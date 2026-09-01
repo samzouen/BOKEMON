@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>博刻MON · BoKeMON</title>
 <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.5/dist/hanzi-writer.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&family=Noto+Sans+SC:wght@500;700;900&family=Noto+Serif+SC:wght@700;900&display=swap');
 
@@ -256,6 +259,12 @@
   .write-box.char-done{ border-color:var(--jade); background:rgba(47,143,111,0.08); }
   .write-box svg{ position:relative; z-index:2; }
 
+  .word-meter{background:var(--paper-2);border:1px solid var(--line);border-radius:11px;padding:9px 11px;margin-bottom:10px;}
+  .word-meter-head{display:flex;justify-content:space-between;font-size:11px;font-weight:800;color:var(--ink-soft);margin-bottom:5px;}
+  .word-meter-head b{color:var(--cinnabar);font-size:13px;}
+  .word-meter-bar{height:7px;background:var(--paper-3);border-radius:5px;overflow:hidden;}
+  .word-meter-bar > div{height:100%;background:linear-gradient(90deg,var(--cinnabar),var(--gold));transition:width .35s ease;}
+  .word-meter-note{font-size:10px;font-weight:700;color:var(--jade-dark);margin-top:4px;}
   .char-progress{display:flex;justify-content:center;gap:8px;margin:2px 0 10px;min-height:30px;align-items:center;}
   .char-pip{
     min-width:30px;height:30px;padding:0 8px;border-radius:9px;display:flex;align-items:center;justify-content:center;
@@ -459,16 +468,16 @@ const SPECIES = {
 /* Move tables live here for later phases; unused in Phase 1 but embedded now
    so battle/stats pages can read them without another data pass. */
 const MOVES = {
-  water_starter:   [['Basic','Tackle',0.2,'Single',1,5],['Power1','Bubble',0.4,'Single',2,5],['Power2','Surf',0.6,'AOE',4,21],['Ultimate','Waterfall',1.5,'Single',5,41]],
-  fire_starter:    [['Basic','Scratch',0.2,'Single',1,5],['Power1','Ember',0.4,'Single',2,5],['Power2','Flamethrower',0.6,'AOE',4,21],['Ultimate','Fire Blast',1.5,'Single',5,41]],
-  grass_starter:   [['Basic','Tackle',0.2,'Single',1,5],['Power1','Vine Whip',0.4,'Single',2,5],['Power2','Razor Leaf',0.6,'AOE',4,21],['Ultimate','Solar Beam',1.5,'Single',5,41]],
-  rat:             [['Basic','Tackle',0.2,'Single',1,5],['Power1','Bite',0.4,'Single',2,5],['Power2','Fury Swipes',0.6,'AOE',4,11],['Ultimate','Super Fang',1.5,'Single',5,25]],
-  bird:            [['Basic','Peck',0.2,'Single',1,5],['Power1','Claw',0.4,'Single',2,5],['Power2','Gust',0.6,'AOE',4,11],['Ultimate','Aerial Ace',1.5,'Single',5,25]],
-  moth:            [['Basic','Tackle',0.2,'Single',1,5],['Power1','Sting',0.4,'Single',2,5],['Power2','Poison Powder',0.6,'AOE',4,11],['Ultimate','Revitalise',null,'Support',7,25]],
-  earth_snake:     [['Basic','Tackle',0.2,'Single',1,5],['Power1','Bite',0.4,'Single',2,5],['Power2','Tail Whip',0.6,'AOE',4,11],['Ultimate','Constrict',1.5,'Single',5,25]],
-  ground_starter:  [['Basic','Tackle',0.2,'Single',1,5],['Power1','Body Slam',0.4,'Single',2,5],['Power2','Earthquake',0.6,'AOE',4,21],['Ultimate','Horn Drill',1.5,'Single',5,41]],
-  electric_starter:[['Basic','Tackle',0.2,'Single',1,20],['Power1','Thundershock',0.4,'Single',2,20],['Power2','Thunderbolt',0.6,'AOE',4,21],['Ultimate','Thunder',1.5,'Single',5,41]],
-  phoenix:         [['Basic','Ember',0.3,'Single',2,25],['Power1','Firestorm',0.6,'AOE',4,25],['Power2','Nova',1.0,'AOE',6,35],['Ultimate','Incinerate',1.4,'Single',5,51]],
+  water_starter:   [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bubble',0.4,'Single',4,5],['Power2','Surf',0.6,'AOE',8,21],['Ultimate','Waterfall',1.5,'Single',10,41]],
+  fire_starter:    [['Basic','Scratch',0.2,'Single',2,5],['Power1','Ember',0.4,'Single',4,5],['Power2','Flamethrower',0.6,'AOE',8,21],['Ultimate','Fire Blast',1.5,'Single',10,41]],
+  grass_starter:   [['Basic','Tackle',0.2,'Single',2,5],['Power1','Vine Whip',0.4,'Single',4,5],['Power2','Razor Leaf',0.6,'AOE',8,21],['Ultimate','Solar Beam',1.5,'Single',10,41]],
+  rat:             [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bite',0.4,'Single',4,5],['Power2','Fury Swipes',0.6,'AOE',8,11],['Ultimate','Super Fang',1.5,'Single',10,25]],
+  bird:            [['Basic','Peck',0.2,'Single',2,5],['Power1','Claw',0.4,'Single',4,5],['Power2','Gust',0.6,'AOE',8,11],['Ultimate','Aerial Ace',1.5,'Single',10,25]],
+  moth:            [['Basic','Tackle',0.2,'Single',2,5],['Power1','Sting',0.4,'Single',4,5],['Power2','Poison Powder',0.6,'AOE',8,11],['Ultimate','Revitalise',null,'Support',14,25]],
+  earth_snake:     [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bite',0.4,'Single',4,5],['Power2','Tail Whip',0.6,'AOE',8,11],['Ultimate','Constrict',1.5,'Single',10,25]],
+  ground_starter:  [['Basic','Tackle',0.2,'Single',2,5],['Power1','Body Slam',0.4,'Single',4,5],['Power2','Earthquake',0.6,'AOE',8,21],['Ultimate','Horn Drill',1.5,'Single',10,41]],
+  electric_starter:[['Basic','Tackle',0.2,'Single',2,20],['Power1','Thundershock',0.4,'Single',4,20],['Power2','Thunderbolt',0.6,'AOE',8,21],['Ultimate','Thunder',1.5,'Single',10,41]],
+  phoenix:         [['Basic','Ember',0.3,'Single',4,25],['Power1','Firestorm',0.6,'AOE',8,25],['Power2','Nova',1.0,'AOE',12,35],['Ultimate','Incinerate',1.4,'Single',10,51]],
 };
 
 const TYPE_COLORS = {
@@ -503,11 +512,11 @@ const TOKEN_LEVEL_ODDS = [ {min:1,max:10,chance:0.10}, {min:11,max:20,chance:0.2
 const TOKENS_PER_ROLL = 5;
 
 const STONE_TIERS = [
-  { id:'low',      label:'Low',       odds:0.50, phrases:1, mult:0.25, kind:'single' },
-  { id:'mid',      label:'Mid',       odds:0.30, phrases:2, mult:0.5,  kind:'single' },
-  { id:'high',     label:'High',      odds:0.12, phrases:4, mult:0.8,  kind:'multi2' },
-  { id:'veryhigh', label:'Very High', odds:0.06, phrases:3, mult:null, kind:'status' },
-  { id:'ultra',    label:'Ultra',     odds:0.02, phrases:7, mult:0.5,  kind:'multihit' },
+  { id:'low',      label:'Low',       odds:0.50, words:2,  mult:0.25, kind:'single' },
+  { id:'mid',      label:'Mid',       odds:0.30, words:4,  mult:0.5,  kind:'single' },
+  { id:'high',     label:'High',      odds:0.12, words:8,  mult:0.8,  kind:'multi2' },
+  { id:'veryhigh', label:'Very High', odds:0.06, words:6,  mult:null, kind:'status' },
+  { id:'ultra',    label:'Ultra',     odds:0.02, words:14, mult:0.5,  kind:'multihit' },
 ];
 const RECYCLE_RETURN = { low:1, mid:2, high:4, veryhigh:7, ultra:15 };
 
@@ -567,6 +576,131 @@ function computeMaxStat(species, level, supplements){
   stat += Math.floor((rate/5) * (supplements||0));
   return stat;
 }
+
+/* ---------- CLOUD SYNC (Firebase) ----------
+   The cloud is the SOURCE OF TRUTH. On boot, every device signs in anonymously
+   (no login screen — one silent identity per device) and pulls its saved
+   profiles, overwriting whatever's cached locally. localStorage from here on
+   is just a fast offline cache, not the record of truth — so editing it by
+   hand in dev tools stops sticking the moment the next sync happens.
+
+   Anonymous auth ties the cloud identity to THIS BROWSER's local storage. If
+   that's ever cleared, the link is lost even though the cloud data survives —
+   the JSON backup file remains the manual safety net for that case. */
+const firebaseConfig = {
+  apiKey: "AIzaSyBEg78ygTrSF7RPnfxrjcZ_Bg_2DQ4FrD0",
+  authDomain: "b0kemon.firebaseapp.com",
+  projectId: "b0kemon",
+  storageBucket: "b0kemon.firebasestorage.app",
+  messagingSenderId: "91724853668",
+  appId: "1:91724853668:web:6d22831d0da10717189131"
+};
+const CLOUD_COLLECTION = 'saves';
+let cloudUid = null;
+let cloudReady = false;
+
+async function initCloud(){
+  try{
+    if(typeof firebase === 'undefined') return; // CDN blocked/offline — game still works locally
+    firebase.initializeApp(firebaseConfig);
+    await new Promise((resolve)=>{
+      let settled = false;
+      const done = ()=>{ if(!settled){ settled = true; resolve(); } };
+      firebase.auth().onAuthStateChanged(user=>{
+        if(user){ cloudUid = user.uid; cloudReady = true; done(); }
+      });
+      firebase.auth().signInAnonymously().catch(()=> done());
+      setTimeout(done, 4000); // never block boot indefinitely if the network is down
+    });
+  }catch(e){ cloudReady = false; }
+}
+function cloudDocRef(){
+  if(!cloudReady || !cloudUid) return null;
+  try{ return firebase.firestore().collection(CLOUD_COLLECTION).doc(cloudUid); }
+  catch(e){ return null; }
+}
+
+/* Pull every profile this device's identity owns, overwriting local caches.
+   Returns true only if real cloud data was found and applied. */
+async function cloudPullAll(){
+  const ref = cloudDocRef();
+  if(!ref) return false;
+  try{
+    const snap = await ref.get();
+    if(!snap.exists) return false;
+    const data = snap.data() || {};
+    const profiles = data.profiles || {};
+    const idx = [];
+    for(const pid in profiles){
+      const p = normalizeProfile(profiles[pid]);
+      await store.set(profileStorageKey(pid), JSON.stringify(p));
+      idx.push({ id:p.id, name:p.name, starterSpecies:p.starterSpecies, level:(p.party[0]?p.party[0].level:1), updatedAt:p.updatedAt||Date.now() });
+    }
+    if(idx.length){ await saveProfileIndex(idx); }
+    if(data.lastProfile){ try{ await store.set(LAST_PROFILE_KEY, data.lastProfile); }catch(e){} }
+    return idx.length > 0;
+  }catch(e){ return false; }
+}
+
+/* Firestore rejects `undefined` anywhere in a document, and a single stray one
+   fails the whole write. A JSON round-trip drops them safely. */
+function sanitizeForCloud(obj){
+  try{ return JSON.parse(JSON.stringify(obj)); }catch(e){ return null; }
+}
+
+/* Push one profile up.
+   NOTE: uses a NESTED object, not a dotted key. Firestore's set() treats a key
+   containing dots as a literal field name — only update() parses dot-paths —
+   so `{'profiles.p1': …}` would create a field called "profiles.p1" that
+   cloudPullAll could never read. set() with merge:true deep-merges nested maps,
+   so writing {profiles:{[id]:p}} updates only this profile and leaves siblings
+   (e.g. a second child on the same iPad) untouched. */
+async function cloudPushProfile(p){
+  const ref = cloudDocRef();
+  if(!ref) return false;
+  try{
+    p.updatedAt = Date.now();
+    const clean = sanitizeForCloud(p);
+    if(!clean) return false;
+    await ref.set({
+      profiles: { [p.id]: clean },
+      lastProfile: p.id,
+      updatedAt: Date.now(),
+    }, { merge:true });
+    return true;
+  }catch(e){ return false; }
+}
+
+/* Background saves happen constantly during battle (every hit, every HP tick).
+   Pushing each one would burn the free write quota and add pointless latency,
+   so ordinary saves are coalesced into one write every few seconds, with a
+   flush when the page is hidden or closed. Economy actions bypass this and
+   commit immediately (see saveProfile's awaitCloud option). */
+const CLOUD_PUSH_INTERVAL = 6000;
+let _cloudPushTimer = null;
+let _cloudPushPending = false;
+
+function scheduleCloudPush(){
+  _cloudPushPending = true;
+  if(_cloudPushTimer) return;
+  _cloudPushTimer = setTimeout(async ()=>{
+    _cloudPushTimer = null;
+    if(!_cloudPushPending || !state) return;
+    _cloudPushPending = false;
+    await cloudPushProfile(state);
+  }, CLOUD_PUSH_INTERVAL);
+}
+async function flushCloudPush(){
+  if(_cloudPushTimer){ clearTimeout(_cloudPushTimer); _cloudPushTimer = null; }
+  if(_cloudPushPending && state){
+    _cloudPushPending = false;
+    await cloudPushProfile(state);
+  }
+}
+try{
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushCloudPush(); });
+  window.addEventListener('pagehide', flushCloudPush);
+}catch(e){}
 
 /* ---------- SAVE MODEL ----------
    Uses the browser's own localStorage, so saves work anywhere the game is
@@ -651,11 +785,24 @@ async function upsertProfileIndexEntry(p){
   await saveProfileIndex(idx);
 }
 
-async function saveProfile(){
-  if(!state) return;
+/* opts.awaitCloud: true blocks until the cloud write is confirmed, and
+   returns false on failure — used only for "economy" actions (spins, shop,
+   recycle, spending currency) where a reload-before-sync could be exploited
+   to keep a result while getting the cost back. Everything else fires the
+   cloud write in the background so ordinary play never waits on network. */
+async function saveProfile(opts){
+  if(!state) return true;
+  opts = opts || {};
   try{ await store.set(profileStorageKey(state.id), JSON.stringify(state)); }catch(e){}
   await upsertProfileIndexEntry(state);
   try{ await store.set(LAST_PROFILE_KEY, state.id); }catch(e){}
+  if(opts.awaitCloud){
+    if(_cloudPushTimer){ clearTimeout(_cloudPushTimer); _cloudPushTimer = null; }
+    _cloudPushPending = false;
+    return await cloudPushProfile(state);
+  }
+  scheduleCloudPush();   // coalesced background write
+  return true;
 }
 async function loadProfileById(id){
   try{
@@ -1026,6 +1173,7 @@ function startQuiz(config){
     timeLeft:TIMER_SECONDS,
     token:++quizToken,
     resolved:false,
+    wordsDone: config.startingWords || 0,   // carry-over spill from the previous move
   };
   ui.screen = 'quiz';
   render();
@@ -1113,7 +1261,9 @@ function renderQuiz(){
 
   screenEl.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;">
-      <button class="back-link" id="quizExit">← Exit</button>
+      ${q.config.lockExit
+        ? `<span style="font-size:13px;font-weight:800;color:var(--ink-soft);opacity:0.6;">🔒 Committed</span>`
+        : `<button class="back-link" id="quizExit">← Exit</button>`}
       <div style="font-weight:800;color:var(--ink-soft);font-size:13px;">Word ${q.index+1} / ${total}</div>
     </div>
 
@@ -1122,12 +1272,22 @@ function renderQuiz(){
         <div class="screen-title" style="font-size:20px;">${escapeHtml(q.config.title||'Spell the word')}</div>
         <div class="screen-sub" style="margin-bottom:10px;">${escapeHtml(q.config.subtitle||'Listen, then write what you hear.')}</div>
         ${q.config.recovery ? `<div style="display:flex;gap:5px;margin-bottom:10px;">${state.party.map(m=>{const max=monMax(m);const pct=Math.max(0,m.currentHp/max*100);return `<div style="flex:1;"><div class="hpbar" style="height:6px;"><div class="hpfill" style="width:${pct}%;background:${pct<30?'var(--cinnabar)':'var(--jade)'};"></div></div></div>`;}).join('')}</div>` : ''}
+        ${q.config.recovery ? `<button class="btn btn-ghost" id="exitRecoveryBtn" style="margin-bottom:10px;">✕ Exit recovery</button>` : ''}
 
         <div class="listen-row-2">
           <button class="btn btn-jade" id="listenBtn">🔊 Listen</button>
           <button class="btn btn-ghost" id="defBtn">📖 Meaning</button>
         </div>
         <div id="defBox" style="text-align:center;font-size:13px;color:var(--ink-soft);font-weight:700;min-height:18px;margin:6px 0;"></div>
+        ${q.config.wordTarget ? `
+        <div class="word-meter">
+          <div class="word-meter-head">
+            <span>字 Words written</span>
+            <span><b id="wordCount">${Math.min(q.wordsDone||0, q.config.wordTarget)}</b> / ${q.config.wordTarget}</span>
+          </div>
+          <div class="word-meter-bar"><div id="wordMeterFill" style="width:${Math.min(100,(q.wordsDone||0)/q.config.wordTarget*100)}%;"></div></div>
+          ${(q.config.startingWords||0) > 0 ? `<div class="word-meter-note">+${q.config.startingWords} carried over</div>` : ''}
+        </div>` : ''}
 
         ${q.config.relaxed ? '' : `
         <div id="timerBar" style="height:8px;background:var(--paper-3);border-radius:6px;overflow:hidden;margin-bottom:4px;">
@@ -1146,7 +1306,10 @@ function renderQuiz(){
     </div>
   `;
 
-  $('#quizExit').addEventListener('click', ()=>{ stopTimer(); document.body.classList.remove('writing'); if(q.config.onExit) q.config.onExit(); });
+  const qe = $('#quizExit');
+  if(qe) qe.addEventListener('click', ()=>{ stopTimer(); document.body.classList.remove('writing'); if(q.config.onExit) q.config.onExit(); });
+  const erb = $('#exitRecoveryBtn');
+  if(erb) erb.addEventListener('click', ()=>{ stopTimer(); document.body.classList.remove('writing'); if(q.config.onExit) q.config.onExit(); });
   $('#listenBtn').addEventListener('click', ()=> speakWord(word));
   $('#defBtn').addEventListener('click', ()=>{
     const def = definitionFor(word);
@@ -1331,7 +1494,8 @@ function resolveWord(passed, timedOut){
     q.masteryReward = recordMastery(word) || q.masteryReward;
     saveProfile();
   }
-  q.results.push({ text:word, passed, mistakes:q.wordMistakes||0, timedOut });
+  if(passed) q.wordsDone = (q.wordsDone||0) + countWords(word);
+  q.results.push({ text:word, passed, mistakes:q.wordMistakes||0, timedOut, words:countWords(word) });
 
   const st = $('#quizStatus');
   const rb = $('#quizResult');
@@ -1380,6 +1544,11 @@ function advanceQuiz(){
     if(misses >= q.config.endAfterMistakes){
       stopTimer(); if(q.config.onComplete) q.config.onComplete(q.results); return;
     }
+  }
+  // Word-powered moves finish the moment the target is met or exceeded — the
+  // overshoot from a long final phrase is handed to the next move as spill.
+  if(q.config.wordTarget && q.wordsDone >= q.config.wordTarget){
+    stopTimer(); if(q.config.onComplete) q.config.onComplete(q.results); return;
   }
   q.index++;
   if(q.index < q.config.words.length){ renderQuiz(); }
@@ -1435,18 +1604,21 @@ function effectivenessLabel(mult){
 }
 
 /* ---------- MOVE RESOLUTION (universal fail-tier formula) ---------- */
-function moveFactor(slot, baseMult, phrases, correct){
+/* Fail tiers, now measured in WORDS. Each old phrase-step is two words, so the
+   shape of the curve is preserved: Power1 drops a tier at n-2 words, and
+   Power2/Ultimate at n-2 then n-4. */
+function moveFactor(slot, baseMult, words, correct){
   if(baseMult==null) return 0;
-  const n = phrases;
-  if(slot==='Basic') return correct>=1 ? baseMult : 0;
+  const n = words;
+  if(slot==='Basic') return correct>=n ? baseMult : 0;
   if(slot==='Power1'){
-    if(correct>=n) return baseMult;
-    if(correct>=n-1) return baseMult*0.2;   // 1/5 at n-1 (was 1/2)
+    if(correct>=n)   return baseMult;
+    if(correct>=n-2) return baseMult*0.2;   // 1/5 one "phrase-step" short
     return 0;
   }
-  if(correct>=n) return baseMult;
-  if(correct>=n-1) return baseMult*0.5;
-  if(correct>=n-2) return baseMult*0.2;
+  if(correct>=n)   return baseMult;
+  if(correct>=n-2) return baseMult*0.5;
+  if(correct>=n-4) return baseMult*0.2;
   return 0;
 }
 
@@ -1633,8 +1805,8 @@ function beginBattle(config){
     waves: config.waves, waveIndex:0,
     isNpc: !!config.isNpc, allowCatch: !!config.allowCatch,
     challenge: config.challenge || null, name: config.name || 'Battle',
-    onWin: config.onWin || null,
-    switchedThisTurn:false, busy:false, fightMistakes:[],
+    onWin: config.onWin || null, noFlee: !!config.noFlee,
+    switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     playerStatuses:{},       // uid -> [ {type,...} ]   persists through switches/faints, cleared at battle end
     mirageActive:false,      // party-wide evasion buff
     usedVeryHigh:{}, usedUltra:{},   // uid -> true, once-per-battle usage
@@ -1648,7 +1820,7 @@ function loadWave(i){
   b.enemies.forEach(e=>{ if(!state.encounteredSpecies.includes(e.species)) state.encounteredSpecies.push(e.species); });
   let ai = state.party.findIndex(m=>m.currentHp>0);
   if(ai<0) ai=0;
-  b.activeIndex = ai; b.switchedThisTurn=false;
+  b.activeIndex = ai; b.switchedThisTurn=false; b.phase='player';
   saveProfile();
 }
 function onWaveCleared(){
@@ -1657,6 +1829,7 @@ function onWaveCleared(){
     // infinite waves: respawn fresh dummies, keep statuses and HP as-is
     b.enemies = Array.from({length:b.arenaCount}, ()=>makeDummy(b.arenaType));
     b.switchedThisTurn=false;
+    b.phase='player';
     renderBattle();
     battleMsg('Dummies respawned. Keep testing!');
     return;
@@ -1677,8 +1850,8 @@ function monMaxHp(m){ return computeMaxStat(m.species, m.level, m.supplements); 
 function monAtk(m){ return computeMaxStat(m.species, m.level, m.supplements); }
 function unlockedMoves(m){
   const base = MOVES[m.species].map(mv=>{
-    const [slot,name,mult,target,phrases,unlock]=mv;
-    return { slot,name,mult,target,phrases,unlock, available:(name!=null && m.level>=unlock), isStone:false };
+    const [slot,name,mult,target,words,unlock]=mv;
+    return { slot,name,mult,target,words,unlock, available:(name!=null && m.level>=unlock), isStone:false };
   });
   // an equipped non-Ultra stone replaces the Basic slot entirely
   if(m.equippedStone){
@@ -1686,13 +1859,13 @@ function unlockedMoves(m){
     const bi = base.findIndex(mv=>mv.slot==='Basic');
     const used = t.id==='veryhigh' && ui.battle && ui.battle.usedVeryHigh[m.uid];
     base[bi] = { slot:'Basic', name:m.equippedStone.name, mult:t.mult, target: t.kind==='multi2'?'Multi2':(t.kind==='status'?'Status':'Single'),
-      phrases:t.phrases, unlock:0, available:!used, isStone:true, stoneTier:t.id, stoneType:m.equippedStone.type };
+      words:t.words, unlock:0, available:!used, isStone:true, stoneTier:t.id, stoneType:m.equippedStone.type };
   }
   // Ultra stone adds a distinct 5th button
   if(m.ultraStone){
     const t = stoneTierDef('ultra');
     const used = ui.battle && ui.battle.usedUltra[m.uid];
-    base.push({ slot:'UltraStone', name:m.ultraStone.name, mult:t.mult, target:'MultiHit', phrases:t.phrases,
+    base.push({ slot:'UltraStone', name:m.ultraStone.name, mult:t.mult, target:'MultiHit', words:t.words,
       unlock:0, available:!used, isStone:true, stoneTier:'ultra', stoneType:m.ultraStone.type });
   }
   return base;
@@ -1712,6 +1885,11 @@ function renderBattle(){
   $('#brandSub').textContent = 'Battle';
   const mon = activeMon();
   const moves = unlockedMoves(mon);
+  // Turn-lock: buttons are only truly interactive once it's genuinely the
+  // player's turn again — not just while their own move's animation plays,
+  // and not during the enemy's turn. Fixes a bug where a second move could be
+  // clicked mid-animation and its quiz silently got wiped on the next redraw.
+  const canAct = (b.phase || 'player') === 'player';
   screenEl.innerHTML = `
     <div class="battle-stage" id="battleStage">
       <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
@@ -1741,19 +1919,19 @@ function renderBattle(){
       </div>
     </div>
     <div id="statusRow" class="status-row"></div>
-    <div id="battleMsg" style="text-align:center;font-weight:700;font-size:14px;min-height:20px;margin-bottom:10px;color:var(--ink-soft);">Choose a move.</div>
+    <div id="battleMsg" style="text-align:center;font-weight:700;font-size:14px;min-height:20px;margin-bottom:10px;color:var(--ink-soft);">${canAct ? 'Choose a move.' : ''}</div>
     <div style="display:flex;gap:12px;">
       <div style="flex:2;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         ${moves.map((mv,i)=>`
-          <button class="move-btn ${mv.available?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''}" data-move="${i}" ${mv.available?'':'disabled'}>
+          <button class="move-btn ${(mv.available && canAct)?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''}" data-move="${i}" ${(mv.available && canAct)?'':'disabled'}>
             <div class="mv-name">${mv.available?escapeHtml(mv.name):'???'}</div>
-            <div class="mv-meta">${mv.available?(mv.isStone?stoneTierDef(mv.stoneTier).label+' stone':( mv.slot==='Basic'?'Basic':mv.slot))+' · '+mv.phrases+'✍':'Locked'}</div>
+            <div class="mv-meta">${mv.available?(mv.isStone?stoneTierDef(mv.stoneTier).label+' stone':( mv.slot==='Basic'?'Basic':mv.slot))+' · '+mv.words+'字':'Locked'}</div>
           </button>`).join('')}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
-        <button class="side-btn" id="switchBtn" ${b.switchedThisTurn?'disabled':''}>🔄 Switch</button>
-        <button class="side-btn" id="fleeBtn">${b.arena?'🚪 Exit':'🏃 Flee'}</button>
-        ${b.arena?'<button class="side-btn" id="arenaMoveBtn" style="background:var(--gold);color:#fff;">🧪 Test move</button>':''}
+        <button class="side-btn" id="switchBtn" ${(b.switchedThisTurn || !canAct)?'disabled':''}>🔄 Switch</button>
+        <button class="side-btn" id="fleeBtn" ${(b.noFlee || !canAct)?'disabled':''}>${b.arena?'🚪 Exit':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
+        ${b.arena?'<button class="side-btn" id="arenaMoveBtn" style="background:var(--gold);color:#fff;" '+(canAct?'':'disabled')+'>🧪 Test move</button>':''}
       </div>
     </div>
     ${b.arena ? `
@@ -1906,6 +2084,7 @@ function monsterChooser(title, options, onPick, dismissable=true){
 
 function onFlee(){
   if(ui.battle.arena){ ui.arenaUnlocked=true; go('arena'); return; }
+  if(ui.battle.noFlee) return; // defensive — button is already disabled/hidden for these fights
   ui.fledFrom = ui.battle.enemies[0].species; toast('Got away safely!'); go('region');
 }
 function livingEnemies(){ return ui.battle.enemies.filter(e=>e.hp>0); }
@@ -1913,6 +2092,8 @@ function livingEnemies(){ return ui.battle.enemies.filter(e=>e.hp>0); }
 const STATUS_NEEDS_TARGET = ['Water','Grass','Ghost','Psychic']; // Very High types that target an enemy
 
 function onMoveChosen(moveIdx){
+  if((ui.battle.phase||'player') !== 'player') return;  // ignore clicks while a turn is still resolving
+  ui.battle.phase = 'resolving';
   const mon=activeMon();
   const mv=unlockedMoves(mon)[moveIdx];
   if(mv.target==='Single' && livingEnemies().length>1){ promptTarget(mv); return; }
@@ -1949,20 +2130,25 @@ function promptTarget(mv, onPick){
   </div>`;
   document.body.appendChild(ov);
   const close=()=>{ if(ov.parentNode) document.body.removeChild(ov); };
-  ov.querySelector('#tgtCancel').addEventListener('click', ()=>{ close(); battleMsg('Choose a move.'); });
-  ov.addEventListener('click', e=>{ if(e.target===ov){ close(); battleMsg('Choose a move.'); } });
+  ov.querySelector('#tgtCancel').addEventListener('click', ()=>{ close(); ui.battle.phase='player'; renderBattle(); });
+  ov.addEventListener('click', e=>{ if(e.target===ov){ close(); ui.battle.phase='player'; renderBattle(); } });
   ov.querySelectorAll('.tgt-opt').forEach(b=> b.addEventListener('click', ()=>{
     close();
     const t = ui.battle.enemies[+b.dataset.i];
     (onPick||(x=>runMoveQuiz(mv,x)))(t);
   }));
 }
-function pickWords(n){
+/* Supply enough phrases to satisfy a WORD target. Shortest entries are 2
+   characters, so ceil(target/2) phrases always suffices; a few spares are added
+   so the quiz never runs dry if a miss shortens the run. */
+function pickWords(wordTarget){
   const pool=activePool().map(w=>w.text);
+  const need = Math.ceil(wordTarget/2) + 3;
   const out=[]; let bag=shuffle(pool);
-  while(out.length<n){ if(bag.length===0) bag=shuffle(pool); out.push(bag.pop()); }
+  while(out.length<need){ if(bag.length===0) bag=shuffle(pool); out.push(bag.pop()); }
   return out;
 }
+function countWords(text){ return (text||'').length; }   // one hanzi = one word
 /* Moves that cost the user HP when they land. Self-damage runs through the same
    pipeline, so Overheat correctly increases it too (per the design). */
 const SELF_DAMAGE = { 'Nova': 0.15 };
@@ -1982,20 +2168,36 @@ function applySelfDamage(mv, mon){
 }
 
 function runMoveQuiz(mv, target){
-  const words=pickWords(mv.phrases);
+  const carry = ui.battle ? (ui.battle.wordCarry||0) : 0;
+  const words = pickWords(Math.max(0, mv.words - carry));
   startQuiz({
     title:mv.name,
-    subtitle:`${mv.isStone?stoneTierDef(mv.stoneTier).label+' move':(mv.slot==='Basic'?'Basic move':mv.slot)} · spell ${mv.phrases} to power it up`,
-    words, stopAtFirstMiss:true,
+    subtitle:`${mv.isStone?stoneTierDef(mv.stoneTier).label+' move':(mv.slot==='Basic'?'Basic move':mv.slot)} · write ${mv.words} words to power it up`,
+    words, stopAtFirstMiss:true, lockExit:true,
+    wordTarget: mv.words,
+    startingWords: carry,
     onComplete:(results)=>resolveBattleMove(mv,target,results),
     onExit:()=>{ go('battle'); },
   });
 }
 
+/* Words written beyond a move's requirement roll into the next move. */
+function bankWordSpill(mv){
+  if(!ui.battle) return 0;
+  const done = (ui.quiz && ui.quiz.wordsDone) || 0;
+  const spill = Math.max(0, done - mv.words);
+  ui.battle.wordCarry = spill;
+  return spill;
+}
+
 function resolveBattleMove(mv, target, results){
   const mon=activeMon();
   results.filter(r=>!r.passed).forEach(r=>{ if(!ui.battle.fightMistakes.includes(r.text)) ui.battle.fightMistakes.push(r.text); });
-  const correct=results.filter(r=>r.passed).length;
+  // Scored in WORDS now: sum the characters of every phrase written correctly,
+  // plus any spill carried in from the previous move.
+  const correct = results.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0)
+                + (ui.quiz && ui.quiz.config ? (ui.quiz.config.startingWords||0) : 0);
+  const spill = bankWordSpill(mv);
   go('battle');
 
   if(mv.slot==='UltraStone') ui.battle.usedUltra[mon.uid]=true;
@@ -2006,8 +2208,8 @@ function resolveBattleMove(mv, target, results){
   if(mv.target==='MultiHit') return resolveMultiHit(mv, mon, correct);
 
   // Single / AOE (standard species moves + Low/Mid stone moves)
-  const factor = mv.isStone ? (correct>=mv.phrases ? mv.mult : 0) : moveFactor(mv.slot, mv.mult, mv.phrases, correct);
-  if(factor<=0){ battleMsg(`${mv.name} missed! (${correct}/${mv.phrases} correct)`); setTimeout(enemyTurn,900); return; }
+  const factor = mv.isStone ? (correct>=mv.words ? mv.mult : 0) : moveFactor(mv.slot, mv.mult, mv.words, correct);
+  if(factor<=0){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
   const atk=monAtk(mon);
   const targets = mv.target==='AOE' ? livingEnemies() : [target];
   const hits = targets.map(t=>{
@@ -2016,7 +2218,7 @@ function resolveBattleMove(mv, target, results){
     return { t, idx, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg), dmg };
   });
   let effMsg=''; hits.forEach(h=>{ const m=typeMultiplier(SPECIES[mon.species].types, h.t.types); if(m!==1) effMsg=effectivenessLabel(m); });
-  logBattle(`${displayName(mon)} used ${mv.name} (${correct}/${mv.phrases}) — factor ${factor.toFixed(2)}x ATK ${atk}`);
+  logBattle(`${displayName(mon)} used ${mv.name} (${correct}/${mv.words} words${spill?`, +${spill} spill`:''}) — factor ${factor.toFixed(2)}x ATK ${atk}`);
   hits.forEach(h=>logBattle(`  → ${SPECIES[h.t.species].name} took ${h.dmg} (${h.oldHp}→${h.newHp})`));
   battleMsg(`${mv.name}! ${effMsg}`);
   bob($('#playerBob'), +1);
@@ -2080,7 +2282,7 @@ function finishPlayerTurn(){
 
 /* High tier: hit 2 different living enemies at 0.8x each (or the single enemy once if only 1 exists) */
 function resolveMulti2(mv, mon, correct){
-  if(correct<mv.phrases){ battleMsg(`${mv.name} missed! (${correct}/${mv.phrases} correct)`); setTimeout(enemyTurn,900); return; }
+  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
   const atk=monAtk(mon);
   const living = livingEnemies();
   const targets = living.length>=2 ? shuffle(living).slice(0,2) : living.slice(0,1);
@@ -2103,7 +2305,7 @@ function resolveMulti2(mv, mon, correct){
 /* Ultra tier: 5-7 random hits (45/35/20) spread across enemies, may repeat a target.
    Screen inverts briefly on use; hits animate at 2x speed in succession. */
 function resolveMultiHit(mv, mon, correct){
-  if(correct<mv.phrases){ battleMsg(`${mv.name} missed! (${correct}/${mv.phrases} correct)`); setTimeout(enemyTurn,900); return; }
+  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
   const r=Math.random();
   const n = r<0.45?5:(r<0.80?6:7);
   const atk=monAtk(mon);
@@ -2162,7 +2364,7 @@ function playSuccessiveHits(hits, i, done, fast){
 
 /* Very High tier: single status application, per-type effect (see applyVeryHighEffect) */
 function resolveStatusMove(mv, mon, target, correct){
-  if(correct<mv.phrases){ battleMsg(`${mv.name} missed! (${correct}/${mv.phrases} correct)`); setTimeout(enemyTurn,900); return; }
+  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
   const atk=monAtk(mon);
   const targets = target ? [target] : [];
   const res = applyVeryHighEffect(mv.stoneType, mon, atk, targets);
@@ -2182,6 +2384,9 @@ function resolveStatusMove(mv, mon, target, correct){
     // part of applying the mark, not a separate attack.)
     setTimeout(()=>{
       if(livingEnemies().length===0){ setTimeout(onWaveCleared,600); return; }
+      // Instant cast doesn't consume the turn, so control returns to the player.
+      // Without this the phase stays 'resolving' and every button softlocks.
+      ui.battle.phase = 'player';
       renderBattle();
       battleMsg(res.msg + ' (instant — you can still attack!)');
     }, 700);
@@ -2210,7 +2415,7 @@ function enemyTurn(){
     battleMsg(frozenCount ? 'The frozen enemy can\'t move!' : 'The enemy hesitates!');
     renderStatusBadges();
     b.switchedThisTurn=false;
-    setTimeout(()=>{ renderBattle(); battleMsg('Choose a move.'); }, 900);
+    setTimeout(()=>{ b.phase='player'; renderBattle(); battleMsg('Choose a move.'); }, 900);
     return;
   }
 
@@ -2219,7 +2424,7 @@ function enemyTurn(){
     battleMsg('💨 The mirage shimmers — the attack missed!');
     b.enemies.forEach((e,i)=>{ if(e.hp>0) bob(document.getElementById('enemyBob-'+i), -1); });
     b.switchedThisTurn=false;
-    setTimeout(()=>{ renderBattle(); battleMsg('Choose a move.'); }, 1100);
+    setTimeout(()=>{ b.phase='player'; renderBattle(); battleMsg('Choose a move.'); }, 1100);
     return;
   }
 
@@ -2282,7 +2487,7 @@ function enemyTurn(){
     setTimeout(()=>{
       if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
       if(mon.currentHp<=0){ setTimeout(onMonFainted,700); }
-      else { b.switchedThisTurn=false; setTimeout(()=>{ renderBattle(); battleMsg('Choose a move.'); },850); }
+      else { b.switchedThisTurn=false; setTimeout(()=>{ b.phase='player'; renderBattle(); battleMsg('Choose a move.'); },850); }
     }, 850);
   }, 330);
 }
@@ -2291,7 +2496,7 @@ function onMonFainted(){
   if(alive.length===0){ return onPlayerDefeated(); }
   battleMsg(`${displayName(activeMon())} fainted!`);
   const options=state.party.map((m,i)=>({m,i})).filter(o=>o.m.currentHp>0);
-  monsterChooser('Send out…', options, (i)=>{ ui.battle.activeIndex=i; ui.battle.switchedThisTurn=false; renderBattle(); battleMsg('Choose a move.'); }, false);
+  monsterChooser('Send out…', options, (i)=>{ ui.battle.activeIndex=i; ui.battle.switchedThisTurn=false; ui.battle.phase='player'; renderBattle(); battleMsg('Choose a move.'); }, false);
 }
 function onPlayerDefeated(){
   const fade=document.createElement('div');
@@ -2488,7 +2693,7 @@ function startCatch(enemy){
     title:`Catching ${SPECIES[enemy.species].name}`,
     subtitle:`Spell ${words.length} to seal it. One slip is risky — two lets it escape!`,
     words,
-    endAfterMistakes:2,
+    endAfterMistakes:2, lockExit:true,
     onComplete:(results)=> resolveCatch(enemy, results),
     onExit:()=>{ showVictory(ui.battle.enemies.map(e=>SPECIES[e.species].name).join(' & '), []); },
   });
@@ -2953,20 +3158,20 @@ function renderStats(){
   const capped = m.level>=REGION_LEVEL_CAP;
   const suppCap = sp.tier==='legendary' ? 10 : (sp.tier==='elite' ? 8 : 6);
   const moves = MOVES[m.species].map(mv=>{
-    const [slot,name,mult,target,phrases,unlock]=mv;
+    const [slot,name,mult,target,words,unlock]=mv;
     const unlocked = name!=null && m.level>=unlock;
-    return { slot,name,mult,target,phrases,unlock,unlocked };
+    return { slot,name,mult,target,words,unlock,unlocked };
   });
   if(m.equippedStone){
     const t = stoneTierDef(m.equippedStone.tier);
     const bi = moves.findIndex(x=>x.slot==='Basic');
     moves[bi] = { slot:'Basic', name:m.equippedStone.name+' 💎', mult:t.mult,
       target:t.kind==='status'?'Status':(t.kind==='multi2'?'2 targets':'Single'),
-      phrases:t.phrases, unlock:0, unlocked:true };
+      words:t.words, unlock:0, unlocked:true };
   }
   if(m.ultraStone){
     const t = stoneTierDef('ultra');
-    moves.push({ slot:'Ultra Stone', name:m.ultraStone.name+' 💎', mult:t.mult, target:'5–7 hits', phrases:t.phrases, unlock:0, unlocked:true });
+    moves.push({ slot:'Ultra Stone', name:m.ultraStone.name+' 💎', mult:t.mult, target:'5–7 hits', words:t.words, unlock:0, unlocked:true });
   }
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Party</button>
@@ -3004,7 +3209,7 @@ function renderStats(){
           </div>
           <div style="font-size:12px;color:var(--ink-soft);font-weight:600;margin-top:3px;">
             ${mv.unlocked
-              ? `${mv.mult!=null?(mv.mult+'× ATK'):'Support'} · ${mv.target} · spell ${mv.phrases}`
+              ? `${mv.mult!=null?(mv.mult+'× ATK'):'Support'} · ${mv.target} · ${mv.words} words`
               : `Unlocks at Lv ${mv.unlock}`}
           </div>
         </div>
@@ -3045,12 +3250,25 @@ function renderStats(){
   const up = $('#useProtein');
   if(up) up.addEventListener('click', async ()=>{
     if(state.inventory.protein<=0 || (m.supplements||0)>=suppCap) return;
+    const beforeProtein = state.inventory.protein;
+    const beforeSupp = m.supplements||0;
+    const beforeHp = m.currentHp;
     const beforeMax = monMaxHp(m);
-    m.supplements = (m.supplements||0)+1;
+    m.supplements = beforeSupp+1;
     state.inventory.protein--;
     const afterMax = monMaxHp(m);
     m.currentHp = Math.min(afterMax, m.currentHp + (afterMax-beforeMax));
-    await saveProfile();
+
+    const sov = showSyncingOverlay('Syncing…');
+    const ok = await saveProfile({ awaitCloud:true });
+    hideSyncingOverlay(sov);
+    if(!ok){
+      m.supplements = beforeSupp;
+      state.inventory.protein = beforeProtein;
+      m.currentHp = beforeHp;
+      showSyncFailure();
+      return;
+    }
     toast(`${displayName(m)} grew stronger!`);
     renderStats();
   });
@@ -3136,20 +3354,45 @@ function renderStoneList(){
         <span class="stone-tier">${t.label}</span>
       </div>
       <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:13px;margin-top:3px;">${escapeHtml(s.name)}</div>
-      <div style="font-size:10px;color:var(--ink-soft);font-weight:700;">${t.mult!=null?t.mult+'× ATK':'Status'} · ${t.phrases}✍</div>
+      <div style="font-size:10px;color:var(--ink-soft);font-weight:700;">${t.mult!=null?t.mult+'× ATK':'Status'} · ${t.words}字</div>
     </div>`;
   }).join('');
   el.querySelectorAll('[data-stone]').forEach(c=> c.addEventListener('click', ()=> openStoneDetail(c.dataset.stone)));
 }
 
 /* gacha spin with a short suspense reveal */
+/* ---------- Commit-before-reveal helpers ----------
+   Used only for economy actions where a reload-before-sync could be exploited
+   (see any spend/roll/recycle below). Nothing is shown until the cloud has
+   confirmed the write, so there's nothing to reload away from. */
+function showSyncingOverlay(label){
+  const ov = document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(35,32,25,0.55);gap:12px;';
+  ov.innerHTML = `<div style="font-size:38px;">☁️</div><div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:15px;color:#fff;">${escapeHtml(label||'Syncing…')}</div>`;
+  document.body.appendChild(ov);
+  return ov;
+}
+function hideSyncingOverlay(ov){ if(ov && ov.parentNode) document.body.removeChild(ov); }
+function showSyncFailure(){
+  toast("☁️ Couldn't confirm online — check your connection and try again.");
+}
+
 async function doStoneRoll(){
   if((state.inventory.tokens||0) < TOKENS_PER_ROLL) return;
+  const beforeTokens = state.inventory.tokens;
   state.inventory.tokens -= TOKENS_PER_ROLL;
   const stone = newMoveStone();
   state.moveStones.push(stone);
-  await saveProfile();
 
+  const ov = showSyncingOverlay('Syncing…');
+  const ok = await saveProfile({ awaitCloud:true });
+  hideSyncingOverlay(ov);
+  if(!ok){
+    state.inventory.tokens = beforeTokens;
+    state.moveStones.pop();
+    showSyncFailure();
+    return;
+  }
   showStoneReveal(stone, 'Rolling…');
 }
 
@@ -3169,7 +3412,7 @@ function showStoneReveal(stone, spinLabel){
         <div class="stone-tier-big tier-${stone.tier}">${t.label}</div>
         <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:24px;margin-top:6px;">${escapeHtml(stone.name)}</div>
         <div style="margin-top:6px;"><span class="type-badge" style="background:${TYPE_COLORS[stone.type]}">${stone.type}</span></div>
-        <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;">${t.mult!=null?t.mult+'× ATK':'Status move'} · spell ${t.phrases}</div>
+        <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;">${t.mult!=null?t.mult+'× ATK':'Status move'} · ${t.words} words</div>
       </div>
       <button class="btn btn-primary" id="rollOk" style="width:auto;padding:12px 30px;margin-top:14px;">Nice!</button>`;
     ov.querySelector('#rollOk').addEventListener('click', ()=>{ if(ov.parentNode) document.body.removeChild(ov); renderStorage(); });
@@ -3179,10 +3422,20 @@ function showStoneReveal(stone, spinLabel){
 /* Elite spin: 5 Elite Skill Tokens, guaranteed High or better. */
 async function doEliteRoll(){
   if((state.inventory.eliteTokens||0) < ELITE_ROLL_COST) return;
+  const beforeElite = state.inventory.eliteTokens;
   state.inventory.eliteTokens -= ELITE_ROLL_COST;
   const stone = newEliteStone();
   state.moveStones.push(stone);
-  await saveProfile();
+
+  const ov = showSyncingOverlay('Syncing…');
+  const ok = await saveProfile({ awaitCloud:true });
+  hideSyncingOverlay(ov);
+  if(!ok){
+    state.inventory.eliteTokens = beforeElite;
+    state.moveStones.pop();
+    showSyncFailure();
+    return;
+  }
   showStoneReveal(stone, 'Elite spin!');
 }
 
@@ -3239,11 +3492,21 @@ function pickShopStone(tierId, cost){
   ov.querySelectorAll('.shop-opt').forEach(b=>b.addEventListener('click', async ()=>{
     const type = b.dataset.type;
     if((state.inventory.eliteTokens||0) < cost){ toast('Not enough Elite Skill Tokens.'); close(); return; }
+    close();
+    const beforeElite = state.inventory.eliteTokens;
     state.inventory.eliteTokens -= cost;
     const stone = { uid:'s'+Date.now()+Math.floor(Math.random()*1000), tier:tierId, type, name:stoneName(type,tierId) };
     state.moveStones.push(stone);
-    await saveProfile();
-    close();
+
+    const sov = showSyncingOverlay('Syncing…');
+    const ok = await saveProfile({ awaitCloud:true });
+    hideSyncingOverlay(sov);
+    if(!ok){
+      state.inventory.eliteTokens = beforeElite;
+      state.moveStones.pop();
+      showSyncFailure();
+      return;
+    }
     showStoneReveal(stone, 'Purchased!');
   }));
 }
@@ -3262,7 +3525,7 @@ function openStoneDetail(uid){
       <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;margin-top:6px;">${escapeHtml(s.name)}</div>
       <div style="margin-top:5px;"><span class="type-badge" style="background:${TYPE_COLORS[s.type]}">${s.type}</span></div>
       <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;line-height:1.5;">
-        ${t.mult!=null?t.mult+'× ATK':'Status move'} · spell ${t.phrases}<br>
+        ${t.mult!=null?t.mult+'× ATK':'Status move'} · ${t.words} words<br>
         ${stoneDescription(s)}
       </div>
       <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:8px;">
@@ -3282,10 +3545,21 @@ function openStoneDetail(uid){
   ov.querySelector('#stRecycle').addEventListener('click', ()=>{
     close();
     confirmDialog(`Recycle ${s.name} for ${RECYCLE_RETURN[s.tier]} tokens? This destroys the stone.`, async ()=>{
+      const beforeTokens = state.inventory.tokens||0;
       const i = state.moveStones.findIndex(x=>x.uid===uid);
-      if(i>=0) state.moveStones.splice(i,1);
-      state.inventory.tokens = (state.inventory.tokens||0) + RECYCLE_RETURN[s.tier];
-      await saveProfile();
+      if(i<0) return;
+      const removed = state.moveStones.splice(i,1)[0];
+      state.inventory.tokens = beforeTokens + RECYCLE_RETURN[s.tier];
+
+      const sov = showSyncingOverlay('Syncing…');
+      const ok = await saveProfile({ awaitCloud:true });
+      hideSyncingOverlay(sov);
+      if(!ok){
+        state.moveStones.splice(i,0,removed);
+        state.inventory.tokens = beforeTokens;
+        showSyncFailure();
+        return;
+      }
       toast(`Recycled for ${RECYCLE_RETURN[s.tier]} tokens.`);
       renderStorage();
     });
@@ -3719,7 +3993,7 @@ function doInvestigate(){
 }
 function startThug(id){
   const d = THUG_DEF[id];
-  beginBattle({ isNpc:true, name:'Thug',
+  beginBattle({ isNpc:true, name:'Thug', noFlee:true,
     waves: d.waves.map(w=>w.map(e=>({...e, ai:'power1', nerfed:false}))),
     onWin:()=>onThugWin(id) });
 }
@@ -3732,7 +4006,7 @@ async function onThugWin(id){
     'challenge');
 }
 function startThugBoss(){
-  beginBattle({ isNpc:true, name:'Thug Boss',
+  beginBattle({ isNpc:true, name:'Thug Boss', noFlee:true,
     waves:[
       [{species:'rat',level:20,ai:'best',nerfed:false},{species:'bird',level:20,ai:'best',nerfed:false},{species:'moth',level:20,ai:'best',nerfed:false}],
       [{species:'ground_starter',level:35,ai:'best',nerfed:false}],
@@ -3911,7 +4185,7 @@ function startArena(uid, count, type){
   const ai = state.party.findIndex(m=>m.uid===uid);
   ui.battle = {
     waves:[[]], waveIndex:0, isNpc:false, allowCatch:false, name:'Test Arena',
-    onWin:null, switchedThisTurn:false, busy:false, fightMistakes:[],
+    onWin:null, switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     playerStatuses:{}, mirageActive:false, usedVeryHigh:{}, usedUltra:{},
     arena:true, arenaCount:count, arenaType:type,
   };
@@ -3924,21 +4198,21 @@ function startArena(uid, count, type){
 function arenaMoveList(m){
   const out = [];
   MOVES[m.species].forEach(mv=>{
-    const [slot,name,mult,target,phrases,unlock]=mv;
+    const [slot,name,mult,target,words,unlock]=mv;
     if(name==null) return;
-    out.push({ slot,name,mult,target,phrases,unlock,available:true,isStone:false });
+    out.push({ slot,name,mult,target,words,unlock,available:true,isStone:false });
   });
   if(m.equippedStone){
     const t=stoneTierDef(m.equippedStone.tier);
     out.push({ slot:'Basic', name:m.equippedStone.name, mult:t.mult,
       target:t.kind==='multi2'?'Multi2':(t.kind==='status'?'Status':'Single'),
-      phrases:t.phrases, unlock:0, available:!ui.battle.usedVeryHigh[m.uid] || t.id!=='veryhigh',
+      words:t.words, unlock:0, available:!ui.battle.usedVeryHigh[m.uid] || t.id!=='veryhigh',
       isStone:true, stoneTier:t.id, stoneType:m.equippedStone.type });
   }
   if(m.ultraStone){
     const t=stoneTierDef('ultra');
     out.push({ slot:'UltraStone', name:m.ultraStone.name, mult:t.mult, target:'MultiHit',
-      phrases:t.phrases, unlock:0, available:!ui.battle.usedUltra[m.uid],
+      words:t.words, unlock:0, available:!ui.battle.usedUltra[m.uid],
       isStone:true, stoneTier:'ultra', stoneType:m.ultraStone.type });
   }
   return out;
@@ -3982,13 +4256,13 @@ function renderArenaMoveSheet(){
     close();
     arenaFire({ slot: tierId==='ultra'?'UltraStone':'Basic', name:stoneName(type,tierId), mult:t.mult,
       target: tierId==='ultra'?'MultiHit':(t.kind==='multi2'?'Multi2':(t.kind==='status'?'Status':'Single')),
-      phrases:t.phrases, unlock:0, available:true, isStone:true, stoneTier:tierId, stoneType:type });
+      words:t.words, unlock:0, available:true, isStone:true, stoneTier:tierId, stoneType:type });
   }));
 }
 
 /* fire a move in arena mode: auto full-success, no quiz */
 function arenaFire(mv){
-  const full = Array.from({length:mv.phrases}, ()=>({ text:'(test)', passed:true }));
+  const full = Array.from({length:Math.ceil(mv.words/2)}, ()=>({ text:'测试', passed:true, words:2 }));
   const needTarget = (mv.target==='Single') || (mv.target==='Status' && STATUS_NEEDS_TARGET.includes(mv.stoneType));
   if(needTarget && livingEnemies().length>1){
     promptTarget(mv, (t)=> resolveBattleMove(mv, t, full));
@@ -4456,9 +4730,15 @@ function escapeHtml(s){
 
 /* ---------- BOOT ---------- */
 (async function boot(){
+  // Anonymous cloud identity + pull FIRST — cloud is the source of truth, so
+  // any local cache gets overwritten before the player sees anything.
+  await initCloud();
+  const gotCloud = cloudReady ? await cloudPullAll() : false;
+
   // migrate any pre-multi-profile save into the new indexed format
+  // (only relevant if the cloud had nothing for this identity yet)
   let idx = await loadProfileIndex();
-  if(idx.length === 0){
+  if(idx.length === 0 && !gotCloud){
     const legacy = await migrateLegacyProfile();
     if(legacy) idx = await loadProfileIndex();
   }
