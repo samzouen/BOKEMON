@@ -343,6 +343,99 @@
   .enemy-card .mon-sprite{ filter:drop-shadow(0 3px 4px rgba(35,32,25,0.20)); }
   .npc-portrait{ flex-shrink:0; }
 
+  /* ---- player avatars ---- */
+  .avatar-img{flex-shrink:0;box-shadow:0 2px 0 var(--paper-3);}
+  .av-picker{display:flex;flex-direction:column;gap:12px;}
+  .av-label{font-size:11px;font-weight:800;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+  .av-row{display:flex;gap:9px;flex-wrap:wrap;}
+  .av-opt{background:none;border:3px solid transparent;border-radius:18px;padding:2px;cursor:pointer;line-height:0;}
+  .av-opt.sel{border-color:var(--cinnabar);background:#fbf3e2;}
+  .home-hero{display:flex;align-items:center;gap:13px;margin:4px 0 16px;}
+  .home-hero-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:22px;line-height:1.1;}
+  .home-hero-sub{font-size:13px;color:var(--ink-soft);font-weight:600;}
+  .avatar-nudge{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:#fbf3e2;border:1px dashed var(--cinnabar);border-radius:13px;padding:11px 13px;
+    margin-bottom:14px;font-size:13px;font-weight:700;}
+
+  /* ---- shop ---- */
+  .shop-keeper{display:flex;align-items:flex-start;gap:12px;margin:6px 0 12px;}
+  .shop-bubble{
+    flex:1;background:var(--paper-2);border:1px solid var(--line);border-radius:14px;
+    padding:12px 14px;font-size:13px;font-weight:600;line-height:1.5;position:relative;
+  }
+  .shop-bubble:before{
+    content:'';position:absolute;left:-7px;top:20px;width:12px;height:12px;
+    background:var(--paper-2);border-left:1px solid var(--line);border-bottom:1px solid var(--line);
+    transform:rotate(45deg);
+  }
+  .medal-bar{display:flex;gap:10px;justify-content:center;background:var(--paper-2);border:1px solid var(--line);
+    border-radius:12px;padding:9px;font-weight:800;font-size:14px;}
+  .ware{display:flex;align-items:center;gap:12px;background:var(--paper-2);border:1px solid var(--line);
+    border-radius:14px;padding:12px;cursor:pointer;box-shadow:0 2px 0 var(--paper-3);}
+  .ware:active{transform:translateY(2px);box-shadow:0 1px 0 var(--paper-3);}
+  .ware.cant{opacity:0.55;}
+  .ware-icon{font-size:26px;width:42px;text-align:center;flex-shrink:0;}
+  .ware-icon.big{font-size:44px;width:auto;margin-bottom:6px;}
+  .ware-name{font-family:'Baloo 2',cursive;font-weight:700;font-size:15px;}
+  .ware-desc{font-size:11px;color:var(--ink-soft);font-weight:600;line-height:1.4;}
+  .ware-price{font-weight:800;font-size:14px;white-space:nowrap;}
+  .shop-overlay{position:fixed;inset:0;z-index:92;background:rgba(35,32,25,0.62);
+    display:flex;align-items:center;justify-content:center;padding:22px;}
+  .shop-ov-top{position:absolute;top:16px;right:18px;background:var(--paper);border-radius:20px;
+    padding:7px 14px;font-weight:800;font-size:15px;box-shadow:0 3px 10px rgba(0,0,0,.25);}
+  .shop-ov-body{width:100%;max-width:360px;}
+  .qty-card,.pick-card{background:var(--paper);border-radius:18px;padding:22px;text-align:center;
+    box-shadow:0 12px 40px var(--shadow);}
+  .qty-row{display:flex;align-items:center;justify-content:center;gap:8px;}
+  .qty-btn{width:46px;height:46px;border-radius:12px;border:1px solid var(--line);background:var(--paper-2);
+    font-size:22px;font-weight:800;cursor:pointer;color:var(--ink);}
+  .qty-btn.wide{width:auto;padding:0 14px;font-size:14px;font-family:'Baloo 2',cursive;}
+  .qty-btn:disabled{opacity:.35;cursor:not-allowed;}
+  .qty-val{min-width:58px;font-family:'Baloo 2',cursive;font-weight:800;font-size:26px;}
+  .pick-list{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow-y:auto;}
+  .pick-opt{display:flex;align-items:center;gap:10px;background:var(--paper-2);border:1px solid var(--line);
+    border-radius:12px;padding:11px;cursor:pointer;text-align:left;}
+  .pick-name{font-weight:700;font-size:14px;}
+
+  /* ---- explore zones ---- */
+  .explore-hero{display:flex;align-items:center;gap:14px;background:var(--paper-2);border:1px solid var(--line);
+    border-radius:16px;padding:14px;margin-bottom:16px;}
+  .explore-hero-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:18px;}
+  .explore-hero-sub{font-size:12px;color:var(--ink-soft);font-weight:600;}
+  .zone-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;}
+  .zone-item{text-align:center;}
+  .zone-btn{
+    width:100%;aspect-ratio:1/1;border-radius:18px;cursor:pointer;position:relative;overflow:hidden;
+    background:var(--zone-tint, var(--paper-3));
+    border:3px solid rgba(255,255,255,0.55);
+    box-shadow:inset 0 3px 0 rgba(255,255,255,0.5), inset 0 -5px 0 rgba(0,0,0,0.22), 0 5px 0 rgba(35,32,25,0.25);
+    transition:transform .08s, box-shadow .08s;
+  }
+  .zone-btn:active{transform:translateY(4px);
+    box-shadow:inset 0 3px 0 rgba(255,255,255,0.4), inset 0 -3px 0 rgba(0,0,0,0.2), 0 1px 0 rgba(35,32,25,0.25);}
+  .zone-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .zone-label{font-family:'Baloo 2',cursive;font-weight:700;font-size:15px;margin-top:8px;}
+
+  /* ---- party header / storage corner ---- */
+  .party-head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+  .storage-corner{width:auto;padding:9px 14px;font-size:14px;flex-shrink:0;}
+
+  /* ---- mastery on word rows ---- */
+  .mastery-line{display:flex;align-items:center;gap:6px;margin-top:4px;}
+  .mst-icon{font-size:11px;}
+  .mst-bar{flex:1;max-width:90px;height:5px;background:var(--paper-3);border-radius:4px;overflow:hidden;}
+  .mst-bar > span{display:block;height:100%;}
+  .mst-num{font-size:10px;color:var(--ink-soft);font-weight:700;}
+
+  /* ---- list filter ---- */
+  .list-filter{display:flex;flex-direction:column;gap:10px;}
+  .lf-level{font-size:11px;font-weight:800;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;}
+  .lf-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:9px;background:var(--paper);
+    border:1px solid var(--line);margin-bottom:5px;font-size:13px;font-weight:600;cursor:pointer;}
+  .lf-item.on{border-color:var(--cinnabar);background:#fbf3e2;}
+  .lf-item input{accent-color:var(--cinnabar);}
+  .lf-count{font-size:10px;color:var(--ink-soft);font-weight:700;}
+
   /* ---- evolution sequence ---- */
   .evo-overlay{
     position:fixed;inset:0;z-index:88;display:flex;flex-direction:column;
@@ -573,6 +666,34 @@ const TYPE_COLORS = {
 };
 
 const STARTER_CHOICES = ['water_starter','fire_starter','grass_starter'];
+
+/* Player avatars: five per gender, chosen when a trainer is created.
+   Art lives at assets/avatar/<id>.png; a lettered tile stands in until then. */
+const AVATARS = {
+  male:   ['m1','m2','m3','m4','m5'],
+  female: ['f1','f2','f3','f4','f5'],
+};
+const ALL_AVATARS = [...AVATARS.male, ...AVATARS.female];
+function avatarImg(id, size, cls){
+  const px = size||64;
+  const safe = id || 'm1';
+  return `<img src="assets/avatar/${safe}.png" alt="" class="avatar-img ${cls||''}"
+    data-px="${px}" data-id="${safe}"
+    style="width:${px}px;height:${px}px;border-radius:${Math.round(px*0.24)}px;object-fit:cover;background:var(--paper-3);"
+    onerror="avatarFallback(this)">`;
+}
+function avatarFallback(img){
+  try{
+    const px = +img.dataset.px, id = img.dataset.id||'m1';
+    const female = id.startsWith('f');
+    img.outerHTML = `<div class="avatar-img" style="width:${px}px;height:${px}px;border-radius:${Math.round(px*0.24)}px;
+      background:${female?'#b5708f':'#5a7fa8'};color:#fff;display:flex;align-items:center;justify-content:center;
+      font-family:'Baloo 2',cursive;font-weight:800;font-size:${Math.round(px*0.42)}px;">${female?'♀':'♂'}</div>`;
+  }catch(e){}
+}
+/* Existing saves predate avatars — playerAvatar() returns null for them so the
+   UI can invite the player to pick one instead of silently assigning. */
+function playerAvatar(){ return (state && state.avatar) || null; }
 
 /* ---------- ASSET MANIFEST (hook for future art/audio) ----------
    Empty by design: every lookup falls back to the current text/CSS behaviour, so
@@ -1022,7 +1143,7 @@ async function cloudPullAll(){
     for(const pid in profiles){
       const p = normalizeProfile(profiles[pid]);
       await store.set(profileStorageKey(pid), JSON.stringify(p));
-      idx.push({ id:p.id, name:p.name, starterSpecies:p.starterSpecies, level:(p.party[0]?p.party[0].level:1), updatedAt:p.updatedAt||Date.now() });
+      idx.push({ id:p.id, name:p.name, starterSpecies:p.starterSpecies, avatar:p.avatar||null, level:(p.party[0]?p.party[0].level:1), updatedAt:p.updatedAt||Date.now() });
     }
     if(idx.length){ await saveProfileIndex(idx); }
     if(data.lastProfile){ try{ await store.set(LAST_PROFILE_KEY, data.lastProfile); }catch(e){} }
@@ -1132,6 +1253,7 @@ function blankProfile(name, starterSpecies){
     id: newProfileId(),
     name,
     starterSpecies,
+    avatar: null,
     party:[starter],
     storage:[],
     caughtSpecies:[starterSpecies],
@@ -1141,7 +1263,8 @@ function blankProfile(name, starterSpecies){
     /* Mastery: how many times each phrase has been completed in a SCORED
        context (battle / catch / recovery). Practice never counts. */
     wordMastery:{},
-    masteryAwarded:{ p15:0, p40:0 },   // how many 10-word milestones already paid out
+    masteryAwarded:{ bronze:0, silver:0, gold:0 },   // 10-word milestones already paid out
+    medals:{ bronze:0, silver:0, gold:0 },
     progress:{
       currentRegion:1,
       region1:{ guardianCleared:false, rivalCleared:false, thugsCleared:[], thugBossCleared:false, investigateProtein:0, dojoCleared:[] },
@@ -1167,7 +1290,7 @@ async function saveProfileIndex(idx){
 }
 async function upsertProfileIndexEntry(p){
   const idx = await loadProfileIndex();
-  const entry = { id:p.id, name:p.name, starterSpecies:p.starterSpecies, level:(p.party[0]?p.party[0].level:1), updatedAt:Date.now() };
+  const entry = { id:p.id, name:p.name, starterSpecies:p.starterSpecies, avatar:p.avatar||null, level:(p.party[0]?p.party[0].level:1), updatedAt:Date.now() };
   const i = idx.findIndex(e=>e.id===p.id);
   if(i>=0) idx[i]=entry; else idx.push(entry);
   await saveProfileIndex(idx);
@@ -1213,6 +1336,7 @@ async function migrateLegacyProfile(){
     if(!r) return null;
     const p = normalizeProfile(JSON.parse(r.value));
     if(!p.id) p.id = newProfileId();
+  if(p.avatar===undefined) p.avatar = null;   // older saves: prompt to choose
     // legacy saves had priority/regular baked into the shared wordlist itself —
     // carry those over as THIS profile's own flags before the shared list is
     // flattened to plain text (see loadWordlist's own legacy path too).
@@ -1236,9 +1360,11 @@ function normalizeProfile(p){
   if(p.inventory.tokens===undefined) p.inventory.tokens = 0;
   if(p.inventory.eliteTokens===undefined) p.inventory.eliteTokens = 0;
   p.wordMastery = p.wordMastery || {};
-  p.masteryAwarded = p.masteryAwarded || { p15:0, p40:0 };
-  if(p.masteryAwarded.p15===undefined) p.masteryAwarded.p15 = 0;
-  if(p.masteryAwarded.p40===undefined) p.masteryAwarded.p40 = 0;
+  p.masteryAwarded = p.masteryAwarded || {};
+  ['bronze','silver','gold'].forEach(k=>{ if(p.masteryAwarded[k]===undefined) p.masteryAwarded[k] = 0; });
+  p.medals = p.medals || {};
+  ['bronze','silver','gold'].forEach(k=>{ if(p.medals[k]===undefined) p.medals[k] = 0; });
+  if(!Array.isArray(p.settings.wordLists)) p.settings.wordLists = null;   // null = all lists
   p.moveStones = p.moveStones || [];
   p.progress = p.progress || { currentRegion:1 };
   const r1 = p.progress.region1 = p.progress.region1 || {};
@@ -1403,15 +1529,43 @@ function displayName(mon){
    (state.wordFlags), so the family studies one list but each child marks it up
    independently. */
 const REMOTE_CACHE_KEY = 'wc_remote_words';
+const LISTS_CACHE_KEY  = 'wc_lists_cache';
 const LOCAL_WORDS_KEY  = 'wc_local_words';
 const HIDDEN_WORDS_KEY = 'wc_hidden_words';
 
-let remoteWords = [];
-let localWords  = [];
-let hiddenWords = [];
-let masterWords = [];
-let wordSyncNote = '';   // shown on the Spelling List screen
+/* Multiple word-list files live in words/, one per level+set, e.g.
+     words/K1_01.txt   words/P1_01.txt   words/P2_03.txt
+   words/lists.txt is a manifest naming them (the browser can't list a folder):
+     P1_01.txt | Primary 1 · Set 1
+   Each profile chooses which lists apply to that child, so an older sibling can
+   revise P1 alongside P2 while the younger one only sees K1. */
+const WORDS_DIR      = 'words/';
+const WORDS_MANIFEST = 'words/lists.txt';
 
+let availableLists = [];   // [{key,file,label,level}]
+let listWords      = {};   // key -> [words]
+let remoteWords    = [];   // union of the lists this profile has selected
+let localWords     = [];
+let hiddenWords    = [];
+let masterWords    = [];
+let wordSyncNote   = '';
+
+function selectedListKeys(){
+  const sel = state?.settings?.wordLists;
+  if(!Array.isArray(sel)) return availableLists.map(l=>l.key);   // default: everything
+  return sel;
+}
+function levelOf(key){ const m = String(key).match(/^([A-Za-z]+\d*)/); return m ? m[1].toUpperCase() : 'OTHER'; }
+
+function rebuildRemote(){
+  const keys = selectedListKeys();
+  const seen = new Set();
+  remoteWords = [];
+  keys.forEach(k=>{
+    (listWords[k]||[]).forEach(w=>{ if(w && !seen.has(w)){ seen.add(w); remoteWords.push(w); } });
+  });
+  rebuildMaster();
+}
 function rebuildMaster(){
   const hidden = new Set(hiddenWords);
   const seen = new Set();
@@ -1423,51 +1577,86 @@ function rebuildMaster(){
 }
 
 async function loadWordlist(){
-  // local layers first (instant, no network)
   try{ const r = await store.get(LOCAL_WORDS_KEY);  localWords  = r ? JSON.parse(r.value) : []; }catch(e){ localWords  = []; }
   try{ const r = await store.get(HIDDEN_WORDS_KEY); hiddenWords = r ? JSON.parse(r.value) : []; }catch(e){ hiddenWords = []; }
+  try{
+    const r = await store.get(LISTS_CACHE_KEY);
+    if(r){ const c = JSON.parse(r.value); availableLists = c.lists||[]; listWords = c.words||{}; }
+  }catch(e){}
 
-  // cached copy of the remote list, so we can render immediately and offline
-  try{ const r = await store.get(REMOTE_CACHE_KEY); remoteWords = r ? JSON.parse(r.value) : []; }catch(e){ remoteWords = []; }
-
-  // one-time migration from older single-list builds
-  if(remoteWords.length===0 && localWords.length===0){
-    try{
-      const old = await store.get('wc_master_words') || await store.get('wc_wordlist');
-      if(old){
-        const arr = JSON.parse(old.value);
-        localWords = arr.map(w => typeof w==='string' ? w : w.text).filter(Boolean);
-        await store.set(LOCAL_WORDS_KEY, JSON.stringify(localWords));
-      }
-    }catch(e){}
+  if(availableLists.length === 0 && Object.keys(listWords).length === 0){
+    // nothing cached yet — fall back to the bundled list so play can start
+    availableLists = [{ key:'builtin', file:null, label:'Built-in starter list', level:'BUILT-IN' }];
+    listWords = { builtin: DEFAULT_MASTER_WORDS.slice() };
   }
-
-  if(remoteWords.length===0 && localWords.length===0){
-    remoteWords = DEFAULT_MASTER_WORDS.slice();   // fresh install fallback
-  }
-  rebuildMaster();
-  syncRemoteWords();   // refresh in the background; updates the screen when done
+  rebuildRemote();
+  syncRemoteWords();
 }
 
-/* Fetch words.txt and merge. Non-blocking: never breaks play if it fails. */
+/* Fetch the manifest, then every list it names. Falls back to the older
+   single words.txt, then to the bundled list. Never blocks play. */
 async function syncRemoteWords(){
+  const notALIst = t => /<\s*html/i.test(t);
   try{
-    const res = await fetch(WORDS_URL, { cache:'no-store' });
-    if(!res.ok) throw new Error('HTTP '+res.status);
+    const res = await fetch(WORDS_MANIFEST, { cache:'no-store' });
+    if(!res.ok) throw new Error('no manifest');
     const text = await res.text();
-    if(/<\s*html/i.test(text)) throw new Error('not a word list');   // 404 page
-    const lines = text.split('\n').map(t=>t.trim()).filter(Boolean);
-    if(lines.length===0) throw new Error('empty');
-    remoteWords = lines;
-    await store.set(REMOTE_CACHE_KEY, JSON.stringify(remoteWords));
-    rebuildMaster();
-    wordSyncNote = `Synced ${lines.length} words from words.txt`;
-  }catch(e){
-    if(remoteWords.length===0){
-      remoteWords = DEFAULT_MASTER_WORDS.slice();
-      rebuildMaster();
+    if(notALIst(text)) throw new Error('404 page');
+    const entries = text.split('\n').map(l=>l.trim()).filter(l=>l && !l.startsWith('#')).map(line=>{
+      const [fileRaw, labelRaw] = line.split('|').map(x=>(x||'').trim());
+      const file = fileRaw;
+      const key  = file.replace(/\.txt$/i,'');
+      return { key, file, label: labelRaw || key, level: levelOf(key) };
+    });
+    if(entries.length===0) throw new Error('empty manifest');
+
+    const fetched = {};
+    for(const e of entries){
+      try{
+        const r = await fetch(WORDS_DIR + e.file, { cache:'no-store' });
+        if(!r.ok) continue;
+        const t = await r.text();
+        if(notALIst(t)) continue;
+        const words = t.split('\n').map(x=>x.trim()).filter(Boolean);
+        if(words.length) fetched[e.key] = words;
+      }catch(err){}
     }
-    wordSyncNote = 'Using the built-in list (words.txt not reachable)';
+    const got = entries.filter(e=>fetched[e.key]);
+    if(got.length===0) throw new Error('no lists loaded');
+
+    availableLists = got;
+    listWords = fetched;
+    await store.set(LISTS_CACHE_KEY, JSON.stringify({ lists:availableLists, words:listWords }));
+    rebuildRemote();
+    const total = new Set(Object.values(fetched).flat()).size;
+    wordSyncNote = `Synced ${got.length} list${got.length===1?'':'s'} · ${total} words`;
+  }catch(e){
+    // legacy single-file mode
+    try{
+      const r = await fetch('words.txt', { cache:'no-store' });
+      if(r.ok){
+        const t = await r.text();
+        if(!notALIst(t)){
+          const words = t.split('\n').map(x=>x.trim()).filter(Boolean);
+          if(words.length){
+            availableLists = [{ key:'words', file:'words.txt', label:'Word list', level:'ALL' }];
+            listWords = { words };
+            await store.set(LISTS_CACHE_KEY, JSON.stringify({ lists:availableLists, words:listWords }));
+            rebuildRemote();
+            wordSyncNote = `Synced ${words.length} words from words.txt`;
+            if(ui.screen==='spelling' && ui.spellingUnlocked) renderSpellingManage();
+            if(ui.screen==='spellingIndex') renderSpellingIndex();
+            return;
+          }
+        }
+      }
+    }catch(err){}
+    if(remoteWords.length===0){
+      availableLists = [{ key:'builtin', file:null, label:'Built-in starter list', level:'BUILT-IN' }];
+      listWords = { builtin: DEFAULT_MASTER_WORDS.slice() };
+      rebuildRemote();
+    }
+    wordSyncNote = 'Using the built-in list (words/ not reachable)';
   }
   if(ui.screen==='spelling' && ui.spellingUnlocked) renderSpellingManage();
   if(ui.screen==='spellingIndex') renderSpellingIndex();
@@ -1543,20 +1732,31 @@ function definitionFor(text){
      - every 10 phrases at 40+  ->  1 Elite Skill Token
    `masteryAwarded` remembers how many milestones have already paid out, so
    rewards are never granted twice. */
-const MASTERY_CHECKPOINTS = { protein:15, elite:40 };
+/* Three mastery tiers, each paying a medal per TEN words that reach it:
+     5 completions  -> Bronze   (rename a monster · 3 = 1 Skill Token)
+    15 completions  -> Silver   (10 = 1 Protein Supplement)
+    25 completions  -> Gold     (elite stones and hand-picked skills)
+   Medals are spent in the Shop, so a long grind converts into a deliberate
+   choice rather than a random drop. */
+const MASTERY_CHECKPOINTS = { bronze:5, silver:15, gold:25 };
 const MASTERY_GROUP = 10;
 
 function masteryOf(text){ return (state.wordMastery && state.wordMastery[text]) || 0; }
+function masteryTier(n){
+  if(n >= MASTERY_CHECKPOINTS.gold)   return 'gold';
+  if(n >= MASTERY_CHECKPOINTS.silver) return 'silver';
+  if(n >= MASTERY_CHECKPOINTS.bronze) return 'bronze';
+  return null;
+}
 function masteryCounts(){
   const vals = Object.values(state.wordMastery || {});
   return {
-    at15: vals.filter(v=>v>=MASTERY_CHECKPOINTS.protein).length,
-    at40: vals.filter(v=>v>=MASTERY_CHECKPOINTS.elite).length,
+    bronze: vals.filter(v=>v>=MASTERY_CHECKPOINTS.bronze).length,
+    silver: vals.filter(v=>v>=MASTERY_CHECKPOINTS.silver).length,
+    gold:   vals.filter(v=>v>=MASTERY_CHECKPOINTS.gold).length,
   };
 }
 
-/* Called once per phrase completed in a scored context. Returns any rewards
-   earned so the UI can announce them. */
 function recordMastery(text){
   if(!state) return null;
   state.wordMastery = state.wordMastery || {};
@@ -1565,27 +1765,24 @@ function recordMastery(text){
 }
 function checkMasteryRewards(){
   const c = masteryCounts();
-  const owed15 = Math.floor(c.at15 / MASTERY_GROUP);
-  const owed40 = Math.floor(c.at40 / MASTERY_GROUP);
-  const rewards = { protein:0, elite:0 };
-  if(owed15 > state.masteryAwarded.p15){
-    rewards.protein = owed15 - state.masteryAwarded.p15;
-    state.masteryAwarded.p15 = owed15;
-    state.inventory.protein = (state.inventory.protein||0) + rewards.protein;
-  }
-  if(owed40 > state.masteryAwarded.p40){
-    rewards.elite = owed40 - state.masteryAwarded.p40;
-    state.masteryAwarded.p40 = owed40;
-    state.inventory.eliteTokens = (state.inventory.eliteTokens||0) + rewards.elite;
-  }
-  return (rewards.protein || rewards.elite) ? rewards : null;
+  const rewards = { bronze:0, silver:0, gold:0 };
+  ['bronze','silver','gold'].forEach(tier=>{
+    const owed = Math.floor(c[tier] / MASTERY_GROUP);
+    if(owed > (state.masteryAwarded[tier]||0)){
+      rewards[tier] = owed - (state.masteryAwarded[tier]||0);
+      state.masteryAwarded[tier] = owed;
+      state.medals[tier] = (state.medals[tier]||0) + rewards[tier];
+    }
+  });
+  return (rewards.bronze || rewards.silver || rewards.gold) ? rewards : null;
 }
 function announceMastery(r){
   if(!r) return;
   const bits = [];
-  if(r.protein) bits.push(`${r.protein} Protein Supplement${r.protein>1?'s':''}`);
-  if(r.elite)   bits.push(`${r.elite} Elite Skill Token${r.elite>1?'s':''}`);
-  toast('🏅 Mastery reward: ' + bits.join(' + ') + '!');
+  if(r.bronze) bits.push(`${r.bronze} 🥉 Bronze`);
+  if(r.silver) bits.push(`${r.silver} 🥈 Silver`);
+  if(r.gold)   bits.push(`${r.gold} 🥇 Gold`);
+  toast('🏅 Mastery reward: ' + bits.join(' + ') + ' Medal' + ((r.bronze+r.silver+r.gold)>1?'s':'') + '!');
 }
 
 /* ---------- ELITE SKILL TOKENS ----------
@@ -2005,12 +2202,14 @@ function quizWillEnd(passed){
   return false;
 }
 
+function medalIcon(tier){ return tier==='gold'?'🥇':(tier==='silver'?'🥈':(tier==='bronze'?'🥉':'📈')); }
 function masteryChip(word){
   const n = masteryOf(word);
-  const next = n < MASTERY_CHECKPOINTS.protein ? MASTERY_CHECKPOINTS.protein
-             : (n < MASTERY_CHECKPOINTS.elite ? MASTERY_CHECKPOINTS.elite : null);
-  const badge = n >= MASTERY_CHECKPOINTS.elite ? '🏆' : (n >= MASTERY_CHECKPOINTS.protein ? '🥇' : '📈');
-  const label = next ? `${badge} mastery ${n} / ${next}` : `${badge} mastered ×${n}`;
+  const tier = masteryTier(n);
+  const next = n < MASTERY_CHECKPOINTS.bronze ? MASTERY_CHECKPOINTS.bronze
+             : (n < MASTERY_CHECKPOINTS.silver ? MASTERY_CHECKPOINTS.silver
+             : (n < MASTERY_CHECKPOINTS.gold ? MASTERY_CHECKPOINTS.gold : null));
+  const label = next ? `${medalIcon(tier)} mastery ${n} / ${next}` : `🥇 mastered ×${n}`;
   return `<div style="font-size:11px;color:var(--ink-soft);font-weight:800;margin-top:6px;">${label}</div>`;
 }
 
@@ -2240,6 +2439,12 @@ function wildGroupSize(){
   return 1;
 }
 const REGION1_WILD = ['rat','bird','moth'];
+
+/* Explorable zones per region. `id` drives the button art at
+   assets/zones/<id>.png; `tint` colours the bevel if no art is present. */
+const REGION_ZONES = {
+  1: [ { id:'tranquil_forest', name:'Tranquil Forest', tint:'#4a7a3c' } ],
+};
 
 function makeEnemy(species, level, opts){
   opts = opts || {};
@@ -2533,6 +2738,7 @@ const BG_MAP = {
   recover:   'recover.png',
   challenge: 'challenge.png',
   explore:   'explore.png',
+  shop:      'shop.png',
 };
 const bgMissing = {};
 function setScreenBg(key){
@@ -3503,6 +3709,8 @@ function renderInner(){
     case 'party':         return renderPartyStub();
     case 'stats':         return renderStats();
     case 'storage':       return renderStorage();
+    case 'shop':          return renderShop();
+    case 'avatarPick':    return renderAvatarPick();
     case 'region2':       return renderStub('Region 2','🏞️','Region 2 is unlocked — its wilds and trainers arrive in a future phase. Earth Snake and Ground Starter will be catchable here.','region');
     case 'recover':       return renderRecover();
     case 'monsterIndex':  return renderMonsterIndex();
@@ -3541,7 +3749,7 @@ function renderProfileSelect(){
   const box = $('#profileList');
   box.innerHTML = list.map(pr=>`
     <div class="region-card" data-pid="${pr.id}">
-      ${monPortrait(pr.starterSpecies || 'fire_starter', 48)}
+      ${pr.avatar ? avatarImg(pr.avatar, 48) : monPortrait(pr.starterSpecies || 'fire_starter', 48)}
       <div class="region-info" style="flex:1;">
         <h3>${escapeHtml(pr.name)}</h3>
         <p>Lv ${pr.level||5} · last played ${timeAgo(pr.updatedAt)}</p>
@@ -3584,22 +3792,73 @@ function renderProfileSelect(){
 
 function promptNewTrainerName(){
   $('#brandSub').textContent = 'New trainer';
+  ui.pendingAvatar = ui.pendingAvatar || null;
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Back</button>
     <div class="screen-title">What's your name?</div>
     <div class="screen-sub">This is how the game will greet you.</div>
-    <input type="text" id="nameInput" placeholder="Enter a name" maxlength="20" value="">
-    <button class="btn btn-primary" id="createBtn" style="margin-top:12px;">Continue</button>
+    <input type="text" id="nameInput" placeholder="Enter a name" maxlength="20" value="${escapeHtml(ui.pendingName||'')}">
+
+    <div class="screen-sub" style="margin:18px 0 8px;">Pick your look</div>
+    ${avatarPickerHtml(ui.pendingAvatar)}
+
+    <button class="btn btn-primary" id="createBtn" style="margin-top:16px;">Continue</button>
   `;
   $('#backBtn').addEventListener('click', ()=>go('profileSelect'));
+  wireAvatarPicker(id=>{ ui.pendingAvatar = id; });
   const submit = ()=>{
     const name = $('#nameInput').value.trim();
     if(!name){ toast('Please enter a name first.'); return; }
+    if(!ui.pendingAvatar){ toast('Pick an avatar to continue.'); return; }
     ui.pendingName = name;
     go('starterSelect');
   };
   $('#createBtn').addEventListener('click', submit);
   $('#nameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
+}
+
+/* Shared avatar grid, used at creation and for changing later in Settings. */
+function avatarPickerHtml(selected){
+  const row = (label, ids)=>`
+    <div class="av-group">
+      <div class="av-label">${label}</div>
+      <div class="av-row">
+        ${ids.map(id=>`
+          <button class="av-opt ${selected===id?'sel':''}" data-avatar="${id}">
+            ${avatarImg(id, 58)}
+          </button>`).join('')}
+      </div>
+    </div>`;
+  return `<div class="av-picker">${row('Boy', AVATARS.male)}${row('Girl', AVATARS.female)}</div>`;
+}
+function wireAvatarPicker(onPick){
+  screenEl.querySelectorAll('[data-avatar]').forEach(b=>b.addEventListener('click', ()=>{
+    screenEl.querySelectorAll('[data-avatar]').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');
+    onPick(b.dataset.avatar);
+  }));
+}
+
+/* Avatar chooser for existing profiles (and for changing later). */
+function renderAvatarPick(){
+  $('#brandSub').textContent = 'Your look';
+  let chosen = playerAvatar();
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Back</button>
+    <div class="screen-title">Choose your look</div>
+    <div class="screen-sub">You can change this any time in Settings.</div>
+    ${avatarPickerHtml(chosen)}
+    <button class="btn btn-primary" id="avSave" style="margin-top:18px;" ${chosen?'':'disabled'}>Save</button>
+  `;
+  $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
+  wireAvatarPicker(id=>{ chosen = id; $('#avSave').disabled = false; });
+  $('#avSave').addEventListener('click', async ()=>{
+    if(!chosen) return;
+    state.avatar = chosen;
+    await saveProfile();
+    toast('Looking good!');
+    go(ui.prevScreen||'home');
+  });
 }
 
 function timeAgo(ts){
@@ -3703,6 +3962,8 @@ function renderStarterSelect(){
   $('#confirmBtn').addEventListener('click', async ()=>{
     if(!picked) return;
     await createAndSaveProfile(ui.pendingName, picked);
+    if(ui.pendingAvatar){ state.avatar = ui.pendingAvatar; await saveProfile(); }
+    ui.pendingAvatar = null;
     ui.profileList = await loadProfileIndex();
     toast('Your adventure begins!');
     go('home');
@@ -3715,8 +3976,14 @@ function renderHome(){
   playMusic('main_menu');
   $('#brandSub').textContent = state.name;
   screenEl.innerHTML = `
-    <div class="screen-title">Home</div>
-    <div class="screen-sub">Where to, ${escapeHtml(state.name)}?</div>
+    ${playerAvatar() ? `<div class="home-hero">${avatarImg(playerAvatar(), 58)}<div>
+        <div class="home-hero-name">${escapeHtml(state.name)}</div>
+        <div class="home-hero-sub">Where to today?</div></div></div>`
+      : `<div class="screen-title">Home</div><div class="screen-sub">Where to, ${escapeHtml(state.name)}?</div>`}
+    ${playerAvatar() ? '' : `<div class="avatar-nudge" id="avatarNudge">
+        <span>👤 Choose a look for ${escapeHtml(state.name)}</span>
+        <button class="btn btn-primary" id="pickAvatarBtn" style="width:auto;padding:9px 16px;font-size:13px;">Pick</button>
+      </div>`}
     ${renderPartyStrip()}
     <div class="menu-grid" style="margin-top:16px;">
       <div class="menu-card full" data-nav="regionList">
@@ -3737,6 +4004,8 @@ function renderHome(){
     </div>
 
   `;
+  const pab = $('#pickAvatarBtn');
+  if(pab) pab.addEventListener('click', ()=>go('avatarPick'));
   screenEl.querySelector('[data-nav="regionList"]').addEventListener('click', ()=>go('region'));
   screenEl.querySelector('[data-nav="monsterIndex"]').addEventListener('click', ()=>go('monsterIndex'));
   screenEl.querySelector('[data-nav="spellingIndex"]').addEventListener('click', ()=>go('spellingIndex'));
@@ -3773,6 +4042,7 @@ function renderRegion(){
       <div class="menu-card" data-nav="challenge"><span class="mc-emoji">⚔️</span><div class="mc-title">Challenge</div><div class="mc-desc">Dojo, Rival &amp; Thugs</div></div>
       <div class="menu-card" data-nav="party"><span class="mc-emoji">🎒</span><div class="mc-title">Party</div><div class="mc-desc">Manage your team</div></div>
       <div class="menu-card" data-nav="recover"><span class="mc-emoji">💧</span><div class="mc-title">Recover</div><div class="mc-desc">Heal &amp; revise</div></div>
+      <div class="menu-card full" data-nav="shop"><span class="mc-emoji">🏪</span><div class="mc-title">Shop</div><div class="mc-desc">Spend medals earned from spelling</div></div>
     </div>
 
     <div style="margin-top:22px;font-weight:800;font-size:14px;color:var(--ink-soft);">Other regions</div>
@@ -3801,13 +4071,17 @@ function renderPartyStub(){
   $('#brandSub').textContent = 'Party';
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Region</button>
-    <div class="screen-title">Your Party</div>
-    <div class="screen-sub">${state.party.length} / 6 monsters · tap one for options</div>
-    <div id="partyList" style="display:flex;flex-direction:column;gap:10px;"></div>
-    <button class="btn btn-ghost" id="storageBtn" style="margin-top:16px;">📦 Storage (${state.storage.length})</button>
+    <div class="party-head-row">
+      <div>
+        <div class="screen-title" style="margin:0;">Your Party</div>
+        <div class="screen-sub" style="margin:0;">${state.party.length} / 6 · tap one for options</div>
+      </div>
+      <button class="btn btn-ghost storage-corner" id="storageBtn">📦 ${state.storage.length}</button>
+    </div>
+    <div id="partyList" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;"></div>
   `;
   $('#backBtn').addEventListener('click', ()=>go('region'));
-  $('#storageBtn').addEventListener('click', ()=>go('storage'));
+  $('#storageBtn').addEventListener('click', ()=>{ ui.storageFrom='party'; go('storage'); });
   renderPartyList();
 }
 
@@ -3942,29 +4216,32 @@ function renderStats(){
   const nameArea = $('#nameArea');
   if(nameArea){
     const unnamed = !m.nickname;
-    const canRename = !unnamed && !m.renamed && (state.progress.currentRegion > (m.namedRegion||1));
+    const bronze = (state.medals && state.medals.bronze) || 0;
+    const canRename = !unnamed && bronze > 0;      // renaming costs 1 Bronze Medal
     if(unnamed || canRename){
       nameArea.innerHTML = `
         <div style="display:flex;gap:8px;">
           <input type="text" id="nameInput" placeholder="${unnamed?'Give it a nickname':'New nickname'}" maxlength="16" style="flex:1;">
           <button class="btn btn-jade" id="nameSave" style="width:auto;padding:12px 16px;">${unnamed?'Name':'Rename'}</button>
         </div>
-        ${unnamed?'':'<div style="font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:5px;">You can rename a monster only once.</div>'}
+        ${unnamed?'<div style="font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:5px;">Naming is free the first time.</div>'
+                 :`<div style="font-size:11px;color:var(--gold);font-weight:700;margin-top:5px;">Costs 🥉 1 Bronze Medal (you have ${bronze}).</div>`}
       `;
       $('#nameSave').addEventListener('click', async ()=>{
         const v = $('#nameInput').value.trim();
         if(!v) return;
-        if(!unnamed) m.renamed = true;
+        if(!unnamed){
+          if(((state.medals&&state.medals.bronze)||0) < 1){ toast('You need a Bronze Medal to rename.'); return; }
+          state.medals.bronze -= 1;
+        }
         m.nickname = v;
         m.namedRegion = state.progress.currentRegion;
         await saveProfile();
-        toast('Name saved!');
+        toast(unnamed ? 'Name saved!' : 'Renamed! 🥉 1 Bronze Medal spent.');
         renderStats();
       });
-    } else if(!unnamed && m.renamed){
-      nameArea.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);font-weight:600;">Already renamed once — can't rename again.</div>`;
     } else if(!unnamed){
-      nameArea.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);font-weight:600;">Reach a later region to rename this monster.</div>`;
+      nameArea.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);font-weight:600;">Earn a 🥉 Bronze Medal to rename this monster.</div>`;
     }
   }
   const up = $('#useProtein');
@@ -4006,7 +4283,7 @@ function renderStorage(){
   const canRoll = tokens >= TOKENS_PER_ROLL;
   const canElite = elite >= ELITE_ROLL_COST;
   screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Party</button>
+    <button class="back-link" id="backBtn">← ${ui.storageFrom==='shop'?'Shop':'Party'}</button>
     <div class="screen-title">Storage</div>
     <div class="screen-sub">${state.storage.length} stored · ${state.moveStones.length} stone${state.moveStones.length===1?'':'s'} · ${tokens} token${tokens===1?'':'s'}</div>
     <div class="storage-cols">
@@ -4027,7 +4304,7 @@ function renderStorage(){
       </div>
     </div>
   `;
-  $('#backBtn').addEventListener('click', ()=>go('party'));
+  $('#backBtn').addEventListener('click', ()=>{ const t = ui.storageFrom==='shop'?'shop':'party'; ui.storageFrom=null; go(t); });
   const rb = $('#rollBtn');
   if(rb && canRoll) rb.addEventListener('click', doStoneRoll);
   const erb = $('#eliteRollBtn');
@@ -5011,28 +5288,299 @@ function arenaFire(mv){
   resolveBattleMove(mv, target, full);
 }
 
+
+/* ============================================================
+   SHOP
+   Medals earned from spelling mastery are spent here. Deliberate purchases,
+   not random drops — the long grind converts into a chosen reward.
+   ============================================================ */
+const SHOP_PRICES = {
+  skillToken:   { cur:'bronze', cost:3  },   // 3 Bronze -> 1 Skill Token
+  randomStone:  { cur:'tokens', cost:TOKENS_PER_ROLL },
+  protein:      { cur:'silver', cost:10 },
+  eliteStone:   { cur:'gold',   cost:5  },
+  highSkill:    { cur:'gold',   cost:5  },
+  veryHighSkill:{ cur:'gold',   cost:50 },
+  ultraSkill:   { cur:'gold',   cost:100 },
+};
+const SHOP_GREETINGS = [
+  "Welcome in! Every word you've mastered is worth something here.",
+  "Ah, a returning trainer. Let's see what your medals can buy.",
+  "Fresh stock today — take your time browsing.",
+  "Those medals won't spend themselves, you know!",
+  "Study hard, shop well. That's the way of it.",
+  "Something catch your eye? I keep only the good stuff.",
+  "Back again? Your monsters must be getting strong.",
+  "Medals in, power out. Simple as that.",
+];
+function shopGreeting(){ return SHOP_GREETINGS[Math.floor(Math.random()*SHOP_GREETINGS.length)]; }
+
+function medalCount(cur){
+  if(cur==='tokens') return state.inventory.tokens||0;
+  return (state.medals && state.medals[cur]) || 0;
+}
+function curIcon(cur){ return cur==='tokens' ? '🎫' : medalIcon(cur); }
+function curName(cur){
+  return cur==='tokens' ? 'Skill Tokens'
+       : cur.charAt(0).toUpperCase()+cur.slice(1)+' Medals';
+}
+async function spend(cur, amount){
+  if(medalCount(cur) < amount) return false;
+  if(cur==='tokens') state.inventory.tokens -= amount;
+  else state.medals[cur] -= amount;
+  return true;
+}
+
+function renderShop(){
+  setScreenBg('shop');
+  $('#brandSub').textContent = 'Shop';
+  if(!ui.shopGreeting) ui.shopGreeting = shopGreeting();
+  const m = state.medals || {bronze:0,silver:0,gold:0};
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Region</button>
+
+    <div class="shop-keeper">
+      ${npcPortrait('shopkeeper','🧑‍🌾',72,'var(--paper-3)')}
+      <div class="shop-bubble">${escapeHtml(ui.shopGreeting)}</div>
+    </div>
+
+    <div class="medal-bar">
+      <span>🥉 ${m.bronze||0}</span><span>🥈 ${m.silver||0}</span><span>🥇 ${m.gold||0}</span><span>🎫 ${state.inventory.tokens||0}</span>
+    </div>
+
+    <div id="shopWares" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;"></div>
+
+    <button class="btn btn-ghost" id="shopStorage" style="margin-top:14px;">📦 Open Storage</button>
+  `;
+  $('#backBtn').addEventListener('click', ()=>{ ui.shopGreeting=null; go('region'); });
+  $('#shopStorage').addEventListener('click', ()=>{ ui.storageFrom='shop'; go('storage'); });
+
+  const wares = [
+    { id:'skillToken',    icon:'🎫', name:'Skill Token',            desc:'Spin for a random Skill Stone (5 tokens per spin).', qty:true },
+    { id:'randomStone',   icon:'💎', name:'Random Skill Stone',     desc:'One spin, right now. Any tier, any type.' },
+    { id:'protein',       icon:'💪', name:'Protein Supplement',     desc:'Permanently raises one monster\'s stats.' },
+    { id:'eliteStone',    icon:'⭐', name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
+    { id:'highSkill',     icon:'🔷', name:'High Quality Skill',     desc:'Pick any High-tier skill yourself.', pick:'high' },
+    { id:'veryHighSkill', icon:'🔶', name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
+    { id:'ultraSkill',    icon:'🔴', name:'Ultra Quality Skill',    desc:'Pick any Ultra skill yourself.', pick:'ultra' },
+  ];
+  const box = $('#shopWares');
+  box.innerHTML = wares.map(w=>{
+    const pr = SHOP_PRICES[w.id];
+    const afford = medalCount(pr.cur) >= pr.cost;
+    return `<div class="ware ${afford?'':'cant'}" data-ware="${w.id}">
+      <div class="ware-icon">${w.icon}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="ware-name">${escapeHtml(w.name)}</div>
+        <div class="ware-desc">${escapeHtml(w.desc)}</div>
+      </div>
+      <div class="ware-price">${curIcon(pr.cur)} ${pr.cost}</div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('[data-ware]').forEach(el=>el.addEventListener('click', ()=>{
+    const w = wares.find(x=>x.id===el.dataset.ware);
+    if(w.qty) return openQtyPurchase(w);
+    if(w.pick) return openSkillPicker(w);
+    return openSinglePurchase(w);
+  }));
+}
+
+/* Overlay header showing the relevant currency, per spec. */
+function shopOverlay(cur, inner){
+  const ov = document.createElement('div');
+  ov.className = 'shop-overlay';
+  ov.innerHTML = `
+    <div class="shop-ov-top">${curIcon(cur)} <b id="ovCount">${medalCount(cur)}</b></div>
+    <div class="shop-ov-body">${inner}</div>`;
+  document.body.appendChild(ov);
+  return ov;
+}
+
+/* Quantity purchase with − / + / Max (Skill Tokens). */
+function openQtyPurchase(w){
+  const pr = SHOP_PRICES[w.id];
+  const max = Math.floor(medalCount(pr.cur)/pr.cost);
+  let qty = max>0 ? 1 : 0;
+  const ov = shopOverlay(pr.cur, `
+    <div class="qty-card">
+      <div class="ware-icon big">${w.icon}</div>
+      <div class="ware-name" style="font-size:19px;">${escapeHtml(w.name)}</div>
+      <div class="ware-desc" style="margin-bottom:14px;">${curIcon(pr.cur)} ${pr.cost} ${curName(pr.cur)} each</div>
+      <div class="qty-row">
+        <button class="qty-btn" id="qMinus">−</button>
+        <div class="qty-val" id="qVal">${qty}</div>
+        <button class="qty-btn" id="qPlus">+</button>
+        <button class="qty-btn wide" id="qMax">Max</button>
+      </div>
+      <div class="ware-desc" id="qTotal" style="margin-top:10px;"></div>
+      <button class="btn btn-primary" id="qBuy" style="margin-top:14px;" ${qty?'':'disabled'}>Buy</button>
+      <button class="btn btn-ghost" id="qCancel" style="margin-top:8px;">Cancel</button>
+    </div>`);
+  const refresh = ()=>{
+    ov.querySelector('#qVal').textContent = qty;
+    ov.querySelector('#qTotal').textContent = qty ? `Total: ${curIcon(pr.cur)} ${qty*pr.cost}` : 'Not enough medals.';
+    ov.querySelector('#qPlus').disabled = qty >= max;
+    ov.querySelector('#qMinus').disabled = qty <= 1;
+    ov.querySelector('#qBuy').disabled = qty < 1;
+  };
+  refresh();
+  const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+  ov.querySelector('#qCancel').addEventListener('click', close);
+  ov.querySelector('#qMinus').addEventListener('click', ()=>{ if(qty>1){ qty--; refresh(); } });
+  ov.querySelector('#qPlus').addEventListener('click', ()=>{ if(qty<max){ qty++; refresh(); } });
+  ov.querySelector('#qMax').addEventListener('click', ()=>{ qty = max; refresh(); });
+  ov.querySelector('#qBuy').addEventListener('click', async ()=>{
+    if(qty<1) return;
+    const before = medalCount(pr.cur);
+    if(!await spend(pr.cur, qty*pr.cost)) return;
+    state.inventory.tokens = (state.inventory.tokens||0) + qty;
+    const sv = showSyncingOverlay('Syncing…');
+    const ok = await saveProfile({ awaitCloud:true });
+    hideSyncingOverlay(sv);
+    if(!ok){ state.medals[pr.cur] = before; state.inventory.tokens -= qty; showSyncFailure(); return; }
+    playSfx('stone_low');
+    close();
+    toast(`Bought ${qty} Skill Token${qty>1?'s':''}!`);
+    renderShop();
+  });
+}
+
+/* One-tap purchases: random stone, protein, elite stone. */
+function openSinglePurchase(w){
+  const pr = SHOP_PRICES[w.id];
+  const ov = shopOverlay(pr.cur, `
+    <div class="qty-card">
+      <div class="ware-icon big">${w.icon}</div>
+      <div class="ware-name" style="font-size:19px;">${escapeHtml(w.name)}</div>
+      <div class="ware-desc" style="margin:6px 0 14px;">${escapeHtml(w.desc)}<br><b>${curIcon(pr.cur)} ${pr.cost} ${curName(pr.cur)}</b></div>
+      <button class="btn btn-primary" id="pBuy" ${medalCount(pr.cur)>=pr.cost?'':'disabled'}>${medalCount(pr.cur)>=pr.cost?'Buy':'Not enough'}</button>
+      <button class="btn btn-ghost" id="pCancel" style="margin-top:8px;">Cancel</button>
+    </div>`);
+  const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+  ov.querySelector('#pCancel').addEventListener('click', close);
+  ov.querySelector('#pBuy').addEventListener('click', async ()=>{
+    if(medalCount(pr.cur) < pr.cost) return;
+    const snapshot = { tokens:state.inventory.tokens, protein:state.inventory.protein, medals:Object.assign({},state.medals), stones:state.moveStones.length };
+    await spend(pr.cur, pr.cost);
+    let stone = null;
+    if(w.id==='randomStone'){ stone = newMoveStone(); state.moveStones.push(stone); }
+    else if(w.id==='eliteStone'){ stone = newEliteStone(); state.moveStones.push(stone); }
+    else if(w.id==='protein'){ state.inventory.protein = (state.inventory.protein||0)+1; }
+    const sv = showSyncingOverlay('Syncing…');
+    const ok = await saveProfile({ awaitCloud:true });
+    hideSyncingOverlay(sv);
+    if(!ok){
+      state.inventory.tokens = snapshot.tokens; state.inventory.protein = snapshot.protein;
+      state.medals = snapshot.medals; state.moveStones.length = snapshot.stones;
+      showSyncFailure(); return;
+    }
+    close();
+    if(stone) showStoneReveal(stone, 'Purchased!');
+    else { playSfx('protein_use'); toast('Protein Supplement purchased!'); renderShop(); }
+  });
+}
+
+/* Browse-and-choose picker for the three hand-picked skill tiers. */
+function openSkillPicker(w){
+  const pr = SHOP_PRICES[w.id];
+  const tier = w.pick;
+  const t = stoneTierDef(tier);
+  const ov = shopOverlay(pr.cur, `
+    <div class="pick-card">
+      <div class="ware-name" style="font-size:19px;">${escapeHtml(w.name)}</div>
+      <div class="ware-desc" style="margin:4px 0 12px;">${curIcon(pr.cur)} ${pr.cost} ${curName(pr.cur)} · tap a skill to read what it does</div>
+      <div class="pick-list">
+        ${STONE_TYPES_REGION1.map(tp=>`
+          <button class="pick-opt" data-type="${tp}">
+            <span class="type-badge" style="background:${TYPE_COLORS[tp]};">${tp}</span>
+            <span class="pick-name">${escapeHtml(stoneName(tp,tier))}</span>
+          </button>`).join('')}
+      </div>
+      <button class="btn btn-ghost" id="pkCancel" style="margin-top:12px;">Cancel</button>
+    </div>`);
+  const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+  ov.querySelector('#pkCancel').addEventListener('click', close);
+  ov.querySelectorAll('.pick-opt').forEach(b=>b.addEventListener('click', ()=>{
+    const type = b.dataset.type;
+    const name = stoneName(type, tier);
+    const detail = `<b>${escapeHtml(name)}</b> (${type})<br><br>${t.mult!=null?t.mult+'× ATK':'Status move'} · ${t.words} words<br>${stoneDescription({tier,type})}<br><br>Buy for ${curIcon(pr.cur)} ${pr.cost}?`;
+    confirmDialogHtml(detail, async ()=>{
+      if(medalCount(pr.cur) < pr.cost){ toast('Not enough medals.'); return; }
+      const snapshot = Object.assign({}, state.medals);
+      await spend(pr.cur, pr.cost);
+      const stone = { uid:'s'+Date.now()+Math.floor(Math.random()*1000), tier, type, name };
+      state.moveStones.push(stone);
+      const sv = showSyncingOverlay('Syncing…');
+      const ok = await saveProfile({ awaitCloud:true });
+      hideSyncingOverlay(sv);
+      if(!ok){ state.medals = snapshot; state.moveStones.pop(); showSyncFailure(); return; }
+      close();
+      showStoneReveal(stone, 'Purchased!');
+    });
+  }));
+}
+
+/* confirmDialog variant that allows rich content. */
+function confirmDialogHtml(html, onYes){
+  const scrim = document.createElement('div');
+  scrim.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.6);z-index:95;display:flex;align-items:center;justify-content:center;padding:24px;';
+  scrim.innerHTML = `
+    <div style="background:var(--paper);border-radius:18px;padding:22px;max-width:340px;width:100%;box-shadow:0 12px 40px var(--shadow);">
+      <div style="font-size:14px;font-weight:600;line-height:1.55;margin-bottom:16px;">${html}</div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost" id="chNo" style="flex:1;">Cancel</button>
+        <button class="btn btn-primary" id="chYes" style="flex:1;">Buy</button>
+      </div>
+    </div>`;
+  document.body.appendChild(scrim);
+  const close=()=>{ if(scrim.parentNode) document.body.removeChild(scrim); };
+  scrim.querySelector('#chNo').addEventListener('click', close);
+  scrim.addEventListener('click', e=>{ if(e.target===scrim) close(); });
+  scrim.querySelector('#chYes').addEventListener('click', ()=>{ close(); onYes(); });
+}
+
 /* ---------- SCREEN: explore ---------- */
 function renderExplore(){
   setScreenBg('explore');
   $('#brandSub').textContent = 'Explore';
   const canFight = state.party.some(m=>m.currentHp>0);
+  const lead = state.party.find(m=>m.currentHp>0) || state.party[0];
+  const zones = REGION_ZONES[state.progress.currentRegion] || [];
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Region</button>
-    <div class="screen-title">Riverside Meadow</div>
-    <div class="screen-sub">Tall grass rustles nearby…</div>
-    <div style="text-align:center;font-size:64px;margin:20px 0;">🌿</div>
+
+    <div class="explore-hero">
+      ${playerAvatar() ? avatarImg(playerAvatar(), 84)
+        : (lead ? monPortrait(lead.species, 84, { view:'back', bare:true, stage:monStage(lead), breathe:'normal' }) : '')}
+      <div class="explore-hero-text">
+        <div class="explore-hero-name">${escapeHtml(state.name)}</div>
+        <div class="explore-hero-sub">Choose where to explore</div>
+      </div>
+    </div>
+
     ${canFight ? `
-      <button class="btn btn-primary" id="exploreBtn">Search the grass</button>
+      <div class="zone-grid">
+        ${zones.map((z,i)=>`
+          <div class="zone-item">
+            <button class="zone-btn" data-zone="${i}" style="${z.tint?`--zone-tint:${z.tint};`:''}">
+              <img src="assets/zones/${z.id}.png" alt="" class="zone-img" onerror="this.style.display='none'">
+            </button>
+            <div class="zone-label">${escapeHtml(z.name)}</div>
+          </div>`).join('')}
+      </div>
     ` : `
       <div class="placeholder-note"><span class="pn-emoji">💤</span>Your whole team has fainted. Heal up before exploring.</div>
     `}
-    <button class="btn btn-ghost" id="backBtn2" style="margin-top:10px;">Back to region</button>
+    <button class="btn btn-ghost" id="backBtn2" style="margin-top:16px;">Back to region</button>
   `;
   $('#backBtn').addEventListener('click', ()=>go('region'));
   $('#backBtn2').addEventListener('click', ()=>go('region'));
-  const eb = $('#exploreBtn');
-  if(eb) eb.addEventListener('click', startWildEncounter);
+  screenEl.querySelectorAll('[data-zone]').forEach(b=>b.addEventListener('click', ()=>{
+    ui.currentZone = zones[+b.dataset.zone];
+    startWildEncounter();
+  }));
 }
+
 
 /* ---------- SCREEN: generic stub ---------- */
 function renderStub(title, emoji, msg, back){
@@ -5108,6 +5656,11 @@ function renderSpellingManage(){
 
 
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:800;margin-bottom:6px;">📚 Which lists for ${escapeHtml(state.name)}?</div>
+      <div id="listFilter" class="list-filter"></div>
+    </div>
+
+    <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:12px;">
       <div style="font-size:12px;font-weight:800;">📄 Shared list source</div>
       <div style="font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:3px;line-height:1.45;">
         ${escapeHtml(wordSyncNote || 'Checking words.txt…')}<br>
@@ -5165,6 +5718,7 @@ function renderSpellingManage(){
     renderSpellingManage();
   });
 
+  renderListFilter();
   const rs = $('#resyncBtn');
   if(rs) rs.addEventListener('click', async ()=>{ wordSyncNote='Syncing…'; renderSpellingManage(); await syncRemoteWords(); });
 
@@ -5221,6 +5775,49 @@ function renderSpellingManage(){
   renderWordRows();
 }
 
+/* Compact mastery readout for a word row. */
+function masteryBadge(text){
+  const n = masteryOf(text);
+  const tier = masteryTier(n);
+  const next = n < MASTERY_CHECKPOINTS.bronze ? MASTERY_CHECKPOINTS.bronze
+             : (n < MASTERY_CHECKPOINTS.silver ? MASTERY_CHECKPOINTS.silver
+             : (n < MASTERY_CHECKPOINTS.gold ? MASTERY_CHECKPOINTS.gold : null));
+  const pct = next ? Math.min(100, n/next*100) : 100;
+  const icon = tier ? medalIcon(tier) : '·';
+  return `<span class="mst-icon">${icon}</span>
+    <span class="mst-bar"><span style="width:${pct}%;background:${tier==='gold'?'var(--gold)':(tier==='silver'?'#9aa0a6':(tier==='bronze'?'#b1743f':'var(--jade)'))};"></span></span>
+    <span class="mst-num">${n}${next?'/'+next:''}</span>`;
+}
+
+/* Per-profile list selection, grouped by level (K1 / P1 / P2 …). */
+function renderListFilter(){
+  const el = $('#listFilter');
+  if(!el) return;
+  if(availableLists.length<=1){
+    el.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);font-weight:600;">Only one list available. Add more files to <b>words/</b> and list them in <b>words/lists.txt</b>.</div>`;
+    return;
+  }
+  const sel = new Set(selectedListKeys());
+  const byLevel = {};
+  availableLists.forEach(l=>{ (byLevel[l.level] = byLevel[l.level] || []).push(l); });
+  el.innerHTML = Object.keys(byLevel).sort().map(lv=>`
+    <div class="lf-group">
+      <div class="lf-level">${escapeHtml(lv)}</div>
+      ${byLevel[lv].map(l=>`
+        <label class="lf-item ${sel.has(l.key)?'on':''}">
+          <input type="checkbox" data-list="${escapeHtml(l.key)}" ${sel.has(l.key)?'checked':''}>
+          <span>${escapeHtml(l.label)} <span class="lf-count">${(listWords[l.key]||[]).length}</span></span>
+        </label>`).join('')}
+    </div>`).join('');
+  el.querySelectorAll('[data-list]').forEach(cb=>cb.addEventListener('change', async ()=>{
+    const chosen = Array.from(el.querySelectorAll('[data-list]')).filter(x=>x.checked).map(x=>x.dataset.list);
+    state.settings.wordLists = chosen;
+    rebuildRemote();
+    await saveProfile();
+    renderSpellingManage();
+  }));
+}
+
 function renderWordRows(){
   const container = $('#wordRows');
   if(!container) return;
@@ -5230,7 +5827,10 @@ function renderWordRows(){
   }
   container.innerHTML = wordRows().map(w=>`
     <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--paper-2);border:1px solid var(--line);border-radius:10px;margin-bottom:6px;">
-      <div style="flex:1;font-family:'Noto Sans SC';font-weight:700;font-size:16px;">${escapeHtml(w.text)}${w.isRemote?'':' <span style="font-size:10px;color:var(--ink-soft);font-family:Nunito;">local</span>'}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-family:'Noto Sans SC';font-weight:700;font-size:16px;">${escapeHtml(w.text)}${w.isRemote?'':' <span style="font-size:10px;color:var(--ink-soft);font-family:Nunito;">local</span>'}</div>
+        <div class="mastery-line">${masteryBadge(w.text)}</div>
+      </div>
       <button class="tagbtn ${w.priority?'on-p':''}" data-p="${escapeHtml(w.text)}">P</button>
       <button class="tagbtn ${w.regular?'on-r':''}" data-r="${escapeHtml(w.text)}">R</button>
       <button class="tagbtn del" data-del="${escapeHtml(w.text)}">✕</button>
@@ -5356,6 +5956,19 @@ function renderSound(){
 
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:12px;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          ${avatarImg(playerAvatar()||'m1', 46)}
+          <div>
+            <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">👤 Your look</div>
+            <div style="font-size:12px;color:var(--ink-soft);font-weight:600;">Change your avatar</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost" id="changeAvatarBtn" style="width:auto;padding:9px 14px;">Change</button>
+      </div>
+    </div>
+
+    <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <div>
           <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">✋ Left-handed layout</div>
           <div style="font-size:12px;color:var(--ink-soft);font-weight:600;">In landscape, puts the writing box on the left.</div>
@@ -5404,6 +6017,8 @@ function renderSound(){
       speechSynthesis.speak(u);
     }catch(e){ toast('Voice not available here.'); }
   });
+  const cav = $('#changeAvatarBtn');
+  if(cav) cav.addEventListener('click', ()=>{ ui.prevScreen='sound'; go('avatarPick'); });
   $('#lhToggle').addEventListener('change', async e=>{
     state.settings.leftHanded = e.target.checked;
     await saveProfile();
