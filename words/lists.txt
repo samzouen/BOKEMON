@@ -1,0 +1,7 @@
+# One line per list file.  Format:  filename.txt | Friendly label
+# The level prefix before the underscore (K1, P1, P2 …) groups them in the app.
+K1_01.txt | Kindergarten 1 · Set 1
+P1_01.txt | Primary 1 · Set 1
+P1_02.txt | Primary 1 · Set 2
+P2_01.txt | Primary 2 · Set 1
+ 
