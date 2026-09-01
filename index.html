@@ -633,30 +633,77 @@ const BGM_MAP = {
 };
 
 const audio = {
-  unlocked: false,          // browsers block sound until a real user gesture
-  sfxCache: {},
+  unlocked: false,
+  sfxCache: {},          // event file -> {el, src, gain}
   musicEl: null,
   musicName: null,
-  pendingChain: null,       // track to start when the current one ends (battle_start -> loop)
-  missing: {},              // remember 404s so we don't retry them every time
+  pendingChain: null,
+  missing: {},
 };
 
-function sfxVolume(){ return (state?.settings?.sfxVolume ?? state?.settings?.volume ?? 0.8); }
-/* Music sits well under the SFX; base level reduced 40% from the original 0.35. */
-function musicVolume(){ return (state?.settings?.musicVolume ?? 0.21); }
+/* ---------- Web Audio volume control ----------
+   iOS Safari IGNORES HTMLAudioElement.volume — it's read-only there, so every
+   sound plays at full system volume no matter what the sliders say. Routing
+   audio through a Web Audio GainNode is the only way to control level on iOS,
+   and it also gives us smooth, click-free fades. */
+let actx = null, musicGain = null, sfxGain = null;
+function ensureAudioCtx(){
+  if(actx) return actx;
+  try{
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return null;
+    actx = new AC();
+    musicGain = actx.createGain(); musicGain.gain.value = musicVolume(); musicGain.connect(actx.destination);
+    sfxGain   = actx.createGain(); sfxGain.gain.value   = sfxVolume();   sfxGain.connect(actx.destination);
+  }catch(e){ actx = null; }
+  return actx;
+}
+/* Attach an <audio> element to a gain bus. Each element may only ever be
+   connected once, so the node is cached on the element itself. */
+function routeAudio(el, bus){
+  const ctx = ensureAudioCtx();
+  if(!ctx || el._routed) return !!el._routed;
+  try{
+    const src = ctx.createMediaElementSource(el);
+    src.connect(bus);
+    el._routed = true;
+    return true;
+  }catch(e){ return false; }
+}
+function applyVolumes(){
+  if(musicGain) musicGain.gain.value = musicVolume();
+  if(sfxGain)   sfxGain.gain.value   = sfxVolume();
+  // fallback for browsers without Web Audio (desktop mostly) — harmless on iOS
+  if(!actx){
+    if(audio.musicEl) audio.musicEl.volume = musicVolume();
+  }
+}
+/* Ramp a gain node, used for fades. */
+function rampGain(node, to, ms, onDone){
+  if(!node || !actx){ if(onDone) onDone(); return; }
+  try{
+    const now = actx.currentTime;
+    node.gain.cancelScheduledValues(now);
+    node.gain.setValueAtTime(node.gain.value, now);
+    node.gain.linearRampToValueAtTime(Math.max(0.0001, to), now + ms/1000);
+  }catch(e){}
+  if(onDone) setTimeout(onDone, ms);
+}
 
-/* Called on the first real tap/click anywhere — satisfies autoplay policy. */
+function sfxVolume(){ return (state?.settings?.sfxVolume ?? 0.55); }
+function musicVolume(){ return (state?.settings?.musicVolume ?? 0.10); }
+
 function unlockAudio(){
+  const ctx = ensureAudioCtx();
+  if(ctx && ctx.state === 'suspended'){ try{ ctx.resume(); }catch(e){} }
   if(audio.unlocked) return;
   audio.unlocked = true;
-  if(audio.musicName && !audio.musicEl) playMusic(audio.musicName);   // resume a track requested too early
+  applyVolumes();
+  if(audio.musicName && !audio.musicEl) playMusic(audio.musicName);
 }
 try{
   document.addEventListener('pointerdown', unlockAudio, { once:false, passive:true });
   document.addEventListener('keydown', unlockAudio, { passive:true });
-  /* One delegated click handler covers every button in the app — current and
-     future — so no individual wiring is needed per screen. The writing canvas
-     and quiz controls are excluded so drawing stays silent. */
   document.addEventListener('click', (e)=>{
     const el = e.target.closest('button, .menu-card, .region-card, .challenge-card, .mon-index-card, .party-head, .stone-card, .drawer-item');
     if(!el || el.disabled) return;
@@ -668,40 +715,93 @@ try{
 function playSfx(event){
   try{
     const file = SFX_MAP[event];
-    if(!file || !audio.unlocked || audio.missing[file]) return;
+    if(!file || !audio.unlocked || audio.missing[file]) return null;
     const src = SFX_DIR + file;
-    let a = audio.sfxCache[file];
-    if(!a){
-      a = new Audio(src);
-      a.addEventListener('error', ()=>{ audio.missing[file] = true; }); // silent if absent
-      audio.sfxCache[file] = a;
+    let entry = audio.sfxCache[file];
+    if(!entry){
+      const el = new Audio(src);
+      el.addEventListener('error', ()=>{ audio.missing[file] = true; });
+      entry = { el, gain:null };
+      const ctx = ensureAudioCtx();
+      if(ctx){
+        try{
+          const g = ctx.createGain();
+          g.gain.value = 1;
+          g.connect(sfxGain);
+          const srcNode = ctx.createMediaElementSource(el);
+          srcNode.connect(g);
+          el._routed = true;
+          entry.gain = g;
+        }catch(e){}
+      }
+      audio.sfxCache[file] = entry;
     }
-    a.currentTime = 0;
-    a.volume = sfxVolume();
-    const p = a.play();
-    if(p && p.catch) p.catch(()=>{});   // ignore autoplay rejections
+    if(entry.gain) entry.gain.gain.value = 1;      // reset after any previous fade
+    else entry.el.volume = sfxVolume();            // non-Web-Audio fallback
+    entry.el.currentTime = 0;
+    const p = entry.el.play();
+    if(p && p.catch) p.catch(()=>{});
+    return entry;
+  }catch(e){ return null; }
+}
+function playStoneSfx(tierId){ return playSfx('stone_'+tierId); }
+
+/* Fade a specific sound effect out (used for the stone-roll spin). */
+function fadeOutSfx(event, ms){
+  try{
+    const file = SFX_MAP[event];
+    const entry = file && audio.sfxCache[file];
+    if(!entry) return;
+    const dur = ms || 500;
+    if(entry.gain && actx){
+      rampGain(entry.gain, 0.0001, dur, ()=>{ try{ entry.el.pause(); entry.el.currentTime = 0; }catch(e){} });
+    } else {
+      const el = entry.el, start = el.volume || 1, steps = 12;
+      let i = 0;
+      const iv = setInterval(()=>{
+        i++; try{ el.volume = Math.max(0, start*(1-i/steps)); }catch(e){}
+        if(i>=steps){ clearInterval(iv); try{ el.pause(); el.currentTime = 0; }catch(e){} }
+      }, dur/steps);
+    }
   }catch(e){}
 }
-/* Convenience: the right fanfare for a stone of a given tier. */
-function playStoneSfx(tierId){ playSfx('stone_'+tierId); }
 
-/* Start a music track. `chainTo` plays once this one finishes (used for the
-   battle-start sting leading into the looping battle theme). */
+/* Music. Switching tracks NEVER cuts the old one — it always fades over 2s. */
+const MUSIC_FADE_MS = 2000;
 function playMusic(name, opts){
   opts = opts || {};
   try{
     if(!BGM_MAP[name]) return;
     audio.musicName = name;
-    if(!audio.unlocked) return;               // will resume on first gesture
+    if(!audio.unlocked) return;
     if(audio.musicEl && audio.musicEl.dataset.track === name && !opts.restart) return;
-    stopMusic();
+
+    // ease the outgoing track away instead of stopping it dead
+    if(audio.musicEl) fadeOutMusic(MUSIC_FADE_MS);
+
     const file = BGM_MAP[name];
     if(audio.missing[file]) return;
     const el = new Audio(BGM_DIR + file);
     el.dataset.track = name;
     el.loop = opts.chainTo ? false : (opts.loop !== false);
-    el.volume = musicVolume();
     el.addEventListener('error', ()=>{ audio.missing[file] = true; });
+
+    const ctx = ensureAudioCtx();
+    let gain = null;
+    if(ctx){
+      try{
+        gain = ctx.createGain();
+        gain.gain.value = (opts.silentMs || opts.fadeMs) ? 0.0001 : 1;
+        gain.connect(musicGain);
+        ctx.createMediaElementSource(el).connect(gain);
+        el._routed = true;
+      }catch(e){ gain = null; }
+    }
+    if(!gain) el.volume = (opts.silentMs || opts.fadeMs) ? 0 : musicVolume();
+
+    el._gain = gain;
+    audio.musicEl = el;
+
     if(opts.chainTo){
       audio.pendingChain = opts.chainTo;
       el.addEventListener('ended', ()=>{
@@ -709,25 +809,22 @@ function playMusic(name, opts){
         if(next) playMusic(next, { loop:true });
       });
     }
-    audio.musicEl = el;
 
-    // Optional silent lead-in then fade up, so a repeat encounter doesn't
-    // slam the same track in from the first frame.
-    const target = musicVolume();
+    // optional silent lead-in, then fade up
     if(opts.silentMs || opts.fadeMs){
-      el.volume = 0;
       const fadeMs = opts.fadeMs || 0;
       setTimeout(()=>{
-        if(audio.musicEl !== el) return;          // a different track took over
-        if(fadeMs <= 0){ el.volume = target; return; }
-        const steps = 20, stepMs = fadeMs/steps;
-        let i = 0;
-        const iv = setInterval(()=>{
-          if(audio.musicEl !== el){ clearInterval(iv); return; }
-          i++;
-          el.volume = Math.min(target, target * (i/steps));
-          if(i >= steps) clearInterval(iv);
-        }, stepMs);
+        if(audio.musicEl !== el) return;
+        if(gain) rampGain(gain, 1, Math.max(1, fadeMs));
+        else {
+          const target = musicVolume(), steps = 20;
+          let i = 0;
+          const iv = setInterval(()=>{
+            if(audio.musicEl !== el){ clearInterval(iv); return; }
+            i++; el.volume = Math.min(target, target*(i/steps));
+            if(i>=steps) clearInterval(iv);
+          }, Math.max(1, fadeMs)/steps);
+        }
       }, opts.silentMs || 0);
     }
 
@@ -735,33 +832,29 @@ function playMusic(name, opts){
     if(p && p.catch) p.catch(()=>{});
   }catch(e){}
 }
-function stopMusic(){
-  try{
-    if(audio.musicEl){ audio.musicEl.pause(); audio.musicEl.currentTime = 0; }
-  }catch(e){}
-  audio.musicEl = null;
-  audio.pendingChain = null;
-}
-/* Ease the track out instead of cutting it dead — used on victory so the
-   fanfare lands over the tail of the battle theme rather than a silence. */
+
+/* Always a fade — never an abrupt stop. */
 function fadeOutMusic(ms){
   const el = audio.musicEl;
-  if(!el){ stopMusic(); return; }
-  audio.pendingChain = null;          // don't let a queued track start mid-fade
-  const dur = ms || 2000;
-  const steps = 24, stepMs = dur/steps;
-  const start = el.volume;
-  let i = 0;
-  const iv = setInterval(()=>{
-    if(audio.musicEl !== el){ clearInterval(iv); return; }   // something else took over
-    i++;
-    el.volume = Math.max(0, start * (1 - i/steps));
-    if(i >= steps){
-      clearInterval(iv);
-      if(audio.musicEl === el) stopMusic();
-    }
-  }, stepMs);
+  if(!el) return;
+  audio.musicEl = null;          // detach immediately so a new track can start
+  audio.pendingChain = null;
+  const dur = ms || MUSIC_FADE_MS;
+  const kill = ()=>{ try{ el.pause(); el.currentTime = 0; }catch(e){} };
+  if(el._gain && actx){
+    rampGain(el._gain, 0.0001, dur, kill);
+  } else {
+    const start = el.volume || musicVolume(), steps = 24;
+    let i = 0;
+    const iv = setInterval(()=>{
+      i++; try{ el.volume = Math.max(0, start*(1-i/steps)); }catch(e){}
+      if(i>=steps){ clearInterval(iv); kill(); }
+    }, dur/steps);
+  }
 }
+/* Kept for API compatibility — now always fades rather than cutting. */
+function stopMusic(){ fadeOutMusic(MUSIC_FADE_MS); }
+
 /* Battle entry: the fight's theme starts immediately — no intro sting.
    `silentIntro` is used when a wild fight is entered straight from "Explore
    again", so back-to-back battles don't restart the same music jarringly:
@@ -1053,7 +1146,7 @@ function blankProfile(name, starterSpecies){
       currentRegion:1,
       region1:{ guardianCleared:false, rivalCleared:false, thugsCleared:[], thugBossCleared:false, investigateProtein:0, dojoCleared:[] },
     },
-    settings:{ volume:0.8, sfxVolume:0.8, musicVolume:0.21, focusMode:false, password:null, xpMode:'default', leftHanded:false },
+    settings:{ volume:0.8, sfxVolume:0.55, musicVolume:0.10, focusMode:false, password:null, xpMode:'default', leftHanded:false },
     recentWrong:[],
     /* Each son's own checkmarks against the SHARED word list (see the Word List
        Module below). Keyed by word text. A word with no entry here defaults to
@@ -1161,8 +1254,8 @@ function normalizeProfile(p){
   if(p.settings.password===undefined) p.settings.password = null;
   if(!XP_MODES[p.settings.xpMode]) p.settings.xpMode = 'default';
   if(p.settings.leftHanded===undefined) p.settings.leftHanded = false;
-  if(p.settings.sfxVolume===undefined) p.settings.sfxVolume = p.settings.volume ?? 0.8;
-  if(p.settings.musicVolume===undefined) p.settings.musicVolume = 0.21;
+  if(p.settings.sfxVolume===undefined) p.settings.sfxVolume = 0.55;
+  if(p.settings.musicVolume===undefined) p.settings.musicVolume = 0.10;
   return p;
 }
 function recordWrong(word){
@@ -1613,8 +1706,10 @@ function speakWord(text){
     u.rate = 0.85;
     u.volume = state?.settings?.volume ?? 0.8;
     // Duck the music while the Chinese prompt plays so it stays clearly audible.
-    const restore = ()=>{ if(audio.musicEl) audio.musicEl.volume = musicVolume(); };
-    if(audio.musicEl) audio.musicEl.volume = musicVolume() * 0.25;
+    const restore = ()=>{ if(musicGain && actx) rampGain(musicGain, musicVolume(), 250);
+                          else if(audio.musicEl) audio.musicEl.volume = musicVolume(); };
+    if(musicGain && actx) rampGain(musicGain, musicVolume()*0.25, 150);
+    else if(audio.musicEl) audio.musicEl.volume = musicVolume() * 0.25;
     u.addEventListener('end', restore);
     u.addEventListener('error', restore);
     setTimeout(restore, 6000);   // failsafe if the end event never fires
@@ -4033,6 +4128,7 @@ function showStoneReveal(stone, spinLabel){
     <div id="rollText" style="font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;color:var(--ink-soft);">${escapeHtml(spinLabel||'Rolling…')}</div>`;
   document.body.appendChild(ov);
   setTimeout(()=>{
+    fadeOutSfx('stone_roll', 500);      // spin sound eases out as the result lands
     playStoneSfx(stone.tier);
     ov.querySelector('#rollSpin').textContent = '💎';
     ov.querySelector('#rollSpin').style.filter = `drop-shadow(0 0 18px ${TYPE_COLORS[stone.type]})`;
@@ -5246,12 +5342,12 @@ function renderSound(){
       <input type="range" id="volSlider" min="0" max="100" value="${Math.round(state.settings.volume*100)}"
         style="width:100%;margin-top:8px;accent-color:var(--cinnabar);">
 
-      <label style="font-weight:800;font-size:14px;display:block;margin-top:14px;">🔔 Sound effects: <span id="sfxLabel">${Math.round((state.settings.sfxVolume ?? 0.8)*100)}%</span></label>
-      <input type="range" id="sfxSlider" min="0" max="100" value="${Math.round((state.settings.sfxVolume ?? 0.8)*100)}"
+      <label style="font-weight:800;font-size:14px;display:block;margin-top:14px;">🔔 Sound effects: <span id="sfxLabel">${Math.round((state.settings.sfxVolume ?? 0.55)*100)}%</span></label>
+      <input type="range" id="sfxSlider" min="0" max="100" value="${Math.round((state.settings.sfxVolume ?? 0.55)*100)}"
         style="width:100%;margin-top:8px;accent-color:var(--cinnabar);">
 
-      <label style="font-weight:800;font-size:14px;display:block;margin-top:14px;">🎵 Music: <span id="musLabel">${Math.round((state.settings.musicVolume ?? 0.21)*100)}%</span></label>
-      <input type="range" id="musSlider" min="0" max="100" value="${Math.round((state.settings.musicVolume ?? 0.21)*100)}"
+      <label style="font-weight:800;font-size:14px;display:block;margin-top:14px;">🎵 Music: <span id="musLabel">${Math.round((state.settings.musicVolume ?? 0.10)*100)}%</span></label>
+      <input type="range" id="musSlider" min="0" max="100" value="${Math.round((state.settings.musicVolume ?? 0.10)*100)}"
         style="width:100%;margin-top:8px;accent-color:var(--cinnabar);">
 
       <button class="btn btn-jade" id="testVoiceBtn" style="margin-top:14px;">🔊 Test voice</button>
@@ -5282,14 +5378,18 @@ function renderSound(){
   slider.addEventListener('change', async ()=>{ state.settings.volume = slider.value/100; await saveProfile(); });
   const sfxS = $('#sfxSlider'), musS = $('#musSlider');
   if(sfxS){
-    sfxS.addEventListener('input', ()=>{ $('#sfxLabel').textContent = sfxS.value+'%'; });
-    sfxS.addEventListener('change', async ()=>{ state.settings.sfxVolume = sfxS.value/100; playSfx('ui_click'); await saveProfile(); });
+    sfxS.addEventListener('input', ()=>{
+      $('#sfxLabel').textContent = sfxS.value+'%';
+      state.settings.sfxVolume = sfxS.value/100;
+      applyVolumes();                                    // live, via the gain bus
+    });
+    sfxS.addEventListener('change', async ()=>{ playSfx('ui_click'); await saveProfile(); });
   }
   if(musS){
     musS.addEventListener('input', ()=>{
       $('#musLabel').textContent = musS.value+'%';
       state.settings.musicVolume = musS.value/100;
-      if(audio.musicEl) audio.musicEl.volume = musicVolume();   // live preview
+      applyVolumes();                                    // live, via the gain bus
     });
     musS.addEventListener('change', async ()=>{ await saveProfile(); });
   }
