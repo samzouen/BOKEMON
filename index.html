@@ -79,6 +79,13 @@
 
   /* ---------- screen ---------- */
   .screen{flex:1;padding:14px 16px 32px;animation:fade .28s ease;position:relative;z-index:1;}
+  /* faded backdrop behind every screen; sits under all content */
+  .screen-bg{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-size:cover;background-position:center;background-repeat:no-repeat;
+    opacity:0;transition:opacity .45s ease;
+  }
+  .screen-bg.on{ opacity:0.16; }
   @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
   .screen-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:26px;margin:6px 0 2px;}
   .screen-sub{color:var(--ink-soft);font-size:14px;font-weight:600;margin-bottom:20px;}
@@ -290,7 +297,7 @@
   /* battle */
   .enemy-card{
     background:var(--paper-2);border:2px solid var(--line);border-radius:14px;padding:8px 6px 6px;
-    text-align:center;width:98px;transition:transform .1s, border-color .15s;
+    text-align:center;transition:transform .1s, border-color .15s;
   }
   .enemy-card.fainted{opacity:0.35;filter:grayscale(1);}
   .enemy-card.targetable{border-color:var(--cinnabar);cursor:pointer;animation:pulse 1s infinite;}
@@ -300,9 +307,9 @@
 
   /* ---- battle stage: avatars < fx layer < text/HP ---- */
   .battle-stage{position:relative;margin-bottom:12px;}
-  .enemy-row{min-height:150px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:4px;}
+  .enemy-row{min-height:auto;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:4px;}
   .player-card{display:flex;align-items:flex-end;gap:14px;background:var(--paper-2);border:1px solid var(--line);
-    border-radius:16px;padding:12px 12px 10px;margin:4px 0 0;min-height:120px;}
+    border-radius:16px;padding:12px 12px 10px;margin:4px 0 0;}
   /* Depth order builds a sense of distance:
      enemy avatars (far) < move effects < player avatar (near) < text/HP bars */
   .avatar-layer{position:relative;z-index:1;}    /* enemies: furthest back */
@@ -335,6 +342,45 @@
   .player-avatar .mon-sprite{ filter:drop-shadow(0 5px 6px rgba(35,32,25,0.28)); }
   .enemy-card .mon-sprite{ filter:drop-shadow(0 3px 4px rgba(35,32,25,0.20)); }
   .npc-portrait{ flex-shrink:0; }
+
+  /* ---- evolution sequence ---- */
+  .evo-overlay{
+    position:fixed;inset:0;z-index:88;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:22px;overflow:hidden;
+    background:radial-gradient(circle at center, #fff9e8 0%, #efe0bd 70%, #e0cfa6 100%);
+  }
+  .evo-stage{position:relative;display:flex;align-items:center;justify-content:center;}
+  .evo-sprite-wrap{
+    filter:drop-shadow(0 0 26px rgba(255,214,120,0.95));
+    transition:filter .12s;
+  }
+  .evo-sprite-wrap.inverted{ filter:invert(1) hue-rotate(180deg) drop-shadow(0 0 30px rgba(120,200,255,0.9)); }
+  .evo-sprite-wrap.evo-pop{ animation:evoPop .6s cubic-bezier(.2,1.5,.4,1) 1; }
+  @keyframes evoPop{ 0%{transform:scale(.75);} 60%{transform:scale(1.12);} 100%{transform:scale(1);} }
+  .evo-text{
+    font-family:'Baloo 2',cursive;font-weight:800;font-size:21px;color:var(--ink);
+    text-align:center;min-height:30px;padding:0 20px;
+  }
+  .evo-learn{font-size:14px;font-weight:700;color:var(--jade-dark);margin-top:6px;}
+  .evo-particles{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+  .evo-particle{
+    position:absolute;bottom:-20px;border-radius:50%;
+    background:radial-gradient(circle, #fff6c9 0%, #ffd166 55%, rgba(255,209,102,0) 72%);
+    animation:evoRise linear infinite;
+  }
+  /* rise while drifting side to side, so the glow spirals upward */
+  @keyframes evoRise{
+    0%   { transform:translate(0,0) scale(.6); opacity:0; }
+    12%  { opacity:1; }
+    35%  { transform:translate(26px,-32vh) scale(1); }
+    65%  { transform:translate(-22px,-62vh) scale(.85); }
+    88%  { opacity:.75; }
+    100% { transform:translate(14px,-100vh) scale(.4); opacity:0; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .evo-particle{ animation:none; opacity:.35; }
+    .evo-sprite-wrap.evo-pop{ animation:none; }
+  }
   .npc-banner{
     display:flex;align-items:center;gap:9px;justify-content:flex-end;margin-bottom:6px;
     font-family:'Baloo 2',cursive;font-weight:700;font-size:13px;color:var(--ink-soft);
@@ -454,6 +500,7 @@
     <button class="hamburger" id="hamburgerBtn" aria-label="Menu"><span></span><span></span><span></span></button>
   </div>
 
+  <div class="screen-bg" id="screenBg" aria-hidden="true"></div>
   <div class="screen" id="screen"></div>
 </div>
 
@@ -581,7 +628,6 @@ const SFX_MAP = {
 const BGM_MAP = {
   main_menu:    'main_menu.mp3',
   region:       'region.mp3',
-  battle_start: 'battle_start.mp3',   // short intro sting; chains into battle_wild/boss
   battle_wild:  'battle_wild.mp3',
   battle_boss:  'battle_boss.mp3',
 };
@@ -596,7 +642,8 @@ const audio = {
 };
 
 function sfxVolume(){ return (state?.settings?.sfxVolume ?? state?.settings?.volume ?? 0.8); }
-function musicVolume(){ return (state?.settings?.musicVolume ?? 0.35); }
+/* Music sits well under the SFX; base level reduced 40% from the original 0.35. */
+function musicVolume(){ return (state?.settings?.musicVolume ?? 0.21); }
 
 /* Called on the first real tap/click anywhere — satisfies autoplay policy. */
 function unlockAudio(){
@@ -663,6 +710,27 @@ function playMusic(name, opts){
       });
     }
     audio.musicEl = el;
+
+    // Optional silent lead-in then fade up, so a repeat encounter doesn't
+    // slam the same track in from the first frame.
+    const target = musicVolume();
+    if(opts.silentMs || opts.fadeMs){
+      el.volume = 0;
+      const fadeMs = opts.fadeMs || 0;
+      setTimeout(()=>{
+        if(audio.musicEl !== el) return;          // a different track took over
+        if(fadeMs <= 0){ el.volume = target; return; }
+        const steps = 20, stepMs = fadeMs/steps;
+        let i = 0;
+        const iv = setInterval(()=>{
+          if(audio.musicEl !== el){ clearInterval(iv); return; }
+          i++;
+          el.volume = Math.min(target, target * (i/steps));
+          if(i >= steps) clearInterval(iv);
+        }, stepMs);
+      }, opts.silentMs || 0);
+    }
+
     const p = el.play();
     if(p && p.catch) p.catch(()=>{});
   }catch(e){}
@@ -674,9 +742,37 @@ function stopMusic(){
   audio.musicEl = null;
   audio.pendingChain = null;
 }
-/* Battle entry: short sting, then the looping theme for that fight type. */
-function playBattleMusic(isBoss){
-  playMusic('battle_start', { chainTo: isBoss ? 'battle_boss' : 'battle_wild' });
+/* Ease the track out instead of cutting it dead — used on victory so the
+   fanfare lands over the tail of the battle theme rather than a silence. */
+function fadeOutMusic(ms){
+  const el = audio.musicEl;
+  if(!el){ stopMusic(); return; }
+  audio.pendingChain = null;          // don't let a queued track start mid-fade
+  const dur = ms || 2000;
+  const steps = 24, stepMs = dur/steps;
+  const start = el.volume;
+  let i = 0;
+  const iv = setInterval(()=>{
+    if(audio.musicEl !== el){ clearInterval(iv); return; }   // something else took over
+    i++;
+    el.volume = Math.max(0, start * (1 - i/steps));
+    if(i >= steps){
+      clearInterval(iv);
+      if(audio.musicEl === el) stopMusic();
+    }
+  }, stepMs);
+}
+/* Battle entry: the fight's theme starts immediately — no intro sting.
+   `silentIntro` is used when a wild fight is entered straight from "Explore
+   again", so back-to-back battles don't restart the same music jarringly:
+   3s of silence, then a 2s fade in. */
+function playBattleMusic(isBoss, opts){
+  opts = opts || {};
+  playMusic(isBoss ? 'battle_boss' : 'battle_wild', {
+    loop:true,
+    silentMs: opts.silentIntro ? 3000 : 0,
+    fadeMs:   opts.silentIntro ? 2000 : 0,
+  });
 }
 
 /* ---------- SHARED WORD LIST SOURCE ----------
@@ -957,7 +1053,7 @@ function blankProfile(name, starterSpecies){
       currentRegion:1,
       region1:{ guardianCleared:false, rivalCleared:false, thugsCleared:[], thugBossCleared:false, investigateProtein:0, dojoCleared:[] },
     },
-    settings:{ volume:0.8, sfxVolume:0.8, musicVolume:0.35, focusMode:false, password:null, xpMode:'default', leftHanded:false },
+    settings:{ volume:0.8, sfxVolume:0.8, musicVolume:0.21, focusMode:false, password:null, xpMode:'default', leftHanded:false },
     recentWrong:[],
     /* Each son's own checkmarks against the SHARED word list (see the Word List
        Module below). Keyed by word text. A word with no entry here defaults to
@@ -1066,7 +1162,7 @@ function normalizeProfile(p){
   if(!XP_MODES[p.settings.xpMode]) p.settings.xpMode = 'default';
   if(p.settings.leftHanded===undefined) p.settings.leftHanded = false;
   if(p.settings.sfxVolume===undefined) p.settings.sfxVolume = p.settings.volume ?? 0.8;
-  if(p.settings.musicVolume===undefined) p.settings.musicVolume = 0.35;
+  if(p.settings.musicVolume===undefined) p.settings.musicVolume = 0.21;
   return p;
 }
 function recordWrong(word){
@@ -1118,29 +1214,53 @@ function monPortrait(species, size, opts){
   const s = SPECIES[species];
   const px = size||76;
   const view = opts.view || 'icon';
+  const stage = opts.stage || 0;              // 0 = base form, 1 = first evolution, 2 = second
   const radius = Math.round(px*0.21);
   const cls = 'mon-portrait mon-sprite' + (opts.breathe ? ' breathe-'+opts.breathe : '');
   const override = (typeof ASSETS!=='undefined' && ASSETS.sprites)
-    ? (ASSETS.sprites[species+'_'+view] || ASSETS.sprites[species]) : null;
-  const generic = 'assets/mon/'+species+'.png';
-  const primary = override || (view==='icon' ? generic : 'assets/mon/'+species+'_'+view+'.png');
+    ? (ASSETS.sprites[spriteKey(species,stage)+'_'+view] || ASSETS.sprites[spriteKey(species,stage)]) : null;
+  const primary = override || spritePath(species, stage, view);
   const bg = opts.bare ? 'transparent' : s.color;
   return `<img src="${primary}" alt="${escapeHtml(s.name)}" class="${cls}"
-    data-species="${species}" data-px="${px}" data-generic="${generic}" data-stage="0"
+    data-species="${species}" data-px="${px}" data-view="${view}" data-stage-n="${stage}" data-try="0"
     style="width:${px}px;height:${px}px;border-radius:${radius}px;object-fit:contain;background:${bg};"
     onerror="spriteFallback(this)">`;
 }
-/* Walks the chain: directional -> generic -> coloured tile. */
+
+/* Evolution stages get a number appended to the species id:
+     water_starter        base form
+     water_starter1       first evolution
+     water_starter2       second evolution
+   combined with the view suffix, e.g. water_starter1_front.png */
+function spriteKey(species, stage){ return species + (stage ? String(stage) : ''); }
+function spritePath(species, stage, view){
+  const key = spriteKey(species, stage);
+  return 'assets/mon/' + key + (view && view!=='icon' ? '_'+view : '') + '.png';
+}
+/* Convenience: the sprite stage a given owned monster is currently at. */
+function monStage(m){ return evolutionStage(m.species, m.level); }
+
+/* Fallback ladder, tried in order until one loads:
+     stage+view  ->  stage generic  ->  lower stage+view  ->  ... ->  base
+     ->  coloured placeholder tile
+   So an unevolved sprite stands in for a missing evolved one rather than
+   breaking, and art can be added one stage at a time. */
 function spriteFallback(img){
   try{
-    const stage = +(img.dataset.stage||0);
-    const generic = img.dataset.generic;
-    if(stage===0 && generic && img.getAttribute('src') !== generic){
-      img.dataset.stage = '1';
-      img.src = generic;
-      return;
+    const species = img.dataset.species;
+    const view = img.dataset.view || 'icon';
+    let stage = +(img.dataset.stageN||0);
+    let attempt = +(img.dataset.try||0);
+
+    const chain = [];
+    for(let st = stage; st >= 0; st--){
+      if(view !== 'icon') chain.push(spritePath(species, st, view));
+      chain.push(spritePath(species, st, 'icon'));
     }
-    img.outerHTML = monPortraitFallback(img.dataset.species, +img.dataset.px);
+    attempt++;
+    img.dataset.try = String(attempt);
+    if(attempt < chain.length){ img.src = chain[attempt]; return; }
+    img.outerHTML = monPortraitFallback(species, +img.dataset.px);
   }catch(e){}
 }
 function monPortraitFallback(species, px){
@@ -1596,9 +1716,15 @@ function refitWriteBox(){
   clearTimeout(_fitTimer);
   _fitTimer = setTimeout(()=>{ if(ui.screen==='quiz' && ui.quiz && !ui.quiz.resolved) initQuizChar(ui.quiz.charIndex); }, 180);
 }
+let _battleFitTimer = null;
+function refitBattle(){
+  if(ui.screen !== 'battle' || !ui.battle) return;
+  clearTimeout(_battleFitTimer);
+  _battleFitTimer = setTimeout(()=>{ if(ui.screen==='battle' && ui.battle) renderBattle(); }, 200);
+}
 try{
-  window.addEventListener('resize', refitWriteBox);
-  window.addEventListener('orientationchange', refitWriteBox);
+  window.addEventListener('resize', ()=>{ refitWriteBox(); refitBattle(); });
+  window.addEventListener('orientationchange', ()=>{ refitWriteBox(); refitBattle(); });
 }catch(e){}
 
 function renderMistakeDots(){
@@ -2039,7 +2165,8 @@ function makeEnemy(species, level, opts){
   return { species, level, maxHp:stat, hp:stat, atk:stat, move, types:sp.types, stage, tier:sp.tier, ai, nerfed };
 }
 
-function startWildEncounter(){
+function startWildEncounter(encOpts){
+  encOpts = encOpts || {};
   const pool = activePool();
   if(pool.length===0){ ui.prevScreen='region'; toast('No words selected, please select to proceed.'); go('spelling'); return; }
   const L = starterLevel();
@@ -2057,7 +2184,7 @@ function startWildEncounter(){
     wave = [];
     for(let i=0;i<size;i++){ wave.push({ species: choices[Math.floor(Math.random()*choices.length)], level:lvl }); }
   }
-  beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Wild encounter' });
+  beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Wild encounter', silentIntro: !!encOpts.silentIntro });
 }
 
 /* ---------- shared multi-wave battle engine ---------- */
@@ -2066,14 +2193,14 @@ function beginBattle(config){
     waves: config.waves, waveIndex:0,
     isNpc: !!config.isNpc, allowCatch: !!config.allowCatch,
     challenge: config.challenge || null, name: config.name || 'Battle',
-    onWin: config.onWin || null, noFlee: !!config.noFlee, npcId: config.npcId || null,
+    onWin: config.onWin || null, noFlee: !!config.noFlee, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     playerStatuses:{},       // uid -> [ {type,...} ]   persists through switches/faints, cleared at battle end
     mirageActive:false,      // party-wide evasion buff
     usedVeryHigh:{}, usedUltra:{},   // uid -> true, once-per-battle usage
   };
   loadWave(0);
-  playBattleMusic(!!config.isNpc);
+  playBattleMusic(!!config.isNpc, { silentIntro: !!config.silentIntro });
   go('battle');
 }
 function loadWave(i){
@@ -2142,7 +2269,27 @@ function hpBar2(id, cur, max, big){
   </div>
   <div class="hp-num" id="${id}-num" style="font-size:${big?11:10}px;">${Math.max(0,cur)}/${max}</div>`;
 }
+/* Battle sprites scale with the viewport so the stage doesn't feel empty on a
+   big screen, and shrink when several enemies share the row. */
+function battleWidth(){
+  const el = $('#app');
+  const w = el ? el.getBoundingClientRect().width : Math.min(window.innerWidth, 480);
+  return Math.max(320, w - 32);
+}
+function playerSpriteSize(){
+  const byW = battleWidth() * 0.42;
+  const byH = window.innerHeight * 0.22;
+  return Math.round(Math.max(120, Math.min(byW, byH, 230)));
+}
+function enemySpriteSize(count){
+  const n = Math.max(1, count||1);
+  const per = (battleWidth() - (n-1)*10) / n;      // share of the row per enemy
+  const byH = window.innerHeight * 0.17;
+  return Math.round(Math.max(76, Math.min(per*0.78, byH, 170)));
+}
+
 function renderBattle(){
+  setScreenBg('battle');
   const b = ui.battle;
   $('#brandSub').textContent = 'Battle';
   const mon = activeMon();
@@ -2159,9 +2306,9 @@ function renderBattle(){
       ${b.npcId ? `<div class="npc-banner">${npcPortrait(b.npcId, '🧑', 44, 'var(--paper-3)')}<span>${escapeHtml(b.name)}</span></div>` : ''}
       <div class="enemy-row">
         ${b.enemies.map((e,i)=>`
-          <div class="enemy-card ${e.hp<=0?'fainted':''}" data-enemy="${i}" id="enemy-${i}">
+          <div class="enemy-card ${e.hp<=0?'fainted':''}" data-enemy="${i}" id="enemy-${i}" style="width:${enemySpriteSize(b.enemies.length)+22}px;">
             <div class="enemy-status" id="enemyStatus-${i}"></div>
-            <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,76,{view:'front',bare:true,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
+            <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,enemySpriteSize(b.enemies.length),{view:'front',bare:true,stage:e.stage||0,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
             <div class="info-layer">
               <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:12px;margin-top:3px;">${SPECIES[e.species].name}</div>
               <div style="font-size:10px;color:var(--ink-soft);font-weight:700;">Lv ${e.level}</div>
@@ -2173,7 +2320,7 @@ function renderBattle(){
       <div class="battlefield" aria-hidden="true"></div>
 
       <div class="player-card">
-        <div class="bob player-avatar" id="playerBob">${monPortrait(mon.species,104,{view:'back',bare:true,breathe: mon.currentHp>0 ? ((mon.currentHp/monMaxHp(mon))<0.3 ? 'weak':'normal') : null})}</div>
+        <div class="bob player-avatar" id="playerBob">${monPortrait(mon.species,playerSpriteSize(),{view:'back',bare:true,stage:monStage(mon),breathe: mon.currentHp>0 ? ((mon.currentHp/monMaxHp(mon))<0.3 ? 'weak':'normal') : null})}</div>
         <div class="info-layer" style="flex:1;">
           <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">${escapeHtml(displayName(mon))} <span style="font-size:12px;color:var(--ink-soft);">Lv ${mon.level}</span></div>
           ${hpBar2('playerHp', mon.currentHp, monMaxHp(mon), true)}
@@ -2279,6 +2426,32 @@ function renderStatusBadges(){
    Author the nine type effects and every move is covered; add tier- or
    move-specific files later without touching code.
    ============================================================ */
+/* ---------- SCREEN BACKGROUNDS ----------
+   A faded image sits behind each major screen. Drop a file into assets/bg/ and
+   it appears automatically; missing files simply leave the plain paper
+   background. Opacity is deliberately low so text stays readable. */
+const BG_DIR = 'assets/bg/';
+const BG_MAP = {
+  home:      'home.png',
+  region:    'region.png',
+  battle:    'battle.png',
+  recover:   'recover.png',
+  challenge: 'challenge.png',
+  explore:   'explore.png',
+};
+const bgMissing = {};
+function setScreenBg(key){
+  const el = document.getElementById('screenBg');
+  if(!el) return;
+  const file = BG_MAP[key];
+  if(!file || bgMissing[file]){ el.style.backgroundImage=''; el.classList.remove('on'); return; }
+  const src = BG_DIR + file;
+  const probe = new Image();
+  probe.onload = ()=>{ el.style.backgroundImage = 'url('+src+')'; el.classList.add('on'); };
+  probe.onerror = ()=>{ bgMissing[file] = true; el.style.backgroundImage=''; el.classList.remove('on'); };
+  probe.src = src;
+}
+
 const FX_DIR = 'assets/fx/';
 const FX_FRAMES = 8;      // authoring standard: 8-frame horizontal strip
 const FX_FPS    = 16;     // → 500ms per effect
@@ -2430,7 +2603,7 @@ function monsterChooser(title, options, onPick, dismissable=true){
   scrim.innerHTML=`<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;">
     <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;margin-bottom:12px;">${escapeHtml(title)}</div>
     ${options.map(o=>`<button class="btn btn-ghost sw-opt" data-i="${o.i}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;">
-      ${monPortrait(o.m.species,36)}<span>${escapeHtml(displayName(o.m))} · Lv ${o.m.level} · ${o.m.currentHp}/${monMaxHp(o.m)} HP</span></button>`).join('')}
+      ${monPortrait(o.m.species,36,{stage:monStage(o.m)})}<span>${escapeHtml(displayName(o.m))} · Lv ${o.m.level} · ${o.m.currentHp}/${monMaxHp(o.m)} HP</span></button>`).join('')}
     ${dismissable?'<button class="btn btn-ghost" id="chCancel" style="margin-top:4px;">Cancel</button>':''}
   </div>`;
   document.body.appendChild(scrim);
@@ -2478,7 +2651,7 @@ function promptTarget(mv, onPick){
       const i = ui.battle.enemies.indexOf(e);
       const st = eStatuses(e).map(s=>STATUS_LABELS[s.type]||s.type).join(', ');
       return `<button class="btn btn-ghost tgt-opt" data-i="${i}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;">
-        ${monPortrait(e.species,36)}
+        ${monPortrait(e.species,36,{stage:e.stage||0})}
         <span style="flex:1;">${SPECIES[e.species].name} · Lv ${e.level} · ${e.hp}/${e.maxHp} HP
         ${st?`<br><span style="font-size:11px;color:var(--cinnabar);">${st}</span>`:''}</span>
       </button>`;
@@ -2984,6 +3157,28 @@ function onBattleWon(){
   }
 }
 
+/* ---------- EVOLUTION SEQUENCE (9 seconds) ----------
+   The silhouette flickers between the current form and a colour-inverted
+   version of the evolved form, accelerating as it goes, while glowing
+   particles swirl upward. It resolves onto the evolved sprite in full colour
+   with the declaration. */
+const EVO_TOTAL_MS   = 9000;
+const EVO_REVEAL_MS  = 2200;                       // final hold on the evolved form
+const EVO_FLASH_MS   = EVO_TOTAL_MS - EVO_REVEAL_MS;
+
+/* Flip intervals shrink geometrically: slow, hesitant flickers at first,
+   frantic by the end. */
+function evoFlashSchedule(totalMs){
+  const out = [];
+  let t = 0, gap = 620;
+  while(t < totalMs){
+    out.push(gap);
+    t += gap;
+    gap = Math.max(70, gap * 0.87);
+  }
+  return out;
+}
+
 function playEvolutions(list, done){
   let i = 0;
   const next = ()=>{
@@ -2991,22 +3186,74 @@ function playEvolutions(list, done){
     const ev = list[i++];
     playSfx('evolution');
     const sp = SPECIES[ev.species];
+    const fromStage = evolutionStage(ev.species, ev.from);
+    const toStage   = evolutionStage(ev.species, ev.to);
+
     const ov = document.createElement('div');
-    ov.style.cssText = 'position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at center, #fff7e0, #e8dcc0);gap:16px;';
+    ov.className = 'evo-overlay';
     ov.innerHTML = `
-      <div class="evo-mon" style="width:120px;height:120px;border-radius:26px;background:${sp.color};display:flex;align-items:center;justify-content:center;font-family:'Noto Sans SC';font-weight:900;font-size:52px;color:#fff;">${sp.glyph}</div>
-      <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:22px;color:var(--ink);">${escapeHtml(ev.name)} evolved!</div>
-      ${ev.newMoves.length?`<div style="font-weight:700;color:var(--jade-dark);">Learned ${ev.newMoves.join(', ')}!</div>`:''}
-      <button class="btn btn-primary" id="evoNext" style="width:auto;padding:12px 28px;">Continue</button>
+      <div class="evo-particles" id="evoParticles"></div>
+      <div class="evo-stage">
+        <div id="evoSprite" class="evo-sprite-wrap">${monPortrait(ev.species,150,{stage:fromStage,bare:true})}</div>
+      </div>
+      <div id="evoText" class="evo-text">What's happening…?</div>
+      <div id="evoActions"></div>
     `;
     document.body.appendChild(ov);
-    ov.querySelector('#evoNext').addEventListener('click', ()=>{ document.body.removeChild(ov); next(); });
+
+    // swirling upward glow
+    const pc = ov.querySelector('#evoParticles');
+    for(let k=0;k<26;k++){
+      const d = document.createElement('span');
+      d.className = 'evo-particle';
+      d.style.left = (5 + Math.random()*90) + '%';
+      d.style.animationDelay = (Math.random()*2.2) + 's';
+      d.style.animationDuration = (2.4 + Math.random()*2.2) + 's';
+      d.style.width = d.style.height = (4 + Math.random()*7) + 'px';
+      pc.appendChild(d);
+    }
+
+    const spriteBox = ov.querySelector('#evoSprite');
+    const schedule = evoFlashSchedule(EVO_FLASH_MS);
+    let step = 0, showEvolved = false;
+    let timer = null;
+
+    const paint = (stage, inverted)=>{
+      spriteBox.innerHTML = monPortrait(ev.species, 150, { stage, bare:true });
+      spriteBox.classList.toggle('inverted', !!inverted);
+    };
+
+    const tick = ()=>{
+      if(step >= schedule.length){ return finish(); }
+      showEvolved = !showEvolved;
+      // evolved form appears colour-inverted; base form appears normally
+      paint(showEvolved ? toStage : fromStage, showEvolved);
+      timer = setTimeout(tick, schedule[step++]);
+    };
+
+    const finish = ()=>{
+      clearTimeout(timer);
+      paint(toStage, false);                       // settle on the evolved form, full colour
+      spriteBox.classList.add('evo-pop');
+      ov.querySelector('#evoText').innerHTML =
+        `<b>${escapeHtml(ev.name)}</b> evolved!` +
+        (ev.newMoves.length ? `<div class="evo-learn">Learned ${escapeHtml(ev.newMoves.join(', '))}!</div>` : '');
+      ov.querySelector('#evoActions').innerHTML =
+        `<button class="btn btn-primary" id="evoNext" style="width:auto;padding:12px 30px;">Continue</button>`;
+      ov.querySelector('#evoNext').addEventListener('click', ()=>{
+        if(ov.parentNode) document.body.removeChild(ov);
+        next();
+      });
+    };
+
+    timer = setTimeout(tick, 500);
   };
   next();
 }
 
+
 function showVictory(enemyNames, levelUps, tokens){
-  playSfx('victory'); stopMusic();
+  playSfx('victory'); fadeOutMusic(2000);
   const b = ui.battle;
   $('#brandSub').textContent = 'Victory';
   // determine catchable target(s): wild only, species not already caught
@@ -3038,7 +3285,7 @@ function showVictory(enemyNames, levelUps, tokens){
     }
   }
   $('#regionBtn').addEventListener('click', ()=>go('region'));
-  $('#againBtn').addEventListener('click', ()=>{ if(state.party.some(m=>m.currentHp>0)) startWildEncounter(); else { toast('Your team needs healing first.'); go('region'); } });
+  $('#againBtn').addEventListener('click', ()=>{ if(state.party.some(m=>m.currentHp>0)) startWildEncounter({ silentIntro:true }); else { toast('Your team needs healing first.'); go('region'); } });
 }
 
 /* ---------- CATCHING ---------- */
@@ -3143,6 +3390,7 @@ function render(){
   }
 }
 function renderInner(){
+  if(!['home','region','battle','recover','challenge','explore'].includes(ui.screen)) setScreenBg(null);
   const hb = $('#hamburgerBtn');
   // hamburger available everywhere except profile setup + (future) fights
   const noMenu = ['boot','profileSelect','starterSelect','battle','quiz'].includes(ui.screen);
@@ -3368,6 +3616,7 @@ function renderStarterSelect(){
 
 /* ---------- SCREEN: home ---------- */
 function renderHome(){
+  setScreenBg('home');
   playMusic('main_menu');
   $('#brandSub').textContent = state.name;
   screenEl.innerHTML = `
@@ -3391,7 +3640,7 @@ function renderHome(){
         <div class="mc-desc">Words in your pool</div>
       </div>
     </div>
-    <div class="phase-flag">Phase 1 · navigation shell — battle, quiz &amp; catching come next</div>
+
   `;
   screenEl.querySelector('[data-nav="regionList"]').addEventListener('click', ()=>go('region'));
   screenEl.querySelector('[data-nav="monsterIndex"]').addEventListener('click', ()=>go('monsterIndex'));
@@ -3403,7 +3652,7 @@ function renderPartyStrip(){
   return `<div class="party-strip">
     ${state.party.map(m=>`
       <div class="party-chip">
-        <div class="mon-mini" style="background:${SPECIES[m.species].color}">${SPECIES[m.species].glyph}</div>
+        ${monPortrait(m.species, 34, { stage:monStage(m) })}
         <div>
           <div class="pc-name">${escapeHtml(displayName(m))}</div>
           <div class="pc-lvl">Lv ${m.level}</div>
@@ -3415,6 +3664,7 @@ function renderPartyStrip(){
 
 /* ---------- SCREEN: region list + region hub ---------- */
 function renderRegion(){
+  setScreenBg('region');
   // Region 1 hub (only region available). A region-list vs hub could split later;
   // for Phase 1 the single unlocked region goes straight to its hub.
   playMusic('region');
@@ -3475,7 +3725,7 @@ function renderPartyList(){
     return `
     <div class="party-card" data-uid="${m.uid}">
       <div class="party-head" data-tap="${m.uid}">
-        ${monPortrait(m.species,52)}
+        ${monPortrait(m.species,52,{stage:monStage(m)})}
         <div style="flex:1;">
           <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">${escapeHtml(displayName(m))} <span style="font-size:12px;color:var(--ink-soft);">Lv ${m.level}</span></div>
           <div>${typeBadges(m.species)}</div>
@@ -3547,7 +3797,7 @@ function renderStats(){
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Party</button>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-      ${monPortrait(m.species,72)}
+      ${monPortrait(m.species,72,{stage:monStage(m)})}
       <div style="flex:1;">
         <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;">${escapeHtml(displayName(m))}</div>
         <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-bottom:4px;">${sp.name}${m.nickname?'':' '}</div>
@@ -3697,7 +3947,7 @@ function renderStorage(){
     list.innerHTML = state.storage.map(m=>`
       <div class="party-card" style="padding:10px;margin-bottom:8px;">
         <div class="party-head" style="gap:8px;">
-          ${monPortrait(m.species,40)}
+          ${monPortrait(m.species,40,{stage:monStage(m)})}
           <div style="flex:1;min-width:0;">
             <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:13px;">${escapeHtml(displayName(m))}</div>
             <div style="font-size:11px;color:var(--ink-soft);font-weight:700;">Lv ${m.level}</div>
@@ -3981,7 +4231,7 @@ function chooseStoneRecipient(s){
     ${eligible.map(m=>{
       const cur = isUltra ? m.ultraStone : m.equippedStone;
       return `<button class="btn btn-ghost st-opt" data-uid="${m.uid}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;">
-        ${monPortrait(m.species,36)}
+        ${monPortrait(m.species,36,{stage:monStage(m)})}
         <span style="flex:1;">${escapeHtml(displayName(m))} · Lv ${m.level}
         ${cur?`<br><span style="font-size:11px;color:var(--cinnabar);">replaces ${escapeHtml(cur.name)}</span>`:''}</span>
       </button>`;
@@ -4107,7 +4357,13 @@ function monMax(m){ return computeMaxStat(m.species, m.level, m.supplements); }
 function partyFull(){ return state.party.every(m=>m.currentHp>=monMax(m)); }
 function healParty(pct){
   playSfx('recovery_heal');
-  state.party.forEach(m=>{ const max=monMax(m); m.currentHp = Math.min(max, m.currentHp + Math.floor(max*pct)); });
+  // Round UP (and heal at least 1) so a monster on very low HP always makes
+  // progress — flooring could yield 0 and leave it permanently stuck.
+  state.party.forEach(m=>{
+    const max = monMax(m);
+    const gain = Math.max(1, Math.ceil(max*pct));
+    m.currentHp = Math.min(max, m.currentHp + gain);
+  });
   saveProfile();
 }
 
@@ -4204,7 +4460,7 @@ function renderPartyHpCard(){
   return `<div style="background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:14px;">
     ${state.party.map(m=>{ const max=monMax(m); return `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-        <div class="mon-mini" style="width:30px;height:30px;border-radius:7px;background:${SPECIES[m.species].color};display:flex;align-items:center;justify-content:center;font-family:'Noto Sans SC';font-weight:900;font-size:14px;color:#fff;">${SPECIES[m.species].glyph}</div>
+        ${monPortrait(m.species, 30, { stage:monStage(m) })}
         <div style="flex:1;">
           <div style="font-size:12px;font-weight:800;">${escapeHtml(displayName(m))}</div>
           <div class="hpbar"><div class="hpfill" style="width:${Math.max(0,m.currentHp/max*100)}%;background:${m.currentHp/max<0.3?'var(--cinnabar)':'var(--jade)'};"></div></div>
@@ -4216,6 +4472,7 @@ function renderPartyHpCard(){
 
 /* ---------- SCREEN: recover landing ---------- */
 function renderRecover(){
+  setScreenBg('recover');
   $('#brandSub').textContent = 'Recover';
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Region</button>
@@ -4431,6 +4688,7 @@ function challengeResult(emoji, title, html, back){
 
 /* ---------- SCREEN: challenge ---------- */
 function renderChallenge(){
+  setScreenBg('challenge');
   $('#brandSub').textContent = 'Challenge';
   const r1 = state.progress.region1;
   const thugsLeft = THUG_ORDER.filter(t=>!r1.thugsCleared.includes(t)).length;
@@ -4537,7 +4795,7 @@ function renderArena(){
     </div>
 
     <button class="btn btn-primary" id="arenaStart">⚔️ Enter Arena</button>
-    <div class="phase-flag">Dev tool — hidden behind the password until release.</div>
+    <div class="phase-flag">Developer testing area.</div>
   `;
   $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
   ui.arenaCount = ui.arenaCount || 1;
@@ -4659,6 +4917,7 @@ function arenaFire(mv){
 
 /* ---------- SCREEN: explore ---------- */
 function renderExplore(){
+  setScreenBg('explore');
   $('#brandSub').textContent = 'Explore';
   const canFight = state.party.some(m=>m.currentHp>0);
   screenEl.innerHTML = `
@@ -4991,8 +5250,8 @@ function renderSound(){
       <input type="range" id="sfxSlider" min="0" max="100" value="${Math.round((state.settings.sfxVolume ?? 0.8)*100)}"
         style="width:100%;margin-top:8px;accent-color:var(--cinnabar);">
 
-      <label style="font-weight:800;font-size:14px;display:block;margin-top:14px;">🎵 Music: <span id="musLabel">${Math.round((state.settings.musicVolume ?? 0.35)*100)}%</span></label>
-      <input type="range" id="musSlider" min="0" max="100" value="${Math.round((state.settings.musicVolume ?? 0.35)*100)}"
+      <label style="font-weight:800;font-size:14px;display:block;margin-top:14px;">🎵 Music: <span id="musLabel">${Math.round((state.settings.musicVolume ?? 0.21)*100)}%</span></label>
+      <input type="range" id="musSlider" min="0" max="100" value="${Math.round((state.settings.musicVolume ?? 0.21)*100)}"
         style="width:100%;margin-top:8px;accent-color:var(--cinnabar);">
 
       <button class="btn btn-jade" id="testVoiceBtn" style="margin-top:14px;">🔊 Test voice</button>
