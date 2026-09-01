@@ -290,7 +290,7 @@
   /* battle */
   .enemy-card{
     background:var(--paper-2);border:2px solid var(--line);border-radius:14px;padding:8px 6px 6px;
-    text-align:center;width:88px;transition:transform .1s, border-color .15s;
+    text-align:center;width:98px;transition:transform .1s, border-color .15s;
   }
   .enemy-card.fainted{opacity:0.35;filter:grayscale(1);}
   .enemy-card.targetable{border-color:var(--cinnabar);cursor:pointer;animation:pulse 1s infinite;}
@@ -300,16 +300,55 @@
 
   /* ---- battle stage: avatars < fx layer < text/HP ---- */
   .battle-stage{position:relative;margin-bottom:12px;}
-  .enemy-row{min-height:118px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:4px;}
-  .player-card{display:flex;align-items:center;gap:12px;background:var(--paper-2);border:1px solid var(--line);
-    border-radius:16px;padding:12px;margin:4px 0 0;}
+  .enemy-row{min-height:150px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:4px;}
+  .player-card{display:flex;align-items:flex-end;gap:14px;background:var(--paper-2);border:1px solid var(--line);
+    border-radius:16px;padding:12px 12px 10px;margin:4px 0 0;min-height:120px;}
   /* Depth order builds a sense of distance:
      enemy avatars (far) < move effects < player avatar (near) < text/HP bars */
   .avatar-layer{position:relative;z-index:1;}    /* enemies: furthest back */
+
+  /* ---- breathing ----
+     A gentle rise, a brief hold at the apex, a settle back down, then a longer
+     rest before the next breath. "Weak" runs the same shape at roughly half
+     speed with a shallower rise, so a hurt monster visibly labours. */
+  @keyframes breatheNormal{
+    0%   { transform:translateY(0); }
+    34%  { transform:translateY(-4px); }
+    42%  { transform:translateY(-4px); }   /* short pause at the apex */
+    72%  { transform:translateY(0); }
+    100% { transform:translateY(0); }      /* longer rest before the next breath */
+  }
+  @keyframes breatheWeak{
+    0%   { transform:translateY(0); }
+    34%  { transform:translateY(-2px); }
+    44%  { transform:translateY(-2px); }
+    74%  { transform:translateY(0); }
+    100% { transform:translateY(0); }
+  }
+  .breathe-normal{ animation:breatheNormal 4s ease-in-out infinite; }
+  .breathe-weak  { animation:breatheWeak 7.6s ease-in-out infinite; opacity:0.88; }
+  @media (prefers-reduced-motion: reduce){
+    .breathe-normal, .breathe-weak{ animation:none; }
+  }
+
+  /* player reads as nearer: bigger, and lifted slightly off the card */
+  .player-avatar .mon-sprite{ filter:drop-shadow(0 5px 6px rgba(35,32,25,0.28)); }
+  .enemy-card .mon-sprite{ filter:drop-shadow(0 3px 4px rgba(35,32,25,0.20)); }
+  .npc-portrait{ flex-shrink:0; }
+  .npc-banner{
+    display:flex;align-items:center;gap:9px;justify-content:flex-end;margin-bottom:6px;
+    font-family:'Baloo 2',cursive;font-weight:700;font-size:13px;color:var(--ink-soft);
+  }
   .player-avatar{position:relative;z-index:7;}   /* player: in front of effects */
   .info-layer{position:relative;z-index:10;}     /* names + HP bars always on top */
   .fx-layer{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:hidden;border-radius:14px;}
   .fx-sprite{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;}
+  .fx-sheet{
+    position:absolute;background-repeat:no-repeat;background-position:0 0;
+    pointer-events:none;image-rendering:auto;
+  }
+  /* steps() walks the strip one frame at a time; ends on the last frame */
+  @keyframes fxPlay{ from{ background-position:0 0; } to{ background-position:-100% 0; } }
   .fx-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     font-family:'Baloo 2',cursive;font-weight:800;font-size:30px;color:var(--cinnabar);
     text-shadow:0 2px 0 #fff,0 0 18px rgba(255,255,255,0.9);animation:fxPop .45s ease-out;}
@@ -494,6 +533,152 @@ const STARTER_CHOICES = ['water_starter','fire_starter','grass_starter'];
    becomes available, e.g. effects:{ 'Ember':'assets/fx/ember.png' }. */
 const ASSETS = { sprites:{}, effects:{}, music:{}, sfx:{} };
 
+/* ============================================================
+   AUDIO ENGINE
+   ------------------------------------------------------------
+   Sounds are addressed by SEMANTIC EVENT NAME, never by filename, so one file
+   can back many events — point a dozen events at 'hit_generic.mp3' now and
+   split them later by editing this map alone, with no code changes.
+
+   Everything degrades silently: a missing file is a no-op, so the game stays
+   fully playable with zero audio present (same rule as the art layer).
+   ============================================================ */
+const SFX_DIR = 'assets/sfx/';
+const BGM_DIR = 'assets/bgm/';
+
+/* event name -> filename in assets/sfx/.  Reuse freely: several events may
+   share one file. Set a value to null to deliberately silence an event. */
+const SFX_MAP = {
+  // combat
+  hit_taken:        'hit_taken.mp3',      // the player's monster is struck
+  hit_dealt:        'hit_dealt.mp3',      // a move connects with an enemy
+  move_miss:        'move_miss.mp3',
+  // quiz feedback
+  answer_correct:   'answer_correct.mp3',
+  answer_wrong:     'answer_wrong.mp3',
+  // outcomes
+  victory:          'victory.mp3',
+  defeat:           'defeat.mp3',
+  catch_success:    'catch_success.mp3',
+  catch_miss:       'catch_miss.mp3',
+  // progression
+  level_up:         'level_up.mp3',
+  protein_use:      'level_up.mp3',       // deliberately the same cue as levelling
+  evolution:        'evolution.mp3',
+  recovery_heal:    'recovery_heal.mp3',
+  // skill stones — tier-specific fanfare, shared by "received" and "used"
+  stone_roll:       'stone_roll.mp3',     // the spin itself
+  stone_low:        'stone_low.mp3',
+  stone_mid:        'stone_mid.mp3',
+  stone_high:       'stone_high.mp3',
+  stone_veryhigh:   'stone_veryhigh.mp3',
+  stone_ultra:      'stone_ultra.mp3',
+  // interface
+  ui_click:         'ui_click.mp3',
+};
+
+/* music track name -> filename in assets/bgm/ */
+const BGM_MAP = {
+  main_menu:    'main_menu.mp3',
+  region:       'region.mp3',
+  battle_start: 'battle_start.mp3',   // short intro sting; chains into battle_wild/boss
+  battle_wild:  'battle_wild.mp3',
+  battle_boss:  'battle_boss.mp3',
+};
+
+const audio = {
+  unlocked: false,          // browsers block sound until a real user gesture
+  sfxCache: {},
+  musicEl: null,
+  musicName: null,
+  pendingChain: null,       // track to start when the current one ends (battle_start -> loop)
+  missing: {},              // remember 404s so we don't retry them every time
+};
+
+function sfxVolume(){ return (state?.settings?.sfxVolume ?? state?.settings?.volume ?? 0.8); }
+function musicVolume(){ return (state?.settings?.musicVolume ?? 0.35); }
+
+/* Called on the first real tap/click anywhere — satisfies autoplay policy. */
+function unlockAudio(){
+  if(audio.unlocked) return;
+  audio.unlocked = true;
+  if(audio.musicName && !audio.musicEl) playMusic(audio.musicName);   // resume a track requested too early
+}
+try{
+  document.addEventListener('pointerdown', unlockAudio, { once:false, passive:true });
+  document.addEventListener('keydown', unlockAudio, { passive:true });
+  /* One delegated click handler covers every button in the app — current and
+     future — so no individual wiring is needed per screen. The writing canvas
+     and quiz controls are excluded so drawing stays silent. */
+  document.addEventListener('click', (e)=>{
+    const el = e.target.closest('button, .menu-card, .region-card, .challenge-card, .mon-index-card, .party-head, .stone-card, .drawer-item');
+    if(!el || el.disabled) return;
+    if(el.closest('.write-box, .quiz-write')) return;
+    playSfx('ui_click');
+  }, true);
+}catch(e){}
+
+function playSfx(event){
+  try{
+    const file = SFX_MAP[event];
+    if(!file || !audio.unlocked || audio.missing[file]) return;
+    const src = SFX_DIR + file;
+    let a = audio.sfxCache[file];
+    if(!a){
+      a = new Audio(src);
+      a.addEventListener('error', ()=>{ audio.missing[file] = true; }); // silent if absent
+      audio.sfxCache[file] = a;
+    }
+    a.currentTime = 0;
+    a.volume = sfxVolume();
+    const p = a.play();
+    if(p && p.catch) p.catch(()=>{});   // ignore autoplay rejections
+  }catch(e){}
+}
+/* Convenience: the right fanfare for a stone of a given tier. */
+function playStoneSfx(tierId){ playSfx('stone_'+tierId); }
+
+/* Start a music track. `chainTo` plays once this one finishes (used for the
+   battle-start sting leading into the looping battle theme). */
+function playMusic(name, opts){
+  opts = opts || {};
+  try{
+    if(!BGM_MAP[name]) return;
+    audio.musicName = name;
+    if(!audio.unlocked) return;               // will resume on first gesture
+    if(audio.musicEl && audio.musicEl.dataset.track === name && !opts.restart) return;
+    stopMusic();
+    const file = BGM_MAP[name];
+    if(audio.missing[file]) return;
+    const el = new Audio(BGM_DIR + file);
+    el.dataset.track = name;
+    el.loop = opts.chainTo ? false : (opts.loop !== false);
+    el.volume = musicVolume();
+    el.addEventListener('error', ()=>{ audio.missing[file] = true; });
+    if(opts.chainTo){
+      audio.pendingChain = opts.chainTo;
+      el.addEventListener('ended', ()=>{
+        const next = audio.pendingChain; audio.pendingChain = null;
+        if(next) playMusic(next, { loop:true });
+      });
+    }
+    audio.musicEl = el;
+    const p = el.play();
+    if(p && p.catch) p.catch(()=>{});
+  }catch(e){}
+}
+function stopMusic(){
+  try{
+    if(audio.musicEl){ audio.musicEl.pause(); audio.musicEl.currentTime = 0; }
+  }catch(e){}
+  audio.musicEl = null;
+  audio.pendingChain = null;
+}
+/* Battle entry: short sting, then the looping theme for that fight type. */
+function playBattleMusic(isBoss){
+  playMusic('battle_start', { chainTo: isBoss ? 'battle_boss' : 'battle_wild' });
+}
+
 /* ---------- SHARED WORD LIST SOURCE ----------
    WORDS_URL points at a plain-text file (one phrase per line) sitting next to
    this page. Hosted on GitHub Pages you can edit words.txt directly on the
@@ -568,12 +753,26 @@ function evolutionStage(species, level){
   for(const lv of evo){ if(level >= lv) stage++; }
   return stage;
 }
+/* Protein Supplement caps by tier. */
+function proteinCap(species){
+  const t = SPECIES[species].tier;
+  return t==='legendary' ? 10 : (t==='elite' ? 8 : 6);
+}
+/* The FINAL supplement counts TRIPLE, so filling the bar is worth chasing
+   rather than stopping partway:
+     normal    5 + (3) =  8 levels' worth of stats
+     elite     7 + (3) = 10
+     legendary 9 + (3) = 12                                          */
+function effectiveSupplements(species, supplements){
+  const n = supplements||0;
+  return n >= proteinCap(species) ? n + 2 : n;
+}
 function computeMaxStat(species, level, supplements){
   const s = SPECIES[species];
   const rate = s.rate;
   let stat = Math.floor((rate/5) * level);
   stat += evolutionStage(species, level) * rate;
-  stat += Math.floor((rate/5) * (supplements||0));
+  stat += Math.floor((rate/5) * effectiveSupplements(species, supplements));
   return stat;
 }
 
@@ -758,7 +957,7 @@ function blankProfile(name, starterSpecies){
       currentRegion:1,
       region1:{ guardianCleared:false, rivalCleared:false, thugsCleared:[], thugBossCleared:false, investigateProtein:0, dojoCleared:[] },
     },
-    settings:{ volume:0.8, focusMode:false, password:null, xpMode:'default', leftHanded:false },
+    settings:{ volume:0.8, sfxVolume:0.8, musicVolume:0.35, focusMode:false, password:null, xpMode:'default', leftHanded:false },
     recentWrong:[],
     /* Each son's own checkmarks against the SHARED word list (see the Word List
        Module below). Keyed by word text. A word with no entry here defaults to
@@ -866,6 +1065,8 @@ function normalizeProfile(p){
   if(p.settings.password===undefined) p.settings.password = null;
   if(!XP_MODES[p.settings.xpMode]) p.settings.xpMode = 'default';
   if(p.settings.leftHanded===undefined) p.settings.leftHanded = false;
+  if(p.settings.sfxVolume===undefined) p.settings.sfxVolume = p.settings.volume ?? 0.8;
+  if(p.settings.musicVolume===undefined) p.settings.musicVolume = 0.35;
   return p;
 }
 function recordWrong(word){
@@ -906,11 +1107,64 @@ function confirmDialog(message, onYes){
   scrim.querySelector('#cdYes').addEventListener('click', ()=>{ close(); onYes(); });
 }
 
-function monPortrait(species, size){
+/* Sprite lookup with a three-step fallback chain, so art can be added piecemeal:
+     1. assets/mon/<species>_back.png   (player side — rear view, facing away)
+        assets/mon/<species>_front.png  (enemy side — facing the player)
+     2. assets/mon/<species>.png        (generic, used everywhere else)
+     3. the coloured placeholder tile   (nothing uploaded yet)
+   `view` is 'back' | 'front' | 'icon'. `breathe` is 'normal' | 'weak' | null. */
+function monPortrait(species, size, opts){
+  opts = opts || {};
   const s = SPECIES[species];
   const px = size||76;
+  const view = opts.view || 'icon';
+  const radius = Math.round(px*0.21);
+  const cls = 'mon-portrait mon-sprite' + (opts.breathe ? ' breathe-'+opts.breathe : '');
+  const override = (typeof ASSETS!=='undefined' && ASSETS.sprites)
+    ? (ASSETS.sprites[species+'_'+view] || ASSETS.sprites[species]) : null;
+  const generic = 'assets/mon/'+species+'.png';
+  const primary = override || (view==='icon' ? generic : 'assets/mon/'+species+'_'+view+'.png');
+  const bg = opts.bare ? 'transparent' : s.color;
+  return `<img src="${primary}" alt="${escapeHtml(s.name)}" class="${cls}"
+    data-species="${species}" data-px="${px}" data-generic="${generic}" data-stage="0"
+    style="width:${px}px;height:${px}px;border-radius:${radius}px;object-fit:contain;background:${bg};"
+    onerror="spriteFallback(this)">`;
+}
+/* Walks the chain: directional -> generic -> coloured tile. */
+function spriteFallback(img){
+  try{
+    const stage = +(img.dataset.stage||0);
+    const generic = img.dataset.generic;
+    if(stage===0 && generic && img.getAttribute('src') !== generic){
+      img.dataset.stage = '1';
+      img.src = generic;
+      return;
+    }
+    img.outerHTML = monPortraitFallback(img.dataset.species, +img.dataset.px);
+  }catch(e){}
+}
+function monPortraitFallback(species, px){
+  const s = SPECIES[species];
+  if(!s) return '';
   const fs = Math.round(px*0.4);
-  return `<div class="mon-portrait" style="width:${px}px;height:${px}px;background:${s.color};font-size:${fs}px;border-radius:${Math.round(px*0.21)}px;">${s.glyph}</div>`;
+  const radius = Math.round(px*0.21);
+  return `<div class="mon-portrait" style="width:${px}px;height:${px}px;background:${s.color};font-size:${fs}px;border-radius:${radius}px;">${s.glyph}</div>`;
+}
+
+/* NPC trainer portraits: assets/npc/<id>.png, falling back to the emoji badge. */
+function npcPortrait(npcId, emoji, size, bg){
+  const px = size||50;
+  if(!npcId) return `<div class="cc-emoji" style="background:${bg||'var(--paper-3)'};width:${px}px;height:${px}px;font-size:${Math.round(px*0.52)}px;">${emoji||'❓'}</div>`;
+  return `<img src="assets/npc/${npcId}.png" alt="" class="npc-portrait"
+    data-emoji="${escapeHtml(emoji||'❓')}" data-px="${px}" data-bg="${bg||'var(--paper-3)'}"
+    style="width:${px}px;height:${px}px;border-radius:13px;object-fit:contain;background:${bg||'var(--paper-3)'};"
+    onerror="npcFallback(this)">`;
+}
+function npcFallback(img){
+  try{
+    const px = +img.dataset.px, emoji = img.dataset.emoji, bg = img.dataset.bg;
+    img.outerHTML = `<div class="cc-emoji" style="background:${bg};width:${px}px;height:${px}px;font-size:${Math.round(px*0.52)}px;">${emoji}</div>`;
+  }catch(e){}
 }
 function typeBadges(species){
   return SPECIES[species].types.map(t =>
@@ -1238,6 +1492,12 @@ function speakWord(text){
     u.lang = 'zh-CN';                          // always Mandarin, never inherited
     u.rate = 0.85;
     u.volume = state?.settings?.volume ?? 0.8;
+    // Duck the music while the Chinese prompt plays so it stays clearly audible.
+    const restore = ()=>{ if(audio.musicEl) audio.musicEl.volume = musicVolume(); };
+    if(audio.musicEl) audio.musicEl.volume = musicVolume() * 0.25;
+    u.addEventListener('end', restore);
+    u.addEventListener('error', restore);
+    setTimeout(restore, 6000);   // failsafe if the end event never fires
     speechSynthesis.speak(u);
   }catch(e){}
 }
@@ -1494,6 +1754,7 @@ function resolveWord(passed, timedOut){
     q.masteryReward = recordMastery(word) || q.masteryReward;
     saveProfile();
   }
+  playSfx(passed ? 'answer_correct' : 'answer_wrong');
   if(passed) q.wordsDone = (q.wordsDone||0) + countWords(word);
   q.results.push({ text:word, passed, mistakes:q.wordMistakes||0, timedOut, words:countWords(word) });
 
@@ -1805,13 +2066,14 @@ function beginBattle(config){
     waves: config.waves, waveIndex:0,
     isNpc: !!config.isNpc, allowCatch: !!config.allowCatch,
     challenge: config.challenge || null, name: config.name || 'Battle',
-    onWin: config.onWin || null, noFlee: !!config.noFlee,
+    onWin: config.onWin || null, noFlee: !!config.noFlee, npcId: config.npcId || null,
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     playerStatuses:{},       // uid -> [ {type,...} ]   persists through switches/faints, cleared at battle end
     mirageActive:false,      // party-wide evasion buff
     usedVeryHigh:{}, usedUltra:{},   // uid -> true, once-per-battle usage
   };
   loadWave(0);
+  playBattleMusic(!!config.isNpc);
   go('battle');
 }
 function loadWave(i){
@@ -1894,11 +2156,12 @@ function renderBattle(){
     <div class="battle-stage" id="battleStage">
       <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
 
+      ${b.npcId ? `<div class="npc-banner">${npcPortrait(b.npcId, '🧑', 44, 'var(--paper-3)')}<span>${escapeHtml(b.name)}</span></div>` : ''}
       <div class="enemy-row">
         ${b.enemies.map((e,i)=>`
           <div class="enemy-card ${e.hp<=0?'fainted':''}" data-enemy="${i}" id="enemy-${i}">
             <div class="enemy-status" id="enemyStatus-${i}"></div>
-            <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,54)}</div>
+            <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,76,{view:'front',bare:true,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
             <div class="info-layer">
               <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:12px;margin-top:3px;">${SPECIES[e.species].name}</div>
               <div style="font-size:10px;color:var(--ink-soft);font-weight:700;">Lv ${e.level}</div>
@@ -1910,7 +2173,7 @@ function renderBattle(){
       <div class="battlefield" aria-hidden="true"></div>
 
       <div class="player-card">
-        <div class="bob player-avatar" id="playerBob">${monPortrait(mon.species,54)}</div>
+        <div class="bob player-avatar" id="playerBob">${monPortrait(mon.species,104,{view:'back',bare:true,breathe: mon.currentHp>0 ? ((mon.currentHp/monMaxHp(mon))<0.3 ? 'weak':'normal') : null})}</div>
         <div class="info-layer" style="flex:1;">
           <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">${escapeHtml(displayName(mon))} <span style="font-size:12px;color:var(--ink-soft);">Lv ${mon.level}</span></div>
           ${hpBar2('playerHp', mon.currentHp, monMaxHp(mon), true)}
@@ -1996,24 +2259,118 @@ function renderStatusBadges(){
    move animations can play across the full battle area.
    playEffect() is the hook for future art: if no asset is registered for the
    move it degrades to a short text flash + delay (per the design rule). */
-function playEffect(moveName, opts, done){
-  const layer = $('#fxLayer');
-  const asset = (typeof ASSETS!=='undefined' && ASSETS.effects) ? ASSETS.effects[moveName] : null;
-  if(!layer){ if(done) done(); return; }
-  if(asset){
-    // real asset path (art not yet supplied — kept ready for drop-in)
-    const img = document.createElement('img');
-    img.src = asset; img.className = 'fx-sprite';
-    layer.appendChild(img);
-    setTimeout(()=>{ if(img.parentNode) layer.removeChild(img); if(done) done(); }, (opts&&opts.duration)||600);
-  } else {
-    const tag = document.createElement('div');
-    tag.className = 'fx-text';
-    tag.textContent = moveName;
-    layer.appendChild(tag);
-    setTimeout(()=>{ if(tag.parentNode) layer.removeChild(tag); if(done) done(); }, (opts&&opts.duration)||450);
+/* ============================================================
+   MOVE EFFECT ANIMATIONS
+   ------------------------------------------------------------
+   Two authoring formats are supported:
+
+   1. SPRITE SHEET (preferred) — a horizontal strip of equal square frames in
+      one PNG. Played with a CSS steps() animation, so the game controls
+      exactly when it starts, how long it runs, and that it plays ONCE.
+      Full alpha transparency, small files, frame-accurate.
+
+   2. GIF (convenient) — simpler to produce, but the browser starts it on load
+      and loops it forever, so we re-inject it each time to restart it and hide
+      it after a set duration. Limited to 256 colours with hard-edged
+      transparency (no soft glows).
+
+   Effects resolve most-specific-first, so a handful of files covers everything:
+      moveName ("Fusion Flare")  →  type_tier ("Fire_ultra")  →  type ("Fire")
+   Author the nine type effects and every move is covered; add tier- or
+   move-specific files later without touching code.
+   ============================================================ */
+const FX_DIR = 'assets/fx/';
+const FX_FRAMES = 8;      // authoring standard: 8-frame horizontal strip
+const FX_FPS    = 16;     // → 500ms per effect
+
+/* Anything listed here is looked for on disk. Entries may override frames/fps,
+   or point at a .gif instead. Missing files degrade to the text flash. */
+const FX_MAP = {
+  Fire:{file:'fire.png'},      Water:{file:'water.png'},   Grass:{file:'grass.png'},
+  Electric:{file:'electric.png'}, Ground:{file:'ground.png'}, Flying:{file:'flying.png'},
+  Physical:{file:'physical.png'}, Ghost:{file:'ghost.png'},  Psychic:{file:'psychic.png'},
+};
+const fxMissing = {};
+
+function resolveFx(moveName, type, tier){
+  const explicit = (typeof ASSETS!=='undefined' && ASSETS.effects) ? ASSETS.effects[moveName] : null;
+  if(explicit) return { file:explicit, frames:FX_FRAMES, fps:FX_FPS };
+  const keys = [moveName, (type&&tier)?type+'_'+tier:null, type];
+  for(const k of keys){
+    if(k && FX_MAP[k]) return Object.assign({ frames:FX_FRAMES, fps:FX_FPS }, FX_MAP[k]);
   }
+  return null;
 }
+
+/* Position the effect over a specific combatant when asked, else centre it. */
+function fxBox(at){
+  const stage = $('#battleStage');
+  if(!stage || !at) return null;
+  const el = document.getElementById(at);
+  if(!el) return null;
+  const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect();
+  const size = Math.max(r.width, r.height) * 1.9;
+  return {
+    left: (r.left - s.left) + r.width/2  - size/2,
+    top:  (r.top  - s.top ) + r.height/2 - size/2,
+    size,
+  };
+}
+
+function playEffect(moveName, opts, done){
+  opts = opts || {};
+  const layer = $('#fxLayer');
+  if(!layer){ if(done) done(); return; }
+  const fx = resolveFx(moveName, opts.type, opts.tier);
+  const box = fxBox(opts.at);
+
+  const place = (node, ms)=>{
+    if(box){
+      node.style.position='absolute';
+      node.style.left=box.left+'px'; node.style.top=box.top+'px';
+      node.style.width=box.size+'px'; node.style.height=box.size+'px';
+    }
+    layer.appendChild(node);
+    setTimeout(()=>{ if(node.parentNode) layer.removeChild(node); if(done) done(); }, ms);
+  };
+
+  if(fx && !fxMissing[fx.file]){
+    const src = FX_DIR + fx.file;
+    if(/\.gif$/i.test(fx.file)){
+      // GIF: cache-bust so it restarts from frame 1 every time it's used
+      const img = document.createElement('img');
+      img.className='fx-sprite';
+      img.onerror = ()=>{ fxMissing[fx.file]=true; };
+      img.src = src + '?t=' + Date.now();
+      place(img, opts.duration || 700);
+      return;
+    }
+    // Sprite sheet: verify it loads, then run a steps() animation exactly once
+    const probe = new Image();
+    probe.onload = ()=>{
+      const div = document.createElement('div');
+      div.className = 'fx-sheet';
+      const ms = Math.round(fx.frames / fx.fps * 1000);
+      div.style.backgroundImage = 'url('+src+')';
+      div.style.backgroundSize = (fx.frames*100)+'% 100%';
+      div.style.animation = 'fxPlay '+ms+'ms steps('+fx.frames+') 1 both';
+      place(div, opts.duration || ms + 60);
+    };
+    probe.onerror = ()=>{
+      fxMissing[fx.file] = true;
+      playEffect(moveName, Object.assign({}, opts, {_noAsset:true}), done);  // fall through to text
+    };
+    probe.src = src;
+    return;
+  }
+
+  // no art available — the original text flash
+  const tag = document.createElement('div');
+  tag.className = 'fx-text';
+  tag.textContent = moveName;
+  place(tag, opts.duration || 450);
+}
+
 function battleMsg(t){ const el=$('#battleMsg'); if(el) el.textContent=t; }
 
 /* ---------- battle animations (item 4 & 5) ---------- */
@@ -2209,7 +2566,7 @@ function resolveBattleMove(mv, target, results){
 
   // Single / AOE (standard species moves + Low/Mid stone moves)
   const factor = mv.isStone ? (correct>=mv.words ? mv.mult : 0) : moveFactor(mv.slot, mv.mult, mv.words, correct);
-  if(factor<=0){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
+  if(factor<=0){ playSfx('move_miss'); battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
   const atk=monAtk(mon);
   const targets = mv.target==='AOE' ? livingEnemies() : [target];
   const hits = targets.map(t=>{
@@ -2222,7 +2579,8 @@ function resolveBattleMove(mv, target, results){
   hits.forEach(h=>logBattle(`  → ${SPECIES[h.t.species].name} took ${h.dmg} (${h.oldHp}→${h.newHp})`));
   battleMsg(`${mv.name}! ${effMsg}`);
   bob($('#playerBob'), +1);
-  playEffect(mv.name);
+  playEffect(mv.name, { type: mv.stoneType || SPECIES[mon.species].types[0], tier: mv.stoneTier,
+                        at: hits[0] ? 'enemy-'+hits[0].idx : null });
   setTimeout(()=>{
     applyHits(hits);
     applySelfDamage(mv, mon);
@@ -2235,6 +2593,7 @@ function resolveBattleMove(mv, target, results){
    Any hit on a Giga-Drain-marked enemy heals the active monster for 0.2x ATK. */
 function applyHits(hits){
   const mon = activeMon();
+  if(hits && hits.length) playSfx('hit_dealt');
   let healed = 0;
   hits.forEach(h=>{
     h.t.hp = h.newHp;
@@ -2294,7 +2653,8 @@ function resolveMulti2(mv, mon, correct){
   hits.forEach(h=>logBattle(`  → ${SPECIES[h.t.species].name} took ${h.dmg} (${h.oldHp}→${h.newHp})`));
   battleMsg(`${mv.name}!`);
   bob($('#playerBob'), +1);
-  playEffect(mv.name);
+  playEffect(mv.name, { type: mv.stoneType || SPECIES[mon.species].types[0], tier: mv.stoneTier,
+                        at: hits[0] ? 'enemy-'+hits[0].idx : null });
   setTimeout(()=> playSuccessiveHits(hits, 0, ()=>{
     saveProfile();
     battleMsg(`${mv.name} hit ${hits.length} time${hits.length===1?'':'s'}!`);
@@ -2328,7 +2688,7 @@ function resolveMultiHit(mv, mon, correct){
   hits.forEach((h,i)=>logBattle(`  hit ${i+1} → ${SPECIES[h.t.species].name} took ${h.dmg} (${h.oldHp}→${h.newHp})`));
   battleMsg(`${mv.name} unleashed!`);
   bob($('#playerBob'), +1);
-  playEffect(mv.name, {duration:700});
+  playEffect(mv.name, { duration:700, type: mv.stoneType || SPECIES[mon.species].types[0], tier: mv.stoneTier });
   setTimeout(()=> playSuccessiveHits(hits, 0, ()=>{
     saveProfile();
     applySelfDamage(mv, mon);
@@ -2369,7 +2729,7 @@ function resolveStatusMove(mv, mon, target, correct){
   const targets = target ? [target] : [];
   const res = applyVeryHighEffect(mv.stoneType, mon, atk, targets);
   bob($('#playerBob'), +1);
-  playEffect(mv.name);
+  playEffect(mv.name, { type: mv.stoneType, tier:'veryhigh', at: target ? 'enemy-'+ui.battle.enemies.indexOf(target) : null });
   setTimeout(()=>{
     let hits = [];
     if(res.hits && res.hits.length){
@@ -2436,6 +2796,7 @@ function enemyTurn(){
 
   battleMsg('Enemy attacks!');
   acting.forEach(e=>{ const i=b.enemies.indexOf(e); bob(document.getElementById('enemyBob-'+i), -1); });
+  if(acting[0]) playEffect(acting[0].move[1], { type: acting[0].types[0], at:'playerBob' });
 
   setTimeout(()=>{
     let msg = '';
@@ -2455,6 +2816,7 @@ function enemyTurn(){
       const oldHp = mon.currentHp;
       mon.currentHp = Math.max(0, mon.currentHp-total);
       flashHit($('#playerBob'));
+      playSfx('hit_taken');
       drainHp('playerHp', oldHp, mon.currentHp, monMaxHp(mon));
       msg = `Enemy dealt ${total} damage!`;
 
@@ -2499,6 +2861,7 @@ function onMonFainted(){
   monsterChooser('Send out…', options, (i)=>{ ui.battle.activeIndex=i; ui.battle.switchedThisTurn=false; ui.battle.phase='player'; renderBattle(); battleMsg('Choose a move.'); }, false);
 }
 function onPlayerDefeated(){
+  playSfx('defeat'); stopMusic();
   const fade=document.createElement('div');
   fade.style.cssText='position:fixed;inset:0;background:#000;z-index:80;opacity:0;transition:opacity .8s;';
   document.body.appendChild(fade);
@@ -2626,6 +2989,7 @@ function playEvolutions(list, done){
   const next = ()=>{
     if(i >= list.length){ done(); return; }
     const ev = list[i++];
+    playSfx('evolution');
     const sp = SPECIES[ev.species];
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at center, #fff7e0, #e8dcc0);gap:16px;';
@@ -2642,6 +3006,7 @@ function playEvolutions(list, done){
 }
 
 function showVictory(enemyNames, levelUps, tokens){
+  playSfx('victory'); stopMusic();
   const b = ui.battle;
   $('#brandSub').textContent = 'Victory';
   // determine catchable target(s): wild only, species not already caught
@@ -2654,7 +3019,7 @@ function showVictory(enemyNames, levelUps, tokens){
     </div>
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;">
       <div style="font-weight:800;font-size:13px;color:var(--ink-soft);margin-bottom:6px;">Your team earned a fight!</div>
-      ${levelUps.length ? levelUps.map(e=>`<div style="font-weight:700;font-size:14px;">⬆️ ${escapeHtml(e.name)} grew to Lv ${e.to}!</div>`).join('') : `<div style="font-size:13px;color:var(--ink-soft);font-weight:600;">Everyone gained progress toward their next level.</div>`}
+      ${(levelUps.length ? (playSfx('level_up'),'') : '')}${levelUps.length ? levelUps.map(e=>`<div style="font-weight:700;font-size:14px;">⬆️ ${escapeHtml(e.name)} grew to Lv ${e.to}!</div>`).join('') : `<div style="font-size:13px;color:var(--ink-soft);font-weight:600;">Everyone gained progress toward their next level.</div>`}
       ${tokens ? `<div style="font-weight:800;font-size:14px;color:var(--gold);margin-top:6px;">🎫 Found a Skill Token! (${state.inventory.tokens} total)</div>` : ''}
     </div>
     <div id="catchArea"></div>
@@ -2706,6 +3071,7 @@ function resolveCatch(enemy, results){
   else caught = false;                                   // second mistake always fails
   if(caught) gotcha(enemy);
   else {
+    playSfx('catch_miss');
     go('battle'); // reuse container
     $('#brandSub').textContent='Catch';
     screenEl.innerHTML = `
@@ -2720,6 +3086,7 @@ function resolveCatch(enemy, results){
   }
 }
 function gotcha(enemy){
+  playSfx('catch_success');
   const sp = SPECIES[enemy.species];
   const ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at center,#fff7e0,#e8dcc0);gap:16px;';
@@ -3001,6 +3368,7 @@ function renderStarterSelect(){
 
 /* ---------- SCREEN: home ---------- */
 function renderHome(){
+  playMusic('main_menu');
   $('#brandSub').textContent = state.name;
   screenEl.innerHTML = `
     <div class="screen-title">Home</div>
@@ -3049,6 +3417,7 @@ function renderPartyStrip(){
 function renderRegion(){
   // Region 1 hub (only region available). A region-list vs hub could split later;
   // for Phase 1 the single unlocked region goes straight to its hub.
+  playMusic('region');
   $('#brandSub').textContent = 'Region 1';
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Home</button>
@@ -3156,7 +3525,9 @@ function renderStats(){
   const maxHp = monMaxHp(m);
   const need = fightsNeeded(m.level);
   const capped = m.level>=REGION_LEVEL_CAP;
-  const suppCap = sp.tier==='legendary' ? 10 : (sp.tier==='elite' ? 8 : 6);
+  const suppCap = proteinCap(m.species);
+  const atCap = (m.supplements||0) >= suppCap;
+  const nextIsFinal = (m.supplements||0) === suppCap-1;
   const moves = MOVES[m.species].map(mv=>{
     const [slot,name,mult,target,words,unlock]=mv;
     const unlocked = name!=null && m.level>=unlock;
@@ -3195,8 +3566,12 @@ function renderStats(){
         <div>❤️ HP <span style="color:var(--jade-dark);">${maxHp}</span></div>
         <div>⚔️ ATK <span style="color:var(--cinnabar-dark);">${monAtk(m)}</span></div>
       </div>
-      <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;">💪 Protein boosts: ${m.supplements||0} / ${suppCap}</div>
-      ${(state.inventory.protein>0 && (m.supplements||0)<suppCap) ? `<button class="btn btn-jade" id="useProtein" style="margin-top:10px;">Use Protein Supplement (${state.inventory.protein} left)</button>` : ''}
+      <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;">
+        💪 Protein boosts: ${m.supplements||0} / ${suppCap}
+        ${atCap ? `<span style="color:var(--gold);">· maxed, final boost counted triple</span>` : ''}
+      </div>
+      ${nextIsFinal && !atCap ? `<div style="font-size:11px;font-weight:800;color:var(--gold);margin-top:4px;">⭐ The last boost is worth TRIPLE — finish the set!</div>` : ''}
+      ${(state.inventory.protein>0 && !atCap) ? `<button class="btn btn-jade" id="useProtein" style="margin-top:10px;">Use Protein Supplement (${state.inventory.protein} left)</button>` : ''}
     </div>
 
     <div style="font-weight:800;font-size:14px;margin-bottom:8px;">Moves</div>
@@ -3250,6 +3625,7 @@ function renderStats(){
   const up = $('#useProtein');
   if(up) up.addEventListener('click', async ()=>{
     if(state.inventory.protein<=0 || (m.supplements||0)>=suppCap) return;
+    const wasFinal = (m.supplements||0) === suppCap-1;
     const beforeProtein = state.inventory.protein;
     const beforeSupp = m.supplements||0;
     const beforeHp = m.currentHp;
@@ -3269,7 +3645,8 @@ function renderStats(){
       showSyncFailure();
       return;
     }
-    toast(`${displayName(m)} grew stronger!`);
+    playSfx('protein_use');
+    toast(wasFinal ? `${displayName(m)} maxed out! Final boost counted TRIPLE.` : `${displayName(m)} grew stronger!`);
     renderStats();
   });
 }
@@ -3398,6 +3775,7 @@ async function doStoneRoll(){
 
 /* Shared reveal animation for every way a stone can be obtained. */
 function showStoneReveal(stone, spinLabel){
+  playSfx('stone_roll');
   const t = stoneTierDef(stone.tier);
   const ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;z-index:85;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at center,#fff7e0,#d9cdae);gap:14px;';
@@ -3405,6 +3783,7 @@ function showStoneReveal(stone, spinLabel){
     <div id="rollText" style="font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;color:var(--ink-soft);">${escapeHtml(spinLabel||'Rolling…')}</div>`;
   document.body.appendChild(ov);
   setTimeout(()=>{
+    playStoneSfx(stone.tier);
     ov.querySelector('#rollSpin').textContent = '💎';
     ov.querySelector('#rollSpin').style.filter = `drop-shadow(0 0 18px ${TYPE_COLORS[stone.type]})`;
     ov.querySelector('#rollText').outerHTML = `
@@ -3624,6 +4003,7 @@ function chooseStoneRecipient(s){
       if(i>=0) state.moveStones.splice(i,1);
       await saveProfile();
       close();
+      playStoneSfx(s.tier);
       toast(`${displayName(mon)} learned ${s.name}!`);
       renderStorage();
     };
@@ -3726,6 +4106,7 @@ function renderIndexDetail(){
 function monMax(m){ return computeMaxStat(m.species, m.level, m.supplements); }
 function partyFull(){ return state.party.every(m=>m.currentHp>=monMax(m)); }
 function healParty(pct){
+  playSfx('recovery_heal');
   state.party.forEach(m=>{ const max=monMax(m); m.currentHp = Math.min(max, m.currentHp + Math.floor(max*pct)); });
   saveProfile();
 }
@@ -3903,7 +4284,7 @@ function nextDojoStage(){ return DOJO_STAGES.find(st=>!dojoCleared(st.id)); }
 
 function startDojoStage(stage){
   if(!ensurePool()) return;
-  beginBattle({ isNpc:true, name:stage.label,
+  beginBattle({ isNpc:true, name:stage.label, npcId:stage.id,
     waves: stage.waves.map(w=>w.map(e=>({...e, ai:stage.ai, nerfed:false}))),
     onWin:()=>onDojoStageWin(stage) });
 }
@@ -3943,7 +4324,7 @@ async function onGuardianWin(){
 function startRival(){
   if(!ensurePool()) return;
   const eff = effectiveStarter();
-  beginBattle({ isNpc:true, name:'Rival',
+  beginBattle({ isNpc:true, name:'Rival', npcId:'rival',
     waves:[
       [{species:'rat',level:21,ai:'best',nerfed:false}],
       [{species:'bird',level:21,ai:'best',nerfed:false}],
@@ -3977,6 +4358,10 @@ const THUG_DEF = {
     [{species:'earth_snake',level:19},{species:'earth_snake',level:19}],
   ] },
 };
+function nextThugId(){
+  const r1 = state.progress.region1;
+  return THUG_ORDER.find(id=>!(r1.thugsCleared||[]).includes(id)) || (r1.thugBossCleared ? null : 'thug_boss');
+}
 function doInvestigate(){
   if(!ensurePool()) return;
   const r1 = state.progress.region1;
@@ -3993,7 +4378,7 @@ function doInvestigate(){
 }
 function startThug(id){
   const d = THUG_DEF[id];
-  beginBattle({ isNpc:true, name:'Thug', noFlee:true,
+  beginBattle({ isNpc:true, name:'Thug', noFlee:true, npcId:id,
     waves: d.waves.map(w=>w.map(e=>({...e, ai:'power1', nerfed:false}))),
     onWin:()=>onThugWin(id) });
 }
@@ -4006,7 +4391,7 @@ async function onThugWin(id){
     'challenge');
 }
 function startThugBoss(){
-  beginBattle({ isNpc:true, name:'Thug Boss', noFlee:true,
+  beginBattle({ isNpc:true, name:'Thug Boss', noFlee:true, npcId:'thug_boss',
     waves:[
       [{species:'rat',level:20,ai:'best',nerfed:false},{species:'bird',level:20,ai:'best',nerfed:false},{species:'moth',level:20,ai:'best',nerfed:false}],
       [{species:'ground_starter',level:35,ai:'best',nerfed:false}],
@@ -4061,7 +4446,7 @@ function renderChallenge(){
     </div>
 
     <div class="challenge-card" id="cGuardian">
-      <div class="cc-emoji" style="background:#b08a5a;">🏯</div>
+      ${npcPortrait((nextDojoStage()||{}).id || 'guardian', '🏯', 50, '#b08a5a')}
       <div style="flex:1;">
         <div class="cc-title">Guardian Dojo ${r1.guardianCleared?'<span class="clear-tag">Cleared</span>':''}</div>
         <div class="cc-desc">${r1.guardianCleared
@@ -4071,7 +4456,7 @@ function renderChallenge(){
     </div>
 
     <div class="challenge-card" id="cRival">
-      <div class="cc-emoji" style="background:#c8453a;">🥊</div>
+      ${npcPortrait('rival', '🥊', 50, '#c8453a')}
       <div style="flex:1;">
         <div class="cc-title">Rival ${r1.rivalCleared?'<span class="clear-tag">Cleared</span>':''}</div>
         <div class="cc-desc">${r1.rivalCleared?'Already beaten — no more rewards.':'One-time battle. Reward: 3 Protein Supplements.'}</div>
@@ -4079,7 +4464,7 @@ function renderChallenge(){
     </div>
 
     <div class="challenge-card" id="cInvestigate" ${investigateDone?'style="opacity:0.6;"':''}>
-      <div class="cc-emoji" style="background:#2f8f6f;">🔍</div>
+      ${npcPortrait(nextThugId() || 'thug_boss', '🔍', 50, '#2f8f6f')}
       <div style="flex:1;">
         <div class="cc-title">Investigate ${investigateDone?'<span class="clear-tag">Cleared</span>':''}</div>
         <div class="cc-desc">${investigateDone?'The area is safe now.':`Search the area — find supplements or run into thugs. ${thugsLeft} thug${thugsLeft===1?'':'s'}${r1.thugBossCleared?'':' + boss'} left.`}</div>
@@ -4598,11 +4983,20 @@ function renderSound(){
     <div class="screen-title">Settings</div>
 
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:12px;">
-      <label style="font-weight:800;font-size:14px;">🔊 Volume: <span id="volLabel">${Math.round(state.settings.volume*100)}%</span></label>
+      <label style="font-weight:800;font-size:14px;">🗣️ Spoken words: <span id="volLabel">${Math.round(state.settings.volume*100)}%</span></label>
       <input type="range" id="volSlider" min="0" max="100" value="${Math.round(state.settings.volume*100)}"
-        style="width:100%;margin-top:12px;accent-color:var(--cinnabar);">
-      <button class="btn btn-jade" id="testVoiceBtn" style="margin-top:12px;">🔊 Test voice</button>
-      <div style="font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:8px;">Words are always read in Mandarin.</div>
+        style="width:100%;margin-top:8px;accent-color:var(--cinnabar);">
+
+      <label style="font-weight:800;font-size:14px;display:block;margin-top:14px;">🔔 Sound effects: <span id="sfxLabel">${Math.round((state.settings.sfxVolume ?? 0.8)*100)}%</span></label>
+      <input type="range" id="sfxSlider" min="0" max="100" value="${Math.round((state.settings.sfxVolume ?? 0.8)*100)}"
+        style="width:100%;margin-top:8px;accent-color:var(--cinnabar);">
+
+      <label style="font-weight:800;font-size:14px;display:block;margin-top:14px;">🎵 Music: <span id="musLabel">${Math.round((state.settings.musicVolume ?? 0.35)*100)}%</span></label>
+      <input type="range" id="musSlider" min="0" max="100" value="${Math.round((state.settings.musicVolume ?? 0.35)*100)}"
+        style="width:100%;margin-top:8px;accent-color:var(--cinnabar);">
+
+      <button class="btn btn-jade" id="testVoiceBtn" style="margin-top:14px;">🔊 Test voice</button>
+      <div style="font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:8px;">Words are always read in Mandarin. Music ducks automatically while a word is spoken.</div>
     </div>
 
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:12px;">
@@ -4627,6 +5021,19 @@ function renderSound(){
   const slider = $('#volSlider');
   slider.addEventListener('input', ()=>{ $('#volLabel').textContent = slider.value+'%'; });
   slider.addEventListener('change', async ()=>{ state.settings.volume = slider.value/100; await saveProfile(); });
+  const sfxS = $('#sfxSlider'), musS = $('#musSlider');
+  if(sfxS){
+    sfxS.addEventListener('input', ()=>{ $('#sfxLabel').textContent = sfxS.value+'%'; });
+    sfxS.addEventListener('change', async ()=>{ state.settings.sfxVolume = sfxS.value/100; playSfx('ui_click'); await saveProfile(); });
+  }
+  if(musS){
+    musS.addEventListener('input', ()=>{
+      $('#musLabel').textContent = musS.value+'%';
+      state.settings.musicVolume = musS.value/100;
+      if(audio.musicEl) audio.musicEl.volume = musicVolume();   // live preview
+    });
+    musS.addEventListener('change', async ()=>{ await saveProfile(); });
+  }
   $('#testVoiceBtn').addEventListener('click', ()=>{
     try{
       speechSynthesis.cancel();
