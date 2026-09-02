@@ -85,7 +85,23 @@
     background-size:cover;background-position:center;background-repeat:no-repeat;
     opacity:0;transition:opacity .45s ease;
   }
-  .screen-bg.on{ opacity:0.16; }
+  .screen-bg.on{ opacity:0.30; }
+  /* On screens with artwork behind them, surfaces go translucent so the image
+     reads through rather than being boxed out by solid panels. */
+  body.has-bg .menu-card,
+  body.has-bg .region-card,
+  body.has-bg .challenge-card,
+  body.has-bg .ware,
+  body.has-bg .shop-bubble,
+  body.has-bg .medal-bar,
+  body.has-bg .party-card,
+  body.has-bg .token-box{
+    background:rgba(244,236,216,0.62);
+    backdrop-filter:blur(3px);
+    -webkit-backdrop-filter:blur(3px);
+  }
+  body.has-bg .btn-ghost{ background:rgba(235,224,196,0.62); backdrop-filter:blur(3px); }
+  body.has-bg .screen-title, body.has-bg .screen-sub{ text-shadow:0 1px 0 rgba(255,255,255,0.7); }
   @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
   .screen-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:26px;margin:6px 0 2px;}
   .screen-sub{color:var(--ink-soft);font-size:14px;font-weight:600;margin-bottom:20px;}
@@ -347,7 +363,7 @@
   .avatar-img{flex-shrink:0;box-shadow:0 2px 0 var(--paper-3);}
   .av-picker{display:flex;flex-direction:column;gap:12px;}
   .av-label{font-size:11px;font-weight:800;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
-  .av-row{display:flex;gap:9px;flex-wrap:wrap;}
+  .av-row{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-start;}
   .av-opt{background:none;border:3px solid transparent;border-radius:18px;padding:2px;cursor:pointer;line-height:0;}
   .av-opt.sel{border-color:var(--cinnabar);background:#fbf3e2;}
   .home-hero{display:flex;align-items:center;gap:13px;margin:4px 0 16px;}
@@ -358,7 +374,7 @@
     margin-bottom:14px;font-size:13px;font-weight:700;}
 
   /* ---- shop ---- */
-  .shop-keeper{display:flex;align-items:flex-start;gap:12px;margin:6px 0 12px;}
+  .shop-keeper{display:flex;align-items:center;gap:10px;margin:4px 0 12px;}
   .shop-bubble{
     flex:1;background:var(--paper-2);border:1px solid var(--line);border-radius:14px;
     padding:12px 14px;font-size:13px;font-weight:600;line-height:1.5;position:relative;
@@ -370,15 +386,17 @@
   }
   .medal-bar{display:flex;gap:10px;justify-content:center;background:var(--paper-2);border:1px solid var(--line);
     border-radius:12px;padding:9px;font-weight:800;font-size:14px;}
-  .ware{display:flex;align-items:center;gap:12px;background:var(--paper-2);border:1px solid var(--line);
-    border-radius:14px;padding:12px;cursor:pointer;box-shadow:0 2px 0 var(--paper-3);}
+  .ware-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+  .ware{display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;
+    background:var(--paper-2);border:1px solid var(--line);
+    border-radius:14px;padding:13px 10px;cursor:pointer;box-shadow:0 2px 0 var(--paper-3);}
   .ware:active{transform:translateY(2px);box-shadow:0 1px 0 var(--paper-3);}
   .ware.cant{opacity:0.55;}
-  .ware-icon{font-size:26px;width:42px;text-align:center;flex-shrink:0;}
+  .ware-icon{font-size:30px;line-height:1;}
   .ware-icon.big{font-size:44px;width:auto;margin-bottom:6px;}
-  .ware-name{font-family:'Baloo 2',cursive;font-weight:700;font-size:15px;}
+  .ware-name{font-family:'Baloo 2',cursive;font-weight:700;font-size:13.5px;line-height:1.2;}
   .ware-desc{font-size:11px;color:var(--ink-soft);font-weight:600;line-height:1.4;}
-  .ware-price{font-weight:800;font-size:14px;white-space:nowrap;}
+  .ware-price{font-weight:800;font-size:14px;white-space:nowrap;margin-top:2px;}
   .shop-overlay{position:fixed;inset:0;z-index:92;background:rgba(35,32,25,0.62);
     display:flex;align-items:center;justify-content:center;padding:22px;}
   .shop-ov-top{position:absolute;top:16px;right:18px;background:var(--paper);border-radius:20px;
@@ -398,14 +416,24 @@
   .pick-name{font-weight:700;font-size:14px;}
 
   /* ---- explore zones ---- */
-  .explore-hero{display:flex;align-items:center;gap:14px;background:var(--paper-2);border:1px solid var(--line);
-    border-radius:16px;padding:14px;margin-bottom:16px;}
-  .explore-hero-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:18px;}
-  .explore-hero-sub{font-size:12px;color:var(--ink-soft);font-weight:600;}
-  .zone-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;}
-  .zone-item{text-align:center;}
+  /* Explore: nothing but the character and the zones — the backdrop shows through. */
+  .explore-avatar{
+    display:flex;align-items:flex-end;justify-content:center;position:relative;
+    min-height:160px;margin:6px 0 14px;
+  }
+  /* soft ground shadow so a full-body figure reads as standing, not floating */
+  .explore-avatar:after{
+    content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
+    width:58%;height:12px;border-radius:50%;
+    background:radial-gradient(ellipse, rgba(35,32,25,0.22), rgba(35,32,25,0) 70%);
+  }
+  .hero-avatar{position:relative;z-index:1;filter:drop-shadow(0 4px 5px rgba(35,32,25,0.22));}
+  .explore-hero-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;margin-top:6px;}
+  .explore-hero-sub{font-size:13px;color:var(--ink-soft);font-weight:600;}
+  .zone-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
+  .zone-item{text-align:center;width:118px;}
   .zone-btn{
-    width:100%;aspect-ratio:1/1;border-radius:18px;cursor:pointer;position:relative;overflow:hidden;
+    width:118px;height:118px;border-radius:18px;cursor:pointer;position:relative;overflow:hidden;
     background:var(--zone-tint, var(--paper-3));
     border:3px solid rgba(255,255,255,0.55);
     box-shadow:inset 0 3px 0 rgba(255,255,255,0.5), inset 0 -5px 0 rgba(0,0,0,0.22), 0 5px 0 rgba(35,32,25,0.25);
@@ -414,7 +442,10 @@
   .zone-btn:active{transform:translateY(4px);
     box-shadow:inset 0 3px 0 rgba(255,255,255,0.4), inset 0 -3px 0 rgba(0,0,0,0.2), 0 1px 0 rgba(35,32,25,0.25);}
   .zone-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-  .zone-label{font-family:'Baloo 2',cursive;font-weight:700;font-size:15px;margin-top:8px;}
+  .zone-label{
+    font-family:'Baloo 2',cursive;font-weight:700;font-size:14px;margin-top:7px;
+    text-shadow:0 1px 0 rgba(255,255,255,0.85);
+  }
 
   /* ---- party header / storage corner ---- */
   .party-head-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
@@ -674,20 +705,27 @@ const AVATARS = {
   female: ['f1','f2','f3','f4','f5'],
 };
 const ALL_AVATARS = [...AVATARS.male, ...AVATARS.female];
-function avatarImg(id, size, cls){
+/* Avatars are FULL BODY, so the art is contained (never cropped) inside its
+   square. Anything with `bare` drops the tile background for a clean cut-out. */
+function avatarImg(id, size, opts){
+  opts = (typeof opts === 'string') ? { cls:opts } : (opts || {});
   const px = size||64;
   const safe = id || 'm1';
-  return `<img src="assets/avatar/${safe}.png" alt="" class="avatar-img ${cls||''}"
-    data-px="${px}" data-id="${safe}"
-    style="width:${px}px;height:${px}px;border-radius:${Math.round(px*0.24)}px;object-fit:cover;background:var(--paper-3);"
+  const bg = opts.bare ? 'transparent' : 'var(--paper-3)';
+  const radius = opts.bare ? 0 : Math.round(px*0.24);
+  return `<img src="assets/avatar/${safe}.png" alt="" class="avatar-img ${opts.cls||''}"
+    data-px="${px}" data-id="${safe}" data-bare="${opts.bare?1:0}"
+    style="width:${px}px;height:${px}px;border-radius:${radius}px;object-fit:contain;background:${bg};"
     onerror="avatarFallback(this)">`;
 }
 function avatarFallback(img){
   try{
     const px = +img.dataset.px, id = img.dataset.id||'m1';
     const female = id.startsWith('f');
-    img.outerHTML = `<div class="avatar-img" style="width:${px}px;height:${px}px;border-radius:${Math.round(px*0.24)}px;
-      background:${female?'#b5708f':'#5a7fa8'};color:#fff;display:flex;align-items:center;justify-content:center;
+    const bare = img.dataset.bare === '1';
+    img.outerHTML = `<div class="avatar-img" style="width:${px}px;height:${px}px;border-radius:${bare?0:Math.round(px*0.24)}px;
+      background:${bare?'transparent':(female?'#b5708f':'#5a7fa8')};color:${bare?(female?'#b5708f':'#5a7fa8'):'#fff'};
+      display:flex;align-items:center;justify-content:center;
       font-family:'Baloo 2',cursive;font-weight:800;font-size:${Math.round(px*0.42)}px;">${female?'♀':'♂'}</div>`;
   }catch(e){}
 }
@@ -1318,7 +1356,12 @@ async function saveProfile(opts){
 async function loadProfileById(id){
   try{
     const r = await store.get(profileStorageKey(id));
-    return r ? normalizeProfile(JSON.parse(r.value)) : null;
+    if(!r) return null;
+    const p = normalizeProfile(JSON.parse(r.value));
+    const prev = state; state = p;
+    if(p._needsMasteryReconcile){ delete p._needsMasteryReconcile; reconcileMastery(); }
+    state = prev;
+    return p;
   }catch(e){ return null; }
 }
 async function createAndSaveProfile(name, starterSpecies){
@@ -1364,6 +1407,7 @@ function normalizeProfile(p){
   ['bronze','silver','gold'].forEach(k=>{ if(p.masteryAwarded[k]===undefined) p.masteryAwarded[k] = 0; });
   p.medals = p.medals || {};
   ['bronze','silver','gold'].forEach(k=>{ if(p.medals[k]===undefined) p.medals[k] = 0; });
+  p._needsMasteryReconcile = true;
   if(!Array.isArray(p.settings.wordLists)) p.settings.wordLists = null;   // null = all lists
   p.moveStones = p.moveStones || [];
   p.progress = p.progress || { currentRegion:1 };
@@ -1763,6 +1807,27 @@ function recordMastery(text){
   state.wordMastery[text] = (state.wordMastery[text] || 0) + 1;
   return checkMasteryRewards();
 }
+/* Medals are granted as words cross a tier, but progress made BEFORE medals
+   existed (or before a tier's threshold changed) would otherwise never pay out.
+   This reconciles the ledger against the actual mastery counts on load. */
+function reconcileMastery(){
+  if(!state || !state.wordMastery) return null;
+  const c = masteryCounts();
+  let granted = null;
+  ['bronze','silver','gold'].forEach(tier=>{
+    const owed = Math.floor(c[tier] / MASTERY_GROUP);
+    const paid = state.masteryAwarded[tier] || 0;
+    if(owed > paid){
+      const diff = owed - paid;
+      state.masteryAwarded[tier] = owed;
+      state.medals[tier] = (state.medals[tier]||0) + diff;
+      granted = granted || {bronze:0,silver:0,gold:0};
+      granted[tier] += diff;
+    }
+  });
+  return granted;
+}
+
 function checkMasteryRewards(){
   const c = masteryCounts();
   const rewards = { bronze:0, silver:0, gold:0 };
@@ -2542,12 +2607,15 @@ function unlockedMoves(m){
     const [slot,name,mult,target,words,unlock]=mv;
     return { slot,name,mult,target,words,unlock, available:(name!=null && m.level>=unlock), isStone:false };
   });
-  // an equipped non-Ultra stone replaces the Basic slot entirely
+  /* Equipped stone slots in by tier: High-tier "twin" skills override POWER1
+     (they're a step above a basic swing), everything else overrides Basic. */
   if(m.equippedStone){
     const t = stoneTierDef(m.equippedStone.tier);
-    const bi = base.findIndex(mv=>mv.slot==='Basic');
+    const slot = (t.id==='high') ? 'Power1' : 'Basic';
+    const bi = base.findIndex(mv=>mv.slot===slot);
     const used = t.id==='veryhigh' && ui.battle && ui.battle.usedVeryHigh[m.uid];
-    base[bi] = { slot:'Basic', name:m.equippedStone.name, mult:t.mult, target: t.kind==='multi2'?'Multi2':(t.kind==='status'?'Status':'Single'),
+    if(bi>=0) base[bi] = { slot, name:m.equippedStone.name, mult:t.mult,
+      target: t.kind==='multi2'?'Multi2':(t.kind==='status'?'Status':'Single'),
       words:t.words, unlock:0, available:!used, isStone:true, stoneTier:t.id, stoneType:m.equippedStone.type };
   }
   // Ultra stone adds a distinct 5th button
@@ -2745,11 +2813,11 @@ function setScreenBg(key){
   const el = document.getElementById('screenBg');
   if(!el) return;
   const file = BG_MAP[key];
-  if(!file || bgMissing[file]){ el.style.backgroundImage=''; el.classList.remove('on'); return; }
+  if(!file || bgMissing[file]){ el.style.backgroundImage=''; el.classList.remove('on'); document.body.classList.remove('has-bg'); return; }
   const src = BG_DIR + file;
   const probe = new Image();
-  probe.onload = ()=>{ el.style.backgroundImage = 'url('+src+')'; el.classList.add('on'); };
-  probe.onerror = ()=>{ bgMissing[file] = true; el.style.backgroundImage=''; el.classList.remove('on'); };
+  probe.onload = ()=>{ el.style.backgroundImage = 'url('+src+')'; el.classList.add('on'); document.body.classList.add('has-bg'); };
+  probe.onerror = ()=>{ bgMissing[file] = true; el.style.backgroundImage=''; el.classList.remove('on'); document.body.classList.remove('has-bg'); };
   probe.src = src;
 }
 
@@ -2934,8 +3002,10 @@ function onMoveChosen(moveIdx){
     const t = STATUS_NEEDS_TARGET.includes(mv.stoneType) ? livingEnemies()[0] : null;
     runMoveQuiz(mv, t); return;
   }
-  // Multi2 and MultiHit auto-select targets, no player picking needed
-  runMoveQuiz(mv, null);
+  // High-tier twin skills: the FIRST hit is aimed by the player; the second
+  // lands elsewhere at random and can never strike the same target.
+  if(mv.target==='Multi2' && livingEnemies().length>1){ promptTarget(mv); return; }
+  runMoveQuiz(mv, mv.target==='Multi2' ? livingEnemies()[0] : null);
 }
 /* Explicit target picker. The old version relied on tapping the small enemy
    cards, which was easy to miss; this shows a clear list instead. */
@@ -3034,7 +3104,7 @@ function resolveBattleMove(mv, target, results){
   if(mv.slot==='UltraStone') ui.battle.usedUltra[mon.uid]=true;
   if(mv.isStone && mv.stoneTier==='veryhigh') ui.battle.usedVeryHigh[mon.uid]=true;
 
-  if(mv.target==='Multi2') return resolveMulti2(mv, mon, correct);
+  if(mv.target==='Multi2') return resolveMulti2(mv, mon, correct, target);
   if(mv.target==='Status') return resolveStatusMove(mv, mon, target, correct);
   if(mv.target==='MultiHit') return resolveMultiHit(mv, mon, correct);
 
@@ -3114,11 +3184,18 @@ function finishPlayerTurn(){
 }
 
 /* High tier: hit 2 different living enemies at 0.8x each (or the single enemy once if only 1 exists) */
-function resolveMulti2(mv, mon, correct){
+function resolveMulti2(mv, mon, correct, target){
   if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
   const atk=monAtk(mon);
   const living = livingEnemies();
-  const targets = living.length>=2 ? shuffle(living).slice(0,2) : living.slice(0,1);
+  let targets;
+  if(living.length >= 2){
+    const first = (target && target.hp>0) ? target : living[0];
+    const others = shuffle(living.filter(e=>e !== first));   // never the primary target
+    targets = others.length ? [first, others[0]] : [first];
+  } else {
+    targets = living.slice(0,1);
+  }
   const hits = targets.map(t=>{
     const dmg = computeDamage(mv.mult, atk, monRef(mon), t, true);
     return { t, idx:ui.battle.enemies.indexOf(t), oldHp:t.hp, newHp:Math.max(0,t.hp-dmg), dmg };
@@ -3825,7 +3902,7 @@ function avatarPickerHtml(selected){
       <div class="av-row">
         ${ids.map(id=>`
           <button class="av-opt ${selected===id?'sel':''}" data-avatar="${id}">
-            ${avatarImg(id, 58)}
+            ${avatarImg(id, 72)}
           </button>`).join('')}
       </div>
     </div>`;
@@ -4154,8 +4231,9 @@ function renderStats(){
   });
   if(m.equippedStone){
     const t = stoneTierDef(m.equippedStone.tier);
-    const bi = moves.findIndex(x=>x.slot==='Basic');
-    moves[bi] = { slot:'Basic', name:m.equippedStone.name+' 💎', mult:t.mult,
+    const slot = (t.id==='high') ? 'Power1' : 'Basic';
+    const bi = moves.findIndex(x=>x.slot===slot);
+    moves[bi] = { slot, name:m.equippedStone.name+' 💎', mult:t.mult,
       target:t.kind==='status'?'Status':(t.kind==='multi2'?'2 targets':'Single'),
       words:t.words, unlock:0, unlocked:true };
   }
@@ -5298,8 +5376,8 @@ const SHOP_PRICES = {
   skillToken:   { cur:'bronze', cost:3  },   // 3 Bronze -> 1 Skill Token
   randomStone:  { cur:'tokens', cost:TOKENS_PER_ROLL },
   protein:      { cur:'silver', cost:10 },
-  eliteStone:   { cur:'gold',   cost:5  },
-  highSkill:    { cur:'gold',   cost:5  },
+  eliteStone:   { cur:'gold',   cost:30 },
+  highSkill:    { cur:'gold',   cost:15 },
   veryHighSkill:{ cur:'gold',   cost:50 },
   ultraSkill:   { cur:'gold',   cost:100 },
 };
@@ -5340,7 +5418,7 @@ function renderShop(){
     <button class="back-link" id="backBtn">← Region</button>
 
     <div class="shop-keeper">
-      ${npcPortrait('shopkeeper','🧑‍🌾',72,'var(--paper-3)')}
+      ${npcPortrait('shopkeeper','🧑‍🌾',110,'transparent')}
       <div class="shop-bubble">${escapeHtml(ui.shopGreeting)}</div>
     </div>
 
@@ -5348,7 +5426,7 @@ function renderShop(){
       <span>🥉 ${m.bronze||0}</span><span>🥈 ${m.silver||0}</span><span>🥇 ${m.gold||0}</span><span>🎫 ${state.inventory.tokens||0}</span>
     </div>
 
-    <div id="shopWares" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;"></div>
+    <div id="shopWares" class="ware-grid"></div>
 
     <button class="btn btn-ghost" id="shopStorage" style="margin-top:14px;">📦 Open Storage</button>
   `;
@@ -5370,10 +5448,7 @@ function renderShop(){
     const afford = medalCount(pr.cur) >= pr.cost;
     return `<div class="ware ${afford?'':'cant'}" data-ware="${w.id}">
       <div class="ware-icon">${w.icon}</div>
-      <div style="flex:1;min-width:0;">
-        <div class="ware-name">${escapeHtml(w.name)}</div>
-        <div class="ware-desc">${escapeHtml(w.desc)}</div>
-      </div>
+      <div class="ware-name">${escapeHtml(w.name)}</div>
       <div class="ware-price">${curIcon(pr.cur)} ${pr.cost}</div>
     </div>`;
   }).join('');
@@ -5540,6 +5615,19 @@ function confirmDialogHtml(html, onYes){
 }
 
 /* ---------- SCREEN: explore ---------- */
+/* The player avatar is essentially only ever seen here, so it gets real
+   presence — sized against the viewport but capped so the zone buttons below
+   still fit on screen without scrolling. */
+/* The avatar is the centrepiece of Explore, so it takes the lion's share of
+   the space; the zone buttons sit beneath it as compact tiles. */
+function exploreAvatarSize(){
+  const h = window.innerHeight;
+  const reserved = 70 + 34 + 130 + 60 + 40;      // chrome, back link, zone row, footer btn, padding
+  const byH = h - reserved;
+  const byW = battleWidth() * 0.86;
+  return Math.round(Math.max(160, Math.min(byH, byW, 340)));
+}
+
 function renderExplore(){
   setScreenBg('explore');
   $('#brandSub').textContent = 'Explore';
@@ -5549,17 +5637,13 @@ function renderExplore(){
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Region</button>
 
-    <div class="explore-hero">
-      ${playerAvatar() ? avatarImg(playerAvatar(), 84)
-        : (lead ? monPortrait(lead.species, 84, { view:'back', bare:true, stage:monStage(lead), breathe:'normal' }) : '')}
-      <div class="explore-hero-text">
-        <div class="explore-hero-name">${escapeHtml(state.name)}</div>
-        <div class="explore-hero-sub">Choose where to explore</div>
-      </div>
+    <div class="explore-avatar">
+      ${playerAvatar() ? avatarImg(playerAvatar(), exploreAvatarSize(), { bare:true, cls:'hero-avatar' })
+        : `<button class="btn btn-primary" id="pickAvatarHere" style="width:auto;padding:12px 18px;">👤 Choose your look</button>`}
     </div>
 
     ${canFight ? `
-      <div class="zone-grid">
+      <div class="zone-row">
         ${zones.map((z,i)=>`
           <div class="zone-item">
             <button class="zone-btn" data-zone="${i}" style="${z.tint?`--zone-tint:${z.tint};`:''}">
@@ -5571,10 +5655,10 @@ function renderExplore(){
     ` : `
       <div class="placeholder-note"><span class="pn-emoji">💤</span>Your whole team has fainted. Heal up before exploring.</div>
     `}
-    <button class="btn btn-ghost" id="backBtn2" style="margin-top:16px;">Back to region</button>
   `;
   $('#backBtn').addEventListener('click', ()=>go('region'));
-  $('#backBtn2').addEventListener('click', ()=>go('region'));
+  const pah = $('#pickAvatarHere');
+  if(pah) pah.addEventListener('click', ()=>{ ui.prevScreen='explore'; go('avatarPick'); });
   screenEl.querySelectorAll('[data-zone]').forEach(b=>b.addEventListener('click', ()=>{
     ui.currentZone = zones[+b.dataset.zone];
     startWildEncounter();
@@ -6132,6 +6216,12 @@ function escapeHtml(s){
   try{ const r = await store.get(LAST_PROFILE_KEY); lastId = r ? r.value : null; }catch(e){}
   if(lastId && idx.some(e=>e.id===lastId)){
     state = await loadProfileById(lastId);
+  }
+
+  if(state && state._needsMasteryReconcile){
+    delete state._needsMasteryReconcile;
+    const g = reconcileMastery();
+    if(g) { await saveProfile(); setTimeout(()=>announceMastery(g), 900); }
   }
 
   if(state) go('home');
