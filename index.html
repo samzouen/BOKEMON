@@ -95,13 +95,19 @@
   body.has-bg .shop-bubble,
   body.has-bg .medal-bar,
   body.has-bg .party-card,
+  body.has-bg .storage-col,
   body.has-bg .token-box{
-    background:rgba(244,236,216,0.62);
-    backdrop-filter:blur(3px);
-    -webkit-backdrop-filter:blur(3px);
+    background:rgba(244,236,216,0.34);
+    border-color:rgba(35,32,25,0.22);
+    backdrop-filter:blur(2px);
+    -webkit-backdrop-filter:blur(2px);
   }
-  body.has-bg .btn-ghost{ background:rgba(235,224,196,0.62); backdrop-filter:blur(3px); }
-  body.has-bg .screen-title, body.has-bg .screen-sub{ text-shadow:0 1px 0 rgba(255,255,255,0.7); }
+  body.has-bg .btn-ghost{ background:rgba(235,224,196,0.38); backdrop-filter:blur(2px); }
+  body.has-bg .screen-title, body.has-bg .screen-sub,
+  body.has-bg .mc-title, body.has-bg .mc-desc,
+  body.has-bg .col-head{ text-shadow:0 1px 2px rgba(255,255,255,0.9); }
+  /* the battle screen keeps nothing but the HP plates */
+  body.has-bg .battlefield{ background:transparent;border-color:rgba(35,32,25,0.18); }
   @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
   .screen-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:26px;margin:6px 0 2px;}
   .screen-sub{color:var(--ink-soft);font-size:14px;font-weight:600;margin-bottom:20px;}
@@ -311,9 +317,11 @@
   textarea:focus{outline:none;border-color:var(--gold);}
 
   /* battle */
+  /* The battle stage is deliberately bare — no panels boxing the monsters in.
+     Only the HP plates carry a surface, so the backdrop stays visible. */
   .enemy-card{
-    background:var(--paper-2);border:2px solid var(--line);border-radius:14px;padding:8px 6px 6px;
-    text-align:center;transition:transform .1s, border-color .15s;
+    background:transparent;border:none;padding:0;
+    text-align:center;transition:transform .1s;
   }
   .enemy-card.fainted{opacity:0.35;filter:grayscale(1);}
   .enemy-card.targetable{border-color:var(--cinnabar);cursor:pointer;animation:pulse 1s infinite;}
@@ -324,8 +332,8 @@
   /* ---- battle stage: avatars < fx layer < text/HP ---- */
   .battle-stage{position:relative;margin-bottom:12px;}
   .enemy-row{min-height:auto;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:4px;}
-  .player-card{display:flex;align-items:flex-end;gap:14px;background:var(--paper-2);border:1px solid var(--line);
-    border-radius:16px;padding:12px 12px 10px;margin:4px 0 0;}
+  .player-card{display:flex;align-items:flex-end;gap:14px;background:transparent;border:none;
+    padding:6px 0 0;margin:0;}
   /* Depth order builds a sense of distance:
      enemy avatars (far) < move effects < player avatar (near) < text/HP bars */
   .avatar-layer{position:relative;z-index:1;}    /* enemies: furthest back */
@@ -392,7 +400,49 @@
     border-radius:14px;padding:13px 10px;cursor:pointer;box-shadow:0 2px 0 var(--paper-3);}
   .ware:active{transform:translateY(2px);box-shadow:0 1px 0 var(--paper-3);}
   .ware.cant{opacity:0.55;}
-  .ware-icon{font-size:30px;line-height:1;}
+  .ware-icon{font-size:30px;line-height:1;display:flex;align-items:center;justify-content:center;min-height:46px;}
+
+  /* ---- faceted gems (no art files needed) ---- */
+  .gem-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;}
+  .gem{
+    width:70%;height:70%;display:block;
+    clip-path:polygon(50% 0%, 93% 33%, 76% 100%, 24% 100%, 7% 33%);
+    background:linear-gradient(150deg, var(--g1) 0%, var(--g2) 45%, var(--g3) 100%);
+    position:relative;
+  }
+  /* facet highlight */
+  .gem:after{
+    content:'';position:absolute;inset:0;
+    clip-path:polygon(50% 0%, 93% 33%, 50% 46%, 7% 33%);
+    background:rgba(255,255,255,0.45);
+  }
+  .gem.tier-low     { --g1:#c9d3d8; --g2:#9aa8b0; --g3:#78868e; }
+  .gem.tier-mid     { --g1:#8fe3c2; --g2:#3fae86; --g3:#23785c; }
+  .gem.tier-high    { --g1:#9fd6ff; --g2:#3b8ec9; --g3:#1f5c8c; }
+  .gem.tier-veryhigh{ --g1:#ffe6a3; --g2:#e0a83c; --g3:#a9761d; }
+  .gem.tier-ultra   { --g1:#ffd3c6; --g2:#e0553f; --g3:#8f2a1c; }
+  .gem.glow{ animation:gemPulse 2.6s ease-in-out infinite; }
+  .gem.tier-high.glow    { filter:drop-shadow(0 0 5px rgba(59,142,201,.85)); }
+  .gem.tier-veryhigh.glow{ filter:drop-shadow(0 0 7px rgba(224,168,60,.95)); }
+  .gem.tier-ultra.glow   { filter:drop-shadow(0 0 10px rgba(224,85,63,1)); }
+  @keyframes gemPulse{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.07);} }
+
+  /* Ultra: drifting motes, echoing the evolution sequence */
+  .gem-motes{position:absolute;inset:-6px;pointer-events:none;overflow:hidden;}
+  .gem-motes i{
+    position:absolute;bottom:0;width:4px;height:4px;border-radius:50%;
+    background:radial-gradient(circle,#fff3c4 0%,#ffbf6b 60%,rgba(255,191,107,0) 72%);
+    animation:gemRise 2.4s linear infinite;
+  }
+  @keyframes gemRise{
+    0%  { transform:translate(0,4px) scale(.5); opacity:0; }
+    20% { opacity:1; }
+    60% { transform:translate(5px,-22px) scale(1); }
+    100%{ transform:translate(-4px,-44px) scale(.4); opacity:0; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .gem.glow{animation:none;} .gem-motes i{animation:none;opacity:.5;}
+  }
   .ware-icon.big{font-size:44px;width:auto;margin-bottom:6px;}
   .ware-name{font-family:'Baloo 2',cursive;font-weight:700;font-size:13.5px;line-height:1.2;}
   .ware-desc{font-size:11px;color:var(--ink-soft);font-weight:600;line-height:1.4;}
@@ -533,10 +583,22 @@
   .bob{display:inline-block;will-change:transform;}
   .hit-flash{animation:hitflash .45s ease-out;}
   @keyframes hitflash{0%,100%{filter:none;opacity:1;}20%{filter:brightness(2.2) saturate(0);opacity:0.35;}45%{filter:none;opacity:1;}65%{filter:brightness(2.2) saturate(0);opacity:0.35;}}
-  .hpbar2{position:relative;background:var(--paper-3);border-radius:5px;overflow:hidden;margin:5px 0 1px;}
+  /* dark outline gives the bar definition against any background */
+  .hpbar2{position:relative;background:rgba(35,32,25,0.35);border:1.5px solid rgba(35,32,25,0.75);
+    border-radius:6px;overflow:hidden;margin:5px 0 1px;box-shadow:0 1px 3px rgba(0,0,0,0.3);}
   .hpbar2 .hp-red{position:absolute;left:0;top:0;height:100%;background:var(--cinnabar);}
   .hpbar2 .hp-green{position:absolute;left:0;top:0;height:100%;}
-  .hp-num{font-weight:800;color:var(--ink-soft);line-height:1;}
+  .hp-num{font-weight:800;color:var(--ink);line-height:1;text-shadow:0 1px 0 rgba(255,255,255,0.85);}
+  /* Names read against artwork without needing a panel behind them. */
+  .name-plate{display:inline-block;}
+  .mon-title{
+    font-family:'Baloo 2',cursive;font-weight:800;font-size:15px;color:var(--ink);
+    text-shadow:0 1px 0 #fff, 0 0 6px rgba(255,255,255,0.9);
+  }
+  .mon-title span{ font-size:15px;font-weight:800;color:var(--ink); }
+  .mon-title.big{ font-size:19px; }
+  .mon-title.big span{ font-size:19px; }
+  .player-plate{flex:1;}
   .move-btn{
     background:var(--cinnabar);color:#fff;border:none;border-radius:13px;padding:12px 8px;cursor:pointer;
     box-shadow:0 3px 0 var(--cinnabar-dark);text-align:left;min-height:58px;transition:transform .07s;
@@ -580,11 +642,27 @@
   .caught-dot{font-size:10px;font-weight:800;color:var(--jade-dark);margin-top:4px;}
 
   /* storage: two independently scrolling columns */
-  .storage-cols{display:flex;gap:10px;align-items:flex-start;}
-  .storage-col{flex:1;min-width:0;max-height:calc(100vh - 220px);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:2px;}
-  .storage-col:last-child{flex:0 0 44%;}
+  .storage-cols{display:flex;gap:10px;align-items:flex-start;margin-top:10px;}
+  .storage-col{min-width:0;max-height:calc(100vh - 230px);overflow-y:auto;-webkit-overflow-scrolling:touch;
+    background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:10px;}
+  .col-mons{flex:2;}
+  .col-stones{flex:1;}
+  .col-head{display:flex;justify-content:space-between;align-items:center;gap:6px;
+    font-family:'Baloo 2',cursive;font-weight:800;font-size:13px;margin-bottom:8px;}
+  .col-head span{font-size:12px;color:var(--ink-soft);font-weight:800;}
+  .col-empty{font-size:11px;color:var(--ink-soft);font-weight:600;font-style:italic;text-align:center;padding:14px 4px;}
+  .stone-group{margin-bottom:10px;}
+  .stone-group-head{
+    font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+    display:flex;justify-content:space-between;padding:3px 6px;border-radius:6px;margin-bottom:5px;
+    background:rgba(35,32,25,0.06);
+  }
+  .stone-group-head.tier-ultra{background:linear-gradient(90deg,rgba(200,69,58,.22),rgba(201,154,63,.22));}
+  .stone-group-head.tier-veryhigh{background:rgba(201,154,63,.20);}
+  .stone-group-head.tier-high{background:rgba(59,126,161,.18);}
   .token-box{background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center;margin-bottom:10px;box-shadow:0 2px 0 var(--paper-3);}
-  .stone-card{background:var(--paper-2);border:1px solid var(--line);border-left-width:4px;border-radius:12px;padding:10px;margin-bottom:8px;cursor:pointer;box-shadow:0 2px 0 var(--paper-3);}
+  .stone-card{background:var(--paper);border:1px solid var(--line);border-left-width:4px;border-radius:10px;
+    padding:8px;margin-bottom:6px;cursor:pointer;text-align:center;}
   .stone-card:active{transform:translateY(2px);box-shadow:0 1px 0 var(--paper-3);}
   .stone-tier{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.03em;color:var(--ink-soft);}
   .stone-tier-big{display:inline-block;font-family:'Baloo 2',cursive;font-weight:800;font-size:13px;padding:3px 12px;border-radius:20px;color:#fff;text-transform:uppercase;letter-spacing:0.04em;}
@@ -1783,7 +1861,11 @@ function definitionFor(text){
    Medals are spent in the Shop, so a long grind converts into a deliberate
    choice rather than a random drop. */
 const MASTERY_CHECKPOINTS = { bronze:5, silver:15, gold:25 };
-const MASTERY_GROUP = 10;
+/* Words needed per medal, by tier. Gold pays per WORD: at 1-per-10 a single
+   gold medal cost 250 correct answers, which put a 120-gold Ultra skill about
+   30,000 answers away — unreachable. Per-word keeps it a long goal but a real one. */
+const MASTERY_GROUP_BY_TIER = { bronze:10, silver:10, gold:1 };
+const MASTERY_GROUP = 10;   // legacy default
 
 function masteryOf(text){ return (state.wordMastery && state.wordMastery[text]) || 0; }
 function masteryTier(n){
@@ -1815,7 +1897,7 @@ function reconcileMastery(){
   const c = masteryCounts();
   let granted = null;
   ['bronze','silver','gold'].forEach(tier=>{
-    const owed = Math.floor(c[tier] / MASTERY_GROUP);
+    const owed = Math.floor(c[tier] / MASTERY_GROUP_BY_TIER[tier]);
     const paid = state.masteryAwarded[tier] || 0;
     if(owed > paid){
       const diff = owed - paid;
@@ -1832,7 +1914,7 @@ function checkMasteryRewards(){
   const c = masteryCounts();
   const rewards = { bronze:0, silver:0, gold:0 };
   ['bronze','silver','gold'].forEach(tier=>{
-    const owed = Math.floor(c[tier] / MASTERY_GROUP);
+    const owed = Math.floor(c[tier] / MASTERY_GROUP_BY_TIER[tier]);
     if(owed > (state.masteryAwarded[tier]||0)){
       rewards[tier] = owed - (state.masteryAwarded[tier]||0);
       state.masteryAwarded[tier] = owed;
@@ -2674,12 +2756,11 @@ function renderBattle(){
       ${b.npcId ? `<div class="npc-banner">${npcPortrait(b.npcId, '🧑', 44, 'var(--paper-3)')}<span>${escapeHtml(b.name)}</span></div>` : ''}
       <div class="enemy-row">
         ${b.enemies.map((e,i)=>`
-          <div class="enemy-card ${e.hp<=0?'fainted':''}" data-enemy="${i}" id="enemy-${i}" style="width:${enemySpriteSize(b.enemies.length)+22}px;">
+          <div class="enemy-card ${e.hp<=0?'fainted':''}" data-enemy="${i}" id="enemy-${i}" style="width:${enemySpriteSize(b.enemies.length)+16}px;">
             <div class="enemy-status" id="enemyStatus-${i}"></div>
             <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,enemySpriteSize(b.enemies.length),{view:'front',bare:true,stage:e.stage||0,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
-            <div class="info-layer">
-              <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:12px;margin-top:3px;">${SPECIES[e.species].name}</div>
-              <div style="font-size:10px;color:var(--ink-soft);font-weight:700;">Lv ${e.level}</div>
+            <div class="info-layer name-plate">
+              <div class="mon-title">${SPECIES[e.species].name} <span>Lv ${e.level}</span></div>
               ${hpBar2('enemyHp-'+i, e.hp, e.maxHp, false)}
             </div>
           </div>`).join('')}
@@ -2689,10 +2770,9 @@ function renderBattle(){
 
       <div class="player-card">
         <div class="bob player-avatar" id="playerBob">${monPortrait(mon.species,playerSpriteSize(),{view:'back',bare:true,stage:monStage(mon),breathe: mon.currentHp>0 ? ((mon.currentHp/monMaxHp(mon))<0.3 ? 'weak':'normal') : null})}</div>
-        <div class="info-layer" style="flex:1;">
-          <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">${escapeHtml(displayName(mon))} <span style="font-size:12px;color:var(--ink-soft);">Lv ${mon.level}</span></div>
+        <div class="info-layer name-plate player-plate">
+          <div class="mon-title big">${escapeHtml(displayName(mon))} <span>Lv ${mon.level}</span></div>
           ${hpBar2('playerHp', mon.currentHp, monMaxHp(mon), true)}
-          <div style="font-size:10px;color:var(--ink-soft);font-weight:700;margin-top:1px;">ATK ${monAtk(mon)}</div>
         </div>
       </div>
     </div>
@@ -3768,7 +3848,7 @@ function render(){
   }
 }
 function renderInner(){
-  if(!['home','region','battle','recover','challenge','explore'].includes(ui.screen)) setScreenBg(null);
+  if(!['home','region','battle','recover','challenge','explore','shop','storage','party','stats','monsterIndex','indexDetail','spellingIndex','profileSelect'].includes(ui.screen)) setScreenBg(null);
   const hb = $('#hamburgerBtn');
   // hamburger available everywhere except profile setup + (future) fights
   const noMenu = ['boot','profileSelect','starterSelect','battle','quiz'].includes(ui.screen);
@@ -3803,6 +3883,7 @@ function renderInner(){
 
 /* ---------- SCREEN: profile select / create / import ---------- */
 function renderProfileSelect(){
+  setScreenBg('home');
   $('#brandSub').textContent = 'Choose a trainer';
   const list = ui.profileList || [];
   screenEl.innerHTML = `
@@ -4145,6 +4226,7 @@ function renderRegion(){
 
 /* ---------- SCREEN: party (full management) ---------- */
 function renderPartyStub(){
+  setScreenBg('home');
   $('#brandSub').textContent = 'Party';
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Region</button>
@@ -4351,56 +4433,44 @@ function renderStats(){
   });
 }
 function renderStorage(){
+  setScreenBg('home');
   $('#brandSub').textContent = 'Storage';
-  // legacy-save guards: these arrays arrived in later phases
   if(!Array.isArray(state.storage)) state.storage = [];
   if(!Array.isArray(state.moveStones)) state.moveStones = [];
-  if(!state.inventory) state.inventory = { protein:0, strangeKey:false, tokens:0 };
-  const tokens = state.inventory.tokens||0;
-  const elite  = state.inventory.eliteTokens||0;
-  const canRoll = tokens >= TOKENS_PER_ROLL;
-  const canElite = elite >= ELITE_ROLL_COST;
+  if(!state.inventory) state.inventory = { protein:0, strangeKey:false, tokens:0, eliteTokens:0 };
+
   screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← ${ui.storageFrom==='shop'?'Shop':'Party'}</button>
-    <div class="screen-title">Storage</div>
-    <div class="screen-sub">${state.storage.length} stored · ${state.moveStones.length} stone${state.moveStones.length===1?'':'s'} · ${tokens} token${tokens===1?'':'s'}</div>
+    <div class="party-head-row">
+      <button class="back-link" id="backBtn" style="margin:0;">← ${ui.storageFrom==='shop'?'Shop':'Party'}</button>
+      <button class="btn btn-ghost storage-corner" id="toShopBtn">🏪 Shop</button>
+    </div>
+    <div class="screen-title" style="margin-top:6px;">Storage</div>
+
     <div class="storage-cols">
-      <div class="storage-col" id="storageList"></div>
-      <div class="storage-col" id="stoneCol">
-        <div class="token-box">
-          <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:15px;">🎫 ${tokens} Skill Tokens</div>
-          <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin:3px 0 8px;">${TOKENS_PER_ROLL} tokens = 1 spin</div>
-          <button class="btn ${canRoll?'btn-primary':'btn-ghost'}" id="rollBtn" style="font-size:13px;padding:10px;" ${canRoll?'':'disabled'}>${canRoll?'🎰 Spin!':'Need '+(TOKENS_PER_ROLL-tokens)+' more'}</button>
-        </div>
-        <div class="token-box" style="border-color:var(--gold);">
-          <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:15px;">⭐ ${elite} Elite Tokens</div>
-          <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin:3px 0 8px;">${ELITE_ROLL_COST} = Very High or Ultra</div>
-          <button class="btn ${canElite?'btn-primary':'btn-ghost'}" id="eliteRollBtn" style="font-size:13px;padding:10px;" ${canElite?'':'disabled'}>${canElite?'⭐ Elite spin':'Need '+(ELITE_ROLL_COST-elite)+' more'}</button>
-          <button class="btn btn-ghost" id="shopBtn" style="font-size:12px;padding:9px;margin-top:6px;">🏪 Shop</button>
-        </div>
+      <div class="storage-col col-mons">
+        <div class="col-head">🐾 Monsters <span>${state.storage.length}</span></div>
+        <div id="storageList"></div>
+      </div>
+      <div class="storage-col col-stones">
+        <div class="col-head">💎 Skills <span>🎫 ${state.inventory.tokens||0}</span></div>
         <div id="stoneList"></div>
       </div>
     </div>
   `;
   $('#backBtn').addEventListener('click', ()=>{ const t = ui.storageFrom==='shop'?'shop':'party'; ui.storageFrom=null; go(t); });
-  const rb = $('#rollBtn');
-  if(rb && canRoll) rb.addEventListener('click', doStoneRoll);
-  const erb = $('#eliteRollBtn');
-  if(erb && canElite) erb.addEventListener('click', doEliteRoll);
-  const sb = $('#shopBtn');
-  if(sb) sb.addEventListener('click', openEliteShop);
+  $('#toShopBtn').addEventListener('click', ()=>{ ui.storageFrom='storage'; go('shop'); });
 
   const list = $('#storageList');
   if(state.storage.length===0){
-    list.innerHTML = `<div class="placeholder-note" style="font-size:12px;padding:14px;"><span class="pn-emoji" style="font-size:24px;">📦</span>No stored monsters.</div>`;
+    list.innerHTML = `<div class="col-empty">No stored monsters.</div>`;
   } else {
     list.innerHTML = state.storage.map(m=>`
       <div class="party-card" style="padding:10px;margin-bottom:8px;">
-        <div class="party-head" style="gap:8px;">
-          ${monPortrait(m.species,40,{stage:monStage(m)})}
+        <div class="party-head" style="gap:9px;">
+          ${monPortrait(m.species,44,{stage:monStage(m)})}
           <div style="flex:1;min-width:0;">
-            <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:13px;">${escapeHtml(displayName(m))}</div>
-            <div style="font-size:11px;color:var(--ink-soft);font-weight:700;">Lv ${m.level}</div>
+            <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:14px;">${escapeHtml(displayName(m))}</div>
+            <div style="font-size:12px;color:var(--ink-soft);font-weight:800;">Lv ${m.level}</div>
           </div>
         </div>
         <div class="party-actions" style="margin-top:8px;padding-top:8px;">
@@ -4412,7 +4482,6 @@ function renderStorage(){
     list.querySelectorAll('[data-stats]').forEach(b=>b.addEventListener('click', ()=>{ ui.statsUid=b.dataset.stats; go('stats'); }));
     list.querySelectorAll('[data-party]').forEach(b=>b.addEventListener('click', ()=> moveToParty(b.dataset.party)));
   }
-
   renderStoneList();
 }
 
@@ -4420,18 +4489,22 @@ function renderStoneList(){
   const el = $('#stoneList');
   if(!el) return;
   if(state.moveStones.length===0){
-    el.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);font-weight:600;text-align:center;padding:12px 6px;font-style:italic;">No skill stones yet. Win battles to earn skill tokens.</div>`;
+    el.innerHTML = `<div class="col-empty">No skill stones yet.</div>`;
     return;
   }
-  el.innerHTML = state.moveStones.map(s=>{
-    const t = stoneTierDef(s.tier);
-    return `<div class="stone-card tier-${s.tier}" data-stone="${s.uid}">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span class="type-badge" style="background:${TYPE_COLORS[s.type]};font-size:9px;padding:2px 6px;">${s.type}</span>
-        <span class="stone-tier">${t.label}</span>
-      </div>
-      <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:13px;margin-top:3px;">${escapeHtml(s.name)}</div>
-      <div style="font-size:10px;color:var(--ink-soft);font-weight:700;">${t.mult!=null?t.mult+'× ATK':'Status'} · ${t.words}字</div>
+  // rarest first, so the good stuff is never buried
+  const order = ['ultra','veryhigh','high','mid','low'];
+  const groups = {};
+  state.moveStones.forEach(st=>{ (groups[st.tier] = groups[st.tier] || []).push(st); });
+  el.innerHTML = order.filter(t=>groups[t]).map(t=>{
+    const def = stoneTierDef(t);
+    return `<div class="stone-group">
+      <div class="stone-group-head tier-${t}">${def.label}<span>${groups[t].length}</span></div>
+      ${groups[t].map(st=>`
+        <div class="stone-card tier-${st.tier}" data-stone="${st.uid}">
+          <span class="type-badge" style="background:${TYPE_COLORS[st.type]};font-size:9px;padding:2px 6px;">${st.type}</span>
+          <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:12.5px;margin-top:3px;line-height:1.2;">${escapeHtml(st.name)}</div>
+        </div>`).join('')}
     </div>`;
   }).join('');
   el.querySelectorAll('[data-stone]').forEach(c=> c.addEventListener('click', ()=> openStoneDetail(c.dataset.stone)));
@@ -4474,7 +4547,7 @@ async function doStoneRoll(){
 }
 
 /* Shared reveal animation for every way a stone can be obtained. */
-function showStoneReveal(stone, spinLabel){
+function showStoneReveal(stone, spinLabel, thenScreen){
   playSfx('stone_roll');
   const t = stoneTierDef(stone.tier);
   const ov = document.createElement('div');
@@ -4495,7 +4568,11 @@ function showStoneReveal(stone, spinLabel){
         <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;">${t.mult!=null?t.mult+'× ATK':'Status move'} · ${t.words} words</div>
       </div>
       <button class="btn btn-primary" id="rollOk" style="width:auto;padding:12px 30px;margin-top:14px;">Nice!</button>`;
-    ov.querySelector('#rollOk').addEventListener('click', ()=>{ if(ov.parentNode) document.body.removeChild(ov); renderStorage(); });
+    ov.querySelector('#rollOk').addEventListener('click', ()=>{
+      if(ov.parentNode) document.body.removeChild(ov);
+      if(thenScreen==='storage'){ ui.storageFrom='shop'; go('storage'); }
+      else renderStorage();
+    });
   }, 1100);
 }
 
@@ -4742,6 +4819,7 @@ function moveToParty(uid){
 
 /* ---------- SCREEN: monster index ---------- */
 function renderMonsterIndex(){
+  setScreenBg('home');
   $('#brandSub').textContent = 'Monster Index';
   const seen = state.encounteredSpecies || [];
   const all = Object.keys(SPECIES);
@@ -5376,10 +5454,10 @@ const SHOP_PRICES = {
   skillToken:   { cur:'bronze', cost:3  },   // 3 Bronze -> 1 Skill Token
   randomStone:  { cur:'tokens', cost:TOKENS_PER_ROLL },
   protein:      { cur:'silver', cost:10 },
-  eliteStone:   { cur:'gold',   cost:30 },
+  eliteStone:   { cur:'gold',   cost:40 },
   highSkill:    { cur:'gold',   cost:15 },
-  veryHighSkill:{ cur:'gold',   cost:50 },
-  ultraSkill:   { cur:'gold',   cost:100 },
+  veryHighSkill:{ cur:'gold',   cost:80 },
+  ultraSkill:   { cur:'gold',   cost:120 },
 };
 const SHOP_GREETINGS = [
   "Welcome in! Every word you've mastered is worth something here.",
@@ -5392,6 +5470,17 @@ const SHOP_GREETINGS = [
   "Medals in, power out. Simple as that.",
 ];
 function shopGreeting(){ return SHOP_GREETINGS[Math.floor(Math.random()*SHOP_GREETINGS.length)]; }
+
+/* Faceted CSS gems, drawn in code so no art files are needed. Higher tiers gain
+   a glowing aura; Ultra additionally emits drifting motes like an evolution. */
+function gemIcon(tier, size){
+  const px = size || 44;
+  const glow = (tier==='ultra'||tier==='veryhigh'||tier==='high') ? ' glow' : '';
+  const motes = tier==='ultra'
+    ? `<span class="gem-motes">${Array.from({length:6},(_,i)=>`<i style="left:${10+i*15}%;animation-delay:${i*0.35}s"></i>`).join('')}</span>`
+    : '';
+  return `<span class="gem-wrap" style="width:${px}px;height:${px}px;">${motes}<span class="gem tier-${tier}${glow}"></span></span>`;
+}
 
 function medalCount(cur){
   if(cur==='tokens') return state.inventory.tokens||0;
@@ -5435,12 +5524,12 @@ function renderShop(){
 
   const wares = [
     { id:'skillToken',    icon:'🎫', name:'Skill Token',            desc:'Spin for a random Skill Stone (5 tokens per spin).', qty:true },
-    { id:'randomStone',   icon:'💎', name:'Random Skill Stone',     desc:'One spin, right now. Any tier, any type.' },
+    { id:'randomStone',   icon:gemIcon('mid'), name:'Random Skill Stone', desc:'One spin, right now. Any tier, any type.' },
     { id:'protein',       icon:'💪', name:'Protein Supplement',     desc:'Permanently raises one monster\'s stats.' },
-    { id:'eliteStone',    icon:'⭐', name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
-    { id:'highSkill',     icon:'🔷', name:'High Quality Skill',     desc:'Pick any High-tier skill yourself.', pick:'high' },
-    { id:'veryHighSkill', icon:'🔶', name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
-    { id:'ultraSkill',    icon:'🔴', name:'Ultra Quality Skill',    desc:'Pick any Ultra skill yourself.', pick:'ultra' },
+    { id:'eliteStone',    icon:gemIcon('veryhigh'), name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
+    { id:'highSkill',     icon:gemIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
+    { id:'veryHighSkill', icon:gemIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
+    { id:'ultraSkill',    icon:gemIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
   ];
   const box = $('#shopWares');
   box.innerHTML = wares.map(w=>{
@@ -5550,7 +5639,7 @@ function openSinglePurchase(w){
       showSyncFailure(); return;
     }
     close();
-    if(stone) showStoneReveal(stone, 'Purchased!');
+    if(stone) showStoneReveal(stone, 'Purchased!', 'storage');   // straight to Storage to equip
     else { playSfx('protein_use'); toast('Protein Supplement purchased!'); renderShop(); }
   });
 }
@@ -5945,6 +6034,7 @@ function renderWordRows(){
 
 /* ---------- SCREEN: spelling index (active pool + practice) ---------- */
 function renderSpellingIndex(){
+  setScreenBg('home');
   $('#brandSub').textContent = 'Spelling Index';
   const pool = activePool();
   const focus = state.settings.focusMode;
