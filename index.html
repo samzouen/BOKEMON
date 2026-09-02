@@ -107,7 +107,7 @@
   body.has-bg .mc-title, body.has-bg .mc-desc,
   body.has-bg .col-head{ text-shadow:0 1px 2px rgba(255,255,255,0.9); }
   /* the battle screen keeps nothing but the HP plates */
-  body.has-bg .battlefield{ background:transparent;border-color:rgba(35,32,25,0.18); }
+  body.has-bg .battlefield{ background:transparent;border:none; }
   @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
   .screen-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:26px;margin:6px 0 2px;}
   .screen-sub{color:var(--ink-soft);font-size:14px;font-weight:600;margin-bottom:20px;}
@@ -181,6 +181,9 @@
     font-family:'Noto Sans SC';font-weight:900;font-size:30px;color:#fff;position:relative;
     box-shadow:inset 0 -6px 0 rgba(0,0,0,0.12);
   }
+  /* Cut-out battle sprites must not carry the tile's inset plate. */
+  .avatar-layer .mon-portrait, .player-avatar .mon-portrait,
+  .explore-avatar .avatar-img, .hero-avatar{ box-shadow:none; border-radius:0; }
   /* SWAP POINT: .mon-portrait is a placeholder colored tile with the species'
      first character. Replace its contents with <img src="..."> when real art exists. */
   .starter-info h3{font-family:'Baloo 2',cursive;margin:0;font-size:19px;font-weight:700;}
@@ -471,13 +474,11 @@
     display:flex;align-items:flex-end;justify-content:center;position:relative;
     min-height:160px;margin:6px 0 14px;
   }
-  /* soft ground shadow so a full-body figure reads as standing, not floating */
-  .explore-avatar:after{
-    content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
-    width:58%;height:12px;border-radius:50%;
-    background:radial-gradient(ellipse, rgba(35,32,25,0.22), rgba(35,32,25,0) 70%);
-  }
-  .hero-avatar{position:relative;z-index:1;filter:drop-shadow(0 4px 5px rgba(35,32,25,0.22));}
+  /* No painted ground shadow: the sprite is CONTAINED in a square, so an
+     ellipse pinned to the container's base lands wherever the box ends rather
+     than at the character's feet — it read as a detached blob. A soft
+     drop-shadow follows the actual silhouette instead. */
+  .hero-avatar{position:relative;z-index:1;filter:drop-shadow(0 3px 4px rgba(35,32,25,0.18));}
   .explore-hero-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;margin-top:6px;}
   .explore-hero-sub{font-size:13px;color:var(--ink-soft);font-weight:600;}
   .zone-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
@@ -577,9 +578,9 @@
   .enemy-status .status-pill{font-size:9px;padding:2px 6px;}
 
   /* battlefield gap + animated HP bars */
-  .battlefield{height:26px;margin:2px 0;border-radius:12px;background:
-    repeating-linear-gradient(90deg, rgba(47,143,111,0.10) 0 10px, rgba(47,143,111,0.04) 10px 20px);
-    border:1px dashed var(--line);}
+  /* Reserved space for move effects — deliberately invisible so the stage looks
+     empty until an FX asset actually plays in it. */
+  .battlefield{height:26px;margin:2px 0;background:transparent;border:none;}
   .bob{display:inline-block;will-change:transform;}
   .hit-flash{animation:hitflash .45s ease-out;}
   @keyframes hitflash{0%,100%{filter:none;opacity:1;}20%{filter:brightness(2.2) saturate(0);opacity:0.35;}45%{filter:none;opacity:1;}65%{filter:brightness(2.2) saturate(0);opacity:0.35;}}
@@ -650,6 +651,14 @@
   .col-head{display:flex;justify-content:space-between;align-items:center;gap:6px;
     font-family:'Baloo 2',cursive;font-weight:800;font-size:13px;margin-bottom:8px;}
   .col-head span{font-size:12px;color:var(--ink-soft);font-weight:800;}
+  .hp-card{background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:14px;}
+  body.has-bg .hp-card{
+    background:rgba(244,236,216,0.30);
+    border-color:rgba(35,32,25,0.22);
+    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+  }
+  body.has-bg .hp-card .pc-name,
+  body.has-bg .hp-card div{ text-shadow:0 1px 2px rgba(255,255,255,0.9); }
   .col-empty{font-size:11px;color:var(--ink-soft);font-weight:600;font-style:italic;text-align:center;padding:14px 4px;}
   .stone-group{margin-bottom:10px;}
   .stone-group-head{
@@ -1861,11 +1870,15 @@ function definitionFor(text){
    Medals are spent in the Shop, so a long grind converts into a deliberate
    choice rather than a random drop. */
 const MASTERY_CHECKPOINTS = { bronze:5, silver:15, gold:25 };
-/* Words needed per medal, by tier. Gold pays per WORD: at 1-per-10 a single
-   gold medal cost 250 correct answers, which put a 120-gold Ultra skill about
-   30,000 answers away — unreachable. Per-word keeps it a long goal but a real one. */
-const MASTERY_GROUP_BY_TIER = { bronze:10, silver:10, gold:1 };
-const MASTERY_GROUP = 10;   // legacy default
+/* EVERY tier pays one medal PER WORD that reaches its threshold. Grouping by
+   ten made the cheap currency cost more practice than the premium one — a
+   bronze medal would have taken 10 words x 5 reps = 50 practices, against 25
+   for a gold. Per-word keeps the ladder honest: 5 / 15 / 25 reps per medal.
+
+   Tiers are CUMULATIVE: a word at 25 reps has also passed 15 and 5, so it pays
+   a bronze, a silver AND a gold. */
+const MASTERY_GROUP_BY_TIER = { bronze:1, silver:1, gold:1 };
+const MASTERY_GROUP = 1;
 
 function masteryOf(text){ return (state.wordMastery && state.wordMastery[text]) || 0; }
 function masteryTier(n){
@@ -3722,7 +3735,7 @@ function showVictory(enemyNames, levelUps, tokens){
       <div class="screen-title" style="text-align:center;">Victory!</div>
       <div class="screen-sub" style="text-align:center;">You defeated the wild ${enemyNames}.</div>
     </div>
-    <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;">
+    <div class="hp-card" style="margin-bottom:14px;">
       <div style="font-weight:800;font-size:13px;color:var(--ink-soft);margin-bottom:6px;">Your team earned a fight!</div>
       ${(levelUps.length ? (playSfx('level_up'),'') : '')}${levelUps.length ? levelUps.map(e=>`<div style="font-weight:700;font-size:14px;">⬆️ ${escapeHtml(e.name)} grew to Lv ${e.to}!</div>`).join('') : `<div style="font-size:13px;color:var(--ink-soft);font-weight:600;">Everyone gained progress toward their next level.</div>`}
       ${tokens ? `<div style="font-weight:800;font-size:14px;color:var(--gold);margin-top:6px;">🎫 Found a Skill Token! (${state.inventory.tokens} total)</div>` : ''}
@@ -4335,7 +4348,7 @@ function renderStats(){
     </div>
     <div id="nameArea" style="margin-bottom:12px;"></div>
 
-    <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;">
+    <div class="hp-card" style="margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;font-weight:800;font-size:15px;">
         <span>Level ${m.level}${capped?' (region cap)':''}</span>
         <span style="color:var(--ink-soft);">${capped?'':`${m.xpFights}/${need} fights`}</span>
@@ -4986,7 +4999,7 @@ function finishRecovery(){
   $('#doneBtn').addEventListener('click', ()=>go('region'));
 }
 function renderPartyHpCard(){
-  return `<div style="background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:14px;">
+  return `<div class="hp-card">
     ${state.party.map(m=>{ const max=monMax(m); return `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
         ${monPortrait(m.species, 30, { stage:monStage(m) })}
@@ -5308,7 +5321,7 @@ function renderArena(){
     <div class="screen-title">Test Arena</div>
     <div class="screen-sub">No spelling required. Every move unlocked. Dummies have ${ARENA_DUMMY_HP} HP and respawn forever.</div>
 
-    <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;">
+    <div class="hp-card" style="margin-bottom:12px;">
       <div style="font-weight:800;font-size:13px;margin-bottom:8px;">Fighter</div>
       <select id="arenaMon" style="width:100%;padding:10px;border-radius:10px;border:2px solid var(--line);background:#fff9ec;font-family:'Nunito';font-weight:700;font-size:14px;">
         ${all.map((m,i)=>`<option value="${m.uid}">${escapeHtml(displayName(m))} · Lv ${m.level} · ${SPECIES[m.species].types.join('/')}</option>`).join('')}
@@ -5814,7 +5827,7 @@ function renderSpellingManage(){
     <div class="screen-title">Spelling List</div>
     <div class="screen-sub">${total} words · ${priorityCount} priority · ${regularCount} regular</div>
 
-    <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;">
+    <div class="hp-card" style="margin-bottom:14px;">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <div>
           <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">Focus mode</div>
