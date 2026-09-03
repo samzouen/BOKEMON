@@ -415,6 +415,17 @@
     background:rgba(47,143,111,0.15);border:1px solid rgba(47,143,111,0.4);border-radius:14px;
     padding:12px;font-size:13px;font-weight:700;text-align:left;}
   .scene-reward span{font-weight:600;color:var(--ink-soft);font-size:11px;}
+  .eye-overlay{position:fixed;inset:0;z-index:99;background:rgba(18,24,20,0.94);
+    display:flex;align-items:center;justify-content:center;padding:26px;}
+  .eye-card{max-width:340px;text-align:center;color:#f4ecd8;}
+  .eye-emoji{font-size:56px;margin-bottom:10px;}
+  .eye-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:24px;margin-bottom:10px;}
+  .eye-body{font-size:14px;font-weight:600;line-height:1.6;opacity:.9;}
+  .eye-clock{font-family:'Baloo 2',cursive;font-weight:800;font-size:52px;margin:18px 0 6px;
+    letter-spacing:.04em;color:#ffd166;}
+  .eye-note{font-size:12px;font-weight:600;opacity:.65;}
+  /* everything underneath is inert while the break runs */
+  body.eye-locked #app{pointer-events:none;filter:blur(2px);}
   .shop-note{
     margin-top:12px;padding:11px 13px;border-radius:12px;text-align:center;
     background:rgba(47,143,111,0.16);border:1px solid rgba(47,143,111,0.4);
@@ -517,6 +528,21 @@
   .trial-warn{font-size:11px;font-weight:800;color:var(--cinnabar-dark);margin-top:7px;line-height:1.4;}
   .zone-locked{filter:grayscale(1);opacity:.55;cursor:not-allowed;}
   .zone-lock{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px;}
+  .zone-hero{position:relative;border-radius:18px;overflow:hidden;margin:8px 0 12px;
+    min-height:150px;display:flex;align-items:flex-end;background:var(--paper-3);
+    box-shadow:inset 0 -40px 40px -20px rgba(35,32,25,0.6);}
+  .zone-hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .zone-hero-name{position:relative;z-index:1;padding:12px 14px;font-family:'Baloo 2',cursive;
+    font-weight:800;font-size:22px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,0.7);}
+  .zone-facts{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;
+    background:var(--paper-2);border:1px solid var(--line);border-radius:13px;padding:11px 13px;}
+  .zone-facts b{font-weight:800;}
+  body.has-bg .zone-facts{background:rgba(244,236,216,0.34);backdrop-filter:blur(2px);}
+  .region-card.locked{opacity:.5;cursor:not-allowed;}
+  .region-num{width:52px;height:52px;border-radius:14px;background:var(--jade);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',cursive;
+    font-weight:800;font-size:24px;flex-shrink:0;}
+  .region-num.dim{background:var(--paper-3);color:var(--ink-soft);}
   .zone-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
   .zone-item{text-align:center;width:118px;}
   .zone-btn{
@@ -1228,6 +1254,9 @@ const STONE_NAMES = {
   Physical: { low:'Pummel',      mid:'Power Strike',  high:'Twin Strike',  veryhigh:'Counter',         ultra:'Devastate' },
   Ghost:    { low:'Astonish',    mid:'Nightmare',     high:'Twin Hex',     veryhigh:'Curse',           ultra:'Shadow Shred' },
   Psychic:  { low:'Confuse',     mid:'Psybeam',       high:'Twin Shock',   veryhigh:'Discombobulate',  ultra:'Mindstorm' },
+  Dragon:   { low:'Dragonclaw',  mid:'Dragonbreath',  high:'Twin Breath',  veryhigh:'Dragon Dance',    ultra:'Draco Meteor' },
+  Steel:    { low:'Iron Bolt',   mid:'Iron Strike',   high:'Twin Cannon',  veryhigh:'Steel Aegis',     ultra:'Gigaton Smash' },
+  Fairy:    { low:'Dazzle',      mid:'Moonbeam',      high:'Twin Gleam',   veryhigh:'Diamond Dust',    ultra:'Astral Bloom' },
 };
 function stoneName(type, tierId){ return (STONE_NAMES[type]||{})[tierId] || tierId; }
 function tokenChanceForLevel(level){
@@ -1491,7 +1520,7 @@ function blankProfile(name, starterSpecies){
       region1:{ guardianCleared:false, rivalCleared:false, thugsCleared:[], thugBossCleared:false, investigateProtein:0, dojoCleared:[] },
       region2:{ courage:0, trialDone:false, seedGranted:false, challengeDone:false },
     },
-    settings:{ volume:0.8, sfxVolume:0.55, musicVolume:0.10, focusMode:false, password:null, xpMode:'default', leftHanded:false },
+    settings:{ volume:0.8, sfxVolume:0.55, musicVolume:0.10, focusMode:false, password:null, xpMode:'default', leftHanded:false, leniency:1.0, eyeBreakEvery:10, eyeBreakMins:5 },
     recentWrong:[],
     /* Each son's own checkmarks against the SHARED word list (see the Word List
        Module below). Keyed by word text. A word with no entry here defaults to
@@ -1625,6 +1654,11 @@ function normalizeProfile(p){
   if(p.settings.password===undefined) p.settings.password = null;
   if(!XP_MODES[p.settings.xpMode]) p.settings.xpMode = 'default';
   if(p.settings.leftHanded===undefined) p.settings.leftHanded = false;
+  if(p.settings.leniency===undefined) p.settings.leniency = 1.0;
+  if(p.settings.eyeBreakEvery===undefined) p.settings.eyeBreakEvery = 10;
+  if(p.settings.eyeBreakMins===undefined) p.settings.eyeBreakMins = 5;
+  if(p.battlesSinceBreak===undefined) p.battlesSinceBreak = 0;
+  if(p.eyeBreakUntil===undefined) p.eyeBreakUntil = 0;
   if(p.settings.sfxVolume===undefined) p.settings.sfxVolume = 0.55;
   if(p.settings.musicVolume===undefined) p.settings.musicVolume = 0.10;
   return p;
@@ -2399,6 +2433,9 @@ function buildWriter(i, box){
   // attempt cap, and Hanzi Writer's own hint appears after 3 misses on a stroke.
   // Battle / catch / recovery keep the strict rules — no hints there, ever.
   const hintAfter = q.config.relaxed ? (q.config.hintAfterMisses || 3) : false;
+  /* Hanzi Writer's leniency multiplier: >1 accepts sloppier strokes. Young
+     hands need the slack; the slider lives in Settings. */
+  const leniency = (state && state.settings && state.settings.leniency) || 1.0;
   const writer = HanziWriter.create(box, q.chars[i], {
     width:size, height:size, padding:Math.round(size*0.05),
     showCharacter:false, showOutline:false, showHintAfterMisses:false,
@@ -2407,6 +2444,7 @@ function buildWriter(i, box){
   });
   q.writers[i] = writer;
   writer.quiz({
+    leniency: leniency,
     showHintAfterMisses: hintAfter,
     onMistake:function(strokeData){
       if(q.locked) return;
@@ -2745,8 +2783,13 @@ const COURAGE_TARGET = 30;
    gauntlet. Fleeing during them costs only the gauntlet rather than the whole
    run — the counter falls back to 25 instead of zero. */
 const COURAGE_GAUNTLET_FROM = 27;   // counter value while fighting battle #28
-const COURAGE_GAUNTLET_LEVEL = 35;
 const COURAGE_FLEE_FALLBACK = 25;
+/* The final three are scripted, not random: rising levels and rising AI. */
+const COURAGE_GAUNTLET = [
+  { level:35, ai:'power1', team:['squirrel','sparrow','deer'] },   // battle 28
+  { level:38, ai:'power2', team:['squirrel','sparrow','deer'] },   // battle 29
+  { level:41, ai:'best',   team:['grass_starter'] },               // battle 30
+];
 function inCourageGauntlet(){
   const c = (state.progress.region2||{}).courage||0;
   return inSacredGroveTrial() && c >= COURAGE_GAUNTLET_FROM && c < COURAGE_TARGET;
@@ -2757,6 +2800,12 @@ const ZONE_WILD = {
   tranquil_forest: ['rat','bird','moth'],
   sacred_grove:    ['sparrow','squirrel','deer','grass_starter'],
   rocky_caverns:   ['earth_snake','ground_starter','golem','bat'],
+};
+/* Wild levels scale with the party but are clamped per zone. */
+const ZONE_LEVELS = {
+  tranquil_forest: { min:5,  max:21 },
+  sacred_grove:    { min:20, max:41 },
+  rocky_caverns:   { min:20, max:46 },
 };
 
 function makeEnemy(species, level, opts){
@@ -2773,7 +2822,8 @@ function makeEnemy(species, level, opts){
   const avail = MOVES[species].filter(m=>m[1]!=null && level>=m[5] && m[2]!=null); // damaging + unlocked
   const bySlot = s=> avail.find(m=>m[0]===s);
   let move;
-  if(ai==='best') move = bySlot('Power2') || bySlot('Power1') || bySlot('Basic');
+  if(ai==='best') move = bySlot('Max') || bySlot('Ultimate') || bySlot('Power2') || bySlot('Power1') || bySlot('Basic');
+  else if(ai==='power2') move = bySlot('Power2') || bySlot('Power1') || bySlot('Basic');
   else if(ai==='power1') move = bySlot('Power1') || bySlot('Basic');
   else move = bySlot('Basic');
   if(!move) move = avail[0] || MOVES[species][0];
@@ -2791,7 +2841,7 @@ function startGuardianTrial(){
   beginBattle({
     waves:[[{ species:'forest_fairy', level:100, ai:'best', nerfed:false, supplements:12, boss:true }]],
     isNpc:false, allowCatch:false, name:'The Forest Guardian',
-    noFlee:false,            // fleeing is allowed, but the counter no longer resets
+    noFlee:true,             // per the design sheet: she cannot be fled from
     guardianTrial:true,
   });
 }
@@ -2813,13 +2863,22 @@ function startWildEncounter(encOpts){
     const lvl = special==='phoenix' ? 25 : 20;
     wave = [{ species:special, level:lvl }];
   } else {
-    const size = wildGroupSize();
-    const lvl = inCourageGauntlet() ? COURAGE_GAUNTLET_LEVEL : wildLevel();
     const zoneId = (ui.currentZone && ui.currentZone.id) || 'tranquil_forest';
-    let choices = (ZONE_WILD[zoneId] || REGION1_WILD).slice();
-    if(ui.fledFrom){ const f=choices.filter(s=>s!==ui.fledFrom); if(f.length) choices=f; ui.fledFrom=null; }
-    wave = [];
-    for(let i=0;i<size;i++){ wave.push({ species: choices[Math.floor(Math.random()*choices.length)], level:lvl }); }
+    // The last three battles of the Trial are hand-authored, not rolled.
+    const g = inCourageGauntlet()
+      ? COURAGE_GAUNTLET[(state.progress.region2.courage||0) - COURAGE_GAUNTLET_FROM]
+      : null;
+    if(g){
+      wave = g.team.map(sp=>({ species:sp, level:g.level, ai:g.ai, nerfed:false }));
+    } else {
+      const size = wildGroupSize();
+      const band = ZONE_LEVELS[zoneId] || { min:5, max:21 };
+      const lvl = Math.max(band.min, Math.min(band.max, wildLevel()));
+      let choices = (ZONE_WILD[zoneId] || REGION1_WILD).slice();
+      if(ui.fledFrom){ const f=choices.filter(s=>s!==ui.fledFrom); if(f.length) choices=f; ui.fledFrom=null; }
+      wave = [];
+      for(let i=0;i<size;i++){ wave.push({ species: choices[Math.floor(Math.random()*choices.length)], level:lvl }); }
+    }
   }
   beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Wild encounter', silentIntro: !!encOpts.silentIntro });
 }
@@ -3270,7 +3329,7 @@ function onFlee(){
   }
   if(guardian) return guardianRebuke(null);   // she is not appeased, but the count stands
   toast('Got away safely!');
-  go('region');
+  go(ui.battle.isNpc ? 'challenge' : 'zone');
 }
 
 /* A modal the player must dismiss — a toast is too easy to miss. */
@@ -3290,7 +3349,7 @@ function guardianRebuke(newCount){
   document.body.appendChild(ov);
   ov.querySelector('#rebukeOk').addEventListener('click', ()=>{
     if(ov.parentNode) document.body.removeChild(ov);
-    go('region');
+    go('zone');
   });
 }
 function livingEnemies(){ return ui.battle.enemies.filter(e=>e.hp>0); }
@@ -3742,17 +3801,19 @@ function onMonFainted(){
 function onPlayerDefeated(){
   if(ui.battle && ui.battle.guardianTrial) return onGuardianTrialResolved();
   playSfx('defeat'); stopMusic();
+  const breakAfterLoss = tallyBattleForEyeBreak();
   const fade=document.createElement('div');
   fade.style.cssText='position:fixed;inset:0;background:#000;z-index:80;opacity:0;transition:opacity .8s;';
   document.body.appendChild(fade);
   requestAnimationFrame(()=>{ fade.style.opacity='1'; });
   setTimeout(async ()=>{
-    state.party.forEach(m=>{ m.currentHp=Math.max(1,Math.floor(monMaxHp(m)*0.10)); m.xpFights=0; });
+    battleParty().forEach(m=>{ m.currentHp=Math.max(1,Math.floor(monMaxHp(m)*0.10)); m.xpFights=0; });
     await saveProfile();
     go('region');
     fade.style.opacity='0';
     setTimeout(()=>document.body.removeChild(fade),800);
     toast('Your team fainted. They recovered a little.');
+    if(breakAfterLoss) showEyeBreak();
   },1000);
 }
 /* ---------- XP / LEVELING / EVOLUTION ---------- */
@@ -3966,6 +4027,7 @@ function playEvolutions(list, done){
 
 function showVictory(enemyNames, levelUps, tokens){
   playSfx('victory'); fadeOutMusic(2000);
+  const breakNow = tallyBattleForEyeBreak();
   const b = ui.battle;
   $('#brandSub').textContent = 'Victory';
   // determine catchable target(s): wild only, species not already caught
@@ -3997,7 +4059,8 @@ function showVictory(enemyNames, levelUps, tokens){
     }
   }
   $('#regionBtn').addEventListener('click', ()=>go('region'));
-  $('#againBtn').addEventListener('click', ()=>{ if(battleParty().some(m=>m.currentHp>0)) startWildEncounter({ silentIntro:true }); else { toast('Your team needs healing first.'); go('region'); } });
+  if(breakNow) showEyeBreak();
+  $('#againBtn').addEventListener('click', ()=>{ if(battleParty().some(m=>m.currentHp>0)) startWildEncounter({ silentIntro:true }); else { toast('Your team needs healing first.'); go('zone'); } });
 }
 
 /* ---------- CATCHING ---------- */
@@ -4102,6 +4165,7 @@ function render(){
   }
 }
 function renderInner(){
+  enforceEyeBreak();
   if(!['home','region','battle','recover','challenge','explore','shop','storage','party','stats','monsterIndex','indexDetail','spellingIndex','profileSelect'].includes(ui.screen)) setScreenBg(null);
   const hb = $('#hamburgerBtn');
   // hamburger available everywhere except profile setup + (future) fights
@@ -4121,6 +4185,8 @@ function renderInner(){
     case 'stats':         return renderStats();
     case 'storage':       return renderStorage();
     case 'shop':          return renderShop();
+    case 'regionSelect':  return renderRegionSelect();
+    case 'zone':          return renderZone();
     case 'avatarPick':    return renderAvatarPick();
     case 'region2':       return renderStub('Region 2','🏞️','Region 2 is unlocked — its wilds and trainers arrive in a future phase. Earth Snake and Ground Starter will be catchable here.','region');
     case 'recover':       return renderRecover();
@@ -4418,7 +4484,7 @@ function renderHome(){
   `;
   const pab = $('#pickAvatarBtn');
   if(pab) pab.addEventListener('click', ()=>go('avatarPick'));
-  screenEl.querySelector('[data-nav="regionList"]').addEventListener('click', ()=>go('region'));
+  screenEl.querySelector('[data-nav="regionList"]').addEventListener('click', ()=>go('regionSelect'));
   screenEl.querySelector('[data-nav="monsterIndex"]').addEventListener('click', ()=>go('monsterIndex'));
   screenEl.querySelector('[data-nav="spellingIndex"]').addEventListener('click', ()=>go('spellingIndex'));
 }
@@ -4475,7 +4541,7 @@ function renderRegion(){
       </div>
     `}
   `;
-  $('#backBtn').addEventListener('click', ()=>go('home'));
+  $('#backBtn').addEventListener('click', ()=>go('regionSelect'));
   screenEl.querySelectorAll('.menu-card[data-nav]').forEach(c=>{
     c.addEventListener('click', ()=>{
       // Sacred Grove gates everything until the Trial of Courage is passed
@@ -5339,15 +5405,18 @@ const DOJO_STAGES = [
 /* Region 2's Water Dojo: three disciples, then the master. */
 const WATER_DOJO_STAGES = [
   { id:'water_disciple1', label:'Water Dojo Disciple 1', ai:'power1',
-    waves:[ [{species:'starfish',level:24}], [{species:'starfish',level:24},{species:'duck',level:24}] ] },
+    waves:[ [{species:'starfish',level:32},{species:'starfish',level:32}],
+            [{species:'duck',level:32},{species:'duck',level:32}] ] },
   { id:'water_disciple2', label:'Water Dojo Disciple 2', ai:'power1',
-    waves:[ [{species:'duck',level:26},{species:'seahorse',level:26}], [{species:'seahorse',level:28}] ] },
+    waves:[ [{species:'starfish',level:35},{species:'duck',level:35}],
+            [{species:'starfish',level:35},{species:'duck',level:35},{species:'seahorse',level:35}] ] },
   { id:'water_disciple3', label:'Water Dojo Disciple 3', ai:'power1',
-    waves:[ [{species:'starfish',level:28},{species:'duck',level:28},{species:'seahorse',level:28}], [{species:'seahorse',level:30}] ] },
+    waves:[ [{species:'duck',level:38},{species:'seahorse',level:38}],
+            [{species:'starfish',level:38},{species:'duck',level:38},{species:'seahorse',level:38}] ] },
   { id:'water_master',    label:'Water Dojo Master',     ai:'best',
-    waves:[ [{species:'seahorse',level:30},{species:'starfish',level:30},{species:'duck',level:30}],
-            [{species:'seahorse',level:34},{species:'duck',level:34}],
-            [{species:'water_starter',level:36}] ] },
+    waves:[ [{species:'starfish',level:40},{species:'seahorse',level:40}],
+            [{species:'starfish',level:40},{species:'duck',level:40},{species:'seahorse',level:40}],
+            [{species:'water_starter',level:41}] ] },
 ];
 
 function dojoCleared(id){ return (state.progress.region1.dojoCleared||[]).includes(id); }
@@ -6035,6 +6104,155 @@ async function onGuardianTrialResolved(){
   });
 }
 
+
+
+/* ============================================================
+   EYE BREAK
+   Counts wild and NPC battles only — Recovery and practice are already gated
+   by HP, so they don't add to the tally. The break is stored as a WALL-CLOCK
+   deadline from the device, so reloading the page can't skip it. It never
+   interrupts a battle: the check happens once the victory screen is up.
+   ============================================================ */
+function eyeBreakActive(){
+  return !!(state && state.eyeBreakUntil && Date.now() < state.eyeBreakUntil);
+}
+function eyeBreakRemaining(){
+  return Math.max(0, (state.eyeBreakUntil||0) - Date.now());
+}
+/* Called when a battle finishes. Returns true if a break has just begun. */
+function tallyBattleForEyeBreak(){
+  if(!state) return false;
+  const every = state.settings.eyeBreakEvery || 0;
+  if(every <= 0) return false;                       // 0 disables the feature
+  state.battlesSinceBreak = (state.battlesSinceBreak||0) + 1;
+  if(state.battlesSinceBreak >= every){
+    state.battlesSinceBreak = 0;
+    state.eyeBreakUntil = Date.now() + (state.settings.eyeBreakMins||5)*60*1000;
+    saveProfile();
+    return true;
+  }
+  saveProfile();
+  return false;
+}
+
+let _eyeTimer = null;
+function showEyeBreak(){
+  if(document.getElementById('eyeBreakOverlay')) return;
+  const ov = document.createElement('div');
+  ov.id = 'eyeBreakOverlay';
+  ov.className = 'eye-overlay';
+  ov.innerHTML = `
+    <div class="eye-card">
+      <div class="eye-emoji">👀</div>
+      <div class="eye-title">Time to rest your eyes</div>
+      <div class="eye-body">Look at something far away — out a window if you can.<br>The game will wake up on its own.</div>
+      <div class="eye-clock" id="eyeClock">--:--</div>
+      <div class="eye-note">Everything is paused until the timer ends.</div>
+    </div>`;
+  document.body.appendChild(ov);
+  document.body.classList.add('eye-locked');
+
+  const tick = ()=>{
+    const ms = eyeBreakRemaining();
+    const el = document.getElementById('eyeClock');
+    if(ms <= 0){
+      clearInterval(_eyeTimer); _eyeTimer = null;
+      const o = document.getElementById('eyeBreakOverlay');
+      if(o && o.parentNode) o.parentNode.removeChild(o);
+      document.body.classList.remove('eye-locked');
+      state.eyeBreakUntil = 0;
+      saveProfile();
+      toast('Break over — welcome back!');
+      return;
+    }
+    if(el){
+      const total = Math.ceil(ms/1000);
+      el.textContent = String(Math.floor(total/60)).padStart(2,'0')+':'+String(total%60).padStart(2,'0');
+    }
+  };
+  tick();
+  _eyeTimer = setInterval(tick, 250);
+}
+/* Re-assert the lock on any render, so a reload during a break stays locked. */
+function enforceEyeBreak(){
+  if(eyeBreakActive()) showEyeBreak();
+}
+
+/* ---------- SCREEN: region select ---------- */
+const REGIONS = [
+  { id:1, name:'Riverside Meadow', desc:'Where your journey began.', unlocked:()=>true },
+  { id:2, name:'Sacred Grove & Beyond', desc:'Old woods, older rules.',
+    unlocked:()=>!!(state.progress.region1||{}).guardianCleared },
+  { id:3, name:'Region 3', desc:'Not yet reachable.', unlocked:()=>false },
+];
+
+function renderRegionSelect(){
+  setScreenBg('home');
+  $('#brandSub').textContent = 'Regions';
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Home</button>
+    <div class="screen-title">Where to?</div>
+    <div class="screen-sub">Choose a region to travel to.</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:14px;">
+      ${REGIONS.map(r=>{
+        const open = r.unlocked();
+        const here = state.progress.currentRegion===r.id;
+        return `<div class="region-card ${open?'':'locked'}" ${open?`data-region="${r.id}"`:''}>
+          <div class="region-num ${open?'':'dim'}">${r.id}</div>
+          <div class="region-info" style="flex:1;">
+            <h3>${escapeHtml(r.name)}${here?' <span class="clear-tag">You are here</span>':''}</h3>
+            <p>${open?escapeHtml(r.desc):'🔒 Locked'}</p>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+  $('#backBtn').addEventListener('click', ()=>go('home'));
+  screenEl.querySelectorAll('[data-region]').forEach(c=>c.addEventListener('click', async ()=>{
+    state.progress.currentRegion = +c.dataset.region;
+    await saveProfile();
+    go('region');
+  }));
+}
+
+/* ---------- SCREEN: a single zone ---------- */
+function renderZone(){
+  const z = ui.currentZone;
+  if(!z) return go('explore');
+  setScreenBg(z.id);
+  $('#brandSub').textContent = z.name;
+  const canFight = battleParty().some(m=>m.currentHp>0);
+  const band = ZONE_LEVELS[z.id] || {min:5,max:21};
+  const wilds = (ZONE_WILD[z.id]||[]).map(k=>SPECIES[k].name).join(' · ');
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Explore</button>
+    <div class="zone-hero">
+      <img src="assets/zones/${z.id}.png" alt="" class="zone-hero-img" onerror="this.style.display='none'">
+      <div class="zone-hero-name">${escapeHtml(z.name)}</div>
+    </div>
+    <div class="zone-facts">
+      <div><b>Levels</b> ${band.min}–${band.max}</div>
+      <div><b>Found here</b> ${escapeHtml(wilds||'—')}</div>
+    </div>
+    ${(state.progress.currentRegion===2 && z.id==='sacred_grove' && !(state.progress.region2||{}).trialDone) ? `
+      <div class="trial-banner" style="margin-top:14px;">
+        <b>The Trial of Courage</b>
+        <div>Stand and fight — the Grove will not let a coward pass.</div>
+        <div class="trial-bar"><span style="width:${Math.min(100,((state.progress.region2||{}).courage||0)/COURAGE_TARGET*100)}%"></span></div>
+        <div class="trial-count">${(state.progress.region2||{}).courage||0} / ${COURAGE_TARGET} battles faced</div>
+        ${inCourageGauntlet() ? `<div class="trial-warn">⚠️ The Grove tests you in earnest now. Flee and you fall back to ${COURAGE_FLEE_FALLBACK}.</div>` : ''}
+      </div>` : ''}
+    <button class="btn btn-primary" id="exploreBtn" style="margin-top:16px;" ${canFight?'':'disabled'}>
+      ${canFight?'🌿 Explore':'💤 Your team needs healing'}
+    </button>
+    <button class="btn btn-ghost" id="returnBtn" style="margin-top:10px;">Return</button>
+  `;
+  $('#backBtn').addEventListener('click', ()=>go('explore'));
+  $('#returnBtn').addEventListener('click', ()=>go('explore'));
+  const eb = $('#exploreBtn');
+  if(eb && canFight) eb.addEventListener('click', ()=>startWildEncounter());
+}
+
 /* ---------- SCREEN: explore ---------- */
 /* The player avatar is essentially only ever seen here, so it gets real
    presence — sized against the viewport but capped so the zone buttons below
@@ -6093,7 +6311,7 @@ function renderExplore(){
   if(pah) pah.addEventListener('click', ()=>{ ui.prevScreen='explore'; go('avatarPick'); });
   screenEl.querySelectorAll('[data-zone]').forEach(b=>b.addEventListener('click', ()=>{
     ui.currentZone = zones[+b.dataset.zone];
-    startWildEncounter();
+    go('zone');
   }));
 }
 
@@ -6484,6 +6702,21 @@ function renderSound(){
       </div>
     </div>
 
+    <div class="hp-card" style="margin-bottom:12px;">
+      <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">✍️ Writing leniency: <span id="lenLabel">${lenLabel(state.settings.leniency||1)}</span></div>
+      <div style="font-size:12px;color:var(--ink-soft);font-weight:600;margin-bottom:8px;">How forgiving stroke recognition is. Slide right if careful strokes keep getting rejected.</div>
+      <input type="range" id="lenSlider" min="70" max="200" step="5" value="${Math.round((state.settings.leniency||1)*100)}" style="width:100%;accent-color:var(--cinnabar);">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink-soft);font-weight:800;margin-top:2px;">
+        <span>Strict</span><span>Standard</span><span>Very forgiving</span>
+      </div>
+    </div>
+
+    <div class="hp-card" style="margin-bottom:12px;">
+      <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">👀 Eye breaks</div>
+      <div style="font-size:12px;color:var(--ink-soft);font-weight:600;margin-bottom:10px;">A mandatory rest after a set number of battles. Recovery and practice don't count.</div>
+      <div id="eyeArea"></div>
+    </div>
+
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:12px;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <div>
@@ -6534,6 +6767,12 @@ function renderSound(){
       speechSynthesis.speak(u);
     }catch(e){ toast('Voice not available here.'); }
   });
+  const lenS = $('#lenSlider');
+  if(lenS){
+    lenS.addEventListener('input', ()=>{ $('#lenLabel').textContent = lenLabel(lenS.value/100); });
+    lenS.addEventListener('change', async ()=>{ state.settings.leniency = lenS.value/100; await saveProfile(); });
+  }
+  renderEyeArea();
   const cav = $('#changeAvatarBtn');
   if(cav) cav.addEventListener('click', ()=>{ ui.prevScreen='sound'; go('avatarPick'); });
   $('#lhToggle').addEventListener('change', async e=>{
@@ -6542,6 +6781,40 @@ function renderSound(){
     toast(e.target.checked ? 'Left-handed layout on.' : 'Right-handed layout on.');
   });
   renderXpArea();
+}
+
+function lenLabel(v){
+  if(v <= 0.85) return 'Strict';
+  if(v <= 1.10) return 'Standard';
+  if(v <= 1.45) return 'Forgiving';
+  return 'Very forgiving';
+}
+
+/* Eye-break limits sit behind the password: they're a health guard, so a child
+   shouldn't be able to raise them without a parent. */
+function renderEyeArea(){
+  const el = $('#eyeArea');
+  if(!el) return;
+  const every = state.settings.eyeBreakEvery||0, mins = state.settings.eyeBreakMins||5;
+  const summary = every>0
+    ? `Currently: a <b>${mins} minute</b> break every <b>${every}</b> battles.`
+    : `Currently: <b>off</b>.`;
+  if(!ui.xpUnlocked){
+    el.innerHTML = `<div style="font-size:13px;font-weight:700;margin-bottom:6px;">${summary}</div>
+      <div style="font-size:11px;color:var(--ink-soft);font-weight:700;">🔒 Unlock the levelling section below to change this.</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <label style="font-size:12px;font-weight:800;">Battles before a break: <span id="ebeLabel">${every||'off'}</span></label>
+    <input type="range" id="ebeSlider" min="0" max="30" step="1" value="${every}" style="width:100%;accent-color:var(--cinnabar);">
+    <label style="font-size:12px;font-weight:800;display:block;margin-top:10px;">Break length: <span id="ebmLabel">${mins} min</span></label>
+    <input type="range" id="ebmSlider" min="1" max="20" step="1" value="${mins}" style="width:100%;accent-color:var(--cinnabar);">
+    <div style="font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:6px;">Set battles to 0 to switch eye breaks off.</div>`;
+  const a=$('#ebeSlider'), b=$('#ebmSlider');
+  a.addEventListener('input', ()=>{ $('#ebeLabel').textContent = a.value>0?a.value:'off'; });
+  a.addEventListener('change', async ()=>{ state.settings.eyeBreakEvery = +a.value; await saveProfile(); });
+  b.addEventListener('input', ()=>{ $('#ebmLabel').textContent = b.value+' min'; });
+  b.addEventListener('change', async ()=>{ state.settings.eyeBreakMins = +b.value; await saveProfile(); });
 }
 
 function renderXpArea(){
@@ -6555,7 +6828,7 @@ function renderXpArea(){
     const submit = ()=>{
       const v = $('#xpPw').value.trim();
       const cur = state.settings.password || RESET_CODE;
-      if(v===cur || v===RESET_CODE){ ui.xpUnlocked = true; renderXpArea(); }
+      if(v===cur || v===RESET_CODE){ ui.xpUnlocked = true; renderXpArea(); renderEyeArea(); }
       else toast('Incorrect password.');
     };
     $('#xpUnlock').addEventListener('click', submit);
