@@ -397,6 +397,24 @@
   }
   .medal-bar{display:flex;gap:10px;justify-content:center;background:var(--paper-2);border:1px solid var(--line);
     border-radius:12px;padding:9px;font-weight:800;font-size:14px;}
+  .scene{max-width:520px;margin:0 auto;text-align:center;}
+  .scene-portrait{display:flex;justify-content:center;margin:10px 0 6px;
+    filter:drop-shadow(0 0 26px rgba(120,200,140,0.75));}
+  .scene-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:22px;margin-bottom:10px;}
+  .scene-body{background:rgba(244,236,216,0.55);border:1px solid var(--line);border-radius:16px;
+    padding:16px;text-align:left;font-size:14px;font-weight:600;line-height:1.6;
+    backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
+  .scene-body p{margin:0 0 10px;}
+  .scene-body p:last-child{margin-bottom:0;}
+  .scene-reward{display:flex;align-items:center;gap:12px;justify-content:center;margin-top:14px;
+    background:rgba(47,143,111,0.15);border:1px solid rgba(47,143,111,0.4);border-radius:14px;
+    padding:12px;font-size:13px;font-weight:700;text-align:left;}
+  .scene-reward span{font-weight:600;color:var(--ink-soft);font-size:11px;}
+  .shop-note{
+    margin-top:12px;padding:11px 13px;border-radius:12px;text-align:center;
+    background:rgba(47,143,111,0.16);border:1px solid rgba(47,143,111,0.4);
+    font-size:13px;font-weight:700;color:var(--jade-dark);
+  }
   .ware-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
   .ware{display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;
     background:var(--paper-2);border:1px solid var(--line);
@@ -481,6 +499,18 @@
   .hero-avatar{position:relative;z-index:1;filter:drop-shadow(0 3px 4px rgba(35,32,25,0.18));}
   .explore-hero-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;margin-top:6px;}
   .explore-hero-sub{font-size:13px;color:var(--ink-soft);font-weight:600;}
+  .trial-banner{
+    background:rgba(95,168,107,0.16);border:1px solid rgba(95,168,107,0.5);border-radius:14px;
+    padding:12px 14px;margin-bottom:14px;text-align:center;font-size:13px;font-weight:700;
+    backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  }
+  .trial-banner b{font-family:'Baloo 2',cursive;font-size:15px;}
+  .trial-banner > div:first-of-type{font-weight:600;color:var(--ink-soft);font-size:12px;margin:3px 0 8px;}
+  .trial-bar{height:8px;background:rgba(35,32,25,0.18);border-radius:5px;overflow:hidden;}
+  .trial-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--jade),var(--gold));transition:width .4s;}
+  .trial-count{font-size:11px;color:var(--ink-soft);font-weight:800;margin-top:5px;}
+  .zone-locked{filter:grayscale(1);opacity:.55;cursor:not-allowed;}
+  .zone-lock{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px;}
   .zone-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
   .zone-item{text-align:center;width:118px;}
   .zone-btn{
@@ -615,6 +645,8 @@
   .side-btn:disabled{opacity:0.4;cursor:not-allowed;}
 
   /* party / storage */
+  .seed-card{opacity:0.62;filter:saturate(0.55);cursor:default;}
+  .seed-card .party-head{cursor:default;}
   .party-card{background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:12px;box-shadow:0 2px 0 var(--paper-3);}
   .party-head{display:flex;align-items:center;gap:12px;cursor:pointer;}
   .party-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);}
@@ -759,7 +791,9 @@ const SPECIES = {
   earth_snake:     { name:'Earth Snake',tier:'wild',      types:['Ground'],       rate:7,  nerfedRate:5,  base:5,  evo:[11,25], color:'#8a9a5b', glyph:'蛇', npcOnlyRegion1:true },
   ground_starter:  { name:'Rhino',      tier:'starter',   types:['Ground'],       rate:10, nerfedRate:10, base:5,  evo:[21,41], color:'#b08a5a', glyph:'土', npcOnlyRegion1:true },
   electric_starter:{ name:'Mouse',      tier:'special',   types:['Electric'],     rate:10, nerfedRate:10, base:20, evo:[21,41], color:'#e0b53a', glyph:'电' },
-  phoenix:         { name:'Phoenix',    tier:'legendary', types:['Fire','Flying'],rate:13, nerfedRate:13, base:25, evo:[],      color:'#c8453a', glyph:'凤', frozenRegion1:true },
+  phoenix:         { name:'Phoenix',    tier:'legendary', types:['Fire','Flying'],rate:13, nerfedRate:13, base:25, evo:[],      color:'#c8453a', glyph:'凤', frozenRegion1:true, bonusStages:1 },   // hatched from a sacred egg
+  sacred_seed:     { name:'Sacred Seed', tier:'special',   types:['Grass'],         rate:0,  nerfedRate:0,  base:1,   evo:[],     color:'#7fa86b', glyph:'种', isSeed:true },
+  forest_fairy:    { name:'Forest Fairy',tier:'legendary', types:['Grass','Fairy'], rate:13, nerfedRate:13, base:100, evo:[1],    color:'#5fa86b', glyph:'仙', bossOnly:true },
 };
 
 /* Move tables live here for later phases; unused in Phase 1 but embedded now
@@ -774,6 +808,7 @@ const MOVES = {
   earth_snake:     [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bite',0.4,'Single',4,5],['Power2','Tail Whip',0.6,'AOE',8,11],['Ultimate','Constrict',1.5,'Single',10,25]],
   ground_starter:  [['Basic','Tackle',0.2,'Single',2,5],['Power1','Body Slam',0.4,'Single',4,5],['Power2','Earthquake',0.6,'AOE',8,21],['Ultimate','Horn Drill',1.5,'Single',10,41]],
   electric_starter:[['Basic','Tackle',0.2,'Single',2,20],['Power1','Thundershock',0.4,'Single',4,20],['Power2','Thunderbolt',0.6,'AOE',8,21],['Ultimate','Thunder',1.5,'Single',10,41]],
+  forest_fairy:    [['Basic','Fairy Wind',0.4,'Single',4,100],['Power1','Giga Drain',0.8,'Single',8,100],['Power2','Nature\'s Wrath',0.7,'AOE',12,100],['Ultimate','Verdant Judgement',1.6,'Single',10,100]],
   phoenix:         [['Basic','Ember',0.3,'Single',4,25],['Power1','Firestorm',0.6,'AOE',8,25],['Power2','Nova',1.0,'AOE',12,35],['Ultimate','Incinerate',1.4,'Single',10,51]],
 };
 
@@ -1143,7 +1178,7 @@ const RECYCLE_RETURN = { low:1, mid:2, high:4, veryhigh:7, ultra:15 };
 const STONE_NAMES = {
   Fire:     { low:'Fireball',    mid:'Flame Wheel',  high:'Twin Blaze',   veryhigh:'Overheat',        ultra:'Fusion Flare' },
   Water:    { low:'Water Pulse', mid:'Aqua Jet',      high:'Twin Torrent', veryhigh:'Ice Tomb',        ultra:'Vortex Blast' },
-  Grass:    { low:'Seed Bomb',   mid:'Power Whip',    high:'Twin Razor',   veryhigh:'Giga Drain',      ultra:'Verdant Nova' },
+  Grass:    { low:'Seed Bomb',   mid:'Power Whip',    high:'Twin Razor',   veryhigh:'Leech Seed',      ultra:'Verdant Nova' },
   Electric: { low:'Spark',       mid:'Volt Charge',   high:'Twin Bolt',    veryhigh:'Overcharge',      ultra:'Arc Explosion' },
   Ground:   { low:'Rock Throw',  mid:'Rock Blast',    high:'Twin Boulder', veryhigh:'Spike Armour',    ultra:'Tectonic Crush' },
   Flying:   { low:'Wing Attack', mid:'Drill Peck',    high:'Twin Gale',    veryhigh:'Mirage',          ultra:'Sonic Skydive' },
@@ -1202,11 +1237,29 @@ function effectiveSupplements(species, supplements){
   const n = supplements||0;
   return n >= proteinCap(species) ? n + 2 : n;
 }
+/* From level 31, HP (not ATK) scales up so fights last longer as moves get
+   stronger — otherwise high-tier skills one-shot everything. Piecewise linear,
+   anchored every ten levels; the final band jumps to 3.0 rather than 2.75. */
+const HP_SCALE_ANCHORS = [[30,1.00],[40,1.25],[50,1.50],[60,1.75],[70,2.00],[80,2.25],[90,2.50],[100,3.00]];
+function hpScale(level){
+  if(level <= 30) return 1;
+  for(let i=1;i<HP_SCALE_ANCHORS.length;i++){
+    const [l0,m0] = HP_SCALE_ANCHORS[i-1], [l1,m1] = HP_SCALE_ANCHORS[i];
+    if(level <= l1) return m0 + (level-l0)*(m1-m0)/(l1-l0);
+  }
+  return HP_SCALE_ANCHORS[HP_SCALE_ANCHORS.length-1][1];
+}
+/* ATK is the raw stat; HP is that stat with the level scaling applied. */
+function computeMaxHp(species, level, supplements){
+  if(SPECIES[species] && SPECIES[species].isSeed) return 1;      // the Seed is always 1 HP
+  return Math.floor(computeMaxStat(species, level, supplements) * hpScale(level));
+}
+
 function computeMaxStat(species, level, supplements){
   const s = SPECIES[species];
   const rate = s.rate;
   let stat = Math.floor((rate/5) * level);
-  stat += evolutionStage(species, level) * rate;
+  stat += (evolutionStage(species, level) + (s.bonusStages||0)) * rate;
   stat += Math.floor((rate/5) * effectiveSupplements(species, supplements));
   return stat;
 }
@@ -1367,7 +1420,7 @@ function newMonster(species, level){
     level,
     xpFights:0,
     supplements:0,
-    currentHp: computeMaxStat(species, level, 0),
+    currentHp: computeMaxHp(species, level, 0),
     renamedInRegion:null,
   };
 }
@@ -1393,6 +1446,7 @@ function blankProfile(name, starterSpecies){
     progress:{
       currentRegion:1,
       region1:{ guardianCleared:false, rivalCleared:false, thugsCleared:[], thugBossCleared:false, investigateProtein:0, dojoCleared:[] },
+      region2:{ courage:0, trialDone:false, seedGranted:false, challengeDone:false },
     },
     settings:{ volume:0.8, sfxVolume:0.55, musicVolume:0.10, focusMode:false, password:null, xpMode:'default', leftHanded:false },
     recentWrong:[],
@@ -1505,6 +1559,11 @@ function normalizeProfile(p){
   r1.dojoCleared = r1.dojoCleared || [];
   r1.thugBossCleared = !!r1.thugBossCleared;
   r1.investigateProtein = r1.investigateProtein || 0;
+  const r2 = p.progress.region2 = p.progress.region2 || {};
+  r2.courage = r2.courage || 0;
+  r2.trialDone = !!r2.trialDone;
+  r2.seedGranted = !!r2.seedGranted;
+  r2.challengeDone = !!r2.challengeDone;
   p.settings = p.settings || {};
   if(p.settings.volume===undefined) p.settings.volume = 0.8;
   if(p.settings.focusMode===undefined) p.settings.focusMode = false;
@@ -1589,6 +1648,22 @@ function spritePath(species, stage, view){
 }
 /* Convenience: the sprite stage a given owned monster is currently at. */
 function monStage(m){ return evolutionStage(m.species, m.level); }
+
+/* The Sacred Seed rides along in a seventh slot: it levels, but it cannot
+   fight, be switched to, be taught skills, or take protein — and it never
+   counts toward winning or losing a battle. */
+function isSeed(m){ return !!(m && SPECIES[m.species] && SPECIES[m.species].isSeed); }
+function battleParty(){ return state.party.filter(m=>!isSeed(m)); }
+function hasSeed(){ return state.party.some(isSeed); }
+function grantSacredSeed(){
+  if(hasSeed()) return null;
+  const seed = newMonster('sacred_seed', 1);
+  seed.currentHp = 1;
+  state.party.push(seed);            // occupies the extra 7th slot
+  if(!state.caughtSpecies.includes('sacred_seed')) state.caughtSpecies.push('sacred_seed');
+  if(!state.encounteredSpecies.includes('sacred_seed')) state.encounteredSpecies.push('sacred_seed');
+  return seed;
+}
 
 /* Fallback ladder, tried in order until one loads:
      stage+view  ->  stage generic  ->  lower stage+view  ->  ... ->  base
@@ -2542,15 +2617,12 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets){
       if(t) addEStatus(t, { type:'iceTomb', turnsLeft:turns });
       res.msg = `The enemy is entombed in ice for ${turns} turns! It takes only half damage while frozen.`;
       break; }
-    case 'Grass': { // Giga Drain: mark + one hit for 0.5x
-      const t = targets[0];
-      if(t){
-        const dmg = Math.ceil(0.5*casterAtk*typeMultiplier(SPECIES[casterMon.species].types, t.types));
-        res.hits.push({ enemy:t, dmg });
-        addEStatus(t, { type:'gigaDrainMark' });
-      }
-      res.msg = `Giga Drain marks the target — any hit on it now heals the attacker!`;
-      break; }
+    case 'Grass': // Leech Seed: a FIELD debuff — every enemy, now and in later
+                  // waves, feeds the attacker 0.2x of that attacker's own ATK.
+      ui.battle.leechSeed = true;
+      livingEnemies().forEach(e=> addEStatus(e, { type:'leechSeed' }));
+      res.msg = `Leech Seed takes root across the field! Every hit now drains life back to the attacker.`;
+      break;
     case 'Electric': // Overcharge: self buff, 25% repeat chance
       setPStatus(uid,{type:'overcharge', chance:0.25});
       res.msg = `${displayName(casterMon)} is overcharged! 25% chance to repeat an attack for the rest of the battle.`;
@@ -2604,7 +2676,16 @@ const REGION1_WILD = ['rat','bird','moth'];
    assets/zones/<id>.png; `tint` colours the bevel if no art is present. */
 const REGION_ZONES = {
   1: [ { id:'tranquil_forest', name:'Tranquil Forest', tint:'#4a7a3c' } ],
+  2: [ { id:'sacred_grove', name:'Sacred Grove', tint:'#5fa86b' },
+       { id:'old_passage',  name:'Old Passage',  tint:'#8a7a5b', locksUntil:'r2ChallengeDone' } ],
 };
+
+/* --- Region 2, first scripted sequence: the Trial of Courage ---
+   Sacred Grove refuses to let anyone pass who runs from a fight. Thirty
+   battles must be seen through without fleeing; the count resets to zero the
+   moment the player flees. At thirty, the Guardian herself appears. */
+const COURAGE_TARGET = 30;
+const REGION2_WILD = ['earth_snake','ground_starter'];   // more species to come
 
 function makeEnemy(species, level, opts){
   opts = opts || {};
@@ -2612,7 +2693,9 @@ function makeEnemy(species, level, opts){
   const nerfed = (opts.nerfed!==undefined) ? opts.nerfed : (sp.tier==='wild');
   const rate = nerfed ? sp.nerfedRate : sp.rate;
   const stage = (sp.evo||[]).filter(lv=>level>=lv).length;
-  let stat = Math.floor((rate/5)*level) + stage*rate;
+  let stat = Math.floor((rate/5)*level) + (stage + (sp.bonusStages||0))*rate;
+  if(opts.supplements) stat += Math.floor((rate/5)*opts.supplements);
+  const hp = Math.floor(stat * hpScale(level));
   // AI: 'basic' | 'power1' | 'best'. Default: wild=basic, but electric/legendary open with Power1.
   let ai = opts.ai || ((species==='electric_starter' || sp.tier==='legendary') ? 'power1' : 'basic');
   const avail = MOVES[species].filter(m=>m[1]!=null && level>=m[5] && m[2]!=null); // damaging + unlocked
@@ -2622,11 +2705,32 @@ function makeEnemy(species, level, opts){
   else if(ai==='power1') move = bySlot('Power1') || bySlot('Basic');
   else move = bySlot('Basic');
   if(!move) move = avail[0] || MOVES[species][0];
-  return { species, level, maxHp:stat, hp:stat, atk:stat, move, types:sp.types, stage, tier:sp.tier, ai, nerfed };
+  return { species, level, maxHp:hp, hp:hp, atk:stat, move, types:sp.types, stage, tier:sp.tier, ai, nerfed, boss:!!opts.boss };
+}
+
+/* Sacred Grove runs its own encounter table while the trial is unresolved. */
+function inSacredGroveTrial(){
+  const r2 = state.progress.region2 || {};
+  return state.progress.currentRegion===2
+      && ui.currentZone && ui.currentZone.id==='sacred_grove'
+      && !r2.trialDone;
+}
+function startGuardianTrial(){
+  beginBattle({
+    waves:[[{ species:'forest_fairy', level:100, ai:'best', nerfed:false, supplements:12, boss:true }]],
+    isNpc:false, allowCatch:false, name:'The Forest Guardian',
+    noFlee:false,            // fleeing is allowed, but the counter no longer resets
+    guardianTrial:true,
+  });
 }
 
 function startWildEncounter(encOpts){
   encOpts = encOpts || {};
+
+  // Once courage is proven, every encounter in the Grove is the Guardian.
+  if(inSacredGroveTrial() && (state.progress.region2.courage||0) >= COURAGE_TARGET){
+    return startGuardianTrial();
+  }
   const pool = activePool();
   if(pool.length===0){ ui.prevScreen='region'; toast('No words selected, please select to proceed.'); go('spelling'); return; }
   const L = starterLevel();
@@ -2644,7 +2748,7 @@ function startWildEncounter(encOpts){
     wave = [];
     for(let i=0;i<size;i++){ wave.push({ species: choices[Math.floor(Math.random()*choices.length)], level:lvl }); }
   }
-  beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Wild encounter', silentIntro: !!encOpts.silentIntro });
+  beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Wild encounter', silentIntro: !!encOpts.silentIntro, noFlee: inSacredGroveTrial() });
 }
 
 /* ---------- shared multi-wave battle engine ---------- */
@@ -2654,6 +2758,7 @@ function beginBattle(config){
     isNpc: !!config.isNpc, allowCatch: !!config.allowCatch,
     challenge: config.challenge || null, name: config.name || 'Battle',
     onWin: config.onWin || null, noFlee: !!config.noFlee, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
+    guardianTrial: !!config.guardianTrial, leechSeed:false,
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     playerStatuses:{},       // uid -> [ {type,...} ]   persists through switches/faints, cleared at battle end
     mirageActive:false,      // party-wide evasion buff
@@ -2665,9 +2770,11 @@ function beginBattle(config){
 }
 function loadWave(i){
   const b = ui.battle;
-  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai }));
+  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss }));
+  // Leech Seed is a FIELD effect: it re-roots on every new wave.
+  if(b.leechSeed) b.enemies.forEach(e=> addEStatus(e, { type:'leechSeed' }));
   b.enemies.forEach(e=>{ if(!state.encounteredSpecies.includes(e.species)) state.encounteredSpecies.push(e.species); });
-  let ai = state.party.findIndex(m=>m.currentHp>0);
+  let ai = state.party.findIndex(m=>m.currentHp>0 && !isSeed(m));
   if(ai<0) ai=0;
   b.activeIndex = ai; b.switchedThisTurn=false; b.phase='player';
   saveProfile();
@@ -2695,7 +2802,7 @@ function onWaveCleared(){
 }
 
 function activeMon(){ return state.party[ui.battle.activeIndex]; }
-function monMaxHp(m){ return computeMaxStat(m.species, m.level, m.supplements); }
+function monMaxHp(m){ return computeMaxHp(m.species, m.level, m.supplements); }
 function monAtk(m){ return computeMaxStat(m.species, m.level, m.supplements); }
 function unlockedMoves(m){
   const base = MOVES[m.species].map(mv=>{
@@ -2833,7 +2940,7 @@ function renderBattle(){
 const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
   counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed',
-  discombobulate:'🌀 Confused', gigaDrainMark:'🌿 Drained',
+  discombobulate:'🌀 Confused', leechSeed:'🌿 Seeded',
 };
 function renderStatusBadges(){
   if(!ui.battle) return;
@@ -3055,7 +3162,7 @@ function drainHp(id, oldCur, newCur, max){
 function onSwitchPressed(){
   const b=ui.battle;
   if(b.switchedThisTurn) return;
-  const options = state.party.map((m,i)=>({m,i})).filter(o=>o.i!==b.activeIndex && o.m.currentHp>0);
+  const options = state.party.map((m,i)=>({m,i})).filter(o=>o.i!==b.activeIndex && o.m.currentHp>0 && !isSeed(o.m));
   if(options.length===0){ toast('No other monster can fight.'); return; }
   monsterChooser('Switch to…', options, (i)=>{ ui.battle.activeIndex=i; ui.battle.switchedThisTurn=true; renderBattle(); battleMsg('Switched! Now choose a move.'); });
 }
@@ -3076,8 +3183,19 @@ function monsterChooser(title, options, onPick, dismissable=true){
 
 function onFlee(){
   if(ui.battle.arena){ ui.arenaUnlocked=true; go('arena'); return; }
-  if(ui.battle.noFlee) return; // defensive — button is already disabled/hidden for these fights
-  ui.fledFrom = ui.battle.enemies[0].species; toast('Got away safely!'); go('region');
+  const trial = inSacredGroveTrial();
+  if(ui.battle.noFlee && !ui.battle.guardianTrial){
+    // Sacred Grove refuses cowardice outright
+    toast('The forest guardian is displeased with your lack of courage. Fight, do not flee.');
+    if(trial){ state.progress.region2.courage = 0; saveProfile(); }
+    return;
+  }
+  if(trial && !ui.battle.guardianTrial){ state.progress.region2.courage = 0; saveProfile(); }
+  ui.fledFrom = ui.battle.enemies[0].species;
+  toast(ui.battle.guardianTrial
+    ? 'The forest guardian is displeased with your lack of courage. Fight, do not flee.'
+    : 'Got away safely!');
+  go('region');
 }
 function livingEnemies(){ return ui.battle.enemies.filter(e=>e.hp>0); }
 
@@ -3146,6 +3264,8 @@ function countWords(text){ return (text||'').length; }   // one hanzi = one word
 /* Moves that cost the user HP when they land. Self-damage runs through the same
    pipeline, so Overheat correctly increases it too (per the design). */
 const SELF_DAMAGE = { 'Nova': 0.15 };
+/* Moves that restore their user for a share of the USER'S OWN ATK on landing. */
+const LIFESTEAL = { 'Giga Drain': 0.2 };
 
 function applySelfDamage(mv, mon){
   const pct = SELF_DAMAGE[mv.name];
@@ -3236,8 +3356,10 @@ function applyHits(hits){
     h.t.hp = h.newHp;
     flashHit(document.getElementById('enemy-'+h.idx));
     drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
-    if(getEStatus(h.t,'gigaDrainMark')) healed += Math.ceil(0.2*monAtk(mon));
+    if(getEStatus(h.t,'leechSeed')) healed += Math.ceil(0.2*monAtk(mon));   // heals the attacker, from its own ATK
   });
+  const ls = ui.battle && ui.battle.pendingLifesteal;
+  if(ls){ healed += ls; ui.battle.pendingLifesteal = 0; }
   if(healed>0 && mon.currentHp>0){
     const max = monMaxHp(mon);
     const before = mon.currentHp;
@@ -3354,7 +3476,7 @@ function playSuccessiveHits(hits, i, done, fast){
   h.t.hp = h.newHp;
   flashHit(document.getElementById('enemy-'+h.idx));
   drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
-  if(getEStatus(h.t,'gigaDrainMark')){
+  if(getEStatus(h.t,'leechSeed')){
     const mon = activeMon(), max = monMaxHp(mon);
     if(mon.currentHp>0){
       const before = mon.currentHp;
@@ -3478,6 +3600,19 @@ function enemyTurn(){
         msg += ` Spikes struck back for ${back}!`;
       }
     }
+    // Life-stealing moves (Giga Drain) restore the attacker from its own ATK
+    acting.forEach(e=>{
+      const pct = LIFESTEAL[e.move && e.move[1]];
+      if(pct && e.hp>0){
+        const before = e.hp;
+        e.hp = Math.min(e.maxHp, e.hp + Math.ceil(pct*e.atk));
+        if(e.hp>before){
+          const idx = b.enemies.indexOf(e);
+          drainHp('enemyHp-'+idx, before, e.hp, e.maxHp);
+          msg += ` ${SPECIES[e.species].name} drained ${e.hp-before} HP!`;
+        }
+      }
+    });
     saveProfile();
     renderStatusBadges();
     logBattle(`Enemy turn: ${msg}`);
@@ -3498,13 +3633,14 @@ function enemyTurn(){
   }, 330);
 }
 function onMonFainted(){
-  const alive=state.party.filter(m=>m.currentHp>0);
+  const alive=battleParty().filter(m=>m.currentHp>0);
   if(alive.length===0){ return onPlayerDefeated(); }
   battleMsg(`${displayName(activeMon())} fainted!`);
-  const options=state.party.map((m,i)=>({m,i})).filter(o=>o.m.currentHp>0);
+  const options=state.party.map((m,i)=>({m,i})).filter(o=>o.m.currentHp>0 && !isSeed(o.m));
   monsterChooser('Send out…', options, (i)=>{ ui.battle.activeIndex=i; ui.battle.switchedThisTurn=false; ui.battle.phase='player'; renderBattle(); battleMsg('Choose a move.'); }, false);
 }
 function onPlayerDefeated(){
+  if(ui.battle && ui.battle.guardianTrial) return onGuardianTrialResolved();
   playSfx('defeat'); stopMusic();
   const fade=document.createElement('div');
   fade.style.cssText='position:fixed;inset:0;background:#000;z-index:80;opacity:0;transition:opacity .8s;';
@@ -3616,6 +3752,11 @@ function rollTokenDrop(){
 
 function onBattleWon(){
   const b = ui.battle;
+  if(b.guardianTrial) return onGuardianTrialResolved();   // winning her is still the scripted beat
+  if(inSacredGroveTrial()){
+    state.progress.region2.courage = (state.progress.region2.courage||0) + 1;
+    saveProfile();
+  }
   const enemyNames = b.enemies.map(e=>SPECIES[e.species].name).join(' & ');
   const levelUps = awardXpToParty();
   const tokens = rollTokenDrop();
@@ -3756,7 +3897,7 @@ function showVictory(enemyNames, levelUps, tokens){
     }
   }
   $('#regionBtn').addEventListener('click', ()=>go('region'));
-  $('#againBtn').addEventListener('click', ()=>{ if(state.party.some(m=>m.currentHp>0)) startWildEncounter({ silentIntro:true }); else { toast('Your team needs healing first.'); go('region'); } });
+  $('#againBtn').addEventListener('click', ()=>{ if(battleParty().some(m=>m.currentHp>0)) startWildEncounter({ silentIntro:true }); else { toast('Your team needs healing first.'); go('region'); } });
 }
 
 /* ---------- CATCHING ---------- */
@@ -3821,7 +3962,7 @@ function gotcha(enemy){
     const nick = ov.querySelector('#nickInput').value.trim();
     const mon = newMonster(enemy.species, enemy.level);
     if(nick){ mon.nickname = nick; mon.namedRegion = state.progress.currentRegion; }
-    if(state.party.length < 6) state.party.push(mon);
+    if(battleParty().length < 6) state.party.push(mon);
     else state.storage.push(mon);
     if(!state.caughtSpecies.includes(enemy.species)) state.caughtSpecies.push(enemy.species);
     if(!state.encounteredSpecies.includes(enemy.species)) state.encounteredSpecies.push(enemy.species);
@@ -4198,6 +4339,11 @@ function renderPartyStrip(){
 }
 
 /* ---------- SCREEN: region list + region hub ---------- */
+function region2Locked(){
+  const r2 = state.progress.region2 || {};
+  return state.progress.currentRegion===2 && !r2.trialDone;
+}
+
 function renderRegion(){
   setScreenBg('region');
   // Region 1 hub (only region available). A region-list vs hub could split later;
@@ -4231,7 +4377,14 @@ function renderRegion(){
   `;
   $('#backBtn').addEventListener('click', ()=>go('home'));
   screenEl.querySelectorAll('.menu-card[data-nav]').forEach(c=>{
-    c.addEventListener('click', ()=>go(c.dataset.nav));
+    c.addEventListener('click', ()=>{
+      // Sacred Grove gates everything until the Trial of Courage is passed
+      if(region2Locked() && c.dataset.nav!=='explore' && c.dataset.nav!=='party' && c.dataset.nav!=='recover'){
+        toast('Prove your courage in the Sacred Grove first.');
+        return;
+      }
+      go(c.dataset.nav);
+    });
   });
   const r2 = $('#region2Card');
   if(r2) r2.addEventListener('click', ()=>go('region2'));
@@ -4246,7 +4399,7 @@ function renderPartyStub(){
     <div class="party-head-row">
       <div>
         <div class="screen-title" style="margin:0;">Your Party</div>
-        <div class="screen-sub" style="margin:0;">${state.party.length} / 6 · tap one for options</div>
+        <div class="screen-sub" style="margin:0;">${battleParty().length} / 6 · tap one for options</div>
       </div>
       <button class="btn btn-ghost storage-corner" id="storageBtn">📦 ${state.storage.length}</button>
     </div>
@@ -4264,14 +4417,16 @@ function renderPartyList(){
     const maxHp = monMaxHp(m);
     const open = ui.partyOpen===m.uid;
     return `
-    <div class="party-card" data-uid="${m.uid}">
-      <div class="party-head" data-tap="${m.uid}">
+    <div class="party-card ${isSeed(m)?'seed-card':''}" data-uid="${m.uid}">
+      <div class="party-head" ${isSeed(m)?'':`data-tap="${m.uid}"`}>
         ${monPortrait(m.species,52,{stage:monStage(m)})}
         <div style="flex:1;">
           <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">${escapeHtml(displayName(m))} <span style="font-size:12px;color:var(--ink-soft);">Lv ${m.level}</span></div>
           <div>${typeBadges(m.species)}</div>
-          <div class="hpbar" style="margin-top:5px;"><div class="hpfill" style="width:${Math.max(0,m.currentHp/maxHp*100)}%;background:${m.currentHp/maxHp<0.3?'var(--cinnabar)':'var(--jade)'};"></div></div>
-          <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:2px;">${Math.max(0,m.currentHp)}/${maxHp} HP · ATK ${monAtk(m)}</div>
+          ${isSeed(m)
+            ? `<div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:5px;font-style:italic;">In your care — cannot battle.</div>`
+            : `<div class="hpbar" style="margin-top:5px;"><div class="hpfill" style="width:${Math.max(0,m.currentHp/maxHp*100)}%;background:${m.currentHp/maxHp<0.3?'var(--cinnabar)':'var(--jade)'};"></div></div>
+               <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:2px;">${Math.max(0,m.currentHp)}/${maxHp} HP · ATK ${monAtk(m)}</div>`}
         </div>
       </div>
       ${open ? `
@@ -4316,7 +4471,7 @@ function renderStats(){
   const maxHp = monMaxHp(m);
   const need = fightsNeeded(m.level);
   const capped = m.level>=REGION_LEVEL_CAP;
-  const suppCap = proteinCap(m.species);
+  const suppCap = isSeed(m) ? 0 : proteinCap(m.species);
   const atCap = (m.supplements||0) >= suppCap;
   const nextIsFinal = (m.supplements||0) === suppCap-1;
   const moves = MOVES[m.species].map(mv=>{
@@ -4583,7 +4738,8 @@ function showStoneReveal(stone, spinLabel, thenScreen){
       <button class="btn btn-primary" id="rollOk" style="width:auto;padding:12px 30px;margin-top:14px;">Nice!</button>`;
     ov.querySelector('#rollOk').addEventListener('click', ()=>{
       if(ov.parentNode) document.body.removeChild(ov);
-      if(thenScreen==='storage'){ ui.storageFrom='shop'; go('storage'); }
+      if(thenScreen==='shop'){ ui.shopNote = 'Sent to Storage — open it to equip.'; renderShop(); }
+      else if(thenScreen==='storage'){ ui.storageFrom='shop'; go('storage'); }
       else renderStorage();
     });
   }, 1100);
@@ -4758,7 +4914,7 @@ function stoneDescription(s){
 /* pick which owned monster of the matching type learns the stone */
 function chooseStoneRecipient(s){
   const all = [...state.party, ...state.storage];
-  const eligible = all.filter(m=>SPECIES[m.species].types.includes(s.type));
+  const eligible = all.filter(m=>!isSeed(m) && SPECIES[m.species].types.includes(s.type));
   if(eligible.length===0){
     toast(`You have no ${s.type}-type monsters yet.`);
     return;
@@ -4810,7 +4966,7 @@ function chooseStoneRecipient(s){
 function moveToParty(uid){
   const idx = state.storage.findIndex(m=>m.uid===uid);
   if(idx<0) return;
-  if(state.party.length<6){
+  if(battleParty().length<6){
     const [m]=state.storage.splice(idx,1);
     state.party.push(m);
     saveProfile();
@@ -4895,13 +5051,13 @@ function renderIndexDetail(){
    - a miss starts a 3-rep remedial loop (needs 3 consecutive correct; any miss
      resets it); loop reps grant no heal, completing the loop heals 5% to all
    - remediated words still stay in the recent-wrong history for future sessions */
-function monMax(m){ return computeMaxStat(m.species, m.level, m.supplements); }
-function partyFull(){ return state.party.every(m=>m.currentHp>=monMax(m)); }
+function monMax(m){ return computeMaxHp(m.species, m.level, m.supplements); }
+function partyFull(){ return battleParty().every(m=>m.currentHp>=monMax(m)); }
 function healParty(pct){
   playSfx('recovery_heal');
   // Round UP (and heal at least 1) so a monster on very low HP always makes
   // progress — flooring could yield 0 and leave it permanently stuck.
-  state.party.forEach(m=>{
+  battleParty().forEach(m=>{
     const max = monMax(m);
     const gain = Math.max(1, Math.ceil(max*pct));
     m.currentHp = Math.min(max, m.currentHp + gain);
@@ -5035,7 +5191,7 @@ function renderRecover(){
 
 function ensurePool(){
   if(activePool().length===0){ ui.prevScreen='challenge'; toast('No words selected, please select to proceed.'); go('spelling'); return false; }
-  if(!state.party.some(m=>m.currentHp>0)){ toast('Your team needs healing first.'); return false; }
+  if(!battleParty().some(m=>m.currentHp>0)){ toast('Your team needs healing first.'); return false; }
   return true;
 }
 function onChallengeWon(){
@@ -5531,8 +5687,10 @@ function renderShop(){
     <div id="shopWares" class="ware-grid"></div>
 
     <button class="btn btn-ghost" id="shopStorage" style="margin-top:14px;">📦 Open Storage</button>
+    ${ui.shopNote ? `<div class="shop-note">💎 ${escapeHtml(ui.shopNote)}</div>` : ''}
   `;
-  $('#backBtn').addEventListener('click', ()=>{ ui.shopGreeting=null; go('region'); });
+  $('#backBtn').addEventListener('click', ()=>{ ui.shopGreeting=null; ui.shopNote=null; go('region'); });
+  if(ui.shopNote) setTimeout(()=>{ ui.shopNote=null; }, 6000);
   $('#shopStorage').addEventListener('click', ()=>{ ui.storageFrom='shop'; go('storage'); });
 
   const wares = [
@@ -5652,7 +5810,7 @@ function openSinglePurchase(w){
       showSyncFailure(); return;
     }
     close();
-    if(stone) showStoneReveal(stone, 'Purchased!', 'storage');   // straight to Storage to equip
+    if(stone) showStoneReveal(stone, 'Purchased!', 'shop');
     else { playSfx('protein_use'); toast('Protein Supplement purchased!'); renderShop(); }
   });
 }
@@ -5716,6 +5874,51 @@ function confirmDialogHtml(html, onYes){
   scrim.querySelector('#chYes').addEventListener('click', ()=>{ close(); onYes(); });
 }
 
+
+/* ---------- Trial of Courage: resolution ----------
+   The fight is not meant to be won. Whichever way it ends, the Guardian
+   acknowledges the courage it took to stand and fight — so the normal defeat
+   penalty (XP loss, 10% HP) is skipped entirely and the same scene plays. */
+async function onGuardianTrialResolved(){
+  stopMusic();
+  const r2 = state.progress.region2;
+  const wasBeaten = livingEnemies().length === 0;
+
+  // never punish the player for the scripted loss
+  battleParty().forEach(m=>{ if(m.currentHp<=0) m.currentHp = Math.max(1, Math.floor(monMaxHp(m)*0.10)); });
+
+  r2.trialDone = true;
+  let seed = null;
+  if(!r2.seedGranted){ seed = grantSacredSeed(); r2.seedGranted = true; }
+  await saveProfile();
+
+  $('#brandSub').textContent = 'The Sacred Grove';
+  document.body.classList.remove('writing');
+  setScreenBg('explore');
+  screenEl.innerHTML = `
+    <div class="scene">
+      <div class="scene-portrait">${monPortrait('forest_fairy', 150, { view:'front', bare:true, stage:1 })}</div>
+      <div class="scene-title">The Forest Guardian</div>
+      <div class="scene-body">
+        ${wasBeaten
+          ? `<p>"…You actually <b>felled</b> me." She rises, unhurried, and something like delight crosses her face. "Then there is no question at all about your courage."</p>`
+          : `<p>The last of your team sinks to the moss. You reach for another — and find the Guardian's hand raised, gently, telling you to stop.</p>
+             <p>"Enough, little trainer. You did not run. Thirty times you could have turned away, and thirty times you stayed."</p>`}
+        <p>"Courage is not the absence of fear. It is standing in the same place fear does."</p>
+        <p>She presses something small and warm into your hands — <b>a Sacred Seed</b>, pale green and faintly glowing.</p>
+        <p>"Guard it. Feed it your effort as you have fed your own. And remember the lesson of courage — you will need it again, sooner than you think."</p>
+      </div>
+      ${seed ? `<div class="scene-reward">${monPortrait('sacred_seed', 64, { bare:true })}<div><b>Sacred Seed</b> joined your care.<br><span>It travels in its own slot and cannot fight.</span></div></div>` : ''}
+      <button class="btn btn-primary" id="sceneNext" style="margin-top:16px;">Continue</button>
+    </div>
+  `;
+  playSfx('evolution');
+  $('#sceneNext').addEventListener('click', ()=>{
+    toast('Sacred Grove is open. The city awaits.');
+    go('region');
+  });
+}
+
 /* ---------- SCREEN: explore ---------- */
 /* The player avatar is essentially only ever seen here, so it gets real
    presence — sized against the viewport but capped so the zone buttons below
@@ -5733,8 +5936,8 @@ function exploreAvatarSize(){
 function renderExplore(){
   setScreenBg('explore');
   $('#brandSub').textContent = 'Explore';
-  const canFight = state.party.some(m=>m.currentHp>0);
-  const lead = state.party.find(m=>m.currentHp>0) || state.party[0];
+  const canFight = battleParty().some(m=>m.currentHp>0);
+  const lead = battleParty().find(m=>m.currentHp>0) || battleParty()[0];
   const zones = REGION_ZONES[state.progress.currentRegion] || [];
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Region</button>
@@ -5744,15 +5947,25 @@ function renderExplore(){
         : `<button class="btn btn-primary" id="pickAvatarHere" style="width:auto;padding:12px 18px;">👤 Choose your look</button>`}
     </div>
 
+    ${(state.progress.currentRegion===2 && !(state.progress.region2||{}).trialDone) ? `
+      <div class="trial-banner">
+        <b>The Trial of Courage</b>
+        <div>Stand and fight — the Grove will not let a coward pass.</div>
+        <div class="trial-bar"><span style="width:${Math.min(100,((state.progress.region2||{}).courage||0)/COURAGE_TARGET*100)}%"></span></div>
+        <div class="trial-count">${(state.progress.region2||{}).courage||0} / ${COURAGE_TARGET} battles faced</div>
+      </div>` : ''}
     ${canFight ? `
       <div class="zone-row">
-        ${zones.map((z,i)=>`
+        ${zones.map((z,i)=>{
+          const locked = z.locksUntil==='r2ChallengeDone' && !(state.progress.region2||{}).challengeDone;
+          return `
           <div class="zone-item">
-            <button class="zone-btn" data-zone="${i}" style="${z.tint?`--zone-tint:${z.tint};`:''}">
+            <button class="zone-btn ${locked?'zone-locked':''}" data-zone="${i}" ${locked?'disabled':''} style="${z.tint?`--zone-tint:${z.tint};`:''}">
               <img src="assets/zones/${z.id}.png" alt="" class="zone-img" onerror="this.style.display='none'">
+              ${locked?'<span class="zone-lock">🔒</span>':''}
             </button>
             <div class="zone-label">${escapeHtml(z.name)}</div>
-          </div>`).join('')}
+          </div>`;}).join('')}
       </div>
     ` : `
       <div class="placeholder-note"><span class="pn-emoji">💤</span>Your whole team has fainted. Heal up before exploring.</div>
