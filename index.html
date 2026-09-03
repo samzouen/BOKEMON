@@ -181,9 +181,14 @@
     font-family:'Noto Sans SC';font-weight:900;font-size:30px;color:#fff;position:relative;
     box-shadow:inset 0 -6px 0 rgba(0,0,0,0.12);
   }
-  /* Cut-out battle sprites must not carry the tile's inset plate. */
+  /* Cut-out sprites (battle, evolution, catching, story scenes) never carry the
+     tile plate or its inset shadow — only the party/menu list tiles do. */
   .avatar-layer .mon-portrait, .player-avatar .mon-portrait,
-  .explore-avatar .avatar-img, .hero-avatar{ box-shadow:none; border-radius:0; }
+  .explore-avatar .avatar-img, .hero-avatar,
+  .cutout .mon-portrait, .cutout img, .evo-mon .mon-portrait,
+  .scene-portrait .mon-portrait, .scene-reward .mon-portrait{
+    box-shadow:none !important; border-radius:0 !important; background:transparent !important;
+  }
   /* SWAP POINT: .mon-portrait is a placeholder colored tile with the species'
      first character. Replace its contents with <img src="..."> when real art exists. */
   .starter-info h3{font-family:'Baloo 2',cursive;margin:0;font-size:19px;font-weight:700;}
@@ -509,6 +514,7 @@
   .trial-bar{height:8px;background:rgba(35,32,25,0.18);border-radius:5px;overflow:hidden;}
   .trial-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--jade),var(--gold));transition:width .4s;}
   .trial-count{font-size:11px;color:var(--ink-soft);font-weight:800;margin-top:5px;}
+  .trial-warn{font-size:11px;font-weight:800;color:var(--cinnabar-dark);margin-top:7px;line-height:1.4;}
   .zone-locked{filter:grayscale(1);opacity:.55;cursor:not-allowed;}
   .zone-lock{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px;}
   .zone-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
@@ -782,34 +788,71 @@
    Types feed the type-triangle system in a later phase.
    `color` + `glyph` are placeholder-art hints (SWAP POINT for real sprites). */
 const SPECIES = {
-  water_starter:   { name:'Turtle',     tier:'starter',   types:['Water'],        rate:10, nerfedRate:10, base:5,  evo:[21,41], color:'#3b7ea1', glyph:'水' },
-  fire_starter:    { name:'Salamander', tier:'starter',   types:['Fire'],         rate:10, nerfedRate:10, base:5,  evo:[21,41], color:'#d4643a', glyph:'火' },
-  grass_starter:   { name:'Frog',       tier:'starter',   types:['Grass'],        rate:10, nerfedRate:10, base:5,  evo:[21,41], color:'#4a9d5b', glyph:'木' },
-  rat:             { name:'Rat',        tier:'wild',      types:['Physical'],     rate:7,  nerfedRate:5,  base:5,  evo:[11,25], color:'#9a8f80', glyph:'鼠' },
-  bird:            { name:'Bird',       tier:'wild',      types:['Flying'],       rate:7,  nerfedRate:5,  base:5,  evo:[11,25], color:'#7aa9d4', glyph:'鸟' },
-  moth:            { name:'Moth',       tier:'wild',      types:['Grass'],        rate:7,  nerfedRate:5,  base:5,  evo:[11,25], color:'#a6789c', glyph:'蛾' },
-  earth_snake:     { name:'Earth Snake',tier:'wild',      types:['Ground'],       rate:7,  nerfedRate:5,  base:5,  evo:[11,25], color:'#8a9a5b', glyph:'蛇', npcOnlyRegion1:true },
-  ground_starter:  { name:'Rhino',      tier:'starter',   types:['Ground'],       rate:10, nerfedRate:10, base:5,  evo:[21,41], color:'#b08a5a', glyph:'土', npcOnlyRegion1:true },
-  electric_starter:{ name:'Mouse',      tier:'special',   types:['Electric'],     rate:10, nerfedRate:10, base:20, evo:[21,41], color:'#e0b53a', glyph:'电' },
-  phoenix:         { name:'Phoenix',    tier:'legendary', types:['Fire','Flying'],rate:13, nerfedRate:13, base:25, evo:[],      color:'#c8453a', glyph:'凤', frozenRegion1:true, bonusStages:1 },   // hatched from a sacred egg
-  sacred_seed:     { name:'Sacred Seed', tier:'special',   types:['Grass'],         rate:0,  nerfedRate:0,  base:1,   evo:[],     color:'#7fa86b', glyph:'种', isSeed:true },
-  forest_fairy:    { name:'Forest Fairy',tier:'legendary', types:['Grass','Fairy'], rate:13, nerfedRate:13, base:100, evo:[1],    color:'#5fa86b', glyph:'仙', bossOnly:true },
+  /* evoMult: single-evolution species get 1.5x the usual evolution bonus, to
+     compensate for never gaining a second stage. */
+  water_starter:   { name:'Turtle',      tier:'starter',   types:['Water'],         rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#3b7ea1', glyph:'水' },
+  fire_starter:    { name:'Salamander',  tier:'starter',   types:['Fire'],          rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#d4643a', glyph:'火' },
+  grass_starter:   { name:'Frog',        tier:'starter',   types:['Grass'],         rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#4a9d5b', glyph:'木' },
+  ground_starter:  { name:'Rhino',       tier:'starter',   types:['Ground'],        rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#b08a5a', glyph:'土', npcOnlyRegion1:true },
+  electric_starter:{ name:'Mouse',       tier:'special',   types:['Electric'],      rate:10, nerfedRate:10, base:20,  evo:[21,36], color:'#e0b53a', glyph:'电' },
+
+  /* --- Region 1 wilds --- */
+  rat:             { name:'Rat',         tier:'wild',      types:['Physical'],      rate:7,  nerfedRate:5,  base:5,   evo:[11],    evoMult:1.5, color:'#9a8f80', glyph:'鼠' },
+  bird:            { name:'Bird',        tier:'wild',      types:['Flying'],        rate:7,  nerfedRate:5,  base:5,   evo:[18],    evoMult:1.5, color:'#7aa9d4', glyph:'鸟' },
+  moth:            { name:'Moth',        tier:'wild',      types:['Grass'],         rate:7,  nerfedRate:5,  base:5,   evo:[18],    evoMult:1.5, color:'#a6789c', glyph:'蛾' },
+  earth_snake:     { name:'Earth Snake', tier:'wild',      types:['Ground'],        rate:7,  nerfedRate:5,  base:5,   evo:[11,25], color:'#8a9a5b', glyph:'蛇', npcOnlyRegion1:true },
+
+  /* --- Region 2: Sacred Grove --- */
+  sparrow:         { name:'Sparrow',     tier:'wild',      types:['Flying'],        rate:7,  nerfedRate:5,  base:5,   evo:[18],    evoMult:1.5, color:'#8fa6c4', glyph:'雀' },
+  squirrel:        { name:'Squirrel',    tier:'wild',      types:['Physical'],      rate:7,  nerfedRate:5,  base:5,   evo:[18],    evoMult:1.5, color:'#b58a5e', glyph:'松' },
+  deer:            { name:'Deer',        tier:'wild',      types:['Physical'],      rate:7,  nerfedRate:5,  base:5,   evo:[18],    evoMult:1.5, color:'#a8845c', glyph:'鹿' },
+
+  /* --- Region 2: Rocky Caverns --- */
+  golem:           { name:'Golem',       tier:'wild',      types:['Ground'],        rate:7,  nerfedRate:5,  base:5,   evo:[11,25], color:'#8b8177', glyph:'岩' },
+  bat:             { name:'Bat',         tier:'wild',      types:['Flying'],        rate:7,  nerfedRate:5,  base:5,   evo:[11,25], color:'#6b5f77', glyph:'蝠' },
+
+  /* --- Region 2: Water Dojo --- */
+  starfish:        { name:'Starfish',    tier:'wild',      types:['Water'],         rate:7,  nerfedRate:5,  base:5,   evo:[18],    evoMult:1.5, color:'#d98aa0', glyph:'星' },
+  seahorse:        { name:'Seahorse',    tier:'wild',      types:['Water'],         rate:7,  nerfedRate:5,  base:5,   evo:[11,25], color:'#4fa3b8', glyph:'马' },
+  duck:            { name:'Duck',        tier:'wild',      types:['Water'],         rate:7,  nerfedRate:5,  base:5,   evo:[18],    evoMult:1.5, color:'#c9b45e', glyph:'鸭' },
+
+  /* --- Legendaries & story --- */
+  phoenix:         { name:'Phoenix',     tier:'legendary', types:['Fire','Flying'], rate:13, nerfedRate:13, base:25,  evo:[],      evoMult:1.5, color:'#c8453a', glyph:'凤', frozenRegion1:true, bonusStages:1 },
+  forest_fairy:    { name:'Forest Fairy',tier:'legendary', types:['Grass','Fairy'], rate:13, nerfedRate:13, base:100, evo:[1],     evoMult:1.5, color:'#5fa86b', glyph:'仙', bossOnly:true },
+  sacred_seed:     { name:'Sacred Seed', tier:'special',   types:['Grass'],         rate:0,  nerfedRate:0,  base:1,   evo:[],      color:'#7fa86b', glyph:'种', isSeed:true },
 };
 
 /* Move tables live here for later phases; unused in Phase 1 but embedded now
    so battle/stats pages can read them without another data pass. */
 const MOVES = {
-  water_starter:   [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bubble',0.4,'Single',4,5],['Power2','Surf',0.6,'AOE',8,21],['Ultimate','Waterfall',1.5,'Single',10,41]],
-  fire_starter:    [['Basic','Scratch',0.2,'Single',2,5],['Power1','Ember',0.4,'Single',4,5],['Power2','Flamethrower',0.6,'AOE',8,21],['Ultimate','Fire Blast',1.5,'Single',10,41]],
-  grass_starter:   [['Basic','Tackle',0.2,'Single',2,5],['Power1','Vine Whip',0.4,'Single',4,5],['Power2','Razor Leaf',0.6,'AOE',8,21],['Ultimate','Solar Beam',1.5,'Single',10,41]],
+  /* [slot, name, multiplier, target, words, unlockLevel]
+     'Max' ultimates arrive at 51 for starters, elites and legendaries — an
+     upgraded version of the original, so progression keeps staggering. */
+  water_starter:   [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bubble',0.4,'Single',4,5],['Power2','Surf',0.6,'AOE',8,21],['Ultimate','Waterfall',1.5,'Single',10,41],['Max','Waterfall Max',2.0,'AOE',12,51]],
+  fire_starter:    [['Basic','Scratch',0.2,'Single',2,5],['Power1','Ember',0.4,'Single',4,5],['Power2','Flamethrower',0.6,'AOE',8,21],['Ultimate','Fire Blast',1.5,'Single',10,41],['Max','Fire Blast Max',2.0,'AOE',12,51]],
+  grass_starter:   [['Basic','Tackle',0.2,'Single',2,5],['Power1','Vine Whip',0.4,'Single',4,5],['Power2','Razor Leaf',0.6,'AOE',8,21],['Ultimate','Solar Beam',1.5,'Single',10,41],['Max','Solar Beam Max',2.0,'AOE',12,51]],
+  ground_starter:  [['Basic','Tackle',0.2,'Single',2,5],['Power1','Body Slam',0.4,'Single',4,5],['Power2','Earthquake',0.6,'AOE',8,21],['Ultimate','Horn Drill',1.5,'Single',10,41],['Max','Horn Drill Max',2.0,'AOE',12,51]],
+  electric_starter:[['Basic','Tackle',0.2,'Single',2,20],['Power1','Thundershock',0.4,'Single',4,20],['Power2','Thunderbolt',0.6,'AOE',8,21],['Ultimate','Thunder',1.5,'Single',10,41],['Max','Thunder Max',2.0,'AOE',12,51]],
+
   rat:             [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bite',0.4,'Single',4,5],['Power2','Fury Swipes',0.6,'AOE',8,11],['Ultimate','Super Fang',1.5,'Single',10,25]],
   bird:            [['Basic','Peck',0.2,'Single',2,5],['Power1','Claw',0.4,'Single',4,5],['Power2','Gust',0.6,'AOE',8,11],['Ultimate','Aerial Ace',1.5,'Single',10,25]],
   moth:            [['Basic','Tackle',0.2,'Single',2,5],['Power1','Sting',0.4,'Single',4,5],['Power2','Poison Powder',0.6,'AOE',8,11],['Ultimate','Revitalise',null,'Support',14,25]],
   earth_snake:     [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bite',0.4,'Single',4,5],['Power2','Tail Whip',0.6,'AOE',8,11],['Ultimate','Constrict',1.5,'Single',10,25]],
-  ground_starter:  [['Basic','Tackle',0.2,'Single',2,5],['Power1','Body Slam',0.4,'Single',4,5],['Power2','Earthquake',0.6,'AOE',8,21],['Ultimate','Horn Drill',1.5,'Single',10,41]],
-  electric_starter:[['Basic','Tackle',0.2,'Single',2,20],['Power1','Thundershock',0.4,'Single',4,20],['Power2','Thunderbolt',0.6,'AOE',8,21],['Ultimate','Thunder',1.5,'Single',10,41]],
-  forest_fairy:    [['Basic','Fairy Wind',0.4,'Single',4,100],['Power1','Giga Drain',0.8,'Single',8,100],['Power2','Nature\'s Wrath',0.7,'AOE',12,100],['Ultimate','Verdant Judgement',1.6,'Single',10,100]],
-  phoenix:         [['Basic','Ember',0.3,'Single',4,25],['Power1','Firestorm',0.6,'AOE',8,25],['Power2','Nova',1.0,'AOE',12,35],['Ultimate','Incinerate',1.4,'Single',10,51]],
+
+  sparrow:         [['Basic','Peck',0.2,'Single',2,5],['Power1','Quick Attack',0.4,'Single',4,5],['Power2','Whirlwind',0.6,'AOE',8,18],['Ultimate','Sky Dive',1.5,'Single',10,28]],
+  squirrel:        [['Basic','Scratch',0.2,'Single',2,5],['Power1','Headbutt',0.4,'Single',4,5],['Power2','Acorn Barrage',0.6,'AOE',8,18],['Ultimate','Tail Slam',1.5,'Single',10,28]],
+  deer:            [['Basic','Tackle',0.2,'Single',2,5],['Power1','Horn Jab',0.4,'Single',4,5],['Power2','Stampede',0.6,'AOE',8,18],['Ultimate','Antler Charge',1.5,'Single',10,28]],
+
+  golem:           [['Basic','Rock Toss',0.2,'Single',2,5],['Power1','Boulder Punch',0.4,'Single',4,5],['Power2','Rockslide',0.6,'AOE',8,11],['Ultimate','Seismic Slam',1.5,'Single',10,25]],
+  bat:             [['Basic','Bite',0.2,'Single',2,5],['Power1','Wing Slash',0.4,'Single',4,5],['Power2','Screech',0.6,'AOE',8,11],['Ultimate','Night Swoop',1.5,'Single',10,25]],
+
+  starfish:        [['Basic','Slap',0.2,'Single',2,5],['Power1','Water Gun',0.4,'Single',4,5],['Power2','Spiral Spray',0.6,'AOE',8,18],['Ultimate','Tidal Star',1.5,'Single',10,28]],
+  seahorse:        [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bubble Jet',0.4,'Single',4,5],['Power2','Whirlpool',0.6,'AOE',8,11],['Ultimate','Aqua Lance',1.5,'Single',10,25]],
+  duck:            [['Basic','Peck',0.2,'Single',2,5],['Power1','Splash Wing',0.4,'Single',4,5],['Power2','Downpour',0.6,'AOE',8,18],['Ultimate','Torrent Dive',1.5,'Single',10,28]],
+
+  phoenix:         [['Basic','Ember',0.3,'Single',4,25],['Power1','Firestorm',0.6,'AOE',8,25],['Power2','Nova',1.0,'AOE',12,35],['Ultimate','Incinerate',1.4,'Single',10,51],['Max','Incinerate Max',1.9,'AOE',14,51]],
+  forest_fairy:    [['Basic','Fairy Wind',0.4,'Single',4,100],['Power1','Giga Drain',0.8,'Single',8,100],['Power2',"Nature's Wrath",0.7,'AOE',12,100],['Ultimate','Verdant Judgement',1.6,'Single',10,100]],
+  sacred_seed:     [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 };
 
 const TYPE_COLORS = {
@@ -1167,11 +1210,11 @@ const TOKEN_LEVEL_ODDS = [ {min:1,max:10,chance:0.10}, {min:11,max:20,chance:0.2
 const TOKENS_PER_ROLL = 5;
 
 const STONE_TIERS = [
-  { id:'low',      label:'Low',       odds:0.50, words:2,  mult:0.25, kind:'single' },
-  { id:'mid',      label:'Mid',       odds:0.30, words:4,  mult:0.5,  kind:'single' },
-  { id:'high',     label:'High',      odds:0.12, words:8,  mult:0.8,  kind:'multi2' },
-  { id:'veryhigh', label:'Very High', odds:0.06, words:6,  mult:null, kind:'status' },
-  { id:'ultra',    label:'Ultra',     odds:0.02, words:14, mult:0.5,  kind:'multihit' },
+  { id:'low',      label:'Low',       odds:0.50, words:1,  mult:0.25, kind:'single' },
+  { id:'mid',      label:'Mid',       odds:0.30, words:3,  mult:0.5,  kind:'single' },
+  { id:'high',     label:'High',      odds:0.12, words:5,  mult:0.8,  kind:'multi2' },
+  { id:'veryhigh', label:'Very High', odds:0.06, words:4,  mult:null, kind:'status' },
+  { id:'ultra',    label:'Ultra',     odds:0.02, words:10, mult:0.5,  kind:'multihit' },
 ];
 const RECYCLE_RETURN = { low:1, mid:2, high:4, veryhigh:7, ultra:15 };
 
@@ -1259,7 +1302,7 @@ function computeMaxStat(species, level, supplements){
   const s = SPECIES[species];
   const rate = s.rate;
   let stat = Math.floor((rate/5) * level);
-  stat += (evolutionStage(species, level) + (s.bonusStages||0)) * rate;
+  stat += (evolutionStage(species, level) + (s.bonusStages||0)) * rate * (s.evoMult||1);
   stat += Math.floor((rate/5) * effectiveSupplements(species, supplements));
   return stat;
 }
@@ -1551,6 +1594,18 @@ function normalizeProfile(p){
   p._needsMasteryReconcile = true;
   if(!Array.isArray(p.settings.wordLists)) p.settings.wordLists = null;   // null = all lists
   p.moveStones = p.moveStones || [];
+  /* Giga Drain became the Forest Guardian's signature move; the Grass Very High
+     stone is now Leech Seed. Rename anything already owned or equipped so old
+     saves don't keep a move that no longer exists. */
+  const renameStone = (st)=>{
+    if(st && st.tier==='veryhigh' && st.type==='Grass' && st.name==='Giga Drain') st.name = 'Leech Seed';
+    return st;
+  };
+  p.moveStones.forEach(renameStone);
+  (p.party||[]).concat(p.storage||[]).forEach(m=>{
+    if(m.equippedStone) renameStone(m.equippedStone);
+    if(m.ultraStone)    renameStone(m.ultraStone);
+  });
   p.progress = p.progress || { currentRegion:1 };
   const r1 = p.progress.region1 = p.progress.region1 || {};
   r1.guardianCleared = !!r1.guardianCleared;
@@ -2631,13 +2686,14 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets){
       setPStatus(uid,{type:'spikeArmour'});
       res.msg = `${displayName(casterMon)} grows spikes! Takes 20% less damage and reflects 0.4x ATK on hit.`;
       break;
-    case 'Flying': // Mirage: party-wide evasion
+    case 'Flying': // Mirage: the FIRST incoming attack always misses, then 20%
       ui.battle.mirageActive = true;
-      res.msg = `A mirage surrounds your whole team! 20% chance to evade any attack for the rest of the battle.`;
+      ui.battle.mirageGuaranteed = true;
+      res.msg = `A mirage surrounds your whole team! The next attack is guaranteed to miss, then 20% after that.`;
       break;
-    case 'Physical': // Counter: self buff, one-shot
-      setPStatus(uid,{type:'counter'});
-      res.msg = `${displayName(casterMon)} braces to counter the next hit!`;
+    case 'Physical': // Counter: the next hit is always countered, then 10%
+      setPStatus(uid,{type:'counter', guaranteed:true, chance:0.10});
+      res.msg = `${displayName(casterMon)} braces to counter! The next hit is guaranteed, then 10% after that.`;
       break;
     case 'Ghost': { // Curse: enemy debuff, +25% damage taken
       const t = targets[0];
@@ -2677,7 +2733,7 @@ const REGION1_WILD = ['rat','bird','moth'];
 const REGION_ZONES = {
   1: [ { id:'tranquil_forest', name:'Tranquil Forest', tint:'#4a7a3c' } ],
   2: [ { id:'sacred_grove', name:'Sacred Grove', tint:'#5fa86b' },
-       { id:'old_passage',  name:'Old Passage',  tint:'#8a7a5b', locksUntil:'r2ChallengeDone' } ],
+       { id:'rocky_caverns', name:'Rocky Caverns', tint:'#8a7a5b', locksUntil:'r2ChallengeDone' } ],
 };
 
 /* --- Region 2, first scripted sequence: the Trial of Courage ---
@@ -2685,7 +2741,23 @@ const REGION_ZONES = {
    battles must be seen through without fleeing; the count resets to zero the
    moment the player flees. At thirty, the Guardian herself appears. */
 const COURAGE_TARGET = 30;
-const REGION2_WILD = ['earth_snake','ground_starter'];   // more species to come
+/* The last three battles of the trial (the 28th, 29th and 30th) are a level-35
+   gauntlet. Fleeing during them costs only the gauntlet rather than the whole
+   run — the counter falls back to 25 instead of zero. */
+const COURAGE_GAUNTLET_FROM = 27;   // counter value while fighting battle #28
+const COURAGE_GAUNTLET_LEVEL = 35;
+const COURAGE_FLEE_FALLBACK = 25;
+function inCourageGauntlet(){
+  const c = (state.progress.region2||{}).courage||0;
+  return inSacredGroveTrial() && c >= COURAGE_GAUNTLET_FROM && c < COURAGE_TARGET;
+}
+/* Zone wild tables. Sacred Grove's list is the same before and after the
+   trial — only the levels change during the gauntlet. */
+const ZONE_WILD = {
+  tranquil_forest: ['rat','bird','moth'],
+  sacred_grove:    ['sparrow','squirrel','deer','grass_starter'],
+  rocky_caverns:   ['earth_snake','ground_starter','golem','bat'],
+};
 
 function makeEnemy(species, level, opts){
   opts = opts || {};
@@ -2693,7 +2765,7 @@ function makeEnemy(species, level, opts){
   const nerfed = (opts.nerfed!==undefined) ? opts.nerfed : (sp.tier==='wild');
   const rate = nerfed ? sp.nerfedRate : sp.rate;
   const stage = (sp.evo||[]).filter(lv=>level>=lv).length;
-  let stat = Math.floor((rate/5)*level) + (stage + (sp.bonusStages||0))*rate;
+  let stat = Math.floor((rate/5)*level) + Math.floor((stage + (sp.bonusStages||0))*rate*(sp.evoMult||1));
   if(opts.supplements) stat += Math.floor((rate/5)*opts.supplements);
   const hp = Math.floor(stat * hpScale(level));
   // AI: 'basic' | 'power1' | 'best'. Default: wild=basic, but electric/legendary open with Power1.
@@ -2742,13 +2814,14 @@ function startWildEncounter(encOpts){
     wave = [{ species:special, level:lvl }];
   } else {
     const size = wildGroupSize();
-    const lvl = wildLevel();
-    let choices = REGION1_WILD.slice();
+    const lvl = inCourageGauntlet() ? COURAGE_GAUNTLET_LEVEL : wildLevel();
+    const zoneId = (ui.currentZone && ui.currentZone.id) || 'tranquil_forest';
+    let choices = (ZONE_WILD[zoneId] || REGION1_WILD).slice();
     if(ui.fledFrom){ const f=choices.filter(s=>s!==ui.fledFrom); if(f.length) choices=f; ui.fledFrom=null; }
     wave = [];
     for(let i=0;i<size;i++){ wave.push({ species: choices[Math.floor(Math.random()*choices.length)], level:lvl }); }
   }
-  beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Wild encounter', silentIntro: !!encOpts.silentIntro, noFlee: inSacredGroveTrial() });
+  beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Wild encounter', silentIntro: !!encOpts.silentIntro });
 }
 
 /* ---------- shared multi-wave battle engine ---------- */
@@ -3183,19 +3256,42 @@ function monsterChooser(title, options, onPick, dismissable=true){
 
 function onFlee(){
   if(ui.battle.arena){ ui.arenaUnlocked=true; go('arena'); return; }
+  if(ui.battle.noFlee) return;
   const trial = inSacredGroveTrial();
-  if(ui.battle.noFlee && !ui.battle.guardianTrial){
-    // Sacred Grove refuses cowardice outright
-    toast('The forest guardian is displeased with your lack of courage. Fight, do not flee.');
-    if(trial){ state.progress.region2.courage = 0; saveProfile(); }
-    return;
-  }
-  if(trial && !ui.battle.guardianTrial){ state.progress.region2.courage = 0; saveProfile(); }
+  const guardian = !!ui.battle.guardianTrial;
   ui.fledFrom = ui.battle.enemies[0].species;
-  toast(ui.battle.guardianTrial
-    ? 'The forest guardian is displeased with your lack of courage. Fight, do not flee.'
-    : 'Got away safely!');
+
+  if(trial && !guardian){
+    // Running costs progress: the whole run, or just the gauntlet if deep in.
+    const c = state.progress.region2.courage||0;
+    state.progress.region2.courage = (c >= COURAGE_GAUNTLET_FROM) ? COURAGE_FLEE_FALLBACK : 0;
+    saveProfile();
+    return guardianRebuke(state.progress.region2.courage);
+  }
+  if(guardian) return guardianRebuke(null);   // she is not appeased, but the count stands
+  toast('Got away safely!');
   go('region');
+}
+
+/* A modal the player must dismiss — a toast is too easy to miss. */
+function guardianRebuke(newCount){
+  const ov = document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,30,20,0.72);z-index:96;display:flex;align-items:center;justify-content:center;padding:24px;';
+  ov.innerHTML = `
+    <div style="background:var(--paper);border-radius:18px;padding:24px;max-width:360px;width:100%;text-align:center;box-shadow:0 12px 40px var(--shadow);">
+      <div style="font-size:40px;margin-bottom:8px;">🌿</div>
+      <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:17px;line-height:1.5;margin-bottom:10px;">
+        The forest guardian is displeased with your lack of courage.<br>Fight, do not flee.
+      </div>
+      ${newCount!==null ? `<div style="font-size:13px;font-weight:700;color:var(--cinnabar);margin-bottom:14px;">
+        Courage reset to ${newCount} / ${COURAGE_TARGET}.</div>` : ''}
+      <button class="btn btn-primary" id="rebukeOk">I understand</button>
+    </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#rebukeOk').addEventListener('click', ()=>{
+    if(ov.parentNode) document.body.removeChild(ov);
+    go('region');
+  });
 }
 function livingEnemies(){ return ui.battle.enemies.filter(e=>e.hp>0); }
 
@@ -3545,8 +3641,10 @@ function enemyTurn(){
     return;
   }
 
-  // Mirage: 20% party-wide chance to evade the whole incoming attack
-  if(b.mirageActive && Math.random()<0.20){
+  // Mirage: the first attack after casting always misses; 20% thereafter
+  const mirageHit = b.mirageActive && (b.mirageGuaranteed || Math.random()<0.20);
+  if(mirageHit){
+    if(b.mirageGuaranteed) b.mirageGuaranteed = false;
     battleMsg('💨 The mirage shimmers — the attack missed!');
     b.enemies.forEach((e,i)=>{ if(e.hp>0) bob(document.getElementById('enemyBob-'+i), -1); });
     b.switchedThisTurn=false;
@@ -3566,9 +3664,11 @@ function enemyTurn(){
 
   setTimeout(()=>{
     let msg = '';
-    if(counter){
-      // Counter negates the damage entirely and reflects 50% back, then expires
-      clearPStatus(mon.uid,'counter');
+    const counterFires = counter && (counter.guaranteed || Math.random() < (counter.chance||0.10));
+    if(counterFires){
+      // Negates the damage entirely and reflects 50%. The guaranteed first use
+      // is spent, but the stance itself persists for the rest of the battle.
+      if(counter.guaranteed){ counter.guaranteed = false; setPStatus(mon.uid, counter); }
       const back = Math.ceil(total*0.5);
       const t = acting[0];
       const idx = b.enemies.indexOf(t);
@@ -3774,8 +3874,8 @@ function onBattleWon(){
    version of the evolved form, accelerating as it goes, while glowing
    particles swirl upward. It resolves onto the evolved sprite in full colour
    with the declaration. */
-const EVO_TOTAL_MS   = 9000;
-const EVO_REVEAL_MS  = 2200;                       // final hold on the evolved form
+const EVO_TOTAL_MS   = 14000;
+const EVO_REVEAL_MS  = 2800;                       // final hold on the evolved form
 const EVO_FLASH_MS   = EVO_TOTAL_MS - EVO_REVEAL_MS;
 
 /* Flip intervals shrink geometrically: slow, hesitant flickers at first,
@@ -3806,7 +3906,7 @@ function playEvolutions(list, done){
     ov.innerHTML = `
       <div class="evo-particles" id="evoParticles"></div>
       <div class="evo-stage">
-        <div id="evoSprite" class="evo-sprite-wrap">${monPortrait(ev.species,150,{stage:fromStage,bare:true})}</div>
+        <div id="evoSprite" class="evo-sprite-wrap cutout">${monPortrait(ev.species,190,{view:'front',stage:fromStage,bare:true})}</div>
       </div>
       <div id="evoText" class="evo-text">What's happening…?</div>
       <div id="evoActions"></div>
@@ -3831,7 +3931,7 @@ function playEvolutions(list, done){
     let timer = null;
 
     const paint = (stage, inverted)=>{
-      spriteBox.innerHTML = monPortrait(ev.species, 150, { stage, bare:true });
+      spriteBox.innerHTML = monPortrait(ev.species, 190, { view:'front', stage, bare:true });
       spriteBox.classList.toggle('inverted', !!inverted);
     };
 
@@ -3950,7 +4050,7 @@ function gotcha(enemy){
   const ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at center,#fff7e0,#e8dcc0);gap:16px;';
   ov.innerHTML = `
-    <div class="evo-mon" style="width:120px;height:120px;border-radius:26px;background:${sp.color};display:flex;align-items:center;justify-content:center;font-family:'Noto Sans SC';font-weight:900;font-size:52px;color:#fff;">${sp.glyph}</div>
+    <div class="evo-mon cutout">${monPortrait(enemy.species, 140, { view:'front', bare:true, stage:enemy.stage||0 })}</div>
     <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:24px;">Gotcha!</div>
     <div style="font-weight:700;color:var(--ink-soft);">${sp.name} was caught!</div>
     <div style="font-size:13px;color:var(--ink-soft);font-weight:600;">Give it a nickname? (optional)</div>
@@ -5113,9 +5213,11 @@ function onRecoveryWord(passed){
   if(r.remedial){
     if(passed){
       r.remedial.streak++;
+      // Each correct rep pays 5% immediately — three reps earn 15% in total,
+      // rather than nothing until the loop completes.
+      healParty(0.05);
+      toast(`+5% HP to the team! (${r.remedial.streak}/3)`);
       if(r.remedial.streak>=3){
-        healParty(0.10);
-        toast('Practice complete! +10% HP to the team.');
         consumeCurrent(r);
         r.remedial = null;
         r.healedCount++;
@@ -5217,23 +5319,37 @@ function effectiveStarter(){
 /* Guardian Dojo — three separate encounters, cleared in order, gates Region 2.
    Assistants are NPC tier (Power1 only); the Guardian is NPC Boss (best move). */
 const DOJO_STAGES = [
-  { id:'assistant1', label:'Guardian Assistant 1', ai:'power1',
+  { id:'assistant1', label:'Rock Dojo Disciple 1', ai:'power1',
     waves:[
       [{species:'earth_snake',level:16}],
       [{species:'earth_snake',level:16},{species:'earth_snake',level:16}],
     ] },
-  { id:'assistant2', label:'Guardian Assistant 2', ai:'power1',
+  { id:'assistant2', label:'Rock Dojo Disciple 2', ai:'power1',
     waves:[
       [{species:'earth_snake',level:16},{species:'earth_snake',level:16}],
       [{species:'earth_snake',level:21}],
     ] },
-  { id:'guardian', label:'The Guardian', ai:'best',
+  { id:'guardian', label:'Rock Dojo Master', ai:'best',
     waves:[
       [{species:'earth_snake',level:16},{species:'earth_snake',level:16},{species:'earth_snake',level:16}],
       [{species:'earth_snake',level:21},{species:'earth_snake',level:21}],
       [{species:'ground_starter',level:21}],
     ] },
 ];
+/* Region 2's Water Dojo: three disciples, then the master. */
+const WATER_DOJO_STAGES = [
+  { id:'water_disciple1', label:'Water Dojo Disciple 1', ai:'power1',
+    waves:[ [{species:'starfish',level:24}], [{species:'starfish',level:24},{species:'duck',level:24}] ] },
+  { id:'water_disciple2', label:'Water Dojo Disciple 2', ai:'power1',
+    waves:[ [{species:'duck',level:26},{species:'seahorse',level:26}], [{species:'seahorse',level:28}] ] },
+  { id:'water_disciple3', label:'Water Dojo Disciple 3', ai:'power1',
+    waves:[ [{species:'starfish',level:28},{species:'duck',level:28},{species:'seahorse',level:28}], [{species:'seahorse',level:30}] ] },
+  { id:'water_master',    label:'Water Dojo Master',     ai:'best',
+    waves:[ [{species:'seahorse',level:30},{species:'starfish',level:30},{species:'duck',level:30}],
+            [{species:'seahorse',level:34},{species:'duck',level:34}],
+            [{species:'water_starter',level:36}] ] },
+];
+
 function dojoCleared(id){ return (state.progress.region1.dojoCleared||[]).includes(id); }
 function nextDojoStage(){ return DOJO_STAGES.find(st=>!dojoCleared(st.id)); }
 
@@ -5404,7 +5520,7 @@ function renderChallenge(){
     <div class="challenge-card" id="cGuardian">
       ${npcPortrait((nextDojoStage()||{}).id || 'guardian', '🏯', 50, '#b08a5a')}
       <div style="flex:1;">
-        <div class="cc-title">Guardian Dojo ${r1.guardianCleared?'<span class="clear-tag">Cleared</span>':''}</div>
+        <div class="cc-title">Rock Dojo ${r1.guardianCleared?'<span class="clear-tag">Cleared</span>':''}</div>
         <div class="cc-desc">${r1.guardianCleared
           ? 'All three challengers beaten. Region 2 is unlocked.'
           : `${(r1.dojoCleared||[]).length}/3 beaten · next: <b>${escapeHtml((nextDojoStage()||{}).label||'')}</b>`}</div>
@@ -5897,7 +6013,7 @@ async function onGuardianTrialResolved(){
   setScreenBg('explore');
   screenEl.innerHTML = `
     <div class="scene">
-      <div class="scene-portrait">${monPortrait('forest_fairy', 150, { view:'front', bare:true, stage:1 })}</div>
+      <div class="scene-portrait cutout">${monPortrait('forest_fairy', 170, { view:'front', bare:true, stage:1 })}</div>
       <div class="scene-title">The Forest Guardian</div>
       <div class="scene-body">
         ${wasBeaten
@@ -5953,6 +6069,7 @@ function renderExplore(){
         <div>Stand and fight — the Grove will not let a coward pass.</div>
         <div class="trial-bar"><span style="width:${Math.min(100,((state.progress.region2||{}).courage||0)/COURAGE_TARGET*100)}%"></span></div>
         <div class="trial-count">${(state.progress.region2||{}).courage||0} / ${COURAGE_TARGET} battles faced</div>
+        ${inCourageGauntlet() ? `<div class="trial-warn">⚠️ The Grove tests you in earnest now — Lv${COURAGE_GAUNTLET_LEVEL} foes. Flee and you fall back to ${COURAGE_FLEE_FALLBACK}.</div>` : ''}
       </div>` : ''}
     ${canFight ? `
       <div class="zone-row">
