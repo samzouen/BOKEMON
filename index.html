@@ -311,6 +311,11 @@
   .char-pip.now{background:var(--cinnabar);color:#fff;border-color:var(--cinnabar);font-size:14px;}
   .char-pip.todo{opacity:0.5;}
   .btn.pill.sel{background:var(--cinnabar);color:#fff;box-shadow:0 3px 0 var(--cinnabar-dark);}
+  .pc-summary{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;
+    background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:11px;margin-bottom:12px;}
+  .pc-block{padding-bottom:14px;margin-bottom:14px;border-bottom:1px solid var(--line);}
+  .pc-head{font-family:'Baloo 2',cursive;font-weight:700;font-size:15px;}
+  .pc-sub{font-size:11.5px;color:var(--ink-soft);font-weight:600;margin:2px 0 8px;line-height:1.45;}
   .xp-opt{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;border-radius:10px;border:1px solid var(--line);
     background:var(--paper);margin-bottom:6px;cursor:pointer;font-size:13px;font-weight:600;}
   .xp-opt.sel{border-color:var(--cinnabar);background:#fbf3e2;}
@@ -2841,7 +2846,8 @@ function startGuardianTrial(){
   beginBattle({
     waves:[[{ species:'forest_fairy', level:100, ai:'best', nerfed:false, supplements:12, boss:true }]],
     isNpc:false, allowCatch:false, name:'The Forest Guardian',
-    noFlee:true,             // per the design sheet: she cannot be fled from
+    noFlee:false,            // Courage means running is POSSIBLE and refused.
+                             // Fleeing costs no progress, but she recovers fully.
     guardianTrial:true,
   });
 }
@@ -3327,13 +3333,17 @@ function onFlee(){
     saveProfile();
     return guardianRebuke(state.progress.region2.courage);
   }
-  if(guardian) return guardianRebuke(null);   // she is not appeased, but the count stands
+  if(guardian){
+    // She is restored the moment you turn away — a fresh Guardian is built on
+    // the next encounter, so any damage dealt is undone.
+    return guardianRebuke(null, true);
+  }
   toast('Got away safely!');
   go(ui.battle.isNpc ? 'challenge' : 'zone');
 }
 
 /* A modal the player must dismiss — a toast is too easy to miss. */
-function guardianRebuke(newCount){
+function guardianRebuke(newCount, guardianHealed){
   const ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(20,30,20,0.72);z-index:96;display:flex;align-items:center;justify-content:center;padding:24px;';
   ov.innerHTML = `
@@ -3344,6 +3354,8 @@ function guardianRebuke(newCount){
       </div>
       ${newCount!==null ? `<div style="font-size:13px;font-weight:700;color:var(--cinnabar);margin-bottom:14px;">
         Courage reset to ${newCount} / ${COURAGE_TARGET}.</div>` : ''}
+      ${guardianHealed ? `<div style="font-size:13px;font-weight:700;color:var(--cinnabar);margin-bottom:14px;">
+        The Guardian's wounds close as you turn away. She waits, whole again.</div>` : ''}
       <button class="btn btn-primary" id="rebukeOk">I understand</button>
     </div>`;
   document.body.appendChild(ov);
@@ -6702,21 +6714,6 @@ function renderSound(){
       </div>
     </div>
 
-    <div class="hp-card" style="margin-bottom:12px;">
-      <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">✍️ Writing leniency: <span id="lenLabel">${lenLabel(state.settings.leniency||1)}</span></div>
-      <div style="font-size:12px;color:var(--ink-soft);font-weight:600;margin-bottom:8px;">How forgiving stroke recognition is. Slide right if careful strokes keep getting rejected.</div>
-      <input type="range" id="lenSlider" min="70" max="200" step="5" value="${Math.round((state.settings.leniency||1)*100)}" style="width:100%;accent-color:var(--cinnabar);">
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink-soft);font-weight:800;margin-top:2px;">
-        <span>Strict</span><span>Standard</span><span>Very forgiving</span>
-      </div>
-    </div>
-
-    <div class="hp-card" style="margin-bottom:12px;">
-      <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">👀 Eye breaks</div>
-      <div style="font-size:12px;color:var(--ink-soft);font-weight:600;margin-bottom:10px;">A mandatory rest after a set number of battles. Recovery and practice don't count.</div>
-      <div id="eyeArea"></div>
-    </div>
-
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:12px;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <div>
@@ -6727,12 +6724,12 @@ function renderSound(){
       </div>
     </div>
 
-    <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:18px;">
-      <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">⚡ Levelling speed</div>
-      <div style="font-size:12px;color:var(--ink-soft);font-weight:600;margin-bottom:10px;">
-        Currently <b>${XP_MODES[xpMode()].label}</b> — ${fightsNeeded(5)} fights at Lv5, ${fightsNeeded(21)} at Lv21.
+    <div class="hp-card">
+      <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;">🔒 Parent controls</div>
+      <div style="font-size:12px;color:var(--ink-soft);font-weight:600;margin-bottom:12px;">
+        Difficulty, writing leniency and eye breaks. Password protected so they can't be changed mid-game.
       </div>
-      <div id="xpArea"></div>
+      <div id="parentArea"></div>
     </div>
   `;
   $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen || 'home'));
@@ -6767,12 +6764,6 @@ function renderSound(){
       speechSynthesis.speak(u);
     }catch(e){ toast('Voice not available here.'); }
   });
-  const lenS = $('#lenSlider');
-  if(lenS){
-    lenS.addEventListener('input', ()=>{ $('#lenLabel').textContent = lenLabel(lenS.value/100); });
-    lenS.addEventListener('change', async ()=>{ state.settings.leniency = lenS.value/100; await saveProfile(); });
-  }
-  renderEyeArea();
   const cav = $('#changeAvatarBtn');
   if(cav) cav.addEventListener('click', ()=>{ ui.prevScreen='sound'; go('avatarPick'); });
   $('#lhToggle').addEventListener('change', async e=>{
@@ -6780,7 +6771,7 @@ function renderSound(){
     await saveProfile();
     toast(e.target.checked ? 'Left-handed layout on.' : 'Right-handed layout on.');
   });
-  renderXpArea();
+  renderParentArea();
 }
 
 function lenLabel(v){
@@ -6790,62 +6781,81 @@ function lenLabel(v){
   return 'Very forgiving';
 }
 
-/* Eye-break limits sit behind the password: they're a health guard, so a child
-   shouldn't be able to raise them without a parent. */
-function renderEyeArea(){
-  const el = $('#eyeArea');
+/* All three parent controls sit behind one password gate — difficulty,
+   leniency and eye breaks are exactly the settings a child would otherwise
+   quietly turn off. The gate re-locks whenever Settings is left. */
+function renderParentArea(){
+  const el = $('#parentArea');
   if(!el) return;
-  const every = state.settings.eyeBreakEvery||0, mins = state.settings.eyeBreakMins||5;
-  const summary = every>0
-    ? `Currently: a <b>${mins} minute</b> break every <b>${every}</b> battles.`
-    : `Currently: <b>off</b>.`;
+
   if(!ui.xpUnlocked){
-    el.innerHTML = `<div style="font-size:13px;font-weight:700;margin-bottom:6px;">${summary}</div>
-      <div style="font-size:11px;color:var(--ink-soft);font-weight:700;">🔒 Unlock the levelling section below to change this.</div>`;
+    const every = state.settings.eyeBreakEvery||0, mins = state.settings.eyeBreakMins||5;
+    el.innerHTML = `
+      <div class="pc-summary">
+        <div>⚡ Levelling: <b>${XP_MODES[xpMode()].label}</b></div>
+        <div>✍️ Leniency: <b>${lenLabel(state.settings.leniency||1)}</b></div>
+        <div>👀 Eye breaks: <b>${every>0?`${mins} min every ${every} battles`:'off'}</b></div>
+      </div>
+      <input type="text" id="pcPw" placeholder="Password to change" inputmode="numeric" autocomplete="off">
+      <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:6px;">Hint: First postal code</div>
+      <button class="btn btn-ghost" id="pcUnlock" style="margin-top:10px;">Unlock</button>`;
+    const submit = ()=>{
+      const v = $('#pcPw').value.trim();
+      const cur = state.settings.password || RESET_CODE;
+      if(v===cur || v===RESET_CODE){ ui.xpUnlocked = true; renderParentArea(); }
+      else toast('Incorrect password.');
+    };
+    $('#pcUnlock').addEventListener('click', submit);
+    $('#pcPw').addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
     return;
   }
+
+  const every = state.settings.eyeBreakEvery||0, mins = state.settings.eyeBreakMins||5;
   el.innerHTML = `
-    <label style="font-size:12px;font-weight:800;">Battles before a break: <span id="ebeLabel">${every||'off'}</span></label>
-    <input type="range" id="ebeSlider" min="0" max="30" step="1" value="${every}" style="width:100%;accent-color:var(--cinnabar);">
-    <label style="font-size:12px;font-weight:800;display:block;margin-top:10px;">Break length: <span id="ebmLabel">${mins} min</span></label>
-    <input type="range" id="ebmSlider" min="1" max="20" step="1" value="${mins}" style="width:100%;accent-color:var(--cinnabar);">
-    <div style="font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:6px;">Set battles to 0 to switch eye breaks off.</div>`;
+    <div class="pc-block">
+      <div class="pc-head">⚡ Levelling speed</div>
+      <div class="pc-sub">${fightsNeeded(5)} fights at Lv5 · ${fightsNeeded(21)} at Lv21</div>
+      ${Object.entries(XP_MODES).map(([k,m])=>`
+        <label class="xp-opt ${xpMode()===k?'sel':''}">
+          <input type="radio" name="xpMode" value="${k}" ${xpMode()===k?'checked':''}>
+          <span><b>${m.label}</b><br><span style="font-size:11px;color:var(--ink-soft);">${m.desc}</span></span>
+        </label>`).join('')}
+    </div>
+
+    <div class="pc-block">
+      <div class="pc-head">✍️ Writing leniency: <span id="lenLabel">${lenLabel(state.settings.leniency||1)}</span></div>
+      <div class="pc-sub">How forgiving stroke recognition is. Slide right if careful strokes keep being rejected.</div>
+      <input type="range" id="lenSlider" min="70" max="200" step="5" value="${Math.round((state.settings.leniency||1)*100)}" style="width:100%;accent-color:var(--cinnabar);">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink-soft);font-weight:800;">
+        <span>Strict</span><span>Standard</span><span>Very forgiving</span>
+      </div>
+    </div>
+
+    <div class="pc-block" style="border-bottom:none;padding-bottom:0;">
+      <div class="pc-head">👀 Eye breaks</div>
+      <div class="pc-sub">Counts battles only — Recovery and practice don't add up.</div>
+      <label style="font-size:12px;font-weight:800;">Battles before a break: <span id="ebeLabel">${every||'off'}</span></label>
+      <input type="range" id="ebeSlider" min="0" max="30" step="1" value="${every}" style="width:100%;accent-color:var(--cinnabar);">
+      <label style="font-size:12px;font-weight:800;display:block;margin-top:8px;">Break length: <span id="ebmLabel">${mins} min</span></label>
+      <input type="range" id="ebmSlider" min="1" max="20" step="1" value="${mins}" style="width:100%;accent-color:var(--cinnabar);">
+      <div class="pc-sub" style="margin-top:6px;">Set battles to 0 to switch eye breaks off.</div>
+    </div>
+  `;
+
+  el.querySelectorAll('input[name="xpMode"]').forEach(r=>r.addEventListener('change', async e=>{
+    state.settings.xpMode = e.target.value;
+    await saveProfile();
+    toast('Levelling speed: '+XP_MODES[e.target.value].label);
+    renderParentArea();
+  }));
+  const lenS = $('#lenSlider');
+  lenS.addEventListener('input', ()=>{ $('#lenLabel').textContent = lenLabel(lenS.value/100); });
+  lenS.addEventListener('change', async ()=>{ state.settings.leniency = lenS.value/100; await saveProfile(); });
   const a=$('#ebeSlider'), b=$('#ebmSlider');
   a.addEventListener('input', ()=>{ $('#ebeLabel').textContent = a.value>0?a.value:'off'; });
   a.addEventListener('change', async ()=>{ state.settings.eyeBreakEvery = +a.value; await saveProfile(); });
   b.addEventListener('input', ()=>{ $('#ebmLabel').textContent = b.value+' min'; });
   b.addEventListener('change', async ()=>{ state.settings.eyeBreakMins = +b.value; await saveProfile(); });
-}
-
-function renderXpArea(){
-  const el = $('#xpArea');
-  if(!el) return;
-  if(!ui.xpUnlocked){
-    el.innerHTML = `
-      <input type="text" id="xpPw" placeholder="Password to change" inputmode="numeric" autocomplete="off">
-      <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:6px;">Hint: First postal code</div>
-      <button class="btn btn-ghost" id="xpUnlock" style="margin-top:10px;">Unlock</button>`;
-    const submit = ()=>{
-      const v = $('#xpPw').value.trim();
-      const cur = state.settings.password || RESET_CODE;
-      if(v===cur || v===RESET_CODE){ ui.xpUnlocked = true; renderXpArea(); renderEyeArea(); }
-      else toast('Incorrect password.');
-    };
-    $('#xpUnlock').addEventListener('click', submit);
-    $('#xpPw').addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
-    return;
-  }
-  el.innerHTML = Object.entries(XP_MODES).map(([k,m])=>`
-    <label class="xp-opt ${xpMode()===k?'sel':''}">
-      <input type="radio" name="xpMode" value="${k}" ${xpMode()===k?'checked':''}>
-      <span><b>${m.label}</b><br><span style="font-size:11px;color:var(--ink-soft);">${m.desc}</span></span>
-    </label>`).join('');
-  el.querySelectorAll('input[name="xpMode"]').forEach(r=>r.addEventListener('change', async e=>{
-    state.settings.xpMode = e.target.value;
-    await saveProfile();
-    toast('Levelling speed: '+XP_MODES[e.target.value].label);
-    renderSound();
-  }));
 }
 
 /* ---------- HAMBURGER DRAWER ---------- */
