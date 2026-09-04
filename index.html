@@ -445,6 +445,33 @@
   .ware-icon{font-size:30px;line-height:1;display:flex;align-items:center;justify-content:center;min-height:46px;}
 
   /* ---- faceted gems (no art files needed) ---- */
+  /* Ultra move button: layered rising fizz behind the label. Larger motes sit
+     in front and rise faster; small ones drift slowly in the background. */
+  .move-btn.ultra-btn{position:relative;overflow:hidden;
+    background:linear-gradient(135deg,#c8453a,#e08a3c 55%,#c99a3f);color:#fff;}
+  .move-btn.ultra-btn .mv-name,.move-btn.ultra-btn .mv-meta{position:relative;z-index:2;}
+  .move-btn.ultra-btn .fizz{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden;}
+  .move-btn.ultra-btn .fizz i{
+    position:absolute;bottom:-8px;border-radius:50%;
+    background:radial-gradient(circle,#fff7d6 0%,#ffd166 55%,rgba(255,209,102,0) 72%);
+    animation:fizzRise linear infinite;
+  }
+  .move-btn.ultra-btn .fizz i.sparkle{
+    background:none;border-radius:0;
+    box-shadow:0 0 4px 1px rgba(255,247,214,.95);
+    animation:fizzSparkle linear infinite;
+  }
+  @keyframes fizzRise{
+    0%  {transform:translate(0,0) scale(.6);opacity:0;}
+    15% {opacity:.95;}
+    70% {transform:translate(6px,-42px) scale(1);opacity:.75;}
+    100%{transform:translate(-4px,-70px) scale(.4);opacity:0;}
+  }
+  @keyframes fizzSparkle{
+    0%,100%{opacity:0;transform:translate(0,0) scale(.4);}
+    50%{opacity:1;transform:translate(3px,-30px) scale(1);}
+  }
+  @media (prefers-reduced-motion: reduce){ .move-btn.ultra-btn .fizz{display:none;} }
   .gem-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;}
   .gem{
     width:70%;height:70%;display:block;
@@ -1653,6 +1680,7 @@ function normalizeProfile(p){
   r2.trialDone = !!r2.trialDone;
   r2.seedGranted = !!r2.seedGranted;
   r2.challengeDone = !!r2.challengeDone;
+  r2.waterDojo = r2.waterDojo || [];
   p.settings = p.settings || {};
   if(p.settings.volume===undefined) p.settings.volume = 0.8;
   if(p.settings.focusMode===undefined) p.settings.focusMode = false;
@@ -2759,12 +2787,17 @@ function starterLevel(){
   const st = state.party.find(m=>m.species===state.starterSpecies);
   return st ? st.level : (state.party[0]?state.party[0].level:5);
 }
+/* Wild level = the strongest party member rounded down to a 5-level step, or
+   the zone's floor — whichever is higher — then clamped to the zone's ceiling. */
 function wildLevel(){
-  const L = starterLevel();
-  return Math.min(20, Math.max(5, Math.floor(L/5)*5));
+  const zoneId = (ui.currentZone && ui.currentZone.id) || 'tranquil_forest';
+  const band = ZONE_LEVELS[zoneId] || { min:5, max:21 };
+  const best = Math.max(...battleParty().map(m=>m.level), 1);
+  const stepped = Math.floor(best/5)*5;
+  return Math.min(band.max, Math.max(band.min, stepped));
 }
 function wildGroupSize(){
-  const L = starterLevel();
+  const L = Math.max(...battleParty().map(m=>m.level), 1);
   if(L>=21 && Math.random()<0.10) return 3;
   if(L>=12 && Math.random()<0.30) return 2;
   return 1;
@@ -2844,7 +2877,9 @@ function inSacredGroveTrial(){
 }
 function startGuardianTrial(){
   beginBattle({
-    waves:[[{ species:'forest_fairy', level:100, ai:'best', nerfed:false, supplements:12, boss:true }]],
+    waves:[[{ species:'forest_fairy', level:100, ai:'power1', nerfed:false, supplements:12, boss:true }]],
+                       // ai:'power1' == Giga Drain, her signature. 'best' would have
+                       // reached past it for the Ultimate and skipped the self-heal.
     isNpc:false, allowCatch:false, name:'The Forest Guardian',
     noFlee:false,            // Courage means running is POSSIBLE and refused.
                              // Fleeing costs no progress, but she recovers fully.
@@ -2863,7 +2898,8 @@ function startWildEncounter(encOpts){
   if(pool.length===0){ ui.prevScreen='region'; toast('No words selected, please select to proceed.'); go('spelling'); return; }
   const L = starterLevel();
   let special = null;
-  if(L>=20){ const r=Math.random(); if(r<0.05) special='phoenix'; else if(r<0.20) special='electric_starter'; }
+  const region1Only = state.progress.currentRegion === 1;
+  if(region1Only && L>=20){ const r=Math.random(); if(r<0.05) special='phoenix'; else if(r<0.20) special='electric_starter'; }
   let wave;
   if(special){
     const lvl = special==='phoenix' ? 25 : 20;
@@ -2943,15 +2979,19 @@ function activeMon(){ return state.party[ui.battle.activeIndex]; }
 function monMaxHp(m){ return computeMaxHp(m.species, m.level, m.supplements); }
 function monAtk(m){ return computeMaxStat(m.species, m.level, m.supplements); }
 function unlockedMoves(m){
-  const base = MOVES[m.species].map(mv=>{
-    const [slot,name,mult,target,words,unlock]=mv;
+  /* 'Max' is an UPGRADE of Ultimate, not an extra button: once its level is
+     reached it takes over the Ultimate slot entirely. */
+  const maxMv = MOVES[m.species].find(mv=>mv[0]==='Max' && mv[1]!=null && m.level>=mv[5]);
+  const base = MOVES[m.species].filter(mv=>mv[0]!=='Max').map(mv=>{
+    let [slot,name,mult,target,words,unlock]=mv;
+    if(slot==='Ultimate' && maxMv){ [,name,mult,target,words,unlock] = maxMv; }
     return { slot,name,mult,target,words,unlock, available:(name!=null && m.level>=unlock), isStone:false };
   });
   /* Equipped stone slots in by tier: High-tier "twin" skills override POWER1
      (they're a step above a basic swing), everything else overrides Basic. */
   if(m.equippedStone){
     const t = stoneTierDef(m.equippedStone.tier);
-    const slot = (t.id==='high') ? 'Power1' : 'Basic';
+    const slot = (t.id==='high' || t.id==='veryhigh') ? 'Power1' : 'Basic';
     const bi = base.findIndex(mv=>mv.slot===slot);
     const used = t.id==='veryhigh' && ui.battle && ui.battle.usedVeryHigh[m.uid];
     if(bi>=0) base[bi] = { slot, name:m.equippedStone.name, mult:t.mult,
@@ -2994,6 +3034,25 @@ function enemySpriteSize(count){
   const per = (battleWidth() - (n-1)*10) / n;      // share of the row per enemy
   const byH = window.innerHeight * 0.17;
   return Math.round(Math.max(76, Math.min(per*0.78, byH, 170)));
+}
+
+/* Depth is faked with size + speed: big fast motes read as near, small slow
+   ones as far. A few sparkles punctuate it. */
+function ultraFizz(){
+  let out = '<span class="fizz">';
+  for(let i=0;i<14;i++){
+    const near = Math.random();
+    const size = 2 + near*6;                 // 2-8px
+    const dur  = 2.6 - near*1.4;             // bigger => faster
+    out += `<i style="left:${Math.random()*96}%;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;`
+         + `animation-duration:${dur.toFixed(2)}s;animation-delay:${(Math.random()*2.6).toFixed(2)}s;`
+         + `opacity:${(0.35+near*0.5).toFixed(2)};"></i>`;
+  }
+  for(let i=0;i<3;i++){
+    out += `<i class="sparkle" style="left:${10+Math.random()*80}%;width:2px;height:2px;`
+         + `animation-duration:${(2.2+Math.random()*1.4).toFixed(2)}s;animation-delay:${(Math.random()*3).toFixed(2)}s;"></i>`;
+  }
+  return out + '</span>';
 }
 
 function renderBattle(){
@@ -3040,6 +3099,7 @@ function renderBattle(){
       <div style="flex:2;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         ${moves.map((mv,i)=>`
           <button class="move-btn ${(mv.available && canAct)?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''}" data-move="${i}" ${(mv.available && canAct)?'':'disabled'}>
+            ${mv.slot==='UltraStone' ? ultraFizz() : ''}
             <div class="mv-name">${mv.available?escapeHtml(mv.name):'???'}</div>
             <div class="mv-meta">${mv.available?(mv.isStone?stoneTierDef(mv.stoneTier).label+' stone':( mv.slot==='Basic'?'Basic':mv.slot))+' · '+mv.words+'字':'Locked'}</div>
           </button>`).join('')}
@@ -3829,7 +3889,9 @@ function onPlayerDefeated(){
   },1000);
 }
 /* ---------- XP / LEVELING / EVOLUTION ---------- */
-const REGION_LEVEL_CAP = 21; // Region 1
+/* Level cap rises with the region: the highest zone cap you can currently reach. */
+const REGION_CAPS = { 1:21, 2:46, 3:60 };
+function levelCap(){ return REGION_CAPS[state.progress.currentRegion] || 21; }
 /* ---------- XP PACING MODES ----------
    Selectable (password-gated) from the Spelling List screen. `tier` counts
    5-level bands: 0 = Lv1-5, 1 = Lv6-10, 2 = Lv11-15, ...  */
@@ -3861,11 +3923,11 @@ function awardXpToParty(fightsWorth){
   state.party.forEach(m=>{
     const sp = SPECIES[m.species];
     if(sp.frozenRegion1 && state.progress.currentRegion===1) return; // phoenix frozen
-    if(m.level >= REGION_LEVEL_CAP){ m.xpFights = 0; return; }
+    if(m.level >= levelCap()){ m.xpFights = 0; return; }
     m.xpFights = (m.xpFights||0) + credit;
     const from = m.level;
     const evos = [], newMoves = [];
-    while(m.level < REGION_LEVEL_CAP && m.xpFights >= fightsNeeded(m.level)){
+    while(m.level < levelCap() && m.xpFights >= fightsNeeded(m.level)){
       m.xpFights -= fightsNeeded(m.level);
       const beforeStage = evolutionStage(m.species, m.level);
       const beforeMax = computeMaxStat(m.species, m.level, m.supplements);
@@ -3877,7 +3939,7 @@ function awardXpToParty(fightsWorth){
       const nm = newMoveAtLevel(m.species, m.level);
       if(nm) newMoves.push(nm);
     }
-    if(m.level >= REGION_LEVEL_CAP) m.xpFights = 0;
+    if(m.level >= levelCap()) m.xpFights = 0;
     if(m.level !== from) events.push({ uid:m.uid, species:m.species, name:displayName(m), from, to:m.level, evos, newMoves });
   });
   return events;
@@ -4524,49 +4586,44 @@ function region2Locked(){
 
 function renderRegion(){
   setScreenBg('region');
-  // Region 1 hub (only region available). A region-list vs hub could split later;
-  // for Phase 1 the single unlocked region goes straight to its hub.
   playMusic('region');
-  $('#brandSub').textContent = 'Region 1';
+  const rid = state.progress.currentRegion || 1;
+  const meta = REGIONS.find(r=>r.id===rid) || REGIONS[0];
+  $('#brandSub').textContent = 'Region '+rid;
+
+  // Sacred Grove bars the way until the Trial of Courage is passed
+  const gated = region2Locked();
+  const challengeLabel = rid===2 ? 'Water Dojo' : 'Dojo, Rival & Thugs';
+
   screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Home</button>
-    <div class="screen-title">Region 1 · Riverside Meadow</div>
-    <div class="screen-sub">Your journey starts here.</div>
+    <button class="back-link" id="backBtn">← Regions</button>
+    <div class="screen-title">Region ${rid} · ${escapeHtml(meta.name)}</div>
+    <div class="screen-sub">${escapeHtml(meta.desc)}</div>
+    ${gated ? `<div class="trial-banner" style="margin-bottom:14px;">
+      <b>The Grove bars the way</b>
+      <div>Prove your courage in the Sacred Grove before the city will receive you.</div>
+    </div>` : ''}
     <div class="menu-grid">
       <div class="menu-card" data-nav="explore"><span class="mc-emoji">🌿</span><div class="mc-title">Explore</div><div class="mc-desc">Find wild monsters</div></div>
-      <div class="menu-card" data-nav="challenge"><span class="mc-emoji">⚔️</span><div class="mc-title">Challenge</div><div class="mc-desc">Dojo, Rival &amp; Thugs</div></div>
+      <div class="menu-card ${gated?'locked':''}" data-nav="challenge"><span class="mc-emoji">⚔️</span><div class="mc-title">Challenge</div><div class="mc-desc">${escapeHtml(challengeLabel)}</div></div>
       <div class="menu-card" data-nav="party"><span class="mc-emoji">🎒</span><div class="mc-title">Party</div><div class="mc-desc">Manage your team</div></div>
       <div class="menu-card" data-nav="recover"><span class="mc-emoji">💧</span><div class="mc-title">Recover</div><div class="mc-desc">Heal &amp; revise</div></div>
-      <div class="menu-card full" data-nav="shop"><span class="mc-emoji">🏪</span><div class="mc-title">Shop</div><div class="mc-desc">Spend medals earned from spelling</div></div>
+      <div class="menu-card full ${gated?'locked':''}" data-nav="shop"><span class="mc-emoji">🏪</span><div class="mc-title">Shop</div><div class="mc-desc">Spend medals earned from spelling</div></div>
     </div>
-
-    <div style="margin-top:22px;font-weight:800;font-size:14px;color:var(--ink-soft);">Other regions</div>
-    ${state.progress.region1.guardianCleared ? `
-      <div class="region-card" id="region2Card" style="margin-top:10px;">
-        <div class="region-emoji" style="background:var(--jade);color:#fff;">2</div>
-        <div class="region-info"><h3>Region 2</h3><p>Unlocked! Tap to enter</p></div>
-      </div>
-    ` : `
-      <div class="region-card locked" style="margin-top:10px;">
-        <div class="region-emoji" style="background:var(--paper-3);">🔒</div>
-        <div class="region-info"><h3>Region 2</h3><p>Clear the Guardian Dojo to unlock</p></div>
-      </div>
-    `}
+    <div class="screen-sub" style="margin-top:18px;font-size:12px;">Level cap here: <b>${REGION_CAPS[rid]||21}</b></div>
   `;
   $('#backBtn').addEventListener('click', ()=>go('regionSelect'));
   screenEl.querySelectorAll('.menu-card[data-nav]').forEach(c=>{
     c.addEventListener('click', ()=>{
-      // Sacred Grove gates everything until the Trial of Courage is passed
-      if(region2Locked() && c.dataset.nav!=='explore' && c.dataset.nav!=='party' && c.dataset.nav!=='recover'){
+      if(gated && c.dataset.nav!=='explore' && c.dataset.nav!=='party' && c.dataset.nav!=='recover'){
         toast('Prove your courage in the Sacred Grove first.');
         return;
       }
       go(c.dataset.nav);
     });
   });
-  const r2 = $('#region2Card');
-  if(r2) r2.addEventListener('click', ()=>go('region2'));
 }
+
 
 /* ---------- SCREEN: party (full management) ---------- */
 function renderPartyStub(){
@@ -4648,7 +4705,7 @@ function renderStats(){
   const sp = SPECIES[m.species];
   const maxHp = monMaxHp(m);
   const need = fightsNeeded(m.level);
-  const capped = m.level>=REGION_LEVEL_CAP;
+  const capped = m.level>=levelCap();
   const suppCap = isSeed(m) ? 0 : proteinCap(m.species);
   const atCap = (m.supplements||0) >= suppCap;
   const nextIsFinal = (m.supplements||0) === suppCap-1;
@@ -4659,7 +4716,7 @@ function renderStats(){
   });
   if(m.equippedStone){
     const t = stoneTierDef(m.equippedStone.tier);
-    const slot = (t.id==='high') ? 'Power1' : 'Basic';
+    const slot = (t.id==='high' || t.id==='veryhigh') ? 'Power1' : 'Basic';
     const bi = moves.findIndex(x=>x.slot===slot);
     moves[bi] = { slot, name:m.equippedStone.name+' 💎', mult:t.mult,
       target:t.kind==='status'?'Status':(t.kind==='multi2'?'2 targets':'Single'),
@@ -5583,6 +5640,7 @@ function challengeResult(emoji, title, html, back){
 
 /* ---------- SCREEN: challenge ---------- */
 function renderChallenge(){
+  if((state.progress.currentRegion||1) === 2) return renderChallengeR2();
   setScreenBg('challenge');
   $('#brandSub').textContent = 'Challenge';
   const r1 = state.progress.region1;
@@ -6188,6 +6246,54 @@ function showEyeBreak(){
 /* Re-assert the lock on any render, so a reload during a break stays locked. */
 function enforceEyeBreak(){
   if(eyeBreakActive()) showEyeBreak();
+}
+
+
+/* ---------- SCREEN: Region 2 challenges (the Water Dojo) ---------- */
+function waterDojoCleared(id){ return ((state.progress.region2||{}).waterDojo||[]).includes(id); }
+function nextWaterStage(){ return WATER_DOJO_STAGES.find(st=>!waterDojoCleared(st.id)); }
+
+function renderChallengeR2(){
+  setScreenBg('challenge');
+  $('#brandSub').textContent = 'Challenge';
+  const done = ((state.progress.region2||{}).waterDojo||[]).length;
+  const nxt = nextWaterStage();
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Region</button>
+    <div class="screen-title">Challenges</div>
+    <div class="screen-sub">Region 2 · the Water Dojo</div>
+    <div class="challenge-card" id="cWater">
+      ${npcPortrait((nxt||{}).id || 'water_master', '🌊', 50, '#3b7ea1')}
+      <div style="flex:1;">
+        <div class="cc-title">Water Dojo ${done>=4?'<span class="clear-tag">Cleared</span>':''}</div>
+        <div class="cc-desc">${done>=4
+          ? 'All four challengers beaten.'
+          : `${done}/4 beaten · next: <b>${escapeHtml((nxt||{}).label||'')}</b>`}</div>
+      </div>
+    </div>
+    <div class="phase-flag">More Region 2 challenges arrive with the next story chapter.</div>
+  `;
+  $('#backBtn').addEventListener('click', ()=>go('region'));
+  const c = $('#cWater');
+  if(c) c.addEventListener('click', ()=>{
+    const st = nextWaterStage();
+    if(!st){ toast('You have already cleared the Water Dojo.'); return; }
+    if(!ensurePool()) return;
+    beginBattle({ isNpc:true, name:st.label, npcId:st.id,
+      waves: st.waves.map(w=>w.map(e=>({...e, ai:st.ai, nerfed:false}))),
+      onWin:()=>onWaterStageWin(st) });
+  });
+}
+async function onWaterStageWin(stage){
+  const r2 = state.progress.region2;
+  r2.waterDojo = r2.waterDojo || [];
+  if(!r2.waterDojo.includes(stage.id)) r2.waterDojo.push(stage.id);
+  if(stage.id==='water_master') r2.challengeDone = true;
+  await saveProfile();
+  const nxt = nextWaterStage();
+  challengeResult('🌊', stage.label+' defeated!',
+    nxt ? `"Good. <b>${escapeHtml(nxt.label)}</b> is waiting."` : 'The Water Dojo is yours. The Rocky Caverns lie open.',
+    'challenge');
 }
 
 /* ---------- SCREEN: region select ---------- */
