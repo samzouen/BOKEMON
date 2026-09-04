@@ -2919,16 +2919,30 @@ function makeEnemy(species, level, opts){
   const sp = SPECIES[species];
   const nerfed = (opts.nerfed!==undefined) ? opts.nerfed : (sp.tier==='wild');
   const rate = nerfed ? sp.nerfedRate : sp.rate;
-  const stage = (sp.evo||[]).filter(lv=>level>=lv).length;
+  /* Wild encounters no longer auto-evolve at the threshold. Reaching the level
+     only makes the evolved form POSSIBLE, so a zone keeps a mix of forms:
+       evo1 reached      -> 67% base, 33% stage 1
+       evo2 also reached -> 20% base, 67% stage 1, 13% stage 2
+     Evolved wilds also fight unpredictably (see enemyMoveFor). */
+  const maxStage = (sp.evo||[]).filter(lv=>level>=lv).length;
+  let stage = maxStage;
+  if(opts.wildRoll && maxStage > 0){
+    const r = Math.random();
+    if(maxStage === 1)      stage = r < 0.67 ? 0 : 1;
+    else                    stage = r < 0.20 ? 0 : (r < 0.87 ? 1 : 2);
+  }
   let stat = Math.floor((rate/5)*level) + Math.floor((stage + (sp.bonusStages||0))*rate*(sp.evoMult||1));
   if(opts.supplements) stat += Math.floor((rate/5)*opts.supplements);
   const hp = Math.floor(stat * hpScale(level));
   // AI: 'basic' | 'power1' | 'best'. Default: wild=basic, but electric/legendary open with Power1.
   let ai = opts.ai || ((species==='electric_starter' || sp.tier==='legendary') ? 'power1' : 'basic');
+  // An evolved wild picks from its whole moveset each turn
+  if(opts.wildRoll && stage > 0 && !opts.ai) ai = 'random';
   const avail = MOVES[species].filter(m=>m[1]!=null && level>=m[5] && m[2]!=null); // damaging + unlocked
   const bySlot = s=> avail.find(m=>m[0]===s);
   let move;
-  if(ai==='best') move = bySlot('Max') || bySlot('Ultimate') || bySlot('Power2') || bySlot('Power1') || bySlot('Basic');
+  if(ai==='random') move = avail[Math.floor(Math.random()*avail.length)] || bySlot('Basic');
+  else if(ai==='best') move = bySlot('Max') || bySlot('Ultimate') || bySlot('Power2') || bySlot('Power1') || bySlot('Basic');
   else if(ai==='power2') move = bySlot('Power2') || bySlot('Power1') || bySlot('Basic');
   else if(ai==='power1') move = bySlot('Power1') || bySlot('Basic');
   else move = bySlot('Basic');
@@ -2987,7 +3001,7 @@ function startWildEncounter(encOpts){
       let choices = (ZONE_WILD[zoneId] || REGION1_WILD).slice();
       if(ui.fledFrom){ const f=choices.filter(s=>s!==ui.fledFrom); if(f.length) choices=f; ui.fledFrom=null; }
       wave = [];
-      for(let i=0;i<size;i++){ wave.push({ species: choices[Math.floor(Math.random()*choices.length)], level:lvl }); }
+      for(let i=0;i<size;i++){ wave.push({ species: choices[Math.floor(Math.random()*choices.length)], level:lvl, wildRoll:true }); }
     }
   }
   beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Wild encounter', silentIntro: !!encOpts.silentIntro });
@@ -3012,7 +3026,7 @@ function beginBattle(config){
 }
 function loadWave(i){
   const b = ui.battle;
-  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss }));
+  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll }));
   // Leech Seed is a FIELD effect: it re-roots on every new wave.
   if(b.leechSeed) b.enemies.forEach(e=> addEStatus(e, { type:'leechSeed' }));
   b.enemies.forEach(e=>{ if(!state.encounteredSpecies.includes(e.species)) state.encounteredSpecies.push(e.species); });
@@ -3861,8 +3875,13 @@ function resolveStatusMove(mv, mon, target, correct){
   }, 330);
 }
 
+/* ---------- ENEMY TURN ----------
+   Enemies now strike ONE AT A TIME rather than as a single lump, so a crowded
+   wave builds pressure blow by blow. If the active monster faints partway
+   through, the remaining attackers do NOT get their swings — the player sends
+   out a replacement and the turn passes back to them. */
 function enemyTurn(){
-  const b=ui.battle, mon=activeMon();
+  const b = ui.battle;
   const attackers = livingEnemies();
 
   // Ice Tomb: frozen enemies lose their turn; tick the counter and thaw at zero
@@ -3880,130 +3899,152 @@ function enemyTurn(){
   });
 
   if(acting.length===0){
-    battleMsg(frozenCount ? 'The frozen enemy can\'t move!' : 'The enemy hesitates!');
+    battleMsg(frozenCount ? "The frozen enemies can't move!" : 'The enemy hesitates!');
     renderStatusBadges();
-    b.switchedThisTurn=false;
-    setTimeout(()=>{ b.phase='player'; renderBattle(); battleMsg('Choose a move.'); }, 900);
-    return;
+    return endEnemyRound();
   }
 
-  /* Discombobulate rolls first — it can make the attack miss outright, be
-     countered, or land at half strength. The guaranteed first use is a halving. */
-  const dis = acting[0] && getEStatus(acting[0],'discombobulate');
-  let disHalve = false, disMiss = false, disCounter = false;
+  b.attackQueue = acting;
+  runEnemyAttack(0);
+}
+
+/* An evolved wild monster fights unpredictably: it picks from its whole
+   unlocked moveset each turn instead of always using the same attack. */
+function enemyMoveFor(e){
+  if(e.ai !== 'random') return e.move;
+  const sp = SPECIES[e.species];
+  const avail = MOVES[e.species].filter(m=>m[1]!=null && e.level>=m[5] && m[2]!=null);
+  if(!avail.length) return e.move;
+  return avail[Math.floor(Math.random()*avail.length)];
+}
+
+function runEnemyAttack(i){
+  const b = ui.battle;
+  const mon = activeMon();
+
+  // The active monster went down mid-sequence: stop here, no free swings.
+  if(mon.currentHp <= 0){
+    b.attackQueue = null;
+    return setTimeout(onMonFainted, 650);
+  }
+  if(livingEnemies().length === 0){ b.attackQueue = null; return setTimeout(onWaveCleared, 650); }
+  if(!b.attackQueue || i >= b.attackQueue.length) return endEnemyRound();
+
+  const e = b.attackQueue[i];
+  if(!e || e.hp <= 0) return runEnemyAttack(i+1);
+
+  const idx  = b.enemies.indexOf(e);
+  const move = enemyMoveFor(e);
+  const name = SPECIES[e.species].name;
+
+  /* Per-attack rolls: Discombobulate can make this one miss, be countered, or
+     land at half; Mirage can make it miss. Both are rolled per attacker now. */
+  const dis = getEStatus(e,'discombobulate');
+  let disHalve=false, disMiss=false, disCounter=false;
   if(dis){
     if(dis.guaranteed){
-      disHalve = true;
-      dis.guaranteed = false;
+      disHalve = true; dis.guaranteed = false;
       if(b.fieldStatus && b.fieldStatus.discombobulate) b.fieldStatus.discombobulate.guaranteed = false;
-      b.enemies.forEach(e=>{ const st=getEStatus(e,'discombobulate'); if(st) st.guaranteed = false; });
+      b.enemies.forEach(x=>{ const st=getEStatus(x,'discombobulate'); if(st) st.guaranteed = false; });
     } else {
       const r = Math.random();
-      if(r < 0.10) disCounter = true;
-      else if(r < 0.20) disMiss = true;
-      else if(r < 0.30) disHalve = true;
+      if(r<0.10) disCounter = true; else if(r<0.20) disMiss = true; else if(r<0.30) disHalve = true;
     }
   }
-
-  // Mirage: the first attack after casting always misses; 20% thereafter
   const mir = getPStatus(0,'mirage');
-  const mirageHit = disMiss || (mir && (mir.guaranteed || Math.random() < (mir.chance||0.20)));
-  if(mirageHit){
-    if(mir && mir.guaranteed) mir.guaranteed = false;
-    battleMsg(disMiss ? '🌀 Confused — the attack went wide!' : '💨 The mirage shimmers — the attack missed!');
-    b.enemies.forEach((e,i)=>{ if(e.hp>0) bob(document.getElementById('enemyBob-'+i), -1); });
-    b.switchedThisTurn=false;
-    setTimeout(()=>{ b.phase='player'; renderBattle(); battleMsg('Choose a move.'); }, 1100);
+  const evaded = disMiss || (mir && (mir.guaranteed || Math.random() < (mir.chance||0.20)));
+  if(mir && mir.guaranteed && evaded) mir.guaranteed = false;
+
+  bob(document.getElementById('enemyBob-'+idx), -1);
+  battleMsg(`${name} used ${move[1]}!`);
+
+  if(evaded){
+    setTimeout(()=>{
+      battleMsg(disMiss ? `🌀 ${name} is confused — the attack went wide!`
+                        : `💨 The mirage shimmers — ${name} missed!`);
+      setTimeout(()=> runEnemyAttack(i+1), 700);
+    }, 300);
     return;
   }
 
-  let total=0;
-  acting.forEach(e=>{ total += computeDamage(e.move[2], e.atk, e, monRef(mon), false); });
-  if(disHalve) total = Math.ceil(total*0.5);
-
-  const counter = getPStatus(0,'counter');
-  const spikes  = getPStatus(0,'spikeArmour');
-
-  battleMsg('Enemy attacks!');
-  acting.forEach(e=>{ const i=b.enemies.indexOf(e); bob(document.getElementById('enemyBob-'+i), -1); });
-  if(acting[0]) playEffect(acting[0].move[1], { type: acting[0].types[0], at:'playerBob' });
+  playEffect(move[1], { type: e.types[0], at:'playerBob' });
 
   setTimeout(()=>{
-    let msg = '';
+    let dmg = computeDamage(move[2], e.atk, e, monRef(mon), false);
+    if(disHalve) dmg = Math.ceil(dmg*0.5);
+
+    const counter = getPStatus(0,'counter');
+    const spikes  = getPStatus(0,'spikeArmour');
     const counterFires = disCounter || (counter && (counter.guaranteed || Math.random() < (counter.chance||0.10)));
+    let msg = '';
+
     if(counterFires){
-      // Negates the damage entirely and reflects 50%. The guaranteed first use
-      // is spent, but the stance itself persists for the rest of the battle.
       if(counter && counter.guaranteed) counter.guaranteed = false;
-      const back = Math.ceil(total*0.5);
-      const t = acting[0];
-      const idx = b.enemies.indexOf(t);
-      const oldHp=t.hp, newHp=Math.max(0,t.hp-back);
-      t.hp=newHp;
+      const back = Math.ceil(dmg*0.5);
+      const oldHp=e.hp, newHp=Math.max(0,e.hp-back);
+      e.hp = newHp;
       flashHit(document.getElementById('enemy-'+idx));
-      drainHp('enemyHp-'+idx, oldHp, newHp, t.maxHp);
+      drainHp('enemyHp-'+idx, oldHp, newHp, e.maxHp);
       if(newHp<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
-      msg = `🛡️ Counter! Damage negated and ${back} reflected back.`;
+      msg = `🛡️ Countered! ${back} reflected back at ${name}.`;
     } else {
       const oldHp = mon.currentHp;
-      mon.currentHp = Math.max(0, mon.currentHp-total);
+      mon.currentHp = Math.max(0, mon.currentHp - dmg);
       flashHit($('#playerBob'));
       playSfx('hit_taken');
       drainHp('playerHp', oldHp, mon.currentHp, monMaxHp(mon));
-      msg = `Enemy dealt ${total} damage!`;
+      msg = `${name} dealt ${dmg} damage!`;
 
-      // Spike Armour retaliates against each attacker
       if(spikes && mon.currentHp>0){
         const back = Math.ceil(0.2*monAtk(mon));
-        acting.forEach(e=>{
-          const idx=b.enemies.indexOf(e);
-          const oh=e.hp, nh=Math.max(0,e.hp-back);
-          e.hp=nh;
-          flashHit(document.getElementById('enemy-'+idx));
-          drainHp('enemyHp-'+idx, oh, nh, e.maxHp);
-          if(nh<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
-        });
+        const oh=e.hp, nh=Math.max(0,e.hp-back);
+        e.hp = nh;
+        flashHit(document.getElementById('enemy-'+idx));
+        drainHp('enemyHp-'+idx, oh, nh, e.maxHp);
+        if(nh<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
         msg += ` Spikes struck back for ${back}!`;
       }
     }
-    // Life-stealing moves (Giga Drain) restore the attacker from its own ATK
-    acting.forEach(e=>{
-      const pct = LIFESTEAL[e.move && e.move[1]];
-      if(pct && e.hp>0){
-        const before = e.hp;
-        e.hp = Math.min(e.maxHp, e.hp + Math.ceil(pct*e.atk));
-        if(e.hp>before){
-          const idx = b.enemies.indexOf(e);
-          drainHp('enemyHp-'+idx, before, e.hp, e.maxHp);
-          msg += ` ${SPECIES[e.species].name} drained ${e.hp-before} HP!`;
-        }
+
+    // Life-stealing moves restore the attacker from its own ATK
+    const pct = LIFESTEAL[move[1]];
+    if(pct && e.hp>0){
+      const before = e.hp;
+      e.hp = Math.min(e.maxHp, e.hp + Math.ceil(pct*e.atk));
+      if(e.hp>before){
+        drainHp('enemyHp-'+idx, before, e.hp, e.maxHp);
+        msg += ` ${name} drained ${e.hp-before} HP!`;
       }
-    });
-    saveProfile();
-    renderStatusBadges();
-    logBattle(`Enemy turn: ${msg}`);
-    // arena auto-heal: restore the fighter to full after taking a hit
-    if(ui.battle.autoHeal && mon.currentHp>0 && mon.currentHp<monMaxHp(mon)){
+    }
+
+    // arena convenience
+    if(b.autoHeal && mon.currentHp>0 && mon.currentHp<monMaxHp(mon)){
       const max = monMaxHp(mon), was = mon.currentHp;
       mon.currentHp = max;
       drainHp('playerHp', was, max, max);
-      logBattle(`  auto-heal: ${was} → ${max}`);
       msg += ' (auto-healed)';
     }
+
+    saveProfile();
+    renderStatusBadges();
+    logBattle(`${name} → ${msg}`);
     battleMsg(msg);
-    setTimeout(()=>{
-      if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
-      if(mon.currentHp<=0){ setTimeout(onMonFainted,700); }
-      else {
-        b.switchedThisTurn=false;
-        const gone = tickStatuses();          // one round has passed
-        setTimeout(()=>{
-          b.phase='player'; renderBattle();
-          battleMsg(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
-        },850);
-      }
-    }, 850);
+
+    setTimeout(()=> runEnemyAttack(i+1), 850);
   }, 330);
+}
+
+function endEnemyRound(){
+  const b = ui.battle;
+  b.attackQueue = null;
+  if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
+  if(activeMon().currentHp<=0){ setTimeout(onMonFainted,700); return; }
+  b.switchedThisTurn = false;
+  const gone = tickStatuses();          // one full round has passed
+  setTimeout(()=>{
+    b.phase='player'; renderBattle();
+    battleMsg(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
+  }, 850);
 }
 function onMonFainted(){
   const alive=battleParty().filter(m=>m.currentHp>0);
