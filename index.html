@@ -883,33 +883,39 @@ const SPECIES = {
 /* Move tables live here for later phases; unused in Phase 1 but embedded now
    so battle/stats pages can read them without another data pass. */
 const MOVES = {
-  /* [slot, name, multiplier, target, words, unlockLevel]
-     'Max' ultimates arrive at 51 for starters, elites and legendaries — an
-     upgraded version of the original, so progression keeps staggering. */
-  water_starter:   [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bubble',0.4,'Single',4,5],['Power2','Surf',0.6,'AOE',8,21],['Ultimate','Waterfall',1.5,'Single',10,41],['Max','Waterfall Max',2.0,'AOE',12,51]],
-  fire_starter:    [['Basic','Scratch',0.2,'Single',2,5],['Power1','Ember',0.4,'Single',4,5],['Power2','Flamethrower',0.6,'AOE',8,21],['Ultimate','Fire Blast',1.5,'Single',10,41],['Max','Fire Blast Max',2.0,'AOE',12,51]],
-  grass_starter:   [['Basic','Tackle',0.2,'Single',2,5],['Power1','Vine Whip',0.4,'Single',4,5],['Power2','Razor Leaf',0.6,'AOE',8,21],['Ultimate','Solar Beam',1.5,'Single',10,41],['Max','Solar Beam Max',2.0,'AOE',12,51]],
-  ground_starter:  [['Basic','Tackle',0.2,'Single',2,5],['Power1','Body Slam',0.4,'Single',4,5],['Power2','Earthquake',0.6,'AOE',8,21],['Ultimate','Horn Drill',1.5,'Single',10,41],['Max','Horn Drill Max',2.0,'AOE',12,51]],
-  electric_starter:[['Basic','Tackle',0.2,'Single',2,20],['Power1','Thundershock',0.4,'Single',4,20],['Power2','Thunderbolt',0.6,'AOE',8,21],['Ultimate','Thunder',1.5,'Single',10,41],['Max','Thunder Max',2.0,'AOE',12,51]],
+  /* [slot, name, multiplier, target, words, unlockLevel, extras?]
+     extras: { scale:{per,max} } — keeps accepting words past the requirement,
+              adding `per` to the multiplier each time, up to `max`.
+             { hits:n } — the total damage lands as n separate strikes on the
+              same target, so per-hit effects (Leech Seed) trigger n times. */
+  water_starter:   [['Basic','Tackle',0.2,'Single',2,1],['Power1','Bubble',0.4,'Single',4,5],['Power2','Surf',0.6,'AOE',8,21],['Ultimate','Waterfall',1.25,'Single',8,41],['Max','Waterfall Max',1.5,'Single',8,51]],
+  fire_starter:    [['Basic','Scratch',0.2,'Single',2,1],['Power1','Ember',0.4,'Single',4,5],['Power2','Flamethrower',0.6,'AOE',8,21],['Ultimate','Fire Blast',1.25,'Single',8,41],['Max','Fire Blast Max',1.5,'Single',8,51]],
+  grass_starter:   [['Basic','Tackle',0.2,'Single',2,1],['Power1','Vine Whip',0.4,'Single',4,5],['Power2','Razor Leaf',0.6,'AOE',8,21],['Ultimate','Solar Beam',1.25,'Single',8,41],['Max','Solar Beam Max',1.5,'Single',8,51]],
+  ground_starter:  [['Basic','Tackle',0.2,'Single',2,1],['Power1','Body Slam',0.4,'Single',4,5],['Power2','Earthquake',0.6,'AOE',8,21],['Ultimate','Horn Drill',1.25,'Single',8,41],['Max','Horn Drill Max',1.5,'Single',8,51]],
+  electric_starter:[['Basic','Tackle',0.2,'Single',2,1],['Power1','Thundershock',0.4,'Single',4,5],['Power2','Thunderbolt',0.6,'AOE',8,21],['Ultimate','Thunder',1.25,'Single',8,41],['Max','Thunder Max',1.5,'Single',8,51]],
 
-  rat:             [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bite',0.4,'Single',4,5],['Power2','Fury Swipes',0.6,'AOE',8,11],['Ultimate','Super Fang',1.5,'Single',10,25]],
-  bird:            [['Basic','Peck',0.2,'Single',2,5],['Power1','Claw',0.4,'Single',4,5],['Power2','Gust',0.6,'AOE',8,11],['Ultimate','Aerial Ace',1.5,'Single',10,25]],
-  moth:            [['Basic','Tackle',0.2,'Single',2,5],['Power1','Sting',0.4,'Single',4,5],['Power2','Poison Powder',0.6,'AOE',8,11],['Ultimate','Revitalise',null,'Support',14,25]],
-  earth_snake:     [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bite',0.4,'Single',4,5],['Power2','Tail Whip',0.6,'AOE',8,11],['Ultimate','Constrict',1.5,'Single',10,25]],
+  rat:             [['Basic','Tackle',0.2,'Single',2,1],['Power1','Bite',0.4,'Single',4,5],['Power2','Fury Swipes',0.6,'AOE',8,11],['Ultimate','Super Fang',1.25,'Single',8,25]],
+  bird:            [['Basic','Peck',0.2,'Single',2,1],['Power1','Claw',0.4,'Single',4,5],['Power2','Gust',0.6,'AOE',8,11],['Ultimate','Aerial Ace',1.25,'Single',8,25]],
+  moth:            [['Basic','Tackle',0.2,'Single',2,1],['Power1','Sting',0.4,'Single',4,5],['Power2','Poison Powder',0.6,'AOE',8,11],['Ultimate','Revitalise',null,'Support',10,25]],
+  earth_snake:     [['Basic','Tackle',0.2,'Single',2,1],['Power1','Bite',0.4,'Single',4,5],['Power2','Tail Whip',0.6,'AOE',8,11],['Ultimate','Constrict',1.25,'Single',8,25]],
 
-  sparrow:         [['Basic','Peck',0.2,'Single',2,5],['Power1','Quick Attack',0.4,'Single',4,5],['Power2','Whirlwind',0.6,'AOE',8,18],['Ultimate','Sky Dive',1.5,'Single',10,28]],
-  squirrel:        [['Basic','Scratch',0.2,'Single',2,5],['Power1','Headbutt',0.4,'Single',4,5],['Power2','Acorn Barrage',0.6,'AOE',8,18],['Ultimate','Tail Slam',1.5,'Single',10,28]],
-  deer:            [['Basic','Tackle',0.2,'Single',2,5],['Power1','Horn Jab',0.4,'Single',4,5],['Power2','Stampede',0.6,'AOE',8,18],['Ultimate','Antler Charge',1.5,'Single',10,28]],
+  sparrow:         [['Basic','Peck',0.2,'Single',2,1],['Power1','Quick Attack',0.4,'Single',4,5],['Power2','Whirlwind',0.6,'AOE',8,18],['Ultimate','Sky Dive',1.25,'Single',8,28]],
+  squirrel:        [['Basic','Scratch',0.2,'Single',2,1],['Power1','Headbutt',0.4,'Single',4,5],['Power2','Acorn Barrage',0.6,'AOE',8,18],['Ultimate','Spin Slam',1.25,'Single',8,28]],
+  deer:            [['Basic','Tackle',0.2,'Single',2,1],['Power1','Horn Jab',0.4,'Single',4,5],['Power2','Stampede',0.6,'AOE',8,18],['Ultimate','Antler Charge',1.25,'Single',8,28]],
 
-  golem:           [['Basic','Rock Toss',0.2,'Single',2,5],['Power1','Boulder Punch',0.4,'Single',4,5],['Power2','Rockslide',0.6,'AOE',8,11],['Ultimate','Seismic Slam',1.5,'Single',10,25]],
-  bat:             [['Basic','Bite',0.2,'Single',2,5],['Power1','Wing Slash',0.4,'Single',4,5],['Power2','Screech',0.6,'AOE',8,11],['Ultimate','Night Swoop',1.5,'Single',10,25]],
+  golem:           [['Basic','Rock Toss',0.2,'Single',2,1],['Power1','Boulder Punch',0.4,'Single',4,5],['Power2','Rockslide',0.6,'AOE',8,18],['Ultimate','Seismic Slam',1.25,'Single',8,28]],
+  bat:             [['Basic','Bite',0.2,'Single',2,1],['Power1','Wing Slash',0.4,'Single',4,5],['Power2','Screech',0.6,'AOE',8,18],['Ultimate','Night Swoop',1.25,'Single',8,28]],
 
-  starfish:        [['Basic','Slap',0.2,'Single',2,5],['Power1','Water Gun',0.4,'Single',4,5],['Power2','Spiral Spray',0.6,'AOE',8,18],['Ultimate','Tidal Star',1.5,'Single',10,28]],
-  seahorse:        [['Basic','Tackle',0.2,'Single',2,5],['Power1','Bubble Jet',0.4,'Single',4,5],['Power2','Whirlpool',0.6,'AOE',8,11],['Ultimate','Aqua Lance',1.5,'Single',10,25]],
-  duck:            [['Basic','Peck',0.2,'Single',2,5],['Power1','Splash Wing',0.4,'Single',4,5],['Power2','Downpour',0.6,'AOE',8,18],['Ultimate','Torrent Dive',1.5,'Single',10,28]],
+  starfish:        [['Basic','Slap',0.2,'Single',2,1],['Power1','Water Gun',0.4,'Single',4,5],['Power2','Spiral Spray',0.6,'AOE',8,18],['Ultimate','Tidal Star',1.25,'Single',8,28]],
+  seahorse:        [['Basic','Tackle',0.2,'Single',2,1],['Power1','Bubble Jet',0.4,'Single',4,5],['Power2','Whirlpool',0.6,'AOE',8,18],['Ultimate','Aqua Lance',1.25,'Single',8,28]],
+  duck:            [['Basic','Peck',0.2,'Single',2,1],['Power1','Splash Wing',0.4,'Single',4,5],['Power2','Downpour',0.6,'AOE',8,18],['Ultimate','Torrent Dive',1.25,'Single',8,28]],
 
-  phoenix:         [['Basic','Ember',0.3,'Single',4,25],['Power1','Firestorm',0.6,'AOE',8,25],['Power2','Nova',1.0,'AOE',12,35],['Ultimate','Incinerate',1.4,'Single',10,51],['Max','Incinerate Max',1.9,'AOE',14,51]],
-  forest_fairy:    [['Basic','Fairy Wind',0.4,'Single',4,100],['Power1','Giga Drain',0.8,'Single',8,100],['Power2',"Nature's Wrath",0.7,'AOE',12,100],['Ultimate','Verdant Judgement',1.6,'Single',10,100]],
+  phoenix:         [['Basic','Ember',0.3,'Single',4,1],['Power1','Firestorm',0.6,'AOE',8,5],['Power2','Nova',1.0,'AOE',10,35],
+                    ['Ultimate','Incinerate',1.25,'Single',10,45,{scale:{per:0.15,max:2.0}}],
+                    ['Max','Incinerate Max',1.5,'Single',10,55,{scale:{per:0.15,max:2.5}}]],
+  forest_fairy:    [['Basic','Fairy Wind',0.4,'Single',2,1],['Power1','Giga Drain',0.8,'Single',5,5],['Power2','Overgrowth',0.7,'AOE',8,35],
+                    ['Ultimate','Verdant Wrath',1.4,'Single',10,45,{hits:2}],
+                    ['Max','Verdant Wrath Max',1.8,'Single',10,55,{hits:3}]],
   sacred_seed:     [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 };
 
@@ -2983,15 +2989,17 @@ function unlockedMoves(m){
      reached it takes over the Ultimate slot entirely. */
   const maxMv = MOVES[m.species].find(mv=>mv[0]==='Max' && mv[1]!=null && m.level>=mv[5]);
   const base = MOVES[m.species].filter(mv=>mv[0]!=='Max').map(mv=>{
-    let [slot,name,mult,target,words,unlock]=mv;
-    if(slot==='Ultimate' && maxMv){ [,name,mult,target,words,unlock] = maxMv; }
-    return { slot,name,mult,target,words,unlock, available:(name!=null && m.level>=unlock), isStone:false };
+    let [slot,name,mult,target,words,unlock,extra]=mv;
+    if(slot==='Ultimate' && maxMv){ [,name,mult,target,words,unlock,extra] = maxMv; }
+    const e = extra || {};
+    return { slot,name,mult,target,words,unlock, scale:e.scale||null, hits:e.hits||0,
+             available:(name!=null && m.level>=unlock), isStone:false };
   });
   /* Equipped stone slots in by tier: High-tier "twin" skills override POWER1
      (they're a step above a basic swing), everything else overrides Basic. */
   if(m.equippedStone){
     const t = stoneTierDef(m.equippedStone.tier);
-    const slot = (t.id==='high' || t.id==='veryhigh') ? 'Power1' : 'Basic';
+    const slot = (t.id==='high') ? 'Power1' : 'Basic';
     const bi = base.findIndex(mv=>mv.slot===slot);
     const used = t.id==='veryhigh' && ui.battle && ui.battle.usedVeryHigh[m.uid];
     if(bi>=0) base[bi] = { slot, name:m.equippedStone.name, mult:t.mult,
@@ -3510,12 +3518,17 @@ function applySelfDamage(mv, mon){
 
 function runMoveQuiz(mv, target){
   const carry = ui.battle ? (ui.battle.wordCarry||0) : 0;
-  const words = pickWords(Math.max(0, mv.words - carry));
+  // A scaling move keeps going past its requirement, gaining power each word,
+  // until the player slips or the cap is reached.
+  const ceilWords = mv.scale
+    ? mv.words + Math.ceil((mv.scale.max - mv.mult) / mv.scale.per)
+    : mv.words;
+  const words = pickWords(Math.max(0, ceilWords - carry));
   startQuiz({
     title:mv.name,
-    subtitle:`${mv.isStone?stoneTierDef(mv.stoneTier).label+' move':(mv.slot==='Basic'?'Basic move':mv.slot)} · write ${mv.words} words to power it up`,
+    subtitle:`${mv.isStone?stoneTierDef(mv.stoneTier).label+' move':(mv.slot==='Basic'?'Basic move':mv.slot)} · write ${mv.words} words to power it up${mv.scale?` — keep going for up to ${mv.scale.max}× !`:''}`,
     words, stopAtFirstMiss:true, lockExit:true,
-    wordTarget: mv.words,
+    wordTarget: ceilWords,
     startingWords: carry,
     onComplete:(results)=>resolveBattleMove(mv,target,results),
     onExit:()=>{ go('battle'); },
@@ -3549,10 +3562,18 @@ function resolveBattleMove(mv, target, results){
   if(mv.target==='MultiHit') return resolveMultiHit(mv, mon, correct);
 
   // Single / AOE (standard species moves + Low/Mid stone moves)
-  const factor = mv.isStone ? (correct>=mv.words ? mv.mult : 0) : moveFactor(mv.slot, mv.mult, mv.words, correct);
+  let factor = mv.isStone ? (correct>=mv.words ? mv.mult : 0) : moveFactor(mv.slot, mv.mult, mv.words, correct);
+  if(mv.scale && correct > mv.words && factor > 0){
+    factor = Math.min(mv.scale.max, mv.mult + mv.scale.per*(correct - mv.words));
+  }
   if(factor<=0){ playSfx('move_miss'); battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
   const atk=monAtk(mon);
   const targets = mv.target==='AOE' ? livingEnemies() : [target];
+  // A `hits` move lands its total damage as several strikes on ONE target, so
+  // per-hit effects (Leech Seed, drains) trigger for each.
+  if(mv.hits && mv.hits > 1 && targets[0]){
+    return resolveSplitHits(mv, mon, factor, atk, targets[0]);
+  }
   const hits = targets.map(t=>{
     const dmg = computeDamage(factor, atk, monRef(mon), t, true);
     const idx=ui.battle.enemies.indexOf(t);
@@ -3623,6 +3644,31 @@ function afterPlayerAttack(mon, hits){
 function finishPlayerTurn(){
   if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
   setTimeout(enemyTurn,850);
+}
+
+/* An Ultimate that strikes the same target repeatedly. */
+function resolveSplitHits(mv, mon, factor, atk, target){
+  const n = mv.hits;
+  const per = factor / n;
+  const hits = [];
+  let simHp = target.hp;
+  for(let i=0;i<n;i++){
+    if(simHp<=0) break;
+    const dmg = computeDamage(per, atk, monRef(mon), target, true);
+    const oldHp = simHp, newHp = Math.max(0, simHp-dmg);
+    simHp = newHp;
+    hits.push({ t:target, idx:ui.battle.enemies.indexOf(target), dmg, oldHp, newHp });
+  }
+  logBattle(`${displayName(mon)} used ${mv.name} — ${hits.length} strikes on ${SPECIES[target.species].name}`);
+  hits.forEach((h,i)=>logBattle(`  strike ${i+1}: ${h.dmg} (${h.oldHp}→${h.newHp})`));
+  battleMsg(`${mv.name}!`);
+  bob($('#playerBob'), +1);
+  playEffect(mv.name, { type: SPECIES[mon.species].types[0], at:'enemy-'+hits[0].idx });
+  setTimeout(()=> playSuccessiveHits(hits, 0, ()=>{
+    saveProfile();
+    battleMsg(`${mv.name} struck ${hits.length} times!`);
+    afterPlayerAttack(mon, hits);
+  }, true), 330);
 }
 
 /* High tier: hit 2 different living enemies at 0.8x each (or the single enemy once if only 1 exists) */
@@ -3889,9 +3935,17 @@ function onPlayerDefeated(){
   },1000);
 }
 /* ---------- XP / LEVELING / EVOLUTION ---------- */
-/* Level cap rises with the region: the highest zone cap you can currently reach. */
-const REGION_CAPS = { 1:21, 2:46, 3:60 };
-function levelCap(){ return REGION_CAPS[state.progress.currentRegion] || 21; }
+/* The cap belongs to the ZONE you're standing in, not the region — Rocky
+   Caverns lets you push past the rest of Emerald March. Away from any zone,
+   the region's best available cap applies. */
+const REGION_CAPS = { 1:21, 2:41, 3:60 };
+function levelCap(){
+  const z = ui.currentZone && ui.currentZone.id;
+  if(z && ZONE_LEVELS[z]) return ZONE_LEVELS[z].max;
+  const rid = (state.progress && state.progress.currentRegion) || 1;
+  const zones = (REGION_ZONES[rid]||[]).map(x=>(ZONE_LEVELS[x.id]||{}).max||0);
+  return Math.max(REGION_CAPS[rid]||21, ...zones, 0) || 21;
+}
 /* ---------- XP PACING MODES ----------
    Selectable (password-gated) from the Spelling List screen. `tier` counts
    5-level bands: 0 = Lv1-5, 1 = Lv6-10, 2 = Lv11-15, ...  */
@@ -4716,7 +4770,7 @@ function renderStats(){
   });
   if(m.equippedStone){
     const t = stoneTierDef(m.equippedStone.tier);
-    const slot = (t.id==='high' || t.id==='veryhigh') ? 'Power1' : 'Basic';
+    const slot = (t.id==='high') ? 'Power1' : 'Basic';
     const bi = moves.findIndex(x=>x.slot===slot);
     moves[bi] = { slot, name:m.equippedStone.name+' 💎', mult:t.mult,
       target:t.kind==='status'?'Status':(t.kind==='multi2'?'2 targets':'Single'),
@@ -5090,7 +5144,7 @@ function openStoneDetail(uid){
         ${stoneDescription(s)}
       </div>
       <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:8px;">
-        Teachable to <b>${s.type}</b>-type monsters${isUltra?' · adds a 5th move button':' · replaces the Basic move'}
+        Teachable to <b>${s.type}</b>-type monsters${isUltra?' · adds a 5th move button':' · replaces the '+(s.tier==='high'?'Power1':'Basic')+' move'}
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
@@ -5159,7 +5213,7 @@ function chooseStoneRecipient(s){
   ov.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:75;display:flex;align-items:flex-end;justify-content:center;';
   ov.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;max-height:75vh;overflow-y:auto;">
     <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;margin-bottom:4px;">Teach ${escapeHtml(s.name)} to…</div>
-    <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-bottom:12px;">${isUltra?'Adds a 5th move button.':'Replaces the monster\'s Basic move.'}</div>
+    <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-bottom:12px;">${isUltra?'Adds a 5th move button.':`Replaces the monster's ${s.tier==='high'?'Power1':'Basic'} move.`}</div>
     ${eligible.map(m=>{
       const cur = isUltra ? m.ultraStone : m.equippedStone;
       return `<button class="btn btn-ghost st-opt" data-uid="${m.uid}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;">
@@ -6299,7 +6353,7 @@ async function onWaterStageWin(stage){
 /* ---------- SCREEN: region select ---------- */
 const REGIONS = [
   { id:1, name:'Riverside Meadow', desc:'Where your journey began.', unlocked:()=>true },
-  { id:2, name:'Sacred Grove & Beyond', desc:'Old woods, older rules.',
+  { id:2, name:'Emerald March', desc:'Old woods, older rules.',
     unlocked:()=>!!(state.progress.region1||{}).guardianCleared },
   { id:3, name:'Region 3', desc:'Not yet reachable.', unlocked:()=>false },
 ];
