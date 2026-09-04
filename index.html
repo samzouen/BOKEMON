@@ -875,6 +875,23 @@ const SPECIES = {
   duck:            { name:'Duck',        tier:'wild',      types:['Water'],         rate:7,  nerfedRate:5,  base:5,   evo:[18],    evoMult:1.5, color:'#c9b45e', glyph:'鸭' },
 
   /* --- Legendaries & story --- */
+  /* --- Region 2: Rocky Caverns starters --- */
+  flying_starter:  { name:'Raven',       tier:'starter',   types:['Flying'],        rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#6b7a8f', glyph:'鸦' },
+  physical_starter:{ name:'Jackal',      tier:'starter',   types:['Physical'],      rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#a8814f', glyph:'豺' },
+  ghost_starter:   { name:'Shadow',      tier:'starter',   types:['Ghost'],         rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#5c5470', glyph:'影' },
+  psychic_starter: { name:'Fox',         tier:'starter',   types:['Psychic'],       rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#b06a9e', glyph:'狐' },
+
+  /* --- Elites: no evolutions, flat growth, bigger protein cap --- */
+  sumo:            { name:'Sumo',        tier:'elite',     types:['Physical'],      rate:11, nerfedRate:11, base:5,   evo:[],      color:'#c08a6a', glyph:'相' },
+  goblin:          { name:'Goblin',      tier:'elite',     types:['Ghost'],         rate:11, nerfedRate:11, base:5,   evo:[],      color:'#6d7a5a', glyph:'鬼' },
+  squid:           { name:'Squid',       tier:'elite',     types:['Psychic'],       rate:11, nerfedRate:11, base:5,   evo:[],      color:'#8a6aa8', glyph:'鱿' },
+
+  /* --- Story monsters --- */
+  lanternfish:     { name:'Lanternfish', tier:'wild',      types:['Water','Electric'], rate:7, nerfedRate:5, base:5, evo:[18], evoMult:1.5, color:'#4fa8b8', glyph:'灯' },
+  water_dragon:    { name:'Water Dragon',tier:'legendary', types:['Water','Dragon'],rate:13, nerfedRate:13, base:100, evo:[31],    evoMult:1.5, color:'#2f7fa8', glyph:'龙', bossOnly:true },
+  water_dragon_nerfed:{ name:'Water Dragon', tier:'elite', types:['Water','Dragon'],rate:11, nerfedRate:11, base:31, evo:[31],    evoMult:1.5, color:'#5a92a8', glyph:'龙', weakened:true },
+  dragon_egg:      { name:'Dragon Egg',  tier:'special',   types:['Water','Dragon'],rate:0,  nerfedRate:0,  base:1,   evo:[],      color:'#7fa8b8', glyph:'卵', isEgg:true, hatchesAt:31, hatchesInto:'water_dragon_nerfed' },
+
   phoenix:         { name:'Phoenix',     tier:'legendary', types:['Fire','Flying'], rate:13, nerfedRate:13, base:25,  evo:[],      evoMult:1.5, color:'#c8453a', glyph:'凤', frozenRegion1:true, bonusStages:1 },
   forest_fairy:    { name:'Forest Fairy',tier:'legendary', types:['Grass','Fairy'], rate:13, nerfedRate:13, base:100, evo:[1],     evoMult:1.5, color:'#5fa86b', glyph:'仙', bossOnly:true },
   sacred_seed:     { name:'Sacred Seed', tier:'special',   types:['Grass'],         rate:0,  nerfedRate:0,  base:1,   evo:[],      color:'#7fa86b', glyph:'种', isSeed:true },
@@ -909,6 +926,27 @@ const MOVES = {
   starfish:        [['Basic','Slap',0.2,'Single',2,1],['Power1','Water Gun',0.4,'Single',4,5],['Power2','Spiral Spray',0.6,'AOE',8,18],['Ultimate','Tidal Star',1.25,'Single',8,28]],
   seahorse:        [['Basic','Tackle',0.2,'Single',2,1],['Power1','Bubble Jet',0.4,'Single',4,5],['Power2','Whirlpool',0.6,'AOE',8,18],['Ultimate','Aqua Lance',1.25,'Single',8,28]],
   duck:            [['Basic','Peck',0.2,'Single',2,1],['Power1','Splash Wing',0.4,'Single',4,5],['Power2','Downpour',0.6,'AOE',8,18],['Ultimate','Torrent Dive',1.25,'Single',8,28]],
+
+  /* --- Rocky Caverns starters: same shape as the Region 1 starters --- */
+  flying_starter:  [['Basic','Peck',0.2,'Single',2,1],['Power1','Wing Slash',0.4,'Single',4,5],['Power2','Gale Force',0.6,'AOE',8,21],['Ultimate','Storm Dive',1.25,'Single',8,41],['Max','Storm Dive Max',1.5,'Single',8,51]],
+  physical_starter:[['Basic','Scratch',0.2,'Single',2,1],['Power1','Lunge',0.4,'Single',4,5],['Power2','Rend',0.6,'AOE',8,21],['Ultimate','Savage Strike',1.25,'Single',8,41],['Max','Savage Strike Max',1.5,'Single',8,51]],
+  ghost_starter:   [['Basic','Touch',0.2,'Single',2,1],['Power1','Shadow Sneak',0.4,'Single',4,5],['Power2','Nightfall',0.6,'AOE',8,21],['Ultimate','Umbral Rend',1.25,'Single',8,41],['Max','Umbral Rend Max',1.5,'Single',8,51]],
+  psychic_starter: [['Basic','Tackle',0.2,'Single',2,1],['Power1','Mind Jab',0.4,'Single',4,5],['Power2','Psywave',0.6,'AOE',8,21],['Ultimate','Mind Shatter',1.25,'Single',8,41],['Max','Mind Shatter Max',1.5,'Single',8,51]],
+
+  /* --- Elites: never evolve, so their kit is their whole identity --- */
+  sumo:            [['Basic','Slap',0.2,'Single',2,1],['Power1','Palm Thrust',0.4,'Single',4,5],['Power2','Earth Stomp',0.6,'AOE',8,21],['Ultimate','Grand Charge',1.25,'Single',8,41],['Max','Grand Charge Max',1.5,'Single',8,51]],
+  goblin:          [['Basic','Claw',0.2,'Single',2,1],['Power1','Hex',0.4,'Single',4,5],['Power2','Shadow Cackle',0.6,'AOE',8,21],['Ultimate','Grave Mischief',1.25,'Single',8,41],['Max','Grave Mischief Max',1.5,'Single',8,51]],
+  squid:           [['Basic','Ink Jet',0.2,'Single',2,1],['Power1','Tentacle Slap',0.4,'Single',4,5],['Power2','Mind Fog',0.6,'AOE',8,21],['Ultimate','Abyssal Gaze',1.25,'Single',8,41],['Max','Abyssal Gaze Max',1.5,'Single',8,51]],
+
+  /* --- Story monsters --- */
+  lanternfish:     [['Basic','Bump',0.2,'Single',2,1],['Power1','Shock Bubble',0.4,'Single',4,5],['Power2','Lantern Flash',0.6,'AOE',8,18],['Ultimate','Deep Current',1.25,'Single',8,28]],
+  water_dragon:    [['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tidal Surge',1.0,'AOE',10,35],
+                    ['Ultimate',"Leviathan's Roar",1.4,'Single',10,45],
+                    ['Max',"Leviathan's Roar Max",1.8,'AOE',10,55]],
+  water_dragon_nerfed:[['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tidal Surge',1.0,'AOE',10,35],
+                    ['Ultimate',"Leviathan's Roar",1.4,'Single',10,45],
+                    ['Max',"Leviathan's Roar Max",1.8,'AOE',10,55]],
+  dragon_egg:      [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 
   phoenix:         [['Basic','Ember',0.3,'Single',4,1],['Power1','Firestorm',0.6,'AOE',8,5],['Power2','Nova',1.0,'AOE',10,35],
                     ['Ultimate','Incinerate',1.25,'Single',10,45,{scale:{per:0.15,max:2.0}}],
@@ -1333,10 +1371,49 @@ function evolutionStage(species, level){
   for(const lv of evo){ if(level >= lv) stage++; }
   return stage;
 }
-/* Protein Supplement caps by tier. */
-function proteinCap(species){
-  const t = SPECIES[species].tier;
+/* ---------- THE FOREST CROWN ----------
+   A starter or elite is promoted to LEGENDARY growth (rate 13) and gains the
+   legendary protein cap. A legendary can't be promoted further, so it gains
+   three extra evolution stages' worth of stats instead — keeping crowned
+   legendaries about 2.5 stages ahead of crowned starters.
+   Requires: final evolution, protein maxed, level 65+. */
+const CROWN_MIN_LEVEL = 65;
+const CROWN_LEGENDARY_STAGES = 3;
+
+function isCrowned(m){ return !!(m && m.crowned); }
+function baseTier(species){ return (SPECIES[species]||{}).tier; }
+/* The tier a monster actually behaves as, once crowning is taken into account. */
+function effectiveTier(m, fallbackSpecies){
+  const t = baseTier((m && m.species) || fallbackSpecies);
+  if(isCrowned(m) && (t==='starter' || t==='elite' || t==='special')) return 'legendary';
+  return t;
+}
+function effectiveRate(m){
+  const sp = SPECIES[m.species];
+  if(isCrowned(m) && effectiveTier(m)==='legendary' && sp.tier!=='legendary') return 13;
+  return sp.rate;
+}
+/* Protein Supplement caps by tier — crowning raises the ceiling too. */
+function proteinCap(species, mon){
+  const t = mon ? effectiveTier(mon, species) : SPECIES[species].tier;
   return t==='legendary' ? 10 : (t==='elite' ? 8 : 6);
+}
+function atFinalEvolution(m){
+  const evo = SPECIES[m.species].evo || [];
+  return evo.length === 0 || m.level >= evo[evo.length-1];
+}
+function crownEligible(m){
+  if(!m || isSeed(m) || isEgg(m) || isCrowned(m)) return false;
+  if(m.level < CROWN_MIN_LEVEL) return false;
+  if(!atFinalEvolution(m)) return false;
+  return (m.supplements||0) >= proteinCap(m.species, m);
+}
+function crownBlockReason(m){
+  if(isCrowned(m)) return 'Already crowned.';
+  if(!atFinalEvolution(m)) return 'Must be in its final evolution.';
+  if(m.level < CROWN_MIN_LEVEL) return `Must be at least level ${CROWN_MIN_LEVEL}.`;
+  if((m.supplements||0) < proteinCap(m.species, m)) return 'Protein must be maxed first.';
+  return '';
 }
 /* The FINAL supplement counts TRIPLE, so filling the bar is worth chasing
    rather than stopping partway:
@@ -1360,17 +1437,24 @@ function hpScale(level){
   return HP_SCALE_ANCHORS[HP_SCALE_ANCHORS.length-1][1];
 }
 /* ATK is the raw stat; HP is that stat with the level scaling applied. */
-function computeMaxHp(species, level, supplements){
-  if(SPECIES[species] && SPECIES[species].isSeed) return 1;      // the Seed is always 1 HP
-  return Math.floor(computeMaxStat(species, level, supplements) * hpScale(level));
+function computeMaxHp(species, level, supplements, mon){
+  const sp = SPECIES[species];
+  if(sp && (sp.isSeed || sp.isEgg)) return 1;     // Seed and Egg are always 1 HP
+  return Math.ceil(computeMaxStat(species, level, supplements, mon) * hpScale(level));
 }
 
-function computeMaxStat(species, level, supplements){
+function computeMaxStat(species, level, supplements, mon){
   const s = SPECIES[species];
-  const rate = s.rate;
-  let stat = Math.floor((rate/5) * level);
-  stat += (evolutionStage(species, level) + (s.bonusStages||0)) * rate * (s.evoMult||1);
-  stat += Math.floor((rate/5) * effectiveSupplements(species, supplements));
+  const crowned = mon && mon.crowned;
+  const rate = (crowned && s.tier!=='legendary') ? 13 : s.rate;
+  let stat = Math.ceil((rate/5) * level);
+  const stages = evolutionStage(species, level) + (s.bonusStages||0);
+  stat += Math.ceil(stages * rate * (s.evoMult||1));
+  /* A crowned legendary can't change tier, so it deepens instead. These stages
+     are added at FLAT rate — they are already "three evolutions' worth", so
+     applying evoMult on top would double-count and overshoot. */
+  if(crowned && s.tier==='legendary') stat += CROWN_LEGENDARY_STAGES * rate;
+  stat += Math.ceil((rate/5) * effectiveSupplements(species, supplements));
   return stat;
 }
 
@@ -1660,6 +1744,8 @@ function normalizeProfile(p){
   ['bronze','silver','gold'].forEach(k=>{ if(p.medals[k]===undefined) p.medals[k] = 0; });
   p._needsMasteryReconcile = true;
   if(!Array.isArray(p.settings.wordLists)) p.settings.wordLists = null;   // null = all lists
+  if(p.lanternGranted===undefined) p.lanternGranted = false;
+  p._needsLanternCheck = true;
   p.moveStones = p.moveStones || [];
   /* Giga Drain became the Forest Guardian's signature move; the Grass Very High
      stone is now Leech Seed. Rename anything already owned or equipped so old
@@ -1686,6 +1772,7 @@ function normalizeProfile(p){
   r2.trialDone = !!r2.trialDone;
   r2.seedGranted = !!r2.seedGranted;
   r2.challengeDone = !!r2.challengeDone;
+  r2.rivalCleared = !!r2.rivalCleared;
   r2.waterDojo = r2.waterDojo || [];
   p.settings = p.settings || {};
   if(p.settings.volume===undefined) p.settings.volume = 0.8;
@@ -1754,12 +1841,14 @@ function monPortrait(species, size, opts){
   const stage = opts.stage || 0;              // 0 = base form, 1 = first evolution, 2 = second
   const radius = Math.round(px*0.21);
   const cls = 'mon-portrait mon-sprite' + (opts.breathe ? ' breathe-'+opts.breathe : '');
+  const crowned = !!opts.crowned;
   const override = (typeof ASSETS!=='undefined' && ASSETS.sprites)
-    ? (ASSETS.sprites[spriteKey(species,stage)+'_'+view] || ASSETS.sprites[spriteKey(species,stage)]) : null;
-  const primary = override || spritePath(species, stage, view);
+    ? (ASSETS.sprites[spriteKey(species,stage,crowned)+'_'+view] || ASSETS.sprites[spriteKey(species,stage,crowned)]) : null;
+  // the icon view starts at _front, so only _front and _back need supplying
+  const primary = override || spritePath(species, stage, view==='icon' ? 'front' : view, crowned);
   const bg = opts.bare ? 'transparent' : s.color;
   return `<img src="${primary}" alt="${escapeHtml(s.name)}" class="${cls}"
-    data-species="${species}" data-px="${px}" data-view="${view}" data-stage-n="${stage}" data-try="0"
+    data-species="${species}" data-px="${px}" data-view="${view}" data-stage-n="${stage}" data-crowned="${crowned?1:0}" data-try="0"
     style="width:${px}px;height:${px}px;border-radius:${radius}px;object-fit:contain;background:${bg};"
     onerror="spriteFallback(this)">`;
 }
@@ -1769,9 +1858,11 @@ function monPortrait(species, size, opts){
      water_starter1       first evolution
      water_starter2       second evolution
    combined with the view suffix, e.g. water_starter1_front.png */
-function spriteKey(species, stage){ return species + (stage ? String(stage) : ''); }
-function spritePath(species, stage, view){
-  const key = spriteKey(species, stage);
+function spriteKey(species, stage, crowned){
+  return species + (stage ? String(stage) : '') + (crowned ? '_c' : '');
+}
+function spritePath(species, stage, view, crowned){
+  const key = spriteKey(species, stage, crowned);
   return 'assets/mon/' + key + (view && view!=='icon' ? '_'+view : '') + '.png';
 }
 /* Convenience: the sprite stage a given owned monster is currently at. */
@@ -1781,7 +1872,9 @@ function monStage(m){ return evolutionStage(m.species, m.level); }
    fight, be switched to, be taught skills, or take protein — and it never
    counts toward winning or losing a battle. */
 function isSeed(m){ return !!(m && SPECIES[m.species] && SPECIES[m.species].isSeed); }
-function battleParty(){ return state.party.filter(m=>!isSeed(m)); }
+function isEgg(m){ return !!(m && SPECIES[m.species] && SPECIES[m.species].isEgg); }
+function isPassenger(m){ return isSeed(m) || isEgg(m); }
+function battleParty(){ return state.party.filter(m=>!isPassenger(m)); }
 function hasSeed(){ return state.party.some(isSeed); }
 function grantSacredSeed(){
   if(hasSeed()) return null;
@@ -1805,10 +1898,16 @@ function spriteFallback(img){
     let stage = +(img.dataset.stageN||0);
     let attempt = +(img.dataset.try||0);
 
+    /* Fallback ladder. Note the icon view tries <species>_front FIRST, so you
+       only ever need to supply _front and _back — a separate <species>.png is
+       an optional override, not a requirement. */
+    const crowned = img.dataset.crowned === '1';
     const chain = [];
-    for(let st = stage; st >= 0; st--){
-      if(view !== 'icon') chain.push(spritePath(species, st, view));
-      chain.push(spritePath(species, st, 'icon'));
+    const views = view === 'icon' ? ['front','icon'] : [view, 'front', 'icon'];
+    for(const cr of (crowned ? [true,false] : [false])){
+      for(let st = stage; st >= 0; st--){
+        for(const v of views) chain.push(spritePath(species, st, v==='icon'?'icon':v, cr));
+      }
     }
     attempt++;
     img.dataset.try = String(attempt);
@@ -2931,9 +3030,9 @@ function makeEnemy(species, level, opts){
     if(maxStage === 1)      stage = r < 0.67 ? 0 : 1;
     else                    stage = r < 0.20 ? 0 : (r < 0.87 ? 1 : 2);
   }
-  let stat = Math.floor((rate/5)*level) + Math.floor((stage + (sp.bonusStages||0))*rate*(sp.evoMult||1));
-  if(opts.supplements) stat += Math.floor((rate/5)*opts.supplements);
-  const hp = Math.floor(stat * hpScale(level));
+  let stat = Math.ceil((rate/5)*level) + Math.ceil((stage + (sp.bonusStages||0))*rate*(sp.evoMult||1));
+  if(opts.supplements) stat += Math.ceil((rate/5)*opts.supplements);
+  const hp = Math.ceil(stat * hpScale(level));
   // AI: 'basic' | 'power1' | 'best'. Default: wild=basic, but electric/legendary open with Power1.
   let ai = opts.ai || ((species==='electric_starter' || sp.tier==='legendary') ? 'power1' : 'basic');
   // An evolved wild picks from its whole moveset each turn
@@ -3058,8 +3157,8 @@ function onWaveCleared(){
 }
 
 function activeMon(){ return state.party[ui.battle.activeIndex]; }
-function monMaxHp(m){ return computeMaxHp(m.species, m.level, m.supplements); }
-function monAtk(m){ return computeMaxStat(m.species, m.level, m.supplements); }
+function monMaxHp(m){ return computeMaxHp(m.species, m.level, m.supplements, m); }
+function monAtk(m){ return computeMaxStat(m.species, m.level, m.supplements, m); }
 function unlockedMoves(m){
   /* 'Max' is an UPGRADE of Ultimate, not an extra button: once its level is
      reached it takes over the Ultimate slot entirely. */
@@ -3577,6 +3676,14 @@ function countWords(text){ return (text||'').length; }   // one hanzi = one word
 const SELF_DAMAGE = { 'Nova': 0.15 };
 /* Moves that restore their user for a share of the USER'S OWN ATK on landing. */
 const LIFESTEAL = { 'Giga Drain': 0.2 };
+
+/* Scripted moves used only inside the Rocky Caverns finale. They bypass the
+   spelling quiz entirely — the drama is the point, and a writing prompt would
+   undercut it. */
+const SCRIPTED_MOVES = {
+  tsunami:      { slot:'Basic', name:'Tsunami', mult:0.8, target:'AOE', words:0, scripted:true },
+  dragonLegacy: { slot:'Basic', name:'Dragon Legacy', mult:0, target:'AOE', words:0, scripted:true, endsBattle:true },
+};
 
 function applySelfDamage(mv, mon){
   const pct = SELF_DAMAGE[mv.name];
@@ -5477,7 +5584,7 @@ function renderIndexDetail(){
    - a miss starts a 3-rep remedial loop (needs 3 consecutive correct; any miss
      resets it); loop reps grant no heal, completing the loop heals 5% to all
    - remediated words still stay in the recent-wrong history for future sessions */
-function monMax(m){ return computeMaxHp(m.species, m.level, m.supplements); }
+function monMax(m){ return computeMaxHp(m.species, m.level, m.supplements, m); }
 function partyFull(){ return battleParty().every(m=>m.currentHp>=monMax(m)); }
 function healParty(pct){
   playSfx('recovery_heal');
@@ -6441,13 +6548,45 @@ function enforceEyeBreak(){
 
 
 /* ---------- SCREEN: Region 2 challenges (the Water Dojo) ---------- */
+/* The Water Dojo Master hands over a Lanternfish — the lamp that lights the
+   Rocky Caverns. Runs on load too, so a save that cleared the Dojo before this
+   existed still receives it. */
+function grantLanternfish(){
+  if(state.lanternGranted) return null;
+  const already = [...state.party, ...state.storage].some(m=>m.species==='lanternfish');
+  state.lanternGranted = true;
+  if(already) return null;
+  const fish = newMonster('lanternfish', 25);
+  if(battleParty().length < 6) state.party.push(fish); else state.storage.push(fish);
+  if(!state.caughtSpecies.includes('lanternfish')) state.caughtSpecies.push('lanternfish');
+  if(!state.encounteredSpecies.includes('lanternfish')) state.encounteredSpecies.push('lanternfish');
+  return fish;
+}
+
 function waterDojoCleared(id){ return ((state.progress.region2||{}).waterDojo||[]).includes(id); }
 function nextWaterStage(){ return WATER_DOJO_STAGES.find(st=>!waterDojoCleared(st.id)); }
+
+/* The Rival returns, stronger — and only for players who already beat him in
+   Region 1, so his reappearance means something. */
+const R2_RIVAL_WAVES = [
+  [{species:'golem',level:41},{species:'bat',level:41}],
+  [{species:'electric_starter',level:44},{species:'ground_starter',level:44}],
+  [{species:'phoenix',level:46}],
+];
+/* His third slot counters the player's own starter, as in Region 1. */
+function r2RivalWaves(){
+  const counter = effectiveStarter();
+  const waves = R2_RIVAL_WAVES.map(w=>w.map(e=>({...e})));
+  waves[2].unshift({ species:counter, level:46 });
+  return waves;
+}
 
 function renderChallengeR2(){
   setScreenBg('challenge');
   $('#brandSub').textContent = 'Challenge';
-  const done = ((state.progress.region2||{}).waterDojo||[]).length;
+  const r2 = state.progress.region2 || {};
+  const r1Rival = !!(state.progress.region1||{}).rivalCleared;   // only if beaten in Region 1
+  const done = (r2.waterDojo||[]).length;
   const nxt = nextWaterStage();
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Region</button>
@@ -6462,9 +6601,25 @@ function renderChallengeR2(){
           : `${done}/4 beaten · next: <b>${escapeHtml((nxt||{}).label||'')}</b>`}</div>
       </div>
     </div>
+    ${r1Rival ? `
+    <div class="challenge-card" id="cRival2">
+      ${npcPortrait('rival', '🥊', 50, '#c8453a')}
+      <div style="flex:1;">
+        <div class="cc-title">Rival ${r2.rivalCleared?'<span class="clear-tag">Cleared</span>':''}</div>
+        <div class="cc-desc">${r2.rivalCleared?'You beat him again.':'He followed you here. Six monsters, and he means it.'}</div>
+      </div>
+    </div>` : ''}
     <div class="phase-flag">More Region 2 challenges arrive with the next story chapter.</div>
   `;
   $('#backBtn').addEventListener('click', ()=>go('region'));
+  const cr = $('#cRival2');
+  if(cr) cr.addEventListener('click', ()=>{
+    if(r2.rivalCleared){ toast('You have already beaten him here.'); return; }
+    if(!ensurePool()) return;
+    beginBattle({ isNpc:true, name:'Rival', npcId:'rival',
+      waves: r2RivalWaves().map(w=>w.map(e=>({...e, ai:'best', nerfed:false}))),
+      onWin:onR2RivalWin });
+  });
   const c = $('#cWater');
   if(c) c.addEventListener('click', ()=>{
     const st = nextWaterStage();
@@ -6475,11 +6630,27 @@ function renderChallengeR2(){
       onWin:()=>onWaterStageWin(st) });
   });
 }
+async function onR2RivalWin(){
+  const r2 = state.progress.region2;
+  r2.rivalCleared = true;
+  state.inventory.protein = (state.inventory.protein||0) + 3;
+  await saveProfile();
+  challengeResult('🥊', 'Rival defeated!',
+    `"Still can't beat you." He shoulders his bag and grins, but there's something new behind it.<br><br>` +
+    `"Doesn't matter. I've been <b>recruited</b> — a proper organisation, the kind that gets you places. ` +
+    `You'll hear about them." He turns to go. "Next time we meet, I won't be doing this alone."<br><br>` +
+    `<b>+3 Protein Supplements</b>`,
+    'challenge');
+}
+
 async function onWaterStageWin(stage){
   const r2 = state.progress.region2;
   r2.waterDojo = r2.waterDojo || [];
   if(!r2.waterDojo.includes(stage.id)) r2.waterDojo.push(stage.id);
-  if(stage.id==='water_master') r2.challengeDone = true;
+  if(stage.id==='water_master'){
+    r2.challengeDone = true;
+    grantLanternfish();
+  }
   await saveProfile();
   const nxt = nextWaterStage();
   challengeResult('🌊', stage.label+' defeated!',
@@ -7235,6 +7406,15 @@ function escapeHtml(s){
     delete state._needsMasteryReconcile;
     const g = reconcileMastery();
     if(g) { await saveProfile(); setTimeout(()=>announceMastery(g), 900); }
+  }
+  // repair saves that cleared the Water Dojo before Lanternfish existed
+  if(state && state._needsLanternCheck){
+    delete state._needsLanternCheck;
+    if((state.progress.region2||{}).challengeDone && !state.lanternGranted){
+      const fish = grantLanternfish();
+      await saveProfile();
+      if(fish) setTimeout(()=>toast('🐟 The Water Dojo Master\'s Lanternfish finally reached you!'), 1200);
+    }
   }
 
   if(state) go('home');
