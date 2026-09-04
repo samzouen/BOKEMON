@@ -2670,23 +2670,56 @@ function moveFactor(slot, baseMult, words, correct){
   return 0;
 }
 
-/* ---------- STATUS EFFECT ENGINE ----------
-   Player statuses: keyed by monster uid on ui.battle.playerStatuses, so they
-   persist through switches and faint/revive, cleared only at battle end.
-   Enemy statuses: attached directly to the enemy object (enemies are recreated
-   fresh each wave, so this naturally resets between waves).
-   Party-wide: ui.battle.mirageActive. */
-function getPStatus(uid, type){ return (ui.battle.playerStatuses[uid]||[]).find(s=>s.type===type); }
+/* ---------- STATUS MODEL ----------
+   Statuses are no longer attached to individual monsters. A Very High skill
+   affects an entire SIDE:
+     - party statuses live on ui.battle.partyStatus  (buffs for your whole team)
+     - field statuses are stamped on every enemy, now and in later waves
+   Every status carries a turn counter and expires; nothing lasts the whole
+   battle any more. Counters tick down once per round, after the enemy acts. */
+const STATUS_TURNS = 5;
+const ICE_TOMB_TURNS = 2;
+
+function partyStatuses(){ return (ui.battle.partyStatus = ui.battle.partyStatus || {}); }
+/* uid is accepted but ignored — kept so existing call sites read naturally. */
+function getPStatus(uid, type){ return partyStatuses()[type]; }
 function setPStatus(uid, status){
-  const arr = ui.battle.playerStatuses[uid] = ui.battle.playerStatuses[uid] || [];
-  const i = arr.findIndex(s=>s.type===status.type);
-  if(i>=0) arr[i]=status; else arr.push(status);
+  const st = Object.assign({ turnsLeft: STATUS_TURNS }, status);
+  partyStatuses()[status.type] = st;
+  return st;
 }
-function clearPStatus(uid, type){
-  const arr = ui.battle.playerStatuses[uid];
-  if(!arr) return;
-  const i = arr.findIndex(s=>s.type===type);
-  if(i>=0) arr.splice(i,1);
+function clearPStatus(uid, type){ delete partyStatuses()[type]; }
+
+/* Stamp a field status on every enemy, and remember it so later waves inherit it. */
+function applyFieldStatus(status){
+  const b = ui.battle;
+  b.fieldStatus = b.fieldStatus || {};
+  b.fieldStatus[status.type] = Object.assign({ turnsLeft: STATUS_TURNS }, status);
+  livingEnemies().forEach(e=> addEStatus(e, Object.assign({}, b.fieldStatus[status.type])));
+}
+
+/* One round has passed: age every status and drop the expired ones. */
+function tickStatuses(){
+  const b = ui.battle;
+  const expired = [];
+  const ps = partyStatuses();
+  Object.keys(ps).forEach(k=>{
+    ps[k].turnsLeft--;
+    if(ps[k].turnsLeft <= 0){ delete ps[k]; expired.push(STATUS_LABELS[k]||k); }
+  });
+  if(b.fieldStatus){
+    Object.keys(b.fieldStatus).forEach(k=>{
+      b.fieldStatus[k].turnsLeft--;
+      if(b.fieldStatus[k].turnsLeft <= 0){
+        delete b.fieldStatus[k];
+        b.enemies.forEach(e=> removeEStatus(e, k));
+        expired.push(STATUS_LABELS[k]||k);
+      } else {
+        b.enemies.forEach(e=>{ const st = getEStatus(e,k); if(st) st.turnsLeft = b.fieldStatus[k].turnsLeft; });
+      }
+    });
+  }
+  return expired;
 }
 
 /* Enemy statuses STACK: each enemy carries a list, not a single slot.
@@ -2718,18 +2751,20 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
 
   // attacker-side buffs/debuffs
   if(isPlayerAttacking){
-    const oh = getPStatus(attacker.uid,'overheat'); if(oh) dmg *= 1.5;               // deals 1.5x
+    if(getPStatus(0,'overheat'))    dmg *= 1.5;    // party buff: deals 1.5x
+    if(getPStatus(0,'dragonDance')) dmg *= 1.25;   // multiplies WITH overheat
   } else {
     if(getEStatus(attacker,'discombobulate')) dmg *= 0.8;   // enemy deals 20% less
   }
 
   // defender-side modifiers
   if(isPlayerAttacking){ // defender is an enemy
-    if(getEStatus(defender,'iceTomb')) dmg *= 0.5;    // entombed takes half
+    if(getEStatus(defender,'iceTomb')) dmg *= 0.8;    // entombed takes 80%
     if(getEStatus(defender,'curse'))   dmg *= 1.25;   // cursed takes 25% more
   } else { // defender is a player monster
-    const oh = getPStatus(defender.uid,'overheat'); if(oh) dmg *= 1.5;               // takes 1.5x (incl. self-dmg)
-    const sa = getPStatus(defender.uid,'spikeArmour'); if(sa) dmg *= 0.8;            // takes 20% less
+    if(getPStatus(0,'overheat'))    dmg *= 1.5;    // takes 1.5x (incl. self-damage)
+    if(getPStatus(0,'spikeArmour')) dmg *= 0.9;    // takes 10% less
+    if(getPStatus(0,'steelAegis'))  dmg *= 0.75;   // takes 25% less
   }
   return Math.max(0, Math.ceil(dmg));
 }
@@ -2738,55 +2773,82 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
 function applyVeryHighEffect(type, casterMon, casterAtk, targets){
   const uid = casterMon.uid;
   const res = { msg:'', hits:[] };
+  const T = STATUS_TURNS;
   switch(type){
-    case 'Fire': // Overheat: self buff, no direct damage
+    case 'Fire': // Overheat — whole party trades defence for offence
       setPStatus(uid,{type:'overheat'});
-      res.msg = `${displayName(casterMon)} overheats! +50% damage dealt, but +50% damage taken for the rest of the battle.`;
+      res.msg = `Your whole team overheats! +50% damage dealt and taken for ${T} turns.`;
       break;
-    case 'Water': { // Ice Tomb: freeze one enemy 3-5 turns, 45/35/20
-      const t = targets[0];
-      const r = Math.random(); const turns = r<0.45?3:(r<0.80?4:5);
-      if(t) addEStatus(t, { type:'iceTomb', turnsLeft:turns });
-      res.msg = `The enemy is entombed in ice for ${turns} turns! It takes only half damage while frozen.`;
+
+    case 'Water': { // Ice Tomb — freezes the current wave for 2 turns
+      livingEnemies().forEach(e=> addEStatus(e, { type:'iceTomb', turnsLeft:ICE_TOMB_TURNS }));
+      res.msg = `The enemy wave is entombed in ice for ${ICE_TOMB_TURNS} turns! They can't act, and take only 80% damage.`;
       break; }
-    case 'Grass': // Leech Seed: a FIELD debuff — every enemy, now and in later
-                  // waves, feeds the attacker 0.2x of that attacker's own ATK.
-      ui.battle.leechSeed = true;
-      livingEnemies().forEach(e=> addEStatus(e, { type:'leechSeed' }));
-      res.msg = `Leech Seed takes root across the field! Every hit now drains life back to the attacker.`;
+
+    case 'Grass': // Leech Seed — field-wide; every hit feeds the WHOLE party
+      applyFieldStatus({ type:'leechSeed' });
+      res.msg = `Leech Seed takes root across the field! For ${T} turns every hit heals your whole team.`;
       break;
-    case 'Electric': // Overcharge: self buff, 25% repeat chance
+
+    case 'Electric': // Overcharge — party-wide repeat chance
       setPStatus(uid,{type:'overcharge', chance:0.25});
-      res.msg = `${displayName(casterMon)} is overcharged! 25% chance to repeat an attack for the rest of the battle.`;
+      res.msg = `Your team is overcharged! 25% chance to repeat an attack for ${T} turns.`;
       break;
-    case 'Ground': // Spike Armour: self buff
+
+    case 'Ground': // Spike Armour — party-wide, softer than before
       setPStatus(uid,{type:'spikeArmour'});
-      res.msg = `${displayName(casterMon)} grows spikes! Takes 20% less damage and reflects 0.4x ATK on hit.`;
+      res.msg = `Spikes cover your team! 10% less damage taken and 0.2× ATK reflected for ${T} turns.`;
       break;
-    case 'Flying': // Mirage: the FIRST incoming attack always misses, then 20%
-      ui.battle.mirageActive = true;
-      ui.battle.mirageGuaranteed = true;
-      res.msg = `A mirage surrounds your whole team! The next attack is guaranteed to miss, then 20% after that.`;
+
+    case 'Flying': // Mirage — first attack always misses, then 20%
+      setPStatus(uid,{type:'mirage', guaranteed:true, chance:0.20});
+      res.msg = `A mirage shrouds your team! The next attack is guaranteed to miss, then 20% for ${T} turns.`;
       break;
-    case 'Physical': // Counter: the next hit is always countered, then 10%
+
+    case 'Physical': // Counter — first hit always countered, then 10%
       setPStatus(uid,{type:'counter', guaranteed:true, chance:0.10});
-      res.msg = `${displayName(casterMon)} braces to counter! The next hit is guaranteed, then 10% after that.`;
+      res.msg = `Your team braces to counter! The next hit is guaranteed, then 10% for ${T} turns.`;
       break;
-    case 'Ghost': { // Curse: enemy debuff, +25% damage taken
-      const t = targets[0];
-      if(t) addEStatus(t, { type:'curse' });
-      res.msg = `The enemy is cursed! It now takes 25% more damage.`;
+
+    case 'Ghost': // Curse — field-wide fragility
+      applyFieldStatus({ type:'curse' });
+      res.msg = `A curse settles over the field! Every enemy takes 25% more damage for ${T} turns.`;
+      break;
+
+    case 'Psychic': // Discombobulate — first enemy hit is halved for certain,
+                    // then each attack rolls 10% countered / 10% miss / 10% halved
+      applyFieldStatus({ type:'discombobulate', guaranteed:true });
+      res.msg = `The field reels! The next enemy attack is halved for certain, then 10% each to be countered, to miss, or to be halved.`;
+      break;
+
+    case 'Dragon': // Dragon Dance — multiplies WITH Overheat rather than replacing it
+      setPStatus(uid,{type:'dragonDance'});
+      res.msg = `Your team dances with dragon fire! ×1.25 damage for ${T} turns — this stacks with Overheat.`;
+      break;
+
+    case 'Steel': // Steel Aegis — flat mitigation
+      setPStatus(uid,{type:'steelAegis'});
+      res.msg = `A steel aegis guards your team! 25% less damage taken for ${T} turns.`;
+      break;
+
+    case 'Fairy': { // Diamond Dust — cleanse the enemy, extend your own
+      const b = ui.battle;
+      let cleared = 0;
+      b.enemies.forEach(e=>{ cleared += eStatuses(e).length; e.statuses = []; });
+      b.fieldStatus = {};
+      const ps = partyStatuses();
+      const extended = Object.keys(ps).length;
+      Object.keys(ps).forEach(k=>{ ps[k].turnsLeft += STATUS_TURNS; });
+      res.msg = `Diamond dust scatters! ${cleared} enemy effect${cleared===1?'':'s'} swept away`
+              + (extended ? ` and your ${extended} own effect${extended===1?'':'s'} extended by ${STATUS_TURNS} turns.` : '.');
       break; }
-    case 'Psychic': { // Discombobulate: enemy debuff, -20% damage dealt
-      const t = targets[0];
-      if(t) addEStatus(t, { type:'discombobulate' });
-      res.msg = `The enemy is discombobulated! It now deals 20% less damage.`;
-      break; }
+
     default:
       res.msg = 'Nothing happened.';
   }
   return res;
 }
+
 
 /* ---------- BATTLE MODULE (Phase 3: wild encounters) ---------- */
 function starterLevel(){
@@ -2940,8 +3002,8 @@ function beginBattle(config){
     onWin: config.onWin || null, noFlee: !!config.noFlee, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
     guardianTrial: !!config.guardianTrial, leechSeed:false,
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
-    playerStatuses:{},       // uid -> [ {type,...} ]   persists through switches/faints, cleared at battle end
-    mirageActive:false,      // party-wide evasion buff
+    partyStatus:{},          // party-wide buffs, each with a turn counter
+    fieldStatus:{},          // debuffs stamped on every enemy, inherited by later waves
     usedVeryHigh:{}, usedUltra:{},   // uid -> true, once-per-battle usage
   };
   loadWave(0);
@@ -3147,6 +3209,7 @@ const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
   counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed',
   discombobulate:'🌀 Confused', leechSeed:'🌿 Seeded',
+  dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
 };
 function renderStatusBadges(){
   if(!ui.battle) return;
@@ -3155,10 +3218,9 @@ function renderStatusBadges(){
   if(row){
     const out = [];
     const mon = activeMon();
-    (ui.battle.playerStatuses[mon.uid]||[]).forEach(s=>{
-      out.push(`<span class="status-pill mine">${STATUS_LABELS[s.type]||s.type}</span>`);
+    Object.values(partyStatuses()).forEach(st=>{
+      out.push(`<span class="status-pill mine">${STATUS_LABELS[st.type]||st.type} ${st.turnsLeft}</span>`);
     });
-    if(ui.battle.mirageActive) out.push('<span class="status-pill mine">✨ Mirage</span>');
     row.innerHTML = out.join('');
   }
   // Enemy statuses render on their OWN card, above that enemy's HP bar, so it's
@@ -3506,7 +3568,7 @@ function applySelfDamage(mv, mon){
   const pct = SELF_DAMAGE[mv.name];
   if(!pct) return 0;
   let dmg = pct * monAtk(mon);
-  if(getPStatus(mon.uid,'overheat')) dmg *= 1.5;   // overheat raises damage taken, incl. recoil
+  if(getPStatus(0,'overheat')) dmg *= 1.5;   // overheat raises damage taken, incl. recoil
   dmg = Math.ceil(dmg);
   const before = mon.currentHp;
   mon.currentHp = Math.max(0, mon.currentHp - dmg);
@@ -3604,10 +3666,17 @@ function applyHits(hits){
     h.t.hp = h.newHp;
     flashHit(document.getElementById('enemy-'+h.idx));
     drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
-    if(getEStatus(h.t,'leechSeed')) healed += Math.ceil(0.2*monAtk(mon));   // heals the attacker, from its own ATK
+    if(getEStatus(h.t,'leechSeed')) healed += Math.ceil(0.15*monAtk(mon));   // 0.15x, and it heals the WHOLE party
   });
   const ls = ui.battle && ui.battle.pendingLifesteal;
   if(ls){ healed += ls; ui.battle.pendingLifesteal = 0; }
+  // Leech Seed feeds the WHOLE team, not only the monster that swung.
+  if(healed>0){
+    battleParty().forEach(m=>{
+      if(m.currentHp<=0 || m===mon) return;
+      m.currentHp = Math.min(monMaxHp(m), m.currentHp + healed);
+    });
+  }
   if(healed>0 && mon.currentHp>0){
     const max = monMaxHp(mon);
     const before = mon.currentHp;
@@ -3623,7 +3692,7 @@ function applyHits(hits){
    `hits` carries the per-target damage so a repeat re-applies the real amount. */
 function afterPlayerAttack(mon, hits){
   setTimeout(()=>{
-    const oc = getPStatus(mon.uid,'overcharge');
+    const oc = getPStatus(0,'overcharge');
     const canRepeat = oc && hits && hits.length && livingEnemies().length>0;
     if(canRepeat && Math.random()<oc.chance){
       battleMsg('⚡ Overcharge triggers — the attack repeats!');
@@ -3818,11 +3887,30 @@ function enemyTurn(){
     return;
   }
 
+  /* Discombobulate rolls first — it can make the attack miss outright, be
+     countered, or land at half strength. The guaranteed first use is a halving. */
+  const dis = acting[0] && getEStatus(acting[0],'discombobulate');
+  let disHalve = false, disMiss = false, disCounter = false;
+  if(dis){
+    if(dis.guaranteed){
+      disHalve = true;
+      dis.guaranteed = false;
+      if(b.fieldStatus && b.fieldStatus.discombobulate) b.fieldStatus.discombobulate.guaranteed = false;
+      b.enemies.forEach(e=>{ const st=getEStatus(e,'discombobulate'); if(st) st.guaranteed = false; });
+    } else {
+      const r = Math.random();
+      if(r < 0.10) disCounter = true;
+      else if(r < 0.20) disMiss = true;
+      else if(r < 0.30) disHalve = true;
+    }
+  }
+
   // Mirage: the first attack after casting always misses; 20% thereafter
-  const mirageHit = b.mirageActive && (b.mirageGuaranteed || Math.random()<0.20);
+  const mir = getPStatus(0,'mirage');
+  const mirageHit = disMiss || (mir && (mir.guaranteed || Math.random() < (mir.chance||0.20)));
   if(mirageHit){
-    if(b.mirageGuaranteed) b.mirageGuaranteed = false;
-    battleMsg('💨 The mirage shimmers — the attack missed!');
+    if(mir && mir.guaranteed) mir.guaranteed = false;
+    battleMsg(disMiss ? '🌀 Confused — the attack went wide!' : '💨 The mirage shimmers — the attack missed!');
     b.enemies.forEach((e,i)=>{ if(e.hp>0) bob(document.getElementById('enemyBob-'+i), -1); });
     b.switchedThisTurn=false;
     setTimeout(()=>{ b.phase='player'; renderBattle(); battleMsg('Choose a move.'); }, 1100);
@@ -3831,9 +3919,10 @@ function enemyTurn(){
 
   let total=0;
   acting.forEach(e=>{ total += computeDamage(e.move[2], e.atk, e, monRef(mon), false); });
+  if(disHalve) total = Math.ceil(total*0.5);
 
-  const counter = getPStatus(mon.uid,'counter');
-  const spikes  = getPStatus(mon.uid,'spikeArmour');
+  const counter = getPStatus(0,'counter');
+  const spikes  = getPStatus(0,'spikeArmour');
 
   battleMsg('Enemy attacks!');
   acting.forEach(e=>{ const i=b.enemies.indexOf(e); bob(document.getElementById('enemyBob-'+i), -1); });
@@ -3841,11 +3930,11 @@ function enemyTurn(){
 
   setTimeout(()=>{
     let msg = '';
-    const counterFires = counter && (counter.guaranteed || Math.random() < (counter.chance||0.10));
+    const counterFires = disCounter || (counter && (counter.guaranteed || Math.random() < (counter.chance||0.10)));
     if(counterFires){
       // Negates the damage entirely and reflects 50%. The guaranteed first use
       // is spent, but the stance itself persists for the rest of the battle.
-      if(counter.guaranteed){ counter.guaranteed = false; setPStatus(mon.uid, counter); }
+      if(counter && counter.guaranteed) counter.guaranteed = false;
       const back = Math.ceil(total*0.5);
       const t = acting[0];
       const idx = b.enemies.indexOf(t);
@@ -3865,7 +3954,7 @@ function enemyTurn(){
 
       // Spike Armour retaliates against each attacker
       if(spikes && mon.currentHp>0){
-        const back = Math.ceil(0.4*monAtk(mon));
+        const back = Math.ceil(0.2*monAtk(mon));
         acting.forEach(e=>{
           const idx=b.enemies.indexOf(e);
           const oh=e.hp, nh=Math.max(0,e.hp-back);
@@ -3905,7 +3994,14 @@ function enemyTurn(){
     setTimeout(()=>{
       if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
       if(mon.currentHp<=0){ setTimeout(onMonFainted,700); }
-      else { b.switchedThisTurn=false; setTimeout(()=>{ b.phase='player'; renderBattle(); battleMsg('Choose a move.'); },850); }
+      else {
+        b.switchedThisTurn=false;
+        const gone = tickStatuses();          // one round has passed
+        setTimeout(()=>{
+          b.phase='player'; renderBattle();
+          battleMsg(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
+        },850);
+      }
     }, 850);
   }, 330);
 }
@@ -5836,7 +5932,7 @@ function startArena(uid, count, type){
   ui.battle = {
     waves:[[]], waveIndex:0, isNpc:false, allowCatch:false, name:'Test Arena',
     onWin:null, switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
-    playerStatuses:{}, mirageActive:false, usedVeryHigh:{}, usedUltra:{},
+    partyStatus:{}, fieldStatus:{}, usedVeryHigh:{}, usedUltra:{},
     arena:true, arenaCount:count, arenaType:type,
   };
   ui.battle.enemies = Array.from({length:count}, ()=>makeDummy(type));
