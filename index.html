@@ -2161,7 +2161,7 @@ function typeBadges(species){
 function crownMark(m){ return isCrowned(m) ? crownIcon(15, 'crown-mark') : ''; }
 /* assets/ui/crown.png, glowing; falls back to the emoji until art exists. */
 function crownIcon(px, cls){
-  px = px || 40;
+  px = px || 20;
   return `<img src="assets/ui/crown.png" alt="Crown" class="crown-icon ${cls||''}"
     style="width:${px}px;height:${px}px;" data-px="${px}" data-cls="${cls||''}"
     onerror="crownIconFallback(this)">`;
@@ -6916,7 +6916,7 @@ function renderShop(){
     </div>
 
     <div class="medal-bar">
-      <span>🥉 ${m.bronze||0}</span><span>🥈 ${m.silver||0}</span><span>🥇 ${m.gold||0}</span><span>🎫 ${state.inventory.tokens||0}</span><span>${crownIcon(16)} ${state.inventory.crowns||0}</span>
+      <span>🥉 ${m.bronze||0}</span><span>🥈 ${m.silver||0}</span><span>🥇 ${m.gold||0}</span><span>🎫 ${state.inventory.tokens||0}</span><span>${crownIcon(25)} ${state.inventory.crowns||0}</span>
     </div>
 
     <div id="shopWares" class="ware-grid"></div>
@@ -6938,7 +6938,7 @@ function renderShop(){
     { id:'highSkill',     from:2, icon:gemIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
     { id:'veryHighSkill', from:3, icon:gemIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
     { id:'ultraSkill',    from:4, icon:gemIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
-    { id:'crown',         from:4, icon:crownIcon(22), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
+    { id:'crown',         from:4, icon:crownIcon(50), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
   ];
   const region = state.progress.currentRegion || 1;
   const box = $('#shopWares');
