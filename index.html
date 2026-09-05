@@ -504,7 +504,8 @@
     border-radius:14px;padding:13px 10px;cursor:pointer;box-shadow:0 2px 0 var(--paper-3);}
   .ware:active{transform:translateY(2px);box-shadow:0 1px 0 var(--paper-3);}
   .ware.cant{opacity:0.55;}
-  .ware.oos{opacity:0.4;filter:grayscale(1);cursor:not-allowed;}
+  .ware.oos{opacity:0.55;cursor:not-allowed;}
+  .ware.oos .ware-name{filter:grayscale(1);}   /* dim the label, keep the icon legible */
   .ware-oos{font-size:11px;font-weight:800;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
   .ware-icon{font-size:30px;line-height:1;display:flex;align-items:center;justify-content:center;min-height:46px;}
 
@@ -2162,8 +2163,17 @@ function crownMark(m){ return isCrowned(m) ? crownIcon(15, 'crown-mark') : ''; }
 function crownIcon(px, cls){
   px = px || 20;
   return `<img src="assets/ui/crown.png" alt="Crown" class="crown-icon ${cls||''}"
-    style="width:${px}px;height:${px}px;" data-px="${px}"
-    onerror="this.outerHTML='<span class=\\'crown-icon-fb ${cls||''}\\' style=\\'font-size:${px}px\\'>👑</span>'">`;
+    style="width:${px}px;height:${px}px;" data-px="${px}" data-cls="${cls||''}"
+    onerror="crownIconFallback(this)">`;
+}
+/* Kept as a named function: the previous inline handler nested three levels of
+   quotes and produced invalid markup. */
+function crownIconFallback(img){
+  try{
+    const px = +img.dataset.px || 20;
+    const cls = img.dataset.cls || '';
+    img.outerHTML = `<span class="crown-icon-fb ${cls}" style="font-size:${px}px;">👑</span>`;
+  }catch(e){}
 }
 function displayName(mon){
   return mon.nickname || SPECIES[mon.species].name;
@@ -5613,7 +5623,7 @@ function crownBlock(m){
   const owned = state.inventory.crowns||0;
   if(isCrowned(m)){
     return `<div class="crown-panel crowned">
-      <div class="crown-title">✦ Crowned</div>
+      <div class="crown-title">${crownIcon(18)} Crowned</div>
       <div class="crown-sub">${baseTier(m.species)==='legendary'
         ? 'Carries three extra evolutions\' worth of strength.'
         : 'Raised to legendary growth, with the legendary protein cap.'}</div>
@@ -5622,7 +5632,7 @@ function crownBlock(m){
   const ok = crownEligible(m);
   const why = ok ? '' : crownBlockReason(m);
   return `<div class="crown-panel">
-    <div class="crown-title">👑 Crown <span>${owned} held</span></div>
+    <div class="crown-title">${crownIcon(18)} Crown <span>${owned} held</span></div>
     <div class="crown-sub">${baseTier(m.species)==='legendary'
       ? 'Would grant three more evolutions\' worth of strength.'
       : 'Would raise this monster to legendary growth and unlock the legendary protein cap.'}</div>
@@ -6906,7 +6916,7 @@ function renderShop(){
     </div>
 
     <div class="medal-bar">
-      <span>🥉 ${m.bronze||0}</span><span>🥈 ${m.silver||0}</span><span>🥇 ${m.gold||0}</span><span>🎫 ${state.inventory.tokens||0}</span><span>👑 ${state.inventory.crowns||0}</span>
+      <span>🥉 ${m.bronze||0}</span><span>🥈 ${m.silver||0}</span><span>🥇 ${m.gold||0}</span><span>🎫 ${state.inventory.tokens||0}</span><span>${crownIcon(16)} ${state.inventory.crowns||0}</span>
     </div>
 
     <div id="shopWares" class="ware-grid"></div>
@@ -7657,7 +7667,7 @@ async function forestCrownScene(){
         `<b>to protect others</b>. That is a different thing, and a harder one."</p>
         <p>"Choose carefully. I do not have many."</p>
       </div>
-      <div class="scene-reward">👑<div><b>Crown</b> received.<br><span>Use it in a monster's Stats page.</span></div></div>
+      <div class="scene-reward">${crownIcon(46)}<div><b>Crown</b> received.<br><span>Use it in a monster's Stats page.</span></div></div>
       <button class="btn btn-primary" id="sceneNext" style="margin-top:16px;">Continue</button>
     </div>`;
   $('#sceneNext').addEventListener('click', ()=>{ toast('Rocky Caverns is open to explore freely.'); go('region'); });
