@@ -340,6 +340,14 @@
   .word-meter-head b{color:var(--cinnabar);font-size:13px;}
   .word-meter-bar{height:7px;background:var(--paper-3);border-radius:5px;overflow:hidden;}
   .word-meter-bar > div{height:100%;background:linear-gradient(90deg,var(--cinnabar),var(--gold));transition:width .35s ease;}
+  .stop-early{
+    width:100%;margin-top:8px;font-size:12px;padding:8px;
+    opacity:.35;transition:opacity .3s;
+  }
+  .stop-early.ready{
+    opacity:1;background:var(--gold);color:#fff;border-color:var(--gold);
+    box-shadow:0 3px 0 rgba(150,110,30,.7);
+  }
   .word-meter-note{font-size:10px;font-weight:700;color:var(--jade-dark);margin-top:4px;}
   .char-progress{display:flex;justify-content:center;gap:8px;margin:2px 0 10px;min-height:30px;align-items:center;}
   .char-pip{
@@ -2635,6 +2643,10 @@ function renderQuiz(){
           </div>
           <div class="word-meter-bar"><div id="wordMeterFill" style="width:${Math.min(100,(q.wordsDone||0)/q.config.wordTarget*100)}%;"></div></div>
           ${(q.config.startingWords||0) > 0 ? `<div class="word-meter-note">+${q.config.startingWords} carried over</div>` : ''}
+          ${q.config.stopAt ? `<button class="btn btn-ghost stop-early ${(q.wordsDone||0) >= q.config.stopAt ? 'ready' : ''}"
+             id="stopEarly" ${(q.wordsDone||0) >= q.config.stopAt ? '' : 'disabled'}>
+             ⏹ Stop here${(q.wordsDone||0) >= q.config.stopAt ? ` — ${q.wordsDone} words` : ` (${q.config.stopAt} needed)`}
+           </button>` : ''}
         </div>` : ''}
 
         ${q.config.relaxed ? '' : `
@@ -2658,6 +2670,12 @@ function renderQuiz(){
   if(qe) qe.addEventListener('click', ()=>{ stopTimer(); document.body.classList.remove('writing'); if(q.config.onExit) q.config.onExit(); });
   const erb = $('#exitRecoveryBtn');
   if(erb) erb.addEventListener('click', ()=>{ stopTimer(); document.body.classList.remove('writing'); if(q.config.onExit) q.config.onExit(); });
+  const se = $('#stopEarly');
+  if(se) se.addEventListener('click', ()=>{
+    stopTimer();
+    q.locked = true;
+    if(q.config.onComplete) q.config.onComplete(q.results);
+  });
   $('#listenBtn').addEventListener('click', ()=> speakWord(word));
   $('#defBtn').addEventListener('click', ()=>{
     const def = definitionFor(word);
@@ -3760,7 +3778,11 @@ function renderStatusBadges(){
 const BG_DIR = 'assets/bg/';
 const BG_MAP = {
   home:      'home.png',
-  region:    'region.png',
+  region:    'region.png',     // fallback for any region
+  region1:   'region1.png',
+  region2:   'region2.png',
+  region3:   'region3.png',
+  region4:   'region4.png',
   battle:    'battle.png',
   recover:   'recover.png',
   challenge: 'challenge.png',
@@ -3779,6 +3801,7 @@ const BG_MAP = {
 function bgCandidates(key){
   if(!key) return [];
   const out = [BG_DIR + (BG_MAP[key]||'')];
+  if(/^region\d+$/.test(key)) out.push(BG_DIR + 'region.png');   // fall back to the shared one
   if(/^battle_/.test(key)){
     out.push(BG_DIR + 'battle.png');                       // generic battlefield
     out.push('assets/zones/'+key.replace('battle_','')+'.png');
@@ -4021,7 +4044,10 @@ function guardianRebuke(newCount, guardianHealed){
 }
 function livingEnemies(){ return ui.battle.enemies.filter(e=>e.hp>0); }
 
-const STATUS_NEEDS_TARGET = ['Water','Grass','Ghost','Psychic']; // Very High types that target an enemy
+/* Every Very High status now covers the whole field or the whole enemy wave,
+   so none of them ask the player to pick a target. Kept as a list because a
+   future single-target status would simply be added here. */
+const STATUS_NEEDS_TARGET = [];
 
 function onMoveChosen(moveIdx){
   if((ui.battle.phase||'player') !== 'player') return;  // ignore clicks while a turn is still resolving
@@ -4041,7 +4067,8 @@ function onMoveChosen(moveIdx){
   }
   // High-tier twin skills: the FIRST hit is aimed by the player; the second
   // lands elsewhere at random and can never strike the same target.
-  if(mv.target==='Multi2' && livingEnemies().length>1){ promptTarget(mv); return; }
+  // With two enemies a twin skill hits both regardless, so only ask with three.
+  if(mv.target==='Multi2' && livingEnemies().length>2){ promptTarget(mv); return; }
   runMoveQuiz(mv, mv.target==='Multi2' ? livingEnemies()[0] : null);
 }
 /* Explicit target picker. The old version relied on tapping the small enemy
@@ -4128,6 +4155,7 @@ function runMoveQuiz(mv, target){
     subtitle:`${mv.isStone?stoneTierDef(mv.stoneTier).label+' move':(mv.slot==='Basic'?'Basic move':mv.slot)} · write ${mv.words} words to power it up${mv.scale?` — keep going for up to ${mv.scale.max}× !`:''}`,
     words, stopAtFirstMiss:true, lockExit:true,
     wordTarget: ceilWords,
+    stopAt: mv.scale ? mv.words : 0,     // scaling moves may be ended once powered
     startingWords: carry,
     onComplete:(results)=>resolveBattleMove(mv,target,results),
     onExit:()=>{ go('battle'); },
@@ -5466,7 +5494,7 @@ function region2Locked(){
 }
 
 function renderRegion(){
-  setScreenBg('region');
+  setScreenBg('region'+(state.progress.currentRegion||1));
   playMusicChain(['region'+(state.progress.currentRegion||1), 'region']);
   const rid = state.progress.currentRegion || 1;
   const meta = REGIONS.find(r=>r.id===rid) || REGIONS[0];
@@ -6099,7 +6127,9 @@ function chooseStoneRecipient(s){
     <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;margin-bottom:4px;">Teach ${escapeHtml(s.name)} to…</div>
     <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-bottom:12px;">${isUltra?'Adds a 5th move button.':`Replaces the monster's ${s.tier==='high'?'Power1':'Basic'} move.`}</div>
     ${eligible.map(m=>{
-      const cur = isUltra ? m.ultraStone : m.equippedStone;
+      // Look at the slot THIS stone will occupy — High goes to Power1, so it
+      // never displaces a Basic-slot skill and shouldn't warn about one.
+      const cur = isUltra ? m.ultraStone : (s.tier==='high' ? m.power1Stone : m.equippedStone);
       return `<button class="btn btn-ghost st-opt" data-uid="${m.uid}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;">
         ${monPortrait(m.species,36,{stage:monStage(m)})}
         <span style="flex:1;">${escapeHtml(displayName(m))} · Lv ${m.level}
@@ -6115,7 +6145,7 @@ function chooseStoneRecipient(s){
   ov.querySelectorAll('.st-opt').forEach(b=> b.addEventListener('click', async ()=>{
     const uid = b.dataset.uid;
     const mon = all.find(m=>m.uid===uid);
-    const replaced = isUltra ? mon.ultraStone : mon.equippedStone;
+    const replaced = isUltra ? mon.ultraStone : (s.tier==='high' ? mon.power1Stone : mon.equippedStone);
     const doIt = async ()=>{
       if(isUltra) mon.ultraStone = { tier:s.tier, type:s.type, name:s.name };
       else if(s.tier==='high') mon.power1Stone = { tier:s.tier, type:s.type, name:s.name };
