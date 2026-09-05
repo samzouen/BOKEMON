@@ -662,6 +662,16 @@
   .storage-corner{width:auto;padding:9px 14px;font-size:14px;flex-shrink:0;}
 
   /* ---- mastery on word rows ---- */
+  .crown-panel{
+    background:linear-gradient(135deg, rgba(201,154,63,.16), rgba(200,69,58,.10));
+    border:1px solid rgba(201,154,63,.55);border-radius:14px;padding:13px;margin-top:12px;
+  }
+  .crown-panel.crowned{background:linear-gradient(135deg, rgba(201,154,63,.28), rgba(200,69,58,.18));}
+  .crown-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:15px;display:flex;justify-content:space-between;}
+  .crown-title span{font-size:12px;color:var(--ink-soft);font-weight:800;}
+  .crown-sub{font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.45;margin-top:3px;}
+  .crown-why{font-size:11px;font-weight:800;color:var(--cinnabar-dark);margin-top:8px;}
+  .crown-mark{color:var(--cinnabar);font-weight:900;}
   .mastery-line{display:flex;align-items:center;gap:6px;margin-top:4px;}
   .mst-icon{font-size:11px;}
   .mst-bar{flex:1;max-width:90px;height:5px;background:var(--paper-3);border-radius:4px;overflow:hidden;}
@@ -1496,7 +1506,7 @@ function evolutionStage(species, level){
    three extra evolution stages' worth of stats instead — keeping crowned
    legendaries about 2.5 stages ahead of crowned starters.
    Requires: final evolution, protein maxed, level 65+. */
-const CROWN_MIN_LEVEL = 65;
+const CROWN_MIN_LEVEL = 60;
 const CROWN_LEGENDARY_STAGES = 3;
 
 function isCrowned(m){ return !!(m && m.crowned); }
@@ -2066,6 +2076,8 @@ function typeBadges(species){
     `<span class="type-badge" style="background:${TYPE_COLORS[t]||'#888'}">${t}</span>`
   ).join(' ');
 }
+/* The ✦ marks a crowned monster without ever touching its nickname. */
+function crownMark(m){ return isCrowned(m) ? ' <span class="crown-mark">✦</span>' : ''; }
 function displayName(mon){
   return mon.nickname || SPECIES[mon.species].name;
 }
@@ -3556,9 +3568,9 @@ function renderBattle(){
       <div class="battlefield" aria-hidden="true"></div>
 
       <div class="player-card">
-        <div class="bob player-avatar" id="playerBob">${monPortrait(mon.species,playerSpriteSize(),{view:'back',bare:true,stage:monStage(mon),breathe: mon.currentHp>0 ? ((mon.currentHp/monMaxHp(mon))<0.3 ? 'weak':'normal') : null})}</div>
+        <div class="bob player-avatar" id="playerBob">${monPortrait(mon.species,playerSpriteSize(),{view:'back',bare:true,crowned:isCrowned(mon),stage:monStage(mon),breathe: mon.currentHp>0 ? ((mon.currentHp/monMaxHp(mon))<0.3 ? 'weak':'normal') : null})}</div>
         <div class="info-layer name-plate player-plate">
-          <div class="mon-title big">${escapeHtml(displayName(mon))} <span>Lv ${mon.level}</span></div>
+          <div class="mon-title big">${escapeHtml(displayName(mon))}${crownMark(mon)} <span>Lv ${mon.level}</span></div>
           ${hpBar2('playerHp', mon.currentHp, monMaxHp(mon), true)}
         </div>
       </div>
@@ -4673,6 +4685,17 @@ function awardXpToParty(fightsWorth){
       if(nm) newMoves.push(nm);
     }
     if(m.level >= levelCap()) m.xpFights = 0;
+    // The Dragon Egg hatches on reaching its level, keeping everything it earned.
+    if(isEgg(m) && m.level >= (SPECIES[m.species].hatchesAt||31)){
+      const into = SPECIES[m.species].hatchesInto;
+      const hatchedName = displayName(m);
+      m.species = into;
+      m.currentHp = computeMaxHp(into, m.level, m.supplements||0, m);
+      if(!state.caughtSpecies.includes(into)) state.caughtSpecies.push(into);
+      if(!state.encounteredSpecies.includes(into)) state.encounteredSpecies.push(into);
+      events.push({ uid:m.uid, species:into, name:hatchedName, from, to:m.level, evos:[m.level], newMoves:[], hatched:true });
+      return;
+    }
     if(m.level !== from) events.push({ uid:m.uid, species:m.species, name:displayName(m), from, to:m.level, evos, newMoves });
   });
   return events;
@@ -4823,7 +4846,7 @@ function playEvolutions(list, done){
       paint(toStage, false);                       // settle on the evolved form, full colour
       spriteBox.classList.add('evo-pop');
       ov.querySelector('#evoText').innerHTML =
-        `<b>${escapeHtml(ev.name)}</b> evolved!` +
+        `<b>${escapeHtml(ev.name)}</b> ${ev.hatched?'hatched!':'evolved!'}` +
         (ev.newMoves.length ? `<div class="evo-learn">Learned ${escapeHtml(ev.newMoves.join(', '))}!</div>` : '');
       ov.querySelector('#evoActions').innerHTML =
         `<button class="btn btn-primary" id="evoNext" style="width:auto;padding:12px 30px;">Continue</button>`;
@@ -5401,9 +5424,9 @@ function renderPartyList(){
     return `
     <div class="party-card ${isSeed(m)?'seed-card':''}" data-uid="${m.uid}">
       <div class="party-head" ${isSeed(m)?'':`data-tap="${m.uid}"`}>
-        ${monPortrait(m.species,52,{stage:monStage(m)})}
+        ${monPortrait(m.species,52,{stage:monStage(m),crowned:isCrowned(m)})}
         <div style="flex:1;">
-          <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">${escapeHtml(displayName(m))} <span style="font-size:12px;color:var(--ink-soft);">Lv ${m.level}</span></div>
+          <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">${escapeHtml(displayName(m))}${crownMark(m)} <span style="font-size:12px;color:var(--ink-soft);">Lv ${m.level}</span></div>
           <div>${typeBadges(m.species)}</div>
           ${isSeed(m)
             ? `<div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:5px;font-style:italic;">In your care — cannot battle.</div>`
@@ -5445,6 +5468,59 @@ function renderPartyList(){
 }
 
 /* ---------- SCREEN: stats & moves ---------- */
+/* The Crown panel on a monster's Stats page. */
+function crownBlock(m){
+  if(isSeed(m) || isEgg(m)) return '';
+  const owned = state.inventory.crowns||0;
+  if(isCrowned(m)){
+    return `<div class="crown-panel crowned">
+      <div class="crown-title">✦ Crowned</div>
+      <div class="crown-sub">${baseTier(m.species)==='legendary'
+        ? 'Carries three extra evolutions\' worth of strength.'
+        : 'Raised to legendary growth, with the legendary protein cap.'}</div>
+    </div>`;
+  }
+  const ok = crownEligible(m);
+  const why = ok ? '' : crownBlockReason(m);
+  return `<div class="crown-panel">
+    <div class="crown-title">👑 Crown <span>${owned} held</span></div>
+    <div class="crown-sub">${baseTier(m.species)==='legendary'
+      ? 'Would grant three more evolutions\' worth of strength.'
+      : 'Would raise this monster to legendary growth and unlock the legendary protein cap.'}</div>
+    ${ok && owned>0
+      ? `<button class="btn btn-primary" id="useCrown" style="margin-top:10px;">Use a Crown</button>`
+      : `<div class="crown-why">${owned>0 ? escapeHtml(why) : 'You have no Crowns.'}</div>`}
+  </div>`;
+}
+
+function confirmCrown(m){
+  const legendary = baseTier(m.species)==='legendary';
+  const before = monAtk(m);
+  const after = computeMaxStat(m.species, m.level, m.supplements, Object.assign({}, m, {crowned:true}));
+  confirmDialogHtml(
+    `Crown <b>${escapeHtml(displayName(m))}</b>?<br><br>` +
+    (legendary
+      ? `It gains three more evolutions' worth of strength.`
+      : `It rises to <b>legendary growth</b>, and its protein cap goes from ${proteinCap(m.species,m)} to 10 — ` +
+        `so it will need more Supplements to fill again.`) +
+    `<br><br>ATK <b>${before} → ${after}</b><br><br>` +
+    `<i>Crowns are rare. This cannot be undone.</i>`,
+    async ()=>{
+      if((state.inventory.crowns||0) < 1){ toast('You have no Crowns.'); return; }
+      const snapshot = state.inventory.crowns;
+      state.inventory.crowns--;
+      m.crowned = true;
+      m.currentHp = Math.min(monMaxHp(m), m.currentHp + (monMaxHp(m) - Math.ceil(monMaxHp(m)/1.2)));
+      const sv = showSyncingOverlay('Syncing…');
+      const okc = await saveProfile({ awaitCloud:true });
+      hideSyncingOverlay(sv);
+      if(!okc){ state.inventory.crowns = snapshot; m.crowned = false; showSyncFailure(); return; }
+      playSfx('evolution');
+      toast(`✦ ${displayName(m)} is crowned!`);
+      renderStats();
+    });
+}
+
 function renderStats(){
   const m = state.party.find(x=>x.uid===ui.statsUid) || state.storage.find(x=>x.uid===ui.statsUid);
   if(!m){ return go('party'); }
@@ -5502,6 +5578,7 @@ function renderStats(){
       </div>
       ${nextIsFinal && !atCap ? `<div style="font-size:11px;font-weight:800;color:var(--gold);margin-top:4px;">⭐ The last boost is worth TRIPLE — finish the set!</div>` : ''}
       ${(state.inventory.protein>0 && !atCap) ? `<button class="btn btn-jade" id="useProtein" style="margin-top:10px;">Use Protein Supplement (${state.inventory.protein} left)</button>` : ''}
+      ${crownBlock(m)}
     </div>
 
     <div style="font-weight:800;font-size:14px;margin-bottom:8px;">Moves</div>
@@ -5555,6 +5632,8 @@ function renderStats(){
       nameArea.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);font-weight:600;">Earn a 🥉 Bronze Medal to rename this monster.</div>`;
     }
   }
+  const cb = $('#useCrown');
+  if(cb) cb.addEventListener('click', ()=> confirmCrown(m));
   const up = $('#useProtein');
   if(up) up.addEventListener('click', async ()=>{
     if(state.inventory.protein<=0 || (m.supplements||0)>=suppCap) return;
@@ -6631,6 +6710,7 @@ const SHOP_PRICES = {
   highSkill:    { cur:'gold',   cost:15 },
   veryHighSkill:{ cur:'gold',   cost:80 },
   ultraSkill:   { cur:'gold',   cost:120 },
+  crown:        { cur:'gold',   cost:100 },
 };
 const SHOP_GREETINGS = [
   "Welcome in! Every word you've mastered is worth something here.",
@@ -6685,7 +6765,7 @@ function renderShop(){
     </div>
 
     <div class="medal-bar">
-      <span>🥉 ${m.bronze||0}</span><span>🥈 ${m.silver||0}</span><span>🥇 ${m.gold||0}</span><span>🎫 ${state.inventory.tokens||0}</span>
+      <span>🥉 ${m.bronze||0}</span><span>🥈 ${m.silver||0}</span><span>🥇 ${m.gold||0}</span><span>🎫 ${state.inventory.tokens||0}</span><span>👑 ${state.inventory.crowns||0}</span>
     </div>
 
     <div id="shopWares" class="ware-grid"></div>
@@ -6705,6 +6785,7 @@ function renderShop(){
     { id:'highSkill',     icon:gemIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
     { id:'veryHighSkill', icon:gemIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
     { id:'ultraSkill',    icon:gemIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
+    { id:'crown',         icon:'👑', name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
   ];
   const box = $('#shopWares');
   box.innerHTML = wares.map(w=>{
@@ -6805,6 +6886,7 @@ function openSinglePurchase(w){
     if(w.id==='randomStone'){ stone = newMoveStone(); state.moveStones.push(stone); }
     else if(w.id==='eliteStone'){ stone = newEliteStone(); state.moveStones.push(stone); }
     else if(w.id==='protein'){ state.inventory.protein = (state.inventory.protein||0)+1; }
+    else if(w.id==='crown'){ state.inventory.crowns = (state.inventory.crowns||0)+1; }
     const sv = showSyncingOverlay('Syncing…');
     const ok = await saveProfile({ awaitCloud:true });
     hideSyncingOverlay(sv);
@@ -6815,6 +6897,7 @@ function openSinglePurchase(w){
     }
     close();
     if(stone) showStoneReveal(stone, 'Purchased!', 'shop');
+    else if(w.id==='crown'){ playSfx('evolution'); ui.shopNote='A Crown is yours. Use it from a monster\'s Stats page.'; renderShop(); }
     else { playSfx('protein_use'); toast('Protein Supplement purchased!'); renderShop(); }
   });
 }
@@ -7391,10 +7474,13 @@ async function forestCrownScene(){
         <p>"You had no such rules. You only had the choice — and you made it twice now, knowing both times ` +
         `that it would cost you."</p>
         <p>She presses a circlet of woven branches into your hands. It is lighter than it looks.</p>
-        <p>"A <b>Forest Crown</b>. Give it to one you have already carried as far as it can go, and it will ` +
-        `become something more. Choose carefully — I do not have many."</p>
+        <p>"A <b>Crown</b>. Give it to one you have carried as far as it can go — one you <i>love</i>, ` +
+        `not merely one that is useful."</p>
+        <p>"It does not make a monster stronger for its own sake. It grants it the strength ` +
+        `<b>to protect others</b>. That is a different thing, and a harder one."</p>
+        <p>"Choose carefully. I do not have many."</p>
       </div>
-      <div class="scene-reward">👑<div><b>Forest Crown</b> received.<br><span>Use it in a monster's Stats page.</span></div></div>
+      <div class="scene-reward">👑<div><b>Crown</b> received.<br><span>Use it in a monster's Stats page.</span></div></div>
       <button class="btn btn-primary" id="sceneNext" style="margin-top:16px;">Continue</button>
     </div>`;
   $('#sceneNext').addEventListener('click', ()=>{ toast('Rocky Caverns is open to explore freely.'); go('region'); });
