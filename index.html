@@ -407,6 +407,14 @@
   }
   .medal-bar{display:flex;gap:10px;justify-content:center;background:var(--paper-2);border:1px solid var(--line);
     border-radius:12px;padding:9px;font-weight:800;font-size:14px;}
+  .white-room{
+    position:fixed;inset:0;z-index:70;background:#fdfcf7;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:26px;overflow-y:auto;
+  }
+  .wr-dragon{filter:drop-shadow(0 0 34px rgba(120,190,220,.9));margin-bottom:14px;}
+  .wr-text{max-width:420px;font-size:14.5px;font-weight:600;line-height:1.65;color:#232019;}
+  .wr-text p{margin:0 0 12px;}
   .scene{max-width:520px;margin:0 auto;text-align:center;}
   .scene-portrait{display:flex;justify-content:center;margin:10px 0 6px;
     filter:drop-shadow(0 0 26px rgba(120,200,140,0.75));}
@@ -566,6 +574,24 @@
   .zone-hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
   .zone-hero-name{position:relative;z-index:1;padding:12px 14px;font-family:'Baloo 2',cursive;
     font-weight:800;font-size:22px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,0.7);}
+  /* --- Rocky Caverns paths --- */
+  .key-row{display:flex;gap:8px;margin:10px 0 14px;}
+  .key-chip{flex:1;text-align:center;font-size:12px;font-weight:800;padding:9px 6px;border-radius:11px;
+    background:var(--paper-3);color:var(--ink-soft);border:1px solid var(--line);opacity:.65;}
+  .key-chip.have{background:rgba(47,143,111,.18);border-color:rgba(47,143,111,.5);color:var(--jade-dark);opacity:1;}
+  .path-list{display:flex;flex-direction:column;gap:10px;}
+  .path-card{
+    background:var(--paper-2);border:1px solid var(--line);border-left:6px solid var(--zone-tint,var(--line));
+    border-radius:14px;padding:13px;cursor:pointer;box-shadow:0 2px 0 var(--paper-3);
+  }
+  .path-card:active{transform:translateY(2px);box-shadow:0 1px 0 var(--paper-3);}
+  .path-card.locked{opacity:.5;cursor:not-allowed;}
+  .path-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:16px;}
+  .path-desc{font-size:12px;color:var(--ink-soft);font-weight:600;margin-bottom:8px;}
+  .path-bar{height:7px;background:var(--paper-3);border-radius:5px;overflow:hidden;}
+  .path-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--jade),var(--gold));transition:width .4s;}
+  .path-note{font-size:11px;font-weight:800;color:var(--ink-soft);margin-top:5px;}
+  body.has-bg .path-card,body.has-bg .key-chip{background:rgba(244,236,216,0.34);backdrop-filter:blur(2px);}
   .zone-facts{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;
     background:var(--paper-2);border:1px solid var(--line);border-radius:13px;padding:11px 13px;}
   .zone-facts b{font-weight:800;}
@@ -1640,7 +1666,7 @@ function blankProfile(name, starterSpecies){
     progress:{
       currentRegion:1,
       region1:{ guardianCleared:false, rivalCleared:false, thugsCleared:[], thugBossCleared:false, investigateProtein:0, dojoCleared:[] },
-      region2:{ courage:0, trialDone:false, seedGranted:false, challengeDone:false },
+      region2:{ courage:0, trialDone:false, seedGranted:false, challengeDone:false, rivalCleared:false, waterDojo:[], paths:{}, uniform:false, password:false, cavernDone:false },
     },
     settings:{ volume:0.8, sfxVolume:0.55, musicVolume:0.10, focusMode:false, password:null, xpMode:'default', leftHanded:false, leniency:1.0, eyeBreakEvery:10, eyeBreakMins:5 },
     recentWrong:[],
@@ -1773,6 +1799,10 @@ function normalizeProfile(p){
   r2.seedGranted = !!r2.seedGranted;
   r2.challengeDone = !!r2.challengeDone;
   r2.rivalCleared = !!r2.rivalCleared;
+  r2.paths = r2.paths || {};
+  r2.uniform = !!r2.uniform;
+  r2.password = !!r2.password;
+  r2.cavernDone = !!r2.cavernDone;
   r2.waterDojo = r2.waterDojo || [];
   p.settings = p.settings || {};
   if(p.settings.volume===undefined) p.settings.volume = 0.8;
@@ -2983,6 +3013,80 @@ const REGION_ZONES = {
    Sacred Grove refuses to let anyone pass who runs from a fight. Thirty
    battles must be seen through without fleeing; the count resets to zero the
    moment the player flees. At thirty, the Guardian herself appears. */
+/* ============================================================
+   ROCKY CAVERNS — THREE PATHS
+   Upper and Lower each run 12 explores and yield half of what the Disused
+   path needs: a mafia uniform from one, the password from the other. The
+   Disused path stalls at explore 5 until both are in hand.
+   Progress is a per-path counter on the profile, so leaving mid-path resumes
+   where you stopped; fleeing costs nothing.
+   ============================================================ */
+const CAVERN_PATHS = [
+  { id:'upper',   name:'Upper Path',   tint:'#8a7a5b', desc:'Cut stone and old lamplight.' },
+  { id:'lower',   name:'Lower Path',   tint:'#5b6a7a', desc:'Damp, and it echoes.' },
+  { id:'disused', name:'Disused Path', tint:'#6b5b5b', desc:'Nobody comes this way. Almost nobody.' },
+];
+const PATH_LENGTH = 12;
+
+/* A Soldato waits at a random point in the first nine explores of the two
+   outer paths; the fixed encounters sit at 10, 11 and 12. */
+function pathState(){
+  const r2 = state.progress.region2;
+  r2.paths = r2.paths || {};
+  CAVERN_PATHS.forEach(p=>{
+    r2.paths[p.id] = r2.paths[p.id] || { step:0, soldatoAt:0, done:false };
+    if(p.id!=='disused' && !r2.paths[p.id].soldatoAt){
+      r2.paths[p.id].soldatoAt = 1 + Math.floor(Math.random()*9);   // 1..9
+    }
+  });
+  return r2.paths;
+}
+function hasUniform(){ return !!(state.progress.region2||{}).uniform; }
+function hasPassword(){ return !!(state.progress.region2||{}).password; }
+function hasLantern(){ return battleParty().some(m=>m.species==='lanternfish' || m.species==='forest_fairy'); }
+
+/* What happens on the NEXT explore of a given path. */
+function pathNext(pathId){
+  const st = pathState()[pathId];
+  const step = st.step + 1;               // the explore about to be taken
+  if(step > PATH_LENGTH) return { kind:'done' };
+
+  if(pathId === 'disused'){
+    if(step <= 4) return { kind:'wild' };
+    if(step === 5 && !(hasUniform() && hasPassword())) return { kind:'blocked' };
+    return { kind:'scene', scene:'disused'+step };
+  }
+
+  // upper / lower
+  if(step === st.soldatoAt) return { kind:'soldato', tier:1 };
+  if(step <= 9)  return { kind:'wild' };
+  if(step === 10) return { kind:'soldato', tier:2 };
+  if(step === 11) return { kind:'capo', which: pathId==='upper' ? 'black' : 'purple' };
+  return { kind:'reward', which: pathId==='upper' ? 'uniform' : 'password' };
+}
+
+/* --- mafia rosters (sheet: wilds first wave, elites second) --- */
+const MAFIA = {
+  soldato1: { npcId:'soldato1', label:'Soldato', waves:[
+    [{species:'golem',level:41},{species:'bat',level:41}],
+    [{species:'goblin',level:43},{species:'squid',level:43}],
+  ], ai:['power1','power2'] },
+  soldato2: { npcId:'soldato2', label:'Soldato', waves:[
+    [{species:'golem',level:44},{species:'bat',level:44},{species:'earth_snake',level:44}],
+    [{species:'goblin',level:46},{species:'sumo',level:46},{species:'squid',level:46}],
+  ], ai:['power1','power2'] },
+  capo_black: { npcId:'capo_black', label:'Black Capo', waves:[
+    [{species:'golem',level:46},{species:'bat',level:46},{species:'earth_snake',level:46}],
+    [{species:'goblin',level:49},{species:'sumo',level:49},{species:'squid',level:49}],
+    [{species:'ghost_starter',level:51}],
+  ], ai:['power2','best','best'] },
+  capo_purple: { npcId:'capo_purple', label:'Purple Capo', waves:[
+    [{species:'golem',level:46},{species:'bat',level:46},{species:'earth_snake',level:46}],
+    [{species:'goblin',level:49},{species:'sumo',level:49},{species:'squid',level:49}],
+    [{species:'psychic_starter',level:51}],
+  ], ai:['power2','best','best'] },
+};
+
 const COURAGE_TARGET = 30;
 /* The last three battles of the trial (the 28th, 29th and 30th) are a level-35
    gauntlet. Fleeing during them costs only the gauntlet rather than the whole
@@ -3114,14 +3218,32 @@ function beginBattle(config){
     challenge: config.challenge || null, name: config.name || 'Battle',
     onWin: config.onWin || null, noFlee: !!config.noFlee, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
     guardianTrial: !!config.guardianTrial, leechSeed:false,
+    scriptedLoss: config.scriptedLoss||null,
+    scriptedAlly: config.scriptedAlly||null, allyMove: config.allyMove||null,
+    allyUnkillable: !!config.allyUnkillable, enemiesFirst: !!config.enemiesFirst,
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     partyStatus:{},          // party-wide buffs, each with a turn counter
     fieldStatus:{},          // debuffs stamped on every enemy, inherited by later waves
     usedVeryHigh:{}, usedUltra:{},   // uid -> true, once-per-battle usage
   };
+  if(config.scriptedAlly){
+    // The player rides a borrowed monster: the real party is set aside and
+    // restored when the scripted sequence ends.
+    ui.realParty = state.party;
+    const ally = newMonster(config.scriptedAlly, config.allyLevel||100);
+    ally.crowned = !!config.allyCrowned;
+    ally.supplements = proteinCap(config.scriptedAlly, ally);
+    ally.currentHp = monMaxHp(ally);
+    state.party = [ally];
+    ui.battle.activeIndex = 0;
+  }
   loadWave(0);
   playBattleMusic(!!config.isNpc, { silentIntro: !!config.silentIntro });
   go('battle');
+  if(config.enemiesFirst){
+    ui.battle.phase = 'resolving';
+    setTimeout(()=>{ battleMsg('They strike first!'); setTimeout(enemyTurn, 700); }, 700);
+  }
 }
 function loadWave(i){
   const b = ui.battle;
@@ -3160,6 +3282,11 @@ function activeMon(){ return state.party[ui.battle.activeIndex]; }
 function monMaxHp(m){ return computeMaxHp(m.species, m.level, m.supplements, m); }
 function monAtk(m){ return computeMaxStat(m.species, m.level, m.supplements, m); }
 function unlockedMoves(m){
+  // A borrowed story monster gets exactly one button, and no writing.
+  const sm = ui.battle && ui.battle.allyMove && SCRIPTED_MOVES[ui.battle.allyMove];
+  if(sm && ui.battle.scriptedAlly && m.species===ui.battle.scriptedAlly){
+    return [Object.assign({ unlock:0, available:true, isStone:false, scripted:true }, sm)];
+  }
   /* 'Max' is an UPGRADE of Ultimate, not an extra button: once its level is
      reached it takes over the Ultimate slot entirely. */
   const maxMv = MOVES[m.species].find(mv=>mv[0]==='Max' && mv[1]!=null && m.level>=mv[5]);
@@ -3582,7 +3709,8 @@ function onFlee(){
     return guardianRebuke(null, true);
   }
   toast('Got away safely!');
-  go(ui.battle.isNpc ? 'challenge' : 'zone');
+  const back = (ui.currentZone||{}).id==='rocky_caverns' ? 'caverns' : (ui.battle.isNpc ? 'challenge' : 'zone');
+  go(back);
 }
 
 /* A modal the player must dismiss — a toast is too easy to miss. */
@@ -3616,6 +3744,7 @@ function onMoveChosen(moveIdx){
   ui.battle.phase = 'resolving';
   const mon=activeMon();
   const mv=unlockedMoves(mon)[moveIdx];
+  if(mv && mv.scripted) return resolveScriptedMove(mv, mon);
   if(mv.target==='Single' && livingEnemies().length>1){ promptTarget(mv); return; }
   if(mv.target==='Single'){ runMoveQuiz(mv, livingEnemies()[0]); return; }
   if(mv.target==='Status'){
@@ -3725,6 +3854,46 @@ function bankWordSpill(mv){
   const spill = Math.max(0, done - mv.words);
   ui.battle.wordCarry = spill;
   return spill;
+}
+
+/* Tsunami sweeps the field; Dragon Legacy whites out and ends the sequence.
+   Neither asks for a single written word. */
+function resolveScriptedMove(mv, mon){
+  const b = ui.battle;
+  if(mv.endsBattle){
+    battleMsg(`${displayName(mon)} used ${mv.name}!`);
+    playEffect(mv.name, { duration:900 });
+    const flash = document.createElement('div');
+    flash.style.cssText='position:fixed;inset:0;background:#fff;z-index:92;opacity:0;transition:opacity 1.2s;';
+    document.body.appendChild(flash);
+    requestAnimationFrame(()=>{ flash.style.opacity='1'; });
+    setTimeout(()=>{
+      if(flash.parentNode) document.body.removeChild(flash);
+      restoreRealParty();
+      if(b.onWin) b.onWin();
+    }, 1600);
+    return;
+  }
+  // a sweeping AOE that is certain to clear the field
+  const atk = monAtk(mon);
+  const hits = livingEnemies().map(t=>{
+    const dmg = Math.max(t.hp, computeDamage(mv.mult, atk, monRef(mon), t, true));
+    return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:0 };
+  });
+  battleMsg(`${displayName(mon)} used ${mv.name}!`);
+  bob($('#playerBob'), +1);
+  playEffect(mv.name, { duration:800 });
+  setTimeout(()=>{
+    applyHits(hits);
+    setTimeout(()=>{
+      battleMsg('The field is swept clean!');
+      setTimeout(()=>{ restoreRealParty(); if(b.onWin) b.onWin(); }, 900);
+    }, 700);
+  }, 500);
+}
+
+function restoreRealParty(){
+  if(ui.realParty){ state.party = ui.realParty; ui.realParty = null; saveProfile(); }
 }
 
 function resolveBattleMove(mv, target, results){
@@ -4096,7 +4265,9 @@ function runEnemyAttack(i){
       msg = `🛡️ Countered! ${back} reflected back at ${name}.`;
     } else {
       const oldHp = mon.currentHp;
-      mon.currentHp = Math.max(0, mon.currentHp - dmg);
+      // scripted last stand: the dragon always survives on 1 HP
+      const floor = ui.battle.allyUnkillable ? 1 : 0;
+      mon.currentHp = Math.max(floor, mon.currentHp - dmg);
       flashHit($('#playerBob'));
       playSfx('hit_taken');
       drainHp('playerHp', oldHp, mon.currentHp, monMaxHp(mon));
@@ -4162,6 +4333,7 @@ function onMonFainted(){
 }
 function onPlayerDefeated(){
   if(ui.battle && ui.battle.guardianTrial) return onGuardianTrialResolved();
+  if(ui.battle && ui.battle.scriptedLoss==='padrino'){ restoreRealParty(); return onPadrinoResolved(); }
   playSfx('defeat'); stopMusic();
   const breakAfterLoss = tallyBattleForEyeBreak();
   const fade=document.createElement('div');
@@ -4285,10 +4457,17 @@ function rollTokenDrop(){
 
 function onBattleWon(){
   const b = ui.battle;
-  if(b.guardianTrial) return onGuardianTrialResolved();   // winning her is still the scripted beat
+  if(b.guardianTrial) return onGuardianTrialResolved();
+  if(b.scriptedLoss==='padrino'){ restoreRealParty(); return onPadrinoResolved(); }   // winning her is still the scripted beat
   if(inSacredGroveTrial()){
     state.progress.region2.courage = (state.progress.region2.courage||0) + 1;
     saveProfile();
+  }
+  // a wild win inside the Caverns moves you one step along that path
+  if(ui.cavernAdvanceOnWin && !b.isNpc){
+    const pid = ui.cavernAdvanceOnWin;
+    ui.cavernAdvanceOnWin = null;
+    advancePath(pid);
   }
   const enemyNames = b.enemies.map(e=>SPECIES[e.species].name).join(' & ');
   const levelUps = awardXpToParty();
@@ -4432,7 +4611,12 @@ function showVictory(enemyNames, levelUps, tokens){
   }
   $('#regionBtn').addEventListener('click', ()=>go('region'));
   if(breakNow) showEyeBreak();
-  $('#againBtn').addEventListener('click', ()=>{ if(battleParty().some(m=>m.currentHp>0)) startWildEncounter({ silentIntro:true }); else { toast('Your team needs healing first.'); go('zone'); } });
+  const inCaverns = (ui.currentZone||{}).id === 'rocky_caverns';
+  $('#againBtn').addEventListener('click', ()=>{
+    if(inCaverns) return go('caverns');
+    if(battleParty().some(m=>m.currentHp>0)) startWildEncounter({ silentIntro:true });
+    else { toast('Your team needs healing first.'); go('zone'); }
+  });
 }
 
 /* ---------- CATCHING ---------- */
@@ -4559,6 +4743,7 @@ function renderInner(){
     case 'shop':          return renderShop();
     case 'regionSelect':  return renderRegionSelect();
     case 'zone':          return renderZone();
+    case 'caverns':       return renderCaverns();
     case 'avatarPick':    return renderAvatarPick();
     case 'region2':       return renderStub('Region 2','🏞️','Region 2 is unlocked — its wilds and trainers arrive in a future phase. Earth Snake and Ground Starter will be catchable here.','region');
     case 'recover':       return renderRecover();
@@ -6658,6 +6843,450 @@ async function onWaterStageWin(stage){
     'challenge');
 }
 
+
+
+/* ============================================================
+   THE DISUSED PATH — the Region 2 finale.
+   Scenes 5-8 build the confrontation, 9-11 are scripted battles the player
+   cannot win by strength, and 12 is the farewell. The through-line is the same
+   lesson as the Sacred Grove: courage is standing your ground, not winning.
+   ============================================================ */
+function runDisusedScene(scene){
+  const step = parseInt(scene.replace('disused',''),10);
+  ui.cavernPath = 'disused';
+  switch(step){
+    case 5:  return disused5();
+    case 6:  return disused6();
+    case 7:  return disused7();
+    case 8:  return disused8();
+    case 9:  return disused9Fight();
+    case 10: return disused10Fight();
+    case 11: return disused11Fight();
+    case 12: return disused12Farewell();
+  }
+}
+
+async function stepDisused(){ await advancePath('disused'); }
+
+/* --- 5: the guards --- */
+async function disused5(){
+  await stepDisused();
+  storyModal('🕴️', 'Two guards at the door',
+    `Your borrowed suit draws no second glance. One of them holds out a hand anyway.<br><br>` +
+    `"Word."<br><br>` +
+    `"<b>Campanile</b>," you say, and your voice does not shake.<br><br>` +
+    `He steps aside without looking at you again.`,
+    ()=>renderCaverns());
+}
+
+/* --- 6: the army, and something roaring --- */
+async function disused6(){
+  await stepDisused();
+  storyModal('🏮', 'An army in the dark',
+    `The tunnel opens into a cavern the size of a town square, and it is <b>full</b> of them — ` +
+    `soldiers in rows, crates stacked to the ceiling, lamps strung on wire.<br><br>` +
+    `You keep your chin level and your pace even, and nobody stops you.<br><br>` +
+    `From somewhere far below comes a sound that is not machinery. It is a <b>roar</b>, ` +
+    `long and furious and tired, and it shakes dust from the roof.`,
+    ()=>renderCaverns());
+}
+
+/* --- 7: the dragon, restrained --- */
+async function disused7(){
+  await stepDisused();
+  storyModal('🐉', 'The thing they caught',
+    `You come out on a ledge above a flooded chamber, and you forget to breathe.<br><br>` +
+    `A <b>water dragon</b> fills it — vast, coiling, magnificent — and it is <b>losing</b>. ` +
+    `A man in a pale coat stands calmly at the water's edge, directing the fight like a conductor.<br><br>` +
+    `He is not fighting fair. His Capos' <b>ghosts and psychics</b> have the dragon bound at every limb, ` +
+    `holding it still while he works.`,
+    ()=>renderCaverns());
+}
+
+/* --- 8: the core, and the choice --- */
+async function disused8(){
+  await stepDisused();
+  document.body.classList.remove('writing');
+  $('#brandSub').textContent = 'Rocky Caverns';
+  setScreenBg('rocky_caverns');
+  screenEl.innerHTML = `
+    <div class="scene">
+      <div style="font-size:52px;margin:14px 0 8px;">💠</div>
+      <div class="scene-title">Its core is gone</div>
+      <div class="scene-body">
+        <p>You see it now. Where the dragon's chest should shine there is only a <b>hollow</b> — ` +
+        `something has been cut out of it.</p>
+        <p>Whatever is left of it is barely fighting any more. Its eyes have gone flat and obedient. ` +
+        `The man in the pale coat says a word and the dragon <b>stops struggling</b>.</p>
+        <p>They have taken its heart, and put something else in its place.</p>
+        <p><b>Nobody has seen you.</b> You could still turn around.</p>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button class="btn btn-ghost" id="choiceNo" style="flex:1;">Leave quietly</button>
+        <button class="btn btn-primary" id="choiceYes" style="flex:1;">Help the dragon</button>
+      </div>
+    </div>`;
+  $('#choiceYes').addEventListener('click', ()=>{
+    storyModal('🐉', 'You step out of the dark',
+      `You do not have a plan. You walk out onto the ledge anyway, and your voice carries further than you meant it to.<br><br>` +
+      `The pale coat turns. He looks you over — the borrowed suit, the child inside it — and something like ` +
+      `<b>amusement</b> crosses his face.<br><br>` +
+      `"<b>Don Padrino</b>," he says, introducing himself to you as though you were worth the courtesy. ` +
+      `"And you are trespassing."`,
+      ()=>disused9Fight());
+  });
+  $('#choiceNo').addEventListener('click', ()=>{
+    storyModal('🕴️', 'You are recognised',
+      `You turn to go — and stop. Two Capos are on the ledge behind you, and one of them is <b>smiling</b>.<br><br>` +
+      `"That's the one. That's the kid who beat me."<br><br>` +
+      `"<b>Intruder!</b>"<br><br>` +
+      `The man in the pale coat does not seem troubled at all. If anything he looks <b>pleased</b>.<br><br>` +
+      `"Then the timing is perfect," says <b>Don Padrino</b>. "I have been wanting to test my new pet."`,
+      ()=>disused9Fight());
+  });
+}
+
+
+/* --- 9: Don Padrino. Unwinnable by design; losing is the story. --- */
+function disused9Fight(){
+  const r2 = state.progress.region2;
+  r2.padrinoMet = true;
+  beginBattle({
+    isNpc:true, name:'Don Padrino', npcId:'padrino', noFlee:true, scriptedLoss:'padrino',
+    waves:[[
+      {species:'ghost_starter',   level:81, ai:'best'},
+      {species:'water_dragon',    level:100, ai:'best', supplements:10, crowned:true, boss:true},
+      {species:'psychic_starter', level:81, ai:'best'},
+    ]],
+    onWin: ()=> onPadrinoResolved(),   // if somehow won, the story still runs
+  });
+}
+
+/* The party falls — and the Sacred Seed answers. */
+async function onPadrinoResolved(){
+  stopMusic();
+  const r2 = state.progress.region2;
+  battleParty().forEach(m=>{ if(m.currentHp<=0) m.currentHp = Math.max(1, Math.ceil(monMaxHp(m)*0.10)); });
+
+  const seedIdx = state.party.findIndex(isSeed);
+  const seed = seedIdx>=0 ? state.party[seedIdx] : null;
+  const level = seed ? seed.level : 1;
+
+  storyModal('🌱', 'The seed answers',
+    `Your last monster goes down. Don Padrino is already turning away, bored of you.<br><br>` +
+    `Then the <b>Sacred Seed</b> in your pack begins to glow.`,
+    ()=>{
+      // grow the Seed into the Forest Fairy, keeping the level it earned
+      if(seed){
+        const evolved = newMonster('forest_fairy', level);
+        evolved.nickname = seed.nickname;
+        evolved.xpFights = seed.xpFights||0;
+        evolved.currentHp = computeMaxHp('forest_fairy', level, 0, evolved);
+        state.party[seedIdx] = evolved;
+        r2.fairyGranted = true;
+        // the Lanternfish steps aside for her
+        const lanternIdx = state.party.findIndex(m=>m.species==='lanternfish');
+        if(lanternIdx>=0){
+          const fish = state.party.splice(lanternIdx,1)[0];
+          state.storage.push(fish);
+        }
+        if(!state.caughtSpecies.includes('forest_fairy')) state.caughtSpecies.push('forest_fairy');
+      }
+      saveProfile();
+      playEvolutions([{ uid:seed?seed.uid:'seed', species:'forest_fairy', name:'Sacred Seed',
+                        from:level, to:level, evos:[level], newMoves:[] }], ()=>{
+        storyModal('✨', 'Fairy light',
+          `The light does not stop at you. It floods the chamber, and where it touches the dragon the ` +
+          `<b>mind-control breaks apart like ice</b>.<br><br>` +
+          `The dragon's eyes clear. It looks at you — really looks — and lowers its head.<br><br>` +
+          `Then it takes you onto its back and <b>runs</b>.`,
+          ()=>disused10Fight());
+      });
+    });
+}
+
+/* --- 10: riding the dragon. One button, no spelling. --- */
+function disused10Fight(){
+  advancePath('disused');   // scenes 9 and 10 are one continuous beat
+  beginBattle({
+    isNpc:true, name:'The Capos', npcId:'capo_black', noFlee:true, scriptedAlly:'water_dragon',
+    allyLevel:100, allyCrowned:true, allyMove:'tsunami',
+    waves:[[
+      {species:'ghost_starter',    level:51, ai:'best'},
+      {species:'physical_starter', level:51, ai:'best'},
+      {species:'psychic_starter',  level:51, ai:'best'},
+    ]],
+    onWin: ()=> disused11Intro(),
+  });
+}
+
+function disused11Intro(){
+  storyModal('💠', 'It is weaker than it looks',
+    `The dragon lands hard, and you feel it shudder beneath you.<br><br>` +
+    `A Capo steps from the smoke, turning something over in his hand — something that <b>glows</b>.<br><br>` +
+    `"Looking for this?" He holds up the <b>dragon's core</b>. "It won't last much longer without it."`,
+    ()=>disused11Fight());
+}
+
+/* --- 11: the last stand. The dragon cannot die, and cannot win. --- */
+function disused11Fight(){
+  beginBattle({
+    isNpc:true, name:'The Capos', npcId:'capo_purple', noFlee:true,
+    scriptedAlly:'water_dragon', allyLevel:100, allyCrowned:true,
+    allyMove:'dragonLegacy', allyUnkillable:true, enemiesFirst:true,
+    waves:[[
+      {species:'ghost_starter',  level:81, ai:'best'},
+      {species:'flying_starter', level:81, ai:'best'},
+      {species:'psychic_starter',level:81, ai:'best'},
+    ]],
+    onWin: ()=> disused12Farewell(),
+  });
+}
+
+/* --- 12: the farewell, in a white room --- */
+async function disused12Farewell(){
+  const r2 = state.progress.region2;
+  await advancePath('disused');
+  stopMusic();
+  playMusic('region');
+  document.body.classList.remove('writing');
+  setScreenBg(null);
+  $('#brandSub').textContent = '';
+
+  const lines = [
+    `<p>There is no cavern any more. No floor, no ceiling — only white, and the dragon, ` +
+    `glowing softly as though lit from inside.</p>`,
+    `<p>"You had every reason to walk away," it says. "You did not. That is a rarer thing than strength."</p>`,
+    `<p>"I cannot follow you out. What they took from me is not something I can live long without."</p>`,
+    `<p>The light gathers in front of you and settles into something small and heavy and warm.</p>
+     <p>"This is my <b>legacy</b>. Be patient with it — a dragon takes a long time to become anything at all, ` +
+     `and longer still to become worth fearing."</p>`,
+    `<p>"One last thing." Its voice is quieter now. "Find the man in the pale coat. ` +
+     `Take back my <b>core</b>, and give it to the one who hatches from that egg."</p>
+     <p>"Then we will both be whole."</p>`,
+  ];
+  let i = 0;
+  const paint = ()=>{
+    screenEl.innerHTML = `
+      <div class="white-room">
+        <div class="wr-dragon">${monPortrait('water_dragon', 190, { view:'front', bare:true, stage:1, crowned:true })}</div>
+        <div class="wr-text">${lines.slice(0, i+1).join('')}</div>
+        <button class="btn btn-primary" id="wrNext" style="margin-top:16px;">${i<lines.length-1?'Continue':'Take the egg'}</button>
+      </div>`;
+    $('#wrNext').addEventListener('click', ()=>{
+      if(i < lines.length-1){ i++; paint(); return; }
+      grantDragonEgg();
+    });
+  };
+  paint();
+}
+
+async function grantDragonEgg(){
+  const r2 = state.progress.region2;
+  // the egg takes the slot the Sacred Seed once held
+  const seedIdx = state.party.findIndex(isSeed);
+  const egg = newMonster('dragon_egg', 1);
+  egg.currentHp = 1;
+  if(seedIdx>=0) state.party[seedIdx] = egg; else state.party.push(egg);
+  r2.eggGranted = true;
+  r2.cavernDone = true;
+  if(!state.caughtSpecies.includes('dragon_egg')) state.caughtSpecies.push('dragon_egg');
+  await saveProfile();
+
+  const fade = document.createElement('div');
+  fade.style.cssText='position:fixed;inset:0;background:#fff;z-index:90;opacity:0;transition:opacity 1.6s;';
+  document.body.appendChild(fade);
+  requestAnimationFrame(()=>{ fade.style.opacity='1'; });
+  setTimeout(()=>{
+    storyModal('🥚', 'A dragon egg',
+      `You are standing in the Sacred Grove again, and the light is ordinary, and your legs are shaking.<br><br>` +
+      `In your arms is a <b>dragon egg</b>, heavy and faintly warm. It travels in the slot the Sacred Seed once ` +
+      `filled — level 1, and a long way from hatching. <b>It will open at level 31.</b>`,
+      ()=>forestCrownScene());
+    fade.style.opacity='0';
+    setTimeout(()=>{ if(fade.parentNode) document.body.removeChild(fade); }, 1600);
+  }, 1700);
+}
+
+/* The Forest Guardian closes the chapter. */
+async function forestCrownScene(){
+  state.inventory.crowns = (state.inventory.crowns||0) + 1;
+  await saveProfile();
+  setScreenBg('explore');
+  $('#brandSub').textContent = 'The Sacred Grove';
+  screenEl.innerHTML = `
+    <div class="scene">
+      <div class="scene-portrait cutout">${monPortrait('forest_fairy', 170, { view:'front', bare:true, stage:1 })}</div>
+      <div class="scene-title">The Forest Guardian</div>
+      <div class="scene-body">
+        <p>She is waiting for you at the treeline, and for once she is not smiling at your expense.</p>
+        <p>"I felt it break. The binding on that creature." A pause. "I could not go. There are rules on ` +
+        `what I am, and older things than me that enforce them."</p>
+        <p>"You had no such rules. You only had the choice — and you made it twice now, knowing both times ` +
+        `that it would cost you."</p>
+        <p>She presses a circlet of woven branches into your hands. It is lighter than it looks.</p>
+        <p>"A <b>Forest Crown</b>. Give it to one you have already carried as far as it can go, and it will ` +
+        `become something more. Choose carefully — I do not have many."</p>
+      </div>
+      <div class="scene-reward">👑<div><b>Forest Crown</b> received.<br><span>Use it in a monster's Stats page.</span></div></div>
+      <button class="btn btn-primary" id="sceneNext" style="margin-top:16px;">Continue</button>
+    </div>`;
+  $('#sceneNext').addEventListener('click', ()=>{ toast('Rocky Caverns is open to explore freely.'); go('region'); });
+}
+
+/* ---------- ROCKY CAVERNS: the three-path zone page ---------- */
+function renderCaverns(){
+  setScreenBg('rocky_caverns');
+  $('#brandSub').textContent = 'Rocky Caverns';
+  const lit = hasLantern();
+  const paths = pathState();
+  const canFight = battleParty().some(m=>m.currentHp>0);
+
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Explore</button>
+    <div class="zone-hero">
+      <img src="assets/zones/rocky_caverns.png" alt="" class="zone-hero-img" onerror="this.style.display='none'">
+      <div class="zone-hero-name">Rocky Caverns</div>
+    </div>
+
+    ${!lit ? `
+      <div class="trial-banner" style="margin-bottom:14px;">
+        <b>Too dark to go on</b>
+        <div>You need a <b>Lanternfish</b> in your party to light the way. Check Storage if it isn't with you.</div>
+      </div>` : ''}
+
+    <div class="key-row">
+      <div class="key-chip ${hasUniform()?'have':''}">${hasUniform()?'🥼':'❔'} Mafia uniform</div>
+      <div class="key-chip ${hasPassword()?'have':''}">${hasPassword()?'🔑':'❔'} Password</div>
+    </div>
+
+    <div class="path-list">
+      ${CAVERN_PATHS.map(pth=>{
+        const st = paths[pth.id];
+        const nx = pathNext(pth.id);
+        const pct = Math.min(100, st.step/PATH_LENGTH*100);
+        const locked = !lit || !canFight || nx.kind==='done';
+        let note;
+        if(nx.kind==='done')          note = '✓ Fully explored';
+        else if(nx.kind==='blocked')  note = '🔒 Mafia everywhere — you need the uniform and the password';
+        else                          note = `Next: explore ${st.step+1} of ${PATH_LENGTH}`;
+        return `<div class="path-card ${locked?'locked':''}" ${locked?'':`data-path="${pth.id}"`} style="--zone-tint:${pth.tint};">
+          <div class="path-name">${escapeHtml(pth.name)}</div>
+          <div class="path-desc">${escapeHtml(pth.desc)}</div>
+          <div class="path-bar"><span style="width:${pct}%"></span></div>
+          <div class="path-note">${note}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    ${!canFight && lit ? `<div class="placeholder-note"><span class="pn-emoji">💤</span>Your team needs healing first.</div>` : ''}
+    <button class="btn btn-ghost" id="returnBtn" style="margin-top:14px;">Return</button>
+  `;
+  $('#backBtn').addEventListener('click', ()=>go('explore'));
+  $('#returnBtn').addEventListener('click', ()=>go('explore'));
+  screenEl.querySelectorAll('[data-path]').forEach(c=>c.addEventListener('click', ()=> exploreCavernPath(c.dataset.path)));
+}
+
+/* Take one step down a path and resolve whatever is there. */
+function exploreCavernPath(pathId){
+  const st = pathState()[pathId];
+  const nx = pathNext(pathId);
+  ui.cavernPath = pathId;
+
+  if(nx.kind==='blocked'){
+    return storyModal('🚧', 'The way is thick with mafia',
+      `There are far too many of them to fight — soldiers at every turn, and more beyond.<br><br>` +
+      `To slip through unnoticed you'll need a <b>mafia uniform</b> to pass for one of them, and the <b>password</b> to get past the guards.`,
+      ()=>renderCaverns());
+  }
+  if(nx.kind==='done'){ toast('Nothing left down here.'); return; }
+
+  if(nx.kind==='wild'){
+    ui.currentZone = { id:'rocky_caverns', name:'Rocky Caverns' };
+    ui.cavernAdvanceOnWin = pathId;
+    return startWildEncounter();
+  }
+  if(nx.kind==='soldato'){
+    const def = MAFIA[nx.tier===1 ? 'soldato1' : 'soldato2'];
+    return startMafiaFight(def, pathId);
+  }
+  if(nx.kind==='capo'){
+    const def = MAFIA[nx.which==='black' ? 'capo_black' : 'capo_purple'];
+    return startMafiaFight(def, pathId);
+  }
+  if(nx.kind==='reward') return givePathReward(pathId, nx.which);
+  if(nx.kind==='scene')  return runDisusedScene(nx.scene);
+}
+
+function startMafiaFight(def, pathId){
+  if(!ensurePool()) return;
+  ui.cavernAdvanceOnWin = pathId;
+  beginBattle({ isNpc:true, name:def.label, npcId:def.npcId,
+    waves: def.waves.map((w,i)=>w.map(e=>({...e, ai:def.ai[i]||'power1', nerfed:false}))),
+    onWin: ()=> onMafiaWin(def, pathId) });
+}
+
+async function advancePath(pathId){
+  const st = pathState()[pathId];
+  st.step = Math.min(PATH_LENGTH, st.step + 1);
+  if(st.step >= PATH_LENGTH) st.done = true;
+  await saveProfile();
+}
+
+async function onMafiaWin(def, pathId){
+  await advancePath(pathId);
+  if(def.npcId==='capo_black'){
+    return storyModal('🕴️', 'Black Capo defeated',
+      `He straightens his coat, unhurried, as though losing were a formality.<br><br>` +
+      `"Enjoy it. My people don't forget a face." He turns away. "And you've picked a poor week for heroics — ` +
+      `the boss is about to tame something out of legend. After that, nobody crosses us again."`,
+      ()=>renderCaverns());
+  }
+  if(def.npcId==='capo_purple'){
+    return storyModal('🕴️', 'Purple Capo defeated',
+      `She laughs, short and sharp, and spits into the dust.<br><br>` +
+      `"You're stronger than you look. Fine — go on then." She jerks her head toward the dark.<br><br>` +
+      `"<b>The disused path.</b> That's where the boss is. Come and challenge him, if you dare."`,
+      ()=>renderCaverns());
+  }
+  challengeResult('👊', 'Soldato defeated!', 'The way ahead is clear.', 'caverns');
+}
+
+async function givePathReward(pathId, which){
+  const r2 = state.progress.region2;
+  state.inventory.protein = (state.inventory.protein||0) + 3;
+  if(which==='uniform'){
+    r2.uniform = true;
+    await advancePath(pathId);
+    return storyModal('🥼', 'A mafia uniform',
+      `Folded in a crate at the end of the path: a pressed dark suit with the family's mark on the collar.<br><br>` +
+      `Wearing it, you might pass for one of them.<br><br><b>+3 Protein Supplements</b>`,
+      ()=>renderCaverns());
+  }
+  r2.password = true;
+  await advancePath(pathId);
+  return storyModal('🔑', 'The password',
+    `A lone Soldato throws his hands up before you've even spoken.<br><br>` +
+    `"Don't — don't. Look, the word's <b>'campanile'</b>, alright? Just say it to the door guards and they'll wave you through."<br><br>` +
+    `He is gone before you can answer.<br><br><b>+3 Protein Supplements</b>`,
+    ()=>renderCaverns());
+}
+
+/* A simple full-screen story beat with one button. */
+function storyModal(emoji, title, html, onClose){
+  document.body.classList.remove('writing');
+  $('#brandSub').textContent = 'Rocky Caverns';
+  setScreenBg('rocky_caverns');
+  screenEl.innerHTML = `
+    <div class="scene">
+      <div style="font-size:52px;margin:14px 0 8px;">${emoji}</div>
+      <div class="scene-title">${escapeHtml(title)}</div>
+      <div class="scene-body">${html}</div>
+      <button class="btn btn-primary" id="sceneNext" style="margin-top:16px;">Continue</button>
+    </div>`;
+  $('#sceneNext').addEventListener('click', ()=>{ if(onClose) onClose(); });
+}
+
 /* ---------- SCREEN: region select ---------- */
 const REGIONS = [
   { id:1, name:'Riverside Meadow', desc:'Where your journey began.', unlocked:()=>true },
@@ -6699,6 +7328,7 @@ function renderRegionSelect(){
 function renderZone(){
   const z = ui.currentZone;
   if(!z) return go('explore');
+  if(z.id === 'rocky_caverns') return renderCaverns();
   setScreenBg(z.id);
   $('#brandSub').textContent = z.name;
   const canFight = battleParty().some(m=>m.currentHp>0);
