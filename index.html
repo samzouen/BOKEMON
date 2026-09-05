@@ -2161,7 +2161,7 @@ function typeBadges(species){
 function crownMark(m){ return isCrowned(m) ? crownIcon(15, 'crown-mark') : ''; }
 /* assets/ui/crown.png, glowing; falls back to the emoji until art exists. */
 function crownIcon(px, cls){
-  px = px || 20;
+  px = px || 40;
   return `<img src="assets/ui/crown.png" alt="Crown" class="crown-icon ${cls||''}"
     style="width:${px}px;height:${px}px;" data-px="${px}" data-cls="${cls||''}"
     onerror="crownIconFallback(this)">`;
