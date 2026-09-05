@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -87,6 +86,45 @@
     opacity:0;transition:opacity .45s ease;
   }
   .screen-bg.on{ opacity:0.30; }
+
+  /* --- zone theming ---
+     On a zone page the artwork carries the mood: Sacred Grove washes it pale so
+     the paper UI still reads; Rocky Caverns sinks it into near-darkness and
+     lightens the text instead. */
+  body.zone-tinted .screen-bg.on{ opacity:0.85; }
+  body.zone-tinted .screen-bg:after{
+    content:'';position:absolute;inset:0;
+    background:rgba(244,236,216,0.62);            /* pale wash by default */
+  }
+  body.zone-dark .screen-bg:after{
+    background:rgba(10,12,16,0.72);               /* caverns: heavy dark wash */
+  }
+  body.zone-dark{ color:#efe7d6; }
+  body.zone-dark .screen-title,
+  body.zone-dark .zone-hero-name,
+  body.zone-dark .path-name,
+  body.zone-dark .mon-title{ color:#f6efdd;text-shadow:0 2px 6px rgba(0,0,0,.85); }
+  body.zone-dark .screen-sub,
+  body.zone-dark .path-desc,
+  body.zone-dark .path-note,
+  body.zone-dark .key-chip{ color:#cfc3ad; }
+  body.zone-dark .back-link{ color:#e6dcc6; }
+  /* darkened buttons — the words stay bright */
+  body.zone-dark .path-card,
+  body.zone-dark .key-chip,
+  body.zone-dark .btn-ghost{
+    background:rgba(18,20,26,0.68);
+    border-color:rgba(255,255,255,0.16);
+    color:#efe7d6;
+    backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  }
+  body.zone-dark .path-card{ box-shadow:0 2px 0 rgba(0,0,0,.5); }
+  body.zone-dark .key-chip.have{
+    background:rgba(47,143,111,0.34);border-color:rgba(120,220,180,.55);color:#bff0da;
+  }
+  body.zone-dark .path-bar{ background:rgba(255,255,255,0.14); }
+  body.zone-dark .trial-banner{ background:rgba(18,20,26,0.7);border-color:rgba(255,255,255,.2);color:#efe7d6; }
+  body.zone-dark .zone-hero{ box-shadow:inset 0 -40px 40px -20px rgba(0,0,0,0.85); }
   /* On screens with artwork behind them, surfaces go translucent so the image
      reads through rather than being boxed out by solid panels. */
   body.has-bg .menu-card,
@@ -967,12 +1005,14 @@ const MOVES = {
 
   /* --- Story monsters --- */
   lanternfish:     [['Basic','Bump',0.2,'Single',2,1],['Power1','Shock Bubble',0.4,'Single',4,5],['Power2','Lantern Flash',0.6,'AOE',8,18],['Ultimate','Deep Current',1.25,'Single',8,28]],
-  water_dragon:    [['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tidal Surge',1.0,'AOE',10,35],
-                    ['Ultimate',"Leviathan's Roar",1.4,'Single',10,45],
-                    ['Max',"Leviathan's Roar Max",1.8,'AOE',10,55]],
-  water_dragon_nerfed:[['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tidal Surge',1.0,'AOE',10,35],
-                    ['Ultimate',"Leviathan's Roar",1.4,'Single',10,45],
-                    ['Max',"Leviathan's Roar Max",1.8,'AOE',10,55]],
+  /* Cataclysm is a CHARGING ultimate — see the charge engine below. Its 'Max'
+     upgrade is unlocked by the Dragon Core, not by level. */
+  water_dragon:    [['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tsunami',0.8,'AOE',10,35],
+                    ['Ultimate','Cataclysm',null,'Charge',10,45,{charge:{max:2, unleash:1.0, hyper:1.5}}],
+                    ['Max','Cataclysm Max',null,'Charge',10,999,{charge:{max:3, unleash:1.25, hyper:1.75}, coreOnly:true}]],
+  water_dragon_nerfed:[['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tsunami',0.8,'AOE',10,35],
+                    ['Ultimate','Cataclysm',null,'Charge',10,45,{charge:{max:2, unleash:1.0, hyper:1.5}}],
+                    ['Max','Cataclysm Max',null,'Charge',10,999,{charge:{max:3, unleash:1.25, hyper:1.75}, coreOnly:true}]],
   dragon_egg:      [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 
   phoenix:         [['Basic','Ember',0.3,'Single',4,1],['Power1','Firestorm',0.6,'AOE',8,5],['Power2','Nova',1.0,'AOE',10,35],
@@ -1078,12 +1118,43 @@ const SFX_MAP = {
 };
 
 /* music track name -> filename in assets/bgm/ */
+/* Music files, resolved MOST SPECIFIC FIRST. Every lookup walks a ladder and
+   falls through to the next candidate if a file is absent, so you can add a
+   bespoke track for one zone without supplying the rest. */
 const BGM_MAP = {
-  main_menu:    'main_menu.mp3',
-  region:       'region.mp3',
-  battle_wild:  'battle_wild.mp3',
-  battle_boss:  'battle_boss.mp3',
+  main_menu:      'main_menu.mp3',
+
+  // region themes
+  region:         'region.mp3',            // generic fallback
+  region1:        'region1.mp3',
+  region2:        'region2.mp3',
+
+  // zone themes
+  zone_tranquil_forest: 'zone_tranquil_forest.mp3',
+  zone_sacred_grove:    'zone_sacred_grove.mp3',
+  zone_rocky_caverns:   'zone_rocky_caverns.mp3',
+
+  // battle themes
+  battle_wild:    'battle_wild.mp3',       // generic fallback
+  battle_boss:    'battle_boss.mp3',       // generic NPC boss
+  battle_tranquil_forest: 'battle_tranquil_forest.mp3',
+  battle_sacred_grove:    'battle_sacred_grove.mp3',
+  battle_rocky_caverns:   'battle_rocky_caverns.mp3',
+
+  // climactic encounters
+  battle_legendary: 'battle_legendary.mp3',   // Phoenix, Forest Guardian, the Dragon
+  battle_padrino:   'battle_padrino.mp3',     // Don Padrino
 };
+
+/* Try each track in turn; the first one that actually loads wins. */
+function playMusicChain(names, opts){
+  const list = names.filter(n=>{
+    const f = BGM_MAP[n];
+    return f && !audio.missing[f];
+  });
+  if(list.length===0) return;
+  playMusic(list[0], Object.assign({ chainFallback:list.slice(1) }, opts||{}));
+}
 
 const audio = {
   unlocked: false,
@@ -1237,7 +1308,14 @@ function playMusic(name, opts){
     const el = new Audio(BGM_DIR + file);
     el.dataset.track = name;
     el.loop = opts.chainTo ? false : (opts.loop !== false);
-    el.addEventListener('error', ()=>{ audio.missing[file] = true; });
+    el.addEventListener('error', ()=>{
+      audio.missing[file] = true;
+      // fall through to the next candidate in the ladder
+      if(opts.chainFallback && opts.chainFallback.length){
+        const rest = opts.chainFallback;
+        setTimeout(()=> playMusicChain(rest, Object.assign({}, opts, { chainFallback:null })), 0);
+      }
+    });
 
     const ctx = ensureAudioCtx();
     let gain = null;
@@ -1312,9 +1390,23 @@ function stopMusic(){ fadeOutMusic(MUSIC_FADE_MS); }
    `silentIntro` is used when a wild fight is entered straight from "Explore
    again", so back-to-back battles don't restart the same music jarringly:
    3s of silence, then a 2s fade in. */
+/* Battle music, most specific first:
+     a climactic fight  ->  the zone's own battle theme  ->  the generic one */
 function playBattleMusic(isBoss, opts){
   opts = opts || {};
-  playMusic(isBoss ? 'battle_boss' : 'battle_wild', {
+  const b = ui.battle || {};
+  const zone = (ui.currentZone && ui.currentZone.id) || '';
+  const chain = [];
+
+  if(b.npcId === 'padrino') chain.push('battle_padrino');
+  const legendary = (b.enemies||[]).some(e=>SPECIES[e.species] && SPECIES[e.species].tier==='legendary')
+                 || b.guardianTrial || b.scriptedLoss;
+  if(legendary) chain.push('battle_legendary');
+  if(zone) chain.push('battle_'+zone);
+  chain.push(isBoss ? 'battle_boss' : 'battle_wild');
+  chain.push('battle_wild');
+
+  playMusicChain(chain, {
     loop:true,
     silentMs: opts.silentIntro ? 3000 : 0,
     fadeMs:   opts.silentIntro ? 2000 : 0,
@@ -2883,6 +2975,8 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
   if(isPlayerAttacking){
     if(getPStatus(0,'overheat'))    dmg *= 1.5;    // party buff: deals 1.5x
     if(getPStatus(0,'dragonDance')) dmg *= 1.25;   // multiplies WITH overheat
+    // Dragon Legacy stacks multiplicatively with the above
+    if(ui.battle && ui.battle.legacyBonus) dmg *= (1 + ui.battle.legacyBonus);
   } else {
     if(getEStatus(attacker,'discombobulate')) dmg *= 0.8;   // enemy deals 20% less
   }
@@ -2979,6 +3073,62 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets){
   return res;
 }
 
+
+/* ============================================================
+   CATACLYSM — the Water Dragon's charging ultimate
+   ------------------------------------------------------------
+   Charging costs a turn and a 10-word quiz. Once charged, Power1/Power2/
+   Ultimate are replaced by Charge / Unleash / Hyperbeam, and Basic is locked
+   out. Unleash and Hyperbeam need no words at all — the cost was paid up front.
+   The window lasts (charges + 1) turns; spending the finale ends it.
+   Leaving the field with charges banked triggers Dragon Legacy, handing the
+   next monster a damage bonus that multiplies with Overheat and Dragon Dance.
+   ============================================================ */
+function chargeState(){ return ui.battle && ui.battle.charge; }
+function chargeDef(m){
+  const mv = MOVES[m.species] && MOVES[m.species].find(x=>x[6] && x[6].charge && moveUnlockedFor(m, x));
+  return mv ? mv[6].charge : null;
+}
+/* 'Max' here is gated on the Dragon Core, not a level. */
+function moveUnlockedFor(m, mv){
+  const extra = mv[6] || {};
+  if(extra.coreOnly) return !!m.hasDragonCore;
+  return m.level >= mv[5];
+}
+function startCharge(mon, def){
+  const b = ui.battle;
+  b.charge = b.charge || { uid:mon.uid, charges:0, turnsLeft:0, def };
+  b.charge.charges = Math.min(def.max, b.charge.charges + 1);
+  b.charge.def = def;
+  b.charge.turnsLeft = b.charge.charges + 1;   // 1 charge -> 2 turns, 2 -> 3
+  saveProfile();
+}
+function clearCharge(){ if(ui.battle) ui.battle.charge = null; }
+
+/* Dragon Legacy: the stored power passes to whoever comes next. */
+function triggerDragonLegacy(){
+  const c = chargeState();
+  if(!c || c.charges<=0) return;
+  ui.battle.legacyBonus = c.charges * 0.25;
+  clearCharge();
+  battleMsg(`🐉 Dragon Legacy! The next monster's move is empowered by +${Math.round(ui.battle.legacyBonus*100)}%.`);
+}
+
+/* The move list while a charge is held. */
+function chargeMoves(m){
+  const c = chargeState();
+  const def = c.def;
+  const atCap = c.charges >= def.max;
+  return [
+    { slot:'Basic', name:'—', mult:null, target:'Single', words:0, unlock:0, available:false, isStone:false, locked:true },
+    { slot:'Power1', name:'Charge', mult:null, target:'Charge', words:10, unlock:0,
+      available:!atCap, isStone:false, chargeMore:true },
+    { slot:'Power2', name:'Unleash', mult:(c.charges-1)*0.25 + def.unleash, target:'AOE', words:0, unlock:0,
+      available:true, isStone:false, chargeSpend:'unleash' },
+    { slot:'Ultimate', name:'Hyperbeam', mult:(c.charges-1)*0.5 + def.hyper, target:'Single', words:0, unlock:0,
+      available:true, isStone:false, chargeSpend:'hyper' },
+  ];
+}
 
 /* ---------- BATTLE MODULE (Phase 3: wild encounters) ---------- */
 function starterLevel(){
@@ -3223,6 +3373,7 @@ function beginBattle(config){
     scriptedAlly: config.scriptedAlly||null, allyMove: config.allyMove||null,
     allyUnkillable: !!config.allyUnkillable, enemiesFirst: !!config.enemiesFirst,
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
+    charge:null, legacyBonus:0,
     partyStatus:{},          // party-wide buffs, each with a turn counter
     fieldStatus:{},          // debuffs stamped on every enemy, inherited by later waves
     usedVeryHigh:{}, usedUltra:{},   // uid -> true, once-per-battle usage
@@ -3283,6 +3434,10 @@ function activeMon(){ return state.party[ui.battle.activeIndex]; }
 function monMaxHp(m){ return computeMaxHp(m.species, m.level, m.supplements, m); }
 function monAtk(m){ return computeMaxStat(m.species, m.level, m.supplements, m); }
 function unlockedMoves(m){
+  // While a Cataclysm charge is held, the whole kit is replaced.
+  const c = chargeState();
+  if(c && c.uid === m.uid) return chargeMoves(m);
+
   // A borrowed story monster gets exactly one button, and no writing.
   const sm = ui.battle && ui.battle.allyMove && SCRIPTED_MOVES[ui.battle.allyMove];
   if(sm && ui.battle.scriptedAlly && m.species===ui.battle.scriptedAlly){
@@ -3290,25 +3445,28 @@ function unlockedMoves(m){
   }
   /* 'Max' is an UPGRADE of Ultimate, not an extra button: once its level is
      reached it takes over the Ultimate slot entirely. */
-  const maxMv = MOVES[m.species].find(mv=>mv[0]==='Max' && mv[1]!=null && m.level>=mv[5]);
+  const maxMv = MOVES[m.species].find(mv=>mv[0]==='Max' && mv[1]!=null && moveUnlockedFor(m, mv));
   const base = MOVES[m.species].filter(mv=>mv[0]!=='Max').map(mv=>{
     let [slot,name,mult,target,words,unlock,extra]=mv;
     if(slot==='Ultimate' && maxMv){ [,name,mult,target,words,unlock,extra] = maxMv; }
     const e = extra || {};
-    return { slot,name,mult,target,words,unlock, scale:e.scale||null, hits:e.hits||0,
-             available:(name!=null && m.level>=unlock), isStone:false };
+    return { slot,name,mult,target,words,unlock, scale:e.scale||null, hits:e.hits||0, charge:e.charge||null,
+             available:(name!=null && moveUnlockedFor(m, [slot,name,mult,target,words,unlock,e])), isStone:false };
   });
   /* Equipped stone slots in by tier: High-tier "twin" skills override POWER1
      (they're a step above a basic swing), everything else overrides Basic. */
-  if(m.equippedStone){
-    const t = stoneTierDef(m.equippedStone.tier);
-    const slot = (t.id==='high') ? 'Power1' : 'Basic';
+  /* Two independent stone slots: Basic (low/mid/veryhigh) and Power1 (high).
+     They used to share one field, so learning a High skill silently erased an
+     Overheat sitting in the Basic slot. */
+  [[m.equippedStone,'Basic'], [m.power1Stone,'Power1']].forEach(([st, slot])=>{
+    if(!st) return;
+    const t = stoneTierDef(st.tier);
     const bi = base.findIndex(mv=>mv.slot===slot);
     const used = t.id==='veryhigh' && ui.battle && ui.battle.usedVeryHigh[m.uid];
-    if(bi>=0) base[bi] = { slot, name:m.equippedStone.name, mult:t.mult,
+    if(bi>=0) base[bi] = { slot, name:st.name, mult:t.mult,
       target: t.kind==='multi2'?'Multi2':(t.kind==='status'?'Status':'Single'),
-      words:t.words, unlock:0, available:!used, isStone:true, stoneTier:t.id, stoneType:m.equippedStone.type };
-  }
+      words:t.words, unlock:0, available:!used, isStone:true, stoneTier:t.id, stoneType:st.type };
+  });
   // Ultra stone adds a distinct 5th button
   if(m.ultraStone){
     const t = stoneTierDef('ultra');
@@ -3367,7 +3525,8 @@ function ultraFizz(){
 }
 
 function renderBattle(){
-  setScreenBg('battle');
+  const zoneBg = (ui.currentZone && ui.currentZone.id) ? 'battle_'+ui.currentZone.id : null;
+  setScreenBg(zoneBg || 'battle');
   const b = ui.battle;
   $('#brandSub').textContent = 'Battle';
   const mon = activeMon();
@@ -3516,18 +3675,45 @@ const BG_MAP = {
   challenge: 'challenge.png',
   explore:   'explore.png',
   shop:      'shop.png',
+  // per-zone battle backdrops
+  battle_tranquil_forest: 'battle_tranquil_forest.png',
+  battle_sacred_grove:    'battle_sacred_grove.png',
+  battle_rocky_caverns:   'battle_rocky_caverns.png',
+  // the zone button art doubles as the zone page backdrop
+  tranquil_forest: 'zone/tranquil_forest.png',
+  sacred_grove:    'zone/sacred_grove.png',
+  rocky_caverns:   'zone/rocky_caverns.png',
 };
+/* A zone key with no bg file of its own falls back to its button art. */
+function bgCandidates(key){
+  if(!key) return [];
+  const out = [BG_DIR + (BG_MAP[key]||'')];
+  if(/^battle_/.test(key)){
+    out.push(BG_DIR + 'battle.png');                       // generic battlefield
+    out.push('assets/zones/'+key.replace('battle_','')+'.png');
+  }
+  if(['tranquil_forest','sacred_grove','rocky_caverns'].includes(key)){
+    out.push('assets/zones/'+key+'.png');                  // reuse the button art
+  }
+  return out.filter(u=>u && !u.endsWith('/'));
+}
 const bgMissing = {};
 function setScreenBg(key){
   const el = document.getElementById('screenBg');
   if(!el) return;
-  const file = BG_MAP[key];
-  if(!file || bgMissing[file]){ el.style.backgroundImage=''; el.classList.remove('on'); document.body.classList.remove('has-bg'); return; }
-  const src = BG_DIR + file;
-  const probe = new Image();
-  probe.onload = ()=>{ el.style.backgroundImage = 'url('+src+')'; el.classList.add('on'); document.body.classList.add('has-bg'); };
-  probe.onerror = ()=>{ bgMissing[file] = true; el.style.backgroundImage=''; el.classList.remove('on'); document.body.classList.remove('has-bg'); };
-  probe.src = src;
+  const cands = bgCandidates(key).filter(u=>!bgMissing[u]);
+  const clear = ()=>{ el.style.backgroundImage=''; el.classList.remove('on'); document.body.classList.remove('has-bg'); };
+  if(cands.length===0) return clear();
+  let i = 0;
+  const tryNext = ()=>{
+    if(i >= cands.length) return clear();
+    const src = cands[i++];
+    const probe = new Image();
+    probe.onload = ()=>{ el.style.backgroundImage='url('+src+')'; el.classList.add('on'); document.body.classList.add('has-bg'); };
+    probe.onerror = ()=>{ bgMissing[src] = true; tryNext(); };
+    probe.src = src;
+  };
+  tryNext();
 }
 
 const FX_DIR = 'assets/fx/';
@@ -3673,7 +3859,13 @@ function onSwitchPressed(){
   if(b.switchedThisTurn) return;
   const options = state.party.map((m,i)=>({m,i})).filter(o=>o.i!==b.activeIndex && o.m.currentHp>0 && !isSeed(o.m));
   if(options.length===0){ toast('No other monster can fight.'); return; }
-  monsterChooser('Switch to…', options, (i)=>{ ui.battle.activeIndex=i; ui.battle.switchedThisTurn=true; renderBattle(); battleMsg('Switched! Now choose a move.'); });
+  monsterChooser('Switch to…', options, (i)=>{
+    const c = chargeState();
+    if(c && c.uid === activeMon().uid) triggerDragonLegacy();   // stored power passes on
+    ui.battle.activeIndex=i; ui.battle.switchedThisTurn=true;
+    renderBattle();
+    if(!ui.battle.legacyBonus) battleMsg('Switched! Now choose a move.');
+  });
 }
 function monsterChooser(title, options, onPick, dismissable=true){
   const scrim=document.createElement('div');
@@ -3746,6 +3938,9 @@ function onMoveChosen(moveIdx){
   const mon=activeMon();
   const mv=unlockedMoves(mon)[moveIdx];
   if(mv && mv.scripted) return resolveScriptedMove(mv, mon);
+  if(mv && mv.locked){ ui.battle.phase='player'; toast('Not while the Cataclysm is building.'); return; }
+  if(mv && mv.chargeSpend) return resolveChargeSpend(mv, mon);
+  if(mv && (mv.charge || mv.chargeMore)) return runChargeQuiz(mv, mon);
   if(mv.target==='Single' && livingEnemies().length>1){ promptTarget(mv); return; }
   if(mv.target==='Single'){ runMoveQuiz(mv, livingEnemies()[0]); return; }
   if(mv.target==='Status'){
@@ -3859,6 +4054,66 @@ function bankWordSpill(mv){
 
 /* Tsunami sweeps the field; Dragon Legacy whites out and ends the sequence.
    Neither asks for a single written word. */
+/* Charging: a 10-word quiz, then the turn passes. */
+function runChargeQuiz(mv, mon){
+  const def = mv.charge || (chargeState() && chargeState().def);
+  const words = pickWords(mv.words);
+  startQuiz({
+    title: mv.name,
+    subtitle: `Charging — write ${mv.words} words. The turn will pass while power gathers.`,
+    words, stopAtFirstMiss:true, lockExit:true,
+    wordTarget: mv.words,
+    startingWords: (ui.battle && ui.battle.wordCarry) || 0,
+    onComplete:(results)=>{
+      const correct = results.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0);
+      go('battle');
+      if(correct < mv.words){
+        battleMsg(`${mv.name} fizzled out! (${correct}/${mv.words} words)`);
+        playSfx('move_miss');
+        return setTimeout(enemyTurn, 900);
+      }
+      startCharge(mon, def);
+      const c = chargeState();
+      playEffect(mv.name, { type:'Water', duration:800 });
+      battleMsg(`⚡ Power gathers… ${c.charges} charge${c.charges>1?'s':''} held. The turn passes.`);
+      logBattle(`${displayName(mon)} charged — ${c.charges}/${c.def.max}, window ${c.turnsLeft} turns`);
+      renderBattle();
+      setTimeout(enemyTurn, 1100);
+    },
+    onExit:()=>{ go('battle'); },
+  });
+}
+
+/* Spending the charge — no words needed, the price was paid to build it. */
+function resolveChargeSpend(mv, mon){
+  const b = ui.battle;
+  const c = chargeState();
+  if(!c) { b.phase='player'; return renderBattle(); }
+  const atk = monAtk(mon);
+  const targets = mv.target==='AOE' ? livingEnemies() : [livingEnemies()[0]];
+  if(!targets[0]){ b.phase='player'; return renderBattle(); }
+
+  const hits = targets.filter(Boolean).map(t=>{
+    const dmg = computeDamage(mv.mult, atk, monRef(mon), t, true);
+    return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
+  });
+  battleMsg(`${mv.name}! (${c.charges} charge${c.charges>1?'s':''}, ${mv.mult.toFixed(2)}× ATK)`);
+  bob($('#playerBob'), +1);
+  playEffect(mv.name, { type:'Water', duration:800, at: hits[0] ? 'enemy-'+hits[0].idx : null });
+  logBattle(`${displayName(mon)} spent ${c.charges} charge(s) on ${mv.name} — ${mv.mult.toFixed(2)}x`);
+
+  setTimeout(()=>{
+    applyHits(hits);
+    c.turnsLeft--;
+    if(c.turnsLeft <= 0){
+      clearCharge();
+      setTimeout(()=>{ battleMsg('The Cataclysm subsides.'); afterPlayerAttack(mon, hits); }, 700);
+    } else {
+      setTimeout(()=> afterPlayerAttack(mon, hits), 700);
+    }
+  }, 400);
+}
+
 function resolveScriptedMove(mv, mon){
   const b = ui.battle;
   if(mv.endsBattle){
@@ -3982,6 +4237,7 @@ function applyHits(hits){
 /* after any player attack resolves: check overcharge repeat, then move on.
    `hits` carries the per-target damage so a repeat re-applies the real amount. */
 function afterPlayerAttack(mon, hits){
+  if(ui.battle && ui.battle.legacyBonus){ ui.battle.legacyBonus = 0; }   // one move only
   setTimeout(()=>{
     const oc = getPStatus(0,'overcharge');
     const canRepeat = oc && hits && hits.length && livingEnemies().length>0;
@@ -4202,6 +4458,7 @@ function runEnemyAttack(i){
   // The active monster went down mid-sequence: stop here, no free swings.
   if(mon.currentHp <= 0){
     b.attackQueue = null;
+    tickStatuses();              // the round still happened — age the statuses
     return setTimeout(onMonFainted, 650);
   }
   if(livingEnemies().length === 0){ b.attackQueue = null; return setTimeout(onWaveCleared, 650); }
@@ -4319,6 +4576,9 @@ function endEnemyRound(){
   if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
   if(activeMon().currentHp<=0){ setTimeout(onMonFainted,700); return; }
   b.switchedThisTurn = false;
+  // an unspent Cataclysm window closes on its own
+  const c = chargeState();
+  if(c){ c.turnsLeft--; if(c.turnsLeft <= 0){ clearCharge(); battleMsg('The gathered power disperses.'); } }
   const gone = tickStatuses();          // one full round has passed
   setTimeout(()=>{
     b.phase='player'; renderBattle();
@@ -4326,6 +4586,8 @@ function endEnemyRound(){
   }, 850);
 }
 function onMonFainted(){
+  const c = chargeState();
+  if(c && activeMon() && c.uid === activeMon().uid) triggerDragonLegacy();
   const alive=battleParty().filter(m=>m.currentHp>0);
   if(alive.length===0){ return onPlayerDefeated(); }
   battleMsg(`${displayName(activeMon())} fainted!`);
@@ -4696,6 +4958,7 @@ function gotcha(enemy){
 
 function go(screen){
   if(screen !== 'quiz') document.body.classList.remove('writing');
+  if(!['zone','caverns','battle','quiz'].includes(screen)) document.body.classList.remove('zone-dark','zone-tinted');
   // Protected screens re-lock as soon as you leave them, so the password is
   // required on every visit. The arena stays unlocked while you're actually
   // fighting in it (arena -> battle -> arena), otherwise testing would prompt
@@ -5070,7 +5333,7 @@ function region2Locked(){
 
 function renderRegion(){
   setScreenBg('region');
-  playMusic('region');
+  playMusicChain(['region'+(state.progress.currentRegion||1), 'region']);
   const rid = state.progress.currentRegion || 1;
   const meta = REGIONS.find(r=>r.id===rid) || REGIONS[0];
   $('#brandSub').textContent = 'Region '+rid;
@@ -5198,14 +5461,15 @@ function renderStats(){
     const unlocked = name!=null && m.level>=unlock;
     return { slot,name,mult,target,words,unlock,unlocked };
   });
-  if(m.equippedStone){
-    const t = stoneTierDef(m.equippedStone.tier);
-    const slot = (t.id==='high') ? 'Power1' : 'Basic';
+  [[m.equippedStone,'Basic'], [m.power1Stone,'Power1']].forEach(([st, slot])=>{
+    if(!st) return;
+    const t = stoneTierDef(st.tier);
     const bi = moves.findIndex(x=>x.slot===slot);
-    moves[bi] = { slot, name:m.equippedStone.name+' 💎', mult:t.mult,
+    if(bi<0) return;
+    moves[bi] = { slot, name:st.name+' 💎', mult:t.mult,
       target:t.kind==='status'?'Status':(t.kind==='multi2'?'2 targets':'Single'),
       words:t.words, unlock:0, unlocked:true };
-  }
+  });
   if(m.ultraStone){
     const t = stoneTierDef('ultra');
     moves.push({ slot:'Ultra Stone', name:m.ultraStone.name+' 💎', mult:t.mult, target:'5–7 hits', words:t.words, unlock:0, unlocked:true });
@@ -5664,6 +5928,7 @@ function chooseStoneRecipient(s){
     const replaced = isUltra ? mon.ultraStone : mon.equippedStone;
     const doIt = async ()=>{
       if(isUltra) mon.ultraStone = { tier:s.tier, type:s.type, name:s.name };
+      else if(s.tier==='high') mon.power1Stone = { tier:s.tier, type:s.type, name:s.name };
       else        mon.equippedStone = { tier:s.tier, type:s.type, name:s.name };
       const i = state.moveStones.findIndex(x=>x.uid===s.uid);
       if(i>=0) state.moveStones.splice(i,1);
@@ -7138,6 +7403,8 @@ async function forestCrownScene(){
 /* ---------- ROCKY CAVERNS: the three-path zone page ---------- */
 function renderCaverns(){
   setScreenBg('rocky_caverns');
+  playMusicChain(['zone_rocky_caverns','region2','region']);
+  document.body.classList.add('zone-dark','zone-tinted');
   $('#brandSub').textContent = 'Rocky Caverns';
   const lit = hasLantern();
   const paths = pathState();
@@ -7331,6 +7598,9 @@ function renderZone(){
   if(!z) return go('explore');
   if(z.id === 'rocky_caverns') return renderCaverns();
   setScreenBg(z.id);
+  playMusicChain(['zone_'+z.id, 'region'+(state.progress.currentRegion||1), 'region']);
+  document.body.classList.remove('zone-dark');
+  document.body.classList.add('zone-tinted');
   $('#brandSub').textContent = z.name;
   const canFight = battleParty().some(m=>m.currentHp>0);
   const band = ZONE_LEVELS[z.id] || {min:5,max:21};
