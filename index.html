@@ -3993,8 +3993,8 @@ function onFlee(){
     return guardianRebuke(null, true);
   }
   toast('Got away safely!');
-  const back = (ui.currentZone||{}).id==='rocky_caverns' ? 'caverns' : (ui.battle.isNpc ? 'challenge' : 'zone');
-  go(back);
+  const inPaths = (ui.currentZone||{}).id==='rocky_caverns' && !cavernsComplete();
+  go(ui.battle.isNpc ? 'challenge' : (inPaths ? 'caverns' : 'zone'));
 }
 
 /* A modal the player must dismiss — a toast is too easy to miss. */
@@ -4967,6 +4967,17 @@ function playEvolutions(list, done){
 }
 
 
+/* Straight back into the next encounter — no detour through the zone page.
+   Inside the Caverns that means the next step of whichever path you were on. */
+function exploreFurther(){
+  if(!battleParty().some(m=>m.currentHp>0)){
+    toast('Your team needs healing first.');
+    return go((ui.currentZone||{}).id==='rocky_caverns' && !cavernsComplete() ? 'caverns' : 'zone');
+  }
+  if(ui.cavernPath && !cavernsComplete()) return exploreCavernPath(ui.cavernPath);
+  return startWildEncounter({ silentIntro:true });
+}
+
 function showVictory(enemyNames, levelUps, tokens){
   playSfx('victory'); fadeOutMusic(2000);
   const breakNow = tallyBattleForEyeBreak();
@@ -4987,7 +4998,7 @@ function showVictory(enemyNames, levelUps, tokens){
     </div>
     <div id="catchArea"></div>
     <button class="btn btn-ghost" id="regionBtn" style="margin-top:10px;">Back to region</button>
-    <button class="btn btn-ghost" id="againBtn" style="margin-top:8px;">Explore again</button>
+    <button class="btn btn-ghost" id="againBtn" style="margin-top:8px;">🌿 Explore further</button>
   `;
   const area = $('#catchArea');
   if(catchable.length){
@@ -5002,12 +5013,7 @@ function showVictory(enemyNames, levelUps, tokens){
   }
   $('#regionBtn').addEventListener('click', ()=>go('region'));
   if(breakNow) showEyeBreak();
-  const inCaverns = (ui.currentZone||{}).id === 'rocky_caverns';
-  $('#againBtn').addEventListener('click', ()=>{
-    if(inCaverns) return go('caverns');
-    if(battleParty().some(m=>m.currentHp>0)) startWildEncounter({ silentIntro:true });
-    else { toast('Your team needs healing first.'); go('zone'); }
-  });
+  $('#againBtn').addEventListener('click', ()=> exploreFurther());
 }
 
 /* ---------- CATCHING ---------- */
@@ -7227,16 +7233,19 @@ function nextWaterStage(){ return WATER_DOJO_STAGES.find(st=>!waterDojoCleared(s
 
 /* The Rival returns, stronger — and only for players who already beat him in
    Region 1, so his reappearance means something. */
+/* Six monsters, one at a time — six waves, not three pairs. Fought singly they
+   are a longer duel, and the XP is credited per wave rather than in bulk. */
 const R2_RIVAL_WAVES = [
-  [{species:'golem',level:41},{species:'bat',level:41}],
-  [{species:'electric_starter',level:44},{species:'ground_starter',level:44}],
+  [{species:'golem',level:41}],
+  [{species:'bat',level:41}],
+  [{species:'electric_starter',level:44}],
+  [{species:'ground_starter',level:44}],
   [{species:'phoenix',level:46}],
 ];
-/* His third slot counters the player's own starter, as in Region 1. */
+/* His last monster counters the player's own starter, as in Region 1. */
 function r2RivalWaves(){
-  const counter = effectiveStarter();
   const waves = R2_RIVAL_WAVES.map(w=>w.map(e=>({...e})));
-  waves[2].unshift({ species:counter, level:46 });
+  waves.push([{ species:effectiveStarter(), level:46 }]);
   return waves;
 }
 
@@ -7634,6 +7643,12 @@ function cavernsComplete(){
 }
 
 function renderCaverns(){
+  // Once every path is walked the path screen is defunct — fall through to the
+  // ordinary zone page rather than stranding the player on dead buttons.
+  if(cavernsComplete()){
+    ui.currentZone = { id:'rocky_caverns', name:'Rocky Caverns' };
+    return renderZonePlain();
+  }
   setScreenBg('rocky_caverns');
   playMusicChain(['zone_rocky_caverns','region2','region']);
   document.body.classList.add('zone-dark','zone-tinted');
@@ -7832,6 +7847,12 @@ function renderZone(){
   // Rocky Caverns shows its three paths until they're all walked, then settles
   // into a normal explorable zone.
   if(z.id === 'rocky_caverns' && !cavernsComplete()) return renderCaverns();
+  return renderZonePlain();
+}
+
+function renderZonePlain(){
+  const z = ui.currentZone;
+  if(!z) return go('explore');
   setScreenBg(z.id);
   playMusicChain(['zone_'+z.id, 'region'+(state.progress.currentRegion||1), 'region']);
   document.body.classList.remove('zone-dark');
