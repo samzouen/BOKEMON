@@ -455,6 +455,13 @@
   .wr-text{max-width:420px;font-size:14.5px;font-weight:600;line-height:1.65;color:#232019;}
   .wr-text p{margin:0 0 12px;}
   .scene{max-width:520px;margin:0 auto;text-align:center;}
+  .scene-emblem{display:flex;justify-content:center;align-items:flex-end;gap:10px;margin:10px 0 6px;min-height:8px;}
+  .scene-emblem:empty{display:none;}
+  .emblem-pair{display:flex;gap:12px;align-items:flex-end;}
+  /* story sprites never carry the tile plate */
+  .scene-emblem .mon-portrait,.scene-emblem img,.emblem-pair img{
+    box-shadow:none !important;border-radius:0 !important;background:transparent !important;
+  }
   .scene-portrait{display:flex;justify-content:center;margin:10px 0 6px;
     filter:drop-shadow(0 0 26px rgba(120,200,140,0.75));}
   .scene-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:22px;margin-bottom:10px;}
@@ -673,7 +680,25 @@
   .crown-title span{font-size:12px;color:var(--ink-soft);font-weight:800;}
   .crown-sub{font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.45;margin-top:3px;}
   .crown-why{font-size:11px;font-weight:800;color:var(--cinnabar-dark);margin-top:8px;}
-  .crown-mark{color:var(--cinnabar);font-weight:900;}
+  .crown-mark{vertical-align:-2px;margin-left:2px;}
+  .crown-icon{filter:drop-shadow(0 0 4px rgba(255,209,102,.95));vertical-align:-2px;}
+  .crown-icon-fb{filter:drop-shadow(0 0 4px rgba(255,209,102,.95));vertical-align:-2px;}
+  /* crowned monsters glow regardless of whether bespoke art exists */
+  .crowned-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;}
+  .crowned-aura{filter:drop-shadow(0 0 8px rgba(255,209,102,.85)) drop-shadow(0 0 18px rgba(255,180,60,.45));}
+  .crown-fizz{position:absolute;inset:-6px;pointer-events:none;overflow:hidden;z-index:2;}
+  .crown-fizz i{
+    position:absolute;bottom:0;border-radius:50%;
+    background:radial-gradient(circle,#fff7d6 0%,#ffd166 55%,rgba(255,209,102,0) 72%);
+    animation:crownRise linear infinite;
+  }
+  @keyframes crownRise{
+    0%{transform:translate(0,4px) scale(.5);opacity:0;}
+    20%{opacity:.95;}
+    70%{transform:translate(5px,-60%) scale(1);opacity:.7;}
+    100%{transform:translate(-3px,-110%) scale(.4);opacity:0;}
+  }
+  @media (prefers-reduced-motion: reduce){ .crown-fizz{display:none;} }
   .mastery-line{display:flex;align-items:center;gap:6px;margin-top:4px;}
   .mst-icon{font-size:11px;}
   .mst-bar{flex:1;max-width:90px;height:5px;background:var(--paper-3);border-radius:4px;overflow:hidden;}
@@ -1438,7 +1463,15 @@ const DEFAULT_MASTER_WORDS = ["夜市","踢足球","一座楼房","静悄悄","�
 /* ---------- SKILL TOKENS / SKILL STONES ----------
    Region 1 rollable types exclude Dragon/Steel/Fairy (unlocked in a later region
    via a separate token type). Tier odds and effects are fixed by design. */
-const STONE_TYPES_REGION1 = ['Fire','Water','Grass','Electric','Ground','Flying','Physical','Ghost','Psychic'];
+/* The fantasy trio joins the pool once Emerald March opens — before that the
+   nine elemental types are the whole world. */
+const STONE_TYPES_BASE   = ['Fire','Water','Grass','Electric','Ground','Flying','Physical','Ghost','Psychic'];
+const STONE_TYPES_FANTASY= ['Dragon','Steel','Fairy'];
+function stoneTypePool(){
+  const r = (state && state.progress && state.progress.currentRegion) || 1;
+  return r >= 2 ? STONE_TYPES_BASE.concat(STONE_TYPES_FANTASY) : STONE_TYPES_BASE.slice();
+}
+const STONE_TYPES_REGION1 = STONE_TYPES_BASE;   // kept for older references
 const TOKEN_LEVEL_ODDS = [ {min:1,max:10,chance:0.10}, {min:11,max:20,chance:0.20}, {min:21,max:30,chance:0.30} ];
 const TOKENS_PER_ROLL = 5;
 
@@ -1478,7 +1511,7 @@ function rollStoneTier(){
   for(const t of STONE_TIERS){ acc+=t.odds; if(r<acc) return t; }
   return STONE_TIERS[0];
 }
-function rollStoneType(){ return STONE_TYPES_REGION1[Math.floor(Math.random()*STONE_TYPES_REGION1.length)]; }
+function rollStoneType(){ const p = stoneTypePool(); return p[Math.floor(Math.random()*p.length)]; }
 function newMoveStone(){
   const tier = rollStoneTier();
   const type = rollStoneType();
@@ -1925,6 +1958,9 @@ function normalizeProfile(p){
   r2.uniform = !!r2.uniform;
   r2.password = !!r2.password;
   r2.cavernDone = !!r2.cavernDone;
+  r2.eggGranted = !!r2.eggGranted;
+  r2.crownGranted = !!r2.crownGranted;
+  p._needsEggDedupe = true;
   r2.waterDojo = r2.waterDojo || [];
   p.settings = p.settings || {};
   if(p.settings.volume===undefined) p.settings.volume = 0.8;
@@ -1992,17 +2028,34 @@ function monPortrait(species, size, opts){
   const view = opts.view || 'icon';
   const stage = opts.stage || 0;              // 0 = base form, 1 = first evolution, 2 = second
   const radius = Math.round(px*0.21);
-  const cls = 'mon-portrait mon-sprite' + (opts.breathe ? ' breathe-'+opts.breathe : '');
+  const cls = 'mon-portrait mon-sprite'
+    + (opts.breathe ? ' breathe-'+opts.breathe : '')
+    + (opts.crowned ? ' crowned-aura' : '');
   const crowned = !!opts.crowned;
   const override = (typeof ASSETS!=='undefined' && ASSETS.sprites)
     ? (ASSETS.sprites[spriteKey(species,stage,crowned)+'_'+view] || ASSETS.sprites[spriteKey(species,stage,crowned)]) : null;
   // the icon view starts at _front, so only _front and _back need supplying
   const primary = override || spritePath(species, stage, view==='icon' ? 'front' : view, crowned);
   const bg = opts.bare ? 'transparent' : s.color;
-  return `<img src="${primary}" alt="${escapeHtml(s.name)}" class="${cls}"
+  const wrapOpen  = opts.crowned ? `<span class="crowned-wrap" style="width:${px}px;height:${px}px;">${crownSparkles()}` : '';
+  const wrapClose = opts.crowned ? '</span>' : '';
+  return wrapOpen + `<img src="${primary}" alt="${escapeHtml(s.name)}" class="${cls}"
     data-species="${species}" data-px="${px}" data-view="${view}" data-stage-n="${stage}" data-crowned="${crowned?1:0}" data-try="0"
     style="width:${px}px;height:${px}px;border-radius:${radius}px;object-fit:contain;background:${bg};"
-    onerror="spriteFallback(this)">`;
+    onerror="spriteFallback(this)">` + wrapClose;
+}
+
+/* Rising motes for a crowned monster — the same idea as the Ultra button,
+   sized down and gold. */
+function crownSparkles(){
+  let out = '<span class="crown-fizz">';
+  for(let i=0;i<7;i++){
+    const near = Math.random();
+    const size = 2 + near*4;
+    out += `<i style="left:${8+Math.random()*84}%;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;`
+         + `animation-duration:${(2.8-near*1.2).toFixed(2)}s;animation-delay:${(Math.random()*2.8).toFixed(2)}s;"></i>`;
+  }
+  return out + '</span>';
 }
 
 /* Evolution stages get a number appended to the species id:
@@ -2096,7 +2149,14 @@ function typeBadges(species){
   ).join(' ');
 }
 /* The ✦ marks a crowned monster without ever touching its nickname. */
-function crownMark(m){ return isCrowned(m) ? ' <span class="crown-mark">✦</span>' : ''; }
+function crownMark(m){ return isCrowned(m) ? crownIcon(15, 'crown-mark') : ''; }
+/* assets/ui/crown.png, glowing; falls back to the emoji until art exists. */
+function crownIcon(px, cls){
+  px = px || 20;
+  return `<img src="assets/ui/crown.png" alt="Crown" class="crown-icon ${cls||''}"
+    style="width:${px}px;height:${px}px;" data-px="${px}"
+    onerror="this.outerHTML='<span class=\\'crown-icon-fb ${cls||''}\\' style=\\'font-size:${px}px\\'>👑</span>'">`;
+}
 function displayName(mon){
   return mon.nickname || SPECIES[mon.species].name;
 }
@@ -4475,6 +4535,14 @@ function enemyTurn(){
 /* An evolved wild monster fights unpredictably: it picks from its whole
    unlocked moveset each turn instead of always using the same attack. */
 function enemyMoveFor(e){
+  /* The Don's dragon opens by charging Cataclysm Max for three turns, then
+     hyperbeams every turn after. Its charge is tracked on the enemy itself. */
+  if(e.ai === 'cataclysm'){
+    e.chargeTurns = (e.chargeTurns||0) + 1;
+    if(e.chargeTurns <= 3) return ['Charge','Cataclysm Max',null,'Charge',0,0];
+    const charges = 3;
+    return ['Ultimate','Hyperbeam',(charges-1)*0.5 + 1.75,'Single',0,0];
+  }
   if(e.ai !== 'random') return e.move;
   const sp = SPECIES[e.species];
   const avail = MOVES[e.species].filter(m=>m[1]!=null && e.level>=m[5] && m[2]!=null);
@@ -4529,6 +4597,16 @@ function runEnemyAttack(i){
                         : `💨 The mirage shimmers — ${name} missed!`);
       setTimeout(()=> runEnemyAttack(i+1), 700);
     }, 300);
+    return;
+  }
+
+  // a charging turn does no damage at all
+  if(move[0] === 'Charge'){
+    playEffect(move[1], { type:'Water', duration:700 });
+    setTimeout(()=>{
+      battleMsg(`⚡ ${name} gathers power… (${e.chargeTurns}/3)`);
+      setTimeout(()=> runEnemyAttack(i+1), 900);
+    }, 400);
     return;
   }
 
@@ -4687,7 +4765,9 @@ function awardXpToParty(fightsWorth){
   state.party.forEach(m=>{
     const sp = SPECIES[m.species];
     if(sp.frozenRegion1 && state.progress.currentRegion===1) return; // phoenix frozen
-    if(m.level >= levelCap()){ m.xpFights = 0; return; }
+    // Past this zone's cap: freeze progress rather than discarding it, so a
+    // monster raised elsewhere doesn't lose a part-finished level on arrival.
+    if(m.level >= levelCap()) return;
     m.xpFights = (m.xpFights||0) + credit;
     const from = m.level;
     const evos = [], newMoves = [];
@@ -4706,7 +4786,7 @@ function awardXpToParty(fightsWorth){
       const nm = newMoveAtLevel(m.species, m.level);
       if(nm) newMoves.push(nm);
     }
-    if(m.level >= levelCap()) m.xpFights = 0;
+    // reaching the cap mid-battle also freezes rather than clears
     // The Dragon Egg hatches on reaching its level, keeping everything it earned.
     if(isEgg(m) && m.level >= (SPECIES[m.species].hatchesAt||31)){
       const into = SPECIES[m.species].hatchesInto;
@@ -4715,7 +4795,7 @@ function awardXpToParty(fightsWorth){
       m.currentHp = computeMaxHp(into, m.level, m.supplements||0, m);
       if(!state.caughtSpecies.includes(into)) state.caughtSpecies.push(into);
       if(!state.encounteredSpecies.includes(into)) state.encounteredSpecies.push(into);
-      events.push({ uid:m.uid, species:into, name:hatchedName, from, to:m.level, evos:[m.level], newMoves:[], hatched:true });
+      events.push({ uid:m.uid, species:into, fromSpecies:'dragon_egg', name:hatchedName, from, to:m.level, evos:[m.level], newMoves:[], hatched:true });
       return;
     }
     if(m.level !== from) events.push({ uid:m.uid, species:m.species, name:displayName(m), from, to:m.level, evos, newMoves });
@@ -4826,7 +4906,7 @@ function playEvolutions(list, done){
     ov.innerHTML = `
       <div class="evo-particles" id="evoParticles"></div>
       <div class="evo-stage">
-        <div id="evoSprite" class="evo-sprite-wrap cutout">${monPortrait(ev.species,190,{view:'front',stage:fromStage,bare:true})}</div>
+        <div id="evoSprite" class="evo-sprite-wrap cutout">${monPortrait(ev.fromSpecies||ev.species,190,{view:'front',stage:ev.fromSpecies?0:fromStage,bare:true})}</div>
       </div>
       <div id="evoText" class="evo-text">What's happening…?</div>
       <div id="evoActions"></div>
@@ -4851,7 +4931,10 @@ function playEvolutions(list, done){
     let timer = null;
 
     const paint = (stage, inverted)=>{
-      spriteBox.innerHTML = monPortrait(ev.species, 190, { view:'front', stage, bare:true });
+      // `fromSpecies` lets a hatch/transformation show two different species
+      const sp = (stage === fromStage && ev.fromSpecies) ? ev.fromSpecies : ev.species;
+      const st = (sp === ev.fromSpecies) ? 0 : stage;
+      spriteBox.innerHTML = monPortrait(sp, 190, { view:'front', stage:st, bare:true });
       spriteBox.classList.toggle('inverted', !!inverted);
     };
 
@@ -5888,7 +5971,7 @@ function pickShopStone(tierId, cost){
   ov.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;max-height:80vh;overflow-y:auto;">
     <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:18px;">Choose a ${t.label} skill</div>
     <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:3px 0 12px;">Costs ${cost} Elite Skill Tokens.</div>
-    ${STONE_TYPES_REGION1.map(tp=>`
+    ${stoneTypePool().map(tp=>`
       <button class="btn btn-ghost shop-opt" data-type="${tp}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;">
         <span class="type-badge" style="background:${TYPE_COLORS[tp]};">${tp}</span>
         <span style="flex:1;font-weight:700;">${escapeHtml(stoneName(tp,tierId))}</span>
@@ -6809,7 +6892,7 @@ function renderShop(){
     { id:'highSkill',     from:2, icon:gemIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
     { id:'veryHighSkill', from:3, icon:gemIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
     { id:'ultraSkill',    from:4, icon:gemIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
-    { id:'crown',         from:2, icon:'👑', name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
+    { id:'crown',         from:4, icon:crownIcon(22), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
   ];
   const region = state.progress.currentRegion || 1;
   const box = $('#shopWares');
@@ -6940,7 +7023,7 @@ function openSkillPicker(w){
       <div class="ware-name" style="font-size:19px;">${escapeHtml(w.name)}</div>
       <div class="ware-desc" style="margin:4px 0 12px;">${curIcon(pr.cur)} ${pr.cost} ${curName(pr.cur)} · tap a skill to read what it does</div>
       <div class="pick-list">
-        ${STONE_TYPES_REGION1.map(tp=>`
+        ${stoneTypePool().map(tp=>`
           <button class="pick-opt" data-type="${tp}">
             <span class="type-badge" style="background:${TYPE_COLORS[tp]};">${tp}</span>
             <span class="pick-name">${escapeHtml(stoneName(tp,tier))}</span>
@@ -7113,6 +7196,20 @@ function enforceEyeBreak(){
 /* The Water Dojo Master hands over a Lanternfish — the lamp that lights the
    Rocky Caverns. Runs on load too, so a save that cleared the Dojo before this
    existed still receives it. */
+/* Keep only the best egg (or hatched dragon) — earlier builds could mint one
+   per replay of the finale. */
+function dedupeDragonEggs(){
+  const all = [...state.party, ...state.storage]
+    .filter(m=>isEgg(m) || m.species==='water_dragon_nerfed');
+  if(all.length <= 1) return 0;
+  all.sort((a,b)=> (b.level||0) - (a.level||0));
+  const keep = all[0];
+  const drop = new Set(all.slice(1).map(m=>m.uid));
+  state.party   = state.party.filter(m=>!drop.has(m.uid));
+  state.storage = state.storage.filter(m=>!drop.has(m.uid));
+  return drop.size;
+}
+
 function grantLanternfish(){
   if(state.lanternGranted) return null;
   const already = [...state.party, ...state.storage].some(m=>m.species==='lanternfish');
@@ -7248,7 +7345,7 @@ async function stepDisused(){ await advancePath('disused'); }
 /* --- 5: the guards --- */
 async function disused5(){
   await stepDisused();
-  storyModal('🕴️', 'Two guards at the door',
+  storyModal(npcPortrait('soldato2','🕴️',120,'transparent'), 'Two guards at the door',
     `Your borrowed suit draws no second glance. One of them holds out a hand anyway.<br><br>` +
     `"Word."<br><br>` +
     `"<b>Campanile</b>," you say, and your voice does not shake.<br><br>` +
@@ -7259,7 +7356,7 @@ async function disused5(){
 /* --- 6: the army, and something roaring --- */
 async function disused6(){
   await stepDisused();
-  storyModal('🏮', 'An army in the dark',
+  storyModal('', 'An army in the dark',
     `The tunnel opens into a cavern the size of a town square, and it is <b>full</b> of them — ` +
     `soldiers in rows, crates stacked to the ceiling, lamps strung on wire.<br><br>` +
     `You keep your chin level and your pace even, and nobody stops you.<br><br>` +
@@ -7271,10 +7368,11 @@ async function disused6(){
 /* --- 7: the dragon, restrained --- */
 async function disused7(){
   await stepDisused();
-  storyModal('🐉', 'The thing they caught',
+  storyModal(monPortrait('water_dragon',170,{view:'front',bare:true,stage:1,crowned:true}), 'The thing they caught',
     `You come out on a ledge above a flooded chamber, and you forget to breathe.<br><br>` +
-    `A <b>water dragon</b> fills it — vast, coiling, magnificent — and it is <b>losing</b>. ` +
-    `A man in a pale coat stands calmly at the water's edge, directing the fight like a conductor.<br><br>` +
+    `A <b>water dragon</b> fills it — vast, shimmering, magnificent — and it is <b>losing</b>. ` +
+    `A man with a <b>gigantic Raven</b> stands calmly at the water's edge, his purple trenchcoat heavy with ` +
+    `jewels, directing the fight like a conductor.<br><br>` +
     `He is not fighting fair. His Capos' <b>ghosts and psychics</b> have the dragon bound at every limb, ` +
     `holding it still while he works.`,
     ()=>renderCaverns());
@@ -7294,8 +7392,8 @@ async function disused8(){
         <p>You see it now. Where the dragon's chest should shine there is only a <b>hollow</b> — ` +
         `something has been cut out of it.</p>
         <p>Whatever is left of it is barely fighting any more. Its eyes have gone flat and obedient. ` +
-        `The man in the pale coat says a word and the dragon <b>stops struggling</b>.</p>
-        <p>They have taken its heart, and put something else in its place.</p>
+        `The man with the Raven says a word and the dragon <b>stops struggling</b>.</p>
+        <p>They have taken something important from the dragon.</p>
         <p><b>Nobody has seen you.</b> You could still turn around.</p>
       </div>
       <div style="display:flex;gap:10px;margin-top:16px;">
@@ -7304,7 +7402,7 @@ async function disused8(){
       </div>
     </div>`;
   $('#choiceYes').addEventListener('click', ()=>{
-    storyModal('🐉', 'You step out of the dark',
+    storyModal(monPortrait('water_dragon',150,{view:'front',bare:true,stage:1,crowned:true}), 'You step out of the dark',
       `You do not have a plan. You walk out onto the ledge anyway, and your voice carries further than you meant it to.<br><br>` +
       `The pale coat turns. He looks you over — the borrowed suit, the child inside it — and something like ` +
       `<b>amusement</b> crosses his face.<br><br>` +
@@ -7313,11 +7411,11 @@ async function disused8(){
       ()=>disused9Fight());
   });
   $('#choiceNo').addEventListener('click', ()=>{
-    storyModal('🕴️', 'You are recognised',
+    storyModal(`<span class="emblem-pair">${npcPortrait('capo_purple','🕴️',110,'transparent')}${npcPortrait('capo_black','🕴️',110,'transparent')}</span>`, 'You are recognised',
       `You turn to go — and stop. Two Capos are on the ledge behind you, and one of them is <b>smiling</b>.<br><br>` +
       `"That's the one. That's the kid who beat me."<br><br>` +
       `"<b>Intruder!</b>"<br><br>` +
-      `The man in the pale coat does not seem troubled at all. If anything he looks <b>pleased</b>.<br><br>` +
+      `Their boss does not seem troubled at all. If anything he looks <b>pleased</b>.<br><br>` +
       `"Then the timing is perfect," says <b>Don Padrino</b>. "I have been wanting to test my new pet."`,
       ()=>disused9Fight());
   });
@@ -7330,10 +7428,11 @@ function disused9Fight(){
   r2.padrinoMet = true;
   beginBattle({
     isNpc:true, name:'Don Padrino', npcId:'padrino', noFlee:true, scriptedLoss:'padrino',
+    enemiesFirst:true,          // Don Padrino moves before you do
     waves:[[
-      {species:'ghost_starter',   level:81, ai:'best'},
-      {species:'water_dragon',    level:100, ai:'best', supplements:10, crowned:true, boss:true},
-      {species:'psychic_starter', level:81, ai:'best'},
+      {species:'water_dragon',   level:100, ai:'cataclysm', supplements:10, crowned:true, boss:true},
+      {species:'flying_starter', level:91,  ai:'best'},
+      {species:'physical_starter', level:81, ai:'best'},
     ]],
     onWin: ()=> onPadrinoResolved(),   // if somehow won, the story still runs
   });
@@ -7349,7 +7448,7 @@ async function onPadrinoResolved(){
   const seed = seedIdx>=0 ? state.party[seedIdx] : null;
   const level = seed ? seed.level : 1;
 
-  storyModal('🌱', 'The seed answers',
+  storyModal(monPortrait('sacred_seed',130,{bare:true}), 'The seed answers',
     `Your last monster goes down. Don Padrino is already turning away, bored of you.<br><br>` +
     `Then the <b>Sacred Seed</b> in your pack begins to glow.`,
     ()=>{
@@ -7370,8 +7469,8 @@ async function onPadrinoResolved(){
         if(!state.caughtSpecies.includes('forest_fairy')) state.caughtSpecies.push('forest_fairy');
       }
       saveProfile();
-      playEvolutions([{ uid:seed?seed.uid:'seed', species:'forest_fairy', name:'Sacred Seed',
-                        from:level, to:level, evos:[level], newMoves:[] }], ()=>{
+      playEvolutions([{ uid:seed?seed.uid:'seed', species:'forest_fairy', fromSpecies:'sacred_seed',
+                        name:'Sacred Seed', from:level, to:level, evos:[level], newMoves:[] }], ()=>{
         storyModal('✨', 'Fairy light',
           `The light does not stop at you. It floods the chamber, and where it touches the dragon the ` +
           `<b>mind-control breaks apart like ice</b>.<br><br>` +
@@ -7398,7 +7497,7 @@ function disused10Fight(){
 }
 
 function disused11Intro(){
-  storyModal('💠', 'It is weaker than it looks',
+  storyModal(monPortrait('water_dragon',150,{view:'back',bare:true,stage:1,crowned:true}), 'It is weaker than it looks',
     `The dragon lands hard, and you feel it shudder beneath you.<br><br>` +
     `A Capo steps from the smoke, turning something over in his hand — something that <b>glows</b>.<br><br>` +
     `"Looking for this?" He holds up the <b>dragon's core</b>. "It won't last much longer without it."`,
@@ -7408,13 +7507,13 @@ function disused11Intro(){
 /* --- 11: the last stand. The dragon cannot die, and cannot win. --- */
 function disused11Fight(){
   beginBattle({
-    isNpc:true, name:'The Capos', npcId:'capo_purple', noFlee:true,
+    isNpc:true, name:'Don Padrino', npcId:'padrino', noFlee:true,
     scriptedAlly:'water_dragon', allyLevel:100, allyCrowned:true,
     allyMove:'dragonLegacy', allyUnkillable:true, enemiesFirst:true,
     waves:[[
-      {species:'ghost_starter',  level:81, ai:'best'},
-      {species:'flying_starter', level:81, ai:'best'},
-      {species:'psychic_starter',level:81, ai:'best'},
+      {species:'flying_starter',   level:91, ai:'best'},
+      {species:'physical_starter', level:81, ai:'best'},
+      {species:'ghost_starter',    level:81, ai:'best'},
     ]],
     onWin: ()=> disused12Farewell(),
   });
@@ -7438,8 +7537,8 @@ async function disused12Farewell(){
     `<p>The light gathers in front of you and settles into something small and heavy and warm.</p>
      <p>"This is my <b>legacy</b>. Be patient with it — a dragon takes a long time to become anything at all, ` +
      `and longer still to become worth fearing."</p>`,
-    `<p>"One last thing." Its voice is quieter now. "Find the man in the pale coat. ` +
-     `Take back my <b>core</b>, and give it to the one who hatches from that egg."</p>
+    `<p>"One last thing." Its voice is quieter now. "Find my <b>core</b>. ` +
+     `Take it back from the one who stole it, and give it to the one who hatches from that egg."</p>
      <p>"Then we will both be whole."</p>`,
   ];
   let i = 0;
@@ -7460,7 +7559,14 @@ async function disused12Farewell(){
 
 async function grantDragonEgg(){
   const r2 = state.progress.region2;
-  // the egg takes the slot the Sacred Seed once held
+  // One egg only. Replaying the finale must not mint more.
+  const existing = [...state.party, ...state.storage].filter(m=>isEgg(m) || m.species==='water_dragon_nerfed');
+  if(r2.eggGranted || existing.length){
+    dedupeDragonEggs();
+    r2.cavernDone = true;
+    await saveProfile();
+    return forestCrownScene();
+  }
   const seedIdx = state.party.findIndex(isSeed);
   const egg = newMonster('dragon_egg', 1);
   egg.currentHp = 1;
@@ -7487,7 +7593,11 @@ async function grantDragonEgg(){
 
 /* The Forest Guardian closes the chapter. */
 async function forestCrownScene(){
-  state.inventory.crowns = (state.inventory.crowns||0) + 1;
+  const r2 = state.progress.region2;
+  if(!r2.crownGranted){                    // the Guardian gives exactly one
+    state.inventory.crowns = (state.inventory.crowns||0) + 1;
+    r2.crownGranted = true;
+  }
   await saveProfile();
   setScreenBg('explore');
   $('#brandSub').textContent = 'The Sacred Grove';
@@ -7501,7 +7611,7 @@ async function forestCrownScene(){
         `what I am, and older things than me that enforce them."</p>
         <p>"You had no such rules. You only had the choice — and you made it twice now, knowing both times ` +
         `that it would cost you."</p>
-        <p>She presses a circlet of woven branches into your hands. It is lighter than it looks.</p>
+        <p>She presses a crystal crown into your hands, made of ethereal, glowing fairy dust. It is lighter than air.</p>
         <p>"A <b>Crown</b>. Give it to one you have carried as far as it can go — one you <i>love</i>, ` +
         `not merely one that is useful."</p>
         <p>"It does not make a monster stronger for its own sake. It grants it the strength ` +
@@ -7515,6 +7625,14 @@ async function forestCrownScene(){
 }
 
 /* ---------- ROCKY CAVERNS: the three-path zone page ---------- */
+/* Every path finished (or the story resolved) — the Caverns become ordinary. */
+function cavernsComplete(){
+  const r2 = state.progress.region2 || {};
+  if(r2.cavernDone) return true;
+  const ps = (r2.paths)||{};
+  return CAVERN_PATHS.every(p => (ps[p.id]||{}).step >= PATH_LENGTH);
+}
+
 function renderCaverns(){
   setScreenBg('rocky_caverns');
   playMusicChain(['zone_rocky_caverns','region2','region']);
@@ -7655,13 +7773,14 @@ async function givePathReward(pathId, which){
 }
 
 /* A simple full-screen story beat with one button. */
-function storyModal(emoji, title, html, onClose){
+/* `emblem` may be an emoji or any HTML (a sprite, a pair of sprites…). */
+function storyModal(emblem, title, html, onClose){
   document.body.classList.remove('writing');
   $('#brandSub').textContent = 'Rocky Caverns';
   setScreenBg('rocky_caverns');
   screenEl.innerHTML = `
     <div class="scene">
-      <div style="font-size:52px;margin:14px 0 8px;">${emoji}</div>
+      <div class="scene-emblem">${emblem}</div>
       <div class="scene-title">${escapeHtml(title)}</div>
       <div class="scene-body">${html}</div>
       <button class="btn btn-primary" id="sceneNext" style="margin-top:16px;">Continue</button>
@@ -7710,7 +7829,9 @@ function renderRegionSelect(){
 function renderZone(){
   const z = ui.currentZone;
   if(!z) return go('explore');
-  if(z.id === 'rocky_caverns') return renderCaverns();
+  // Rocky Caverns shows its three paths until they're all walked, then settles
+  // into a normal explorable zone.
+  if(z.id === 'rocky_caverns' && !cavernsComplete()) return renderCaverns();
   setScreenBg(z.id);
   playMusicChain(['zone_'+z.id, 'region'+(state.progress.currentRegion||1), 'region']);
   document.body.classList.remove('zone-dark');
@@ -8421,6 +8542,11 @@ function escapeHtml(s){
     delete state._needsMasteryReconcile;
     const g = reconcileMastery();
     if(g) { await saveProfile(); setTimeout(()=>announceMastery(g), 900); }
+  }
+  if(state && state._needsEggDedupe){
+    delete state._needsEggDedupe;
+    const n = dedupeDragonEggs();
+    if(n){ await saveProfile(); setTimeout(()=>toast(`Kept your strongest dragon egg; removed ${n} duplicate${n>1?'s':''}.`), 1500); }
   }
   // repair saves that cleared the Water Dojo before Lanternfish existed
   if(state && state._needsLanternCheck){
