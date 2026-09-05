@@ -489,6 +489,8 @@
     border-radius:14px;padding:13px 10px;cursor:pointer;box-shadow:0 2px 0 var(--paper-3);}
   .ware:active{transform:translateY(2px);box-shadow:0 1px 0 var(--paper-3);}
   .ware.cant{opacity:0.55;}
+  .ware.oos{opacity:0.4;filter:grayscale(1);cursor:not-allowed;}
+  .ware-oos{font-size:11px;font-weight:800;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
   .ware-icon{font-size:30px;line-height:1;display:flex;align-items:center;justify-content:center;min-height:46px;}
 
   /* ---- faceted gems (no art files needed) ---- */
@@ -1867,6 +1869,8 @@ function normalizeProfile(p){
   if(p.inventory.tokens===undefined) p.inventory.tokens = 0;
   if(p.inventory.eliteTokens===undefined) p.inventory.eliteTokens = 0;
   p.wordMastery = p.wordMastery || {};
+  // passengers always sit at exactly 1 HP; a stray 0 makes them look fainted
+  (p.party||[]).forEach(m=>{ const sp=SPECIES[m.species]; if(sp && (sp.isSeed||sp.isEgg)) m.currentHp = 1; });
   p.masteryAwarded = p.masteryAwarded || {};
   ['bronze','silver','gold'].forEach(k=>{ if(p.masteryAwarded[k]===undefined) p.masteryAwarded[k] = 0; });
   p.medals = p.medals || {};
@@ -1875,6 +1879,21 @@ function normalizeProfile(p){
   if(!Array.isArray(p.settings.wordLists)) p.settings.wordLists = null;   // null = all lists
   if(p.lanternGranted===undefined) p.lanternGranted = false;
   p._needsLanternCheck = true;
+  /* One-time repair. Earlier builds grew current HP by the unscaled stat delta,
+     so monsters sat permanently below their real maximum — it looked like
+     something was quietly damaging the party. Anyone at or above the old
+     unscaled figure was actually at full, so top them up. */
+  if(!p._hpRepaired){
+    p._hpRepaired = true;
+    (p.party||[]).concat(p.storage||[]).forEach(m=>{
+      const sp = SPECIES[m.species];
+      if(!sp || sp.isSeed || sp.isEgg) return;
+      const raw = computeMaxStat(m.species, m.level, m.supplements, m);
+      const max = computeMaxHp(m.species, m.level, m.supplements, m);
+      if(m.currentHp >= raw && m.currentHp < max) m.currentHp = max;
+      if(m.currentHp > max) m.currentHp = max;
+    });
+  }
   p.moveStones = p.moveStones || [];
   /* Giga Drain became the Forest Guardian's signature move; the Grass Very High
      stone is now Leech Seed. Rename anything already owned or equipped so old
@@ -4675,10 +4694,13 @@ function awardXpToParty(fightsWorth){
     while(m.level < levelCap() && m.xpFights >= fightsNeeded(m.level)){
       m.xpFights -= fightsNeeded(m.level);
       const beforeStage = evolutionStage(m.species, m.level);
-      const beforeMax = computeMaxStat(m.species, m.level, m.supplements);
+      // Grow current HP by the change in MAX HP (which is scaled), not by the
+      // raw ATK delta — using the unscaled figure left every monster a little
+      // short of full after each level, and the gap compounded.
+      const beforeMax = computeMaxHp(m.species, m.level, m.supplements, m);
       m.level++;
-      const afterMax = computeMaxStat(m.species, m.level, m.supplements);
-      m.currentHp = Math.min(afterMax, m.currentHp + (afterMax - beforeMax)); // grow HP with the stat gain
+      const afterMax = computeMaxHp(m.species, m.level, m.supplements, m);
+      m.currentHp = Math.min(afterMax, m.currentHp + (afterMax - beforeMax));
       const afterStage = evolutionStage(m.species, m.level);
       if(afterStage > beforeStage) evos.push(m.level);
       const nm = newMoveAtLevel(m.species, m.level);
@@ -6760,7 +6782,7 @@ function renderShop(){
     <button class="back-link" id="backBtn">← Region</button>
 
     <div class="shop-keeper">
-      ${npcPortrait('shopkeeper','🧑‍🌾',110,'transparent')}
+      ${npcPortrait('shopkeeper'+(state.progress.currentRegion||1),'🧑‍🌾',110,'transparent')}
       <div class="shop-bubble">${escapeHtml(ui.shopGreeting)}</div>
     </div>
 
@@ -6777,24 +6799,30 @@ function renderShop(){
   if(ui.shopNote) setTimeout(()=>{ ui.shopNote=null; }, 6000);
   $('#shopStorage').addEventListener('click', ()=>{ ui.storageFrom='shop'; go('storage'); });
 
+  /* Stock arrives with the regions, so the shop grows as the story does.
+     `from` is the earliest region that carries the item. */
   const wares = [
-    { id:'skillToken',    icon:'🎫', name:'Skill Token',            desc:'Spin for a random Skill Stone (5 tokens per spin).', qty:true },
-    { id:'randomStone',   icon:gemIcon('mid'), name:'Random Skill Stone', desc:'One spin, right now. Any tier, any type.' },
-    { id:'protein',       icon:'💪', name:'Protein Supplement',     desc:'Permanently raises one monster\'s stats.' },
-    { id:'eliteStone',    icon:gemIcon('veryhigh'), name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
-    { id:'highSkill',     icon:gemIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
-    { id:'veryHighSkill', icon:gemIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
-    { id:'ultraSkill',    icon:gemIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
-    { id:'crown',         icon:'👑', name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
+    { id:'skillToken',    from:1, icon:'🎫', name:'Skill Token',            desc:'Spin for a random Skill Stone (5 tokens per spin).', qty:true },
+    { id:'randomStone',   from:1, icon:gemIcon('mid'), name:'Random Skill Stone', desc:'One spin, right now. Any tier, any type.' },
+    { id:'protein',       from:2, icon:'💪', name:'Protein Supplement',     desc:'Permanently raises one monster\'s stats.' },
+    { id:'eliteStone',    from:2, icon:gemIcon('veryhigh'), name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
+    { id:'highSkill',     from:2, icon:gemIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
+    { id:'veryHighSkill', from:3, icon:gemIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
+    { id:'ultraSkill',    from:4, icon:gemIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
+    { id:'crown',         from:2, icon:'👑', name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
   ];
+  const region = state.progress.currentRegion || 1;
   const box = $('#shopWares');
   box.innerHTML = wares.map(w=>{
     const pr = SHOP_PRICES[w.id];
-    const afford = medalCount(pr.cur) >= pr.cost;
-    return `<div class="ware ${afford?'':'cant'}" data-ware="${w.id}">
+    const stocked = region >= w.from;
+    const afford = stocked && medalCount(pr.cur) >= pr.cost;
+    return `<div class="ware ${stocked?(afford?'':'cant'):'oos'}" ${stocked?`data-ware="${w.id}"`:''}>
       <div class="ware-icon">${w.icon}</div>
       <div class="ware-name">${escapeHtml(w.name)}</div>
-      <div class="ware-price">${curIcon(pr.cur)} ${pr.cost}</div>
+      ${stocked
+        ? `<div class="ware-price">${curIcon(pr.cur)} ${pr.cost}</div>`
+        : `<div class="ware-oos">Out of stock</div>`}
     </div>`;
   }).join('');
   box.querySelectorAll('[data-ware]').forEach(el=>el.addEventListener('click', ()=>{
