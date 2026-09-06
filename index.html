@@ -840,6 +840,8 @@
     border-radius:6px;overflow:hidden;margin:5px 0 1px;box-shadow:0 1px 3px rgba(0,0,0,0.3);}
   .hpbar2 .hp-red{position:absolute;left:0;top:0;height:100%;background:var(--cinnabar);}
   .hpbar2 .hp-green{position:absolute;left:0;top:0;height:100%;}
+  .atk-line{font-size:12px;font-weight:800;color:var(--ink);margin-top:2px;
+    text-shadow:0 1px 0 rgba(255,255,255,.85);}
   .hp-num{font-weight:800;color:var(--ink);line-height:1;text-shadow:0 1px 0 rgba(255,255,255,0.85);}
   /* Names read against artwork without needing a panel behind them. */
   .name-plate{display:inline-block;}
@@ -923,6 +925,18 @@
   .stone-group-head.tier-veryhigh{background:rgba(201,154,63,.20);}
   .stone-group-head.tier-high{background:rgba(59,126,161,.18);}
   .token-box{background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center;margin-bottom:10px;box-shadow:0 2px 0 var(--paper-3);}
+  .plus-mark{color:var(--gold);font-weight:900;margin-left:2px;
+    text-shadow:0 0 5px rgba(255,209,102,.9);}
+  .plus-mark.big{font-size:22px;}
+  .upg-panel{margin-top:14px;padding:12px;border-radius:13px;
+    background:rgba(201,154,63,.14);border:1px solid rgba(201,154,63,.5);text-align:center;}
+  .upg-panel.muted,.upg-panel.done{background:var(--paper-2);border-color:var(--line);
+    font-size:12px;font-weight:800;color:var(--ink-soft);}
+  .upg-panel.done{color:var(--gold);}
+  .upg-head{font-family:'Baloo 2',cursive;font-weight:800;font-size:14px;}
+  .upg-preview{font-size:13px;font-weight:700;margin:4px 0 6px;}
+  .upg-cost{font-size:11px;font-weight:700;color:var(--ink-soft);line-height:1.45;}
+  .upg-why{font-size:11px;font-weight:800;color:var(--cinnabar-dark);margin-top:8px;}
   .stone-card{background:var(--paper);border:1px solid var(--line);border-left-width:4px;border-radius:10px;
     padding:8px;margin-bottom:6px;cursor:pointer;text-align:center;}
   .stone-card:active{transform:translateY(2px);box-shadow:0 1px 0 var(--paper-3);}
@@ -3401,6 +3415,63 @@ function cloneEchoTargets(count){
   return out;
 }
 
+/* ============================================================
+   SKILL STONE UPGRADES
+   A stone can be refined twice — to + and then to ✦ — by consuming a DUPLICATE
+   of the same tier and type plus medals.
+     low / mid / high : +0.1 damage per step, paid in Silver (5 then 10)
+     ultra            : more hits AND more damage, paid in Gold (5 then 10)
+     very high        : not upgradable yet
+   ============================================================ */
+const UPGRADE_MARKS = ['', ' +', ' ✦'];
+const UPGRADE_COSTS = {
+  low:      [{cur:'bronze',n:3},{cur:'bronze',n:5}],
+  mid:      [{cur:'bronze',n:5},{cur:'bronze',n:10}],
+  high:     [{cur:'silver',n:3},{cur:'silver',n:5}],
+  /* veryhigh: [{cur:'silver',n:5},{cur:'silver',n:10}]  — priced, not yet built */
+  ultra:    [{cur:'gold',  n:5},{cur:'gold',  n:10}],
+};
+/* Ultra gains hit-count as well as power, so it gets its own table. */
+const ULTRA_TIERS = [
+  { mult:0.50, min:5, max:7 },
+  { mult:0.55, min:6, max:8 },
+  { mult:0.60, min:7, max:9 },
+];
+
+function stonePlus(st){ return Math.max(0, Math.min(2, (st && st.plus) || 0)); }
+function stoneUpgradable(st){ return !!(st && UPGRADE_COSTS[st.tier] && stonePlus(st) < 2); }
+function stoneDisplayName(st){ return (st ? st.name : '') + UPGRADE_MARKS[stonePlus(st)]; }
+
+/* The effective multiplier once refinement is taken into account. */
+function stoneMult(st){
+  const t = stoneTierDef(st.tier);
+  const p = stonePlus(st);
+  if(st.tier === 'ultra') return ULTRA_TIERS[p].mult;
+  if(t.mult == null) return null;                  // very high: status, no damage
+  return +(t.mult + 0.1 * p).toFixed(2);
+}
+function ultraHitRange(st){
+  const p = stonePlus(st);
+  return { min: ULTRA_TIERS[p].min, max: ULTRA_TIERS[p].max };
+}
+function upgradeCost(st){
+  const tier = UPGRADE_COSTS[st.tier];
+  return tier ? tier[stonePlus(st)] : null;
+}
+/* A duplicate is any OTHER stone of the same tier and type. */
+function findDuplicate(st){
+  return state.moveStones.find(x=>x!==st && x.uid!==st.uid && x.tier===st.tier && x.type===st.type);
+}
+function canUpgradeStone(st){
+  if(!stoneUpgradable(st)) return { ok:false, why:st && st.tier==='veryhigh'
+    ? 'Very High skills cannot be refined yet.' : 'Fully refined.' };
+  const cost = upgradeCost(st);
+  const dup = findDuplicate(st);
+  if(!dup) return { ok:false, why:`Needs a second ${st.type} ${stoneTierDef(st.tier).label} stone.` };
+  if(medalCount(cost.cur) < cost.n) return { ok:false, why:`Needs ${cost.n} ${curName(cost.cur)}.` };
+  return { ok:true, cost, dup };
+}
+
 /* ---------- BATTLE MODULE (Phase 3: wild encounters) ---------- */
 function starterLevel(){
   const st = state.party.find(m=>m.species===state.starterSpecies);
@@ -3747,7 +3818,7 @@ function unlockedMoves(m){
     const t = stoneTierDef(st.tier);
     const bi = base.findIndex(mv=>mv.slot===slot);
     const used = t.id==='veryhigh' && ui.battle && ui.battle.usedVeryHigh[m.uid];
-    if(bi>=0) base[bi] = { slot, name:st.name, mult:t.mult,
+    if(bi>=0) base[bi] = { slot, name:stoneDisplayName(st), mult:stoneMult(st), stonePlus:stonePlus(st),
       target: t.kind==='multi2'?'Multi2':(t.kind==='status'?'Status':'Single'),
       words:t.words, unlock:0, available:!used, isStone:true, stoneTier:t.id, stoneType:st.type };
   });
@@ -3755,7 +3826,8 @@ function unlockedMoves(m){
   if(m.ultraStone){
     const t = stoneTierDef('ultra');
     const used = ui.battle && ui.battle.usedUltra[m.uid];
-    base.push({ slot:'UltraStone', name:m.ultraStone.name, mult:t.mult, target:'MultiHit', words:t.words,
+    base.push({ slot:'UltraStone', name:stoneDisplayName(m.ultraStone), mult:stoneMult(m.ultraStone),
+      stonePlus:stonePlus(m.ultraStone), ultraStone:m.ultraStone, target:'MultiHit', words:t.words,
       unlock:0, available:!used, isStone:true, stoneTier:'ultra', stoneType:m.ultraStone.type });
   }
   return base;
@@ -3845,6 +3917,7 @@ function renderBattle(){
         <div class="info-layer name-plate player-plate">
           <div class="mon-title big">${escapeHtml(displayName(mon))}${crownMark(mon)} <span>Lv ${mon.level}</span></div>
           ${hpBar2('playerHp', mon.currentHp, monMaxHp(mon), true)}
+          <div class="atk-line">ATK ${monAtk(mon)}</div>
         </div>
       </div>
     </div>
@@ -3978,7 +4051,16 @@ const BG_MAP = {
 /* Same idea for artwork: `<key>.png` unless the map overrides it. */
 function bgCandidates(key){
   if(!key) return [];
-  const out = [BG_DIR + (BG_MAP[key] || (key + '.png'))];
+  const rid0 = (state && state.progress && state.progress.currentRegion) || 1;
+  const out = [];
+  /* A region's own art takes precedence over the shared screen art, so
+     Region 3's Explore shows region3.png rather than Region 1's explore.png. */
+  const SHARED = ['explore','region','challenge','recover','shop','battle','home'];
+  if(SHARED.includes(key)){
+    out.push(BG_DIR + key + rid0 + '.png');     // e.g. explore3.png
+    out.push(BG_DIR + 'region' + rid0 + '.png');
+  }
+  out.push(BG_DIR + (BG_MAP[key] || (key + '.png')));
   if(/^region\d+$/.test(key)) out.push(BG_DIR + 'region.png');   // fall back to the shared one
   /* Anything without its own art falls back to the current region's backdrop,
      then to the generic one — so a new region only needs regionN.png. */
@@ -4335,26 +4417,28 @@ const LIFESTEAL = { 'Giga Drain': 0.2 };          // enemy-side self-heal (the G
    PROPORTION of their maximum, and it can bring a fainted one back. */
 const PARTY_DRAIN = { 'Giga Drain': 0.4 };
 
-function neediestAlly(){
-  const list = battleParty();
-  if(!list.length) return null;
-  return list.slice().sort((a,b)=>{
-    const ra = a.currentHp / Math.max(1, monMaxHp(a));
-    const rb = b.currentHp / Math.max(1, monMaxHp(b));
-    return ra - rb;                       // fainted (0) sorts first
-  })[0];
+/* Living allies only — Giga Drain no longer resurrects. The caster gets first
+   claim on the life it drained; if she's already full it passes to whoever is
+   worst off as a proportion of their maximum. */
+function drainRecipient(caster){
+  const living = battleParty().filter(m=>m.currentHp > 0);
+  if(!living.length) return null;
+  if(caster && caster.currentHp > 0 && caster.currentHp < monMaxHp(caster)) return caster;
+  const hurt = living.filter(m=>m.currentHp < monMaxHp(m));
+  if(!hurt.length) return null;
+  return hurt.sort((a,b)=>
+    (a.currentHp/Math.max(1,monMaxHp(a))) - (b.currentHp/Math.max(1,monMaxHp(b))))[0];
 }
 function applyPartyDrain(mv, mon){
   const pct = PARTY_DRAIN[mv.name];
   if(!pct) return null;
-  const t = neediestAlly();
+  const t = drainRecipient(mon);
   if(!t) return null;
   const amount = Math.ceil(pct * monAtk(mon));
   const max = monMaxHp(t);
   const before = t.currentHp;
-  const revived = before <= 0;
-  t.currentHp = Math.min(max, Math.max(0, before) + amount);
-  return { target:t, healed:t.currentHp - Math.max(0,before), revived };
+  t.currentHp = Math.min(max, before + amount);
+  return { target:t, healed:t.currentHp - before };
 }
 
 /* Scripted moves used only inside the Rocky Caverns finale. They bypass the
@@ -4637,13 +4721,12 @@ function resolveBattleMove(mv, target, results){
     applyHits(hits);
     reportHits(hits);
     if(mv.shell) applyShell(mv, mon);       // Slag Eruption leaves molten armour
+    // resolves AFTER Leech Seed, so the field heal lands first
     const drain = applyPartyDrain(mv, mon);
     if(drain && drain.healed>0){
-      playSfx('recovery_heal');
       if(drain.target === activeMon()) drainHp('playerHp', drain.target.currentHp-drain.healed, drain.target.currentHp, monMaxHp(drain.target));
-      setTimeout(()=> battleMsg(drain.revived
-        ? `🌿 ${displayName(drain.target)} is pulled back from the brink! (+${drain.healed} HP)`
-        : `🌿 ${displayName(drain.target)} drinks in ${drain.healed} HP.`), 600);
+      showDamageNumber(drain.target === activeMon() ? 'playerBob' : 'playerBob', drain.healed, { heal:true });
+      setTimeout(()=> battleMsg(`🌿 ${displayName(drain.target)} drinks in ${drain.healed} HP.`), 600);
     }
     applySelfDamage(mv, mon);
     if(mon.currentHp<=0){ setTimeout(()=>onMonFainted(), 900); return; }
@@ -4799,8 +4882,10 @@ function resolveMulti2(mv, mon, correct, target){
    Screen inverts briefly on use; hits animate at 2x speed in succession. */
 function resolveMultiHit(mv, mon, correct){
   if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
+  /* Hit count widens as the stone is refined: 5-7 → 6-8 → 7-9. */
+  const range = mv.ultraStone ? ultraHitRange(mv.ultraStone) : { min:5, max:7 };
   const r=Math.random();
-  const n = r<0.45?5:(r<0.80?6:7);
+  const n = r<0.45 ? range.min : (r<0.80 ? range.min+1 : range.max);
   const atk=monAtk(mon);
   // simulate against a working copy of HP so targeting skips already-downed enemies,
   // but leave real HP untouched until the animation plays it back hit by hit
@@ -6284,7 +6369,8 @@ function renderStoneList(){
       ${groups[t].map(st=>`
         <div class="stone-card tier-${st.tier}" data-stone="${st.uid}">
           <span class="type-badge" style="background:${TYPE_COLORS[st.type]};font-size:9px;padding:2px 6px;">${st.type}</span>
-          <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:12.5px;margin-top:3px;line-height:1.2;">${escapeHtml(st.name)}</div>
+          <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:12.5px;margin-top:3px;line-height:1.2;">
+            ${escapeHtml(st.name)}${stonePlus(st) ? `<span class="plus-mark">${UPGRADE_MARKS[stonePlus(st)].trim()}</span>` : ''}</div>
         </div>`).join('')}
     </div>`;
   }).join('');
@@ -6451,6 +6537,56 @@ function pickShopStone(tierId, cost){
 }
 
 /* stone detail: Use / Recycle / Back */
+/* The refinement panel inside a stone's detail card. */
+function upgradePanel(st){
+  if(st.tier === 'veryhigh'){
+    return `<div class="upg-panel muted">Very High skills cannot be refined yet.</div>`;
+  }
+  if(stonePlus(st) >= 2){
+    return `<div class="upg-panel done">✦ Fully refined</div>`;
+  }
+  const cost = upgradeCost(st);
+  const check = canUpgradeStone(st);
+  const nextMark = UPGRADE_MARKS[stonePlus(st)+1].trim();
+  const cur = stoneMult(st);
+  const nextSt = Object.assign({}, st, { plus: stonePlus(st)+1 });
+  const nxt = stoneMult(nextSt);
+  const preview = st.tier==='ultra'
+    ? (()=>{ const a=ultraHitRange(st), b=ultraHitRange(nextSt);
+             return `${cur}× / ${a.min}–${a.max} hits → <b>${nxt}× / ${b.min}–${b.max} hits</b>`; })()
+    : `${cur}× → <b>${nxt}×</b>`;
+  return `<div class="upg-panel">
+    <div class="upg-head">Refine to <b>${nextMark}</b></div>
+    <div class="upg-preview">${preview}</div>
+    <div class="upg-cost">Costs a duplicate ${escapeHtml(st.type)} ${stoneTierDef(st.tier).label} stone
+      + ${curIcon(cost.cur)} ${cost.n}</div>
+    ${check.ok
+      ? `<button class="btn btn-primary" id="upgBtn" style="margin-top:9px;">Refine</button>`
+      : `<div class="upg-why">${escapeHtml(check.why)}</div>`}
+  </div>`;
+}
+
+async function doUpgradeStone(st, closeFn){
+  const check = canUpgradeStone(st);
+  if(!check.ok) return toast(check.why);
+  const snapshot = { medals:Object.assign({},state.medals), stones:state.moveStones.slice() };
+  // spend the medals and consume the duplicate
+  if(check.cost.cur==='gold' || check.cost.cur==='silver') state.medals[check.cost.cur] -= check.cost.n;
+  const di = state.moveStones.indexOf(check.dup);
+  if(di>=0) state.moveStones.splice(di,1);
+  st.plus = stonePlus(st) + 1;
+
+  const sv = showSyncingOverlay('Refining…');
+  const ok = await saveProfile({ awaitCloud:true });
+  hideSyncingOverlay(sv);
+  if(!ok){ state.medals = snapshot.medals; state.moveStones = snapshot.stones; st.plus = stonePlus(st)-1; showSyncFailure(); return; }
+
+  playSfx('stone_'+(st.tier==='ultra'?'ultra':st.tier));
+  toast(`${st.name} refined to ${UPGRADE_MARKS[stonePlus(st)].trim()}!`);
+  if(closeFn) closeFn();
+  renderStoneList();
+}
+
 function openStoneDetail(uid){
   const s = state.moveStones.find(x=>x.uid===uid);
   if(!s) return;
@@ -6461,16 +6597,21 @@ function openStoneDetail(uid){
   ov.innerHTML = `<div style="background:var(--paper);border-radius:18px;padding:20px;max-width:340px;width:100%;box-shadow:0 12px 40px var(--shadow);">
     <div style="text-align:center;">
       <div class="stone-tier-big tier-${s.tier}">${t.label}</div>
-      <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;margin-top:6px;">${escapeHtml(s.name)}</div>
+      <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;margin-top:6px;">
+        ${escapeHtml(s.name)}${stonePlus(s) ? `<span class="plus-mark big">${UPGRADE_MARKS[stonePlus(s)].trim()}</span>` : ''}</div>
       <div style="margin-top:5px;"><span class="type-badge" style="background:${TYPE_COLORS[s.type]}">${s.type}</span></div>
       <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;line-height:1.5;">
-        ${t.mult!=null?t.mult+'× ATK':'Status move'} · ${t.words} words<br>
+        ${(()=>{ const m = stoneMult(s);
+                 if(m==null) return 'Status move';
+                 if(s.tier==='ultra'){ const r=ultraHitRange(s); return `${m}× ATK · ${r.min}–${r.max} hits`; }
+                 return `${m}× ATK`; })()} · ${t.words} words<br>
         ${stoneDescription(s)}
       </div>
       <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:8px;">
         Teachable to <b>${s.type}</b>-type monsters${isUltra?' · adds a 5th move button':' · replaces the '+(s.tier==='high'?'Power1':'Basic')+' move'}
       </div>
     </div>
+    ${upgradePanel(s)}
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
       <button class="btn btn-primary" id="stUse">Use</button>
       <button class="btn btn-ghost" id="stRecycle">Recycle (+${RECYCLE_RETURN[s.tier]} tokens)</button>
@@ -6503,6 +6644,8 @@ function openStoneDetail(uid){
       renderStorage();
     });
   });
+  const ub = ov.querySelector('#upgBtn');
+  if(ub) ub.addEventListener('click', ()=> doUpgradeStone(s, close));
   ov.querySelector('#stUse').addEventListener('click', ()=>{ close(); chooseStoneRecipient(s); });
 }
 
@@ -7341,7 +7484,7 @@ function renderShop(){
     { id:'highSkill',     from:2, icon:gemIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
     { id:'veryHighSkill', from:3, icon:gemIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
     { id:'ultraSkill',    from:4, icon:gemIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
-    { id:'crown',         from:4, icon:crownIcon(22), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
+    { id:'crown',         from:4, icon:crownIcon(50), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
   ];
   const region = state.progress.currentRegion || 1;
   const box = $('#shopWares');
