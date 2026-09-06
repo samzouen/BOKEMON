@@ -925,6 +925,22 @@
   .stone-group-head.tier-veryhigh{background:rgba(201,154,63,.20);}
   .stone-group-head.tier-high{background:rgba(59,126,161,.18);}
   .token-box{background:var(--paper-2);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center;margin-bottom:10px;box-shadow:0 2px 0 var(--paper-3);}
+  .move-row.refinable{cursor:pointer;border-color:rgba(201,154,63,.55) !important;}
+  .move-row.refinable:active{transform:translateY(1px);}
+  .refine-hint{font-size:10px;font-weight:800;color:var(--gold);margin-top:5px;letter-spacing:.03em;}
+  .refine-scrim{position:fixed;inset:0;background:rgba(35,32,25,.6);z-index:78;
+    display:flex;align-items:center;justify-content:center;padding:22px;}
+  .refine-card{background:var(--paper);border-radius:18px;padding:20px;max-width:340px;width:100%;
+    text-align:center;box-shadow:0 12px 40px var(--shadow);}
+  .refine-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;margin-top:6px;}
+  .refine-sub{font-size:11px;color:var(--ink-soft);font-weight:700;margin-bottom:4px;}
+  /* refined skills glow brighter on the battle buttons */
+  .move-btn.refined-1{box-shadow:0 3px 0 rgba(150,110,30,.7),0 0 12px rgba(255,209,102,.55);
+    background:linear-gradient(135deg,#d1584a,#c9843a);}
+  .move-btn.refined-2{box-shadow:0 3px 0 rgba(150,110,30,.85),0 0 20px rgba(255,209,102,.85);
+    background:linear-gradient(135deg,#dc6350,#e0a13a);}
+  .move-btn.ultra-btn.refined-1{background:linear-gradient(135deg,#d4483c,#f0a040 55%,#e0b34a);}
+  .move-btn.ultra-btn.refined-2{background:linear-gradient(135deg,#e04a3a,#ffb84a 50%,#ffd166);}
   .plus-mark{color:var(--gold);font-weight:900;margin-left:2px;
     text-shadow:0 0 5px rgba(255,209,102,.9);}
   .plus-mark.big{font-size:22px;}
@@ -3863,9 +3879,11 @@ function enemySpriteSize(count){
 
 /* Depth is faked with size + speed: big fast motes read as near, small slow
    ones as far. A few sparkles punctuate it. */
-function ultraFizz(){
-  let out = '<span class="fizz">';
-  for(let i=0;i<14;i++){
+function ultraFizz(plus){
+  plus = plus || 0;
+  const count = 14 + plus*10;          // a refined stone visibly seethes
+  let out = '<span class="fizz plus-'+plus+'">';
+  for(let i=0;i<count;i++){
     const near = Math.random();
     const size = 2 + near*6;                 // 2-8px
     const dur  = 2.6 - near*1.4;             // bigger => faster
@@ -3873,8 +3891,8 @@ function ultraFizz(){
          + `animation-duration:${dur.toFixed(2)}s;animation-delay:${(Math.random()*2.6).toFixed(2)}s;`
          + `opacity:${(0.35+near*0.5).toFixed(2)};"></i>`;
   }
-  for(let i=0;i<3;i++){
-    out += `<i class="sparkle" style="left:${10+Math.random()*80}%;width:2px;height:2px;`
+  for(let i=0;i<3+plus*4;i++){
+    out += `<i class="sparkle" style="left:${10+Math.random()*80}%;width:${2+plus}px;height:${2+plus}px;`
          + `animation-duration:${(2.2+Math.random()*1.4).toFixed(2)}s;animation-delay:${(Math.random()*3).toFixed(2)}s;"></i>`;
   }
   return out + '</span>';
@@ -3926,8 +3944,8 @@ function renderBattle(){
     <div style="display:flex;gap:12px;">
       <div style="flex:2;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         ${moves.map((mv,i)=>`
-          <button class="move-btn ${(mv.available && canAct)?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''}" data-move="${i}" ${(mv.available && canAct)?'':'disabled'}>
-            ${mv.slot==='UltraStone' ? ultraFizz() : ''}
+          <button class="move-btn ${(mv.available && canAct)?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${(mv.available && canAct)?'':'disabled'}>
+            ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
             <div class="mv-name">${mv.available?escapeHtml(mv.name):'???'}</div>
             <div class="mv-meta">${mv.available?(mv.isStone?stoneTierDef(mv.stoneTier).label+' stone':( mv.slot==='Basic'?'Basic':mv.slot))+' · '+mv.words+'字':'Locked'}</div>
           </button>`).join('')}
@@ -6105,6 +6123,57 @@ function renderPartyList(){
 
 /* ---------- SCREEN: stats & moves ---------- */
 /* The Crown panel on a monster's Stats page. */
+/* Refining lives here, on the monster that actually knows the skill — a stone
+   sitting in storage isn't a move yet, so it can't be refined. */
+function openRefineSheet(st, mon){
+  const t = stoneTierDef(st.tier);
+  const maxed = stonePlus(st) >= 2;
+  const notYet = st.tier === 'veryhigh';
+  const check = (maxed || notYet) ? { ok:false } : canUpgradeStone(st);
+  const cost = (maxed || notYet) ? null : upgradeCost(st);
+  const nextSt = Object.assign({}, st, { plus: stonePlus(st)+1 });
+  const cur = stoneMult(st), nxt = maxed||notYet ? null : stoneMult(nextSt);
+  const preview = (maxed || notYet) ? '' : (st.tier==='ultra'
+    ? (()=>{ const a=ultraHitRange(st), b=ultraHitRange(nextSt);
+             return `${cur}× · ${a.min}–${a.max} hits  →  <b>${nxt}× · ${b.min}–${b.max} hits</b>`; })()
+    : `${cur}× ATK  →  <b>${nxt}× ATK</b>`);
+
+  const ov = document.createElement('div');
+  ov.className = 'refine-scrim';
+  ov.innerHTML = `
+    <div class="refine-card">
+      <div class="stone-tier-big tier-${st.tier}">${t.label}</div>
+      <div class="refine-name">${escapeHtml(st.name)}${stonePlus(st)?`<span class="plus-mark big">${UPGRADE_MARKS[stonePlus(st)].trim()}</span>`:''}</div>
+      <div class="refine-sub">Known by ${escapeHtml(displayName(mon))}</div>
+      ${notYet ? `<div class="upg-panel muted">Very High skills cannot be refined yet.</div>`
+        : maxed ? `<div class="upg-panel done">✦ Fully refined</div>`
+        : `<div class="upg-panel">
+             <div class="upg-head">Refine to <b>${UPGRADE_MARKS[stonePlus(st)+1].trim()}</b></div>
+             <div class="upg-preview">${preview}</div>
+             <div class="upg-cost">A spare ${escapeHtml(st.type)} ${t.label} stone
+               + ${curIcon(cost.cur)} ${cost.n} ${curName(cost.cur)}</div>
+             ${check.ok ? '' : `<div class="upg-why">${escapeHtml(check.why||'')}</div>`}
+           </div>`}
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn btn-ghost" id="rfBack" style="flex:1;">Back</button>
+        <button class="btn btn-primary" id="rfGo" style="flex:1;" ${check.ok?'':'disabled'}>Upgrade</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+  ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
+  ov.querySelector('#rfBack').addEventListener('click', close);
+  const go = ov.querySelector('#rfGo');
+  if(check.ok) go.addEventListener('click', ()=>{
+    confirmDialogHtml(
+      `Refine <b>${escapeHtml(st.name)}</b> to <b>${UPGRADE_MARKS[stonePlus(st)+1].trim()}</b>?<br><br>` +
+      `${preview}<br><br>` +
+      `This consumes a spare ${escapeHtml(st.type)} ${t.label} stone and ${curIcon(cost.cur)} ${cost.n}.<br><br>` +
+      `<i>The spare stone is used up for good.</i>`,
+      async ()=>{ await doUpgradeStone(st, close); renderStats(); });
+  });
+}
+
 function crownBlock(m){
   if(isSeed(m) || isEgg(m)) return '';
   const owned = state.inventory.crowns||0;
@@ -6178,13 +6247,15 @@ function renderStats(){
     const t = stoneTierDef(st.tier);
     const bi = moves.findIndex(x=>x.slot===slot);
     if(bi<0) return;
-    moves[bi] = { slot, name:st.name+' 💎', mult:t.mult,
+    moves[bi] = { slot, name:stoneDisplayName(st)+' 💎', mult:stoneMult(st), stone:st,
       target:t.kind==='status'?'Status':(t.kind==='multi2'?'2 targets':'Single'),
       words:t.words, unlock:0, unlocked:true };
   });
   if(m.ultraStone){
     const t = stoneTierDef('ultra');
-    moves.push({ slot:'Ultra Stone', name:m.ultraStone.name+' 💎', mult:t.mult, target:'5–7 hits', words:t.words, unlock:0, unlocked:true });
+    const ur = ultraHitRange(m.ultraStone);
+    moves.push({ slot:'Ultra Stone', name:stoneDisplayName(m.ultraStone)+' 💎', mult:stoneMult(m.ultraStone),
+      stone:m.ultraStone, target:`${ur.min}–${ur.max} hits`, words:t.words, unlock:0, unlocked:true });
   }
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Party</button>
@@ -6219,10 +6290,13 @@ function renderStats(){
 
     <div style="font-weight:800;font-size:14px;margin-bottom:8px;">Moves</div>
     <div style="display:flex;flex-direction:column;gap:8px;">
-      ${moves.map(mv=>`
-        <div style="background:${mv.unlocked?'var(--paper-2)':'var(--paper-3)'};border:1px solid var(--line);border-radius:12px;padding:12px;${mv.unlocked?'':'opacity:0.7;'}">
+      ${moves.map((mv,mi)=>`
+        <div class="move-row ${mv.stone?'refinable':''}" ${mv.stone?`data-mvstone="${mi}"`:''}
+          style="background:${mv.unlocked?'var(--paper-2)':'var(--paper-3)'};border:1px solid var(--line);border-radius:12px;padding:12px;${mv.unlocked?'':'opacity:0.7;'}">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:15px;">${mv.unlocked?escapeHtml(mv.name):'???'}</div>
+            <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:15px;">
+              ${mv.unlocked?escapeHtml(mv.name):'???'}${mv.stone&&stonePlus(mv.stone)?`<span class="plus-mark">${UPGRADE_MARKS[stonePlus(mv.stone)].trim()}</span>`:''}
+            </div>
             <div style="font-size:11px;font-weight:800;color:var(--ink-soft);">${mv.slot}</div>
           </div>
           <div style="font-size:12px;color:var(--ink-soft);font-weight:600;margin-top:3px;">
@@ -6230,6 +6304,7 @@ function renderStats(){
               ? `${mv.mult!=null?(mv.mult+'× ATK'):'Support'} · ${mv.target} · ${mv.words} words`
               : `Unlocks at Lv ${mv.unlock}`}
           </div>
+          ${mv.stone ? `<div class="refine-hint">tap to refine</div>` : ''}
         </div>
       `).join('')}
     </div>
@@ -6268,6 +6343,10 @@ function renderStats(){
       nameArea.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);font-weight:600;">Earn a 🥉 Bronze Medal to rename this monster.</div>`;
     }
   }
+  screenEl.querySelectorAll('[data-mvstone]').forEach(el=>el.addEventListener('click', ()=>{
+    const mv = moves[+el.dataset.mvstone];
+    if(mv && mv.stone) openRefineSheet(mv.stone, m);
+  }));
   const cb = $('#useCrown');
   if(cb) cb.addEventListener('click', ()=> confirmCrown(m));
   const up = $('#useProtein');
@@ -6584,7 +6663,6 @@ async function doUpgradeStone(st, closeFn){
   playSfx('stone_'+(st.tier==='ultra'?'ultra':st.tier));
   toast(`${st.name} refined to ${UPGRADE_MARKS[stonePlus(st)].trim()}!`);
   if(closeFn) closeFn();
-  renderStoneList();
 }
 
 function openStoneDetail(uid){
@@ -6611,7 +6689,6 @@ function openStoneDetail(uid){
         Teachable to <b>${s.type}</b>-type monsters${isUltra?' · adds a 5th move button':' · replaces the '+(s.tier==='high'?'Power1':'Basic')+' move'}
       </div>
     </div>
-    ${upgradePanel(s)}
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
       <button class="btn btn-primary" id="stUse">Use</button>
       <button class="btn btn-ghost" id="stRecycle">Recycle (+${RECYCLE_RETURN[s.tier]} tokens)</button>
@@ -6644,8 +6721,6 @@ function openStoneDetail(uid){
       renderStorage();
     });
   });
-  const ub = ov.querySelector('#upgBtn');
-  if(ub) ub.addEventListener('click', ()=> doUpgradeStone(s, close));
   ov.querySelector('#stUse').addEventListener('click', ()=>{ close(); chooseStoneRecipient(s); });
 }
 
