@@ -636,6 +636,25 @@
   .key-chip{flex:1;text-align:center;font-size:12px;font-weight:800;padding:9px 6px;border-radius:11px;
     background:var(--paper-3);color:var(--ink-soft);border:1px solid var(--line);opacity:.65;}
   .key-chip.have{background:rgba(47,143,111,.18);border-color:rgba(47,143,111,.5);color:var(--jade-dark);opacity:1;}
+  .plant-note{font-size:12.5px;font-weight:600;color:var(--ink-soft);line-height:1.5;margin:10px 0;}
+  .worker-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
+  .worker{
+    position:relative;aspect-ratio:1/1;border-radius:14px;cursor:pointer;
+    background:var(--paper-2);border:2px solid var(--line);
+    display:flex;align-items:center;justify-content:center;transition:transform .08s;
+  }
+  .worker:active{transform:scale(.95);}
+  .worker.calling{
+    background:rgba(200,69,58,.9);border-color:#ff8a6a;
+    box-shadow:0 0 0 4px rgba(200,69,58,.35),0 0 22px rgba(255,120,80,.8);
+    animation:workerCall .28s ease-in-out infinite alternate;
+  }
+  @keyframes workerCall{ from{transform:scale(1);} to{transform:scale(1.06);} }
+  .worker.too-late{ animation:workerMiss .5s ease-out; }
+  @keyframes workerMiss{ 0%{background:rgba(120,120,120,.7);} 100%{background:var(--paper-2);} }
+  .worker-done{position:absolute;top:4px;right:6px;font-size:12px;color:var(--jade);font-weight:900;}
+  .worker img,.worker .mon-portrait{box-shadow:none !important;background:transparent !important;}
+  .engineer-btn{display:flex;align-items:center;justify-content:center;gap:10px;}
   .path-list{display:flex;flex-direction:column;gap:10px;}
   .path-card{
     background:var(--paper-2);border:1px solid var(--line);border-left:6px solid var(--zone-tint,var(--line));
@@ -985,6 +1004,16 @@ const SPECIES = {
   seahorse:        { name:'Seahorse',    tier:'wild',      types:['Water'],         rate:7,  nerfedRate:5,  base:5,   evo:[11,25], color:'#4fa3b8', glyph:'马' },
   duck:            { name:'Duck',        tier:'wild',      types:['Water'],         rate:7,  nerfedRate:5,  base:5,   evo:[18],    evoMult:1.5, color:'#c9b45e', glyph:'鸭' },
 
+  /* --- Region 3: Port Akrotiri --- */
+  snail:           { name:'Snail',       tier:'wild',      types:['Fire'],           rate:7,  nerfedRate:5,  base:31,  evo:[18],    evoMult:1.5, color:'#c47a4a', glyph:'蜗' },
+  boobybird:       { name:'Boobybird',   tier:'wild',      types:['Fire'],           rate:7,  nerfedRate:5,  base:31,  evo:[11,25], color:'#d4713a', glyph:'鸟' },
+  firefly:         { name:'Firefly',     tier:'wild',      types:['Fire'],           rate:7,  nerfedRate:5,  base:31,  evo:[18],    evoMult:1.5, color:'#e0a13a', glyph:'萤' },
+  toad:            { name:'Toad',        tier:'elite',     types:['Fire','Steel'],   rate:11, nerfedRate:11, base:51,  evo:[],      color:'#a87c4a', glyph:'蟾' },
+  /* Legendary who lost his crown: runs at elite growth until the story
+     restores it, then regains rate 13 AND the three crowned stages. */
+  monkey_king:     { name:'Monkey',      tier:'legendary', types:['Physical','Fairy'], rate:13, nerfedRate:13, base:61, evo:[31], evoMult:1.5,
+                     color:'#b8813a', glyph:'猴', nerfedUntilCrowned:true, storyCrownOnly:true },
+
   /* --- Legendaries & story --- */
   /* --- Region 2: Rocky Caverns starters --- */
   flying_starter:  { name:'Raven',       tier:'starter',   types:['Flying'],        rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#6b7a8f', glyph:'鸦' },
@@ -996,6 +1025,7 @@ const SPECIES = {
   sumo:            { name:'Sumo',        tier:'elite',     types:['Physical'],      rate:11, nerfedRate:11, base:5,   evo:[],      color:'#c08a6a', glyph:'相' },
   goblin:          { name:'Goblin',      tier:'elite',     types:['Ghost'],         rate:11, nerfedRate:11, base:5,   evo:[],      color:'#6d7a5a', glyph:'鬼' },
   squid:           { name:'Squid',       tier:'elite',     types:['Psychic'],       rate:11, nerfedRate:11, base:5,   evo:[],      color:'#8a6aa8', glyph:'鱿' },
+
 
   /* --- Story monsters --- */
   lanternfish:     { name:'Lanternfish', tier:'wild',      types:['Water','Electric'], rate:7, nerfedRate:5, base:5, evo:[18], evoMult:1.5, color:'#4fa8b8', glyph:'灯' },
@@ -1048,6 +1078,21 @@ const MOVES = {
   sumo:            [['Basic','Slap',0.2,'Single',2,1],['Power1','Palm Thrust',0.4,'Single',4,5],['Power2','Earth Stomp',0.6,'AOE',8,21],['Ultimate','Grand Charge',1.25,'Single',8,41],['Max','Grand Charge Max',1.5,'Single',8,51]],
   goblin:          [['Basic','Claw',0.2,'Single',2,1],['Power1','Hex',0.4,'Single',4,5],['Power2','Shadow Cackle',0.6,'AOE',8,21],['Ultimate','Grave Mischief',1.25,'Single',8,41],['Max','Grave Mischief Max',1.5,'Single',8,51]],
   squid:           [['Basic','Ink Jet',0.2,'Single',2,1],['Power1','Tentacle Slap',0.4,'Single',4,5],['Power2','Mind Fog',0.6,'AOE',8,21],['Ultimate','Abyssal Gaze',1.25,'Single',8,41],['Max','Abyssal Gaze Max',1.5,'Single',8,51]],
+
+  snail:           [['Basic','Roll',0.2,'Single',2,1],['Power1','Molten Gout',0.4,'Single',4,1],
+                    ['Power2','Lava Shell',null,'Self',8,18,{shell:{reduce:0.6, thorns:0.5, turns:1}}],
+                    ['Ultimate','Magma Goo',null,'AOE',8,25,{dot:{pct:0.3, turns:5, rider:'noflee'}}]],
+  boobybird:       [['Basic','Fire Punch',0.2,'Single',2,1],['Power1','Fire Breath',0.4,'Single',4,1],['Power2','Flamethrower',0.6,'AOE',8,11],['Ultimate','Eruption',1.0,'AOE',8,25]],
+  firefly:         [['Basic','Cinder',0.2,'Single',2,1],['Power1','Cinder Wing',0.4,'Single',4,1],['Power2','Cinder Gust',0.6,'AOE',8,18],
+                    ['Ultimate','Scorching Ash',null,'AOE',8,25,{dot:{pct:0.3, turns:5, rider:'miss', miss:0.20}}]],
+  toad:            [['Basic','Leap',0.2,'Single',2,1],['Power1','Flame Lash',0.4,'Single',4,1],['Power2','Slag Cannon',0.6,'AOE',8,21],
+                    ['Ultimate','Slag Eruption',0.8,'AOE',8,41,{shell:{reduce:0, thorns:0.3, turns:1}}],
+                    ['Max','Slag Eruption Max',1.0,'AOE',8,51,{shell:{reduce:0, thorns:0.5, turns:1}}]],
+  monkey_king:     [['Basic','Jingu Thrust',0.3,'Single',2,1],
+                    ['Power1','Cloud Step',0.8,'Single',4,1,{stun:0.5}],
+                    ['Power2','72 Transformations',null,'Self',4,35,{clones:{turns:3, mult:0.5, evade:0.20}}],
+                    ['Ultimate','Heavensplitter',1.25,'Single',7,45,{bonus:{words:4, mult:2}}],
+                    ['Max','Heavensplitter Max',1.5,'Single',7,999,{bonus:{words:4, mult:2}, coreOnly:true}]],
 
   /* --- Story monsters --- */
   lanternfish:     [['Basic','Bump',0.2,'Single',2,1],['Power1','Shock Bubble',0.4,'Single',4,5],['Power2','Lantern Flash',0.6,'AOE',8,18],['Ultimate','Deep Current',1.25,'Single',8,28]],
@@ -1563,6 +1608,7 @@ function effectiveTier(m, fallbackSpecies){
 }
 function effectiveRate(m){
   const sp = SPECIES[m.species];
+  if(sp.nerfedUntilCrowned && !isCrowned(m)) return 11;   // diminished until the story restores him
   if(isCrowned(m) && effectiveTier(m)==='legendary' && sp.tier!=='legendary') return 13;
   return sp.rate;
 }
@@ -1577,12 +1623,14 @@ function atFinalEvolution(m){
 }
 function crownEligible(m){
   if(!m || isSeed(m) || isEgg(m) || isCrowned(m)) return false;
+  if(SPECIES[m.species].storyCrownOnly) return false;   // his crown is a story beat, not a purchase
   if(m.level < CROWN_MIN_LEVEL) return false;
   if(!atFinalEvolution(m)) return false;
   return (m.supplements||0) >= proteinCap(m.species, m);
 }
 function crownBlockReason(m){
   if(isCrowned(m)) return 'Already crowned.';
+  if(SPECIES[m.species].storyCrownOnly) return 'His crown must be recovered, not bought.';
   if(!atFinalEvolution(m)) return 'Must be in its final evolution.';
   if(m.level < CROWN_MIN_LEVEL) return `Must be at least level ${CROWN_MIN_LEVEL}.`;
   if((m.supplements||0) < proteinCap(m.species, m)) return 'Protein must be maxed first.';
@@ -1619,7 +1667,8 @@ function computeMaxHp(species, level, supplements, mon){
 function computeMaxStat(species, level, supplements, mon){
   const s = SPECIES[species];
   const crowned = mon && mon.crowned;
-  const rate = (crowned && s.tier!=='legendary') ? 13 : s.rate;
+  let rate = (crowned && s.tier!=='legendary') ? 13 : s.rate;
+  if(s.nerfedUntilCrowned && !crowned) rate = 11;   // Monkey King without his crown
   let stat = Math.ceil((rate/5) * level);
   const stages = evolutionStage(species, level) + (s.bonusStages||0);
   stat += Math.ceil(stages * rate * (s.evoMult||1));
@@ -1813,6 +1862,8 @@ function blankProfile(name, starterSpecies){
     progress:{
       currentRegion:1,
       region1:{ guardianCleared:false, rivalCleared:false, thugsCleared:[], thugBossCleared:false, investigateProtein:0, dojoCleared:[] },
+      region3:{ monkeyMet:false, monkeyChoice:null, plantIntro:false, helped:{}, helpCount:0,
+                powerStone:false, powerStoneUsed:false, engineerDone:0 },
       region2:{ courage:0, trialDone:false, seedGranted:false, challengeDone:false, rivalCleared:false, waterDojo:[], paths:{}, uniform:false, password:false, cavernDone:false },
     },
     settings:{ volume:0.8, sfxVolume:0.55, musicVolume:0.10, focusMode:false, password:null, xpMode:'default', leftHanded:false, leniency:1.0, eyeBreakEvery:10, eyeBreakMins:5 },
@@ -1969,6 +2020,14 @@ function normalizeProfile(p){
   r2.cavernDone = !!r2.cavernDone;
   r2.eggGranted = !!r2.eggGranted;
   r2.crownGranted = !!r2.crownGranted;
+  const r3 = p.progress.region3 = p.progress.region3 || {};
+  r3.monkeyMet = !!r3.monkeyMet;
+  r3.plantIntro = !!r3.plantIntro;
+  r3.helped = r3.helped || {};
+  r3.helpCount = r3.helpCount || 0;
+  r3.powerStone = !!r3.powerStone;
+  r3.powerStoneUsed = !!r3.powerStoneUsed;
+  r3.engineerDone = r3.engineerDone || 0;
   p._needsEggDedupe = true;
   r2.waterDojo = r2.waterDojo || [];
   p.settings = p.settings || {};
@@ -3043,6 +3102,20 @@ function applyFieldStatus(status){
 function tickStatuses(){
   const b = ui.battle;
   const expired = [];
+  // damage-over-time burns the enemy side at the end of each round
+  const dot = b.fieldStatus && b.fieldStatus.dot;
+  if(dot){
+    let total = 0;
+    livingEnemies().forEach(e=>{
+      const before = e.hp;
+      e.hp = Math.max(0, e.hp - dot.tick);
+      total += before - e.hp;
+      const i = b.enemies.indexOf(e);
+      drainHp('enemyHp-'+i, before, e.hp, e.maxHp);
+      if(e.hp<=0){ const el=document.getElementById('enemy-'+i); if(el) el.classList.add('fainted'); }
+    });
+    if(total) battleMsg(`🔥 ${dot.label} burns for ${total}!`);
+  }
   const ps = partyStatuses();
   Object.keys(ps).forEach(k=>{
     ps[k].turnsLeft--;
@@ -3108,6 +3181,8 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(getPStatus(0,'overheat'))    dmg *= 1.5;    // takes 1.5x (incl. self-damage)
     if(getPStatus(0,'spikeArmour')) dmg *= 0.9;    // takes 10% less
     if(getPStatus(0,'steelAegis'))  dmg *= 0.75;   // takes 25% less
+    const sh = getPStatus(0,'shell');
+    if(sh && sh.reduce) dmg *= (1 - sh.reduce);    // Lava Shell
   }
   return Math.max(0, Math.ceil(dmg));
 }
@@ -3249,6 +3324,49 @@ function chargeMoves(m){
   ];
 }
 
+/* ============================================================
+   TACTICAL MOVES  (Region 3)
+   Weak monsters that can never be crowned earn their place through utility.
+   - dot    : a field status ticking a share of the CASTER'S ATK each turn.
+              ATK is snapshotted at cast, so switching the caster out later
+              doesn't weaken it.
+   - shell  : a short self-buff — damage reduction and/or thorns.
+   - clones : the caster's chosen move is echoed by copies at reduced power.
+   - bonus  : an optional second quiz that can double a move's damage.
+   ============================================================ */
+function applyDot(mv, mon){
+  const b = ui.battle;
+  const snap = Math.ceil(mv.dot.pct * monAtk(mon));
+  b.fieldStatus = b.fieldStatus || {};
+  const st = { type:'dot', turnsLeft:mv.dot.turns, tick:snap, rider:mv.dot.rider,
+               miss:mv.dot.miss||0, label:mv.name };
+  b.fieldStatus.dot = st;
+  livingEnemies().forEach(e=> addEStatus(e, Object.assign({}, st)));
+  return snap;
+}
+function applyShell(mv, mon){
+  setPStatus(0, { type:'shell', turnsLeft:(mv.shell.turns||1)+1,
+                  reduce:mv.shell.reduce||0, thorns:mv.shell.thorns||0, owner:mon.uid });
+}
+function applyClones(mv, mon){
+  ui.battle.clones = { turnsLeft:mv.clones.turns, mult:mv.clones.mult,
+                       evade:mv.clones.evade, uid:mon.uid };
+  setPStatus(0, { type:'clones', turnsLeft:mv.clones.turns, evade:mv.clones.evade });
+}
+/* Clone echoes: successive hits that spread across untouched enemies first. */
+function cloneEchoTargets(count){
+  const living = livingEnemies();
+  if(living.length===0) return [];
+  const out = [];
+  const unhit = living.slice();
+  for(let i=0;i<count;i++){
+    if(unhit.length===0) unhit.push(...living);          // everyone hit once; wrap around
+    const idx = Math.floor(Math.random()*unhit.length);
+    out.push(unhit.splice(idx,1)[0]);
+  }
+  return out;
+}
+
 /* ---------- BATTLE MODULE (Phase 3: wild encounters) ---------- */
 function starterLevel(){
   const st = state.party.find(m=>m.species===state.starterSpecies);
@@ -3277,6 +3395,9 @@ const REGION_ZONES = {
   1: [ { id:'tranquil_forest', name:'Tranquil Forest', tint:'#4a7a3c' } ],
   2: [ { id:'sacred_grove', name:'Sacred Grove', tint:'#5fa86b' },
        { id:'rocky_caverns', name:'Rocky Caverns', tint:'#8a7a5b', locksUntil:'r2ChallengeDone' } ],
+  3: [ { id:'volcanic_caldera', name:'Volcanic Caldera', tint:'#b0503a' },
+       { id:'geothermal_plant', name:'Geothermal Plant', tint:'#c98a3a', locksUntil:'r3MonkeyMet' },
+       { id:'vane_shear',       name:'RRS Vane Shear',   tint:'#4a6a8a', locksUntil:'never' } ],
 };
 
 /* --- Region 2, first scripted sequence: the Trial of Courage ---
@@ -3379,12 +3500,16 @@ const ZONE_WILD = {
   tranquil_forest: ['rat','bird','moth'],
   sacred_grove:    ['sparrow','squirrel','deer','grass_starter'],
   rocky_caverns:   ['earth_snake','ground_starter','golem','bat'],
+  volcanic_caldera:['snail','boobybird','firefly'],      // + fire_starter at 15%
+  geothermal_plant:['snail','boobybird','firefly'],      // + toad via the Engineer
 };
 /* Wild levels scale with the party but are clamped per zone. */
 const ZONE_LEVELS = {
   tranquil_forest: { min:5,  max:21 },
   sacred_grove:    { min:20, max:41 },
   rocky_caverns:   { min:20, max:46 },
+  volcanic_caldera:{ min:31, max:61 },
+  geothermal_plant:{ min:31, max:61 },
 };
 
 function makeEnemy(species, level, opts){
@@ -3455,10 +3580,14 @@ function startWildEncounter(encOpts){
   let special = null;
   const region1Only = state.progress.currentRegion === 1;
   if(region1Only && L>=20){ const r=Math.random(); if(r<0.05) special='phoenix'; else if(r<0.20) special='electric_starter'; }
+  // the Caldera hides a Fire Starter
+  if((ui.currentZone||{}).id==='volcanic_caldera' && Math.random()<0.15) special='fire_starter';
   let wave;
   if(special){
-    const lvl = special==='phoenix' ? 25 : 20;
-    wave = [{ species:special, level:lvl }];
+    const band = ZONE_LEVELS[(ui.currentZone||{}).id] || { min:5, max:21 };
+    const lvl = special==='fire_starter' ? Math.max(band.min, Math.min(band.max, wildLevel()))
+              : (special==='phoenix' ? 25 : 20);
+    wave = [{ species:special, level:lvl, wildRoll:special==='fire_starter' }];
   } else {
     const zoneId = (ui.currentZone && ui.currentZone.id) || 'tranquil_forest';
     // The last three battles of the Trial are hand-authored, not rolled.
@@ -3570,6 +3699,7 @@ function unlockedMoves(m){
     if(slot==='Ultimate' && maxMv){ [,name,mult,target,words,unlock,extra] = maxMv; }
     const e = extra || {};
     return { slot,name,mult,target,words,unlock, scale:e.scale||null, hits:e.hits||0, charge:e.charge||null,
+             dot:e.dot||null, shell:e.shell||null, clones:e.clones||null, bonus:e.bonus||null, stun:e.stun||0,
              available:(name!=null && moveUnlockedFor(m, [slot,name,mult,target,words,unlock,e])), isStone:false };
   });
   /* Equipped stone slots in by tier: High-tier "twin" skills override POWER1
@@ -4026,8 +4156,9 @@ function onFlee(){
     return guardianRebuke(null, true);
   }
   toast('Got away safely!');
-  const inPaths = (ui.currentZone||{}).id==='rocky_caverns' && !cavernsComplete();
-  go(ui.battle.isNpc ? 'challenge' : (inPaths ? 'caverns' : 'zone'));
+  const zid = (ui.currentZone||{}).id;
+  const inPaths = zid==='rocky_caverns' && !cavernsComplete();
+  go(ui.battle.isNpc ? 'challenge' : (inPaths ? 'caverns' : (zid==='geothermal_plant' ? 'plant' : 'zone')));
 }
 
 /* A modal the player must dismiss — a toast is too easy to miss. */
@@ -4128,7 +4259,32 @@ function countWords(text){ return (text||'').length; }   // one hanzi = one word
    pipeline, so Overheat correctly increases it too (per the design). */
 const SELF_DAMAGE = { 'Nova': 0.15 };
 /* Moves that restore their user for a share of the USER'S OWN ATK on landing. */
-const LIFESTEAL = { 'Giga Drain': 0.2 };
+const LIFESTEAL = { 'Giga Drain': 0.2 };          // enemy-side self-heal (the Guardian)
+/* Player-side: Giga Drain routes its life to whichever ally is worst off as a
+   PROPORTION of their maximum, and it can bring a fainted one back. */
+const PARTY_DRAIN = { 'Giga Drain': 0.4 };
+
+function neediestAlly(){
+  const list = battleParty();
+  if(!list.length) return null;
+  return list.slice().sort((a,b)=>{
+    const ra = a.currentHp / Math.max(1, monMaxHp(a));
+    const rb = b.currentHp / Math.max(1, monMaxHp(b));
+    return ra - rb;                       // fainted (0) sorts first
+  })[0];
+}
+function applyPartyDrain(mv, mon){
+  const pct = PARTY_DRAIN[mv.name];
+  if(!pct) return null;
+  const t = neediestAlly();
+  if(!t) return null;
+  const amount = Math.ceil(pct * monAtk(mon));
+  const max = monMaxHp(t);
+  const before = t.currentHp;
+  const revived = before <= 0;
+  t.currentHp = Math.min(max, Math.max(0, before) + amount);
+  return { target:t, healed:t.currentHp - Math.max(0,before), revived };
+}
 
 /* Scripted moves used only inside the Rocky Caverns finale. They bypass the
    spelling quiz entirely — the drama is the point, and a writing prompt would
@@ -4243,6 +4399,52 @@ function resolveChargeSpend(mv, mon){
   }, 400);
 }
 
+/* The gamble: four more words, any of them from the full list, for double
+   damage. Backing out keeps the damage already earned. */
+function offerBonusRound(mv, mon, hits, effMsg){
+  const b = ui.battle;
+  const ov = document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.6);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;';
+  ov.innerHTML = `<div style="background:var(--paper);border-radius:18px;padding:22px;max-width:340px;width:100%;text-align:center;">
+    <div style="font-size:40px;">⚡</div>
+    <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:19px;margin:6px 0;">${escapeHtml(mv.name)} is ready</div>
+    <div style="font-size:13px;font-weight:600;line-height:1.55;color:var(--ink-soft);margin-bottom:16px;">
+      Write <b>${mv.bonus.words} more words</b> — drawn from your <b>whole</b> list, not just today's —
+      to <b>double</b> the damage. Slip up and it still lands at full strength.
+    </div>
+    <button class="btn btn-primary" id="bonusGo">Try for ×${mv.bonus.mult}</button>
+    <button class="btn btn-ghost" id="bonusSkip" style="margin-top:8px;">Strike now</button>
+  </div>`;
+  document.body.appendChild(ov);
+  const close=()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+  const finish = (multiplier)=>{
+    b._bonusResolved = true;
+    b.bonusMult = multiplier;
+    resolveBattleMove(mv, hits[0] ? hits[0].t : null, ui.quiz ? ui.quiz.results : []);
+  };
+  ov.querySelector('#bonusSkip').addEventListener('click', ()=>{ close(); finish(1); });
+  ov.querySelector('#bonusGo').addEventListener('click', ()=>{
+    close();
+    const pool = masterWords.slice();
+    const words = [];
+    let bag = shuffle(pool);
+    while(words.length < mv.bonus.words){ if(!bag.length) bag = shuffle(pool); words.push(bag.pop()); }
+    startQuiz({
+      title: mv.name+' — power up',
+      subtitle:`${mv.bonus.words} words from your whole list. Stop any time and keep the normal hit.`,
+      words, stopAtFirstMiss:true, lockExit:true,
+      wordTarget: words.reduce((n,w)=>n+countWords(w),0),
+      stopAt: 1,
+      onComplete:(res)=>{
+        const allPassed = res.length>=mv.bonus.words && res.every(r=>r.passed);
+        go('battle');
+        finish(allPassed ? mv.bonus.mult : 1);
+      },
+      onExit:()=>{ go('battle'); finish(1); },
+    });
+  });
+}
+
 function resolveScriptedMove(mv, mon){
   const b = ui.battle;
   if(mv.endsBattle){
@@ -4289,11 +4491,38 @@ function resolveBattleMove(mv, target, results){
   const correct = results.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0)
                 + (ui.quiz && ui.quiz.config ? (ui.quiz.config.startingWords||0) : 0);
   const spill = bankWordSpill(mv);
+  if(ui.battle) ui.battle.lastMove = mv;
   go('battle');
 
   if(mv.slot==='UltraStone') ui.battle.usedUltra[mon.uid]=true;
   if(mv.isStone && mv.stoneTier==='veryhigh') ui.battle.usedVeryHigh[mon.uid]=true;
 
+  /* Tactical moves resolve before the ordinary damage path. */
+  if(mv.dot){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    const tick = applyDot(mv, mon);
+    renderStatusBadges();
+    battleMsg(`${mv.name}! ${tick} damage a turn for ${mv.dot.turns} turns` +
+      (mv.dot.rider==='noflee' ? ' — and nothing is getting away.' : ` — and they'll miss more often.`));
+    playEffect(mv.name, { type:SPECIES[mon.species].types[0] });
+    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+  }
+  if(mv.shell && mv.mult==null){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    applyShell(mv, mon);
+    renderStatusBadges();
+    battleMsg(`${mv.name}! Damage taken cut by ${Math.round(mv.shell.reduce*100)}%, and attackers get burned.`);
+    playEffect(mv.name, { type:SPECIES[mon.species].types[0] });
+    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+  }
+  if(mv.clones){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    applyClones(mv, mon);
+    renderStatusBadges();
+    battleMsg(`${mv.name}! Two clones fight alongside you for ${mv.clones.turns} turns.`);
+    playEffect(mv.name, { type:SPECIES[mon.species].types[0] });
+    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+  }
   if(mv.target==='Multi2') return resolveMulti2(mv, mon, correct, target);
   if(mv.target==='Status') return resolveStatusMove(mv, mon, target, correct);
   if(mv.target==='MultiHit') return resolveMultiHit(mv, mon, correct);
@@ -4302,6 +4531,10 @@ function resolveBattleMove(mv, target, results){
   let factor = mv.isStone ? (correct>=mv.words ? mv.mult : 0) : moveFactor(mv.slot, mv.mult, mv.words, correct);
   if(mv.scale && correct > mv.words && factor > 0){
     factor = Math.min(mv.scale.max, mv.mult + mv.scale.per*(correct - mv.words));
+  }
+  if(ui.battle && ui.battle.bonusMult && ui.battle.bonusMult > 1){
+    factor *= ui.battle.bonusMult;          // multiplies with everything else
+    ui.battle.bonusMult = 0;
   }
   if(factor<=0){ playSfx('move_miss'); battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
   const atk=monAtk(mon);
@@ -4319,12 +4552,27 @@ function resolveBattleMove(mv, target, results){
   let effMsg=''; hits.forEach(h=>{ const m=typeMultiplier(SPECIES[mon.species].types, h.t.types); if(m!==1) effMsg=effectivenessLabel(m); });
   logBattle(`${displayName(mon)} used ${mv.name} (${correct}/${mv.words} words${spill?`, +${spill} spill`:''}) — factor ${factor.toFixed(2)}x ATK ${atk}`);
   hits.forEach(h=>logBattle(`  → ${SPECIES[h.t.species].name} took ${h.dmg} (${h.oldHp}→${h.newHp})`));
+  /* A bonus move offers a second, optional quiz drawn from the WHOLE word bank
+     — unfamiliar words for double damage, quittable at any point. */
+  if(mv.bonus && !ui.battle._bonusResolved){
+    return offerBonusRound(mv, mon, hits, effMsg);
+  }
+  ui.battle._bonusResolved = false;
   battleMsg(`${mv.name}! ${effMsg}`);
   bob($('#playerBob'), +1);
   playEffect(mv.name, { type: mv.stoneType || SPECIES[mon.species].types[0], tier: mv.stoneTier,
                         at: hits[0] ? 'enemy-'+hits[0].idx : null });
   setTimeout(()=>{
     applyHits(hits);
+    if(mv.shell) applyShell(mv, mon);       // Slag Eruption leaves molten armour
+    const drain = applyPartyDrain(mv, mon);
+    if(drain && drain.healed>0){
+      playSfx('recovery_heal');
+      if(drain.target === activeMon()) drainHp('playerHp', drain.target.currentHp-drain.healed, drain.target.currentHp, monMaxHp(drain.target));
+      setTimeout(()=> battleMsg(drain.revived
+        ? `🌿 ${displayName(drain.target)} is pulled back from the brink! (+${drain.healed} HP)`
+        : `🌿 ${displayName(drain.target)} drinks in ${drain.healed} HP.`), 600);
+    }
     applySelfDamage(mv, mon);
     if(mon.currentHp<=0){ setTimeout(()=>onMonFainted(), 900); return; }
     afterPlayerAttack(mon, hits);
@@ -4367,6 +4615,35 @@ function applyHits(hits){
    `hits` carries the per-target damage so a repeat re-applies the real amount. */
 function afterPlayerAttack(mon, hits){
   if(ui.battle && ui.battle.legacyBonus){ ui.battle.legacyBonus = 0; }   // one move only
+  const cl = ui.battle && ui.battle.clones;
+  if(cl && cl.turnsLeft>0 && !ui.battle._cloneEchoing && hits && hits.length && ui.battle.lastMove){
+    return runCloneEchoes(mon, ui.battle.lastMove, ()=> afterPlayerAttackReal(mon, hits));
+  }
+  return afterPlayerAttackReal(mon, hits);
+}
+
+/* The two copies repeat the move at half power, spreading across enemies that
+   haven't been struck yet this turn. */
+function runCloneEchoes(mon, mv, done){
+  const b = ui.battle;
+  b._cloneEchoing = true;
+  const targets = cloneEchoTargets(2);
+  const atk = monAtk(mon);
+  const echoes = targets.filter(t=>t && t.hp>0).map(t=>{
+    const dmg = Math.max(1, Math.ceil(computeDamage(mv.mult||0.2, atk, monRef(mon), t, true) * b.clones.mult));
+    return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
+  });
+  if(echoes.length===0){ b._cloneEchoing=false; return done(); }
+  battleMsg('Two clones strike!');
+  playSuccessiveHits(echoes, 0, ()=>{
+    b._cloneEchoing = false;
+    b.clones.turnsLeft--;
+    if(b.clones.turnsLeft<=0){ b.clones=null; clearPStatus(0,'clones'); }
+    done();
+  }, true);
+}
+
+function afterPlayerAttackReal(mon, hits){
   setTimeout(()=>{
     const oc = getPStatus(0,'overcharge');
     const canRepeat = oc && hits && hits.length && livingEnemies().length>0;
@@ -4623,7 +4900,21 @@ function runEnemyAttack(i){
     }
   }
   const mir = getPStatus(0,'mirage');
-  const evaded = disMiss || (mir && (mir.guaranteed || Math.random() < (mir.chance||0.20)));
+  const cl  = getPStatus(0,'clones');
+  const dotMiss = getEStatus(e,'dot');
+  /* Every evasion source rolls separately and stacks multiplicatively. */
+  let evadeChance = 0;
+  const sources = [
+    mir ? (mir.guaranteed ? 1 : (mir.chance||0.20)) : 0,
+    cl ? (cl.evade||0) : 0,
+    (dotMiss && dotMiss.rider==='miss') ? (dotMiss.miss||0) : 0,
+  ].filter(x=>x>0);
+  if(sources.length){
+    let hitChance = 1;
+    sources.forEach(x=>{ hitChance *= (1-x); });
+    evadeChance = 1 - hitChance;
+  }
+  const evaded = disMiss || (evadeChance>0 && Math.random() < evadeChance);
   if(mir && mir.guaranteed && evaded) mir.guaranteed = false;
 
   bob(document.getElementById('enemyBob-'+idx), -1);
@@ -4678,6 +4969,16 @@ function runEnemyAttack(i){
       drainHp('playerHp', oldHp, mon.currentHp, monMaxHp(mon));
       msg = `${name} dealt ${dmg} damage!`;
 
+      const shell = getPStatus(0,'shell');
+      if(shell && shell.thorns && mon.currentHp>0){
+        const back = Math.ceil(shell.thorns * monAtk(mon));
+        const oh=e.hp, nh=Math.max(0,e.hp-back);
+        e.hp = nh;
+        flashHit(document.getElementById('enemy-'+idx));
+        drainHp('enemyHp-'+idx, oh, nh, e.maxHp);
+        if(nh<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
+        msg += ` Molten slag burned back for ${back}!`;
+      }
       if(spikes && mon.currentHp>0){
         const back = Math.ceil(0.2*monAtk(mon));
         const oh=e.hp, nh=Math.max(0,e.hp-back);
@@ -4764,7 +5065,7 @@ function onPlayerDefeated(){
 /* The cap belongs to the ZONE you're standing in, not the region — Rocky
    Caverns lets you push past the rest of Emerald March. Away from any zone,
    the region's best available cap applies. */
-const REGION_CAPS = { 1:21, 2:41, 3:60 };
+const REGION_CAPS = { 1:21, 2:41, 3:61, 4:76 };
 function levelCap(){
   const z = ui.currentZone && ui.currentZone.id;
   if(z && ZONE_LEVELS[z]) return ZONE_LEVELS[z].max;
@@ -4890,6 +5191,18 @@ function onBattleWon(){
     saveProfile();
   }
   // a wild win inside the Caverns moves you one step along that path
+  if(ui.plantReachedTarget && !b.isNpc){
+    ui.plantReachedTarget = false;
+    const r3 = state.progress.region3;
+    r3.powerStone = true;
+    saveProfile();
+    setTimeout(()=> storyModal(npcPortrait('plant_boss','🧑‍🏭',130,'transparent'), 'The boss keeps his word',
+      `"Ten call-outs answered. My crew have been singing your praises and I'm sick of hearing it."<br><br>` +
+      `He drops a warm, faintly glowing stone into your palm.<br><br>` +
+      `<b>Power Stone received</b> — use it on your dragon from this screen.<br><br>` +
+      `"And if you've a strong stomach, my <b>engineer</b> has a job that's beyond us."`,
+      ()=>go('plant')), 1200);
+  }
   if(ui.cavernAdvanceOnWin && !b.isNpc){
     const pid = ui.cavernAdvanceOnWin;
     ui.cavernAdvanceOnWin = null;
@@ -5013,6 +5326,7 @@ function exploreFurther(){
     return go((ui.currentZone||{}).id==='rocky_caverns' && !cavernsComplete() ? 'caverns' : 'zone');
   }
   if(ui.cavernPath && !cavernsComplete()) return exploreCavernPath(ui.cavernPath);
+  if((ui.currentZone||{}).id==='geothermal_plant') return go('plant');
   return startWildEncounter({ silentIntro:true });
 }
 
@@ -5180,6 +5494,7 @@ function renderInner(){
     case 'regionSelect':  return renderRegionSelect();
     case 'zone':          return renderZone();
     case 'caverns':       return renderCaverns();
+    case 'plant':         return renderPlant();
     case 'avatarPick':    return renderAvatarPick();
     case 'region2':       return renderStub('Region 2','🏞️','Region 2 is unlocked — its wilds and trainers arrive in a future phase. Earth Snake and Ground Starter will be catchable here.','region');
     case 'recover':       return renderRecover();
@@ -5512,7 +5827,7 @@ function renderRegion(){
 
   // Sacred Grove bars the way until the Trial of Courage is passed
   const gated = region2Locked();
-  const challengeLabel = rid===2 ? 'Water Dojo' : 'Dojo, Rival & Thugs';
+  const challengeLabel = rid===3 ? 'Electric Dojo (closed)' : (rid===2 ? 'Water Dojo' : 'Dojo, Rival & Thugs');
 
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Regions</button>
@@ -6619,6 +6934,7 @@ function challengeResult(emoji, title, html, back){
 
 /* ---------- SCREEN: challenge ---------- */
 function renderChallenge(){
+  if((state.progress.currentRegion||1) === 3) return renderChallengeR3();
   if((state.progress.currentRegion||1) === 2) return renderChallengeR2();
   setScreenBg('challenge');
   $('#brandSub').textContent = 'Challenge';
@@ -6938,7 +7254,7 @@ function renderShop(){
     { id:'highSkill',     from:2, icon:gemIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
     { id:'veryHighSkill', from:3, icon:gemIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
     { id:'ultraSkill',    from:4, icon:gemIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
-    { id:'crown',         from:4, icon:crownIcon(50), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
+    { id:'crown',         from:4, icon:crownIcon(48), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
   ];
   const region = state.progress.currentRegion || 1;
   const box = $('#shopWares');
@@ -7287,6 +7603,31 @@ function r2RivalWaves(){
   const waves = R2_RIVAL_WAVES.map(w=>w.map(e=>({...e})));
   waves.push([{ species:effectiveStarter(), level:46 }]);
   return waves;
+}
+
+function renderChallengeR3(){
+  setScreenBg('challenge');
+  $('#brandSub').textContent = 'Challenge';
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Region</button>
+    <div class="screen-title">Challenges</div>
+    <div class="screen-sub">Port Akrotiri</div>
+    <div class="challenge-card" id="cDojo">
+      ${npcPortrait('electric_master','⚡',50,'#e0b53a')}
+      <div style="flex:1;">
+        <div class="cc-title">Electric Dojo <span class="clear-tag" style="background:var(--paper-3);color:var(--ink-soft);">Closed</span></div>
+        <div class="cc-desc">A hand-written sign hangs on the door.</div>
+      </div>
+    </div>
+    <div class="phase-flag">The band competition has emptied half the port. Challenges open when it ends.</div>
+  `;
+  $('#backBtn').addEventListener('click', ()=>go('region'));
+  $('#cDojo').addEventListener('click', ()=> storyModal(npcPortrait('electric_master','⚡',120,'transparent'),
+    'Closed for the competition',
+    `The sign reads, in a confident hand:<br><br>` +
+    `<i>"GONE TO THE BAND COMPETITION. All of us. Yes, all. Spar amongst yourselves."</i><br><br>` +
+    `Through the shutters you can hear something enormous being tuned.`,
+    ()=>go('challenge')));
 }
 
 function renderChallengeR2(){
@@ -7843,12 +8184,326 @@ function storyModal(emblem, title, html, onClose){
   $('#sceneNext').addEventListener('click', ()=>{ if(onClose) onClose(); });
 }
 
+
+/* ============================================================
+   PORT AKROTIRI — the Monkey King arc opens
+   ============================================================ */
+function monkeyEncounterDue(){
+  const r3 = state.progress.region3 || {};
+  return state.progress.currentRegion===3
+      && (ui.currentZone||{}).id==='volcanic_caldera'
+      && !r3.monkeyMet;
+}
+
+function monkeyScene1(){
+  storyModal(monPortrait('monkey_king',150,{view:'front',bare:true,stage:1}), 'A monkey in the hot spring',
+    `Steam rolls off a pool of green water, and something is sitting in it with its arms along the rim, ` +
+    `entirely at ease.<br><br>` +
+    `"That thing you're carrying." The monkey doesn't open its eyes. "It's missing its <b>core</b>. ` +
+    `Don't look so surprised — I can feel the hole in it from here."<br><br>` +
+    `"It won't last like that. Needs something to run on until you get the real thing back."`,
+    ()=>monkeyScene2());
+}
+function monkeyScene2(){
+  storyModal(monPortrait('monkey_king',150,{view:'front',bare:true,stage:1}), '"Try the plant"',
+    `"There's a <b>geothermal plant</b> in the city. They pull power out of the ground there — ` +
+    `they'll have a <b>power stone</b> lying about. That'll hold your dragon together for a while."<br><br>` +
+    `You ask why a wild monster would help you at all.<br><br>` +
+    `One eye opens. "Because the same hand that took your dragon's core took <b>mine</b>." ` +
+    `The water goes very still. "And I intend to take it back."`,
+    ()=>monkeyScene3());
+}
+function monkeyScene3(){
+  document.body.classList.remove('writing');
+  $('#brandSub').textContent = 'Volcanic Caldera';
+  setScreenBg('volcanic_caldera');
+  screenEl.innerHTML = `
+    <div class="scene">
+      <div class="scene-emblem">${monPortrait('monkey_king',150,{view:'front',bare:true,stage:1})}</div>
+      <div class="scene-title">"Alone."</div>
+      <div class="scene-body">
+        <p>You suggest going together. You have a dragon to mend and he has a score to settle — ` +
+        `it seems obvious.</p>
+        <p>The monkey laughs at you. Not unkindly, but not kindly either.</p>
+        <p>"I have been doing this a very long time, small one. I do not need a partner, and I ` +
+        `certainly do not need <b>rescuing</b>."</p>
+        <p>He settles back into the water and waits, as though curious what you'll do about it.</p>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button class="btn btn-ghost" id="mkFarewell" style="flex:1;">Bid farewell</button>
+        <button class="btn btn-primary" id="mkCatch" style="flex:1;">Try to catch him</button>
+      </div>
+    </div>`;
+  $('#mkFarewell').addEventListener('click', ()=>monkeyFarewell());
+  $('#mkCatch').addEventListener('click', ()=>monkeyFight());
+}
+
+async function monkeyFarewell(){
+  const r3 = state.progress.region3;
+  r3.monkeyMet = true; r3.monkeyChoice = 'farewell';
+  await saveProfile();
+  storyModal(monPortrait('monkey_king',150,{view:'front',bare:true,stage:1}), 'He snorts',
+    `You wish him luck instead.<br><br>` +
+    `The monkey snorts — one short, surprised sound — and flicks a hand at you without looking.<br><br>` +
+    `"…Mm. Mind the steam vents."<br><br>` +
+    `When you glance back, the spring is empty.<br><br><b>The Geothermal Plant is now on your map.</b>`,
+    ()=>go('explore'));
+}
+
+/* A real fight — that ends before you get a turn. */
+function monkeyFight(){
+  beginBattle({
+    isNpc:true, name:'Monkey', npcId:'monkey_king', noFlee:true,
+    scriptedLoss:'monkey', enemiesFirst:true,
+    waves:[[{ species:'monkey_king', level:100, ai:'power1', nerfed:false }]],
+    onWin: ()=> onMonkeyResolved(),
+  });
+}
+
+async function onMonkeyResolved(){
+  const r3 = state.progress.region3;
+  r3.monkeyMet = true; r3.monkeyChoice = 'fight';
+  battleParty().forEach(m=>{ m.currentHp = Math.max(1, Math.ceil(monMaxHp(m)*0.10)); });
+  await saveProfile();
+  stopMusic();
+
+  const fade=document.createElement('div');
+  fade.style.cssText='position:fixed;inset:0;background:#000;z-index:88;opacity:0;transition:opacity .9s;';
+  document.body.appendChild(fade);
+  requestAnimationFrame(()=>{ fade.style.opacity='1'; });
+  setTimeout(()=>{
+    storyModal('', 'Somewhere over the caldera',
+      `You never got to move.<br><br>` +
+      `There was a blur, a sensation of enormous unhurried strength, and then a great deal of sky.<br><br>` +
+      `You come down some distance away, mostly intact, with your whole team groaning around you.<br><br>` +
+      `Faintly, from back at the spring: <i>"Told you."</i><br><br>` +
+      `<b>The Geothermal Plant is now on your map.</b>`,
+      ()=>{ go('region'); });
+    fade.style.opacity='0';
+    setTimeout(()=>{ if(fade.parentNode) document.body.removeChild(fade); }, 900);
+  }, 1100);
+}
+
+/* ============================================================
+   GEOTHERMAL PLANT — nine workers, a reaction game, an engineer
+   ============================================================ */
+const PLANT_WORKERS = 9;
+const PLANT_TARGET = 10;
+const PLANT_FLASH_MIN = 500, PLANT_FLASH_MAX = 1200;
+
+function renderPlant(){
+  const r3 = state.progress.region3;
+  if(!r3.plantIntro) return plantIntro();
+  setScreenBg('geothermal_plant');
+  playMusicChain(['zone_geothermal_plant','region3','region']);
+  $('#brandSub').textContent = 'Geothermal Plant';
+  const canFight = battleParty().some(m=>m.currentHp>0);
+  const pct = Math.min(100, r3.helpCount/PLANT_TARGET*100);
+
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Explore</button>
+    <div class="zone-hero">
+      <img src="assets/zones/geothermal_plant.png" alt="" class="zone-hero-img" onerror="this.style.display='none'">
+      <div class="zone-hero-name">Geothermal Plant</div>
+    </div>
+    <div class="plant-note">Watch for a worker waving. Tap them before they give up — the fire monsters
+      get in among the machinery and someone has to shift them.</div>
+    <div class="trial-bar" style="margin:10px 0 4px;"><span style="width:${pct}%"></span></div>
+    <div class="trial-count">${r3.helpCount} / ${PLANT_TARGET} calls answered</div>
+
+    <div class="worker-grid" id="workerGrid">
+      ${Array.from({length:PLANT_WORKERS},(_,i)=>{
+        const n=i+1;
+        return `<button class="worker" data-worker="${n}" id="worker-${n}">
+          ${npcPortrait('worker'+n,'👷',56,'transparent')}
+          ${r3.helped[n] ? '<span class="worker-done">✓</span>' : ''}
+        </button>`;
+      }).join('')}
+    </div>
+
+    ${r3.powerStone && !r3.powerStoneUsed ? `<button class="btn btn-primary" id="usePowerStone" style="margin-top:14px;">
+      ${powerStoneIcon(20)} Use the Power Stone</button>` : ''}
+
+    ${r3.helpCount>=PLANT_TARGET ? `<button class="btn btn-ghost engineer-btn" id="engineerBtn" style="margin-top:12px;">
+      ${npcPortrait('engineer1','🛠️',40,'transparent')} <span>The Engineer's commission</span></button>` : ''}
+
+    <button class="btn btn-ghost" id="returnBtn" style="margin-top:10px;">Return</button>
+  `;
+  $('#backBtn').addEventListener('click', ()=>{ stopPlantLoop(); go('explore'); });
+  $('#returnBtn').addEventListener('click', ()=>{ stopPlantLoop(); go('explore'); });
+  const ps = $('#usePowerStone');
+  if(ps) ps.addEventListener('click', ()=> usePowerStone());
+  const eb = $('#engineerBtn');
+  if(eb) eb.addEventListener('click', ()=> engineerOffer());
+  if(canFight) startPlantLoop();
+}
+
+function powerStoneIcon(px){
+  px = px||20;
+  return `<img src="assets/ui/power_stone.png" alt="" style="width:${px}px;height:${px}px;vertical-align:-3px;"
+    onerror="this.outerHTML='💎'">`;
+}
+
+/* One worker waves at a time; the window is 0.5–1.2s. Missing costs nothing. */
+let _plantTimer = null, _plantFlash = null, _plantActive = 0;
+function stopPlantLoop(){
+  clearTimeout(_plantTimer); clearTimeout(_plantFlash);
+  _plantTimer = _plantFlash = null; _plantActive = 0;
+}
+function startPlantLoop(){
+  stopPlantLoop();
+  const schedule = ()=>{
+    _plantTimer = setTimeout(()=>{
+      if(ui.screen!=='plant') return stopPlantLoop();
+      const n = 1 + Math.floor(Math.random()*PLANT_WORKERS);
+      const el = document.getElementById('worker-'+n);
+      if(!el) return schedule();
+      _plantActive = n;
+      el.classList.add('calling');
+      const window_ = PLANT_FLASH_MIN + Math.random()*(PLANT_FLASH_MAX-PLANT_FLASH_MIN);
+      _plantFlash = setTimeout(()=>{
+        el.classList.remove('calling');
+        if(_plantActive===n){ _plantActive = 0; }
+        schedule();
+      }, window_);
+    }, 700 + Math.random()*1800);
+  };
+  schedule();
+  screenEl.querySelectorAll('[data-worker]').forEach(b=>b.addEventListener('click', ()=>{
+    const n = +b.dataset.worker;
+    if(_plantActive === n) return plantHelpSuccess(n);
+    plantTooLate(n);
+  }));
+}
+
+function plantTooLate(n){
+  const el = document.getElementById('worker-'+n);
+  if(el){ el.classList.add('too-late'); setTimeout(()=>el.classList.remove('too-late'), 500); }
+  battleMsgToast(`Worker ${n}: "Too late! Come more promptly next time."`);
+}
+function battleMsgToast(t){ toast(t); }
+
+async function plantHelpSuccess(n){
+  stopPlantLoop();
+  const r3 = state.progress.region3;
+  const first = !r3.helped[n];
+  r3.helped[n] = true;
+  r3.helpCount = (r3.helpCount||0) + 1;
+  if(first) state.inventory.tokens = (state.inventory.tokens||0) + 2;
+  const reached = r3.helpCount === PLANT_TARGET;
+  await saveProfile();
+
+  storyModal(npcPortrait('worker'+n,'👷',120,'transparent'), 'Thank you!',
+    `"You're a lifesaver — they've got in among the coupling again."<br><br>` +
+    (first ? `<b>+2 Skill Tokens</b><br><br>` : '') +
+    `The worker points you at the machinery, and something hot moves behind it.`,
+    ()=>{
+      ui.currentZone = { id:'geothermal_plant', name:'Geothermal Plant' };
+      ui.plantReturn = true;
+      if(reached) ui.plantReachedTarget = true;
+      startWildEncounter();
+    });
+}
+
+
+/* --- Plant: the boss, the stone, the engineer --- */
+async function plantIntro(){
+  const r3 = state.progress.region3;
+  r3.plantIntro = true;
+  await saveProfile();
+  storyModal(npcPortrait('plant_boss','🧑‍🏭',130,'transparent'), 'The plant boss',
+    `"Visitors! Don't get many." He wipes his hands on a rag that makes them no cleaner.<br><br>` +
+    `You ask about a <b>power stone</b>.<br><br>` +
+    `"Ha — I've a crate of them. But look around." He gestures at the pipework, where something ` +
+    `orange is moving. "The fire monsters come up the tubes and nest in the couplings. My people can't ` +
+    `shift them.<br><br>Help my workers, and the stone's yours."`,
+    ()=>renderPlant());
+}
+
+async function usePowerStone(){
+  const r3 = state.progress.region3;
+  const dragon = state.party.concat(state.storage)
+    .find(m=>isEgg(m) || m.species==='water_dragon_nerfed' || m.species==='water_dragon');
+  if(!dragon) return toast('Nothing here needs it yet.');
+  r3.powerStoneUsed = true;
+  const before = dragon.level;
+  dragon.xpFights = (dragon.xpFights||0) + 15;
+  const ups = [];
+  while(dragon.level < levelCap() && (dragon.xpFights||0) >= fightsNeeded(dragon.level)){
+    dragon.xpFights -= fightsNeeded(dragon.level);
+    dragon.level++;
+  }
+  dragon.currentHp = monMaxHp(dragon);
+  await saveProfile();
+  storyModal(powerStoneIcon(110), 'The stone goes in',
+    `The stone sinks into the hollow and stays there, humming faintly.<br><br>` +
+    `<b>${escapeHtml(displayName(dragon))}</b> looks <b>significantly more energetic</b>.<br><br>` +
+    `<b>+15 fights' worth of growth</b>${dragon.level>before?` · now level ${dragon.level}`:''}`,
+    ()=>renderPlant());
+}
+
+function engineerOffer(){
+  const r3 = state.progress.region3;
+  const paid = r3.engineerDone||0;
+  storyModal(npcPortrait('engineer1','🛠️',120,'transparent'), 'The Engineer',
+    `"There's a nastier problem below." She taps a chewed-looking drill bit on the bench.<br><br>` +
+    `"Three of the big ones have <b>melted our drills and taken the metal into their hide</b>. ` +
+    `Fire and steel both, now. They're beyond my crew."<br><br>` +
+    `"It's extra work and I'd understand a no."` +
+    (paid>=3 ? `<br><br><i>She has nothing left to pay you with, but the toads keep coming back.</i>` : ''),
+    ()=>engineerChoice());
+}
+function engineerChoice(){
+  screenEl.innerHTML += `
+    <div style="display:flex;gap:10px;margin-top:12px;max-width:520px;margin-left:auto;margin-right:auto;">
+      <button class="btn btn-ghost" id="engNo" style="flex:1;">Not today</button>
+      <button class="btn btn-primary" id="engYes" style="flex:1;">Take the commission</button>
+    </div>`;
+  $('#engNo').addEventListener('click', ()=>renderPlant());
+  $('#engYes').addEventListener('click', ()=>{
+    if(!ensurePool()) return;
+    ui.currentZone = { id:'geothermal_plant', name:'Geothermal Plant' };
+    beginBattle({ isNpc:false, allowCatch:true, name:'Slag Toads', npcId:'engineer1',
+      waves:[[{species:'toad',level:51,ai:'power1',nerfed:false},
+              {species:'toad',level:51,ai:'best',nerfed:false},
+              {species:'toad',level:51,ai:'power1',nerfed:false}]],
+      onWin: onEngineerWin });
+  });
+}
+async function onEngineerWin(){
+  const r3 = state.progress.region3;
+  const paid = r3.engineerDone||0;
+  if(paid < 3){
+    r3.engineerDone = paid + 1;
+    state.inventory.protein = (state.inventory.protein||0) + 1;
+    await saveProfile();
+    return challengeResult('🛠️', 'Commission complete',
+      `"That's the drills back, more or less." She presses a Protein Supplement into your hand.<br><br>` +
+      `<b>+1 Protein Supplement</b>${r3.engineerDone<3?` · ${3-r3.engineerDone} more commission${3-r3.engineerDone>1?'s':''} available`:''}`,
+      'plant');
+  }
+  await saveProfile();
+  challengeResult('🛠️', 'Commission complete',
+    `"They'll be back next week, same as always." She shrugs. "Nothing left to pay you with, mind — ` +
+    `but you're welcome to the practice."`, 'plant');
+}
+
+/* --- the ship, and the shuttered dojo --- */
+function vaneShearClosed(){
+  storyModal(npcPortrait('shipkeeper','⚓',120,'transparent'), 'RRS Vane Shear',
+    `A woman with a clipboard blocks the gangway, not unkindly.<br><br>` +
+    `"Nobody aboard, love. Sailors and researchers both — they've all gone up to town for the ` +
+    `<b>band competition</b>." She checks a watch. "Back later. Much later, if the finals run long."`,
+    ()=>go('explore'));
+}
+
 /* ---------- SCREEN: region select ---------- */
 const REGIONS = [
   { id:1, name:'Riverside Meadow', desc:'Where your journey began.', unlocked:()=>true },
   { id:2, name:'Emerald March', desc:'Old woods, older rules.',
     unlocked:()=>!!(state.progress.region1||{}).guardianCleared },
-  { id:3, name:'Region 3', desc:'Not yet reachable.', unlocked:()=>false },
+  { id:3, name:'Port Akrotiri', desc:'Lava tubes, steam and salt air.',
+    unlocked:()=>!!(state.progress.region2||{}).cavernDone },
 ];
 
 function renderRegionSelect(){
@@ -7887,6 +8542,8 @@ function renderZone(){
   // Rocky Caverns shows its three paths until they're all walked, then settles
   // into a normal explorable zone.
   if(z.id === 'rocky_caverns' && !cavernsComplete()) return renderCaverns();
+  if(z.id === 'geothermal_plant') return renderPlant();
+  if(z.id === 'vane_shear') return vaneShearClosed();
   return renderZonePlain();
 }
 
@@ -7927,7 +8584,10 @@ function renderZonePlain(){
   $('#backBtn').addEventListener('click', ()=>go('explore'));
   $('#returnBtn').addEventListener('click', ()=>go('explore'));
   const eb = $('#exploreBtn');
-  if(eb && canFight) eb.addEventListener('click', ()=>startWildEncounter());
+  if(eb && canFight) eb.addEventListener('click', ()=>{
+    if(monkeyEncounterDue()) return monkeyScene1();
+    startWildEncounter();
+  });
 }
 
 /* ---------- SCREEN: explore ---------- */
@@ -7969,7 +8629,11 @@ function renderExplore(){
     ${canFight ? `
       <div class="zone-row">
         ${zones.map((z,i)=>{
-          const locked = z.locksUntil==='r2ChallengeDone' && !(state.progress.region2||{}).challengeDone;
+          const r3 = state.progress.region3||{};
+          const locked =
+            (z.locksUntil==='r2ChallengeDone' && !(state.progress.region2||{}).challengeDone) ||
+            (z.locksUntil==='r3MonkeyMet' && !r3.monkeyMet) ||
+            (z.locksUntil==='never');
           return `
           <div class="zone-item">
             <button class="zone-btn ${locked?'zone-locked':''}" data-zone="${i}" ${locked?'disabled':''} style="${z.tint?`--zone-tint:${z.tint};`:''}">
