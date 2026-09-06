@@ -383,7 +383,17 @@
     background:transparent;border:none;padding:0;
     text-align:center;transition:transform .1s;
   }
-  .enemy-card.fainted{opacity:0.35;filter:grayscale(1);}
+  .enemy-card{ overflow:hidden; }
+  .enemy-card .avatar-layer{ position:relative; z-index:0; }   /* sinks BEHIND the plate */
+  .enemy-card .info-layer{ position:relative; z-index:3; }
+  .enemy-card.fainted .avatar-layer{
+    animation:sinkAway .85s cubic-bezier(.55,.06,.68,.19) forwards;
+  }
+  @keyframes sinkAway{
+    0%  { transform:translateY(0)    rotate(0);     opacity:1; }
+    100%{ transform:translateY(80px) rotate(14deg); opacity:0; }
+  }
+  .enemy-card.fainted .info-layer{ opacity:.45; }
   .enemy-card.targetable{border-color:var(--cinnabar);cursor:pointer;animation:pulse 1s infinite;}
   @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.05);}}
   .hpbar{height:7px;background:var(--paper-3);border-radius:5px;overflow:hidden;margin:5px 0 2px;}
@@ -809,6 +819,23 @@
   .hit-flash{animation:hitflash .45s ease-out;}
   @keyframes hitflash{0%,100%{filter:none;opacity:1;}20%{filter:brightness(2.2) saturate(0);opacity:0.35;}45%{filter:none;opacity:1;}65%{filter:brightness(2.2) saturate(0);opacity:0.35;}}
   /* dark outline gives the bar definition against any background */
+  .dmg-pop{
+    position:absolute;transform:translate(-50%,-50%);
+    font-family:'Baloo 2',cursive;font-weight:900;font-size:34px;
+    color:#ff3b30;pointer-events:none;z-index:12;
+    text-shadow:0 0 3px #fff,0 2px 0 #7a0f0a,0 3px 8px rgba(0,0,0,.6);
+    animation:dmgPop 2s ease-out forwards;
+  }
+  .dmg-pop.heal{ color:#2f8f6f;text-shadow:0 0 3px #fff,0 2px 0 #14523c,0 3px 8px rgba(0,0,0,.5); }
+  @keyframes dmgPop{
+    0%   {opacity:0;transform:translate(-50%,-30%) scale(.6);}
+    12%  {opacity:1;transform:translate(-50%,-60%) scale(1.25);}
+    22%  {transform:translate(-50%,-55%) scale(1);}
+    30%,45%,60%{opacity:1;}
+    38%,52%   {opacity:.45;}
+    80%  {opacity:1;transform:translate(-50%,-70%) scale(1);}
+    100% {opacity:0;transform:translate(-50%,-95%) scale(.9);}
+  }
   .hpbar2{position:relative;background:rgba(35,32,25,0.35);border:1.5px solid rgba(35,32,25,0.75);
     border-radius:6px;overflow:hidden;margin:5px 0 1px;box-shadow:0 1px 3px rgba(0,0,0,0.3);}
   .hpbar2 .hp-red{position:absolute;left:0;top:0;height:100%;background:var(--cinnabar);}
@@ -1219,6 +1246,8 @@ const BGM_MAP = {
   region:         'region.mp3',            // generic fallback
   region1:        'region1.mp3',
   region2:        'region2.mp3',
+  region3:        'region3.mp3',
+  region4:        'region4.mp3',
 
   // zone themes
   zone_tranquil_forest: 'zone_tranquil_forest.mp3',
@@ -3621,7 +3650,7 @@ function beginBattle(config){
     isNpc: !!config.isNpc, allowCatch: !!config.allowCatch,
     challenge: config.challenge || null, name: config.name || 'Battle',
     onWin: config.onWin || null, noFlee: !!config.noFlee, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
-    guardianTrial: !!config.guardianTrial, leechSeed:false,
+    guardianTrial: !!config.guardianTrial, leechSeed:false, bgKey: config.bgKey||null,
     scriptedOneTurn: !!config.scriptedOneTurn,
     scriptedLoss: config.scriptedLoss||null,
     scriptedAlly: config.scriptedAlly||null, allyMove: config.allyMove||null,
@@ -3780,7 +3809,8 @@ function ultraFizz(){
 }
 
 function renderBattle(){
-  const zoneBg = (ui.currentZone && ui.currentZone.id) ? 'battle_'+ui.currentZone.id : null;
+  const zoneBg = (ui.battle && ui.battle.bgKey)
+    || ((ui.currentZone && ui.currentZone.id) ? 'battle_'+ui.currentZone.id : null);
   setScreenBg(zoneBg || 'battle');
   const b = ui.battle;
   $('#brandSub').textContent = 'Battle';
@@ -3935,6 +3965,7 @@ const BG_MAP = {
   explore:   'explore.png',
   shop:      'shop.png',
   // per-zone battle backdrops
+  battle_hot_spring:      'battle_hot_spring.png',
   battle_tranquil_forest: 'battle_tranquil_forest.png',
   battle_sacred_grove:    'battle_sacred_grove.png',
   battle_rocky_caverns:   'battle_rocky_caverns.png',
@@ -3949,13 +3980,18 @@ function bgCandidates(key){
   if(!key) return [];
   const out = [BG_DIR + (BG_MAP[key] || (key + '.png'))];
   if(/^region\d+$/.test(key)) out.push(BG_DIR + 'region.png');   // fall back to the shared one
+  /* Anything without its own art falls back to the current region's backdrop,
+     then to the generic one — so a new region only needs regionN.png. */
+  const rid = (state && state.progress && state.progress.currentRegion) || 1;
+  const regionFallback = [BG_DIR + 'region'+rid+'.png', BG_DIR + 'region.png'];
   if(/^battle_/.test(key)){
     out.push(BG_DIR + 'battle.png');                       // generic battlefield
     out.push('assets/zones/'+key.replace('battle_','')+'.png');
   }
-  if(['tranquil_forest','sacred_grove','rocky_caverns'].includes(key)){
-    out.push('assets/zones/'+key+'.png');                  // reuse the button art
-  }
+  /* Any zone key falls back to its button art — no per-zone listing needed. */
+  if(ZONE_LEVELS[key] || /_/.test(key)) out.push('assets/zones/'+key+'.png');
+  if(key==='explore' || /^zone_/.test(key)) out.push(...regionFallback);
+  out.push(...regionFallback);
   return out.filter(u=>u && !u.endsWith('/'));
 }
 const bgMissing = {};
@@ -4062,11 +4098,10 @@ function playEffect(moveName, opts, done){
     return;
   }
 
-  // no art available — the original text flash
-  const tag = document.createElement('div');
-  tag.className = 'fx-text';
-  tag.textContent = moveName;
-  place(tag, opts.duration || 450);
+  // No art for this move: show nothing. The hit flash and the damage number
+  // read better than a name card floating over the sprite.
+  if(done) done();
+  return;
 }
 
 function battleMsg(t){ const el=$('#battleMsg'); if(el) el.textContent=t; }
@@ -4094,6 +4129,35 @@ function bob(el, dir){ // dir: +1 = right, -1 = left
   el.style.transform=`translateX(${dir*14}px)`;
   setTimeout(()=>{ el.style.transform='translateX(0)'; }, 170);
 }
+/* The final figure — after types, statuses and every multiplier — floating
+   above the sprite that took it. Multi-hit moves report one combined total. */
+function showDamageNumber(anchorId, amount, opts){
+  opts = opts || {};
+  if(!amount || amount <= 0) return;
+  const host = document.getElementById(anchorId);
+  if(!host) return;
+  const layer = document.getElementById('fxLayer') || document.getElementById('screen');
+  if(!layer) return;
+  const hb = host.getBoundingClientRect();
+  const lb = layer.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'dmg-pop' + (opts.heal ? ' heal' : '');
+  el.textContent = (opts.heal ? '+' : '') + amount;
+  el.style.left = (hb.left - lb.left + hb.width/2) + 'px';
+  el.style.top  = (hb.top  - lb.top  + hb.height*0.18) + 'px';
+  layer.appendChild(el);
+  setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 2100);
+}
+/* Sum a hit list so a 7-strike Ultra reports one number, not seven. */
+function reportHits(hits){
+  const byAnchor = {};
+  (hits||[]).forEach(h=>{
+    const id = (h.idx!=null && h.idx>=0) ? 'enemy-'+h.idx : 'playerBob';
+    byAnchor[id] = (byAnchor[id]||0) + (h.dmg||0);
+  });
+  Object.entries(byAnchor).forEach(([id,total])=> showDamageNumber(id, total));
+}
+
 function flashHit(el){
   if(!el) return;
   el.classList.remove('hit-flash'); void el.offsetWidth; el.classList.add('hit-flash');
@@ -4571,6 +4635,7 @@ function resolveBattleMove(mv, target, results){
                         at: hits[0] ? 'enemy-'+hits[0].idx : null });
   setTimeout(()=>{
     applyHits(hits);
+    reportHits(hits);
     if(mv.shell) applyShell(mv, mon);       // Slag Eruption leaves molten armour
     const drain = applyPartyDrain(mv, mon);
     if(drain && drain.healed>0){
@@ -4758,33 +4823,40 @@ function resolveMultiHit(mv, mon, correct){
   bob($('#playerBob'), +1);
   playEffect(mv.name, { duration:700, type: mv.stoneType || SPECIES[mon.species].types[0], tier: mv.stoneTier });
   setTimeout(()=> playSuccessiveHits(hits, 0, ()=>{
+    releaseInvert();                      // only once every strike has landed
     saveProfile();
+    reportHits(hits);
     applySelfDamage(mv, mon);
     battleMsg(`${mv.name} hit ${hits.length} time${hits.length===1?'':'s'}!`);
     if(mon.currentHp<=0){ setTimeout(()=>onMonFainted(), 900); return; }
     afterPlayerAttack(mon, hits);
   }, true), 330);
 }
-function invertScreen(){
+/* Held until explicitly released, so the screen stays inverted for the entire
+   Ultra sequence rather than snapping back mid-barrage. */
+function invertScreen(ms){
   document.body.classList.add('ultra-invert');
-  setTimeout(()=> document.body.classList.remove('ultra-invert'), 600);
+  if(ms) setTimeout(()=> releaseInvert(), ms);
 }
+function releaseInvert(){ document.body.classList.remove('ultra-invert'); }
 /* play pre-computed hits one at a time, applying HP as each lands.
    fast=true halves the gap (the multi-hit "2x speed" rule). */
 function playSuccessiveHits(hits, i, done, fast){
   if(i>=hits.length){ done(); return; }
   const h = hits[i];
-  const gap = fast ? 175 : 350;
+  const gap = fast ? 350 : 350;   // Ultra strikes now dwell as long as normal ones
   h.t.hp = h.newHp;
   flashHit(document.getElementById('enemy-'+h.idx));
   drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
   if(getEStatus(h.t,'leechSeed')){
-    const mon = activeMon(), max = monMaxHp(mon);
-    if(mon.currentHp>0){
-      const before = mon.currentHp;
-      mon.currentHp = Math.min(max, mon.currentHp + Math.ceil(0.2*monAtk(mon)));
-      drainHp('playerHp', before, mon.currentHp, max);
-    }
+    const mon = activeMon();
+    const amount = Math.ceil(0.15*monAtk(mon));
+    battleParty().forEach(m=>{
+      if(m.currentHp<=0) return;
+      const before = m.currentHp, max = monMaxHp(m);
+      m.currentHp = Math.min(max, m.currentHp + amount);
+      if(m===mon) drainHp('playerHp', before, m.currentHp, max);
+    });
   }
   if(h.newHp<=0){ const el=document.getElementById('enemy-'+h.idx); if(el) el.classList.add('fainted'); }
   setTimeout(()=> playSuccessiveHits(hits, i+1, done, fast), gap);
@@ -4972,6 +5044,7 @@ function runEnemyAttack(i){
       const floor = ui.battle.allyUnkillable ? 1 : 0;
       mon.currentHp = Math.max(floor, mon.currentHp - dmg);
       flashHit($('#playerBob'));
+      showDamageNumber('playerBob', oldHp - mon.currentHp);
       playSfx('hit_taken');
       drainHp('playerHp', oldHp, mon.currentHp, monMaxHp(mon));
       msg = `${name} dealt ${dmg} damage!`;
@@ -7268,7 +7341,7 @@ function renderShop(){
     { id:'highSkill',     from:2, icon:gemIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
     { id:'veryHighSkill', from:3, icon:gemIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
     { id:'ultraSkill',    from:4, icon:gemIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
-    { id:'crown',         from:4, icon:crownIcon(48), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
+    { id:'crown',         from:4, icon:crownIcon(22), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
   ];
   const region = state.progress.currentRegion || 1;
   const box = $('#shopWares');
@@ -7754,7 +7827,7 @@ async function disused5(){
     `"Word."<br><br>` +
     `"<b>Campanile</b>," you say, and your voice does not shake.<br><br>` +
     `He steps aside without looking at you again.`,
-    ()=>renderCaverns());
+    ()=>renderCaverns(), { bg:'rocky_caverns', subtitle:'Rocky Caverns' });
 }
 
 /* --- 6: the army, and something roaring --- */
@@ -7766,7 +7839,7 @@ async function disused6(){
     `You keep your chin level and your pace even, and nobody stops you.<br><br>` +
     `From somewhere far below comes a sound that is not machinery. It is a <b>roar</b>, ` +
     `long and furious and tired, and it shakes dust from the roof.`,
-    ()=>renderCaverns());
+    ()=>renderCaverns(), { bg:'rocky_caverns', subtitle:'Rocky Caverns' });
 }
 
 /* --- 7: the dragon, restrained --- */
@@ -7779,7 +7852,7 @@ async function disused7(){
     `jewels, directing the fight like a conductor.<br><br>` +
     `He is not fighting fair. His Capos' <b>ghosts and psychics</b> have the dragon bound at every limb, ` +
     `holding it still while he works.`,
-    ()=>renderCaverns());
+    ()=>renderCaverns(), { bg:'rocky_caverns', subtitle:'Rocky Caverns' });
 }
 
 /* --- 8: the core, and the choice --- */
@@ -8107,7 +8180,7 @@ function exploreCavernPath(pathId){
     return storyModal('🚧', 'The way is thick with mafia',
       `There are far too many of them to fight — soldiers at every turn, and more beyond.<br><br>` +
       `To slip through unnoticed you'll need a <b>mafia uniform</b> to pass for one of them, and the <b>password</b> to get past the guards.`,
-      ()=>renderCaverns());
+      ()=>renderCaverns(), { bg:'rocky_caverns', subtitle:'Rocky Caverns' });
   }
   if(nx.kind==='done'){ toast('Nothing left down here.'); return; }
 
@@ -8150,14 +8223,14 @@ async function onMafiaWin(def, pathId){
       `He straightens his coat, unhurried, as though losing were a formality.<br><br>` +
       `"Enjoy it. My people don't forget a face." He turns away. "And you've picked a poor week for heroics — ` +
       `the boss is about to tame something out of legend. After that, nobody crosses us again."`,
-      ()=>renderCaverns());
+      ()=>renderCaverns(), { bg:'rocky_caverns', subtitle:'Rocky Caverns' });
   }
   if(def.npcId==='capo_purple'){
     return storyModal('🕴️', 'Purple Capo defeated',
       `She laughs, short and sharp, and spits into the dust.<br><br>` +
       `"You're stronger than you look. Fine — go on then." She jerks her head toward the dark.<br><br>` +
       `"<b>The disused path.</b> That's where the boss is. Come and challenge him, if you dare."`,
-      ()=>renderCaverns());
+      ()=>renderCaverns(), { bg:'rocky_caverns', subtitle:'Rocky Caverns' });
   }
   challengeResult('👊', 'Soldato defeated!', 'The way ahead is clear.', 'caverns');
 }
@@ -8171,7 +8244,7 @@ async function givePathReward(pathId, which){
     return storyModal('🥼', 'A mafia uniform',
       `Folded in a crate at the end of the path: a pressed dark suit with the family's mark on the collar.<br><br>` +
       `Wearing it, you might pass for one of them.<br><br><b>+3 Protein Supplements</b>`,
-      ()=>renderCaverns());
+      ()=>renderCaverns(), { bg:'rocky_caverns', subtitle:'Rocky Caverns' });
   }
   r2.password = true;
   await advancePath(pathId);
@@ -8179,15 +8252,16 @@ async function givePathReward(pathId, which){
     `A lone Soldato throws his hands up before you've even spoken.<br><br>` +
     `"Don't — don't. Look, the word's <b>'campanile'</b>, alright? Just say it to the door guards and they'll wave you through."<br><br>` +
     `He is gone before you can answer.<br><br><b>+3 Protein Supplements</b>`,
-    ()=>renderCaverns());
+    ()=>renderCaverns(), { bg:'rocky_caverns', subtitle:'Rocky Caverns' });
 }
 
 /* A simple full-screen story beat with one button. */
 /* `emblem` may be an emoji or any HTML (a sprite, a pair of sprites…). */
-function storyModal(emblem, title, html, onClose){
+function storyModal(emblem, title, html, onClose, opts){
+  opts = opts || {};
   document.body.classList.remove('writing');
-  $('#brandSub').textContent = 'Rocky Caverns';
-  setScreenBg('rocky_caverns');
+  if(opts.subtitle !== undefined) $('#brandSub').textContent = opts.subtitle;
+  if(opts.bg) setScreenBg(opts.bg);
   screenEl.innerHTML = `
     <div class="scene">
       <div class="scene-emblem">${emblem}</div>
@@ -8216,7 +8290,7 @@ function monkeyScene1(){
     `"That thing you're carrying." The monkey doesn't open its eyes. "It's missing its <b>core</b>. ` +
     `Don't look so surprised — I can feel the hole in it from here."<br><br>` +
     `"It won't last like that. Needs something to run on until you get the real thing back."`,
-    ()=>monkeyScene2());
+    ()=>monkeyScene2(), { bg:'battle_hot_spring', subtitle:'Volcanic Caldera' });
 }
 function monkeyScene2(){
   storyModal(monPortrait('monkey_king',150,{view:'front',bare:true,stage:1}), '"Try the plant"',
@@ -8225,12 +8299,12 @@ function monkeyScene2(){
     `You ask why a wild monster would help you at all.<br><br>` +
     `One eye opens. "Because the same hand that took your dragon's core took <b>mine</b>." ` +
     `The water goes very still. "And I intend to take it back."`,
-    ()=>monkeyScene3());
+    ()=>monkeyScene3(), { bg:'battle_hot_spring', subtitle:'Volcanic Caldera' });
 }
 function monkeyScene3(){
   document.body.classList.remove('writing');
   $('#brandSub').textContent = 'Volcanic Caldera';
-  setScreenBg('volcanic_caldera');
+  setScreenBg('battle_hot_spring');
   screenEl.innerHTML = `
     <div class="scene">
       <div class="scene-emblem">${monPortrait('monkey_king',150,{view:'front',bare:true,stage:1})}</div>
@@ -8261,13 +8335,13 @@ async function monkeyFarewell(){
     `The monkey snorts — one short, surprised sound — and flicks a hand at you without looking.<br><br>` +
     `"…Mm. Mind the steam vents."<br><br>` +
     `When you glance back, the spring is empty.<br><br><b>The Geothermal Plant is now on your map.</b>`,
-    ()=>go('explore'));
+    ()=>go('explore'), { bg:'battle_hot_spring', subtitle:'Volcanic Caldera' });
 }
 
 /* A real fight — that ends before you get a turn. */
 function monkeyFight(){
   beginBattle({
-    isNpc:false, name:'Monkey', noFlee:true,
+    isNpc:false, name:'Monkey', noFlee:true, bgKey:'battle_hot_spring',
     scriptedLoss:'monkey', scriptedOneTurn:true, enemiesFirst:true, allowCatch:false,
     waves:[[{ species:'monkey_king', level:100, ai:'power1', nerfed:false }]],
     onWin: ()=> onMonkeyResolved(),
@@ -8292,7 +8366,7 @@ async function onMonkeyResolved(){
       `You come down some distance away, mostly intact, with your whole team groaning around you.<br><br>` +
       `Faintly, from back at the spring: <i>"Told you."</i><br><br>` +
       `<b>The Geothermal Plant is now on your map.</b>`,
-      ()=>{ go('region'); });
+      ()=>{ go('region'); }, { bg:'battle_hot_spring', subtitle:'Volcanic Caldera' });
     fade.style.opacity='0';
     setTimeout(()=>{ if(fade.parentNode) document.body.removeChild(fade); }, 900);
   }, 1100);
@@ -8359,16 +8433,19 @@ function powerStoneIcon(px){
 }
 
 /* One worker waves at a time; the window is 0.5–1.2s. Missing costs nothing. */
-let _plantTimer = null, _plantFlash = null, _plantActive = 0;
+let _plantTimer = null, _plantFlash = null, _plantActive = 0, _plantRunning = false;
 function stopPlantLoop(){
   clearTimeout(_plantTimer); clearTimeout(_plantFlash);
-  _plantTimer = _plantFlash = null; _plantActive = 0;
+  _plantTimer = _plantFlash = null; _plantActive = 0; _plantRunning = false;
 }
 function startPlantLoop(){
   stopPlantLoop();
+  _plantRunning = true;
   const schedule = ()=>{
     _plantTimer = setTimeout(()=>{
-      if(ui.screen!=='plant') return stopPlantLoop();
+      // The plant can be reached as either 'plant' or 'zone', so trust our own
+      // running flag and the presence of the grid rather than the screen key.
+      if(!_plantRunning || !document.getElementById('workerGrid')) return stopPlantLoop();
       const n = 1 + Math.floor(Math.random()*PLANT_WORKERS);
       const el = document.getElementById('worker-'+n);
       if(!el) return schedule();
@@ -8431,7 +8508,7 @@ async function plantIntro(){
     `"Ha — I've a crate of them. But look around." He gestures at the pipework, where something ` +
     `orange is moving. "The fire monsters come up the tubes and nest in the couplings. My people can't ` +
     `shift them.<br><br>Help my workers, and the stone's yours."`,
-    ()=>renderPlant());
+    ()=>renderPlant(), { bg:'geothermal_plant', subtitle:'Geothermal Plant' });
 }
 
 async function usePowerStone(){
@@ -8453,7 +8530,7 @@ async function usePowerStone(){
     `The stone sinks into the hollow and stays there, humming faintly.<br><br>` +
     `<b>${escapeHtml(displayName(dragon))}</b> looks <b>significantly more energetic</b>.<br><br>` +
     `<b>+15 fights' worth of growth</b>${dragon.level>before?` · now level ${dragon.level}`:''}`,
-    ()=>renderPlant());
+    ()=>renderPlant(), { bg:'geothermal_plant', subtitle:'Geothermal Plant' });
 }
 
 function engineerOffer(){
@@ -8564,6 +8641,7 @@ function renderZone(){
 function renderZonePlain(){
   const z = ui.currentZone;
   if(!z) return go('explore');
+  setScreenBg(z.id);          // zone art doubles as the backdrop
   setScreenBg(z.id);
   playMusicChain(['zone_'+z.id, 'region'+(state.progress.currentRegion||1), 'region']);
   document.body.classList.remove('zone-dark');
