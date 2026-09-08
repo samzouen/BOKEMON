@@ -547,6 +547,24 @@
     50%{opacity:1;transform:translate(3px,-30px) scale(1);}
   }
   @media (prefers-reduced-motion: reduce){ .move-btn.ultra-btn .fizz{display:none;} }
+  /* the shared five-tier ramp: dull grey → green → blue → gold → red */
+  .odds-table{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;text-align:left;}
+  .odds-row{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;}
+  .odds-name{flex:1;}
+  .odds-pct{font-weight:900;}
+  .odds-swatch{width:14px;height:14px;border-radius:4px;flex-shrink:0;
+    box-shadow:inset 0 -2px 0 rgba(0,0,0,.25);}
+  .odds-swatch.tier-low     {background:linear-gradient(150deg,#c9d3d8,#78868e);}
+  .odds-swatch.tier-mid     {background:linear-gradient(150deg,#8fe3c2,#23785c);}
+  .odds-swatch.tier-high    {background:linear-gradient(150deg,#9fd6ff,#1f5c8c);}
+  .odds-swatch.tier-veryhigh{background:linear-gradient(150deg,#ffe6a3,#a9761d);}
+  .odds-swatch.tier-ultra   {background:linear-gradient(150deg,#ffd3c6,#8f2a1c);}
+  /* stone cards in storage take the same ramp on their left edge */
+  .stone-card.tier-low     {border-left-color:#78868e;}
+  .stone-card.tier-mid     {border-left-color:#23785c;}
+  .stone-card.tier-high    {border-left-color:#1f5c8c;}
+  .stone-card.tier-veryhigh{border-left-color:#a9761d;}
+  .stone-card.tier-ultra   {border-left-color:#8f2a1c;}
   .gem-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;}
   .gem{
     width:70%;height:70%;display:block;
@@ -598,6 +616,16 @@
   .shop-ov-body{width:100%;max-width:360px;}
   .qty-card,.pick-card{background:var(--paper);border-radius:18px;padding:22px;text-align:center;
     box-shadow:0 12px 40px var(--shadow);}
+  .ui-icon{vertical-align:-3px;width:18px;height:18px;object-fit:contain;}
+  .award-row{display:flex;align-items:center;gap:5px;margin-top:7px;}
+  .award-icon{width:22px;text-align:center;font-size:15px;flex-shrink:0;}
+  .award-name{flex:1;min-width:0;font-size:12px;font-weight:800;}
+  .qty-btn.sm{width:32px;height:32px;font-size:17px;}
+  .award-n{width:52px;text-align:center;margin:0;padding:6px;font-size:13px;}
+  .btn.sm-give{width:auto;padding:7px 11px;font-size:12px;margin:0;}
+  .ticket-row{display:flex;align-items:center;gap:6px;margin-top:6px;}
+  .ticket-row input{flex:1;min-width:0;text-align:center;margin:0;}
+  .ticket-row .qty-btn{width:auto;padding:0 10px;height:40px;font-size:13px;}
   .qty-row{display:flex;align-items:center;justify-content:center;gap:8px;}
   .qty-btn{width:46px;height:46px;border-radius:12px;border:1px solid var(--line);background:var(--paper-2);
     font-size:22px;font-weight:800;cursor:pointer;color:var(--ink);}
@@ -840,6 +868,12 @@
     border-radius:6px;overflow:hidden;margin:5px 0 1px;box-shadow:0 1px 3px rgba(0,0,0,0.3);}
   .hpbar2 .hp-red{position:absolute;left:0;top:0;height:100%;background:var(--cinnabar);}
   .hpbar2 .hp-green{position:absolute;left:0;top:0;height:100%;}
+  .recharge{position:relative;height:11px;border-radius:6px;margin-top:4px;
+    background:rgba(35,32,25,.3);border:1px solid rgba(35,32,25,.6);overflow:hidden;}
+  .recharge span{display:block;height:100%;background:linear-gradient(90deg,#3b8ec9,#c99a3f);
+    transition:width .5s;}
+  .recharge b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:8px;font-weight:900;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.9);letter-spacing:.03em;}
   .atk-line{font-size:12px;font-weight:800;color:var(--ink);margin-top:2px;
     text-shadow:0 1px 0 rgba(255,255,255,.85);}
   .hp-num{font-weight:800;color:var(--ink);line-height:1;text-shadow:0 1px 0 rgba(255,255,255,0.85);}
@@ -1071,6 +1105,11 @@ const SPECIES = {
   monkey_king:     { name:'Monkey',      tier:'legendary', types:['Physical','Fairy'], rate:13, nerfedRate:13, base:61, evo:[31], evoMult:1.5,
                      color:'#b8813a', glyph:'猴', nerfedUntilCrowned:true, storyCrownOnly:true },
 
+  newt_baby:       { name:'Thunder Newt Baby', tier:'special', types:['Psychic','Electric'], rate:0, nerfedRate:0, base:1, evo:[], color:'#7fa8c8', glyph:'蝾', isBaby:true, hatchesAt:31, hatchesInto:'newt' },
+  newt:            { name:'Thunder Newt', tier:'legendary', types:['Psychic','Electric'], rate:13, nerfedRate:13, base:31, evo:[31], evoMult:1.5,
+                     color:'#5f9ac8', glyph:'雷', nerfedUntilCrowned:true, storyCrownOnly:true },
+  ankylosaurus:    { name:'Ankylosaurus', tier:'legendary', types:['Ground','Steel'], rate:13, nerfedRate:13, base:65, evo:[5], evoMult:1.5, color:'#7a8a6a', glyph:'甲' },
+
   /* --- Legendaries & story --- */
   /* --- Region 2: Rocky Caverns starters --- */
   flying_starter:  { name:'Raven',       tier:'starter',   types:['Flying'],        rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#6b7a8f', glyph:'鸦' },
@@ -1082,6 +1121,7 @@ const SPECIES = {
   sumo:            { name:'Sumo',        tier:'elite',     types:['Physical'],      rate:11, nerfedRate:11, base:5,   evo:[],      color:'#c08a6a', glyph:'相' },
   goblin:          { name:'Goblin',      tier:'elite',     types:['Ghost'],         rate:11, nerfedRate:11, base:5,   evo:[],      color:'#6d7a5a', glyph:'鬼' },
   squid:           { name:'Squid',       tier:'elite',     types:['Psychic'],       rate:11, nerfedRate:11, base:5,   evo:[],      color:'#8a6aa8', glyph:'鱿' },
+
 
 
   /* --- Story monsters --- */
@@ -1163,12 +1203,23 @@ const MOVES = {
                     ['Max','Cataclysm Max',null,'Charge',10,999,{charge:{max:3, unleash:1.25, hyper:1.75}, coreOnly:true}]],
   dragon_egg:      [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 
-  phoenix:         [['Basic','Ember',0.3,'Single',4,1],['Power1','Firestorm',0.6,'AOE',8,5],['Power2','Nova',1.0,'AOE',10,35],
-                    ['Ultimate','Incinerate',1.25,'Single',10,45,{scale:{per:0.15,max:2.0}}],
-                    ['Max','Incinerate Max',1.5,'Single',10,55,{scale:{per:0.15,max:2.5}}]],
+  phoenix:         [['Basic','Ember',0.3,'Single',4,1],['Power1','Firestorm',0.6,'AOE',8,5],['Power2','Nova',1.0,'AOE',8,35],
+                    ['Ultimate','Incinerate',1.25,'Single',8,45,{scale:{per:0.15,max:2.0}}],
+                    ['Max','Incinerate Max',1.5,'Single',8,55,{scale:{per:0.15,max:2.5}}]],
   forest_fairy:    [['Basic','Fairy Wind',0.4,'Single',2,1],['Power1','Giga Drain',0.8,'Single',5,5],['Power2','Overgrowth',0.7,'AOE',8,35],
                     ['Ultimate','Verdant Wrath',1.4,'Single',10,45,{hits:2}],
                     ['Max','Verdant Wrath Max',1.8,'Single',10,55,{hits:3}]],
+  newt_baby:       [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
+  newt:            [['Basic','Psyshock',0.2,'Single',4,31,{paralyse:0.20}],
+                    ['Power1','Psywave',0.5,'AOE',8,31,{paralyse:0.20}],
+                    ['Power2','Tachypsychia',null,'Self',4,35,{tachy:{turns:3, double:0.50, evadeFirst:0.80, evadeAfter:0.30}}],
+                    ['Ultimate','Volt Concussion',0.4,'Single',8,45,{hits:3, paralyse:0.20}],
+                    ['Max','Volt Concussion Max',0.4,'Single',8,999,{hits:4, paralyse:0.20, coreOnly:true}]],
+  ankylosaurus:    [['Basic','Hammertail',0.1,'Single',4,1,{hits:3}],
+                    ['Power1','Seismic Shock',0.2,'AOE',8,1,{hits:3}],
+                    ['Power2','Steel Soul',null,'Self',4,35,{soul:{turns:3, reduce:0.5, bonus:0.1}}],
+                    ['Ultimate','Rampage',0.2,'AOE',8,45,{hits:5}],
+                    ['Max','Rampage Max',0.3,'AOE',10,55,{hits:5, bonus:{words:2, aftershock:true}}]],
   sacred_seed:     [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 };
 
@@ -1653,6 +1704,15 @@ function evolutionStage(species, level){
   for(const lv of evo){ if(level >= lv) stage++; }
   return stage;
 }
+/* A monster caught ABOVE its evolution thresholds shouldn't leap several forms
+   at once. `evoFloor` pins the form it was caught in; it then climbs one stage
+   per level gained until it catches up with its level. */
+function monStageOf(m){
+  const full = evolutionStage(m.species, m.level);
+  if(m.evoFloor == null) return full;
+  const gained = Math.max(0, m.level - (m.evoFloorLevel || m.level));
+  return Math.max(0, Math.min(full, m.evoFloor + gained));
+}
 /* ---------- THE FOREST CROWN ----------
    A starter or elite is promoted to LEGENDARY growth (rate 13) and gains the
    legendary protein cap. A legendary can't be promoted further, so it gains
@@ -1724,7 +1784,7 @@ function hpScale(level){
 /* ATK is the raw stat; HP is that stat with the level scaling applied. */
 function computeMaxHp(species, level, supplements, mon){
   const sp = SPECIES[species];
-  if(sp && (sp.isSeed || sp.isEgg)) return 1;     // Seed and Egg are always 1 HP
+  if(sp && (sp.isSeed || sp.isEgg || sp.isBaby)) return 1;   // passengers are always 1 HP
   return Math.ceil(computeMaxStat(species, level, supplements, mon) * hpScale(level));
 }
 
@@ -2030,6 +2090,7 @@ function normalizeProfile(p){
   (p.party||[]).forEach(m=>{ const sp=SPECIES[m.species]; if(sp && (sp.isSeed||sp.isEgg)) m.currentHp = 1; });
   p.masteryAwarded = p.masteryAwarded || {};
   ['bronze','silver','gold'].forEach(k=>{ if(p.masteryAwarded[k]===undefined) p.masteryAwarded[k] = 0; });
+  p.overmasteryAwarded = p.overmasteryAwarded || { bronze:0, silver:0, gold:0 };
   p.medals = p.medals || {};
   ['bronze','silver','gold'].forEach(k=>{ if(p.medals[k]===undefined) p.medals[k] = 0; });
   p._needsMasteryReconcile = true;
@@ -2092,7 +2153,11 @@ function normalizeProfile(p){
   r3.powerStone = !!r3.powerStone;
   r3.powerStoneUsed = !!r3.powerStoneUsed;
   r3.engineerDone = r3.engineerDone || 0;
+  r3.ankylo = r3.ankylo || { refusals:0, agreed:false, seen:false };
   p._needsEggDedupe = true;
+  /* Skill Tokens used to cost 3 Bronze; they now cost 1. Refund two-thirds of
+     everything already spent so nobody is punished for buying early. */
+  p._needsBronzeRefund = !p._bronzeRefunded;
   r2.waterDojo = r2.waterDojo || [];
   p.settings = p.settings || {};
   if(p.settings.volume===undefined) p.settings.volume = 0.8;
@@ -2203,14 +2268,15 @@ function spritePath(species, stage, view, crowned){
   return 'assets/mon/' + key + (view && view!=='icon' ? '_'+view : '') + '.png';
 }
 /* Convenience: the sprite stage a given owned monster is currently at. */
-function monStage(m){ return evolutionStage(m.species, m.level); }
+function monStage(m){ return monStageOf(m); }
 
 /* The Sacred Seed rides along in a seventh slot: it levels, but it cannot
    fight, be switched to, be taught skills, or take protein — and it never
    counts toward winning or losing a battle. */
 function isSeed(m){ return !!(m && SPECIES[m.species] && SPECIES[m.species].isSeed); }
 function isEgg(m){ return !!(m && SPECIES[m.species] && SPECIES[m.species].isEgg); }
-function isPassenger(m){ return isSeed(m) || isEgg(m); }
+function isBaby(m){ return !!(m && SPECIES[m.species] && SPECIES[m.species].isBaby); }
+function isPassenger(m){ return isSeed(m) || isEgg(m) || isBaby(m); }
 function battleParty(){ return state.party.filter(m=>!isPassenger(m)); }
 function hasSeed(){ return state.party.some(isSeed); }
 function grantSacredSeed(){
@@ -2283,6 +2349,23 @@ function typeBadges(species){
 /* The ✦ marks a crowned monster without ever touching its nickname. */
 function crownMark(m){ return isCrowned(m) ? crownIcon(15, 'crown-mark') : ''; }
 /* assets/ui/crown.png, glowing; falls back to the emoji until art exists. */
+/* assets/ui/skill_token.png, with the old emoji as a fallback. */
+function tokenIcon(px){
+  px = px || 18;
+  return `<img src="assets/ui/skill_token.png" alt="" class="ui-icon" style="width:${px}px;height:${px}px;"
+    onerror="this.outerHTML='🎫'">`;
+}
+/* Any file in assets/ui/ can be dropped in by name; the emoji is the fallback. */
+function uiIcon(name, px, fallback){
+  px = px || 20;
+  return `<img src="assets/ui/${name}.png" alt="" class="ui-icon" style="width:${px}px;height:${px}px;"
+    onerror="this.outerHTML='${fallback||'❔'}'">`;
+}
+function voidIcon(px){
+  px = px || 20;
+  return `<img src="assets/ui/void_stone.png" alt="" class="ui-icon" style="width:${px}px;height:${px}px;"
+    onerror="this.outerHTML='🕳️'">`;
+}
 function crownIcon(px, cls){
   px = px || 20;
   return `<img src="assets/ui/crown.png" alt="Crown" class="crown-icon ${cls||''}"
@@ -2562,6 +2645,61 @@ function recordMastery(text){
 /* Medals are granted as words cross a tier, but progress made BEFORE medals
    existed (or before a tier's threshold changed) would otherwise never pay out.
    This reconciles the ledger against the actual mastery counts on load. */
+/* ============================================================
+   OVERMASTERY
+   Reps beyond a word's gold threshold (25) still represent real effort, so
+   they pool together across ALL phrases and pay out on the same 5 / 15 / 25
+   rhythm, resetting each time a cycle completes.
+   The pool is capped at 30% of the player's gold-mastered phrases (rounded up)
+   worth of cycles, so grinding one familiar phrase forever earns nothing —
+   breadth has to grow before the surplus keeps counting.
+   Fully idempotent: it recomputes from scratch and grants only the difference,
+   so previously-uncredited effort is picked up without ever paying twice.
+   ============================================================ */
+const OVERMASTERY_CYCLE = 25;
+const OVERMASTERY_STEPS = { bronze:5, silver:15, gold:25 };
+const OVERMASTERY_CAP_RATIO = 0.30;
+
+function overmasteryStats(){
+  const wm = (state && state.wordMastery) || {};
+  const gold = MASTERY_CHECKPOINTS.gold;
+  let excess = 0, goldWords = 0;
+  Object.values(wm).forEach(v=>{
+    if(v >= gold){ goldWords++; excess += (v - gold); }
+  });
+  const maxCycles = Math.ceil(goldWords * OVERMASTERY_CAP_RATIO);
+  const usable = Math.min(excess, maxCycles * OVERMASTERY_CYCLE);
+  const cycles = Math.floor(usable / OVERMASTERY_CYCLE);
+  const partial = usable % OVERMASTERY_CYCLE;
+  return {
+    excess, goldWords, maxCycles, usable, cycles, partial,
+    owed: {
+      bronze: cycles + (partial >= OVERMASTERY_STEPS.bronze ? 1 : 0),
+      silver: cycles + (partial >= OVERMASTERY_STEPS.silver ? 1 : 0),
+      gold:   cycles,
+    },
+    capped: excess > usable,
+  };
+}
+
+function reconcileOvermastery(){
+  if(!state) return null;
+  state.overmasteryAwarded = state.overmasteryAwarded || { bronze:0, silver:0, gold:0 };
+  const { owed } = overmasteryStats();
+  let granted = null;
+  ['bronze','silver','gold'].forEach(tier=>{
+    const paid = state.overmasteryAwarded[tier] || 0;
+    if(owed[tier] > paid){
+      const diff = owed[tier] - paid;
+      state.overmasteryAwarded[tier] = owed[tier];
+      state.medals[tier] = (state.medals[tier]||0) + diff;
+      granted = granted || { bronze:0, silver:0, gold:0 };
+      granted[tier] += diff;
+    }
+  });
+  return granted;
+}
+
 function reconcileMastery(){
   if(!state || !state.wordMastery) return null;
   const c = masteryCounts();
@@ -2581,6 +2719,8 @@ function reconcileMastery(){
 }
 
 function checkMasteryRewards(){
+  const over = reconcileOvermastery();
+  if(over) setTimeout(()=>announceOvermastery(over), 700);
   const c = masteryCounts();
   const rewards = { bronze:0, silver:0, gold:0 };
   ['bronze','silver','gold'].forEach(tier=>{
@@ -2593,6 +2733,15 @@ function checkMasteryRewards(){
   });
   return (rewards.bronze || rewards.silver || rewards.gold) ? rewards : null;
 }
+function announceOvermastery(r){
+  if(!r) return;
+  const bits = [];
+  if(r.bronze) bits.push(`${r.bronze} 🥉`);
+  if(r.silver) bits.push(`${r.silver} 🥈`);
+  if(r.gold)   bits.push(`${r.gold} 🥇`);
+  toast('✨ Overmastery: ' + bits.join(' + ') + ' for practice beyond gold!');
+}
+
 function announceMastery(r){
   if(!r) return;
   const bits = [];
@@ -3233,6 +3382,8 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(getPStatus(0,'dragonDance')) dmg *= 1.25;   // multiplies WITH overheat
     // Dragon Legacy stacks multiplicatively with the above
     if(ui.battle && ui.battle.legacyBonus) dmg *= (1 + ui.battle.legacyBonus);
+    const soulAtk = getPStatus(0,'steelSoul');
+    if(soulAtk) dmg += soulAtk.bonus * atk;        // Steel Soul adds flat power per hit
   } else {
     if(getEStatus(attacker,'discombobulate')) dmg *= 0.8;   // enemy deals 20% less
   }
@@ -3247,6 +3398,8 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(getPStatus(0,'steelAegis'))  dmg *= 0.75;   // takes 25% less
     const sh = getPStatus(0,'shell');
     if(sh && sh.reduce) dmg *= (1 - sh.reduce);    // Lava Shell
+    const soul = getPStatus(0,'steelSoul');
+    if(soul) dmg *= (1 - soul.reduce);             // Steel Soul
   }
   return Math.max(0, Math.ceil(dmg));
 }
@@ -3651,6 +3804,7 @@ function makeEnemy(species, level, opts){
     else                    stage = r < 0.20 ? 0 : (r < 0.87 ? 1 : 2);
   }
   let stat = Math.ceil((rate/5)*level) + Math.ceil((stage + (sp.bonusStages||0))*rate*(sp.evoMult||1));
+  if(opts.crowned && sp.tier==='legendary') stat += 3*rate;      // crowned legendary
   if(opts.supplements) stat += Math.ceil((rate/5)*opts.supplements);
   const hp = Math.ceil(stat * hpScale(level));
   // AI: 'basic' | 'power1' | 'best'. Default: wild=basic, but electric/legendary open with Power1.
@@ -3666,7 +3820,7 @@ function makeEnemy(species, level, opts){
   else if(ai==='power1') move = bySlot('Power1') || bySlot('Basic');
   else move = bySlot('Basic');
   if(!move) move = avail[0] || MOVES[species][0];
-  return { species, level, maxHp:hp, hp:hp, atk:stat, move, types:sp.types, stage, tier:sp.tier, ai, nerfed, boss:!!opts.boss };
+  return { species, level, maxHp:hp, hp:hp, atk:stat, move, types:sp.types, stage, tier:sp.tier, ai, nerfed, boss:!!opts.boss, crowned:!!opts.crowned };
 }
 
 /* Sacred Grove runs its own encounter table while the trial is unresolved. */
@@ -3678,7 +3832,7 @@ function inSacredGroveTrial(){
 }
 function startGuardianTrial(){
   beginBattle({
-    waves:[[{ species:'forest_fairy', level:100, ai:'power1', nerfed:false, supplements:12, boss:true }]],
+    waves:[[{ species:'forest_fairy', level:100, ai:'power1', nerfed:false, supplements:12, crowned:true, boss:true }]],
                        // ai:'power1' == Giga Drain, her signature. 'best' would have
                        // reached past it for the Ultimate and skipped the self-heal.
     isNpc:false, allowCatch:false, name:'The Forest Guardian',
@@ -3700,7 +3854,11 @@ function startWildEncounter(encOpts){
   const L = starterLevel();
   let special = null;
   const region1Only = state.progress.currentRegion === 1;
-  if(region1Only && L>=20){ const r=Math.random(); if(r<0.05) special='phoenix'; else if(r<0.20) special='electric_starter'; }
+  if(region1Only && L>=20){
+    const r=Math.random();
+    if(r<0.05 && !legendaryCaught('phoenix')) special='phoenix';
+    else if(r<0.20) special='electric_starter';
+  }
   // the Caldera hides a Fire Starter
   if((ui.currentZone||{}).id==='volcanic_caldera' && Math.random()<0.15) special='fire_starter';
   let wave;
@@ -3744,6 +3902,8 @@ function beginBattle(config){
     allyUnkillable: !!config.allyUnkillable, enemiesFirst: !!config.enemiesFirst,
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     charge:null, legacyBonus:0,
+    rechargeWords:0,         // every word written this battle feeds the meter
+
     partyStatus:{},          // party-wide buffs, each with a turn counter
     fieldStatus:{},          // debuffs stamped on every enemy, inherited by later waves
     usedVeryHigh:{}, usedUltra:{},   // uid -> true, once-per-battle usage
@@ -3769,11 +3929,16 @@ function beginBattle(config){
 }
 function loadWave(i){
   const b = ui.battle;
-  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll }));
+  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll, crowned:spec.crowned }));
   // Leech Seed is a FIELD effect: it re-roots on every new wave.
   if(b.leechSeed) b.enemies.forEach(e=> addEStatus(e, { type:'leechSeed' }));
   b.enemies.forEach(e=>{ if(!state.encounteredSpecies.includes(e.species)) state.encounteredSpecies.push(e.species); });
-  let ai = state.party.findIndex(m=>m.currentHp>0 && !isPassenger(m));
+  /* Keep whoever was fighting, as long as they're still standing — a new wave
+     shouldn't quietly hand the fight back to the first slot. */
+  const cur = state.party[b.activeIndex];
+  let ai = (cur && cur.currentHp>0 && !isPassenger(cur))
+    ? b.activeIndex
+    : state.party.findIndex(m=>m.currentHp>0 && !isPassenger(m));
   if(ai<0) ai=0;
   b.activeIndex = ai; b.switchedThisTurn=false; b.phase='player';
   saveProfile();
@@ -3920,7 +4085,7 @@ function renderBattle(){
         ${b.enemies.map((e,i)=>`
           <div class="enemy-card ${e.hp<=0?'fainted':''}" data-enemy="${i}" id="enemy-${i}" style="width:${enemySpriteSize(b.enemies.length)+16}px;">
             <div class="enemy-status" id="enemyStatus-${i}"></div>
-            <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,enemySpriteSize(b.enemies.length),{view:'front',bare:true,stage:e.stage||0,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
+            <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,enemySpriteSize(b.enemies.length),{view:'front',bare:true,crowned:!!e.crowned,stage:e.stage||0,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
             <div class="info-layer name-plate">
               <div class="mon-title">${SPECIES[e.species].name} <span>Lv ${e.level}</span></div>
               ${hpBar2('enemyHp-'+i, e.hp, e.maxHp, false)}
@@ -3936,6 +4101,10 @@ function renderBattle(){
           <div class="mon-title big">${escapeHtml(displayName(mon))}${crownMark(mon)} <span>Lv ${mon.level}</span></div>
           ${hpBar2('playerHp', mon.currentHp, monMaxHp(mon), true)}
           <div class="atk-line">ATK ${monAtk(mon)}</div>
+          <div class="recharge">
+            <span style="width:${Math.min(100,(b.rechargeWords||0)/RECHARGE_TARGET*100)}%"></span>
+            <b>${b.rechargeWords||0}/${RECHARGE_TARGET}</b>
+          </div>
         </div>
       </div>
     </div>
@@ -3984,7 +4153,7 @@ function renderBattle(){
 const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
   counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed',
-  discombobulate:'🌀 Confused', leechSeed:'🌿 Seeded',
+  discombobulate:'🌀 Confused', leechSeed:'🌿 Seeded', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
 };
 function renderStatusBadges(){
@@ -4502,6 +4671,21 @@ function runMoveQuiz(mv, target){
 }
 
 /* Words written beyond a move's requirement roll into the next move. */
+const RECHARGE_TARGET = 100;
+/* Every word written during a fight feeds a shared meter. At 100 it restores
+   every spent Very High and Ultra move — a second wind for long battles — and
+   rolls the surplus into the next charge. */
+function feedRecharge(words){
+  const b = ui.battle;
+  if(!b || !words) return false;
+  b.rechargeWords = (b.rechargeWords||0) + words;
+  if(b.rechargeWords < RECHARGE_TARGET) return false;
+  b.rechargeWords -= RECHARGE_TARGET;
+  b.usedVeryHigh = {};
+  b.usedUltra = {};
+  return true;
+}
+
 function bankWordSpill(mv){
   if(!ui.battle) return 0;
   const done = (ui.quiz && ui.quiz.wordsDone) || 0;
@@ -4664,8 +4848,12 @@ function resolveBattleMove(mv, target, results){
   const correct = results.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0)
                 + (ui.quiz && ui.quiz.config ? (ui.quiz.config.startingWords||0) : 0);
   const spill = bankWordSpill(mv);
+  // Feed the second-wind meter with everything written this turn, right or wrong
+  const written = results.reduce((n,r)=>n+(r.words||countWords(r.text)),0);
+  const recharged = feedRecharge(written);
   if(ui.battle) ui.battle.lastMove = mv;
   go('battle');
+  if(recharged) setTimeout(()=>{ battleMsg('⚡ Second wind! Very High and Ultra moves restored.'); renderBattle(); }, 1500);
 
   if(mv.slot==='UltraStone') ui.battle.usedUltra[mon.uid]=true;
   if(mv.isStone && mv.stoneTier==='veryhigh') ui.battle.usedVeryHigh[mon.uid]=true;
@@ -4686,6 +4874,23 @@ function resolveBattleMove(mv, target, results){
     renderStatusBadges();
     battleMsg(`${mv.name}! Damage taken cut by ${Math.round(mv.shell.reduce*100)}%, and attackers get burned.`);
     playEffect(mv.name, { type:SPECIES[mon.species].types[0] });
+    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+  }
+  if(mv.tachy){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    setPStatus(0, { type:'tachy', turnsLeft:mv.tachy.turns+1, double:mv.tachy.double,
+                    evadeFirst:mv.tachy.evadeFirst, evadeAfter:mv.tachy.evadeAfter, fresh:true });
+    renderStatusBadges();
+    battleMsg(`${mv.name}! Time slows — ${Math.round(mv.tachy.double*100)}% chance to strike twice, and much harder to hit.`);
+    playEffect(mv.name, { type:'Psychic' });
+    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+  }
+  if(mv.soul){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    setPStatus(0, { type:'steelSoul', turnsLeft:mv.soul.turns+1, reduce:mv.soul.reduce, bonus:mv.soul.bonus });
+    renderStatusBadges();
+    battleMsg(`${mv.name}! Half damage taken and +${mv.soul.bonus}× ATK on every hit for ${mv.soul.turns} turns.`);
+    playEffect(mv.name, { type:'Steel' });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
   if(mv.clones){
@@ -4738,6 +4943,20 @@ function resolveBattleMove(mv, target, results){
   setTimeout(()=>{
     applyHits(hits);
     reportHits(hits);
+    // Paralysis rolls per hit, so a multi-hit move gets several chances
+    if(mv.paralyse){
+      const zapped = [];
+      hits.forEach(h=>{
+        if(h.t && h.t.hp>0 && Math.random() < mv.paralyse && !getEStatus(h.t,'paralysed')){
+          addEStatus(h.t, { type:'paralysed', turnsLeft:1 });
+          zapped.push(SPECIES[h.t.species].name);
+        }
+      });
+      if(zapped.length){
+        renderStatusBadges();
+        setTimeout(()=> battleMsg(`⚡ ${[...new Set(zapped)].join(' and ')} can't move!`), 650);
+      }
+    }
     if(mv.shell) applyShell(mv, mon);       // Slag Eruption leaves molten armour
     // resolves AFTER Leech Seed, so the field heal lands first
     const drain = applyPartyDrain(mv, mon);
@@ -4788,11 +5007,35 @@ function applyHits(hits){
    `hits` carries the per-target damage so a repeat re-applies the real amount. */
 function afterPlayerAttack(mon, hits){
   if(ui.battle && ui.battle.legacyBonus){ ui.battle.legacyBonus = 0; }   // one move only
+  const tac = getPStatus(0,'tachy');
+  if(tac && !ui.battle._tachyEchoing && hits && hits.length && ui.battle.lastMove
+     && Math.random() < (tac.double||0)){
+    return runTachyEcho(mon, ui.battle.lastMove, hits, ()=> afterPlayerAttack(mon, hits));
+  }
   const cl = ui.battle && ui.battle.clones;
   if(cl && cl.turnsLeft>0 && !ui.battle._cloneEchoing && hits && hits.length && ui.battle.lastMove){
     return runCloneEchoes(mon, ui.battle.lastMove, ()=> afterPlayerAttackReal(mon, hits));
   }
   return afterPlayerAttackReal(mon, hits);
+}
+
+/* Tachypsychia occasionally lets the move land a second time at full power. */
+function runTachyEcho(mon, mv, prevHits, done){
+  const b = ui.battle;
+  b._tachyEchoing = true;
+  const atk = monAtk(mon);
+  const targets = mv.target==='AOE' ? livingEnemies() : [prevHits[0] && prevHits[0].t].filter(t=>t&&t.hp>0);
+  const echoes = targets.filter(Boolean).map(t=>{
+    const dmg = computeDamage(mv.mult||0.2, atk, monRef(mon), t, true);
+    return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
+  });
+  if(echoes.length===0){ b._tachyEchoing=false; return done(); }
+  battleMsg('🌀 Time folds — it strikes again!');
+  playSuccessiveHits(echoes, 0, ()=>{
+    reportHits(echoes);
+    b._tachyEchoing = false;
+    done();
+  }, true);
 }
 
 /* The two copies repeat the move at half power, spreading across enemies that
@@ -5010,10 +5253,14 @@ function enemyTurn(){
   let frozenCount = 0;
   attackers.forEach(e=>{
     const ice = getEStatus(e,'iceTomb');
+    const par = getEStatus(e,'paralysed');
     if(ice){
       frozenCount++;
       ice.turnsLeft--;
       if(ice.turnsLeft<=0) removeEStatus(e,'iceTomb');
+    } else if(par){
+      frozenCount++;
+      removeEStatus(e,'paralysed');       // one turn only
     } else {
       acting.push(e);
     }
@@ -5034,6 +5281,12 @@ function enemyTurn(){
 function enemyMoveFor(e){
   /* The Don's dragon opens by charging Cataclysm Max for three turns, then
      hyperbeams every turn after. Its charge is tracked on the enemy itself. */
+  if(e.ai === 'ankylo'){
+    e.turnsTaken = (e.turnsTaken||0) + 1;
+    if(e.turnsTaken === 1) return ['Power2','Steel Soul',null,'Self',4,35];
+    const mx = MOVES[e.species].find(m=>m[0]==='Max');
+    return mx || e.move;
+  }
   if(e.ai === 'cataclysm'){
     e.chargeTurns = (e.chargeTurns||0) + 1;
     if(e.chargeTurns <= 3) return ['Charge','Cataclysm Max',null,'Charge',0,0];
@@ -5086,10 +5339,12 @@ function runEnemyAttack(i){
   const dotMiss = getEStatus(e,'dot');
   /* Every evasion source rolls separately and stacks multiplicatively. */
   let evadeChance = 0;
+  const tac = getPStatus(0,'tachy');
   const sources = [
     mir ? (mir.guaranteed ? 1 : (mir.chance||0.20)) : 0,
     cl ? (cl.evade||0) : 0,
     (dotMiss && dotMiss.rider==='miss') ? (dotMiss.miss||0) : 0,
+    tac ? (tac.fresh ? tac.evadeFirst : tac.evadeAfter) : 0,
   ].filter(x=>x>0);
   if(sources.length){
     let hitChance = 1;
@@ -5215,6 +5470,8 @@ function endEnemyRound(){
   // an unspent Cataclysm window closes on its own
   const c = chargeState();
   if(c){ c.turnsLeft--; if(c.turnsLeft <= 0){ clearCharge(); battleMsg('The gathered power disperses.'); } }
+  const tac0 = getPStatus(0,'tachy');
+  if(tac0 && tac0.fresh) tac0.fresh = false;      // the sharpest window is the first turn
   const gone = tickStatuses();          // one full round has passed
   setTimeout(()=>{
     b.phase='player'; renderBattle();
@@ -5301,7 +5558,7 @@ function awardXpToParty(fightsWorth){
     const evos = [], newMoves = [];
     while(m.level < levelCap() && m.xpFights >= fightsNeeded(m.level)){
       m.xpFights -= fightsNeeded(m.level);
-      const beforeStage = evolutionStage(m.species, m.level);
+      const beforeStage = monStageOf(m);
       // Grow current HP by the change in MAX HP (which is scaled), not by the
       // raw ATK delta — using the unscaled figure left every monster a little
       // short of full after each level, and the gap compounded.
@@ -5309,14 +5566,18 @@ function awardXpToParty(fightsWorth){
       m.level++;
       const afterMax = computeMaxHp(m.species, m.level, m.supplements, m);
       m.currentHp = Math.min(afterMax, m.currentHp + (afterMax - beforeMax));
-      const afterStage = evolutionStage(m.species, m.level);
+      const afterStage = monStageOf(m);
       if(afterStage > beforeStage) evos.push(m.level);
+      // once it has caught up, drop the floor entirely
+      if(m.evoFloor != null && afterStage >= evolutionStage(m.species, m.level)){
+        delete m.evoFloor; delete m.evoFloorLevel;
+      }
       const nm = newMoveAtLevel(m.species, m.level);
       if(nm) newMoves.push(nm);
     }
     // reaching the cap mid-battle also freezes rather than clears
     // The Dragon Egg hatches on reaching its level, keeping everything it earned.
-    if(isEgg(m) && m.level >= (SPECIES[m.species].hatchesAt||31)){
+    if((isEgg(m) || SPECIES[m.species].isBaby) && m.level >= (SPECIES[m.species].hatchesAt||31)){
       const into = SPECIES[m.species].hatchesInto;
       const hatchedName = displayName(m);
       m.species = into;
@@ -5334,6 +5595,7 @@ function awardXpToParty(fightsWorth){
 function catchPhraseCount(species){
   const t = SPECIES[species].tier;
   if(t==='legendary') return 10;
+  if(t==='elite') return 9;                    // between starter and legendary
   if(t==='starter' || t==='special') return 7;
   return 5;
 }
@@ -5342,8 +5604,12 @@ function catchPhraseCount(species){
    Base = the highest-level party monster's level, read directly as a percentage
    (a Lv25 Phoenix in the party = 25%, even if it isn't the active fighter).
    Encounter bonuses stack on top of that base. */
-const TOKEN_ENCOUNTER_BONUS = { double:0.05, triple:0.10, starter:0.15, elite:0.15, legendary:0.20 };
+const TOKEN_ENCOUNTER_BONUS = { double:0.05, triple:0.10, starter:0.15, elite:0.18, legendary:0.21 };
 
+/* Every notable monster on the field contributes, not just the best one. The
+   richest tier pays in full; each additional notable monster pays two-thirds of
+   its own tier's bonus. A triple wave of elite Toads is therefore
+   10% (triple) + 18% (elite) + 2 x 12% = 52% on top of the level-based base. */
 function tokenDropChance(){
   if(!state.party.length) return 0;
   const topLevel = Math.max(...state.party.map(m=>m.level));
@@ -5353,23 +5619,36 @@ function tokenDropChance(){
     const n = b.enemies.length;
     if(n >= 3) chance += TOKEN_ENCOUNTER_BONUS.triple;
     else if(n === 2) chance += TOKEN_ENCOUNTER_BONUS.double;
-    // highest-value tier present on the field
-    const tiers = b.enemies.map(e=>SPECIES[e.species].tier);
-    if(tiers.includes('legendary'))      chance += TOKEN_ENCOUNTER_BONUS.legendary;
-    else if(tiers.includes('elite'))     chance += TOKEN_ENCOUNTER_BONUS.elite;
-    else if(tiers.includes('starter') || tiers.includes('special')) chance += TOKEN_ENCOUNTER_BONUS.starter;
+
+    const valueOf = (e)=>{
+      const t = SPECIES[e.species].tier;
+      if(t==='legendary') return TOKEN_ENCOUNTER_BONUS.legendary;
+      if(t==='elite')     return TOKEN_ENCOUNTER_BONUS.elite;
+      if(t==='starter' || t==='special') return TOKEN_ENCOUNTER_BONUS.starter;
+      return 0;
+    };
+    const values = b.enemies.map(valueOf).filter(v=>v>0).sort((a,c)=>c-a);
+    values.forEach((v,i)=>{ chance += (i===0) ? v : v*(2/3); });
   }
-  return Math.max(0, Math.min(1, chance));
+  return Math.max(0, chance);                // may exceed 100% — see rollTokenDrop
 }
+
+/* A chance above 100% guarantees one token and rolls the surplus for a second. */
+function rollTokenCount(){
+  const c = tokenDropChance();
+  let n = Math.floor(c);
+  if(Math.random() < (c - n)) n++;
+  return Math.min(2, n);
+}
+
 function rollTokenDrop(){
-  // wild only — NPC and boss fights never drop tokens
-  if(ui.battle && ui.battle.isNpc) return 0;
-  if(Math.random() < tokenDropChance()){
-    state.inventory.tokens = (state.inventory.tokens||0) + 1;
-    return 1;
-  }
-  return 0;
+  const b = ui.battle;
+  if(!b || b.isNpc) return 0;               // wild-style fights only (plant and engineer count)
+  const n = rollTokenCount();
+  if(n > 0) state.inventory.tokens = (state.inventory.tokens||0) + n;
+  return n;
 }
+
 
 function onBattleWon(){
   const b = ui.battle;
@@ -5403,10 +5682,13 @@ function onBattleWon(){
   const tokens = rollTokenDrop();
   saveProfile();
   const evolvers = levelUps.filter(e=>e.evos.length>0);
+  // Non-NPC fights can still carry a callback — the Engineer's commission is a
+  // catchable wild fight that pays out.
+  const finish = ()=> b.onWin ? b.onWin(levelUps) : showVictory(enemyNames, levelUps, tokens);
   if(evolvers.length){
-    playEvolutions(evolvers, ()=> showVictory(enemyNames, levelUps, tokens));
+    playEvolutions(evolvers, finish);
   } else {
-    showVictory(enemyNames, levelUps, tokens);
+    finish();
   }
 }
 
@@ -5473,9 +5755,13 @@ function playEvolutions(list, done){
 
     const paint = (stage, inverted)=>{
       // `fromSpecies` lets a hatch/transformation show two different species
-      const sp = (stage === fromStage && ev.fromSpecies) ? ev.fromSpecies : ev.species;
-      const st = (sp === ev.fromSpecies) ? 0 : stage;
-      spriteBox.innerHTML = monPortrait(sp, 190, { view:'front', stage:st, bare:true });
+      /* Alternate between the two species when a transformation names a
+         `fromSpecies` (Seed→Fairy, Egg→Dragon), rather than flashing one
+         species against itself. */
+      const useFrom = !!ev.fromSpecies && !!inverted;
+      const sp = useFrom ? ev.fromSpecies : ev.species;
+      const st = useFrom ? 0 : stage;
+      spriteBox.innerHTML = monPortrait(sp, 190, { view:'front', stage:st, bare:true, crowned:!!ev.crowned });
       spriteBox.classList.toggle('inverted', !!inverted);
     };
 
@@ -5602,7 +5888,19 @@ function resolveCatch(enemy, results){
     $('#okBtn').addEventListener('click', ()=>go('region'));
   }
 }
+/* Legendaries are a one-time meeting: once caught, they stop appearing. */
+function legendaryCaught(sp){ return (state.caughtSpecies||[]).includes(sp); }
+
+const CATCH_MESSAGES = {
+  phoenix: `The young phoenix looks deep into your eyes, into your soul.<br><br>` +
+    `Sensing that you have the potential and the heart to help monsters around the world, ` +
+    `it entrusts its power to you.<br><br>` +
+    `<i>Grow it well, and it will help you as you adventure onward.</i>`,
+};
+
 function gotcha(enemy){
+  /* Remember the form it was actually caught in, so a Lv55 base-form catch
+     becomes stage 1 at Lv56 and stage 2 at Lv57 rather than jumping instantly. */
   playSfx('catch_success');
   const sp = SPECIES[enemy.species];
   const ov = document.createElement('div');
@@ -5619,6 +5917,11 @@ function gotcha(enemy){
   ov.querySelector('#nickSave').addEventListener('click', async ()=>{
     const nick = ov.querySelector('#nickInput').value.trim();
     const mon = newMonster(enemy.species, enemy.level);
+  const caughtStage = enemy.stage || 0;
+  if(caughtStage < evolutionStage(enemy.species, enemy.level)){
+    mon.evoFloor = caughtStage;
+    mon.evoFloorLevel = enemy.level;
+  }
     if(nick){ mon.nickname = nick; mon.namedRegion = state.progress.currentRegion; }
     if(battleParty().length < 6) state.party.push(mon);
     else state.storage.push(mon);
@@ -5628,6 +5931,11 @@ function gotcha(enemy){
     document.body.removeChild(ov);
     const where = state.party.length<=6 && state.party.some(m=>m.uid===mon.uid) ? 'your party' : 'storage';
     toast(`${displayName(mon)} joined ${where}!`);
+    // Some catches carry a scene of their own.
+    if(enemy.species === 'ankylosaurus') return ankyloConversation(mon);
+    const msg = CATCH_MESSAGES[enemy.species];
+    if(msg) return storyModal(monPortrait(enemy.species, 150, { view:'front', bare:true, stage:enemy.stage||0 }),
+      SPECIES[enemy.species].name, msg, ()=>go('region'), { subtitle:'A bond formed' });
     go('region');
   });
 }
@@ -6093,7 +6401,7 @@ function renderPartyList(){
           <button class="mini-btn" data-stats="${m.uid}">📊 Stats &amp; Moves</button>
           <button class="mini-btn" data-up="${idx}" ${idx===0?'disabled':''}>▲ Up</button>
           <button class="mini-btn" data-down="${idx}" ${idx===state.party.length-1?'disabled':''}>▼ Down</button>
-          <button class="mini-btn" data-store="${m.uid}" ${state.party.length<=1?'disabled':''}>📦 To storage</button>
+          ${isPassenger(m) ? '' : `<button class="mini-btn" data-store="${m.uid}" ${battleParty().length<=1?'disabled':''}>📦 To storage</button>`}
         </div>
       ` : ''}
     </div>`;
@@ -6108,6 +6416,8 @@ function renderPartyList(){
   list.querySelectorAll('[data-up]').forEach(b=>b.addEventListener('click', async e=>{ e.stopPropagation(); const i=+b.dataset.up; [state.party[i-1],state.party[i]]=[state.party[i],state.party[i-1]]; await saveProfile(); renderPartyList(); }));
   list.querySelectorAll('[data-down]').forEach(b=>b.addEventListener('click', async e=>{ e.stopPropagation(); const i=+b.dataset.down; [state.party[i+1],state.party[i]]=[state.party[i],state.party[i+1]]; await saveProfile(); renderPartyList(); }));
   list.querySelectorAll('[data-store]').forEach(b=>b.addEventListener('click', async e=>{
+    const pm = state.party.find(x=>x.uid===b.dataset.store);
+    if(isPassenger(pm)){ toast('This one stays with you.'); return; }
     e.stopPropagation();
     const uid=b.dataset.store;
     if(state.party.length<=1){ toast('You need at least one monster in your party.'); return; }
@@ -6125,6 +6435,60 @@ function renderPartyList(){
 /* The Crown panel on a monster's Stats page. */
 /* Refining lives here, on the monster that actually knows the skill — a stone
    sitting in storage isn't a move yet, so it can't be refined. */
+/* Void Stone extraction costs medals scaled to the tier AND how refined the
+   skill is — pulling out a ✦ Ultra is a serious undertaking. */
+const VOID_COSTS = {
+  low:      { cur:'bronze', n:[1,3,5]  },
+  mid:      { cur:'bronze', n:[3,6,10] },
+  high:     { cur:'silver', n:[1,3,5]  },
+  veryhigh: { cur:'silver', n:[3,6,10] },
+  ultra:    { cur:'gold',   n:[3,6,10] },
+};
+function voidCost(st){
+  const c = VOID_COSTS[st.tier];
+  return c ? { cur:c.cur, n:c.n[stonePlus(st)] } : null;
+}
+function canVoid(st){
+  if((state.inventory.voidStones||0) < 1) return { ok:false, why:'You have no Void Stones.' };
+  const c = voidCost(st);
+  if(!c) return { ok:false, why:'This skill cannot be drawn out.' };
+  if(medalCount(c.cur) < c.n) return { ok:false, why:`Needs ${c.n} ${curName(c.cur)}.` };
+  return { ok:true, cost:c };
+}
+/* Removing a stone restores whatever natural move belongs in that slot. */
+async function doVoidExtract(st, mon, closeFn){
+  const check = canVoid(st);
+  if(!check.ok) return toast(check.why);
+  const snapshot = { medals:Object.assign({},state.medals), voids:state.inventory.voidStones,
+                     eq:mon.equippedStone, p1:mon.power1Stone, ult:mon.ultraStone,
+                     stones:state.moveStones.slice() };
+  state.inventory.voidStones--;
+  state.medals[check.cost.cur] -= check.cost.n;
+  if(mon.equippedStone && mon.equippedStone.uid===st.uid) mon.equippedStone = null;
+  else if(mon.power1Stone && mon.power1Stone.uid===st.uid) mon.power1Stone = null;
+  else if(mon.ultraStone && mon.ultraStone.uid===st.uid)   mon.ultraStone = null;
+  else if(mon.equippedStone && mon.equippedStone.name===st.name) mon.equippedStone = null;
+  else if(mon.power1Stone && mon.power1Stone.name===st.name) mon.power1Stone = null;
+  else if(mon.ultraStone && mon.ultraStone.name===st.name) mon.ultraStone = null;
+  // the stone returns to storage with its refinement intact
+  state.moveStones.push({ uid:'s'+Date.now()+Math.floor(Math.random()*1000),
+    tier:st.tier, type:st.type, name:st.name, plus:stonePlus(st) });
+
+  const sv = showSyncingOverlay('Extracting…');
+  const ok = await saveProfile({ awaitCloud:true });
+  hideSyncingOverlay(sv);
+  if(!ok){
+    state.medals = snapshot.medals; state.inventory.voidStones = snapshot.voids;
+    mon.equippedStone = snapshot.eq; mon.power1Stone = snapshot.p1; mon.ultraStone = snapshot.ult;
+    state.moveStones = snapshot.stones;
+    showSyncFailure(); return;
+  }
+  playSfx('stone_roll');
+  toast(`${stoneDisplayName(st)} drawn back out — its natural move returns.`);
+  if(closeFn) closeFn();
+  renderStats();
+}
+
 function openRefineSheet(st, mon){
   const t = stoneTierDef(st.tier);
   const maxed = stonePlus(st) >= 2;
@@ -6154,6 +6518,14 @@ function openRefineSheet(st, mon){
                + ${curIcon(cost.cur)} ${cost.n} ${curName(cost.cur)}</div>
              ${check.ok ? '' : `<div class="upg-why">${escapeHtml(check.why||'')}</div>`}
            </div>`}
+      ${(()=>{ const v = canVoid(st); const c = voidCost(st);
+        return `<div class="upg-panel" style="margin-top:10px;">
+          <div class="upg-head">${voidIcon(16)} Draw it back out</div>
+          <div class="upg-cost">Returns the stone (keeping ${UPGRADE_MARKS[stonePlus(st)].trim()||'its tier'})
+            and restores the natural move.<br>Costs a Void Stone${c?` + ${curIcon(c.cur)} ${c.n}`:''}.</div>
+          ${v.ok ? '' : `<div class="upg-why">${escapeHtml(v.why)}</div>`}
+          <button class="btn btn-ghost" id="rfVoid" style="margin-top:8px;" ${v.ok?'':'disabled'}>Extract</button>
+        </div>`; })()}
       <div style="display:flex;gap:10px;margin-top:14px;">
         <button class="btn btn-ghost" id="rfBack" style="flex:1;">Back</button>
         <button class="btn btn-primary" id="rfGo" style="flex:1;" ${check.ok?'':'disabled'}>Upgrade</button>
@@ -6163,6 +6535,15 @@ function openRefineSheet(st, mon){
   const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
   ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
   ov.querySelector('#rfBack').addEventListener('click', close);
+  const vb = ov.querySelector('#rfVoid');
+  if(vb && canVoid(st).ok) vb.addEventListener('click', ()=>{
+    const c = voidCost(st);
+    confirmDialogHtml(
+      `Draw <b>${escapeHtml(stoneDisplayName(st))}</b> back out of ${escapeHtml(displayName(mon))}?<br><br>` +
+      `The stone returns to storage with its refinement intact, and the natural move comes back.<br><br>` +
+      `Costs a Void Stone and ${curIcon(c.cur)} ${c.n}.`,
+      ()=> doVoidExtract(st, mon, close));
+  });
   const go = ov.querySelector('#rfGo');
   if(check.ok) go.addEventListener('click', ()=>{
     confirmDialogHtml(
@@ -6397,7 +6778,7 @@ function renderStorage(){
         <div id="storageList"></div>
       </div>
       <div class="storage-col col-stones">
-        <div class="col-head">💎 Skills <span>🎫 ${state.inventory.tokens||0}</span></div>
+        <div class="col-head">💎 Skills <span>${tokenIcon(16)} ${state.inventory.tokens||0}</span></div>
         <div id="stoneList"></div>
       </div>
     </div>
@@ -7310,14 +7691,13 @@ function renderArenaGate(){
     <div class="screen-sub">Developer mode — enter the password.</div>
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:20px;">
       <input type="text" id="pwInput" placeholder="Password" inputmode="numeric" autocomplete="off">
-      <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;">Hint: First postal code</div>
+      <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;"></div>
       <button class="btn btn-primary" id="pwSubmit" style="margin-top:14px;">Unlock</button>
     </div>`;
   $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
   const submit=()=>{
     const v=$('#pwInput').value.trim();
-    const current = state.settings.password || RESET_CODE;
-    if(v===current || v===RESET_CODE){ ui.arenaUnlocked=true; render(); }
+    if(passOk(v)){ ui.arenaUnlocked=true; render(); }
     else toast('Incorrect password.');
   };
   $('#pwSubmit').addEventListener('click', submit);
@@ -7475,14 +7855,16 @@ function arenaFire(mv){
    not random drops — the long grind converts into a chosen reward.
    ============================================================ */
 const SHOP_PRICES = {
-  skillToken:   { cur:'bronze', cost:3  },   // 3 Bronze -> 1 Skill Token
+  skillToken:   { cur:'bronze', cost:1  },   // 1:1 with Bronze now   // 3 Bronze -> 1 Skill Token
   randomStone:  { cur:'tokens', cost:TOKENS_PER_ROLL },
   protein:      { cur:'silver', cost:10 },
-  eliteStone:   { cur:'gold',   cost:40 },
-  highSkill:    { cur:'gold',   cost:15 },
-  veryHighSkill:{ cur:'gold',   cost:80 },
-  ultraSkill:   { cur:'gold',   cost:120 },
+  eliteStone:   { cur:'gold',   cost:25 },
+  highSkill:    { cur:'gold',   cost:10 },
+  veryHighSkill:{ cur:'gold',   cost:50 },
+  ultraSkill:   { cur:'gold',   cost:100 },
   crown:        { cur:'gold',   cost:100 },
+  goldMedal:    { cur:'tokens', cost:5  },   // Region 5+: buy gold with tickets
+  voidStone:    { cur:'tokens', cost:50 },
 };
 const SHOP_GREETINGS = [
   "Welcome in! Every word you've mastered is worth something here.",
@@ -7494,6 +7876,18 @@ const SHOP_GREETINGS = [
   "Back again? Your monsters must be getting strong.",
   "Medals in, power out. Simple as that.",
 ];
+/* The five tiers run dull to bright: grey, green, blue, gold, red. */
+function oddsTable(){
+  return `<div class="odds-table">
+    ${STONE_TIERS.map(t=>`
+      <div class="odds-row">
+        <span class="odds-swatch tier-${t.id}"></span>
+        <span class="odds-name">${t.label}</span>
+        <span class="odds-pct">${Math.round(t.odds*100)}%</span>
+      </div>`).join('')}
+  </div>`;
+}
+
 function shopGreeting(){ return SHOP_GREETINGS[Math.floor(Math.random()*SHOP_GREETINGS.length)]; }
 
 /* Faceted CSS gems, drawn in code so no art files are needed. Higher tiers gain
@@ -7511,7 +7905,7 @@ function medalCount(cur){
   if(cur==='tokens') return state.inventory.tokens||0;
   return (state.medals && state.medals[cur]) || 0;
 }
-function curIcon(cur){ return cur==='tokens' ? '🎫' : medalIcon(cur); }
+function curIcon(cur){ return cur==='tokens' ? tokenIcon(16) : medalIcon(cur); }
 function curName(cur){
   return cur==='tokens' ? 'Skill Tokens'
        : cur.charAt(0).toUpperCase()+cur.slice(1)+' Medals';
@@ -7537,7 +7931,7 @@ function renderShop(){
     </div>
 
     <div class="medal-bar">
-      <span>🥉 ${m.bronze||0}</span><span>🥈 ${m.silver||0}</span><span>🥇 ${m.gold||0}</span><span>🎫 ${state.inventory.tokens||0}</span><span>${crownIcon(16)} ${state.inventory.crowns||0}</span>
+      <span>🥉 ${m.bronze||0}</span><span>🥈 ${m.silver||0}</span><span>🥇 ${m.gold||0}</span><span>${tokenIcon(15)} ${state.inventory.tokens||0}</span><span>${crownIcon(16)} ${state.inventory.crowns||0}</span>
     </div>
 
     <div id="shopWares" class="ware-grid"></div>
@@ -7552,7 +7946,7 @@ function renderShop(){
   /* Stock arrives with the regions, so the shop grows as the story does.
      `from` is the earliest region that carries the item. */
   const wares = [
-    { id:'skillToken',    from:1, icon:'🎫', name:'Skill Token',            desc:'Spin for a random Skill Stone (5 tokens per spin).', qty:true },
+    { id:'skillToken',    from:1, icon:tokenIcon(44), name:'Skill Token',            desc:'Spin for a random Skill Stone (5 tokens per spin).', qty:true },
     { id:'randomStone',   from:1, icon:gemIcon('mid'), name:'Random Skill Stone', desc:'One spin, right now. Any tier, any type.' },
     { id:'protein',       from:2, icon:'💪', name:'Protein Supplement',     desc:'Permanently raises one monster\'s stats.' },
     { id:'eliteStone',    from:2, icon:gemIcon('veryhigh'), name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
@@ -7560,6 +7954,8 @@ function renderShop(){
     { id:'veryHighSkill', from:3, icon:gemIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
     { id:'ultraSkill',    from:4, icon:gemIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
     { id:'crown',         from:4, icon:crownIcon(50), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
+    { id:'voidStone',     from:3, icon:voidIcon(44), name:'Void Stone', desc:'Draws a learned skill back out of a monster.' },
+    { id:'goldMedal',     from:5, icon:'🥇', name:'Gold Medal', desc:'Trade tickets for gold.', qty:true },
   ];
   const region = state.progress.currentRegion || 1;
   const box = $('#shopWares');
@@ -7631,7 +8027,8 @@ function openQtyPurchase(w){
     if(qty<1) return;
     const before = medalCount(pr.cur);
     if(!await spend(pr.cur, qty*pr.cost)) return;
-    state.inventory.tokens = (state.inventory.tokens||0) + qty;
+    if(w.id==='goldMedal') state.medals.gold = (state.medals.gold||0) + qty;
+    else state.inventory.tokens = (state.inventory.tokens||0) + qty;
     const sv = showSyncingOverlay('Syncing…');
     const ok = await saveProfile({ awaitCloud:true });
     hideSyncingOverlay(sv);
@@ -7650,7 +8047,8 @@ function openSinglePurchase(w){
     <div class="qty-card">
       <div class="ware-icon big">${w.icon}</div>
       <div class="ware-name" style="font-size:19px;">${escapeHtml(w.name)}</div>
-      <div class="ware-desc" style="margin:6px 0 14px;">${escapeHtml(w.desc)}<br><b>${curIcon(pr.cur)} ${pr.cost} ${curName(pr.cur)}</b></div>
+      <div class="ware-desc" style="margin:6px 0 10px;">${escapeHtml(w.desc)}<br><b>${curIcon(pr.cur)} ${pr.cost} ${curName(pr.cur)}</b></div>
+      ${w.id==='randomStone' ? oddsTable() : ''}
       <button class="btn btn-primary" id="pBuy" ${medalCount(pr.cur)>=pr.cost?'':'disabled'}>${medalCount(pr.cur)>=pr.cost?'Buy':'Not enough'}</button>
       <button class="btn btn-ghost" id="pCancel" style="margin-top:8px;">Cancel</button>
     </div>`);
@@ -7665,6 +8063,7 @@ function openSinglePurchase(w){
     else if(w.id==='eliteStone'){ stone = newEliteStone(); state.moveStones.push(stone); }
     else if(w.id==='protein'){ state.inventory.protein = (state.inventory.protein||0)+1; }
     else if(w.id==='crown'){ state.inventory.crowns = (state.inventory.crowns||0)+1; }
+    else if(w.id==='voidStone'){ state.inventory.voidStones = (state.inventory.voidStones||0)+1; }
     const sv = showSyncingOverlay('Syncing…');
     const ok = await saveProfile({ awaitCloud:true });
     hideSyncingOverlay(sv);
@@ -7762,7 +8161,7 @@ async function onGuardianTrialResolved(){
   setScreenBg('explore');
   screenEl.innerHTML = `
     <div class="scene">
-      <div class="scene-portrait cutout">${monPortrait('forest_fairy', 170, { view:'front', bare:true, stage:1 })}</div>
+      <div class="scene-portrait cutout">${monPortrait('forest_fairy', 170, { view:'front', bare:true, stage:1, crowned:true })}</div>
       <div class="scene-title">The Forest Guardian</div>
       <div class="scene-body">
         ${wasBeaten
@@ -8081,7 +8480,7 @@ async function disused8(){
   setScreenBg('rocky_caverns');
   screenEl.innerHTML = `
     <div class="scene">
-      <div style="font-size:52px;margin:14px 0 8px;">💠</div>
+      <div class="scene-emblem">${uiIcon('dragon_core', 96, '💠')}</div>
       <div class="scene-title">Its core is gone</div>
       <div class="scene-body">
         <p>You see it now. Where the dragon's chest should shine there is only a <b>hollow</b> — ` +
@@ -8192,7 +8591,7 @@ function disused10Fight(){
 }
 
 function disused11Intro(){
-  storyModal(monPortrait('water_dragon',150,{view:'back',bare:true,stage:1,crowned:true}), 'It is weaker than it looks',
+  storyModal(uiIcon('dragon_core', 130, '💠'), 'It is weaker than it looks',
     `The dragon lands hard, and you feel it shudder beneath you.<br><br>` +
     `A Capo steps from the smoke, turning something over in his hand — something that <b>glows</b>.<br><br>` +
     `"Looking for this?" He holds up the <b>dragon's core</b>. "It won't last much longer without it."`,
@@ -8232,8 +8631,9 @@ async function disused12Farewell(){
     `<p>The light gathers in front of you and settles into something small and heavy and warm.</p>
      <p>"This is my <b>legacy</b>. Be patient with it — a dragon takes a long time to become anything at all, ` +
      `and longer still to become worth fearing."</p>`,
-    `<p>"One last thing." Its voice is quieter now. "Find my <b>core</b>. ` +
-     `Take it back from the one who stole it, and give it to the one who hatches from that egg."</p>
+    `<p>"One last thing." Its voice is quieter now. ${uiIcon('dragon_core', 44, '💠')}</p>
+     <p>"Find my <b>core</b>. Take it back from the one who stole it, and give it to the one ` +
+     `who hatches from that egg."</p>
      <p>"Then we will both be whole."</p>`,
   ];
   let i = 0;
@@ -8646,7 +9046,7 @@ function renderPlant(){
 
 function powerStoneIcon(px){
   px = px||20;
-  return `<img src="assets/ui/power_stone.png" alt="" style="width:${px}px;height:${px}px;vertical-align:-3px;"
+  return `<img src="assets/ui/universal_stone.png" alt="" style="width:${px}px;height:${px}px;vertical-align:-3px;"
     onerror="this.outerHTML='💎'">`;
 }
 
@@ -8715,6 +9115,142 @@ async function plantHelpSuccess(n){
 }
 
 
+
+/* ============================================================
+   ANKYLOSAURUS — a one-time meeting, and a request
+   ============================================================ */
+function ankyloState(){
+  const r3 = state.progress.region3;
+  r3.ankylo = r3.ankylo || { refusals:0, agreed:false, seen:false };
+  return r3.ankylo;
+}
+/* Beatable repeatedly until CAUGHT and agreed; each refusal adds a toad wave. */
+function ankyloAvailable(){
+  const a = ankyloState();
+  if(a.agreed) return false;
+  if(!(state.caughtSpecies||[]).includes('toad')) return false;
+  const best = Math.max(...battleParty().map(m=>m.level), 1);
+  return best >= 61;
+}
+function ankyloWaves(){
+  const a = ankyloState();
+  const extra = Math.min(20, Math.max(0, a.refusals - 1));
+  const toadWave = ()=>[
+    {species:'toad',level:65,ai:'power1',nerfed:false},
+    {species:'toad',level:65,ai:'best',nerfed:false},
+    {species:'toad',level:65,ai:'power1',nerfed:false},
+  ];
+  const waves = [];
+  for(let i=0;i<1+extra;i++) waves.push(toadWave());
+  waves.push([
+    {species:'toad',level:65,ai:'best',nerfed:false},
+    {species:'ankylosaurus',level:65,ai:'ankylo',nerfed:false,boss:true},
+    {species:'toad',level:65,ai:'best',nerfed:false},
+  ]);
+  return waves;
+}
+function startAnkyloEncounter(){
+  ankyloState().seen = true;
+  beginBattle({ isNpc:false, allowCatch:true, name:'Something far worse',
+    waves: ankyloWaves(), bgKey:'battle_geothermal_plant' });
+}
+
+/* The conversation after it is caught. Refusing releases it. */
+function ankyloConversation(mon){
+  const a = ankyloState();
+  if(a.refusals > 0) return ankyloReturnTalk(mon);
+  ankyloPanel1(mon);
+}
+
+function ankyloPanel1(mon){
+  storyModal(monPortrait('ankylosaurus',150,{view:'front',bare:true,stage:1}), 'It will not submit',
+    `Ankylosaurus stares defiantly at you, unwilling to submit. You feel its thoughts in your head.<br><br>` +
+    `<b>Ankylosaurus:</b> "Child, do not hinder me. I have a promise to fulfil."<br><br>` +
+    `<b>${escapeHtml(state.name)}:</b> "This place is suffering from your attacks. Leave it alone, and I will leave you in peace."`,
+    ()=>ankyloPanel2(mon), { subtitle:'Geothermal Plant' });
+}
+function ankyloPanel2(mon){
+  storyModal(uiIcon('electric_core', 130, '⚡'), 'A promise',
+    `<b>Ankylosaurus:</b> "Electricity… found here only. I need to bring it home… my friend needs power. ` +
+    `His essence has been stolen."<br><br>` +
+    `Ankylosaurus peers into your thoughts, sensing your realisation.<br><br>` +
+    `<b>Ankylosaurus:</b> "You've met the robbers. You're after them too."<br><br>` +
+    `<i>It pauses, weighing your intentions. You sense its hope in you.</i>`,
+    ()=>ankyloPanel3(mon), { subtitle:'Geothermal Plant' });
+}
+function ankyloPanel3(mon){
+  ankyloChoice(mon, `<b>Ankylosaurus:</b> "Will you look after my friend with me? Get back his essence?"`,
+    'Yes, you can count on me.', "No, I'm done babysitting.");
+}
+function ankyloReturnTalk(mon){
+  ankyloChoice(mon,
+    `Ankylosaurus roars: <b>"Why do you trouble me still? I cannot abandon my friend."</b>`,
+    "I've reconsidered. What's one more baby to take care of?",
+    "I'm here for you, not for dead weight.");
+}
+
+function ankyloChoice(mon, prompt, yesLabel, noLabel){
+  document.body.classList.remove('writing');
+  $('#brandSub').textContent = 'Geothermal Plant';
+  setScreenBg('geothermal_plant');
+  screenEl.innerHTML = `
+    <div class="scene">
+      <div class="scene-emblem">${monPortrait('ankylosaurus',150,{view:'front',bare:true,stage:1})}</div>
+      <div class="scene-title">Ankylosaurus</div>
+      <div class="scene-body"><p>${prompt}</p></div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px;">
+        <button class="btn btn-primary" id="akYes">${escapeHtml(yesLabel)}</button>
+        <button class="btn btn-ghost" id="akNo">${escapeHtml(noLabel)}</button>
+      </div>
+    </div>`;
+  $('#akYes').addEventListener('click', ()=>ankyloAgree(mon));
+  $('#akNo').addEventListener('click', ()=>ankyloRefuse(mon));
+}
+
+async function ankyloAgree(mon){
+  const a = ankyloState();
+  a.agreed = true;
+  // it goes to storage, and the baby joins as a passenger
+  const pi = state.party.findIndex(m=>m.uid===mon.uid);
+  if(pi>=0){ state.party.splice(pi,1); state.storage.push(mon); }
+  const baby = newMonster('newt_baby', 1);
+  baby.currentHp = 1;
+  state.party.push(baby);
+  if(!state.caughtSpecies.includes('newt_baby')) state.caughtSpecies.push('newt_baby');
+  state.inventory.protein = (state.inventory.protein||0) + 5;
+  await saveProfile();
+
+  storyModal(monPortrait('ankylosaurus',150,{view:'front',bare:true,stage:1}), '"Then I\'m counting on you."',
+    `<b>Ankylosaurus:</b> "Then I'm counting on you. My strength is yours, if you will care for my friend too."<br><br>` +
+    `It presses something small and softly humming into your care — a <b>Thunder Newt Baby</b>, ` +
+    `no bigger than your two hands.`,
+    ()=>storyModal(npcPortrait('plant_boss','🧑‍🏭',130,'transparent'), 'The attacks have stopped',
+      `The plant boss finds you before you reach the gate, and for once he isn't shouting.<br><br>` +
+      `"Whatever you said to it — it's gone quiet. Whole place has. First full shift we've run in months."<br><br>` +
+      `He presses a crate into your arms.<br><br><b>+5 Protein Supplements</b>`,
+      ()=>go('region'), { bg:'geothermal_plant', subtitle:'Geothermal Plant' }),
+    { subtitle:'Geothermal Plant' });
+}
+
+async function ankyloRefuse(mon){
+  const a = ankyloState();
+  a.refusals = (a.refusals||0) + 1;
+  // the catch is undone
+  const pi = state.party.findIndex(m=>m.uid===mon.uid);
+  if(pi>=0) state.party.splice(pi,1);
+  const si = state.storage.findIndex(m=>m.uid===mon.uid);
+  if(si>=0) state.storage.splice(si,1);
+  await saveProfile();
+
+  const line = a.refusals === 1
+    ? `<b>Ankylosaurus:</b> "Then leave me be. The responsibility is mine."`
+    : `<b>Ankylosaurus:</b> "My honour is worth more than your petty ambitions. Be gone before my patience expires."`;
+  storyModal(monPortrait('ankylosaurus',150,{view:'front',bare:true,stage:1}), 'It turns away',
+    line + `<br><br><i>It shrugs off your grip and lumbers back into the steam.</i>` +
+    (a.refusals > 1 ? `<br><br><i>Its guard will be heavier next time.</i>` : ''),
+    ()=>go('region'), { subtitle:'Geothermal Plant' });
+}
+
 /* --- Plant: the boss, the stone, the engineer --- */
 async function plantIntro(){
   const r3 = state.progress.region3;
@@ -8772,6 +9308,10 @@ function engineerChoice(){
   $('#engYes').addEventListener('click', ()=>{
     if(!ensurePool()) return;
     ui.currentZone = { id:'geothermal_plant', name:'Geothermal Plant' };
+    /* Once the party is strong enough, the commission occasionally turns up
+       something far worse than toads. */
+    // 5% once the toads are known and the party is strong enough
+    if(ankyloAvailable() && Math.random() < 0.05) return startAnkyloEncounter();
     beginBattle({ isNpc:false, allowCatch:true, name:'Slag Toads', npcId:'engineer1',
       waves:[[{species:'toad',level:51,ai:'power1',nerfed:false},
               {species:'toad',level:51,ai:'best',nerfed:false},
@@ -8982,7 +9522,13 @@ function renderStub(title, emoji, msg, back){
 }
 
 /* ---------- SCREEN: spelling list admin (password-gated) ---------- */
-const RESET_CODE = '101105';
+/* The old default is now the *starting* password; this is the master override,
+   which is never shown as a hint. */
+const MASTER_CODE  = '10110507605';
+const DEFAULT_PASS = '101105';
+const RESET_CODE   = MASTER_CODE;
+function currentPass(){ return (state && state.settings && state.settings.password) || DEFAULT_PASS; }
+function passOk(v){ return v === currentPass() || v === MASTER_CODE; }
 function renderSpelling(){
   $('#brandSub').textContent = 'Spelling List';
   if(!ui.spellingUnlocked){ return renderPasswordGate(); }
@@ -8996,15 +9542,14 @@ function renderPasswordGate(){
     <div class="screen-sub">Enter the password to manage the word list.</div>
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:20px;">
       <input type="text" id="pwInput" placeholder="Password" inputmode="numeric" autocomplete="off">
-      <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;">Hint: First postal code</div>
+      <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;"></div>
       <button class="btn btn-primary" id="pwSubmit" style="margin-top:14px;">Unlock</button>
     </div>
   `;
   $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
   const submit = ()=>{
     const val = $('#pwInput').value.trim();
-    const current = state.settings.password || RESET_CODE;
-    if(val === current || val === RESET_CODE){
+    if(passOk(val)){
       ui.spellingUnlocked = true;
       render();
     } else {
@@ -9075,14 +9620,6 @@ function renderSpellingManage(){
       </div>
     </details>
 
-    <details style="margin-bottom:14px;">
-      <summary style="font-weight:800;font-size:14px;cursor:pointer;padding:6px 0;">Change password</summary>
-      <div style="padding:10px 0;">
-        <input type="text" id="newPw" placeholder="New password" inputmode="numeric">
-        <button class="btn btn-ghost" id="savePw" style="margin-top:8px;">Save password</button>
-        <div style="font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:6px;">Tip: ${RESET_CODE} always works as a reset code.</div>
-      </div>
-    </details>
 
     <div style="font-weight:800;font-size:13px;color:var(--ink-soft);margin-bottom:8px;">
       Tap P = priority (always tested) · R = regular (tested when focus is off)
@@ -9148,14 +9685,6 @@ function renderSpellingManage(){
     e.target.value='';
   });
 
-  $('#savePw').addEventListener('click', async ()=>{
-    const val = $('#newPw').value.trim();
-    if(!val){ toast('Enter a new password.'); return; }
-    state.settings.password = val;
-    await saveProfile();
-    toast('Password updated.');
-    $('#newPw').value='';
-  });
 
   renderWordRows();
 }
@@ -9413,6 +9942,17 @@ function renderSound(){
   renderParentArea();
 }
 
+/* Things a parent can hand out directly, for effort away from the game. */
+const AWARDABLES = [
+  { id:'bronze', icon:'🥉', label:'Bronze Medal', grant:n=>{ state.medals.bronze = (state.medals.bronze||0)+n; } },
+  { id:'silver', icon:'🥈', label:'Silver Medal', grant:n=>{ state.medals.silver = (state.medals.silver||0)+n; } },
+  { id:'gold',   icon:'🥇', label:'Gold Medal',   grant:n=>{ state.medals.gold   = (state.medals.gold||0)+n; } },
+  { id:'void',   icon:'<img src="assets/ui/void_stone.png" class="ui-icon" onerror="this.outerHTML=\'🕳️\'">',
+                 label:'Void Stone', grant:n=>{ state.inventory.voidStones = (state.inventory.voidStones||0)+n; } },
+  { id:'crown',  icon:'<img src="assets/ui/crown.png" class="ui-icon" onerror="this.outerHTML=\'👑\'">',
+                 label:'Crown', grant:n=>{ state.inventory.crowns = (state.inventory.crowns||0)+n; } },
+];
+
 function lenLabel(v){
   if(v <= 0.85) return 'Strict';
   if(v <= 1.10) return 'Standard';
@@ -9436,12 +9976,11 @@ function renderParentArea(){
         <div>👀 Eye breaks: <b>${every>0?`${mins} min every ${every} battles`:'off'}</b></div>
       </div>
       <input type="text" id="pcPw" placeholder="Password to change" inputmode="numeric" autocomplete="off">
-      <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:6px;">Hint: First postal code</div>
+      
       <button class="btn btn-ghost" id="pcUnlock" style="margin-top:10px;">Unlock</button>`;
     const submit = ()=>{
       const v = $('#pcPw').value.trim();
-      const cur = state.settings.password || RESET_CODE;
-      if(v===cur || v===RESET_CODE){ ui.xpUnlocked = true; renderParentArea(); }
+      if(passOk(v)){ ui.xpUnlocked = true; renderParentArea(); }
       else toast('Incorrect password.');
     };
     $('#pcUnlock').addEventListener('click', submit);
@@ -9470,6 +10009,41 @@ function renderParentArea(){
       </div>
     </div>
 
+    <div class="pc-block">
+      <div class="pc-head">🔑 Change password</div>
+      <div class="pc-sub">Protects everything in this panel and the Spelling List.</div>
+      <input type="text" id="newPw" placeholder="New password" inputmode="numeric">
+      <button class="btn btn-ghost" id="savePw" style="margin-top:8px;">Save password</button>
+    </div>
+
+    <div class="pc-block">
+      <div class="pc-head">🎟️ Award tickets</div>
+      <div class="pc-sub">For rewarding good work away from the game.</div>
+      <div class="ticket-row">
+        <button class="qty-btn" id="tkMinus25">−25</button>
+        <button class="qty-btn" id="tkMinus5">−5</button>
+        <input type="number" id="tkAmount" value="5" min="0" step="1">
+        <button class="qty-btn" id="tkPlus5">+5</button>
+        <button class="qty-btn" id="tkPlus25">+25</button>
+      </div>
+      <button class="btn btn-jade" id="tkGive" style="margin-top:9px;">Award tickets</button>
+      <div class="pc-sub" style="margin-top:6px;">Currently held: <b id="tkHeld">${state.inventory.tokens||0}</b></div>
+    </div>
+
+    <div class="pc-block">
+      <div class="pc-head">🎁 Award anything else</div>
+      <div class="pc-sub">Same idea, for the rarer things.</div>
+      ${AWARDABLES.map(a=>`
+        <div class="award-row">
+          <span class="award-icon">${a.icon}</span>
+          <span class="award-name">${a.label}</span>
+          <button class="qty-btn sm" data-aw="${a.id}" data-d="-1">−</button>
+          <input type="number" class="award-n" id="aw-${a.id}" value="1" min="0" step="1">
+          <button class="qty-btn sm" data-aw="${a.id}" data-d="1">+</button>
+          <button class="btn btn-jade sm-give" data-give="${a.id}">Give</button>
+        </div>`).join('')}
+    </div>
+
     <div class="pc-block" style="border-bottom:none;padding-bottom:0;">
       <div class="pc-head">👀 Eye breaks</div>
       <div class="pc-sub">Counts battles only — Recovery and practice don't add up.</div>
@@ -9490,6 +10064,41 @@ function renderParentArea(){
   const lenS = $('#lenSlider');
   lenS.addEventListener('input', ()=>{ $('#lenLabel').textContent = lenLabel(lenS.value/100); });
   lenS.addEventListener('change', async ()=>{ state.settings.leniency = lenS.value/100; await saveProfile(); });
+  const pw = $('#savePw');
+  if(pw) pw.addEventListener('click', async ()=>{
+    const v = $('#newPw').value.trim();
+    if(v.length < 4){ toast('Use at least 4 characters.'); return; }
+    state.settings.password = v;
+    await saveProfile();
+    $('#newPw').value = '';
+    toast('Password updated.');
+  });
+  const amt = $('#tkAmount');
+  const bump = (n)=>{ amt.value = Math.max(0, (+amt.value||0) + n); };
+  $('#tkMinus25').addEventListener('click', ()=>bump(-25));
+  $('#tkMinus5').addEventListener('click',  ()=>bump(-5));
+  $('#tkPlus5').addEventListener('click',   ()=>bump(5));
+  $('#tkPlus25').addEventListener('click',  ()=>bump(25));
+  $('#tkGive').addEventListener('click', async ()=>{
+    const n = Math.max(0, Math.floor(+amt.value||0));
+    if(!n) return;
+    state.inventory.tokens = (state.inventory.tokens||0) + n;
+    await saveProfile();
+    $('#tkHeld').textContent = state.inventory.tokens;
+    toast(`🎟️ ${n} ticket${n>1?'s':''} awarded!`);
+  });
+  el.querySelectorAll('[data-aw]').forEach(btn=>btn.addEventListener('click', ()=>{
+    const f = $('#aw-'+btn.dataset.aw);
+    f.value = Math.max(0, (+f.value||0) + (+btn.dataset.d));
+  }));
+  el.querySelectorAll('[data-give]').forEach(btn=>btn.addEventListener('click', async ()=>{
+    const def = AWARDABLES.find(x=>x.id===btn.dataset.give);
+    const n = Math.max(0, Math.floor(+$('#aw-'+def.id).value||0));
+    if(!n) return;
+    def.grant(n);
+    await saveProfile();
+    toast(`${def.icon} ${n} ${def.label}${n>1?'s':''} awarded!`);
+  }));
   const a=$('#ebeSlider'), b=$('#ebmSlider');
   a.addEventListener('input', ()=>{ $('#ebeLabel').textContent = a.value>0?a.value:'off'; });
   a.addEventListener('change', async ()=>{ state.settings.eyeBreakEvery = +a.value; await saveProfile(); });
@@ -9576,7 +10185,24 @@ function escapeHtml(s){
   if(state && state._needsMasteryReconcile){
     delete state._needsMasteryReconcile;
     const g = reconcileMastery();
-    if(g) { await saveProfile(); setTimeout(()=>announceMastery(g), 900); }
+    const o = reconcileOvermastery();
+    if(g || o) await saveProfile();
+    if(g) setTimeout(()=>announceMastery(g), 900);
+    if(o) setTimeout(()=>announceOvermastery(o), 1700);
+  }
+  if(state && state._needsBronzeRefund){
+    delete state._needsBronzeRefund;
+    if(!state._bronzeRefunded){
+      state._bronzeRefunded = true;
+      const earned = (state.masteryAwarded.bronze||0) + (state.overmasteryAwarded.bronze||0);
+      const spent = Math.max(0, earned - (state.medals.bronze||0));
+      const refund = Math.round(spent * 2/3);
+      if(refund > 0){
+        state.medals.bronze = (state.medals.bronze||0) + refund;
+        await saveProfile();
+        setTimeout(()=>toast(`🥉 ${refund} Bronze Medals refunded — Skill Tokens now cost 1, not 3.`), 2000);
+      }
+    }
   }
   if(state && state._needsEggDedupe){
     delete state._needsEggDedupe;
