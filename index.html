@@ -957,6 +957,7 @@
   body.has-bg .hp-card .pc-name,
   body.has-bg .hp-card div{ text-shadow:0 1px 2px rgba(255,255,255,0.9); }
   .col-empty{font-size:11px;color:var(--ink-soft);font-weight:600;font-style:italic;text-align:center;padding:14px 4px;}
+  .recycle-all{width:100%;font-size:12px;padding:9px;margin-bottom:9px;}
   .stone-group{margin-bottom:10px;}
   .stone-group-head{
     font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
@@ -5007,7 +5008,12 @@ function resolveBattleMove(mv, target, results){
       setTimeout(()=> battleMsg(`🌿 ${displayName(drain.target)} drinks in ${drain.healed} HP.`), 600);
     }
     applySelfDamage(mv, mon);
-    if(mon.currentHp<=0){ setTimeout(()=>onMonFainted(), 900); return; }
+    if(mon.currentHp<=0){
+      /* Recoil can knock the attacker out on the same turn the wave falls.
+         Clearing the wave has to win, or the fight stalls after the swap. */
+      if(livingEnemies().length===0){ setTimeout(()=>onWaveCleared(), 900); return; }
+      setTimeout(()=>onMonFainted(), 900); return;
+    }
     afterPlayerAttack(mon, hits);
   }, 330);
 }
@@ -5215,7 +5221,12 @@ function resolveMultiHit(mv, mon, correct){
     reportHits(hits);
     applySelfDamage(mv, mon);
     battleMsg(`${mv.name} hit ${hits.length} time${hits.length===1?'':'s'}!`);
-    if(mon.currentHp<=0){ setTimeout(()=>onMonFainted(), 900); return; }
+    if(mon.currentHp<=0){
+      /* Recoil can knock the attacker out on the same turn the wave falls.
+         Clearing the wave has to win, or the fight stalls after the swap. */
+      if(livingEnemies().length===0){ setTimeout(()=>onWaveCleared(), 900); return; }
+      setTimeout(()=>onMonFainted(), 900); return;
+    }
     afterPlayerAttack(mon, hits);
   }, true), 330);
 }
@@ -5526,7 +5537,12 @@ function onMonFainted(){
   if(alive.length===0){ return onPlayerDefeated(); }
   battleMsg(`${displayName(activeMon())} fainted!`);
   const options=state.party.map((m,i)=>({m,i})).filter(o=>o.m.currentHp>0 && !isPassenger(o.m));
-  monsterChooser('Send out…', options, (i)=>{ ui.battle.activeIndex=i; ui.battle.switchedThisTurn=false; ui.battle.phase='player'; renderBattle(); battleMsg('Choose a move.'); }, false);
+  monsterChooser('Send out…', options, (i)=>{
+    ui.battle.activeIndex=i; ui.battle.switchedThisTurn=false; ui.battle.phase='player';
+    renderBattle();
+    if(livingEnemies().length===0) return setTimeout(()=>onWaveCleared(), 500);
+    battleMsg('Choose a move.');
+  }, false);
 }
 function onPlayerDefeated(){
   if(ui.battle && ui.battle.guardianTrial) return onGuardianTrialResolved();
@@ -6689,7 +6705,7 @@ function renderStats(){
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Party</button>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-      ${monPortrait(m.species,72,{stage:monStage(m)})}
+      ${monPortrait(m.species,72,{stage:monStage(m),crowned:isCrowned(m)})}
       <div style="flex:1;">
         <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;">${escapeHtml(displayName(m))}</div>
         <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-bottom:4px;">${sp.name}${m.nickname?'':' '}</div>
@@ -6850,7 +6866,8 @@ function renderStorage(){
         <div id="storageList"></div>
       </div>
       <div class="storage-col col-stones">
-        <div class="col-head">💎 Skills <span>${tokenIcon(16)} ${state.inventory.tokens||0}</span></div>
+        ${recycleAllBar()}
+      <div class="col-head">💎 Skills <span>${tokenIcon(16)} ${state.inventory.tokens||0}</span></div>
         <div id="stoneList"></div>
       </div>
     </div>
@@ -6881,6 +6898,45 @@ function renderStorage(){
     list.querySelectorAll('[data-party]').forEach(b=>b.addEventListener('click', ()=> moveToParty(b.dataset.party)));
   }
   renderStoneList();
+  wireRecycleAll();
+}
+
+/* Low and Mid stones pile up fast, so they can be cleared in one go. */
+function recycleAllBar(){
+  const counts = { low:0, mid:0 };
+  state.moveStones.forEach(st=>{ if(counts[st.tier]!==undefined) counts[st.tier]++; });
+  const total = counts.low + counts.mid;
+  if(total === 0) return '';
+  const back = counts.low*RECYCLE_RETURN.low + counts.mid*RECYCLE_RETURN.mid;
+  return `<button class="btn btn-ghost recycle-all" id="recycleAll">
+    ♻️ Recycle all Low &amp; Mid (${total}) → ${tokenIcon(14)} ${back}
+  </button>`;
+}
+function wireRecycleAll(){
+  const b = $('#recycleAll');
+  if(!b) return;
+  b.addEventListener('click', ()=>{
+    const doomed = state.moveStones.filter(st=>st.tier==='low' || st.tier==='mid');
+    if(!doomed.length) return;
+    const refined = doomed.filter(st=>stonePlus(st) > 0).length;
+    const back = doomed.reduce((n,st)=>n + (RECYCLE_RETURN[st.tier]||0), 0);
+    confirmDialogHtml(
+      `Recycle <b>${doomed.length}</b> Low and Mid stone${doomed.length>1?'s':''} for ${tokenIcon(15)} <b>${back}</b>?` +
+      (refined ? `<br><br><b style="color:var(--cinnabar-dark);">${refined} of them ${refined>1?'have been':'has been'} refined</b> — that work is lost too.` : '') +
+      `<br><br>Stones already taught to a monster are not touched.`,
+      async ()=>{
+        const snapshot = { stones:state.moveStones.slice(), tokens:state.inventory.tokens };
+        state.moveStones = state.moveStones.filter(st=>!(st.tier==='low' || st.tier==='mid'));
+        state.inventory.tokens = (state.inventory.tokens||0) + back;
+        const sv = showSyncingOverlay('Recycling…');
+        const ok = await saveProfile({ awaitCloud:true });
+        hideSyncingOverlay(sv);
+        if(!ok){ state.moveStones = snapshot.stones; state.inventory.tokens = snapshot.tokens; showSyncFailure(); return; }
+        playSfx('stone_roll');
+        toast(`Recycled ${doomed.length} stones for ${back} tokens.`);
+        renderStorage();
+      });
+  });
 }
 
 function renderStoneList(){
