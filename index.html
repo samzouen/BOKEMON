@@ -1773,9 +1773,9 @@ function crownBlockReason(m){
      normal    5 + (3) =  8 levels' worth of stats
      elite     7 + (3) = 10
      legendary 9 + (3) = 12                                          */
-function effectiveSupplements(species, supplements){
+function effectiveSupplements(species, supplements, mon){
   const n = supplements||0;
-  return n >= proteinCap(species) ? n + 2 : n;
+  return n >= proteinCap(species, mon) ? n + 2 : n;
 }
 /* From level 31, HP (not ATK) scales up so fights last longer as moves get
    stronger — otherwise high-tier skills one-shot everything. Piecewise linear,
@@ -1808,7 +1808,7 @@ function computeMaxStat(species, level, supplements, mon){
      are added at FLAT rate — they are already "three evolutions' worth", so
      applying evoMult on top would double-count and overshoot. */
   if(crowned && s.tier==='legendary') stat += CROWN_LEGENDARY_STAGES * rate;
-  stat += Math.ceil((rate/5) * effectiveSupplements(species, supplements));
+  stat += Math.ceil((rate/5) * effectiveSupplements(species, supplements, mon));
   return stat;
 }
 
@@ -2631,7 +2631,9 @@ const MASTERY_GROUP_BY_TIER = { bronze:1, silver:1, gold:1 };
 const MASTERY_GROUP = 1;
 
 /* Attempts are counted per phrase, in every scored context. */
-const HINT_CURVE = [0, 0, 1, 1, 3];      // attempt 1..5 → misses needed before a hint
+/* Hanzi Writer treats 0 as "no hint", and an immediate outline would block
+   input anyway — so the gentlest setting is after a single miss. */
+const HINT_CURVE = [1, 1, 2, 2, 3];      // attempt 1..5 → misses needed before a hint
 function attemptsOf(text){ return (state && state.wordAttempts && state.wordAttempts[text]) || 0; }
 function hintScheduleFor(text){
   const n = attemptsOf(text);
@@ -5796,7 +5798,9 @@ function playEvolutions(list, done){
       const useFrom = !!ev.fromSpecies && !!inverted;
       const sp = useFrom ? ev.fromSpecies : ev.species;
       const st = useFrom ? 0 : stage;
-      spriteBox.innerHTML = monPortrait(sp, 190, { view:'front', stage:st, bare:true, crowned:!!ev.crowned });
+      // a crowning flickers between the plain and crowned forms
+      const cr = ev.crowned ? !inverted : false;
+      spriteBox.innerHTML = monPortrait(sp, 190, { view:'front', stage:st, bare:true, crowned:cr });
       spriteBox.classList.toggle('inverted', !!inverted);
     };
 
@@ -5813,7 +5817,7 @@ function playEvolutions(list, done){
       paint(toStage, false);                       // settle on the evolved form, full colour
       spriteBox.classList.add('evo-pop');
       ov.querySelector('#evoText').innerHTML =
-        `<b>${escapeHtml(ev.name)}</b> ${ev.hatched?'hatched!':'evolved!'}` +
+        `<b>${escapeHtml(ev.name)}</b> ${ev.crowned?'is crowned!':(ev.hatched?'hatched!':'evolved!')}` +
         (ev.newMoves.length ? `<div class="evo-learn">Learned ${escapeHtml(ev.newMoves.join(', '))}!</div>` : '');
       ov.querySelector('#evoActions').innerHTML =
         `<button class="btn btn-primary" id="evoNext" style="width:auto;padding:12px 30px;">Continue</button>`;
@@ -6638,9 +6642,12 @@ function confirmCrown(m){
       const okc = await saveProfile({ awaitCloud:true });
       hideSyncingOverlay(sv);
       if(!okc){ state.inventory.crowns = snapshot; m.crowned = false; showSyncFailure(); return; }
-      playSfx('evolution');
-      toast(`✦ ${displayName(m)} is crowned!`);
-      renderStats();
+      // Crowning deserves the full transformation, not just a sound.
+      playEvolutions([{ uid:m.uid, species:m.species, name:displayName(m), crowned:true,
+                        from:m.level, to:m.level, evos:[m.level], newMoves:[] }], ()=>{
+        toast(`✦ ${displayName(m)} is crowned!`);
+        renderStats();
+      });
     });
 }
 
@@ -6652,7 +6659,7 @@ function renderStats(){
   const maxHp = monMaxHp(m);
   const need = fightsNeeded(m.level);
   const capped = m.level>=levelCap();
-  const suppCap = isSeed(m) ? 0 : proteinCap(m.species);
+  const suppCap = isSeed(m) ? 0 : proteinCap(m.species, m);   // crowning raises this
   const atCap = (m.supplements||0) >= suppCap;
   const nextIsFinal = (m.supplements||0) === suppCap-1;
   const moves = MOVES[m.species].map(mv=>{
