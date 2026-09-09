@@ -3112,9 +3112,13 @@ function buildWriter(i, box){
   /* Practice keeps its fixed schedule. Everywhere else, hints taper off as a
      phrase becomes familiar: free for the first two attempts, then after one
      miss, then after three, then not at all. */
+  // `word` is not in scope here — read the current phrase off the quiz. A bare
+  // reference threw a ReferenceError, which aborted buildWriter entirely and
+  // left the writing pad blank.
+  const currentWord = q.config.words[q.index];
   const hintAfter = q.config.relaxed
     ? (q.config.hintAfterMisses || 3)
-    : hintScheduleFor(word);
+    : hintScheduleFor(currentWord);
   /* Hanzi Writer's leniency multiplier: >1 accepts sloppier strokes. Young
      hands need the slack; the slider lives in Settings. */
   const leniency = (state && state.settings && state.settings.leniency) || 1.0;
