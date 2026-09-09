@@ -617,6 +617,14 @@
   .qty-card,.pick-card{background:var(--paper);border-radius:18px;padding:22px;text-align:center;
     box-shadow:0 12px 40px var(--shadow);}
   .ui-icon{vertical-align:-3px;width:18px;height:18px;object-fit:contain;}
+  .dev-panel{background:rgba(59,126,161,.14);border:1px solid rgba(59,126,161,.5);
+    border-radius:13px;padding:12px;margin-top:14px;}
+  .dev-head{font-family:'Baloo 2',cursive;font-weight:800;font-size:14px;}
+  .dev-sub{font-size:11px;color:var(--ink-soft);font-weight:600;line-height:1.45;margin-top:3px;}
+  .dev-btns{display:flex;gap:6px;align-items:center;margin-top:8px;flex-wrap:wrap;}
+  .dev-btn{width:auto;flex:1;padding:8px 6px;font-size:12px;margin:0;}
+  .dev-tag{font-size:9px;font-weight:900;background:#3b7ea1;color:#fff;
+    padding:2px 5px;border-radius:5px;vertical-align:2px;letter-spacing:.05em;}
   .award-row{display:flex;align-items:center;gap:5px;margin-top:7px;}
   .award-icon{width:22px;text-align:center;font-size:15px;flex-shrink:0;}
   .award-name{flex:1;min-width:0;font-size:12px;font-weight:800;}
@@ -1861,7 +1869,7 @@ async function cloudPullAll(){
     for(const pid in profiles){
       const p = normalizeProfile(profiles[pid]);
       await store.set(profileStorageKey(pid), JSON.stringify(p));
-      idx.push({ id:p.id, name:p.name, starterSpecies:p.starterSpecies, avatar:p.avatar||null, level:(p.party[0]?p.party[0].level:1), updatedAt:p.updatedAt||Date.now() });
+      idx.push({ id:p.id, name:p.name, starterSpecies:p.starterSpecies, avatar:p.avatar||null, isDev:!!p.isDev, isDev:!!p.isDev, level:(p.party[0]?p.party[0].level:1), updatedAt:p.updatedAt||Date.now() });
     }
     if(idx.length){ await saveProfileIndex(idx); }
     if(data.lastProfile){ try{ await store.set(LAST_PROFILE_KEY, data.lastProfile); }catch(e){} }
@@ -2011,7 +2019,7 @@ async function saveProfileIndex(idx){
 }
 async function upsertProfileIndexEntry(p){
   const idx = await loadProfileIndex();
-  const entry = { id:p.id, name:p.name, starterSpecies:p.starterSpecies, avatar:p.avatar||null, level:(p.party[0]?p.party[0].level:1), updatedAt:Date.now() };
+  const entry = { id:p.id, name:p.name, starterSpecies:p.starterSpecies, avatar:p.avatar||null, isDev:!!p.isDev, isDev:!!p.isDev, level:(p.party[0]?p.party[0].level:1), updatedAt:Date.now() };
   const i = idx.findIndex(e=>e.id===p.id);
   if(i>=0) idx[i]=entry; else idx.push(entry);
   await saveProfileIndex(idx);
@@ -2086,6 +2094,8 @@ function normalizeProfile(p){
   if(p.inventory.tokens===undefined) p.inventory.tokens = 0;
   if(p.inventory.eliteTokens===undefined) p.inventory.eliteTokens = 0;
   p.wordMastery = p.wordMastery || {};
+  p.wordAttempts = p.wordAttempts || {};
+  p.isDev = !!p.isDev;
   // passengers always sit at exactly 1 HP; a stray 0 makes them look fainted
   (p.party||[]).forEach(m=>{ const sp=SPECIES[m.species]; if(sp && (sp.isSeed||sp.isEgg)) m.currentHp = 1; });
   p.masteryAwarded = p.masteryAwarded || {};
@@ -2620,6 +2630,19 @@ const MASTERY_CHECKPOINTS = { bronze:5, silver:15, gold:25 };
 const MASTERY_GROUP_BY_TIER = { bronze:1, silver:1, gold:1 };
 const MASTERY_GROUP = 1;
 
+/* Attempts are counted per phrase, in every scored context. */
+const HINT_CURVE = [0, 0, 1, 1, 3];      // attempt 1..5 → misses needed before a hint
+function attemptsOf(text){ return (state && state.wordAttempts && state.wordAttempts[text]) || 0; }
+function hintScheduleFor(text){
+  const n = attemptsOf(text);
+  return n < HINT_CURVE.length ? HINT_CURVE[n] : false;   // false = no hint at all
+}
+function noteAttempt(text){
+  if(!state) return;
+  state.wordAttempts = state.wordAttempts || {};
+  state.wordAttempts[text] = (state.wordAttempts[text] || 0) + 1;
+}
+
 function masteryOf(text){ return (state.wordMastery && state.wordMastery[text]) || 0; }
 function masteryTier(n){
   if(n >= MASTERY_CHECKPOINTS.gold)   return 'gold';
@@ -3084,7 +3107,12 @@ function buildWriter(i, box){
   // Practice ("relaxed") mode is a low-pressure learning space: no timer, no
   // attempt cap, and Hanzi Writer's own hint appears after 3 misses on a stroke.
   // Battle / catch / recovery keep the strict rules — no hints there, ever.
-  const hintAfter = q.config.relaxed ? (q.config.hintAfterMisses || 3) : false;
+  /* Practice keeps its fixed schedule. Everywhere else, hints taper off as a
+     phrase becomes familiar: free for the first two attempts, then after one
+     miss, then after three, then not at all. */
+  const hintAfter = q.config.relaxed
+    ? (q.config.hintAfterMisses || 3)
+    : hintScheduleFor(word);
   /* Hanzi Writer's leniency multiplier: >1 accepts sloppier strokes. Young
      hands need the slack; the slider lives in Settings. */
   const leniency = (state && state.settings && state.settings.leniency) || 1.0;
@@ -3148,8 +3176,11 @@ function resolveWord(passed, timedOut){
   // attempts should still surface first in Recovery later.
   if(!passed || (q.config.relaxed && (q.wordMistakes||0) >= 3)) recordWrong(word);
   // Mastery only accrues in SCORED contexts — practice deliberately doesn't count.
-  if(passed && !q.config.relaxed){
-    q.masteryReward = recordMastery(word) || q.masteryReward;
+  if(!q.config.relaxed){
+    noteAttempt(word);                 // drives the tapering hint curve
+    if(passed){
+      q.masteryReward = recordMastery(word) || q.masteryReward;
+    }
     saveProfile();
   }
   playSfx(passed ? 'answer_correct' : 'answer_wrong');
@@ -3855,9 +3886,13 @@ function startWildEncounter(encOpts){
   let special = null;
   const region1Only = state.progress.currentRegion === 1;
   if(region1Only && L>=20){
-    const r=Math.random();
-    if(r<0.05 && !legendaryCaught('phoenix')) special='phoenix';
-    else if(r<0.20) special='electric_starter';
+    // dev profiles meet the Phoenix on the very next step
+    if(isDev() && L>=21 && !legendaryCaught('phoenix')) special='phoenix';
+    else {
+      const r=Math.random();
+      if(r<0.05 && !legendaryCaught('phoenix')) special='phoenix';
+      else if(r<0.20) special='electric_starter';
+    }
   }
   // the Caldera hides a Fire Starter
   if((ui.currentZone||{}).id==='volcanic_caldera' && Math.random()<0.15) special='fire_starter';
@@ -6035,7 +6070,7 @@ function renderProfileSelect(){
     <div class="region-card" data-pid="${pr.id}">
       ${pr.avatar ? avatarImg(pr.avatar, 48) : monPortrait(pr.starterSpecies || 'fire_starter', 48)}
       <div class="region-info" style="flex:1;">
-        <h3>${escapeHtml(pr.name)}</h3>
+        <h3>${escapeHtml(pr.name)}${pr.isDev?' <span class="dev-tag">DEV</span>':''}</h3>
         <p>Lv ${pr.level||5} · last played ${timeAgo(pr.updatedAt)}</p>
       </div>
       <button class="tagbtn del" data-delp="${pr.id}" title="Delete">✕</button>
@@ -6343,8 +6378,10 @@ function renderRegion(){
       <div class="menu-card full ${gated?'locked':''}" data-nav="shop"><span class="mc-emoji">🏪</span><div class="mc-title">Shop</div><div class="mc-desc">Spend medals earned from spelling</div></div>
     </div>
     <div class="screen-sub" style="margin-top:18px;font-size:12px;">Level cap here: <b>${REGION_CAPS[rid]||21}</b></div>
+    ${devPanel()}
   `;
   $('#backBtn').addEventListener('click', ()=>go('regionSelect'));
+  wireDevPanel();
   screenEl.querySelectorAll('.menu-card[data-nav]').forEach(c=>{
     c.addEventListener('click', ()=>{
       if(gated && c.dataset.nav!=='explore' && c.dataset.nav!=='party' && c.dataset.nav!=='recover'){
@@ -6667,6 +6704,15 @@ function renderStats(){
       ${nextIsFinal && !atCap ? `<div style="font-size:11px;font-weight:800;color:var(--gold);margin-top:4px;">⭐ The last boost is worth TRIPLE — finish the set!</div>` : ''}
       ${(state.inventory.protein>0 && !atCap) ? `<button class="btn btn-jade" id="useProtein" style="margin-top:10px;">Use Protein Supplement (${state.inventory.protein} left)</button>` : ''}
       ${crownBlock(m)}
+      ${isDev() ? `<div class="dev-panel" style="margin-top:12px;">
+        <div class="dev-head">🛠️ Set level</div>
+        <div class="dev-btns" style="margin-top:6px;">
+          <button class="qty-btn sm" id="lvDown">−</button>
+          <input type="number" class="award-n" id="lvSet" value="${m.level}" min="1" max="100">
+          <button class="qty-btn sm" id="lvUp">+</button>
+          <button class="btn btn-jade sm-give" id="lvGo">Apply</button>
+        </div>
+      </div>` : ''}
     </div>
 
     <div style="font-weight:800;font-size:14px;margin-bottom:8px;">Moves</div>
@@ -6728,6 +6774,21 @@ function renderStats(){
     const mv = moves[+el.dataset.mvstone];
     if(mv && mv.stone) openRefineSheet(mv.stone, m);
   }));
+  if(isDev()){
+    const f = $('#lvSet');
+    $('#lvDown').addEventListener('click', ()=>{ f.value = Math.max(1,(+f.value||1)-1); });
+    $('#lvUp').addEventListener('click',   ()=>{ f.value = Math.min(100,(+f.value||1)+1); });
+    $('#lvGo').addEventListener('click', async ()=>{
+      const lv = Math.max(1, Math.min(100, Math.floor(+f.value||1)));
+      m.level = lv;
+      delete m.evoFloor; delete m.evoFloorLevel;      // let it settle at its true form
+      m.xpFights = 0;
+      m.currentHp = monMaxHp(m);
+      await saveProfile();
+      toast(`${displayName(m)} set to level ${lv}.`);
+      renderStats();
+    });
+  }
   const cb = $('#useCrown');
   if(cb) cb.addEventListener('click', ()=> confirmCrown(m));
   const up = $('#useProtein');
@@ -7690,7 +7751,7 @@ function renderArenaGate(){
     <div class="screen-title">Test Arena</div>
     <div class="screen-sub">Developer mode — enter the password.</div>
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:20px;">
-      <input type="text" id="pwInput" placeholder="Password" inputmode="numeric" autocomplete="off">
+      <input type="password" id="pwInput" placeholder="Password" inputmode="numeric" autocomplete="off">
       <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;"></div>
       <button class="btn btn-primary" id="pwSubmit" style="margin-top:14px;">Unlock</button>
     </div>`;
@@ -8729,6 +8790,7 @@ function cavernsComplete(){
 }
 
 function renderCaverns(){
+  if(isDev()) devShortcut();
   // Once every path is walked the path screen is defunct — fall through to the
   // ordinary zone page rather than stranding the player on dead buttons.
   if(cavernsComplete()){
@@ -9311,7 +9373,7 @@ function engineerChoice(){
     /* Once the party is strong enough, the commission occasionally turns up
        something far worse than toads. */
     // 5% once the toads are known and the party is strong enough
-    if(ankyloAvailable() && Math.random() < 0.05) return startAnkyloEncounter();
+    if(ankyloAvailable() && (isDev() || Math.random() < 0.05)) return startAnkyloEncounter();
     beginBattle({ isNpc:false, allowCatch:true, name:'Slag Toads', npcId:'engineer1',
       waves:[[{species:'toad',level:51,ai:'power1',nerfed:false},
               {species:'toad',level:51,ai:'best',nerfed:false},
@@ -9344,6 +9406,113 @@ function vaneShearClosed(){
     `"Nobody aboard, love. Sailors and researchers both — they've all gone up to town for the ` +
     `<b>band competition</b>." She checks a watch. "Back later. Much later, if the finals run long."`,
     ()=>go('explore'));
+}
+
+
+/* ============================================================
+   DEVELOPER PROFILE
+   A profile flagged as `isDev` can jump to any point in the story, so scripted
+   sequences can be re-tested without replaying the whole game. Everything here
+   is inert on a normal profile.
+   ============================================================ */
+function isDev(){ return !!(state && state.isDev); }
+
+/* Scripted acquisitions, cleared when their region is reset. */
+const REGION_SCRIPTED = {
+  1: { species:['phoenix','ground_starter'], flags:['strangeKey'] },
+  2: { species:['forest_fairy','sacred_seed','lanternfish','water_dragon','water_dragon_nerfed','dragon_egg'], flags:[] },
+  3: { species:['ankylosaurus','newt','newt_baby'], flags:[] },
+};
+
+async function makeDevProfile(){
+  state.isDev = true;
+  state.settings.xpMode = 'dev';
+  state.inventory.tokens   = 500;
+  state.inventory.protein  = 500;
+  state.inventory.crowns   = 500;
+  state.inventory.voidStones = 500;
+  state.medals = { bronze:500, silver:500, gold:500 };
+  await saveProfile();
+  toast('🛠️ Developer profile enabled.');
+}
+
+/* Wipe a region's story back to its opening, keeping the team and inventory.
+   Later regions always go with it — you can't half-rewind a story. */
+async function resetRegion(n){
+  const p = state.progress;
+  const clear = [];
+  for(let r = n; r <= 3; r++) clear.push(r);
+
+  clear.forEach(r=>{
+    if(r===1){
+      p.region1 = { guardianCleared:false, rivalCleared:false, thugsCleared:[],
+                    thugBossCleared:false, investigateProtein:0, dojoCleared:[] };
+    }
+    if(r===2){
+      p.region2 = { courage:0, trialDone:false, seedGranted:false, challengeDone:false,
+                    rivalCleared:false, waterDojo:[], paths:{}, uniform:false, password:false,
+                    cavernDone:false, eggGranted:false, crownGranted:false };
+    }
+    if(r===3){
+      p.region3 = { monkeyMet:false, monkeyChoice:null, plantIntro:false, helped:{}, helpCount:0,
+                    powerStone:false, powerStoneUsed:false, engineerDone:0,
+                    ankylo:{ refusals:0, agreed:false, seen:false } };
+    }
+    // remove that region's scripted monsters and items
+    const sc = REGION_SCRIPTED[r] || { species:[], flags:[] };
+    state.party   = state.party.filter(m=>!sc.species.includes(m.species));
+    state.storage = state.storage.filter(m=>!sc.species.includes(m.species));
+    sc.flags.forEach(f=>{ state.inventory[f] = false; });
+    sc.species.forEach(sp=>{
+      state.caughtSpecies = (state.caughtSpecies||[]).filter(x=>x!==sp);
+    });
+    if(r===2) state.lanternGranted = false;
+  });
+
+  p.currentRegion = n;
+  if(!state.party.length){
+    state.party.push(newMonster(state.starterSpecies || 'fire_starter', 5));
+  }
+  await saveProfile();
+  toast(`🛠️ Region ${n}${n<3?'+':''} reset.`);
+  go('regionSelect');
+}
+
+/* --- shortcuts through the long scripted stretches --- */
+function devShortcut(){
+  if(!isDev()) return;
+  const p = state.progress;
+  // Region 2: drop straight into the tail of each sequence
+  if(p.region2){
+    if(!p.region2.trialDone && p.region2.courage < 27) p.region2.courage = 27;
+    const paths = pathState();
+    ['upper','lower'].forEach(id=>{ if(paths[id].step < 8) paths[id].step = 8; });
+    if(paths.disused.step < 4) paths.disused.step = 4;
+  }
+  saveProfile();
+}
+
+function devPanel(){
+  if(!isDev()) return '';
+  return `
+    <div class="dev-panel">
+      <div class="dev-head">🛠️ Developer</div>
+      <div class="dev-sub">Story resets keep your team, levels, storage and inventory.
+        Scripted catches and passengers for the region are removed.</div>
+      <div class="dev-btns">
+        ${[1,2,3].map(n=>`<button class="btn btn-ghost dev-btn" data-devreset="${n}">Reset R${n}${n<3?'+':''}</button>`).join('')}
+      </div>
+    </div>`;
+}
+function wireDevPanel(){
+  screenEl.querySelectorAll('[data-devreset]').forEach(b=>b.addEventListener('click', ()=>{
+    const n = +b.dataset.devreset;
+    confirmDialogHtml(
+      `Reset <b>Region ${n}${n<3?' and everything after it':''}</b>?<br><br>` +
+      `Your party, levels, storage and inventory stay. Scripted catches and passengers ` +
+      `from ${n<3?'those regions':'that region'} are removed.`,
+      ()=> resetRegion(n));
+  }));
 }
 
 /* ---------- SCREEN: region select ---------- */
@@ -9399,6 +9568,7 @@ function renderZone(){
 function renderZonePlain(){
   const z = ui.currentZone;
   if(!z) return go('explore');
+  if(isDev()) devShortcut();
   setScreenBg(z.id);          // zone art doubles as the backdrop
   setScreenBg(z.id);
   playMusicChain(['zone_'+z.id, 'region'+(state.progress.currentRegion||1), 'region']);
@@ -9541,7 +9711,7 @@ function renderPasswordGate(){
     <div class="screen-title">Grown-ups only</div>
     <div class="screen-sub">Enter the password to manage the word list.</div>
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:20px;">
-      <input type="text" id="pwInput" placeholder="Password" inputmode="numeric" autocomplete="off">
+      <input type="password" id="pwInput" placeholder="Password" inputmode="numeric" autocomplete="off">
       <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;"></div>
       <button class="btn btn-primary" id="pwSubmit" style="margin-top:14px;">Unlock</button>
     </div>
@@ -9949,6 +10119,7 @@ const AWARDABLES = [
   { id:'gold',   icon:'🥇', label:'Gold Medal',   grant:n=>{ state.medals.gold   = (state.medals.gold||0)+n; } },
   { id:'void',   icon:'<img src="assets/ui/void_stone.png" class="ui-icon" onerror="this.outerHTML=\'🕳️\'">',
                  label:'Void Stone', grant:n=>{ state.inventory.voidStones = (state.inventory.voidStones||0)+n; } },
+  { id:'protein',icon:'💪', label:'Protein Supplement', grant:n=>{ state.inventory.protein = (state.inventory.protein||0)+n; } },
   { id:'crown',  icon:'<img src="assets/ui/crown.png" class="ui-icon" onerror="this.outerHTML=\'👑\'">',
                  label:'Crown', grant:n=>{ state.inventory.crowns = (state.inventory.crowns||0)+n; } },
 ];
@@ -9975,7 +10146,7 @@ function renderParentArea(){
         <div>✍️ Leniency: <b>${lenLabel(state.settings.leniency||1)}</b></div>
         <div>👀 Eye breaks: <b>${every>0?`${mins} min every ${every} battles`:'off'}</b></div>
       </div>
-      <input type="text" id="pcPw" placeholder="Password to change" inputmode="numeric" autocomplete="off">
+      <input type="password" id="pcPw" placeholder="Password to change" inputmode="numeric" autocomplete="off">
       
       <button class="btn btn-ghost" id="pcUnlock" style="margin-top:10px;">Unlock</button>`;
     const submit = ()=>{
@@ -10012,7 +10183,7 @@ function renderParentArea(){
     <div class="pc-block">
       <div class="pc-head">🔑 Change password</div>
       <div class="pc-sub">Protects everything in this panel and the Spelling List.</div>
-      <input type="text" id="newPw" placeholder="New password" inputmode="numeric">
+      <input type="password" id="newPw" placeholder="New password" inputmode="numeric">
       <button class="btn btn-ghost" id="savePw" style="margin-top:8px;">Save password</button>
     </div>
 
@@ -10028,6 +10199,15 @@ function renderParentArea(){
       </div>
       <button class="btn btn-jade" id="tkGive" style="margin-top:9px;">Award tickets</button>
       <div class="pc-sub" style="margin-top:6px;">Currently held: <b id="tkHeld">${state.inventory.tokens||0}</b></div>
+    </div>
+
+    <div class="pc-block">
+      <div class="pc-head">🛠️ Developer profile</div>
+      <div class="pc-sub">${isDev()
+        ? 'This profile is flagged for development: manual levels, region resets and shortened scripts.'
+        : 'Grants 500 of every currency, Dev levelling, region resets and shortened scripted events.'}</div>
+      ${isDev() ? '<div class="pc-sub" style="color:var(--jade-dark);font-weight:800;">✓ Enabled</div>'
+        : '<button class="btn btn-ghost" id="devOn" style="margin-top:6px;">Make this a developer profile</button>'}
     </div>
 
     <div class="pc-block">
@@ -10087,6 +10267,8 @@ function renderParentArea(){
     $('#tkHeld').textContent = state.inventory.tokens;
     toast(`🎟️ ${n} ticket${n>1?'s':''} awarded!`);
   });
+  const dv = $('#devOn');
+  if(dv) dv.addEventListener('click', async ()=>{ await makeDevProfile(); renderParentArea(); });
   el.querySelectorAll('[data-aw]').forEach(btn=>btn.addEventListener('click', ()=>{
     const f = $('#aw-'+btn.dataset.aw);
     f.value = Math.max(0, (+f.value||0) + (+btn.dataset.d));
