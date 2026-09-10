@@ -88,9 +88,18 @@
   .screen-bg.on{ opacity:0.30; }
   /* Safari's rubber-band scroll could drag a story scene away and leave the
      frozen battle behind it. Scenes own the viewport and scroll internally. */
+  /* A story scene owns the viewport: fixed, self-scrolling and above the
+     battle beneath it, so a rubber-band swipe can't reveal the frozen fight. */
+  body.in-scene{ overflow:hidden; overscroll-behavior:none; }
+  body.in-scene #screen{
+    position:fixed; inset:56px 0 0 0; z-index:60;
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    padding:16px 16px 40px;
+    background:var(--paper);
+  }
+  body.in-scene.has-bg #screen{ background:transparent; }
   .scene, .white-room{ overscroll-behavior:contain; }
-  body.in-scene{ overscroll-behavior-y:none; }
-  body.in-scene #screen{ min-height:100dvh; }
 
   /* --- zone theming ---
      On a zone page the artwork carries the mood: Sacred Grove washes it pale so
@@ -485,6 +494,9 @@
     padding:26px;overflow-y:auto;
   }
   .wr-dragon{filter:drop-shadow(0 0 34px rgba(120,190,220,.9));margin-bottom:14px;}
+  .wr-dragon .mon-portrait, .wr-dragon img{
+    box-shadow:none !important;border-radius:0 !important;background:transparent !important;
+  }
   .wr-text{max-width:420px;font-size:14.5px;font-weight:600;line-height:1.65;color:#232019;}
   .wr-text p{margin:0 0 12px;}
   .scene{max-width:520px;margin:0 auto;text-align:center;}
@@ -773,9 +785,17 @@
   .crown-icon{filter:drop-shadow(0 0 4px rgba(255,209,102,.95));vertical-align:-2px;}
   .crown-icon-fb{filter:drop-shadow(0 0 4px rgba(255,209,102,.95));vertical-align:-2px;}
   /* crowned monsters glow regardless of whether bespoke art exists */
-  .crowned-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;}
-  .crowned-aura{filter:drop-shadow(0 0 8px rgba(255,209,102,.85)) drop-shadow(0 0 18px rgba(255,180,60,.45));}
-  .crown-fizz{position:absolute;inset:-10% -6px -6px;pointer-events:none;overflow:visible;z-index:3;}
+  .crowned-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;
+    overflow:visible;}
+  .crowned-aura,
+  .player-avatar .crowned-aura,
+  .avatar-layer .crowned-aura{
+    filter:drop-shadow(0 0 10px rgba(255,209,102,.95))
+           drop-shadow(0 0 24px rgba(255,180,60,.6)) !important;
+  }
+  /* spans the full sprite and a little beyond, in front of the body */
+  .crown-fizz{position:absolute;left:-8%;right:-8%;top:-15%;bottom:0;
+    pointer-events:none;overflow:visible;z-index:3;}
   .crown-fizz i{
     position:absolute;bottom:0;border-radius:50%;
     background:radial-gradient(circle,#fff7d6 0%,#ffd166 55%,rgba(255,209,102,0) 72%);
@@ -816,6 +836,12 @@
     filter:drop-shadow(0 0 26px rgba(255,214,120,0.95));
     transition:filter .12s;
   }
+  /* fixed stage: both forms sit in the same 190px box so nothing reflows */
+  .evo-sprite-wrap{position:relative;width:190px;height:190px;margin:0 auto;
+    display:flex;align-items:center;justify-content:center;}
+  .evo-layer{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    transition:opacity .08s linear;}
+  .evo-layer .mon-portrait{box-shadow:none !important;background:transparent !important;}
   .evo-sprite-wrap.inverted{ filter:invert(1) hue-rotate(180deg) drop-shadow(0 0 30px rgba(120,200,255,0.9)); }
   .evo-sprite-wrap.evo-pop{ animation:evoPop .6s cubic-bezier(.2,1.5,.4,1) 1; }
   @keyframes evoPop{ 0%{transform:scale(.75);} 60%{transform:scale(1.12);} 100%{transform:scale(1);} }
@@ -5868,35 +5894,44 @@ function playEvolutions(list, done){
     let step = 0, showEvolved = false;
     let timer = null;
 
-    const paint = (stage, inverted)=>{
-      // `fromSpecies` lets a hatch/transformation show two different species
-      /* Alternate between the two species when a transformation names a
-         `fromSpecies` (Seed→Fairy, Egg→Dragon), rather than flashing one
-         species against itself. */
-      /* The INVERTED frame is the thing you're becoming — that's where the
-         mystery lives. The normal frame stays as the current form. */
-      const showTarget = !!inverted;
-      const sp = (ev.fromSpecies && !showTarget) ? ev.fromSpecies : ev.species;
-      const st = (ev.fromSpecies && !showTarget) ? 0 : stage;
-      const cr = ev.crowned ? showTarget : false;
-      // passengers are tiny things; don't render them at hero size
-      const scale = (!showTarget && ev.fromSpecies==='sacred_seed') ? 0.20
-                  : (!showTarget && ev.fromSpecies==='dragon_egg')  ? 0.40 : 1;
-      spriteBox.innerHTML = monPortrait(sp, Math.round(190*scale), { view:'front', stage:st, bare:true, crowned:cr });
-      spriteBox.classList.toggle('inverted', !!inverted);
+    /* Both forms are rendered ONCE into fixed-size layers and simply toggled.
+       Re-writing innerHTML each flip made the box resize (so the caption jumped),
+       reloaded the images (so old and new overlapped), and left the final frame
+       showing whichever species happened to be painted last. */
+    const passengerScale = ev.fromSpecies==='sacred_seed' ? 0.20
+                         : ev.fromSpecies==='dragon_egg'  ? 0.40 : 1;
+    spriteBox.innerHTML =
+      `<span class="evo-layer" id="evoFrom">${
+        monPortrait(ev.fromSpecies || ev.species, Math.round(190*passengerScale),
+                    { view:'front', stage: ev.fromSpecies ? 0 : fromStage, bare:true })
+      }</span>` +
+      `<span class="evo-layer" id="evoTo">${
+        monPortrait(ev.species, 190, { view:'front', stage:toStage, bare:true, crowned:!!ev.crowned })
+      }</span>`;
+    const layerFrom = spriteBox.querySelector('#evoFrom');
+    const layerTo   = spriteBox.querySelector('#evoTo');
+
+    const paint = (showTarget)=>{
+      layerFrom.style.opacity = showTarget ? '0' : '1';
+      layerTo.style.opacity   = showTarget ? '1' : '0';
+      // the form you're BECOMING is the inverted one — that's the mystery
+      spriteBox.classList.toggle('inverted', !!showTarget);
     };
+    paint(false);
 
     const tick = ()=>{
       if(step >= schedule.length){ return finish(); }
       showEvolved = !showEvolved;
-      // evolved form appears colour-inverted; base form appears normally
-      paint(showEvolved ? toStage : fromStage, showEvolved);
+      paint(showEvolved);
       timer = setTimeout(tick, schedule[step++]);
     };
 
     const finish = ()=>{
       clearTimeout(timer);
-      paint(toStage, false);                       // settle on the evolved form, full colour
+      // settle on the NEW form, full colour, with the old one gone for good
+      layerFrom.style.display = 'none';
+      layerTo.style.opacity = '1';
+      spriteBox.classList.remove('inverted');
       spriteBox.classList.add('evo-pop');
       ov.querySelector('#evoText').innerHTML =
         `<b>${escapeHtml(ev.name)}</b> ${ev.crowned?'is crowned!':(ev.hatched?'hatched!':'evolved!')}` +
@@ -8359,6 +8394,8 @@ async function onGuardianTrialResolved(){
 
   $('#brandSub').textContent = 'The Sacred Grove';
   document.body.classList.remove('writing');
+  document.body.classList.add('in-scene');
+  window.scrollTo(0,0);
   setScreenBg('explore');
   screenEl.innerHTML = `
     <div class="scene">
@@ -8379,6 +8416,7 @@ async function onGuardianTrialResolved(){
   `;
   playSfx('evolution');
   $('#sceneNext').addEventListener('click', ()=>{
+    document.body.classList.remove('in-scene');
     toast('Sacred Grove is open. The city awaits.');
     go('region');
   });
@@ -8677,6 +8715,8 @@ async function disused7(){
 async function disused8(){
   await stepDisused();
   document.body.classList.remove('writing');
+  document.body.classList.add('in-scene');
+  window.scrollTo(0,0);
   $('#brandSub').textContent = 'Rocky Caverns';
   setScreenBg('rocky_caverns');
   screenEl.innerHTML = `
@@ -8800,7 +8840,7 @@ function disused10Fight(){
 }
 
 function disused11Intro(){
-  storyModal(uiIcon('dragon_core', 130, '💠'), 'It is weaker than it looks',
+  storyModal(npcPortrait('padrino','🕴️',130,'transparent'), 'It is weaker than it looks',
     `The dragon lands hard, and you feel it shudder beneath you.<br><br>` +
     `<b>Don Padrino</b> steps from the smoke, flaunting the glowing core on his sword.<br><br>` +
     `"A valiant last stand," he smirks at the dragon. "But without your core, you're at death's door."`,
@@ -8829,6 +8869,8 @@ async function disused12Farewell(){
   stopMusic();
   playMusic('region');
   document.body.classList.remove('writing');
+  document.body.classList.add('in-scene');
+  window.scrollTo(0,0);
   setScreenBg(null);
   $('#brandSub').textContent = '';
 
@@ -8903,6 +8945,8 @@ async function forestCrownScene(){
     r2.crownGranted = true;
   }
   await saveProfile();
+  document.body.classList.add('in-scene');
+  window.scrollTo(0,0);
   setScreenBg('explore');
   $('#brandSub').textContent = 'The Sacred Grove';
   screenEl.innerHTML = `
@@ -8925,7 +8969,8 @@ async function forestCrownScene(){
       <div class="scene-reward">${crownIcon(46)}<div><b>Crown</b> received.<br><span>Use it in a monster's Stats page.</span></div></div>
       <button class="btn btn-primary" id="sceneNext" style="margin-top:16px;">Continue</button>
     </div>`;
-  $('#sceneNext').addEventListener('click', ()=>{ toast('Rocky Caverns is open to explore freely.'); go('region'); });
+  $('#sceneNext').addEventListener('click', ()=>{
+    document.body.classList.remove('in-scene'); toast('Rocky Caverns is open to explore freely.'); go('region'); });
 }
 
 /* ---------- ROCKY CAVERNS: the three-path zone page ---------- */
@@ -9102,6 +9147,7 @@ function storyModal(emblem, title, html, onClose, opts){
     </div>`;
   $('#sceneNext').addEventListener('click', ()=>{
     document.body.classList.remove('in-scene');
+    document.body.classList.remove('in-scene');
     if(onClose) onClose();
   });
 }
@@ -9137,6 +9183,8 @@ function monkeyScene2(){
 }
 function monkeyScene3(){
   document.body.classList.remove('writing');
+  document.body.classList.add('in-scene');
+  window.scrollTo(0,0);
   $('#brandSub').textContent = 'Volcanic Caldera';
   setScreenBg('battle_hot_spring');
   screenEl.innerHTML = `
@@ -9422,6 +9470,8 @@ function ankyloReturnTalk(mon){
 
 function ankyloChoice(mon, prompt, yesLabel, noLabel){
   document.body.classList.remove('writing');
+  document.body.classList.add('in-scene');
+  window.scrollTo(0,0);
   $('#brandSub').textContent = 'Geothermal Plant';
   setScreenBg('geothermal_plant');
   screenEl.innerHTML = `
@@ -9466,11 +9516,13 @@ async function ankyloAgree(mon){
 async function ankyloRefuse(mon){
   const a = ankyloState();
   a.refusals = (a.refusals||0) + 1;
-  // the catch is undone
+  // Undo the catch completely — including the caught-species record, which
+  // otherwise marks it as a one-time legendary and blocks every future attempt.
   const pi = state.party.findIndex(m=>m.uid===mon.uid);
   if(pi>=0) state.party.splice(pi,1);
   const si = state.storage.findIndex(m=>m.uid===mon.uid);
   if(si>=0) state.storage.splice(si,1);
+  state.caughtSpecies = (state.caughtSpecies||[]).filter(x=>x!=='ankylosaurus');
   await saveProfile();
 
   const line = a.refusals === 1
