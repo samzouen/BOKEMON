@@ -726,6 +726,11 @@
   .worker.too-late{ animation:workerMiss .5s ease-out; }
   @keyframes workerMiss{ 0%{background:rgba(120,120,120,.7);} 100%{background:var(--paper-2);} }
   .worker-done{position:absolute;top:4px;right:6px;font-size:12px;color:var(--jade);font-weight:900;}
+  .worker.peaceful{
+    position:relative;aspect-ratio:1/1;border-radius:14px;
+    background:rgba(95,168,107,0.14);border:2px solid rgba(95,168,107,0.4);
+    display:flex;align-items:center;justify-content:center;opacity:.85;
+  }
   .worker img,.worker .mon-portrait{box-shadow:none !important;background:transparent !important;}
   .engineer-btn{display:flex;align-items:center;justify-content:center;gap:10px;}
   .path-list{display:flex;flex-direction:column;gap:10px;}
@@ -843,6 +848,9 @@
     transition:opacity .08s linear;}
   .evo-layer .mon-portrait{box-shadow:none !important;background:transparent !important;}
   .evo-sprite-wrap.inverted{ filter:invert(1) hue-rotate(180deg) drop-shadow(0 0 30px rgba(120,200,255,0.9)); }
+  /* per-layer invert — deterministic even where filter+opacity on a shared
+     parent composites unreliably on mobile Safari */
+  .evo-layer.evo-inverted{ filter:invert(1) hue-rotate(180deg) drop-shadow(0 0 30px rgba(120,200,255,0.9)); }
   .evo-sprite-wrap.evo-pop{ animation:evoPop .6s cubic-bezier(.2,1.5,.4,1) 1; }
   @keyframes evoPop{ 0%{transform:scale(.75);} 60%{transform:scale(1.12);} 100%{transform:scale(1);} }
   .evo-text{
@@ -4703,11 +4711,24 @@ function promptTarget(mv, onPick){
 /* Supply enough phrases to satisfy a WORD target. Shortest entries are 2
    characters, so ceil(target/2) phrases always suffices; a few spares are added
    so the quiz never runs dry if a miss shortens the run. */
+/* Draw phrases until their COMBINED character count clears the target, with a
+   buffer on top — not a fixed phrase count. The old heuristic assumed ~2
+   characters per phrase; a list of single-character phrases (or very long
+   ones) broke that assumption and could run the quiz dry before the target
+   was reached, which read as the move "fizzling out" mid-fight. */
 function pickWords(wordTarget){
-  const pool=activePool().map(w=>w.text);
-  const need = Math.ceil(wordTarget/2) + 3;
-  const out=[]; let bag=shuffle(pool);
-  while(out.length<need){ if(bag.length===0) bag=shuffle(pool); out.push(bag.pop()); }
+  const pool = activePool().map(w=>w.text);
+  if(pool.length===0) return [];
+  const buffer = Math.max(4, Math.ceil(wordTarget * 0.3));   // headroom for misses/spill
+  const needChars = wordTarget + buffer;
+  const out=[]; let chars=0; let bag=shuffle(pool);
+  let guard = 0;
+  while(chars < needChars && guard++ < 500){
+    if(bag.length===0) bag=shuffle(pool);
+    const w = bag.pop();
+    out.push(w);
+    chars += countWords(w);
+  }
   return out;
 }
 function countWords(text){ return (text||'').length; }   // one hanzi = one word
@@ -5734,7 +5755,7 @@ function awardXpToParty(fightsWorth){
       m.currentHp = computeMaxHp(into, m.level, m.supplements||0, m);
       if(!state.caughtSpecies.includes(into)) state.caughtSpecies.push(into);
       if(!state.encounteredSpecies.includes(into)) state.encounteredSpecies.push(into);
-      events.push({ uid:m.uid, species:into, fromSpecies:'dragon_egg', name:hatchedName, from, to:m.level, evos:[m.level], newMoves:[], hatched:true });
+      events.push({ uid:m.uid, species:into, fromSpecies:m.species, name:hatchedName, from, to:m.level, evos:[m.level], newMoves:[], hatched:true });
       return;
     }
     if(m.level !== from) events.push({ uid:m.uid, species:m.species, name:displayName(m), from, to:m.level, evos, newMoves });
@@ -5899,7 +5920,8 @@ function playEvolutions(list, done){
        reloaded the images (so old and new overlapped), and left the final frame
        showing whichever species happened to be painted last. */
     const passengerScale = ev.fromSpecies==='sacred_seed' ? 0.20
-                         : ev.fromSpecies==='dragon_egg'  ? 0.40 : 1;
+                         : ev.fromSpecies==='dragon_egg'  ? 0.40
+                         : ev.fromSpecies==='newt_baby'   ? 0.35 : 1;
     spriteBox.innerHTML =
       `<span class="evo-layer" id="evoFrom">${
         monPortrait(ev.fromSpecies || ev.species, Math.round(190*passengerScale),
@@ -5914,8 +5936,11 @@ function playEvolutions(list, done){
     const paint = (showTarget)=>{
       layerFrom.style.opacity = showTarget ? '0' : '1';
       layerTo.style.opacity   = showTarget ? '1' : '0';
-      // the form you're BECOMING is the inverted one — that's the mystery
-      spriteBox.classList.toggle('inverted', !!showTarget);
+      // The invert lives on the TARGET LAYER ONLY, never the shared box — a
+      // filter toggled on a parent while children fade via opacity composites
+      // unreliably on some mobile browsers and could bleed onto the old form.
+      layerFrom.classList.remove('evo-inverted');
+      layerTo.classList.toggle('evo-inverted', !!showTarget);
     };
     paint(false);
 
@@ -5931,7 +5956,7 @@ function playEvolutions(list, done){
       // settle on the NEW form, full colour, with the old one gone for good
       layerFrom.style.display = 'none';
       layerTo.style.opacity = '1';
-      spriteBox.classList.remove('inverted');
+      layerTo.classList.remove('evo-inverted');
       spriteBox.classList.add('evo-pop');
       ov.querySelector('#evoText').innerHTML =
         `<b>${escapeHtml(ev.name)}</b> ${ev.crowned?'is crowned!':(ev.hatched?'hatched!':'evolved!')}` +
@@ -9269,6 +9294,7 @@ function renderPlant(){
   $('#brandSub').textContent = 'Geothermal Plant';
   const canFight = battleParty().some(m=>m.currentHp>0);
   const pct = Math.min(100, r3.helpCount/PLANT_TARGET*100);
+  const peace = plantAtPeace();
 
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Explore</button>
@@ -9276,26 +9302,43 @@ function renderPlant(){
       <img src="assets/zones/geothermal_plant.png" alt="" class="zone-hero-img" onerror="this.style.display='none'">
       <div class="zone-hero-name">Geothermal Plant</div>
     </div>
-    <div class="plant-note">Watch for a worker waving. Tap them before they give up — the fire monsters
-      get in among the machinery and someone has to shift them.</div>
-    <div class="trial-bar" style="margin:10px 0 4px;"><span style="width:${pct}%"></span></div>
-    <div class="trial-count">${r3.helpCount} / ${PLANT_TARGET} calls answered</div>
+    ${peace ? `
+      <div class="plant-note" style="text-align:center;font-weight:800;">
+        🕊️ The fire monsters haven't come back since Ankylosaurus called them home.
+        The whole plant is running quiet for the first time in months.
+      </div>
+      <div class="worker-grid" id="workerGrid">
+        ${Array.from({length:PLANT_WORKERS},(_,i)=>{
+          const n=i+1;
+          return `<div class="worker peaceful" data-worker="${n}">
+            ${npcPortrait('worker'+n,'👷',56,'transparent')}
+          </div>`;
+        }).join('')}
+      </div>
+      <button class="btn btn-ghost" id="engineerBtn" style="margin-top:12px;">
+        ${npcPortrait('engineer1','🛠️',40,'transparent')} <span>Say hello to the Engineer</span></button>
+    ` : `
+      <div class="plant-note">Watch for a worker waving. Tap them before they give up — the fire monsters
+        get in among the machinery and someone has to shift them.</div>
+      <div class="trial-bar" style="margin:10px 0 4px;"><span style="width:${pct}%"></span></div>
+      <div class="trial-count">${r3.helpCount} / ${PLANT_TARGET} calls answered</div>
 
-    <div class="worker-grid" id="workerGrid">
-      ${Array.from({length:PLANT_WORKERS},(_,i)=>{
-        const n=i+1;
-        return `<button class="worker" data-worker="${n}" id="worker-${n}">
-          ${npcPortrait('worker'+n,'👷',56,'transparent')}
-          ${r3.helped[n] ? '<span class="worker-done">✓</span>' : ''}
-        </button>`;
-      }).join('')}
-    </div>
+      <div class="worker-grid" id="workerGrid">
+        ${Array.from({length:PLANT_WORKERS},(_,i)=>{
+          const n=i+1;
+          return `<button class="worker" data-worker="${n}" id="worker-${n}">
+            ${npcPortrait('worker'+n,'👷',56,'transparent')}
+            ${r3.helped[n] ? '<span class="worker-done">✓</span>' : ''}
+          </button>`;
+        }).join('')}
+      </div>
 
-    ${r3.powerStone && !r3.powerStoneUsed ? `<button class="btn btn-primary" id="usePowerStone" style="margin-top:14px;">
-      ${powerStoneIcon(20)} Use the Power Stone</button>` : ''}
+      ${r3.powerStone && !r3.powerStoneUsed ? `<button class="btn btn-primary" id="usePowerStone" style="margin-top:14px;">
+        ${powerStoneIcon(20)} Use the Power Stone</button>` : ''}
 
-    ${r3.helpCount>=PLANT_TARGET ? `<button class="btn btn-ghost engineer-btn" id="engineerBtn" style="margin-top:12px;">
-      ${npcPortrait('engineer1','🛠️',40,'transparent')} <span>The Engineer's commission</span></button>` : ''}
+      ${r3.helpCount>=PLANT_TARGET ? `<button class="btn btn-ghost engineer-btn" id="engineerBtn" style="margin-top:12px;">
+        ${npcPortrait('engineer1','🛠️',40,'transparent')} <span>The Engineer's commission</span></button>` : ''}
+    `}
 
     <button class="btn btn-ghost" id="returnBtn" style="margin-top:10px;">Return</button>
   `;
@@ -9305,7 +9348,7 @@ function renderPlant(){
   if(ps) ps.addEventListener('click', ()=> usePowerStone());
   const eb = $('#engineerBtn');
   if(eb) eb.addEventListener('click', ()=> engineerOffer());
-  if(canFight) startPlantLoop();
+  if(canFight && !peace) startPlantLoop();
 }
 
 function powerStoneIcon(px){
@@ -9408,9 +9451,12 @@ function ankyloAvailable(){
   const a = ankyloState();
   if(a.agreed) return false;
   if(!(state.caughtSpecies||[]).includes('toad')) return false;
+  if((state.progress.region3.engineerDone||0) < 3) return false;   // all 3 protein commissions done
   const best = Math.max(...battleParty().map(m=>m.level), 1);
   return best >= 61;
 }
+/* Once Ankylosaurus has agreed to help, the plant is genuinely at peace. */
+function plantAtPeace(){ return !!ankyloState().agreed; }
 function ankyloWaves(){
   const a = ankyloState();
   const extra = Math.min(20, Math.max(0, a.refusals - 1));
@@ -9573,6 +9619,14 @@ async function usePowerStone(){
 function engineerOffer(){
   const r3 = state.progress.region3;
   const paid = r3.engineerDone||0;
+  if(plantAtPeace()){
+    return storyModal(npcPortrait('engineer1','🛠️',120,'transparent'), 'The Engineer',
+      `She wipes her hands and actually smiles at you.<br><br>` +
+      `"Whatever you did out there — the drills haven't so much as hiccupped since. ` +
+      `First quiet week we've had. I'll not forget it."<br><br>` +
+      `<i>She doesn't have another job for you. For once, she doesn't need one.</i>`,
+      ()=>go('plant'), { bg:'geothermal_plant', subtitle:'Geothermal Plant' });
+  }
   storyModal(npcPortrait('engineer1','🛠️',120,'transparent'), 'The Engineer',
     `"There's a nastier problem below." She taps a chewed-looking drill bit on the bench.<br><br>` +
     `"Three of the big ones have <b>melted our drills and taken the metal into their hide</b>. ` +
@@ -9605,7 +9659,7 @@ function engineerChoice(){
 async function onEngineerWin(){
   const r3 = state.progress.region3;
   const paid = r3.engineerDone||0;
-  if(paid >= 3) return resumeVictory();     // nothing left to say; go and catch things
+  if(paid >= 3 || plantAtPeace()) return resumeVictory();
   r3.engineerDone = paid + 1;
   state.inventory.protein = (state.inventory.protein||0) + 1;
   await saveProfile();
