@@ -86,6 +86,11 @@
     opacity:0;transition:opacity .45s ease;
   }
   .screen-bg.on{ opacity:0.30; }
+  /* Safari's rubber-band scroll could drag a story scene away and leave the
+     frozen battle behind it. Scenes own the viewport and scroll internally. */
+  .scene, .white-room{ overscroll-behavior:contain; }
+  body.in-scene{ overscroll-behavior-y:none; }
+  body.in-scene #screen{ min-height:100dvh; }
 
   /* --- zone theming ---
      On a zone page the artwork carries the mood: Sacred Grove washes it pale so
@@ -96,6 +101,16 @@
     content:'';position:absolute;inset:0;
     background:rgba(244,236,216,0.62);            /* pale wash by default */
   }
+  /* A story scene overrides the zone theme entirely: dialogue is read on the
+     ordinary paper, never in the caverns' inverted palette. */
+  body.in-scene.zone-dark{ color:var(--ink); }
+  body.in-scene.zone-dark .screen-bg:after{ background:rgba(244,236,216,0.62); }
+  body.in-scene.zone-dark .scene-title,
+  body.in-scene.zone-dark .scene-body,
+  body.in-scene.zone-dark .scene-body b,
+  body.in-scene.zone-dark .screen-title{ color:var(--ink) !important;text-shadow:none !important; }
+  body.in-scene.zone-dark .scene-body{ background:rgba(244,236,216,0.72); }
+
   body.zone-dark .screen-bg:after{
     background:rgba(10,12,16,0.72);               /* caverns: heavy dark wash */
   }
@@ -760,17 +775,19 @@
   /* crowned monsters glow regardless of whether bespoke art exists */
   .crowned-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;}
   .crowned-aura{filter:drop-shadow(0 0 8px rgba(255,209,102,.85)) drop-shadow(0 0 18px rgba(255,180,60,.45));}
-  .crown-fizz{position:absolute;inset:-6px;pointer-events:none;overflow:hidden;z-index:2;}
+  .crown-fizz{position:absolute;inset:-10% -6px -6px;pointer-events:none;overflow:visible;z-index:3;}
   .crown-fizz i{
     position:absolute;bottom:0;border-radius:50%;
     background:radial-gradient(circle,#fff7d6 0%,#ffd166 55%,rgba(255,209,102,0) 72%);
     animation:crownRise linear infinite;
   }
+  /* rise the full height of the sprite and past the top, in front of the body */
   @keyframes crownRise{
-    0%{transform:translate(0,4px) scale(.5);opacity:0;}
-    20%{opacity:.95;}
-    70%{transform:translate(5px,-60%) scale(1);opacity:.7;}
-    100%{transform:translate(-3px,-110%) scale(.4);opacity:0;}
+    0%  {transform:translate(0,6px) scale(.5);opacity:0;}
+    15% {opacity:.95;}
+    55% {transform:translate(5px,-55%) scale(1);opacity:.9;}
+    85% {transform:translate(-2px,-95%) scale(.8);opacity:.7;}
+    100%{transform:translate(-4px,-125%) scale(.35);opacity:0;}
   }
   @media (prefers-reduced-motion: reduce){ .crown-fizz{display:none;} }
   .mastery-line{display:flex;align-items:center;gap:6px;margin-top:4px;}
@@ -2243,14 +2260,20 @@ function monPortrait(species, size, opts){
   const override = (typeof ASSETS!=='undefined' && ASSETS.sprites)
     ? (ASSETS.sprites[spriteKey(species,stage,crowned)+'_'+view] || ASSETS.sprites[spriteKey(species,stage,crowned)]) : null;
   // the icon view starts at _front, so only _front and _back need supplying
-  const primary = override || spritePath(species, stage, view==='icon' ? 'front' : view, crowned);
+  const cacheKey = spriteCacheKey(species, stage, view, crowned);
+  const cached = spriteResolved[cacheKey];
+  const primary = override
+    || (cached !== undefined && cached !== null ? cached
+        : spritePath(species, stage, view==='icon' ? 'front' : view, crowned));
+  // hidden until it actually loads, so a 404 never flashes a broken image
+  const startHidden = (cached === undefined);
   const bg = opts.bare ? 'transparent' : s.color;
   const wrapOpen  = opts.crowned ? `<span class="crowned-wrap" style="width:${px}px;height:${px}px;">${crownSparkles()}` : '';
   const wrapClose = opts.crowned ? '</span>' : '';
   return wrapOpen + `<img src="${primary}" alt="${escapeHtml(s.name)}" class="${cls}"
     data-species="${species}" data-px="${px}" data-view="${view}" data-stage-n="${stage}" data-crowned="${crowned?1:0}" data-try="0"
-    style="width:${px}px;height:${px}px;border-radius:${radius}px;object-fit:contain;background:${bg};"
-    onerror="spriteFallback(this)">` + wrapClose;
+    style="width:${px}px;height:${px}px;border-radius:${radius}px;object-fit:contain;background:${bg};${startHidden?'visibility:hidden;':''}"
+    onload="spriteLoaded(this)" onerror="spriteFallback(this)">` + wrapClose;
 }
 
 /* Rising motes for a crowned monster — the same idea as the Ultra button,
@@ -2305,6 +2328,24 @@ function grantSacredSeed(){
      ->  coloured placeholder tile
    So an unevolved sprite stands in for a missing evolved one rather than
    breaking, and art can be added one stage at a time. */
+/* Once a sprite path resolves, remember it. Forest Fairy and the Water Dragon
+   are declared at stage 1 but their art lives at the base name, so EVERY render
+   walked the 404 ladder again — and each failed attempt flashed the browser's
+   broken-image placeholder. Caching plus hide-until-loaded removes both. */
+const spriteResolved = {};
+function spriteCacheKey(species, stage, view, crowned){
+  return species+'|'+stage+'|'+view+'|'+(crowned?1:0);
+}
+
+function spriteLoaded(img){
+  try{
+    const key = spriteCacheKey(img.dataset.species, +(img.dataset.stageN||0),
+                               img.dataset.view||'icon', img.dataset.crowned==='1');
+    spriteResolved[key] = img.getAttribute('src');
+    img.style.visibility = 'visible';
+  }catch(e){}
+}
+
 function spriteFallback(img){
   try{
     const species = img.dataset.species;
@@ -2326,6 +2367,8 @@ function spriteFallback(img){
     attempt++;
     img.dataset.try = String(attempt);
     if(attempt < chain.length){ img.src = chain[attempt]; return; }
+    // nothing in the ladder exists — remember that too, and draw the tile
+    spriteResolved[spriteCacheKey(species, stage, view, crowned)] = null;
     img.outerHTML = monPortraitFallback(species, +img.dataset.px);
   }catch(e){}
 }
@@ -3927,7 +3970,8 @@ function startWildEncounter(encOpts){
       for(let i=0;i<size;i++){ wave.push({ species: choices[Math.floor(Math.random()*choices.length)], level:lvl, wildRoll:true }); }
     }
   }
-  beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Wild encounter', silentIntro: !!encOpts.silentIntro });
+  beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Wild encounter',
+    silentIntro: !!encOpts.silentIntro, onWin: encOpts.onWin || null });
 }
 
 /* ---------- shared multi-wave battle engine ---------- */
@@ -3936,8 +3980,9 @@ function beginBattle(config){
     waves: config.waves, waveIndex:0,
     isNpc: !!config.isNpc, allowCatch: !!config.allowCatch,
     challenge: config.challenge || null, name: config.name || 'Battle',
-    onWin: config.onWin || null, noFlee: !!config.noFlee, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
+    onWin: config.onWin || null, onWaveStart: config.onWaveStart || null, noFlee: !!config.noFlee, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
     guardianTrial: !!config.guardianTrial, leechSeed:false, bgKey: config.bgKey||null,
+    alwaysFirst: !!config.alwaysFirst,
     scriptedOneTurn: !!config.scriptedOneTurn,
     scriptedLoss: config.scriptedLoss||null,
     scriptedAlly: config.scriptedAlly||null, allyMove: config.allyMove||null,
@@ -3975,8 +4020,9 @@ function loadWave(i){
   // Leech Seed is a FIELD effect: it re-roots on every new wave.
   if(b.leechSeed) b.enemies.forEach(e=> addEStatus(e, { type:'leechSeed' }));
   b.enemies.forEach(e=>{ if(!state.encounteredSpecies.includes(e.species)) state.encounteredSpecies.push(e.species); });
-  /* Keep whoever was fighting, as long as they're still standing — a new wave
-     shouldn't quietly hand the fight back to the first slot. */
+  if(b.onWaveStart) b.onWaveStart(i);
+  /* A borrowed story monster is the only thing in the party, so it simply
+     stays. Otherwise keep whoever was fighting, as long as they're standing. */
   const cur = state.party[b.activeIndex];
   let ai = (cur && cur.currentHp>0 && !isPassenger(cur))
     ? b.activeIndex
@@ -3986,6 +4032,8 @@ function loadWave(i){
   saveProfile();
 }
 function onWaveCleared(){
+  // a scripted ally keeps fighting across waves — don't hand the party back yet
+
   const b = ui.battle;
   if(b.arena){
     // infinite waves: respawn fresh dummies, keep statuses and HP as-is
@@ -4018,7 +4066,7 @@ function unlockedMoves(m){
   // A borrowed story monster gets exactly one button, and no writing.
   const sm = ui.battle && ui.battle.allyMove && SCRIPTED_MOVES[ui.battle.allyMove];
   if(sm && ui.battle.scriptedAlly && m.species===ui.battle.scriptedAlly){
-    return [Object.assign({ unlock:0, available:true, isStone:false, scripted:true }, sm)];
+    return [Object.assign({ unlock:0, available:true, isStone:false, scripted:true, mult:sm.fixed?null:sm.mult }, sm)];
   }
   /* 'Max' is an UPGRADE of Ultimate, not an extra button: once its level is
      reached it takes over the Ultimate slot entirely. */
@@ -4509,7 +4557,7 @@ function monsterChooser(title, options, onPick, dismissable=true){
   scrim.innerHTML=`<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;">
     <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;margin-bottom:12px;">${escapeHtml(title)}</div>
     ${options.map(o=>`<button class="btn btn-ghost sw-opt" data-i="${o.i}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;">
-      ${monPortrait(o.m.species,36,{stage:monStage(o.m)})}<span>${escapeHtml(displayName(o.m))} · Lv ${o.m.level} · ${o.m.currentHp}/${monMaxHp(o.m)} HP</span></button>`).join('')}
+      ${monPortrait(o.m.species,36,{stage:monStage(o.m),crowned:isCrowned(o.m)})}<span>${escapeHtml(displayName(o.m))} · Lv ${o.m.level} · ${o.m.currentHp}/${monMaxHp(o.m)} HP</span></button>`).join('')}
     ${dismissable?'<button class="btn btn-ghost" id="chCancel" style="margin-top:4px;">Cancel</button>':''}
   </div>`;
   document.body.appendChild(scrim);
@@ -4674,7 +4722,10 @@ function applyPartyDrain(mv, mon){
    spelling quiz entirely — the drama is the point, and a writing prompt would
    undercut it. */
 const SCRIPTED_MOVES = {
-  tsunami:      { slot:'Basic', name:'Tsunami', mult:0.8, target:'AOE', words:0, scripted:true },
+  /* Fixed damage: what a fully-charged Cataclysm Max would have done at the
+     dragon's crowned 351 ATK. Enough to erase anything it is pointed at. */
+  unleashMax:   { slot:'Basic', name:'Unleash Max',   fixed:614, target:'AOE',    words:0, scripted:true },
+  hyperbeamMax: { slot:'Basic', name:'Hyperbeam Max', fixed:965, target:'Single', words:0, scripted:true },
   dragonLegacy: { slot:'Basic', name:'Dragon Legacy', mult:0, target:'AOE', words:0, scripted:true, endsBattle:true },
 };
 
@@ -4860,20 +4911,29 @@ function resolveScriptedMove(mv, mon){
     }, 1600);
     return;
   }
-  // a sweeping AOE that is certain to clear the field
+  // A scripted finisher: fixed damage, always enough, and it shows the number.
   const atk = monAtk(mon);
-  const hits = livingEnemies().map(t=>{
-    const dmg = Math.max(t.hp, computeDamage(mv.mult, atk, monRef(mon), t, true));
-    return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:0 };
+  const pool = mv.target==='Single' ? livingEnemies().slice(0,1) : livingEnemies();
+  const hits = pool.map(t=>{
+    const dmg = mv.fixed != null ? mv.fixed
+              : Math.max(t.hp, computeDamage(mv.mult, atk, monRef(mon), t, true));
+    return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp-dmg) };
   });
   battleMsg(`${displayName(mon)} used ${mv.name}!`);
   bob($('#playerBob'), +1);
   playEffect(mv.name, { duration:800 });
   setTimeout(()=>{
     applyHits(hits);
+    reportHits(hits);              // the red numbers were missing here
     setTimeout(()=>{
       battleMsg('The field is swept clean!');
-      setTimeout(()=>{ restoreRealParty(); if(b.onWin) b.onWin(); }, 900);
+      setTimeout(()=>{
+        // The sweep always empties the field, so the question is whether more
+        // WAVES remain — checking for living enemies would end the fight early.
+        if(b.waveIndex < b.waves.length - 1) return onWaveCleared();
+        restoreRealParty();
+        if(b.onWin) b.onWin();
+      }, 900);
     }, 700);
   }, 500);
 }
@@ -5538,9 +5598,16 @@ function onMonFainted(){
   battleMsg(`${displayName(activeMon())} fainted!`);
   const options=state.party.map((m,i)=>({m,i})).filter(o=>o.m.currentHp>0 && !isPassenger(o.m));
   monsterChooser('Send out…', options, (i)=>{
-    ui.battle.activeIndex=i; ui.battle.switchedThisTurn=false; ui.battle.phase='player';
+    ui.battle.activeIndex=i; ui.battle.switchedThisTurn=false;
     renderBattle();
     if(livingEnemies().length===0) return setTimeout(()=>onWaveCleared(), 500);
+    // In a scripted rout the enemy keeps the initiative after every swap.
+    if(ui.battle.alwaysFirst){
+      ui.battle.phase='resolving';
+      battleMsg('They strike again!');
+      return setTimeout(enemyTurn, 800);
+    }
+    ui.battle.phase='player';
     battleMsg('Choose a move.');
   }, false);
 }
@@ -5717,18 +5784,6 @@ function onBattleWon(){
     saveProfile();
   }
   // a wild win inside the Caverns moves you one step along that path
-  if(ui.plantReachedTarget && !b.isNpc){
-    ui.plantReachedTarget = false;
-    const r3 = state.progress.region3;
-    r3.powerStone = true;
-    saveProfile();
-    setTimeout(()=> storyModal(npcPortrait('plant_boss','🧑‍🏭',130,'transparent'), 'The boss keeps his word',
-      `"Ten call-outs answered. My crew have been singing your praises and I'm sick of hearing it."<br><br>` +
-      `He drops a warm, faintly glowing stone into your palm.<br><br>` +
-      `<b>Power Stone received</b> — use it on your dragon from this screen.<br><br>` +
-      `"And if you've a strong stomach, my <b>engineer</b> has a job that's beyond us."`,
-      ()=>go('plant')), 1200);
-  }
   if(ui.cavernAdvanceOnWin && !b.isNpc){
     const pid = ui.cavernAdvanceOnWin;
     ui.cavernAdvanceOnWin = null;
@@ -5741,6 +5796,9 @@ function onBattleWon(){
   const evolvers = levelUps.filter(e=>e.evos.length>0);
   // Non-NPC fights can still carry a callback — the Engineer's commission is a
   // catchable wild fight that pays out.
+  /* A callback may show a scene first and then call resumeVictory() to fall
+     through to the ordinary victory page — which is where catching happens. */
+  ui.pendingVictory = ()=> showVictory(enemyNames, levelUps, tokens);
   const finish = ()=> b.onWin ? b.onWin(levelUps) : showVictory(enemyNames, levelUps, tokens);
   if(evolvers.length){
     playEvolutions(evolvers, finish);
@@ -5815,12 +5873,16 @@ function playEvolutions(list, done){
       /* Alternate between the two species when a transformation names a
          `fromSpecies` (Seed→Fairy, Egg→Dragon), rather than flashing one
          species against itself. */
-      const useFrom = !!ev.fromSpecies && !!inverted;
-      const sp = useFrom ? ev.fromSpecies : ev.species;
-      const st = useFrom ? 0 : stage;
-      // a crowning flickers between the plain and crowned forms
-      const cr = ev.crowned ? !inverted : false;
-      spriteBox.innerHTML = monPortrait(sp, 190, { view:'front', stage:st, bare:true, crowned:cr });
+      /* The INVERTED frame is the thing you're becoming — that's where the
+         mystery lives. The normal frame stays as the current form. */
+      const showTarget = !!inverted;
+      const sp = (ev.fromSpecies && !showTarget) ? ev.fromSpecies : ev.species;
+      const st = (ev.fromSpecies && !showTarget) ? 0 : stage;
+      const cr = ev.crowned ? showTarget : false;
+      // passengers are tiny things; don't render them at hero size
+      const scale = (!showTarget && ev.fromSpecies==='sacred_seed') ? 0.20
+                  : (!showTarget && ev.fromSpecies==='dragon_egg')  ? 0.40 : 1;
+      spriteBox.innerHTML = monPortrait(sp, Math.round(190*scale), { view:'front', stage:st, bare:true, crowned:cr });
       spriteBox.classList.toggle('inverted', !!inverted);
     };
 
@@ -5863,6 +5925,13 @@ function exploreFurther(){
   if(ui.cavernPath && !cavernsComplete()) return exploreCavernPath(ui.cavernPath);
   if((ui.currentZone||{}).id==='geothermal_plant') return go('plant');
   return startWildEncounter({ silentIntro:true });
+}
+
+/* Continue to the standard victory screen after a story beat. */
+function resumeVictory(){
+  const f = ui.pendingVictory;
+  ui.pendingVictory = null;
+  if(f) f(); else go('region');
 }
 
 function showVictory(enemyNames, levelUps, tokens){
@@ -6001,6 +6070,7 @@ function gotcha(enemy){
 
 function go(screen){
   if(screen !== 'quiz') document.body.classList.remove('writing');
+  document.body.classList.remove('in-scene');
   if(!['zone','caverns','battle','quiz'].includes(screen)) document.body.classList.remove('zone-dark','zone-tinted');
   // Protected screens re-lock as soon as you leave them, so the password is
   // required on every visit. The arena stays unlocked while you're actually
@@ -6359,7 +6429,7 @@ function renderPartyStrip(){
   return `<div class="party-strip">
     ${state.party.map(m=>`
       <div class="party-chip">
-        ${monPortrait(m.species, 34, { stage:monStage(m) })}
+        ${monPortrait(m.species,34,{stage:monStage(m),crowned:isCrowned(m)})}
         <div>
           <div class="pc-name">${escapeHtml(displayName(m))}</div>
           <div class="pc-lvl">Lv ${m.level}</div>
@@ -6617,7 +6687,7 @@ function openRefineSheet(st, mon){
 }
 
 function crownBlock(m){
-  if(isSeed(m) || isEgg(m)) return '';
+  if(isPassenger(m)) return '';
   const owned = state.inventory.crowns||0;
   if(isCrowned(m)){
     return `<div class="crown-panel crowned">
@@ -6679,7 +6749,7 @@ function renderStats(){
   const maxHp = monMaxHp(m);
   const need = fightsNeeded(m.level);
   const capped = m.level>=levelCap();
-  const suppCap = isSeed(m) ? 0 : proteinCap(m.species, m);   // crowning raises this
+  const suppCap = isPassenger(m) ? 0 : proteinCap(m.species, m);   // crowning raises this
   const atCap = (m.supplements||0) >= suppCap;
   const nextIsFinal = (m.supplements||0) === suppCap-1;
   const moves = MOVES[m.species].map(mv=>{
@@ -6882,7 +6952,7 @@ function renderStorage(){
     list.innerHTML = state.storage.map(m=>`
       <div class="party-card" style="padding:10px;margin-bottom:8px;">
         <div class="party-head" style="gap:9px;">
-          ${monPortrait(m.species,44,{stage:monStage(m)})}
+          ${monPortrait(m.species,44,{stage:monStage(m),crowned:isCrowned(m)})}
           <div style="flex:1;min-width:0;">
             <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:14px;">${escapeHtml(displayName(m))}</div>
             <div style="font-size:12px;color:var(--ink-soft);font-weight:800;">Lv ${m.level}</div>
@@ -7254,7 +7324,7 @@ function stoneDescription(s){
 /* pick which owned monster of the matching type learns the stone */
 function chooseStoneRecipient(s){
   const all = [...state.party, ...state.storage];
-  const eligible = all.filter(m=>!isSeed(m) && SPECIES[m.species].types.includes(s.type));
+  const eligible = all.filter(m=>!isPassenger(m) && SPECIES[m.species].types.includes(s.type));
   if(eligible.length===0){
     toast(`You have no ${s.type}-type monsters yet.`);
     return;
@@ -7270,7 +7340,7 @@ function chooseStoneRecipient(s){
       // never displaces a Basic-slot skill and shouldn't warn about one.
       const cur = isUltra ? m.ultraStone : (s.tier==='high' ? m.power1Stone : m.equippedStone);
       return `<button class="btn btn-ghost st-opt" data-uid="${m.uid}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;">
-        ${monPortrait(m.species,36,{stage:monStage(m)})}
+        ${monPortrait(m.species,36,{stage:monStage(m),crowned:isCrowned(m)})}
         <span style="flex:1;">${escapeHtml(displayName(m))} · Lv ${m.level}
         ${cur?`<br><span style="font-size:11px;color:var(--cinnabar);">replaces ${escapeHtml(cur.name)}</span>`:''}</span>
       </button>`;
@@ -7286,9 +7356,12 @@ function chooseStoneRecipient(s){
     const mon = all.find(m=>m.uid===uid);
     const replaced = isUltra ? mon.ultraStone : (s.tier==='high' ? mon.power1Stone : mon.equippedStone);
     const doIt = async ()=>{
-      if(isUltra) mon.ultraStone = { tier:s.tier, type:s.type, name:s.name };
-      else if(s.tier==='high') mon.power1Stone = { tier:s.tier, type:s.type, name:s.name };
-      else        mon.equippedStone = { tier:s.tier, type:s.type, name:s.name };
+      // Carry the refinement across — a ✦ stone taught plainly would silently
+      // throw away the medals and duplicates that bought it.
+      const taught = { uid:s.uid, tier:s.tier, type:s.type, name:s.name, plus:stonePlus(s) };
+      if(isUltra) mon.ultraStone = taught;
+      else if(s.tier==='high') mon.power1Stone = taught;
+      else        mon.equippedStone = taught;
       const i = state.moveStones.findIndex(x=>x.uid===s.uid);
       if(i>=0) state.moveStones.splice(i,1);
       await saveProfile();
@@ -7503,7 +7576,7 @@ function renderPartyHpCard(){
   return `<div class="hp-card">
     ${state.party.map(m=>{ const max=monMax(m); return `
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-        ${monPortrait(m.species, 30, { stage:monStage(m) })}
+        ${monPortrait(m.species,30,{stage:monStage(m),crowned:isCrowned(m)})}
         <div style="flex:1;">
           <div style="font-size:12px;font-weight:800;">${escapeHtml(displayName(m))}</div>
           <div class="hpbar"><div class="hpfill" style="width:${Math.max(0,m.currentHp/max*100)}%;background:${m.currentHp/max<0.3?'var(--cinnabar)':'var(--jade)'};"></div></div>
@@ -8593,8 +8666,8 @@ async function disused7(){
   storyModal(monPortrait('water_dragon',170,{view:'front',bare:true,stage:1,crowned:true}), 'The thing they caught',
     `You come out on a ledge above a flooded chamber, and you forget to breathe.<br><br>` +
     `A <b>water dragon</b> fills it — vast, shimmering, magnificent — and it is <b>losing</b>. ` +
-    `A man with a <b>gigantic Raven</b> stands calmly at the water's edge, his purple trenchcoat heavy with ` +
-    `jewels, directing the fight like a conductor.<br><br>` +
+    `A man with a <b>gigantic Raven</b> stands calmly at the water's edge, raising his sword to command ` +
+    `his army against the dragon. Set into the guard of that sword is a <b>large blue orb</b>.<br><br>` +
     `He is not fighting fair. His Capos' <b>ghosts and psychics</b> have the dragon bound at every limb, ` +
     `holding it still while he works.`,
     ()=>renderCaverns(), { bg:'rocky_caverns', subtitle:'Rocky Caverns' });
@@ -8612,7 +8685,8 @@ async function disused8(){
       <div class="scene-title">Its core is gone</div>
       <div class="scene-body">
         <p>You see it now. Where the dragon's chest should shine there is only a <b>hollow</b> — ` +
-        `something has been cut out of it.</p>
+        `something has been cut out of it. <b>The core</b>, which now sits clasped in the X of that man's ` +
+        `sword guard, glowing a deep and patient blue.</p>
         <p>Whatever is left of it is barely fighting any more. Its eyes have gone flat and obedient. ` +
         `The man with the Raven says a word and the dragon <b>stops struggling</b>.</p>
         <p>They have taken something important from the dragon.</p>
@@ -8626,7 +8700,8 @@ async function disused8(){
   $('#choiceYes').addEventListener('click', ()=>{
     storyModal(monPortrait('water_dragon',150,{view:'front',bare:true,stage:1,crowned:true}), 'You step out of the dark',
       `You do not have a plan. You walk out onto the ledge anyway, and your voice carries further than you meant it to.<br><br>` +
-      `The pale coat turns. He looks you over — the borrowed suit, the child inside it — and something like ` +
+      `The man with the Raven turns. He looks you over — the borrowed suit, the child inside it — ` +
+      `and something like ` +
       `<b>amusement</b> crosses his face.<br><br>` +
       `"<b>Don Padrino</b>," he says, introducing himself to you as though you were worth the courtesy. ` +
       `"And you are trespassing."`,
@@ -8650,7 +8725,7 @@ function disused9Fight(){
   r2.padrinoMet = true;
   beginBattle({
     isNpc:true, name:'Don Padrino', npcId:'padrino', noFlee:true, scriptedLoss:'padrino',
-    enemiesFirst:true,          // Don Padrino moves before you do
+    enemiesFirst:true, alwaysFirst:true,   // he moves before you EVERY round
     waves:[[
       {species:'water_dragon',   level:100, ai:'cataclysm', supplements:10, crowned:true, boss:true},
       {species:'flying_starter', level:91,  ai:'best'},
@@ -8707,13 +8782,19 @@ async function onPadrinoResolved(){
 function disused10Fight(){
   advancePath('disused');   // scenes 9 and 10 are one continuous beat
   beginBattle({
-    isNpc:true, name:'The Capos', npcId:'capo_black', noFlee:true, scriptedAlly:'water_dragon',
-    allyLevel:100, allyCrowned:true, allyMove:'tsunami',
-    waves:[[
-      {species:'ghost_starter',    level:51, ai:'best'},
-      {species:'physical_starter', level:51, ai:'best'},
-      {species:'psychic_starter',  level:51, ai:'best'},
-    ]],
+    isNpc:true, name:'Sottocapo', npcId:'sottocapo', noFlee:true, scriptedAlly:'water_dragon',
+    allyLevel:100, allyCrowned:true, allyMove:'unleashMax',
+    waves:[
+      [{species:'golem',level:61,ai:'best'},
+       {species:'earth_snake',level:61,ai:'best'},
+       {species:'bat',level:61,ai:'best'}],
+      [{species:'ghost_starter',level:71,ai:'best'},
+       {species:'psychic_starter',level:71,ai:'best'},
+       {species:'ground_starter',level:71,ai:'best'}],
+      [{species:'physical_starter',level:85,ai:'best'}],
+    ],
+    // the last wave is a single foe, so the dragon switches to Hyperbeam
+    onWaveStart:(i)=>{ ui.battle.allyMove = (i>=2) ? 'hyperbeamMax' : 'unleashMax'; },
     onWin: ()=> disused11Intro(),
   });
 }
@@ -8721,8 +8802,8 @@ function disused10Fight(){
 function disused11Intro(){
   storyModal(uiIcon('dragon_core', 130, '💠'), 'It is weaker than it looks',
     `The dragon lands hard, and you feel it shudder beneath you.<br><br>` +
-    `A Capo steps from the smoke, turning something over in his hand — something that <b>glows</b>.<br><br>` +
-    `"Looking for this?" He holds up the <b>dragon's core</b>. "It won't last much longer without it."`,
+    `<b>Don Padrino</b> steps from the smoke, flaunting the glowing core on his sword.<br><br>` +
+    `"A valiant last stand," he smirks at the dragon. "But without your core, you're at death's door."`,
     ()=>disused11Fight());
 }
 
@@ -8800,11 +8881,11 @@ async function grantDragonEgg(){
   await saveProfile();
 
   const fade = document.createElement('div');
-  fade.style.cssText='position:fixed;inset:0;background:#fff;z-index:90;opacity:0;transition:opacity 1.6s;';
+  fade.style.cssText='position:fixed;inset:0;background:#fff;z-index:90;opacity:0;transition:opacity 1.2s;pointer-events:none;';
   document.body.appendChild(fade);
   requestAnimationFrame(()=>{ fade.style.opacity='1'; });
   setTimeout(()=>{
-    storyModal('🥚', 'A dragon egg',
+    storyModal(monPortrait('dragon_egg', 130, { view:'front', bare:true }), 'A dragon egg',
       `You are standing in the Sacred Grove again, and the light is ordinary, and your legs are shaking.<br><br>` +
       `In your arms is a <b>dragon egg</b>, heavy and faintly warm. It travels in the slot the Sacred Seed once ` +
       `filled — level 1, and a long way from hatching. <b>It will open at level 31.</b>`,
@@ -9007,6 +9088,9 @@ async function givePathReward(pathId, which){
 function storyModal(emblem, title, html, onClose, opts){
   opts = opts || {};
   document.body.classList.remove('writing');
+  document.body.classList.add('in-scene');
+  document.body.classList.remove('zone-dark');   // read dialogue on paper, not in the dark
+  window.scrollTo(0, 0);
   if(opts.subtitle !== undefined) $('#brandSub').textContent = opts.subtitle;
   if(opts.bg) setScreenBg(opts.bg);
   screenEl.innerHTML = `
@@ -9016,7 +9100,10 @@ function storyModal(emblem, title, html, onClose, opts){
       <div class="scene-body">${html}</div>
       <button class="btn btn-primary" id="sceneNext" style="margin-top:16px;">Continue</button>
     </div>`;
-  $('#sceneNext').addEventListener('click', ()=>{ if(onClose) onClose(); });
+  $('#sceneNext').addEventListener('click', ()=>{
+    document.body.classList.remove('in-scene');
+    if(onClose) onClose();
+  });
 }
 
 
@@ -9221,26 +9308,41 @@ function plantTooLate(n){
 }
 function battleMsgToast(t){ toast(t); }
 
-async function plantHelpSuccess(n){
+/* Answering a call starts the fight. Nothing is paid until the monsters are
+   actually cleared — fleeing earns nothing, which is the point of helping. */
+function plantHelpSuccess(n){
   stopPlantLoop();
+  ui.currentZone = { id:'geothermal_plant', name:'Geothermal Plant' };
+  ui.plantWorker = n;
+  startWildEncounter({ onWin: ()=> onPlantHelpWon(n) });
+}
+
+async function onPlantHelpWon(n){
   const r3 = state.progress.region3;
   const first = !r3.helped[n];
   r3.helped[n] = true;
   r3.helpCount = (r3.helpCount||0) + 1;
-  if(first) state.inventory.tokens = (state.inventory.tokens||0) + 2;
   const reached = r3.helpCount === PLANT_TARGET;
+  if(first) state.inventory.tokens = (state.inventory.tokens||0) + 2;
+  if(reached) r3.powerStone = true;
   await saveProfile();
 
   storyModal(npcPortrait('worker'+n,'👷',120,'transparent'), 'Thank you!',
-    `"You're a lifesaver — they've got in among the coupling again."<br><br>` +
-    (first ? `<b>+2 Skill Tokens</b><br><br>` : '') +
-    `The worker points you at the machinery, and something hot moves behind it.`,
+    `"You're a lifesaver — they'd got in among the coupling again."<br><br>` +
+    (first ? `<b>+2 Skill Tokens</b>` : `<i>This one has already thanked you once, but the help still counts.</i>`),
     ()=>{
-      ui.currentZone = { id:'geothermal_plant', name:'Geothermal Plant' };
-      ui.plantReturn = true;
-      if(reached) ui.plantReachedTarget = true;
-      startWildEncounter();
-    });
+      if(reached) return plantBossReward();
+      resumeVictory();
+    }, { bg:'geothermal_plant', subtitle:'Geothermal Plant' });
+}
+
+function plantBossReward(){
+  storyModal(npcPortrait('plant_boss','🧑‍🏭',130,'transparent'), 'The boss keeps his word',
+    `"Ten call-outs answered. My crew have been singing your praises and I'm sick of hearing it."<br><br>` +
+    `He drops a warm, faintly glowing stone into your palm.<br><br>` +
+    `<b>Power Stone received</b> — use it on your dragon from the plant screen.<br><br>` +
+    `"And if you've a strong stomach, my <b>engineer</b> has a job that's beyond us."`,
+    ()=> resumeVictory(), { bg:'geothermal_plant', subtitle:'Geothermal Plant' });
 }
 
 
@@ -9451,19 +9553,15 @@ function engineerChoice(){
 async function onEngineerWin(){
   const r3 = state.progress.region3;
   const paid = r3.engineerDone||0;
-  if(paid < 3){
-    r3.engineerDone = paid + 1;
-    state.inventory.protein = (state.inventory.protein||0) + 1;
-    await saveProfile();
-    return challengeResult('🛠️', 'Commission complete',
-      `"That's the drills back, more or less." She presses a Protein Supplement into your hand.<br><br>` +
-      `<b>+1 Protein Supplement</b>${r3.engineerDone<3?` · ${3-r3.engineerDone} more commission${3-r3.engineerDone>1?'s':''} available`:''}`,
-      'plant');
-  }
+  if(paid >= 3) return resumeVictory();     // nothing left to say; go and catch things
+  r3.engineerDone = paid + 1;
+  state.inventory.protein = (state.inventory.protein||0) + 1;
   await saveProfile();
-  challengeResult('🛠️', 'Commission complete',
-    `"They'll be back next week, same as always." She shrugs. "Nothing left to pay you with, mind — ` +
-    `but you're welcome to the practice."`, 'plant');
+  const left = 3 - r3.engineerDone;
+  storyModal(npcPortrait('engineer1','🛠️',120,'transparent'), 'Commission complete',
+    `"That's the drills back, more or less." She presses a Protein Supplement into your hand.<br><br>` +
+    `<b>+1 Protein Supplement</b>${left?` · ${left} more commission${left>1?'s':''} available`:''}`,
+    ()=> resumeVictory(), { bg:'geothermal_plant', subtitle:'Geothermal Plant' });
 }
 
 /* --- the ship, and the shuttered dojo --- */
@@ -9711,7 +9809,8 @@ function renderExplore(){
         <div>Stand and fight — the Grove will not let a coward pass.</div>
         <div class="trial-bar"><span style="width:${Math.min(100,((state.progress.region2||{}).courage||0)/COURAGE_TARGET*100)}%"></span></div>
         <div class="trial-count">${(state.progress.region2||{}).courage||0} / ${COURAGE_TARGET} battles faced</div>
-        ${inCourageGauntlet() ? `<div class="trial-warn">⚠️ The Grove tests you in earnest now — Lv${COURAGE_GAUNTLET_LEVEL} foes. Flee and you fall back to ${COURAGE_FLEE_FALLBACK}.</div>` : ''}
+        ${inCourageGauntlet() ? (()=>{ const g = COURAGE_GAUNTLET[(state.progress.region2.courage||0) - COURAGE_GAUNTLET_FROM];
+          return `<div class="trial-warn">⚠️ The Grove tests you in earnest now — Lv${g?g.level:41} foes. Flee and you fall back to ${COURAGE_FLEE_FALLBACK}.</div>`; })() : ''}
       </div>` : ''}
     ${canFight ? `
       <div class="zone-row">
