@@ -3211,9 +3211,9 @@ function buildWriter(i, box){
   // reference threw a ReferenceError, which aborted buildWriter entirely and
   // left the writing pad blank.
   const currentWord = q.config.words[q.index];
-  const hintAfter = q.config.relaxed
-    ? (q.config.hintAfterMisses || 3)
-    : hintScheduleFor(currentWord);
+  const hintAfter = q.config.noHints ? false
+    : (q.config.relaxed ? (q.config.hintAfterMisses || 3)
+                        : hintScheduleFor(currentWord));
   /* Hanzi Writer's leniency multiplier: >1 accepts sloppier strokes. Young
      hands need the slack; the slider lives in Settings. */
   const leniency = (state && state.settings && state.settings.leniency) || 1.0;
@@ -4043,6 +4043,7 @@ function beginBattle(config){
     allyUnkillable: !!config.allyUnkillable, enemiesFirst: !!config.enemiesFirst,
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     charge:null, legacyBonus:0,
+    aftershock:[], aftershockPending:false, bonusMult:0, _bonusResolved:false,
     rechargeWords:0,         // every word written this battle feeds the meter
 
     partyStatus:{},          // party-wide buffs, each with a turn counter
@@ -4129,8 +4130,12 @@ function unlockedMoves(m){
     let [slot,name,mult,target,words,unlock,extra]=mv;
     if(slot==='Ultimate' && maxMv){ [,name,mult,target,words,unlock,extra] = maxMv; }
     const e = extra || {};
-    return { slot,name,mult,target,words,unlock, scale:e.scale||null, hits:e.hits||0, split:!!e.split, charge:e.charge||null,
-             dot:e.dot||null, shell:e.shell||null, clones:e.clones||null, bonus:e.bonus||null, stun:e.stun||0,
+    /* Spread the whole extras object. The old allow-list silently dropped any
+       property it hadn't been told about — which is why `soul` and `tachy`
+       never reached the move, so Steel Soul and Tachypsychia did nothing at
+       all. Adding a new mechanic must not require editing this line. */
+    return { slot,name,mult,target,words,unlock, ...e,
+             scale:e.scale||null, hits:e.hits||0, split:!!e.split, charge:e.charge||null,
              available:(name!=null && moveUnlockedFor(m, [slot,name,mult,target,words,unlock,e])), isStone:false };
   });
   /* Equipped stone slots in by tier: High-tier "twin" skills override POWER1
@@ -4235,7 +4240,11 @@ function moveShape(mv){
     return `×${r.min}–${r.max}`;
   }
   // an aftershock bonus can add a strike, so show the band
-  if(mv.hits && mv.hits > 1 && mv.bonus && mv.bonus.aftershock) return `×${mv.hits}–${mv.hits+1}`;
+  if(mv.hits && mv.hits > 1 && mv.bonus && mv.bonus.aftershock){
+    const lo = mv.hits + aftershockBonusHits();
+    return `×${lo}–${lo+1}`;
+  }
+  if(mv.hits && mv.hits > 1 && aftershockBonusHits()) return `×${mv.hits + aftershockBonusHits()}`;
   if(mv.hits && mv.hits > 1) return `×${mv.hits}`;
   if(mv.target === 'AOE') return 'AOE';
   if(mv.target === 'Multi2') return '2 targets';
@@ -4392,6 +4401,8 @@ function renderStatusBadges(){
       const shown = Math.max(0, st.turnsLeft - 1);
       out.push(`<span class="status-pill mine">${STATUS_LABELS[st.type]||st.type} ${shown}</span>`);
     });
+    const af = aftershockBonusHits();
+    if(af) out.push(`<span class="status-pill mine">💥 Aftershock ×${af}</span>`);
     row.innerHTML = out.join('');
   }
   // Enemy statuses render on their OWN card, above that enemy's HP bar, so it's
@@ -5007,8 +5018,21 @@ function resolveChargeSpend(mv, mon){
 
 /* The gamble: four more words, any of them from the full list, for double
    damage. Backing out keeps the damage already earned. */
-function offerBonusRound(mv, mon, hits, effMsg){
+/* The optional second quiz. Two flavours:
+     mult       — Heavensplitter: doubles the damage
+     aftershock — Rampage Max: adds a strike now and a stacking field effect
+   Crucially it re-resolves with the ORIGINAL results, not the bonus quiz's;
+   re-entering with the short bonus run scored ~2 words against a 10-word
+   requirement, so the move landed for nothing. */
+function offerBonusRound(mv, mon, hits, effMsg, origResults){
   const b = ui.battle;
+  b._bonusOriginal = origResults || (ui.quiz ? ui.quiz.results : []);
+  const isAftershock = !!(mv.bonus && mv.bonus.aftershock);
+  const reward = isAftershock ? '+1 strike & Aftershock' : `×${mv.bonus.mult}`;
+  const promise = isAftershock
+    ? `to add <b>an extra strike</b> now and start an <b>Aftershock</b> — another strike every turn for 3 turns.`
+    : `to <b>double</b> the damage.`;
+
   const ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.6);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;';
   ov.innerHTML = `<div style="background:var(--paper);border-radius:18px;padding:22px;max-width:340px;width:100%;text-align:center;">
@@ -5016,39 +5040,74 @@ function offerBonusRound(mv, mon, hits, effMsg){
     <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:19px;margin:6px 0;">${escapeHtml(mv.name)} is ready</div>
     <div style="font-size:13px;font-weight:600;line-height:1.55;color:var(--ink-soft);margin-bottom:16px;">
       Write <b>${mv.bonus.words} more words</b> — drawn from your <b>whole</b> list, not just today's —
-      to <b>double</b> the damage. Slip up and it still lands at full strength.
+      ${promise} No hints. Slip up and it still lands at full strength.
     </div>
-    <button class="btn btn-primary" id="bonusGo">Try for ×${mv.bonus.mult}</button>
+    <button class="btn btn-primary" id="bonusGo">Try for ${reward}</button>
     <button class="btn btn-ghost" id="bonusSkip" style="margin-top:8px;">Strike now</button>
   </div>`;
   document.body.appendChild(ov);
   const close=()=>{ if(ov.parentNode) document.body.removeChild(ov); };
-  const finish = (multiplier)=>{
+
+  const finish = (won)=>{
     b._bonusResolved = true;
-    b.bonusMult = multiplier;
-    resolveBattleMove(mv, hits[0] ? hits[0].t : null, ui.quiz ? ui.quiz.results : []);
+    if(isAftershock){
+      if(won){
+        b.aftershockPending = true;              // this cast gets the extra strike
+        addAftershockStack();
+      }
+    } else {
+      b.bonusMult = won ? mv.bonus.mult : 1;
+    }
+    const orig = b._bonusOriginal || [];
+    b._bonusOriginal = null;
+    resolveBattleMove(mv, hits[0] ? hits[0].t : null, orig);
   };
-  ov.querySelector('#bonusSkip').addEventListener('click', ()=>{ close(); finish(1); });
+
+  ov.querySelector('#bonusSkip').addEventListener('click', ()=>{ close(); finish(false); });
   ov.querySelector('#bonusGo').addEventListener('click', ()=>{
     close();
+    // draw by CHARACTER count, like every other quiz, from the whole word bank
     const pool = masterWords.slice();
+    const target = mv.bonus.words;
     const words = [];
-    let bag = shuffle(pool);
-    while(words.length < mv.bonus.words){ if(!bag.length) bag = shuffle(pool); words.push(bag.pop()); }
+    let chars = 0, bag = shuffle(pool), guard = 0;
+    while(chars < target && guard++ < 200){
+      if(!bag.length) bag = shuffle(pool);
+      const w = bag.pop();
+      words.push(w); chars += countWords(w);
+    }
     startQuiz({
       title: mv.name+' — power up',
-      subtitle:`${mv.bonus.words} words from your whole list. Stop any time and keep the normal hit.`,
+      subtitle:`${target} words from your whole list. No hints.`,
       words, stopAtFirstMiss:true, lockExit:true,
-      wordTarget: words.reduce((n,w)=>n+countWords(w),0),
-      stopAt: 1,
+      wordTarget: target,
+      noHints: true,                    // a gamble should not be handheld
       onComplete:(res)=>{
-        const allPassed = res.length>=mv.bonus.words && res.every(r=>r.passed);
+        const got = res.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0);
         go('battle');
-        finish(allPassed ? mv.bonus.mult : 1);
+        finish(got >= target);
       },
-      onExit:()=>{ go('battle'); finish(1); },
+      onExit:()=>{ go('battle'); finish(false); },
     });
   });
+}
+
+/* Aftershock: each stack adds a strike to multi-hit moves and expires on its
+   own timer, so stacks never refresh one another. */
+function addAftershockStack(){
+  const b = ui.battle;
+  b.aftershock = b.aftershock || [];
+  b.aftershock.push({ turnsLeft: 3 });
+}
+function aftershockBonusHits(){
+  const b = ui.battle;
+  return (b && b.aftershock) ? b.aftershock.length : 0;
+}
+function tickAftershock(){
+  const b = ui.battle;
+  if(!b || !b.aftershock) return;
+  b.aftershock.forEach(a=>a.turnsLeft--);
+  b.aftershock = b.aftershock.filter(a=>a.turnsLeft > 0);
 }
 
 function resolveScriptedMove(mv, mon){
@@ -5180,7 +5239,7 @@ function resolveBattleMove(mv, target, results){
      so Rampage Max can ask for its aftershock words. Previously the multi-hit
      branch returned first and the offer was never reached. */
   if(mv.bonus && !ui.battle._bonusResolved && targets[0]){
-    return offerBonusRound(mv, mon, [{ t:targets[0], idx:ui.battle.enemies.indexOf(targets[0]) }], '');
+    return offerBonusRound(mv, mon, [{ t:targets[0], idx:ui.battle.enemies.indexOf(targets[0]) }], '', results);
   }
   ui.battle._bonusResolved = false;
 
@@ -5202,7 +5261,7 @@ function resolveBattleMove(mv, target, results){
   /* A bonus move offers a second, optional quiz drawn from the WHOLE word bank
      — unfamiliar words for double damage, quittable at any point. */
   if(mv.bonus && !ui.battle._bonusResolved){
-    return offerBonusRound(mv, mon, hits, effMsg);
+    return offerBonusRound(mv, mon, hits, effMsg, results);
   }
   ui.battle._bonusResolved = false;
   battleMsg(`${mv.name}! ${effMsg}`);
@@ -5357,10 +5416,14 @@ function finishPlayerTurn(){
    per-hit effects (Steel Soul's flat bonus, Leech Seed) apply to each. */
 function resolveAoeHits(mv, mon, factor, atk, targets){
   const b = ui.battle;
+  // a successful power-up adds a strike this cast; each Aftershock stack adds one more
+  const extra = (b.aftershockPending ? 1 : 0) + aftershockBonusHits();
+  b.aftershockPending = false;
+  const totalHits = mv.hits + extra;
   const per = mv.split ? factor / mv.hits : factor;
   const sim = new Map(targets.map(t=>[t, t.hp]));
   const all = [];
-  for(let k=0;k<mv.hits;k++){
+  for(let k=0;k<totalHits;k++){
     targets.forEach(t=>{
       if(sim.get(t) <= 0) return;
       const dmg = computeDamage(per, atk, monRef(mon), t, true);
@@ -5369,7 +5432,7 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
       all.push({ t, idx:b.enemies.indexOf(t), dmg, oldHp, newHp });
     });
   }
-  logBattle(`${displayName(mon)} used ${mv.name} — ${mv.hits} strikes on ${targets.length} target(s)`);
+  logBattle(`${displayName(mon)} used ${mv.name} — ${totalHits} strikes on ${targets.length} target(s)`);
   battleMsg(`${mv.name}!`);
   bob($('#playerBob'), +1);
   playEffect(mv.name, { type: SPECIES[mon.species].types[0] });
@@ -5377,7 +5440,8 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
     reportHits(all);
     saveProfile();
     applySelfDamage(mv, mon);
-    battleMsg(`${mv.name} struck ${mv.hits} times!`);
+    battleMsg(`${mv.name} struck ${totalHits} times!`
+      + (extra ? ` (+${extra} from Aftershock)` : ''));
     if(mon.currentHp<=0){
       if(livingEnemies().length===0){ setTimeout(()=>onWaveCleared(), 900); return; }
       setTimeout(()=>onMonFainted(), 900); return;
@@ -5786,6 +5850,7 @@ function endEnemyRound(){
     tac0.fresh = false;          // the sharpest evasion window is the first turn only
     tac0.extras = 0;             // bonus actions are counted per turn
   }
+  tickAftershock();
   const gone = tickStatuses();          // one full round has passed
   setTimeout(()=>{
     b.phase='player'; renderBattle();
