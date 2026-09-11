@@ -798,22 +798,28 @@
     filter:drop-shadow(0 0 10px rgba(255,209,102,.95))
            drop-shadow(0 0 24px rgba(255,180,60,.6)) !important;
   }
-  /* spans the full sprite and a little beyond, in front of the body */
-  .crown-fizz{position:absolute;left:-8%;right:-8%;top:-15%;bottom:0;
+  /* Spans the full sprite and a little beyond, in front of the body. */
+  .crown-fizz{position:absolute;left:-10%;right:-10%;top:-18%;bottom:0;
     pointer-events:none;overflow:visible;z-index:3;}
   .crown-fizz i{
     position:absolute;bottom:0;border-radius:50%;
-    background:radial-gradient(circle,#fff7d6 0%,#ffd166 55%,rgba(255,209,102,0) 72%);
+    background:radial-gradient(circle,#fffdf0 0%,#ffe89a 40%,#ffc94a 62%,rgba(255,201,74,0) 74%);
+    box-shadow:0 0 5px 1px rgba(255,224,140,.85);
+    /* Percentage translations resolve against the ELEMENT's own size, so a 4px
+       mote moving -125% travelled ~5px. The distance is set per-particle in JS
+       as a pixel value on --rise instead. */
     animation:crownRise linear infinite;
   }
-  /* rise the full height of the sprite and past the top, in front of the body */
   @keyframes crownRise{
-    0%  {transform:translate(0,6px) scale(.5);opacity:0;}
-    15% {opacity:.95;}
-    55% {transform:translate(5px,-55%) scale(1);opacity:.9;}
-    85% {transform:translate(-2px,-95%) scale(.8);opacity:.7;}
-    100%{transform:translate(-4px,-125%) scale(.35);opacity:0;}
+    0%  {transform:translate(0,4px) scale(.35);opacity:0;}
+    12% {opacity:1;}
+    50% {transform:translate(var(--drift,4px), calc(var(--rise,60px) * -0.5)) scale(1);opacity:1;}
+    80% {opacity:.9;}
+    100%{transform:translate(calc(var(--drift,4px) * -0.6), calc(var(--rise,60px) * -1)) scale(.5);opacity:0;}
   }
+  /* a few motes twinkle on the way up */
+  .crown-fizz i.tw{ animation:crownRise linear infinite, crownTwinkle .5s ease-in-out infinite alternate; }
+  @keyframes crownTwinkle{ from{filter:brightness(1);} to{filter:brightness(1.9);} }
   @media (prefers-reduced-motion: reduce){ .crown-fizz{display:none;} }
   .mastery-line{display:flex;align-items:center;gap:6px;margin-top:4px;}
   .mst-icon{font-size:11px;}
@@ -2302,7 +2308,7 @@ function monPortrait(species, size, opts){
   // hidden until it actually loads, so a 404 never flashes a broken image
   const startHidden = (cached === undefined);
   const bg = opts.bare ? 'transparent' : s.color;
-  const wrapOpen  = opts.crowned ? `<span class="crowned-wrap" style="width:${px}px;height:${px}px;">${crownSparkles()}` : '';
+  const wrapOpen  = opts.crowned ? `<span class="crowned-wrap" style="width:${px}px;height:${px}px;">${crownSparkles(px)}` : '';
   const wrapClose = opts.crowned ? '</span>' : '';
   return wrapOpen + `<img src="${primary}" alt="${escapeHtml(s.name)}" class="${cls}"
     data-species="${species}" data-px="${px}" data-view="${view}" data-stage-n="${stage}" data-crowned="${crowned?1:0}" data-try="0"
@@ -2312,13 +2318,23 @@ function monPortrait(species, size, opts){
 
 /* Rising motes for a crowned monster — the same idea as the Ultra button,
    sized down and gold. */
-function crownSparkles(){
+/* `px` is the sprite's rendered size, so the motes can be told in PIXELS how
+   far to climb — a percentage would be measured against the mote itself. */
+function crownSparkles(px){
+  const h = px || 96;
   let out = '<span class="crown-fizz">';
-  for(let i=0;i<7;i++){
-    const near = Math.random();
-    const size = 2 + near*4;
-    out += `<i style="left:${8+Math.random()*84}%;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;`
-         + `animation-duration:${(2.8-near*1.2).toFixed(2)}s;animation-delay:${(Math.random()*2.8).toFixed(2)}s;"></i>`;
+  for(let i=0;i<16;i++){
+    const near = Math.random();                 // 0 = far/small/slow, 1 = near/big/fast
+    const size = 2 + near*5;
+    const rise = h * (0.85 + near*0.45);        // clears the top of the sprite
+    const drift = (Math.random()*10 - 5).toFixed(1);
+    const tw = Math.random() < 0.35 ? ' tw' : '';
+    out += `<i class="${tw.trim()}" style="left:${6+Math.random()*88}%;`
+         + `width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;`
+         + `--rise:${rise.toFixed(0)}px;--drift:${drift}px;`
+         + `opacity:${(0.5+near*0.5).toFixed(2)};`
+         + `animation-duration:${(3.4-near*1.5).toFixed(2)}s;`
+         + `animation-delay:${(Math.random()*3.4).toFixed(2)}s;"></i>`;
   }
   return out + '</span>';
 }
@@ -4187,6 +4203,46 @@ function ultraFizz(plus){
   return out + '</span>';
 }
 
+/* What the button tells you: how many characters it costs, roughly how hard it
+   hits, and whether it spreads. Deliberately BEFORE type effectiveness — that
+   varies per target — but after the multipliers the player controls. */
+function ownBuffMultiplier(){
+  let m = 1;
+  if(getPStatus(0,'overheat'))    m *= 1.5;
+  if(getPStatus(0,'dragonDance')) m *= 1.25;
+  if(ui.battle && ui.battle.legacyBonus) m *= (1 + ui.battle.legacyBonus);
+  return m;
+}
+function estimateHit(mv, mon){
+  if(mv.fixed != null) return mv.fixed;              // scripted finishers
+  if(mv.mult == null) return null;                   // status / support
+  const atk = monAtk(mon);
+  let per = mv.mult;
+  if(mv.hits && mv.hits > 1) per = mv.mult / mv.hits;   // split moves show per-hit
+  let dmg = per * atk * ownBuffMultiplier();
+  const soul = getPStatus(0,'steelSoul');
+  if(soul) dmg += soul.bonus * atk;                  // Steel Soul adds flat power per hit
+  return Math.ceil(dmg);
+}
+function moveShape(mv){
+  if(mv.slot === 'UltraStone'){
+    const r = mv.ultraStone ? ultraHitRange(mv.ultraStone) : { min:5, max:7 };
+    return `×${r.min}–${r.max}`;
+  }
+  if(mv.hits && mv.hits > 1) return `×${mv.hits}`;
+  if(mv.target === 'AOE') return 'AOE';
+  if(mv.target === 'Multi2') return '2 targets';
+  return '';
+}
+function moveMeta(mv, mon){
+  const bits = [`${mv.words}字`];
+  const dmg = estimateHit(mv, mon);
+  if(dmg != null) bits.push(`~${dmg}`);
+  const shape = moveShape(mv);
+  if(shape) bits.push(shape);
+  return bits.join(' · ');
+}
+
 function renderBattle(){
   const zoneBg = (ui.battle && ui.battle.bgKey)
     || ((ui.currentZone && ui.currentZone.id) ? 'battle_'+ui.currentZone.id : null);
@@ -4240,7 +4296,7 @@ function renderBattle(){
           <button class="move-btn ${(mv.available && canAct)?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${(mv.available && canAct)?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
             <div class="mv-name">${mv.available?escapeHtml(mv.name):'???'}</div>
-            <div class="mv-meta">${mv.available?(mv.isStone?stoneTierDef(mv.stoneTier).label+' stone':( mv.slot==='Basic'?'Basic':mv.slot))+' · '+mv.words+'字':'Locked'}</div>
+            <div class="mv-meta">${mv.available ? moveMeta(mv, mon) : 'Locked'}</div>
           </button>`).join('')}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
@@ -4886,6 +4942,7 @@ function resolveChargeSpend(mv, mon){
 
   setTimeout(()=>{
     applyHits(hits);
+    reportHits(hits);          // Unleash / Hyperbeam were landing silently
     c.turnsLeft--;
     if(c.turnsLeft <= 0){
       clearCharge();
