@@ -1176,6 +1176,16 @@ const SPECIES = {
                      color:'#5f9ac8', glyph:'雷', nerfedUntilCrowned:true, storyCrownOnly:true },
   ankylosaurus:    { name:'Ankylosaurus', tier:'legendary', types:['Ground','Steel'], rate:13, nerfedRate:13, base:65, evo:[5], evoMult:1.5, color:'#7a8a6a', glyph:'甲' },
 
+  /* --- Region 3: the Electric Dojo --- */
+  thunderdog:      { name:'Thunderdog',     tier:'wild',  types:['Electric'], rate:7,  nerfedRate:5,  base:54, evo:[18],    evoMult:1.5, color:'#e0b53a', glyph:'犬' },
+  zebra:           { name:'Zebra',          tier:'wild',  types:['Electric'], rate:7,  nerfedRate:5,  base:54, evo:[18],    evoMult:1.5, color:'#c8c2b4', glyph:'斑' },
+  thunderlion:     { name:'Thunderlion',    tier:'wild',  types:['Electric'], rate:7,  nerfedRate:5,  base:54, evo:[18],    evoMult:1.5, color:'#d4a03a', glyph:'狮' },
+  thundersquirrel: { name:'Thundersquirrel',tier:'wild',  types:['Electric'], rate:7,  nerfedRate:5,  base:60, evo:[],      color:'#c9903a', glyph:'鼠' },
+  magnet:          { name:'Magnet',         tier:'wild',  types:['Electric'], rate:7,  nerfedRate:5,  base:60, evo:[11,25], color:'#9aa8b0', glyph:'磁' },
+  tiger:           { name:'Tiger',          tier:'elite', types:['Electric'], rate:11, nerfedRate:11, base:60, evo:[18],    evoMult:1.5, color:'#e08a2a', glyph:'虎' },
+  giraffe:         { name:'Giraffe',        tier:'elite', types:['Electric'], rate:11, nerfedRate:11, base:61, evo:[21,36], color:'#d8b45a', glyph:'鹿' },
+  thundercat:      { name:'Thundercat',     tier:'elite', types:['Electric'], rate:11, nerfedRate:11, base:71, evo:[],      color:'#e8c23a', glyph:'猫' },
+
   /* --- Legendaries & story --- */
   /* --- Region 2: Rocky Caverns starters --- */
   flying_starter:  { name:'Raven',       tier:'starter',   types:['Flying'],        rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#6b7a8f', glyph:'鸦' },
@@ -1187,6 +1197,7 @@ const SPECIES = {
   sumo:            { name:'Sumo',        tier:'elite',     types:['Physical'],      rate:11, nerfedRate:11, base:5,   evo:[],      color:'#c08a6a', glyph:'相' },
   goblin:          { name:'Goblin',      tier:'elite',     types:['Ghost'],         rate:11, nerfedRate:11, base:5,   evo:[],      color:'#6d7a5a', glyph:'鬼' },
   squid:           { name:'Squid',       tier:'elite',     types:['Psychic'],       rate:11, nerfedRate:11, base:5,   evo:[],      color:'#8a6aa8', glyph:'鱿' },
+
 
 
 
@@ -1286,6 +1297,45 @@ const MOVES = {
                     ['Power2','Steel Soul',null,'Self',4,35,{soul:{turns:3, reduce:0.5, bonus:0.1}}],
                     ['Ultimate','Rampage',0.2,'AOE',8,45,{hits:5}],
                     ['Max','Rampage Max',0.3,'AOE',10,55,{hits:5, bonus:{words:2, aftershock:true}}]],
+  /* Swift Strike: an enemy using it seizes the initiative; the player, who
+     usually moves first anyway, gets extra power instead. */
+  thunderdog:      [['Basic','Bite',0.2,'Single',2,1],
+                    ['Power1','Swift Strike',0.3,'Single',4,1,{first:true, playerBonus:0.2}],
+                    ['Power2','Thunderhowl',0.5,'AOE',8,18],
+                    ['Ultimate','Pack Attack',0.5,'Single',8,25,{hits:3}]],
+  zebra:           [['Basic','Kick',0.2,'Single',2,1],
+                    ['Power1','Swift Strike',0.3,'Single',4,1,{first:true, playerBonus:0.2}],
+                    ['Power2','Blitz Strike',0.5,'AOE',8,18],
+                    ['Ultimate','Thundercrash',1.5,'Single',8,25]],
+  thunderlion:     [['Basic','Claw',0.2,'Single',2,1],
+                    ['Power1','Swift Strike',0.3,'Single',4,1,{first:true, playerBonus:0.2}],
+                    ['Power2','Thundershred',0.5,'AOE',8,25],
+                    ['Ultimate','Pride Attack',0.5,'Single',8,25,{hits:3}]],
+  thundersquirrel: [['Basic','Tackle',0.2,'Single',2,1],
+                    ['Power1','Acorn Bolt',0.4,'Single',4,1],
+                    ['Power2','Thunderroll',0.6,'AOE',8,18],
+                    ['Ultimate','Charm',null,'Single',8,25,{charm:{turns:5, chance:0.20}}]],
+  magnet:          [['Basic','Spark',0.2,'Single',2,1],
+                    ['Power1','Magnet Pulse',0.4,'Multi2',5,1],
+                    ['Power2','Magnet Wave',0.5,'AOE',8,18],
+                    ['Ultimate','Disrupt',null,'Single',8,25,{disrupt:{turns:5, playerBlock:0.15}}]],
+  tiger:           [['Basic','Tackle',0.2,'Single',2,1],
+                    ['Power1','Thunderfist',0.5,'Single',4,1],
+                    ['Power2','Thunderlariat',0.6,'AOE',8,21],
+                    ['Ultimate','Tesla Bolt',0.4,'Single',8,41,{hits:3, stunHit:0.15}],
+                    ['Max','Tesla Bolt Max',0.4,'Single',8,51,{hits:4, stunHit:0.15}]],
+  giraffe:         [['Basic','Tackle',0.2,'Single',2,1],
+                    ['Power1','Orb Beam',0.5,'Single',4,1],
+                    ['Power2','Thundertail',0.6,'AOE',8,21],
+                    ['Ultimate','Livewire',1.1,'Single',8,41,{repeat:0.20}],
+                    ['Max','Livewire Max',1.4,'Single',8,51,{repeat:0.20}]],
+  /* Lightning Cat is a PASSIVE — it takes effect the moment Thundercat enters
+     the field and is never chosen as an action. */
+  thundercat:      [['Basic','Swipe',0.2,'Single',2,1],
+                    ['Power1','Wildbolt',0.5,'Single',4,1],
+                    ['Power2','Lightning Cat',null,'Passive',0,21,{passive:{first:true, playerDouble:0.20}}],
+                    ['Ultimate','Omnislash',1.0,'SingleAOE',8,41,{splash:0.5}],
+                    ['Max','Omnislash Max',1.1,'SingleAOE',8,51,{splash:0.65}]],
   sacred_seed:     [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 };
 
@@ -3773,6 +3823,70 @@ function canUpgradeStone(st){
   return { ok:true, cost, dup };
 }
 
+/* ============================================================
+   INITIATIVE, PASSIVES, AND THE TWO ELECTRIC STATUSES
+   ------------------------------------------------------------
+   Several Electric monsters seize the first move of a round. Because the
+   player normally acts first, the same abilities would be worthless in the
+   player's hands — so each one grants a different perk instead.
+   ============================================================ */
+
+/* A passive takes effect the moment its owner is on the field; it is never
+   chosen as an action and never appears on the move menu. */
+function passiveOf(e){
+  const list = MOVES[e.species] || [];
+  const mv = list.find(m => m[3] === 'Passive' && m[6] && m[6].passive && (e.level||1) >= m[5]);
+  return mv ? { name: mv[1], ...mv[6].passive } : null;
+}
+function enemyHasFirstStrikePassive(){
+  return livingEnemies().some(e => { const p = passiveOf(e); return p && p.first; });
+}
+
+/* Does the enemy side take this round's first action? */
+function enemySeizesInitiative(){
+  const b = ui.battle;
+  if(!b) return false;
+  if(b.alwaysFirst) return true;                       // scripted routs
+  // Disrupt cancels out if both sides have it
+  const enemyDisrupt = livingEnemies().some(e => getEStatus(e,'disrupt'));
+  const playerDisrupt = !!getPStatus(0,'disrupt');
+  if(enemyDisrupt && !playerDisrupt) return true;
+  if(enemyHasFirstStrikePassive()) return true;
+  // a queued Swift Strike claims the opening blow
+  return livingEnemies().some(e => {
+    const mv = e.move;
+    return mv && MOVE_FIRST_NAMES.has(mv[1]);
+  });
+}
+const MOVE_FIRST_NAMES = new Set(['Swift Strike']);
+
+/* Hand the turn to whoever has the initiative. */
+function beginPlayerPhase(msg){
+  const b = ui.battle;
+  if(!b) return;
+  // enemy-cast Charm may steal the player's turn before it begins
+  const ch = getPStatus(0,'charmed');
+  if(ch && Math.random() < (ch.chance||0.20)){
+    b.phase = 'resolving';
+    renderBattle();
+    battleMsg(`💗 ${displayName(activeMon())} is charmed and loses its turn!`);
+    return setTimeout(enemyTurn, 900);
+  }
+  if(b._enemyWentThisRound){ b._enemyWentThisRound = false; }
+  else if(enemySeizesInitiative()){
+    b.phase = 'resolving';
+    b._enemyWentThisRound = true;
+    renderBattle();
+    const cat = livingEnemies().find(e => { const p = passiveOf(e); return p && p.first; });
+    battleMsg(cat ? `⚡ Cat Reflexes — ${SPECIES[cat.species].name} moves first!`
+                  : '⚡ They seize the initiative!');
+    return setTimeout(enemyTurn, 800);
+  }
+  b.phase = 'player';
+  renderBattle();
+  if(msg) battleMsg(msg);
+}
+
 /* ---------- BATTLE MODULE (Phase 3: wild encounters) ---------- */
 function starterLevel(){
   const st = state.party.find(m=>m.species===state.starterSpecies);
@@ -4044,6 +4158,7 @@ function beginBattle(config){
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     charge:null, legacyBonus:0,
     aftershock:[], aftershockPending:false, bonusMult:0, _bonusResolved:false,
+    _passiveUsed:false, _enemyWentThisRound:false,
     rechargeWords:0,         // every word written this battle feeds the meter
 
     partyStatus:{},          // party-wide buffs, each with a turn counter
@@ -4076,6 +4191,12 @@ function loadWave(i){
   if(b.leechSeed) b.enemies.forEach(e=> addEStatus(e, { type:'leechSeed' }));
   b.enemies.forEach(e=>{ if(!state.encounteredSpecies.includes(e.species)) state.encounteredSpecies.push(e.species); });
   if(b.onWaveStart) b.onWaveStart(i);
+  // a passive announces itself the moment its owner appears
+  const withPassive = b.enemies.find(e=>passiveOf(e));
+  if(withPassive){
+    const p = passiveOf(withPassive);
+    setTimeout(()=> battleMsg(`⚡ ${SPECIES[withPassive.species].name}'s ${p.name} is active!`), 600);
+  }
   /* A borrowed story monster is the only thing in the party, so it simply
      stays. Otherwise keep whoever was fighting, as long as they're standing. */
   const cur = state.party[b.activeIndex];
@@ -4126,7 +4247,8 @@ function unlockedMoves(m){
   /* 'Max' is an UPGRADE of Ultimate, not an extra button: once its level is
      reached it takes over the Ultimate slot entirely. */
   const maxMv = MOVES[m.species].find(mv=>mv[0]==='Max' && mv[1]!=null && moveUnlockedFor(m, mv));
-  const base = MOVES[m.species].filter(mv=>mv[0]!=='Max').map(mv=>{
+  /* Passives take effect on entering the field; they never appear as buttons. */
+  const base = MOVES[m.species].filter(mv=>mv[0]!=='Max' && mv[3]!=='Passive').map(mv=>{
     let [slot,name,mult,target,words,unlock,extra]=mv;
     if(slot==='Ultimate' && maxMv){ [,name,mult,target,words,unlock,extra] = maxMv; }
     const e = extra || {};
@@ -4385,7 +4507,7 @@ function renderBattle(){
 const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
   counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed',
-  discombobulate:'🌀 Confused', leechSeed:'🌿 Seeded', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
+  discombobulate:'🌀 Confused', leechSeed:'🌿 Seeded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
 };
 function renderStatusBadges(){
@@ -5202,6 +5324,24 @@ function resolveBattleMove(mv, target, results){
     playEffect(mv.name, { type:'Psychic' });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
+  if(mv.charm){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    applyFieldStatus({ type:'charm', turnsLeft:mv.charm.turns, chance:mv.charm.chance });
+    renderStatusBadges();
+    battleMsg(`${mv.name}! For ${mv.charm.turns} turns each enemy may be charmed into losing its turn.`);
+    playEffect(mv.name, { type:'Electric' });
+    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+  }
+  if(mv.disrupt){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    // In the player's hands it can't grant an initiative they already have, so
+    // it jams the enemy's attacks instead.
+    setPStatus(0, { type:'disrupt', turnsLeft:mv.disrupt.turns+1, block:mv.disrupt.playerBlock });
+    renderStatusBadges();
+    battleMsg(`${mv.name}! Their signals are jammed — ${Math.round(mv.disrupt.playerBlock*100)}% of enemy attacks will fail for ${mv.disrupt.turns} turns.`);
+    playEffect(mv.name, { type:'Electric' });
+    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+  }
   if(mv.soul){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
     setPStatus(0, { type:'steelSoul', turnsLeft:mv.soul.turns+1, reduce:mv.soul.reduce, bonus:mv.soul.bonus });
@@ -5227,12 +5367,34 @@ function resolveBattleMove(mv, target, results){
   if(mv.scale && correct > mv.words && factor > 0){
     factor = Math.min(mv.scale.max, mv.mult + mv.scale.per*(correct - mv.words));
   }
+  // Swift Strike can't grant the player an initiative they already have, so it
+  // pays out as extra damage instead.
+  if(mv.playerBonus) factor += mv.playerBonus;
   if(ui.battle && ui.battle.bonusMult && ui.battle.bonusMult > 1){
     factor *= ui.battle.bonusMult;          // multiplies with everything else
     ui.battle.bonusMult = 0;
   }
   if(factor<=0){ playSfx('move_miss'); battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
   const atk=monAtk(mon);
+  /* SingleAOE: one main target at full power, everyone else at `splash`. */
+  if(mv.target === 'SingleAOE' && mv.splash){
+    const main = (target && target.hp>0) ? target : livingEnemies()[0];
+    if(main){
+      const all = livingEnemies().map(t=>{
+        const f = (t === main) ? factor : factor * mv.splash;
+        const dmg = computeDamage(f, atk, monRef(mon), t, true);
+        return { t, idx:ui.battle.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
+      });
+      battleMsg(`${mv.name}!`);
+      bob($('#playerBob'), +1);
+      playEffect(mv.name, { type: SPECIES[mon.species].types[0] });
+      return setTimeout(()=>{
+        applyHits(all); reportHits(all);
+        setTimeout(()=> afterPlayerAttack(mon, all), 700);
+      }, 400);
+    }
+  }
+
   const targets = mv.target==='AOE' ? livingEnemies() : [target];
 
   /* A bonus move offers its optional second quiz BEFORE any damage resolves,
@@ -5272,10 +5434,11 @@ function resolveBattleMove(mv, target, results){
     applyHits(hits);
     reportHits(hits);
     // Paralysis rolls per hit, so a multi-hit move gets several chances
-    if(mv.paralyse){
+    const stunPct = mv.paralyse || mv.stunHit;
+    if(stunPct){
       const zapped = [];
       hits.forEach(h=>{
-        if(h.t && h.t.hp>0 && Math.random() < mv.paralyse && !getEStatus(h.t,'paralysed')){
+        if(h.t && h.t.hp>0 && Math.random() < stunPct && !getEStatus(h.t,'paralysed')){
           addEStatus(h.t, { type:'paralysed', turnsLeft:1 });
           zapped.push(SPECIES[h.t.species].name);
         }
@@ -5346,6 +5509,22 @@ function afterPlayerAttack(mon, hits){
      lucky streak chains. It is also guaranteed to land at least once across its
      lifetime — a buff that can roll nothing at all feels broken rather than
      unlucky, so the last turn forces it if it hasn't happened yet. */
+  /* Livewire (and Thundercat's passive in the player's hands) can fire again,
+     and a repeat can itself repeat. */
+  const lastMv = ui.battle && ui.battle.lastMove;
+  const ownPassive = passiveOf(mon);
+  const passiveDouble = (ownPassive && ownPassive.playerDouble && !ui.battle._passiveUsed)
+    ? ownPassive.playerDouble : 0;
+  const repeatPct = (lastMv && lastMv.repeat) || 0;
+  if(passiveDouble && hits && hits.length && Math.random() < passiveDouble){
+    ui.battle._passiveUsed = true;          // the second strike cannot repeat itself
+    return runRepeatStrike(mon, Object.assign({}, lastMv, { repeat:0, name:ownPassive.name }),
+      hits, ()=>{ ui.battle._passiveUsed = false; afterPlayerAttack(mon, hits); });
+  }
+  if(repeatPct && hits && hits.length && Math.random() < repeatPct){
+    return runRepeatStrike(mon, lastMv, hits, ()=> afterPlayerAttack(mon, hits));
+  }
+
   const tac = getPStatus(0,'tachy');
   if(tac){
     const lastChance = (tac.turnsLeft||0) <= 1 && !tac.procced;
@@ -5363,6 +5542,31 @@ function afterPlayerAttack(mon, hits){
     return runCloneEchoes(mon, ui.battle.lastMove, ()=> afterPlayerAttackReal(mon, hits));
   }
   return afterPlayerAttackReal(mon, hits);
+}
+
+/* A move that fires again at full power — Livewire, and Thundercat's passive
+   when the player owns it. Chains indefinitely. */
+function runRepeatStrike(mon, mv, prevHits, done){
+  const b = ui.battle;
+  const atk = monAtk(mon);
+  const t = prevHits[0] && prevHits[0].t;
+  if(!t || t.hp<=0){
+    const alt = livingEnemies()[0];
+    if(!alt) return done();
+    prevHits = [{ t:alt, idx:b.enemies.indexOf(alt) }];
+  }
+  const target = prevHits[0].t;
+  const dmg = computeDamage(mv.mult||0.5, atk, monRef(mon), target, true);
+  const again = [{ t:target, idx:b.enemies.indexOf(target), dmg, oldHp:target.hp, newHp:Math.max(0,target.hp-dmg) }];
+  battleMsg(`⚡ ${mv.name} arcs again!`);
+  setTimeout(()=>{
+    applyHits(again); reportHits(again);
+    setTimeout(()=>{
+      // a repeat can spark another
+      if(Math.random() < (mv.repeat||0)) return runRepeatStrike(mon, mv, again, done);
+      done();
+    }, 600);
+  }, 350);
 }
 
 /* The two copies repeat the move at half power, spreading across enemies that
@@ -5686,6 +5890,19 @@ function runEnemyAttack(i){
   const e = b.attackQueue[i];
   if(!e || e.hp <= 0) return runEnemyAttack(i+1);
 
+  // player-cast Disrupt jams a share of incoming attacks outright
+  const jam = getPStatus(0,'disrupt');
+  if(jam && jam.block && Math.random() < jam.block){
+    battleMsg(`📡 ${SPECIES[e.species].name}'s attack is jammed!`);
+    return setTimeout(()=> runEnemyAttack(i+1), 700);
+  }
+  // enemy-side Charm: a charmed enemy may lose its turn outright
+  const chm = getEStatus(e,'charm');
+  if(chm && Math.random() < (chm.chance||0.20)){
+    battleMsg(`💗 ${SPECIES[e.species].name} is charmed and can't attack!`);
+    return setTimeout(()=> runEnemyAttack(i+1), 700);
+  }
+
   const idx  = b.enemies.indexOf(e);
   const move = enemyMoveFor(e);
   const name = SPECIES[e.species].name;
@@ -5804,6 +6021,20 @@ function runEnemyAttack(i){
     }
 
     // Life-stealing moves restore the attacker from its own ATK
+    /* Enemy-cast Charm / Disrupt land on the player's side of the field. */
+    if(move[1] === 'Charm'){
+      setPStatus(0, { type:'charmed', turnsLeft:6, chance:0.20 });
+      renderStatusBadges();
+      msg += ' Your team is charmed!';
+    }
+    if(move[1] === 'Disrupt'){
+      addEStatus(e, { type:'disrupt', turnsLeft:6 });
+      b.fieldStatus = b.fieldStatus || {};
+      b.fieldStatus.disrupt = { type:'disrupt', turnsLeft:6 };
+      livingEnemies().forEach(x=> addEStatus(x, { type:'disrupt', turnsLeft:6 }));
+      renderStatusBadges();
+      msg += ' They seize the initiative!';
+    }
     const pct = LIFESTEAL[move[1]];
     if(pct && e.hp>0){
       const before = e.hp;
@@ -5853,8 +6084,7 @@ function endEnemyRound(){
   tickAftershock();
   const gone = tickStatuses();          // one full round has passed
   setTimeout(()=>{
-    b.phase='player'; renderBattle();
-    battleMsg(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
+    beginPlayerPhase(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
   }, 850);
 }
 function onMonFainted(){
