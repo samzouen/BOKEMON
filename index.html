@@ -1273,16 +1273,16 @@ const MOVES = {
                     ['Ultimate','Incinerate',1.25,'Single',8,45,{scale:{per:0.15,max:2.0}}],
                     ['Max','Incinerate Max',1.5,'Single',8,55,{scale:{per:0.15,max:2.5}}]],
   forest_fairy:    [['Basic','Fairy Wind',0.4,'Single',2,1],['Power1','Giga Drain',0.8,'Single',5,5],['Power2','Overgrowth',0.7,'AOE',8,35],
-                    ['Ultimate','Verdant Wrath',1.4,'Single',10,45,{hits:2}],
-                    ['Max','Verdant Wrath Max',1.8,'Single',10,55,{hits:3}]],
+                    ['Ultimate','Verdant Wrath',1.4,'Single',10,45,{hits:2, split:true}],
+                    ['Max','Verdant Wrath Max',1.8,'Single',10,55,{hits:3, split:true}]],
   newt_baby:       [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
   newt:            [['Basic','Psyshock',0.2,'Single',4,31,{paralyse:0.20}],
                     ['Power1','Psywave',0.5,'AOE',8,31,{paralyse:0.20}],
-                    ['Power2','Tachypsychia',null,'Self',4,35,{tachy:{turns:3, double:0.50, evadeFirst:0.80, evadeAfter:0.30}}],
+                    ['Power2','Tachypsychia',null,'Self',4,35,{tachy:{turns:3, bonusAction:0.30, evadeFirst:0.80, evadeAfter:0.30}}],
                     ['Ultimate','Volt Concussion',0.4,'Single',8,45,{hits:3, paralyse:0.20}],
                     ['Max','Volt Concussion Max',0.4,'Single',8,999,{hits:4, paralyse:0.20, coreOnly:true}]],
   ankylosaurus:    [['Basic','Hammertail',0.1,'Single',4,1,{hits:3}],
-                    ['Power1','Seismic Shock',0.2,'AOE',8,1,{hits:3}],
+                    ['Power1','Seismic Shock',0.2,'AOE',8,1,{hits:2}],
                     ['Power2','Steel Soul',null,'Self',4,35,{soul:{turns:3, reduce:0.5, bonus:0.1}}],
                     ['Ultimate','Rampage',0.2,'AOE',8,45,{hits:5}],
                     ['Max','Rampage Max',0.3,'AOE',10,55,{hits:5, bonus:{words:2, aftershock:true}}]],
@@ -1991,7 +1991,8 @@ async function flushCloudPush(){
   }
 }
 try{
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushCloudPush(); });
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden) setTimeout(unstickBattle, 400); if(document.visibilityState==='hidden') flushCloudPush(); });
   window.addEventListener('pagehide', flushCloudPush);
 }catch(e){}
 
@@ -4030,10 +4031,13 @@ function beginBattle(config){
     waves: config.waves, waveIndex:0,
     isNpc: !!config.isNpc, allowCatch: !!config.allowCatch,
     challenge: config.challenge || null, name: config.name || 'Battle',
-    onWin: config.onWin || null, onWaveStart: config.onWaveStart || null, noFlee: !!config.noFlee, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
+    onWin: config.onWin || null, onWaveStart: config.onWaveStart || null, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
     guardianTrial: !!config.guardianTrial, leechSeed:false, bgKey: config.bgKey||null,
     alwaysFirst: !!config.alwaysFirst,
     scriptedOneTurn: !!config.scriptedOneTurn,
+    /* From Emerald March onward a trainer fight is a commitment: no fleeing.
+       Region 1 keeps its gentler rules so the early game stays forgiving. */
+    noFlee: !!config.noFlee || (!!config.isNpc && (state.progress.currentRegion||1) >= 2),
     scriptedLoss: config.scriptedLoss||null,
     scriptedAlly: config.scriptedAlly||null, allyMove: config.allyMove||null,
     allyUnkillable: !!config.allyUnkillable, enemiesFirst: !!config.enemiesFirst,
@@ -4125,7 +4129,7 @@ function unlockedMoves(m){
     let [slot,name,mult,target,words,unlock,extra]=mv;
     if(slot==='Ultimate' && maxMv){ [,name,mult,target,words,unlock,extra] = maxMv; }
     const e = extra || {};
-    return { slot,name,mult,target,words,unlock, scale:e.scale||null, hits:e.hits||0, charge:e.charge||null,
+    return { slot,name,mult,target,words,unlock, scale:e.scale||null, hits:e.hits||0, split:!!e.split, charge:e.charge||null,
              dot:e.dot||null, shell:e.shell||null, clones:e.clones||null, bonus:e.bonus||null, stun:e.stun||0,
              available:(name!=null && moveUnlockedFor(m, [slot,name,mult,target,words,unlock,e])), isStone:false };
   });
@@ -4218,7 +4222,8 @@ function estimateHit(mv, mon){
   if(mv.mult == null) return null;                   // status / support
   const atk = monAtk(mon);
   let per = mv.mult;
-  if(mv.hits && mv.hits > 1) per = mv.mult / mv.hits;   // split moves show per-hit
+  // `split` divides the total across strikes; otherwise each strike lands full
+  if(mv.split && mv.hits > 1) per = mv.mult / mv.hits;
   let dmg = per * atk * ownBuffMultiplier();
   const soul = getPStatus(0,'steelSoul');
   if(soul) dmg += soul.bonus * atk;                  // Steel Soul adds flat power per hit
@@ -4229,6 +4234,8 @@ function moveShape(mv){
     const r = mv.ultraStone ? ultraHitRange(mv.ultraStone) : { min:5, max:7 };
     return `×${r.min}–${r.max}`;
   }
+  // an aftershock bonus can add a strike, so show the band
+  if(mv.hits && mv.hits > 1 && mv.bonus && mv.bonus.aftershock) return `×${mv.hits}–${mv.hits+1}`;
   if(mv.hits && mv.hits > 1) return `×${mv.hits}`;
   if(mv.target === 'AOE') return 'AOE';
   if(mv.target === 'Multi2') return '2 targets';
@@ -4237,13 +4244,49 @@ function moveShape(mv){
 function moveMeta(mv, mon){
   const bits = [`${mv.words}字`];
   const dmg = estimateHit(mv, mon);
-  if(dmg != null) bits.push(`~${dmg}`);
+  if(dmg != null){
+    // A scaling move (Incinerate) spans base → cap depending on how far the
+    // writing goes, so show the whole band rather than just the floor.
+    if(mv.scale){
+      const hi = Math.ceil(estimateHit(Object.assign({}, mv, { mult:mv.scale.max }), mon));
+      bits.push(`${dmg}–${hi}`);
+    } else {
+      bits.push(`${dmg}`);
+    }
+  }
   const shape = moveShape(mv);
   if(shape) bits.push(shape);
   return bits.join(' · ');
 }
 
+/* Safety net: if the player has a monster standing, the field has enemies and
+   nothing is mid-animation, the turn belongs to the player. A dropped timer
+   (backgrounded tab, interrupted sequence) could otherwise leave the menu
+   disabled until the app was minimised and reopened. */
+function unstickBattle(){
+  const b = ui.battle;
+  if(!b || ui.screen !== 'battle') return;
+  if(b.phase === 'player') return;
+  if(b._cloneEchoing || b.attackQueue) return;       // a sequence is genuinely running
+  const mon = activeMon();
+  if(!mon || mon.currentHp <= 0) return;             // waiting on a replacement
+  if(livingEnemies().length === 0) return;           // wave is resolving
+  b.phase = 'player';
+  renderBattle();
+  battleMsg('Choose a move.');
+}
+
+let _unstickTimer = null;
+function startUnstickWatchdog(){
+  clearInterval(_unstickTimer);
+  _unstickTimer = setInterval(()=>{
+    if(ui.screen !== 'battle'){ clearInterval(_unstickTimer); _unstickTimer=null; return; }
+    unstickBattle();
+  }, 2500);
+}
+
 function renderBattle(){
+  startUnstickWatchdog();
   const zoneBg = (ui.battle && ui.battle.bgKey)
     || ((ui.currentZone && ui.currentZone.id) ? 'battle_'+ui.currentZone.id : null);
   setScreenBg(zoneBg || 'battle');
@@ -4344,7 +4387,10 @@ function renderStatusBadges(){
     const out = [];
     const mon = activeMon();
     Object.values(partyStatuses()).forEach(st=>{
-      out.push(`<span class="status-pill mine">${STATUS_LABELS[st.type]||st.type} ${st.turnsLeft}</span>`);
+      // turnsLeft is stored with a +1 grace so the cast turn counts; show the
+      // number of turns the player will actually still have it for.
+      const shown = Math.max(0, st.turnsLeft - 1);
+      out.push(`<span class="status-pill mine">${STATUS_LABELS[st.type]||st.type} ${shown}</span>`);
     });
     row.innerHTML = out.join('');
   }
@@ -4637,6 +4683,7 @@ function onSwitchPressed(){
     const c = chargeState();
     if(c && c.uid === activeMon().uid) triggerDragonLegacy();   // stored power passes on
     ui.battle.activeIndex=i; ui.battle.switchedThisTurn=true;
+    ui.battle.phase = 'player';        // a free switch never hands the turn over
     renderBattle();
     if(!ui.battle.legacyBonus) battleMsg('Switched! Now choose a move.');
   });
@@ -4903,13 +4950,18 @@ function runChargeQuiz(mv, mon){
     wordTarget: mv.words,
     startingWords: (ui.battle && ui.battle.wordCarry) || 0,
     onComplete:(results)=>{
-      const correct = results.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0);
+      /* The meter — and therefore the point at which the quiz ENDS — counts the
+         spill carried in from the previous move. Leaving it out of this tally
+         meant any carry-over guaranteed a "fizzle" despite a perfect run. */
+      const carry = (ui.quiz && ui.quiz.config ? (ui.quiz.config.startingWords||0) : 0);
+      const correct = results.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0) + carry;
       go('battle');
       if(correct < mv.words){
         battleMsg(`${mv.name} fizzled out! (${correct}/${mv.words} words)`);
         playSfx('move_miss');
         return setTimeout(enemyTurn, 900);
       }
+      if(ui.battle) ui.battle.wordCarry = Math.max(0, correct - mv.words);
       startCharge(mon, def);
       const c = chargeState();
       playEffect(mv.name, { type:'Water', duration:800 });
@@ -5084,10 +5136,10 @@ function resolveBattleMove(mv, target, results){
   }
   if(mv.tachy){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
-    setPStatus(0, { type:'tachy', turnsLeft:mv.tachy.turns+1, double:mv.tachy.double,
+    setPStatus(0, { type:'tachy', turnsLeft:mv.tachy.turns+1, bonusAction:mv.tachy.bonusAction,
                     evadeFirst:mv.tachy.evadeFirst, evadeAfter:mv.tachy.evadeAfter, fresh:true });
     renderStatusBadges();
-    battleMsg(`${mv.name}! Time slows — ${Math.round(mv.tachy.double*100)}% chance to strike twice, and much harder to hit.`);
+    battleMsg(`${mv.name}! Time slows — ${Math.round(mv.tachy.bonusAction*100)}% chance of an extra action each time you act, and much harder to hit.`);
     playEffect(mv.name, { type:'Psychic' });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
@@ -5123,10 +5175,21 @@ function resolveBattleMove(mv, target, results){
   if(factor<=0){ playSfx('move_miss'); battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
   const atk=monAtk(mon);
   const targets = mv.target==='AOE' ? livingEnemies() : [target];
-  // A `hits` move lands its total damage as several strikes on ONE target, so
-  // per-hit effects (Leech Seed, drains) trigger for each.
+
+  /* A bonus move offers its optional second quiz BEFORE any damage resolves,
+     so Rampage Max can ask for its aftershock words. Previously the multi-hit
+     branch returned first and the offer was never reached. */
+  if(mv.bonus && !ui.battle._bonusResolved && targets[0]){
+    return offerBonusRound(mv, mon, [{ t:targets[0], idx:ui.battle.enemies.indexOf(targets[0]) }], '');
+  }
+  ui.battle._bonusResolved = false;
+
+  /* A SINGLE-TARGET `hits` move rains several strikes on one enemy. An AOE
+     `hits` move strikes EVERY enemy that many times — routing it through the
+     single-target path was making Seismic Shock and Rampage hit one foe only. */
   if(mv.hits && mv.hits > 1 && targets[0]){
-    return resolveSplitHits(mv, mon, factor, atk, targets[0]);
+    if(mv.target !== 'AOE') return resolveSplitHits(mv, mon, factor, atk, targets[0]);
+    return resolveAoeHits(mv, mon, factor, atk, targets);
   }
   const hits = targets.map(t=>{
     const dmg = computeDamage(factor, atk, monRef(mon), t, true);
@@ -5218,35 +5281,29 @@ function applyHits(hits){
    `hits` carries the per-target damage so a repeat re-applies the real amount. */
 function afterPlayerAttack(mon, hits){
   if(ui.battle && ui.battle.legacyBonus){ ui.battle.legacyBonus = 0; }   // one move only
+  /* Tachypsychia grants a whole EXTRA ACTION rather than a hidden second hit,
+     re-rolled after every action — so a lucky streak can chain several. */
+  /* Tachypsychia grants a whole EXTRA ACTION, re-rolled after every action so a
+     lucky streak chains. It is also guaranteed to land at least once across its
+     lifetime — a buff that can roll nothing at all feels broken rather than
+     unlucky, so the last turn forces it if it hasn't happened yet. */
   const tac = getPStatus(0,'tachy');
-  if(tac && !ui.battle._tachyEchoing && hits && hits.length && ui.battle.lastMove
-     && Math.random() < (tac.double||0)){
-    return runTachyEcho(mon, ui.battle.lastMove, hits, ()=> afterPlayerAttack(mon, hits));
+  if(tac){
+    const lastChance = (tac.turnsLeft||0) <= 1 && !tac.procced;
+    if(lastChance || Math.random() < (tac.bonusAction||0)){
+      tac.procced = true;
+      ui.battle.phase = 'player';
+      renderBattle();
+      battleMsg('⚡ Lightning reflexes — you act again!');
+      playSfx('answer_correct');
+      return;                    // the turn does NOT pass to the enemy
+    }
   }
   const cl = ui.battle && ui.battle.clones;
   if(cl && cl.turnsLeft>0 && !ui.battle._cloneEchoing && hits && hits.length && ui.battle.lastMove){
     return runCloneEchoes(mon, ui.battle.lastMove, ()=> afterPlayerAttackReal(mon, hits));
   }
   return afterPlayerAttackReal(mon, hits);
-}
-
-/* Tachypsychia occasionally lets the move land a second time at full power. */
-function runTachyEcho(mon, mv, prevHits, done){
-  const b = ui.battle;
-  b._tachyEchoing = true;
-  const atk = monAtk(mon);
-  const targets = mv.target==='AOE' ? livingEnemies() : [prevHits[0] && prevHits[0].t].filter(t=>t&&t.hp>0);
-  const echoes = targets.filter(Boolean).map(t=>{
-    const dmg = computeDamage(mv.mult||0.2, atk, monRef(mon), t, true);
-    return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
-  });
-  if(echoes.length===0){ b._tachyEchoing=false; return done(); }
-  battleMsg('🌀 Time folds — it strikes again!');
-  playSuccessiveHits(echoes, 0, ()=>{
-    reportHits(echoes);
-    b._tachyEchoing = false;
-    done();
-  }, true);
 }
 
 /* The two copies repeat the move at half power, spreading across enemies that
@@ -5296,9 +5353,42 @@ function finishPlayerTurn(){
 }
 
 /* An Ultimate that strikes the same target repeatedly. */
+/* Every enemy takes `hits` separate strikes, resolved one after another so the
+   per-hit effects (Steel Soul's flat bonus, Leech Seed) apply to each. */
+function resolveAoeHits(mv, mon, factor, atk, targets){
+  const b = ui.battle;
+  const per = mv.split ? factor / mv.hits : factor;
+  const sim = new Map(targets.map(t=>[t, t.hp]));
+  const all = [];
+  for(let k=0;k<mv.hits;k++){
+    targets.forEach(t=>{
+      if(sim.get(t) <= 0) return;
+      const dmg = computeDamage(per, atk, monRef(mon), t, true);
+      const oldHp = sim.get(t), newHp = Math.max(0, oldHp - dmg);
+      sim.set(t, newHp);
+      all.push({ t, idx:b.enemies.indexOf(t), dmg, oldHp, newHp });
+    });
+  }
+  logBattle(`${displayName(mon)} used ${mv.name} — ${mv.hits} strikes on ${targets.length} target(s)`);
+  battleMsg(`${mv.name}!`);
+  bob($('#playerBob'), +1);
+  playEffect(mv.name, { type: SPECIES[mon.species].types[0] });
+  setTimeout(()=> playSuccessiveHits(all, 0, ()=>{
+    reportHits(all);
+    saveProfile();
+    applySelfDamage(mv, mon);
+    battleMsg(`${mv.name} struck ${mv.hits} times!`);
+    if(mon.currentHp<=0){
+      if(livingEnemies().length===0){ setTimeout(()=>onWaveCleared(), 900); return; }
+      setTimeout(()=>onMonFainted(), 900); return;
+    }
+    afterPlayerAttack(mon, all);
+  }, true), 330);
+}
+
 function resolveSplitHits(mv, mon, factor, atk, target){
   const n = mv.hits;
-  const per = factor / n;
+  const per = mv.split ? factor / n : factor;   // split shares the total; others hit full each time
   const hits = [];
   let simHp = target.hp;
   for(let i=0;i<n;i++){
@@ -5567,8 +5657,12 @@ function runEnemyAttack(i){
     sources.forEach(x=>{ hitChance *= (1-x); });
     evadeChance = 1 - hitChance;
   }
-  const evaded = disMiss || (evadeChance>0 && Math.random() < evadeChance);
+  /* Same reasoning as the bonus action: if Tachypsychia is about to expire and
+     has never once caused a miss, make this one miss. */
+  const tacLast = tac && (tac.turnsLeft||0) <= 1 && !tac.evadedOnce;
+  const evaded = disMiss || tacLast || (evadeChance>0 && Math.random() < evadeChance);
   if(mir && mir.guaranteed && evaded) mir.guaranteed = false;
+  if(evaded && tac) tac.evadedOnce = true;
 
   bob(document.getElementById('enemyBob-'+idx), -1);
   battleMsg(`${name} used ${move[1]}!`);
@@ -5576,7 +5670,8 @@ function runEnemyAttack(i){
   if(evaded){
     setTimeout(()=>{
       battleMsg(disMiss ? `🌀 ${name} is confused — the attack went wide!`
-                        : `💨 The mirage shimmers — ${name} missed!`);
+               : (tac ? `⚡ Lightning reflexes — ${name} missed!`
+                      : `💨 The mirage shimmers — ${name} missed!`));
       setTimeout(()=> runEnemyAttack(i+1), 700);
     }, 300);
     return;
@@ -5687,7 +5782,10 @@ function endEnemyRound(){
   const c = chargeState();
   if(c){ c.turnsLeft--; if(c.turnsLeft <= 0){ clearCharge(); battleMsg('The gathered power disperses.'); } }
   const tac0 = getPStatus(0,'tachy');
-  if(tac0 && tac0.fresh) tac0.fresh = false;      // the sharpest window is the first turn
+  if(tac0){
+    tac0.fresh = false;          // the sharpest evasion window is the first turn only
+    tac0.extras = 0;             // bonus actions are counted per turn
+  }
   const gone = tickStatuses();          // one full round has passed
   setTimeout(()=>{
     b.phase='player'; renderBattle();
@@ -5703,15 +5801,21 @@ function onMonFainted(){
   const options=state.party.map((m,i)=>({m,i})).filter(o=>o.m.currentHp>0 && !isPassenger(o.m));
   monsterChooser('Send out…', options, (i)=>{
     ui.battle.activeIndex=i; ui.battle.switchedThisTurn=false;
-    renderBattle();
-    if(livingEnemies().length===0) return setTimeout(()=>onWaveCleared(), 500);
-    // In a scripted rout the enemy keeps the initiative after every swap.
+
+    if(livingEnemies().length===0){ renderBattle(); return setTimeout(()=>onWaveCleared(), 500); }
+
+    /* Set the phase BEFORE painting. Rendering first drew the move buttons
+       while the phase was still 'resolving', so they came out greyed and
+       nothing re-rendered afterwards — the menu stayed dead until the app was
+       backgrounded and forced a repaint. */
     if(ui.battle.alwaysFirst){
       ui.battle.phase='resolving';
+      renderBattle();
       battleMsg('They strike again!');
       return setTimeout(enemyTurn, 800);
     }
     ui.battle.phase='player';
+    renderBattle();
     battleMsg('Choose a move.');
   }, false);
 }
@@ -9678,18 +9782,18 @@ function engineerOffer(){
   const paid = r3.engineerDone||0;
   if(plantAtPeace()){
     return storyModal(npcPortrait('engineer1','🛠️',120,'transparent'), 'The Engineer',
-      `She wipes her hands and actually smiles at you.<br><br>` +
+      `He wipes his hands and actually smiles at you.<br><br>` +
       `"Whatever you did out there — the drills haven't so much as hiccupped since. ` +
       `First quiet week we've had. I'll not forget it."<br><br>` +
-      `<i>She doesn't have another job for you. For once, she doesn't need one.</i>`,
+      `<i>He doesn't have another job for you. For once, he doesn't need one.</i>`,
       ()=>go('plant'), { bg:'geothermal_plant', subtitle:'Geothermal Plant' });
   }
   storyModal(npcPortrait('engineer1','🛠️',120,'transparent'), 'The Engineer',
-    `"There's a nastier problem below." She taps a chewed-looking drill bit on the bench.<br><br>` +
+    `"There's a nastier problem below." He taps a chewed-looking drill bit on the bench.<br><br>` +
     `"Three of the big ones have <b>melted our drills and taken the metal into their hide</b>. ` +
     `Fire and steel both, now. They're beyond my crew."<br><br>` +
     `"It's extra work and I'd understand a no."` +
-    (paid>=3 ? `<br><br><i>She has nothing left to pay you with, but the toads keep coming back.</i>` : ''),
+    (paid>=3 ? `<br><br><i>He has nothing left to pay you with, but the toads keep coming back.</i>` : ''),
     ()=>engineerChoice());
 }
 function engineerChoice(){
@@ -9722,7 +9826,7 @@ async function onEngineerWin(){
   await saveProfile();
   const left = 3 - r3.engineerDone;
   storyModal(npcPortrait('engineer1','🛠️',120,'transparent'), 'Commission complete',
-    `"That's the drills back, more or less." She presses a Protein Supplement into your hand.<br><br>` +
+    `"That's the drills back, more or less." He presses a Protein Supplement into your hand.<br><br>` +
     `<b>+1 Protein Supplement</b>${left?` · ${left} more commission${left>1?'s':''} available`:''}`,
     ()=> resumeVictory(), { bg:'geothermal_plant', subtitle:'Geothermal Plant' });
 }
