@@ -3638,8 +3638,12 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(dd) dmg *= (dd.deal || 1.25);               // multiplies WITH overheat
     // Dragon Legacy stacks multiplicatively with the above
     if(ui.battle && ui.battle.legacyBonus) dmg *= (1 + ui.battle.legacyBonus);
+    /* `atk` does not exist in this scope — the parameter is `attackerAtk`. The
+       ReferenceError aborted every attack while Steel Soul was up, which is why
+       the turn bounced straight back with no damage.
+       It also only empowers the monster that cast it, not whoever is on field. */
     const soulAtk = getPStatus(0,'steelSoul');
-    if(soulAtk) dmg += soulAtk.bonus * atk;        // Steel Soul adds flat power per hit
+    if(soulAtk && soulAtk.owner === attacker.uid) dmg += soulAtk.bonus * attackerAtk;
   } else {
     if(getEStatus(attacker,'discombobulate')) dmg *= 0.8;   // enemy deals 20% less
   }
@@ -3662,7 +3666,7 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     const sh = getPStatus(0,'shell');
     if(sh && sh.reduce) dmg *= (1 - sh.reduce);    // Lava Shell
     const soul = getPStatus(0,'steelSoul');
-    if(soul) dmg *= (1 - soul.reduce);             // Steel Soul
+    if(soul && soul.owner === defender.uid) dmg *= (1 - soul.reduce);   // only its caster is armoured
   }
   return Math.max(0, Math.ceil(dmg));
 }
@@ -3861,7 +3865,7 @@ const UPGRADE_COSTS = {
   low:      [{cur:'bronze',n:3},{cur:'bronze',n:5}],
   mid:      [{cur:'bronze',n:5},{cur:'bronze',n:10}],
   high:     [{cur:'silver',n:3},{cur:'silver',n:5}],
-  /* veryhigh: [{cur:'silver',n:5},{cur:'silver',n:10}]  — priced, not yet built */
+  veryhigh: [{cur:'silver',n:5},{cur:'silver',n:10}],
   ultra:    [{cur:'gold',  n:5},{cur:'gold',  n:10}],
 };
 /* Ultra gains hit-count as well as power, so it gets its own table. */
@@ -4288,7 +4292,7 @@ const REGION_ZONES = {
        { id:'rocky_caverns', name:'Rocky Caverns', tint:'#8a7a5b', locksUntil:'r2ChallengeDone' } ],
   3: [ { id:'volcanic_caldera', name:'Volcanic Caldera', tint:'#b0503a' },
        { id:'geothermal_plant', name:'Geothermal Plant', tint:'#c98a3a', locksUntil:'r3MonkeyMet' },
-       { id:'vane_shear',       name:'RRS Vane Shear',   tint:'#4a6a8a', locksUntil:'never' } ],
+       { id:'vane_shear',       name:'RRS Vane Shear',   tint:'#4a6a8a' } ],
 };
 
 /* --- Region 2, first scripted sequence: the Trial of Courage ---
@@ -4730,7 +4734,7 @@ function estimateHit(mv, mon){
   if(mv.split && mv.hits > 1) per = mv.mult / mv.hits;
   let dmg = per * atk * ownBuffMultiplier();
   const soul = getPStatus(0,'steelSoul');
-  if(soul) dmg += soul.bonus * atk;                  // Steel Soul adds flat power per hit
+  if(soul && soul.owner === mon.uid) dmg += soul.bonus * atk;
   return Math.ceil(dmg);
 }
 function moveShape(mv){
@@ -5740,7 +5744,8 @@ function resolveBattleMove(mv, target, results){
   }
   if(mv.soul){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
-    setPStatus(0, { type:'steelSoul', turnsLeft:mv.soul.turns+1, reduce:mv.soul.reduce, bonus:mv.soul.bonus });
+    setPStatus(0, { type:'steelSoul', turnsLeft:mv.soul.turns+1, reduce:mv.soul.reduce,
+                    bonus:mv.soul.bonus, owner:mon.uid });
     renderStatusBadges();
     battleMsg(`${mv.name}! Half damage taken and +${mv.soul.bonus}× ATK on every hit for ${mv.soul.turns} turns.`);
     playEffect(mv.name, { type:'Steel' });
@@ -7629,15 +7634,17 @@ async function doVoidExtract(st, mon, closeFn){
 function openRefineSheet(st, mon){
   const t = stoneTierDef(st.tier);
   const maxed = stonePlus(st) >= 2;
-  const notYet = st.tier === 'veryhigh';
+  const notYet = false;                // every tier can now be refined
   const check = (maxed || notYet) ? { ok:false } : canUpgradeStone(st);
   const cost = (maxed || notYet) ? null : upgradeCost(st);
   const nextSt = Object.assign({}, st, { plus: stonePlus(st)+1 });
   const cur = stoneMult(st), nxt = maxed||notYet ? null : stoneMult(nextSt);
-  const preview = (maxed || notYet) ? '' : (st.tier==='ultra'
+  const preview = maxed ? '' : (st.tier==='ultra'
     ? (()=>{ const a=ultraHitRange(st), b=ultraHitRange(nextSt);
              return `${cur}× · ${a.min}–${a.max} hits  →  <b>${nxt}× · ${b.min}–${b.max} hits</b>`; })()
-    : `${cur}× ATK  →  <b>${nxt}× ATK</b>`);
+    : st.tier==='veryhigh'
+      ? `<div style="text-align:left;font-size:12px;line-height:1.5;">${veryHighDef(st.type, stonePlus(st)+1).text}</div>`
+      : `${cur}× ATK  →  <b>${nxt}× ATK</b>`);
 
   const ov = document.createElement('div');
   ov.className = 'refine-scrim';
