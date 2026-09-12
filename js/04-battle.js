@@ -213,6 +213,9 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
   switch(type){
     case 'Fire': // Overheat — whole party trades defence for offence
       setPStatus(uid,{type:'overheat', turnsLeft:T+1, deal:d.deal, take:d.take, burn:d.burn||0, atk:casterAtk});
+      if(d.burn){
+        addPreHit({ label:`🔥 The air itself scorches them!`, pct:d.burn, atk:casterAtk, turnsLeft:T, aoe:true });
+      }
       res.msg = d.text;
       break;
 
@@ -705,6 +708,49 @@ function stancePills(m){
 }
 
 /* ============================================================
+   PRE-HITS
+   Damage that resolves at the very start of the player's turn, before any
+   action is chosen. Each pre-hit is its own effect with its own lifetime — an
+   Aftershock is not attached to Rampage, and Overheat ✦'s burn is not attached
+   to any move at all. Both scale with the player's damage buffs.
+   ============================================================ */
+function addPreHit(p){
+  const b = ui.battle;
+  if(!b) return;
+  b.preHits = b.preHits || [];
+  b.preHits.push(p);          // { label, pct, atk, turnsLeft, aoe }
+}
+/* Resolve everything queued, then hand control back. */
+function runPreHits(done){
+  const b = ui.battle;
+  if(!b || !b.preHits || !b.preHits.length) return done();
+  const queue = b.preHits.slice();
+  let i = 0;
+  const step = ()=>{
+    if(i >= queue.length){
+      // tick lifetimes; each entry expires on its own schedule
+      b.preHits.forEach(p=>p.turnsLeft--);
+      b.preHits = b.preHits.filter(p=>p.turnsLeft > 0);
+      return done();
+    }
+    const p = queue[i++];
+    const foes = livingEnemies();
+    if(!foes.length) return step();
+    const buff = ownBuffMultiplier();          // Overheat / Dragon Dance / Legacy
+    const hits = foes.map(t=>{
+      let dmg = Math.ceil(p.pct * p.atk * buff);
+      const cur = getEStatus(t,'curse');
+      if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
+      return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
+    });
+    applyHits(hits); reportHits(hits);
+    battleMsg(p.label);
+    setTimeout(step, 850);
+  };
+  step();
+}
+
+/* ============================================================
    DAMAGE BLOCK STACKS
    Each stack absorbs up to 100% of the CASTING monster's ATK from the next hit
    it takes. Overflow still lands. Any blocked hit consumes a stack, even a weak
@@ -720,12 +766,76 @@ function grantBlock(holder, n, atkAt){
   holder.blockValue = atkAt || holder.blockValue || 0;
 }
 /* Consume one stack against `dmg`; returns what actually gets through. */
-function applyBlock(holder, dmg){
+function applyBlock(holder, dmg, barId){
   if(!holder || !holder.blockStacks || holder.blockStacks <= 0) return dmg;
+  const before = holder.blockStacks;
   holder.blockStacks--;
+  if(barId) drainBlock(barId, before, holder.blockStacks);
   const absorbed = holder.blockValue || 0;
   return Math.max(0, dmg - absorbed);
 }
+/* A second bar above the HP bar: a shield, the stack count, and one segment per
+   stack. Each segment is worth the caster's ATK, shown at the right. */
+/* A dodge reads as a quick drift away and back: enemies slip right, the player
+   slips left, so the direction always means "away from the attacker". */
+function dodgeDrift(el){
+  if(!el) return;
+  el.classList.remove('dodge-drift');
+  void el.offsetWidth;                 // restart the animation
+  el.classList.add('dodge-drift');
+  setTimeout(()=> el.classList.remove('dodge-drift'), 480);
+}
+function dodgeEnemy(idx){ dodgeDrift(document.getElementById('enemyBob-'+idx)); }
+function dodgePlayer(){   dodgeDrift(document.getElementById('playerBob')); }
+/* A counter is a dodge followed by a strike back. */
+function counterDrift(el, attackEl){
+  dodgeDrift(el);
+  setTimeout(()=>{
+    if(!attackEl) return;
+    attackEl.classList.add('counter-lunge');
+    setTimeout(()=> attackEl.classList.remove('counter-lunge'), 420);
+  }, 320);
+}
+function floatMiss(anchorId, text){
+  const host = document.getElementById(anchorId);
+  const layer = document.getElementById('fxLayer') || document.getElementById('screen');
+  if(!host || !layer) return;
+  const hb = host.getBoundingClientRect(), lb = layer.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'miss-pop';
+  el.textContent = text || 'MISS';
+  el.style.left = (hb.left - lb.left + hb.width/2) + 'px';
+  el.style.top  = (hb.top  - lb.top  + hb.height*0.3) + 'px';
+  layer.appendChild(el);
+  setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 1200);
+}
+
+function blockBar(id, holder){
+  const n = blockStacksOf(holder);
+  if(!n) return `<div class="blk-wrap" id="${id}" style="display:none;"></div>`;
+  const val = holder.blockValue || 0;
+  return `<div class="blk-wrap" id="${id}" data-max="${n}">
+    <span class="blk-shield">🛡</span>
+    <span class="blk-count">×${n}</span>
+    <span class="blk-track">${Array.from({length:n},()=>'<i></i>').join('')}</span>
+    <span class="blk-val">${val}</span>
+  </div>`;
+}
+/* Deplete segments with the same weight as an HP drain. */
+function drainBlock(id, before, after){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const seg = el.querySelectorAll('.blk-track i');
+  for(let k = after; k < before && k < seg.length; k++){
+    const s = seg[k];
+    setTimeout(()=>{ s.classList.add('spent'); }, (k-after)*160);
+  }
+  const cnt = el.querySelector('.blk-count');
+  if(cnt) cnt.textContent = '×' + after;
+  el.classList.add('blk-hit');
+  setTimeout(()=> el.classList.remove('blk-hit'), 520);
+}
+
 function blockPill(holder){
   const n = blockStacksOf(holder);
   return n ? `<span class="status-pill mine">🛡 Block ×${n}</span>` : '';
@@ -755,15 +865,23 @@ function enemySeizesInitiative(){
   const b = ui.battle;
   if(!b) return false;
   if(b.alwaysFirst) return true;                       // scripted routs
+  /* Dragon Dance ✦ overrides everything else that touches initiative. */
+  const ddP = getPStatus(0,'dragonDance');
+  const ddE = livingEnemies().some(e=>getEStatus(e,'dragonDance'));
+  if(ddP && ddP.initiative && !ddE) return false;
+  if(ddE && !(ddP && ddP.initiative)) return true;
+  if(b.figlio) return true;                            // he insists on leading
   // Disrupt cancels out if both sides have it
   const enemyDisrupt = livingEnemies().some(e => getEStatus(e,'disrupt'));
   const playerDisrupt = !!getPStatus(0,'disrupt');
   if(enemyDisrupt && !playerDisrupt) return true;
   if(enemyHasFirstStrikePassive()) return true;
-  // a queued Swift Strike claims the opening blow
+  /* A Swift Striker takes the opening blow of the ROUND, including the very
+     first one — checking only the already-chosen move meant the player could
+     wipe them out before they ever acted, which defeated the attrition. */
   return livingEnemies().some(e => {
-    const mv = e.move;
-    return mv && MOVE_FIRST_NAMES.has(mv[1]);
+    if(e.move && MOVE_FIRST_NAMES.has(e.move[1])) return true;
+    return (MOVES[e.species]||[]).some(m => MOVE_FIRST_NAMES.has(m[1]) && (e.level||1) >= m[5]);
   });
 }
 const MOVE_FIRST_NAMES = new Set(['Swift Strike']);
@@ -790,9 +908,15 @@ function beginPlayerPhase(msg){
                   : '⚡ They seize the initiative!');
     return setTimeout(enemyTurn, 800);
   }
-  b.phase = 'player';
+  /* Pre-hits land before the player may act. */
+  b.phase = 'resolving';
   renderBattle();
-  if(msg) battleMsg(msg);
+  runPreHits(()=>{
+    if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
+    b.phase = 'player';
+    renderBattle();
+    if(msg) battleMsg(msg);
+  });
 }
 
 /* ---------- BATTLE MODULE (Phase 3: wild encounters) ---------- */
@@ -1102,6 +1226,12 @@ function loadWave(i){
   // Leech Seed is a FIELD effect: it re-roots on every new wave.
   if(b.leechSeed) b.enemies.forEach(e=> addEStatus(e, { type:'leechSeed' }));
   b.enemies.forEach(e=>{ if(!state.encounteredSpecies.includes(e.species)) state.encounteredSpecies.push(e.species); });
+  /* Field effects re-apply to anything that walks onto the field, so a new wave
+     arrives already seeded / entombed rather than stepping in clean. */
+  const fs = b.fieldStatus || {};
+  if(fs.leechSeed) b.enemies.forEach(e=> addEStatus(e, Object.assign({}, fs.leechSeed)));
+  if(fs.iceField)  b.enemies.forEach(e=> addEStatus(e, { type:'iceTomb', turnsLeft:1, taken:fs.iceField.taken }));
+  if(fs.curse)     b.enemies.forEach(e=> addEStatus(e, Object.assign({}, fs.curse)));
   if(b.onWaveStart) b.onWaveStart(i);
   // stances and block stacks apply the moment a monster takes the field
   b.enemies.forEach(e=> applyEntryPassives(e, e.species, e.level, e.atk));
@@ -1276,16 +1406,123 @@ function moveShape(mv){
     return `×${r.min}–${r.max}`;
   }
   // an aftershock bonus can add a strike, so show the band
-  if(mv.hits && mv.hits > 1 && mv.bonus && mv.bonus.aftershock){
-    const lo = mv.hits + aftershockBonusHits();
-    return `×${lo}–${lo+1}`;
-  }
-  if(mv.hits && mv.hits > 1 && aftershockBonusHits()) return `×${mv.hits + aftershockBonusHits()}`;
+  if(mv.hits && mv.hits > 1) return `×${mv.hits}`;
   if(mv.hits && mv.hits > 1) return `×${mv.hits}`;
   if(mv.target === 'AOE') return 'AOE';
   if(mv.target === 'Multi2') return '2 targets';
   return '';
 }
+/* ============================================================
+   MOVE DESCRIPTIONS
+   Written so a seven-year-old can tell what a move does without experimenting.
+   Damage figures use the monster's real ATK and current buffs.
+   ============================================================ */
+function moveShapeSentence(mv, dmg){
+  const n = mv.hits && mv.hits > 1 ? mv.hits : 0;
+  if(mv.slot === 'UltraStone'){
+    const r = mv.ultraStone ? ultraHitRange(mv.ultraStone) : { min:5, max:7 };
+    return `Hits enemies <b>${r.min}–${r.max}</b> times for <b>${dmg}</b> damage per hit.`;
+  }
+  if(mv.target === 'SingleAOE')
+    return `Hits one enemy for <b>${dmg}</b>, then every other enemy for <b>${Math.ceil(dmg*(mv.splash||0.5))}</b>.`;
+  if(mv.target === 'AOE' && n) return `Hits <b>all enemies ${n} times</b> for <b>${dmg}</b> damage per hit.`;
+  if(mv.target === 'AOE')      return `Hits <b>all enemies</b> for <b>${dmg}</b> damage each.`;
+  if(mv.target === 'Multi2')   return `Hits <b>2 enemies</b> for <b>${dmg}</b> damage each.`;
+  if(n)                        return `Hits <b>1 enemy ${n} times</b> for <b>${dmg}</b> damage per hit.`;
+  return `Hits <b>1 enemy</b> for <b>${dmg}</b> damage.`;
+}
+
+/* Effects, in plain words. Keyed by the mechanic, not the move name, so a new
+   monster reusing a mechanic gets its description for free. */
+function moveEffectText(mv, mon, atk){
+  const out = [];
+  if(mv.soul) out.push(
+    `<b>Steel Soul.</b> For ${mv.soul.turns} turns this monster takes <b>half damage</b> and adds ` +
+    `<b>+${Math.ceil(mv.soul.bonus*atk)}</b> to every hit it lands — including skill-stone moves. ` +
+    `Only this monster benefits; swapping out leaves the buff behind.`);
+  if(mv.tachy) out.push(
+    `<b>Tachypsychia.</b> For ${mv.tachy.turns} turns, each time this monster acts there is a ` +
+    `<b>${Math.round(mv.tachy.bonusAction*100)}% chance to act again</b> — and that can chain. ` +
+    `It also dodges <b>${Math.round(mv.tachy.evadeFirst*100)}%</b> of attacks on the first turn, then ` +
+    `<b>${Math.round(mv.tachy.evadeAfter*100)}%</b> after.`);
+  if(mv.charm) out.push(
+    `<b>Charm.</b> For ${mv.charm.turns} turns each enemy has a <b>${Math.round(mv.charm.chance*100)}% chance</b> ` +
+    `to lose its turn entirely.`);
+  if(mv.disrupt) out.push(
+    `<b>Disrupt.</b> For ${mv.disrupt.turns} turns, <b>${Math.round(mv.disrupt.playerBlock*100)}%</b> of enemy ` +
+    `attacks simply fail. (An enemy using this instead seizes the first move every round.)`);
+  if(mv.grant){
+    const g = mv.grant;
+    const bits = [];
+    if(g.guard)     bits.push(`goes <b>on guard</b>, gaining a block stack at the start of each turn`);
+    if(g.airborne)  bits.push(`leaps <b>airborne</b> for a turn, dodging <b>70%</b> of attacks`);
+    if(g.invisible) bits.push(`turns <b>unseen</b> for a turn, dodging <b>80%</b> of attacks`);
+    if(g.block)     bits.push(`gains <b>${g.block} block stack${g.block>1?'s':''}</b> worth <b>${atk}</b> each`);
+    if(g.prep)      bits.push(`builds <b>${g.prep} preparation</b>`);
+    out.push(`This monster ${bits.join(', and ')}.`);
+  }
+  if(mv.spend){
+    const sp = mv.spend;
+    const what = sp.status === 'guard' ? 'on guard' : sp.status === 'airborne' ? 'airborne' : 'unseen';
+    let bonus = `<b>${Math.ceil(sp.mult*atk)}</b> damage instead`;
+    if(sp.perStack) bonus += `, plus <b>${Math.ceil(sp.perStack*atk)}</b> for every block stack held`;
+    if(sp.perPrep)  bonus += `, plus <b>${Math.ceil(sp.perPrep*atk)}</b> for every preparation stack`;
+    out.push(`If used while <b>${what}</b>, it spends that stance to deal ${bonus}.`);
+  }
+  if(mv.paralyse || mv.stunHit) out.push(
+    `Each hit has a <b>${Math.round((mv.paralyse||mv.stunHit)*100)}% chance</b> to stun, making that enemy skip its next turn.`);
+  if(mv.repeat) out.push(
+    `Has a <b>${Math.round(mv.repeat*100)}% chance to fire again</b> — and each repeat can spark another, with no limit.`);
+  if(mv.first) out.push(
+    `In an enemy's hands this always strikes first. In yours it deals <b>+${Math.ceil((mv.playerBonus||0)*atk)}</b> extra damage instead.`);
+  if(mv.scale) out.push(
+    `Keep writing past the required words to raise the damage, up to <b>${Math.ceil(mv.scale.max*atk*ownBuffMultiplier())}</b>.`);
+  if(mv.bonus && mv.bonus.aftershock){
+    const pct = (mv.slot === 'Max' ? 0.3 : 0.2);
+    out.push(`Afterwards you may write <b>${mv.bonus.words} bonus words</b> from your whole list. Succeed and an ` +
+      `<b>Aftershock</b> begins: it strikes <b>all enemies at the start of each of your next 3 turns</b> for ` +
+      `<b>${Math.ceil(pct*atk)}</b> damage (more if Steel Soul was active when it formed).`);
+  } else if(mv.bonus){
+    out.push(`Afterwards you may write <b>${mv.bonus.words} bonus words</b> from your whole list to <b>double</b> the damage.`);
+  }
+  if(mv.dot) out.push(
+    `Leaves them burning for <b>${Math.ceil(mv.dot.pct*atk)}</b> damage a turn over ${mv.dot.turns} turns` +
+    (mv.dot.rider === 'noflee' ? `, and they cannot flee.` : mv.dot.rider === 'miss' ? `, and their attacks are harder to land.` : '.'));
+  if(mv.shell) out.push(
+    `This monster takes <b>${Math.round(mv.shell.reduce*100)}% less damage</b> and returns ` +
+    `<b>${Math.ceil(mv.shell.thorns*atk)}</b> to anything that strikes it.`);
+  if(mv.clones) out.push(
+    `Two copies echo each move for ${mv.clones.turns} turns at half power, and you dodge ` +
+    `<b>${Math.round(mv.clones.evade*100)}%</b> of attacks.`);
+  if(mv.charge) out.push(
+    `Gathers power instead of attacking. Spend the charge later for a far heavier blow.`);
+  if(mv.passive) out.push(`<b>Passive.</b> This works on its own the moment the monster enters battle.`);
+  return out;
+}
+
+function moveDescription(mv, mon, atk){
+  const parts = [];
+  if(mv.isStone && mv.stoneTier === 'veryhigh'){
+    const d = veryHighDef(mv.stoneType, mv.stonePlus||0);
+    if(d){
+      parts.push(`<b>${escapeHtml(d.name)}</b> — a field effect lasting <b>${d.turns} turns</b>.`);
+      parts.push(d.text);
+      parts.push(`<i>Cast instantly: using it does not cost your turn. Once per battle, ` +
+                 `restored when the recharge meter fills.</i>`);
+      return parts.map(p=>`<p>${p}</p>`).join('');
+    }
+  }
+  const dmg = estimateHit(mv, mon);
+  if(dmg != null) parts.push(moveShapeSentence(mv, dmg));
+  else if(!mv.passive) parts.push(`A support move — it deals no damage by itself.`);
+  moveEffectText(mv, mon, atk).forEach(t=>parts.push(t));
+  if(mv.isStone && mv.stoneTier === 'ultra')
+    parts.push(`<i>Once per battle, restored when the recharge meter fills.</i>`);
+  if(dmg != null)
+    parts.push(`<i>Damage shown includes your current buffs, before the enemy's type resistance.</i>`);
+  return parts.map(p=>`<p>${p}</p>`).join('');
+}
+
 function moveMeta(mv, mon){
   const bits = [`${mv.words}字`];
   const dmg = estimateHit(mv, mon);
@@ -1356,6 +1593,7 @@ function renderBattle(){
             <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,enemySpriteSize(b.enemies.length),{view:'front',bare:true,crowned:!!e.crowned,stage:e.stage||0,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
             <div class="info-layer name-plate">
               <div class="mon-title">${SPECIES[e.species].name} <span>Lv ${e.level}</span></div>
+              ${blockBar('enemyBlk-'+i, e)}
               ${hpBar2('enemyHp-'+i, e.hp, e.maxHp, false)}
             </div>
           </div>`).join('')}
@@ -1367,6 +1605,7 @@ function renderBattle(){
         <div class="bob player-avatar" id="playerBob">${monPortrait(mon.species,playerSpriteSize(),{view:'back',bare:true,crowned:isCrowned(mon),stage:monStage(mon),breathe: mon.currentHp>0 ? ((mon.currentHp/monMaxHp(mon))<0.3 ? 'weak':'normal') : null})}</div>
         <div class="info-layer name-plate player-plate">
           <div class="mon-title big">${escapeHtml(displayName(mon))}${crownMark(mon)} <span>Lv ${mon.level}</span></div>
+          ${blockBar('playerBlk', mon)}
           ${hpBar2('playerHp', mon.currentHp, monMaxHp(mon), true)}
           <div class="atk-line">ATK ${monAtk(mon)}</div>
           <div class="recharge">
@@ -1420,8 +1659,8 @@ function renderBattle(){
 
 const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
-  counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed',
-  discombobulate:'🌀 Confused', leechSeed:'🌿 Seeded', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
+  counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed', stunned:'💫 Stunned',
+  discombobulate:'🌀 Confused', leechSeed:'🌿 Leeched', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
 };
 function renderStatusBadges(){
@@ -1451,10 +1690,19 @@ function renderStatusBadges(){
     const slot = document.getElementById('enemyStatus-'+i);
     if(!slot) return;
     if(e.hp<=0){ slot.innerHTML=''; return; }
+    /* Stances and block live as plain fields rather than statuses, so they need
+       rendering explicitly — otherwise a Loong's 70% evasion is invisible and
+       the fight just feels like bad luck. */
+    const extras = [];
+    if(e.guard)          extras.push('<span class="status-pill foe">🛡 Guard</span>');
+    if(e.airborne > 0)   extras.push('<span class="status-pill foe">🕊 Airborne</span>');
+    if(e.invisible > 0)  extras.push('<span class="status-pill foe">👤 Unseen</span>');
+    if(e.prep > 0)       extras.push(`<span class="status-pill foe">🎯 Prep ×${e.prep}</span>`);
+    if(passiveOf(e))     extras.push(`<span class="status-pill foe">✨ ${passiveOf(e).name}</span>`);
     slot.innerHTML = eStatuses(e).map(st=>{
       const extra = st.type==='iceTomb' ? ` ${st.turnsLeft}` : '';
       return `<span class="status-pill foe">${STATUS_LABELS[st.type]||st.type}${extra}</span>`;
-    }).join('');
+    }).join('') + extras.join('');
   });
 }
 

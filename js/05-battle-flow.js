@@ -634,8 +634,16 @@ function offerBonusRound(mv, mon, hits, effMsg, origResults){
     b._bonusResolved = true;
     if(isAftershock){
       if(won){
-        b.aftershockPending = true;              // this cast gets the extra strike
-        addAftershockStack();
+        /* Rampage still lands its own 5 strikes. The reward is a STANDING
+           aftershock that hits at the start of each of the next 3 turns —
+           and it locks in Steel Soul's bonus at the moment of creation. */
+        const mon = activeMon();
+        const soul = getPStatus(0,'steelSoul');
+        const soulOn = !!(soul && soul.owner === mon.uid);
+        const pct = (mv.slot === 'Max' ? 0.3 : 0.2) + (soulOn ? 0.1 : 0);
+        addPreHit({ label:`💥 Aftershock rips through the ground!`, pct, atk:monAtk(mon),
+                    turnsLeft:3, aoe:true });
+        battleMsg(`💥 An aftershock begins — ${pct}× ATK for 3 turns.`);
       }
     } else {
       b.bonusMult = won ? mv.bonus.mult : 1;
@@ -674,23 +682,13 @@ function offerBonusRound(mv, mon, hits, effMsg, origResults){
   });
 }
 
-/* Aftershock: each stack adds a strike to multi-hit moves and expires on its
-   own timer, so stacks never refresh one another. */
-function addAftershockStack(){
-  const b = ui.battle;
-  b.aftershock = b.aftershock || [];
-  b.aftershock.push({ turnsLeft: 3 });
-}
+/* Aftershocks are ordinary pre-hits now; these remain so older call sites and
+   the move-button text keep working. */
 function aftershockBonusHits(){
   const b = ui.battle;
-  return (b && b.aftershock) ? b.aftershock.length : 0;
+  return (b && b.preHits) ? b.preHits.filter(p=>/Aftershock/.test(p.label)).length : 0;
 }
-function tickAftershock(){
-  const b = ui.battle;
-  if(!b || !b.aftershock) return;
-  b.aftershock.forEach(a=>a.turnsLeft--);
-  b.aftershock = b.aftershock.filter(a=>a.turnsLeft > 0);
-}
+function tickAftershock(){ /* handled by runPreHits */ }
 
 function resolveScriptedMove(mv, mon){
   const b = ui.battle;
@@ -898,7 +896,9 @@ function resolveBattleMove(mv, target, results){
     // an airborne or unseen defender is hard to touch
     const ev = stanceEvasion(t);
     if(ev > 0 && Math.random() < ev){
-      return { t, idx:ui.battle.enemies.indexOf(t), oldHp:t.hp, newHp:t.hp, dmg:0, dodged:true };
+      const idx = ui.battle.enemies.indexOf(t);
+      setTimeout(()=>{ dodgeEnemy(idx); floatMiss('enemy-'+idx, 'MISS'); }, 240);
+      return { t, idx, oldHp:t.hp, newHp:t.hp, dmg:0, dodged:true };
     }
     const dmg = computeDamage(factor, atk, monRef(mon), t, true);
     const idx=ui.battle.enemies.indexOf(t);
@@ -960,7 +960,7 @@ function applyHits(hits){
   // an enemy holding block stacks eats one per strike
   hits.forEach(h=>{
     if(!h || !h.t || !blockStacksOf(h.t)) return;
-    const through = applyBlock(h.t, h.dmg);
+    const through = applyBlock(h.t, h.dmg, 'enemyBlk-'+h.idx);
     if(through !== h.dmg){
       h.blocked = h.dmg - through;
       h.dmg = through;
@@ -1120,9 +1120,9 @@ function finishPlayerTurn(){
 function resolveAoeHits(mv, mon, factor, atk, targets){
   const b = ui.battle;
   // a successful power-up adds a strike this cast; each Aftershock stack adds one more
-  const extra = (b.aftershockPending ? 1 : 0) + aftershockBonusHits();
-  b.aftershockPending = false;
-  const totalHits = mv.hits + extra;
+  // Rampage always lands its own strikes; aftershocks arrive separately.
+  const extra = 0;
+  const totalHits = mv.hits;
   const per = mv.split ? factor / mv.hits : factor;
   const sim = new Map(targets.map(t=>[t, t.hp]));
   const all = [];
@@ -1341,6 +1341,7 @@ function enemyTurn(){
       frozenCount++;
       ice.turnsLeft--;
       if(ice.turnsLeft<=0) removeEStatus(e,'iceTomb');
+      else e._stillFrozen = true;
     } else if(par){
       frozenCount++;
       removeEStatus(e,'paralysed');       // one turn only
@@ -1350,7 +1351,11 @@ function enemyTurn(){
   });
 
   if(acting.length===0){
-    battleMsg(frozenCount ? "The frozen enemies can't move!" : 'The enemy hesitates!');
+    const left = Math.max(0, ...livingEnemies().map(e=>{ const i=getEStatus(e,'iceTomb'); return i?i.turnsLeft:0; }));
+    battleMsg(frozenCount
+      ? (left ? "🧊 The frozen enemies can't move! (" + left + ' more turn' + (left>1?'s':'') + ')'
+              : "🧊 The frozen enemies can't move! The ice is cracking…")
+      : 'The enemy hesitates!');
     renderStatusBadges();
     return endEnemyRound();
   }
@@ -1473,6 +1478,8 @@ function runEnemyAttack(i){
 
   if(evaded){
     setTimeout(()=>{
+      dodgePlayer();
+      floatMiss('playerBob', 'MISS');
       battleMsg(disMiss ? `🌀 ${name} is confused — the attack went wide!`
                : (tac ? `⚡ Lightning reflexes — ${name} missed!`
                       : `💨 The mirage shimmers — ${name} missed!`));
@@ -1506,6 +1513,7 @@ function runEnemyAttack(i){
 
     if(counterFires){
       if(counter && counter.guaranteed > 0) counter.guaranteed--;
+      counterDrift(document.getElementById('playerBob'), document.getElementById('playerBob'));
       const ret = disCounter ? (getEStatus(e,'discombobulate')||{}).counterRet || 0.5
                              : (counter ? (counter.ret||0.5) : 0.5);
       const back = Math.ceil(dmg*ret);
@@ -1519,7 +1527,7 @@ function runEnemyAttack(i){
       const oldHp = mon.currentHp;
       // reduction has already been applied inside computeDamage; block is last
       const beforeBlock = dmg;
-      dmg = applyBlock(mon, dmg);
+      dmg = applyBlock(mon, dmg, 'playerBlk');
       if(dmg < beforeBlock) msg = `🛡 Blocked ${beforeBlock - dmg}! ` + msg;
       // scripted last stand: the dragon always survives on 1 HP
       const floor = ui.battle.allyUnkillable ? 1 : 0;

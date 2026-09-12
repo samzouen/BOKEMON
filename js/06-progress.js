@@ -14,7 +14,8 @@ function levelCap(){
      own ceiling; beating the band lifts the whole region. */
   const r3 = (state.progress && state.progress.region3) || {};
   if(ui.screen === 'concert' || (ui.battle && ui.battle.concertFight)) return 66;
-  if((state.progress||{}).currentRegion === 3 && r3.concert && r3.concert.bandCleared) return 71;
+  // Once the Power Stone is in hand, Region 3 opens all the way up.
+  if((state.progress||{}).currentRegion === 3 && r3.powerStone) return 71;
   const z = ui.currentZone && ui.currentZone.id;
   if(z && ZONE_LEVELS[z]) return ZONE_LEVELS[z].max;
   const rid = (state.progress && state.progress.currentRegion) || 1;

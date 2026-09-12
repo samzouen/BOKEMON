@@ -196,7 +196,7 @@ const MOVES = {
                     ['Power1','Seismic Shock',0.2,'AOE',8,1,{hits:2}],
                     ['Power2','Steel Soul',null,'Self',4,35,{soul:{turns:3, reduce:0.5, bonus:0.1}}],
                     ['Ultimate','Rampage',0.2,'AOE',8,45,{hits:5}],
-                    ['Max','Rampage Max',0.3,'AOE',10,55,{hits:5, bonus:{words:2, aftershock:true}}]],
+                    ['Max','Rampage Max',0.3,'AOE',8,55,{hits:5, bonus:{words:2, aftershock:true}}]],
   /* Swift Strike: an enemy using it seizes the initiative; the player, who
      usually moves first anyway, gets extra power instead. */
   thunderdog:      [['Basic','Bite',0.2,'Single',2,1],

@@ -241,9 +241,13 @@ function vaneShearClosed(){
   const r3 = state.progress.region3;
   if(!r3.vaneShearSeen){ r3.vaneShearSeen = true; saveProfile(); }
   storyModal(npcPortrait('shipkeeper','⚓',120,'transparent'), 'RRS Vane Shear',
-    `A woman with a clipboard blocks the gangway, not unkindly.<br><br>` +
-    `"Nobody aboard, love. Sailors and researchers both — they've all gone up to town for the ` +
-    `<b>band competition</b>." She checks a watch. "Back later. Much later, if the finals run long."`,
+    `A white-bearded giant blocks the gangway. He folds his arms, which takes a moment.<br><br>` +
+    `"No."<br><br>` +
+    `A pause, in case that was enough. It usually is.<br><br>` +
+    `"Crew's ashore. Sailors, researchers, the lot — gone up to that <b>band competition</b>. ` +
+    `Nobody boards while they're off her."<br><br>` +
+    `He looks past you at the harbour, which ends the conversation.<br><br>` +
+    `<i>"Come back when you've a reason I care about."</i>`,
     ()=>go('explore'));
 }
 
@@ -396,20 +400,24 @@ const DOJO_WAVE1 = (lv)=>[
   {species:'zebra',       level:lv, ai:'power1'},
   {species:'thunderlion', level:lv, ai:'power1'},
 ];
+/* Fought in this order — the four disciples, then the master last. The
+   pentagon draws them in a different order; see BAND_LAYOUT. */
 const ELECTRIC_BAND = [
   { id:'electric_disciple1', label:'Electric Disciple', waves:[ DOJO_WAVE1(54),
       [{species:'thundersquirrel',level:60,ai:'best'}] ] },
   { id:'electric_disciple2', label:'Electric Disciple', waves:[ DOJO_WAVE1(55),
       [{species:'magnet',level:60,ai:'best'}] ] },
-  { id:'electric_master',    label:'Electric Master',   waves:[ DOJO_WAVE1(58),
-      [{species:'thundersquirrel',level:61,ai:'best'},{species:'magnet',level:61,ai:'best'},{species:'tiger',level:61,ai:'best'}],
-      [{species:'electric_starter',level:65,ai:'best'},{species:'giraffe',level:65,ai:'best'}],
-      [{species:'thundercat',level:71,ai:'best'}] ] },
   { id:'electric_disciple3', label:'Electric Disciple', waves:[ DOJO_WAVE1(56),
       [{species:'tiger',level:60,ai:'best'}] ] },
   { id:'electric_disciple4', label:'Electric Disciple', waves:[ DOJO_WAVE1(57),
       [{species:'electric_starter',level:60,ai:'best'},{species:'giraffe',level:61,ai:'best'}] ] },
+  { id:'electric_master',    label:'Electric Master',   waves:[ DOJO_WAVE1(58),
+      [{species:'thundersquirrel',level:61,ai:'best'},{species:'magnet',level:61,ai:'best'},{species:'tiger',level:61,ai:'best'}],
+      [{species:'electric_starter',level:65,ai:'best'},{species:'giraffe',level:65,ai:'best'}],
+      [{species:'thundercat',level:71,ai:'best'}] ] },
 ];
+/* Left to right on the button, with the master in the middle. */
+const BAND_LAYOUT = ['electric_disciple1','electric_disciple2','electric_master','electric_disciple3','electric_disciple4'];
 
 /* --- the three opening scenes --- */
 function concertIntro(){
@@ -480,7 +488,7 @@ function renderConcert(){
         ${[1,5,2].map(n=>sailorButton(n)).join('')}
       </div>
       <button class="band-btn ${c.bandCleared?'done':''}" id="bandBtn">
-        ${ELECTRIC_BAND.map(m=>npcPortrait(m.id,'⚡',52,'transparent')).join('')}
+        ${BAND_LAYOUT.map(id=>npcPortrait(id,'⚡',52,'transparent')).join('')}
         <div class="band-label">${c.bandCleared?'The Electric Dojo — cleared':'The Electric Dojo'}</div>
       </button>
       <div class="pent-row bottom">
@@ -709,7 +717,7 @@ function figlioChallenge(){
 function startFiglioFight(){
   if(!ensurePool()) return;
   beginBattle({ isNpc:true, name:'Figlio', npcId:'figlio', concertFight:true,
-    bgKey:'battle_band_concert',
+    bgKey:'battle_band_concert', figlio:true,
     waves:[
       [{species:'ground_starter',  level:66, ai:'best'}],
       [{species:'psychic_starter', level:67, ai:'best'}],

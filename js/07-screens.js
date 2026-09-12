@@ -573,6 +573,31 @@ function dragonStoneBlock(m){
   </div>`;
 }
 
+/* Every move explains itself: what it hits, for how much, and — for anything
+   with an effect — exactly what that effect does. */
+function openMoveInfo(mv, mon){
+  const atk = monAtk(mon);
+  const st = mv.stone;
+  const ov = document.createElement('div');
+  ov.className = 'refine-scrim';
+  ov.innerHTML = `
+    <div class="refine-card">
+      <div class="refine-name">${escapeHtml(mv.name)}${st&&stonePlus(st)?`<span class="plus-mark big">${UPGRADE_MARKS[stonePlus(st)].trim()}</span>`:''}</div>
+      <div class="refine-sub">${mv.slot} · ${mv.words} words</div>
+      <div class="move-info-body">${moveDescription(mv, mon, atk)}</div>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn btn-ghost" id="miBack" style="flex:1;">Back</button>
+        ${st ? `<button class="btn btn-primary" id="miRefine" style="flex:1;">Refine…</button>` : ''}
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+  ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
+  ov.querySelector('#miBack').addEventListener('click', close);
+  const rf = ov.querySelector('#miRefine');
+  if(rf) rf.addEventListener('click', ()=>{ close(); openRefineSheet(st, mon); });
+}
+
 function crownBlock(m){
   if(isPassenger(m)) return '';
   const owned = state.inventory.crowns||0;
@@ -703,7 +728,7 @@ function renderStats(){
     <div style="font-weight:800;font-size:14px;margin-bottom:8px;">Moves</div>
     <div style="display:flex;flex-direction:column;gap:8px;">
       ${moves.map((mv,mi)=>`
-        <div class="move-row ${mv.stone?'refinable':''}" ${mv.stone?`data-mvstone="${mi}"`:''}
+        <div class="move-row ${mv.unlocked?'tappable':''} ${mv.stone?'refinable':''}" data-mvinfo="${mi}" ${mv.stone?`data-mvstone="${mi}"`:''}
           style="background:${mv.unlocked?'var(--paper-2)':'var(--paper-3)'};border:1px solid var(--line);border-radius:12px;padding:12px;${mv.unlocked?'':'opacity:0.7;'}">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:15px;">
@@ -716,7 +741,7 @@ function renderStats(){
               ? `${mv.mult!=null?(mv.mult+'× ATK'):'Support'} · ${mv.target} · ${mv.words} words`
               : `Unlocks at Lv ${mv.unlock}`}
           </div>
-          ${mv.stone ? `<div class="refine-hint">tap to refine</div>` : ''}
+          ${mv.unlocked ? `<div class="refine-hint">${mv.stone ? 'tap to read or refine' : 'tap to read'}</div>` : ''}
         </div>
       `).join('')}
     </div>
@@ -755,9 +780,9 @@ function renderStats(){
       nameArea.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);font-weight:600;">Earn a 🥉 Bronze Medal to rename this monster.</div>`;
     }
   }
-  screenEl.querySelectorAll('[data-mvstone]').forEach(el=>el.addEventListener('click', ()=>{
-    const mv = moves[+el.dataset.mvstone];
-    if(mv && mv.stone) openRefineSheet(mv.stone, m);
+  screenEl.querySelectorAll('[data-mvinfo]').forEach(el=>el.addEventListener('click', ()=>{
+    const mv = moves[+el.dataset.mvinfo];
+    if(mv && mv.unlocked) openMoveInfo(mv, m);
   }));
   if(isDev()){
     const f = $('#lvSet');

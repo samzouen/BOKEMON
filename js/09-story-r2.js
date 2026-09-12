@@ -487,9 +487,9 @@ function renderChallengeR3(){
     <div class="challenge-card" id="cDojo">
       ${npcPortrait('electric_master','⚡',50,'#e0b53a')}
       <div style="flex:1;">
-        <div class="cc-title">Electric Dojo ${(state.progress.region3||{}).dojoOpen?'<span class="clear-tag">Open</span>':'<span class="clear-tag" style="background:var(--paper-3);color:var(--ink-soft);">Closed</span>'}</div>
-        <div class="cc-desc">${(state.progress.region3||{}).dojoOpen
-          ? 'They kept their word.'
+        <div class="cc-title">Electric Dojo <span class="clear-tag" style="background:var(--paper-3);color:var(--ink-soft);">Closed</span></div>
+        <div class="cc-desc">${concertState().bandCleared
+          ? 'Seeking a new Dojo Master.'
           : 'A hand-written sign hangs on the door.'}</div>
       </div>
     </div>
@@ -500,10 +500,16 @@ function renderChallengeR3(){
   const cc = $('#cConcert');
   if(cc) cc.addEventListener('click', ()=> go('concert'));
   $('#cDojo').addEventListener('click', ()=> storyModal(npcPortrait('electric_master','⚡',120,'transparent'),
-    'Closed for the competition',
-    `The sign reads, in a confident hand:<br><br>` +
-    `<i>"GONE TO THE BAND COMPETITION. All of us. Yes, all. Spar amongst yourselves."</i><br><br>` +
-    `Through the shutters you can hear something enormous being tuned.`,
+    concertState().bandCleared ? 'Under new management. Eventually.' : 'Closed for the competition',
+    concertState().bandCleared
+      ? `<div class="dojo-sign">ELECTRIC DOJO — <b>CLOSED</b><br><br>` +
+        `Our Master has hung up her gloves for a guitar.<br>` +
+        `We are <b>seeking a new Dojo Master</b>.<br><br>` +
+        `<i>Strength alone will not do. Come and be judged.</i></div><br>` +
+        `Through the shutters, the hall is dark and the mats are stacked.`
+      : `The sign reads, in a confident hand:<br><br>` +
+        `<i>"GONE TO THE BAND COMPETITION. All of us. Yes, all. Spar amongst yourselves."</i><br><br>` +
+        `Through the shutters you can hear something enormous being tuned.`,
     ()=>go('challenge')));
 }
 
