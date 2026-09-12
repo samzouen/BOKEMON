@@ -338,14 +338,22 @@ function stopMusic(){ fadeOutMusic(MUSIC_FADE_MS); }
 function playBattleMusic(isBoss, opts){
   opts = opts || {};
   const b = ui.battle || {};
-  const zone = (ui.currentZone && ui.currentZone.id) || '';
+  /* A battle's own bgKey wins over ui.currentZone. Challenge fights (the band
+     competition, the dojos) aren't in a zone at all, and the stale currentZone
+     was leaking the wrong zone's battle theme into them. */
+  const place = b.bgKey ? b.bgKey.replace(/^battle_/, '')
+                        : ((ui.currentZone && ui.currentZone.id) || '');
   const chain = [];
 
   if(b.npcId === 'padrino') chain.push('battle_padrino');
   const legendary = (b.enemies||[]).some(e=>SPECIES[e.species] && SPECIES[e.species].tier==='legendary')
                  || b.guardianTrial || b.scriptedLoss;
   if(legendary) chain.push('battle_legendary');
-  if(zone) chain.push('battle_'+zone);
+  if(place) chain.push('battle_'+place);
+  /* The Band Competition is the one place where the zone's own track carries
+     into its fights — it's a concert, so the music IS the setting. Everywhere
+     else falls through to the generic battle themes as usual. */
+  if(b.concertFight) chain.push('zone_band_concert');
   chain.push('battle_region'+((state.progress||{}).currentRegion||1));
   chain.push(isBoss ? 'battle_boss' : 'battle_wild');
   chain.push('battle_wild');

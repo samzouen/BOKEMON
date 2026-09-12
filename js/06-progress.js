@@ -287,6 +287,10 @@ function playEvolutions(list, done){
 
     const finish = ()=>{
       clearTimeout(timer);
+      /* The transformation loop has to stop before the fanfare, or the two
+         overlap and neither reads. Same fanfare as winning an Ultra stone. */
+      fadeOutSfx('evolution', 320);
+      setTimeout(()=> playSfx('stone_ultra'), 260);
       // settle on the NEW form, full colour, with the old one gone for good
       layerFrom.style.display = 'none';
       layerTo.style.opacity = '1';

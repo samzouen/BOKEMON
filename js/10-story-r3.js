@@ -456,6 +456,7 @@ function renderConcert(){
   const c = concertState();
   if(!c.seen) return concertIntro();
   setScreenBg('band_concert');
+  playMusicChain(['zone_band_concert','region3','region']);
   $('#brandSub').textContent = 'Band Competition';
   const beaten = sailorsBeaten();
 
@@ -526,7 +527,7 @@ function onSailorTap(n){
   }
   const def = SAILORS[n];
   if(!ensurePool()) return;
-  beginBattle({ isNpc:true, name:def.label, npcId:'sailor'+n,
+  beginBattle({ isNpc:true, name:def.label, npcId:'sailor'+n, concertFight:true,
     waves: def.waves.map(w=>w.map(e=>({...e, nerfed:false}))),
     bgKey:'battle_band_concert',
     onWin: ()=> onSailorWin(n) });
@@ -583,7 +584,7 @@ function startBandGauntlet(i){
   beginBattle({ isNpc:true, name:m.label, npcId:m.id,
     waves: m.waves.map(w=>w.map(e=>({...e, nerfed:false}))),
     bgKey:'battle_band_concert',
-    bandRun:true,
+    bandRun:true, concertFight:true,
     onWin: ()=> onBandStageWin(i) });
 }
 async function onBandStageWin(i){

@@ -1184,6 +1184,7 @@ function beginBattle(config){
     /* From Emerald March onward a trainer fight is a commitment: no fleeing.
        Region 1 keeps its gentler rules so the early game stays forgiving. */
     noFlee: !!config.noFlee || (!!config.isNpc && (state.progress.currentRegion||1) >= 2),
+    concertFight: !!config.concertFight,
     scriptedLoss: config.scriptedLoss||null,
     scriptedAlly: config.scriptedAlly||null, allyMove: config.allyMove||null,
     allyUnkillable: !!config.allyUnkillable, enemiesFirst: !!config.enemiesFirst,
