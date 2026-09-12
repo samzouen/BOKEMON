@@ -575,6 +575,20 @@
   }
   @media (prefers-reduced-motion: reduce){ .move-btn.ultra-btn .fizz{display:none;} }
   /* the shared five-tier ramp: dull grey → green → blue → gold → red */
+  .borrow-scrim{position:fixed;inset:0;background:rgba(35,32,25,.66);z-index:86;
+    display:flex;align-items:center;justify-content:center;padding:20px;}
+  .borrow-card{background:var(--paper);border-radius:18px;padding:20px;max-width:360px;width:100%;
+    text-align:center;box-shadow:0 12px 40px var(--shadow);}
+  .borrow-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;}
+  .borrow-sub{font-size:12.5px;color:var(--ink-soft);font-weight:600;margin:4px 0 12px;}
+  .borrow-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .borrow-cell{display:flex;flex-direction:column;align-items:center;gap:4px;
+    background:var(--paper-2);border:1px solid var(--line);border-radius:12px;
+    padding:9px 4px;cursor:pointer;}
+  .borrow-cell .gem{width:22px;height:22px;}
+  .borrow-cell.picked{border-color:var(--gold);background:rgba(201,154,63,.2);}
+  .borrow-name{font-size:10.5px;font-weight:800;line-height:1.15;}
+  .borrow-picked{font-size:12px;font-weight:800;color:var(--gold);margin-top:10px;}
   .odds-table{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;text-align:left;}
   .odds-row{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;}
   .odds-name{flex:1;}
@@ -710,6 +724,27 @@
     background:var(--paper-3);color:var(--ink-soft);border:1px solid var(--line);opacity:.65;}
   .key-chip.have{background:rgba(47,143,111,.18);border-color:rgba(47,143,111,.5);color:var(--jade-dark);opacity:1;}
   .plant-note{font-size:12.5px;font-weight:600;color:var(--ink-soft);line-height:1.5;margin:10px 0;}
+  .pentagon{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:14px;}
+  .pent-row{display:flex;gap:18px;justify-content:center;}
+  .pent-row.bottom{gap:90px;}
+  .sailor-btn{
+    position:relative;width:76px;height:76px;border-radius:16px;cursor:pointer;
+    background:var(--paper-2);border:2px solid var(--line);
+    display:flex;align-items:center;justify-content:center;transition:transform .08s;
+  }
+  .sailor-btn:active{transform:scale(.95);}
+  .sailor-btn.done{opacity:.45;filter:grayscale(1);}
+  .sailor-btn.locked{opacity:.55;}
+  .band-btn{
+    width:100%;border-radius:16px;padding:12px 10px;cursor:pointer;
+    background:linear-gradient(135deg,rgba(224,181,58,.22),rgba(200,69,58,.16));
+    border:2px solid rgba(224,181,58,.6);
+    display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:2px;
+  }
+  .band-btn.done{opacity:.6;}
+  .band-label{width:100%;text-align:center;font-family:'Baloo 2',cursive;font-weight:800;
+    font-size:14px;margin-top:6px;}
+  .sailor-btn img,.band-btn img{box-shadow:none !important;background:transparent !important;}
   .worker-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
   .worker{
     position:relative;aspect-ratio:1/1;border-radius:14px;cursor:pointer;
@@ -1186,6 +1221,13 @@ const SPECIES = {
   giraffe:         { name:'Giraffe',        tier:'elite', types:['Electric'], rate:11, nerfedRate:11, base:61, evo:[21,36], color:'#d8b45a', glyph:'鹿' },
   thundercat:      { name:'Thundercat',     tier:'elite', types:['Electric'], rate:11, nerfedRate:11, base:71, evo:[],      color:'#e8c23a', glyph:'猫' },
 
+  /* --- Region 3: the sailor fans --- */
+  sea_turtle:      { name:'Sea Turtle', tier:'wild',  types:['Water','Steel'],    rate:7,  nerfedRate:5,  base:55, evo:[18],    evoMult:1.5, color:'#4f8a7a', glyph:'龟' },
+  plesiosaur:      { name:'Plesiosaur', tier:'elite', types:['Water','Steel'],    rate:11, nerfedRate:11, base:55, evo:[],      color:'#5a7f9a', glyph:'蛇' },
+  otter:           { name:'Otter',      tier:'elite', types:['Water','Physical'], rate:11, nerfedRate:11, base:56, evo:[21,41], color:'#8a6a4a', glyph:'獭' },
+  loong:           { name:'Loong',      tier:'elite', types:['Water','Dragon'],   rate:11, nerfedRate:11, base:57, evo:[41],    evoMult:1.5, color:'#3f8fa8', glyph:'龙' },
+  ninja:           { name:'Ninja',      tier:'elite', types:['Water','Physical'], rate:11, nerfedRate:11, base:58, evo:[21,41], color:'#4a4a5a', glyph:'忍' },
+
   /* --- Legendaries & story --- */
   /* --- Region 2: Rocky Caverns starters --- */
   flying_starter:  { name:'Raven',       tier:'starter',   types:['Flying'],        rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#6b7a8f', glyph:'鸦' },
@@ -1309,7 +1351,7 @@ const MOVES = {
                     ['Ultimate','Thundercrash',1.5,'Single',8,25]],
   thunderlion:     [['Basic','Claw',0.2,'Single',2,1],
                     ['Power1','Swift Strike',0.3,'Single',4,1,{first:true, playerBonus:0.2}],
-                    ['Power2','Thundershred',0.5,'AOE',8,25],
+                    ['Power2','Thundershred',0.6,'AOE',8,25],
                     ['Ultimate','Pride Attack',0.5,'Single',8,25,{hits:3}]],
   thundersquirrel: [['Basic','Tackle',0.2,'Single',2,1],
                     ['Power1','Acorn Bolt',0.4,'Single',4,1],
@@ -1336,6 +1378,33 @@ const MOVES = {
                     ['Power2','Lightning Cat',null,'Passive',0,21,{passive:{first:true, playerDouble:0.20}}],
                     ['Ultimate','Omnislash',1.0,'SingleAOE',8,41,{splash:0.5}],
                     ['Max','Omnislash Max',1.1,'SingleAOE',8,51,{splash:0.65}]],
+  /* Several of these are BOTH passive and active: the passive fires on entering
+     the field, the active can be used again later for the same effect. */
+  sea_turtle:      [['Basic','Slap',0.2,'Single',2,1],
+                    ['Power1','Beak Crush',0.4,'Single',4,1],
+                    ['Power2','Iron Shell',null,'Passive',0,18,{passive:{block:3}}],
+                    ['Ultimate','Whirlpool',0.8,'AOE',8,25]],
+  plesiosaur:      [['Basic','Slam',0.3,'Single',2,1],
+                    ['Power1','Water Jet',0.5,'Single',4,1],
+                    ['Power2','Crashing Wave',0.6,'AOE',8,21],
+                    ['Ultimate','Fortress',0.3,'Single',8,41,{passive:{block:2}, hits:3, randomTargets:true}],
+                    ['Max','Fortress Max',0.3,'Single',8,51,{passive:{block:2}, hits:4, randomTargets:true, regainBlock:1}]],
+  otter:           [['Basic','Bite',0.3,'Single',2,1],
+                    ['Power1','Tsuki',0.5,'Single',4,1],
+                    ['Power2','Guard',null,'Self',4,21,{passive:{guard:true, block:1}, grant:{guard:true, block:1}, blockedWhile:'guard'}],
+                    ['Ultimate','Iaijutsu',1.0,'Single',8,41,{spend:{status:'guard', clearBlock:true, mult:1.6, perStack:0.2}}],
+                    ['Max','Iaijutsu Max',1.2,'Single',8,51,{spend:{status:'guard', clearBlock:true, mult:1.8, perStack:0.25}}]],
+  loong:           [['Basic','Bite',0.3,'Single',2,1],
+                    ['Power1','Water Jet',0.5,'Single',4,1],
+                    ['Power2','Soar',null,'Self',4,21,{passive:{airborne:1}, grant:{airborne:1}, blockedWhile:'airborne'}],
+                    ['Ultimate','Dragon Dive',0.8,'AOE',8,41,{spend:{status:'airborne', mult:1.6}}],
+                    ['Max','Dragon Dive Max',1.0,'AOE',8,51,{spend:{status:'airborne', mult:2.0}}]],
+  ninja:           [['Basic','Slash',0.3,'Single',2,1],
+                    ['Power1','Shurikens',0.3,'Multi2',5,1],
+                    ['Power2','Onkei-jutsu',null,'Self',4,21,{passive:{invisible:1}, grant:{invisible:1, prep:1}}],
+                    ['Ultimate','Ansatsu',1.0,'Single',8,41,{spend:{status:'invisible', clearPrep:true, mult:1.5, perPrep:0.3}}],
+                    ['Max','Ansatsu Max',1.2,'Single',8,51,{spend:{status:'invisible', clearPrep:true, mult:1.7, perPrep:0.4}}]],
+
   sacred_seed:     [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 };
 
@@ -2273,6 +2342,9 @@ function normalizeProfile(p){
   r3.powerStoneUsed = !!r3.powerStoneUsed;
   r3.engineerDone = r3.engineerDone || 0;
   r3.ankylo = r3.ankylo || { refusals:0, agreed:false, seen:false };
+  r3.vaneShearSeen = !!r3.vaneShearSeen;
+  r3.dojoOpen = !!r3.dojoOpen;
+  r3.concert = r3.concert || { seen:false, sailors:[], bandCleared:false, stage:0 };
   p._needsEggDedupe = true;
   /* Skill Tokens used to cost 3 Bronze; they now cost 1. Refund two-thirds of
      everything already spent so nobody is punished for buying early. */
@@ -3560,8 +3632,10 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
 
   // attacker-side buffs/debuffs
   if(isPlayerAttacking){
-    if(getPStatus(0,'overheat'))    dmg *= 1.5;    // party buff: deals 1.5x
-    if(getPStatus(0,'dragonDance')) dmg *= 1.25;   // multiplies WITH overheat
+    const oh = getPStatus(0,'overheat');
+    if(oh) dmg *= (oh.deal || 1.5);
+    const dd = getPStatus(0,'dragonDance');
+    if(dd) dmg *= (dd.deal || 1.25);               // multiplies WITH overheat
     // Dragon Legacy stacks multiplicatively with the above
     if(ui.battle && ui.battle.legacyBonus) dmg *= (1 + ui.battle.legacyBonus);
     const soulAtk = getPStatus(0,'steelSoul');
@@ -3572,12 +3646,19 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
 
   // defender-side modifiers
   if(isPlayerAttacking){ // defender is an enemy
-    if(getEStatus(defender,'iceTomb')) dmg *= 0.8;    // entombed takes 80%
-    if(getEStatus(defender,'curse'))   dmg *= 1.25;   // cursed takes 25% more
+    const ice = getEStatus(defender,'iceTomb');
+    if(ice) dmg *= (ice.taken != null ? ice.taken : 0.8);
+    const cur = getEStatus(defender,'curse');
+    if(cur) dmg *= (1 + (cur.extra != null ? cur.extra : 0.25));
   } else { // defender is a player monster
-    if(getPStatus(0,'overheat'))    dmg *= 1.5;    // takes 1.5x (incl. self-damage)
-    if(getPStatus(0,'spikeArmour')) dmg *= 0.9;    // takes 10% less
-    if(getPStatus(0,'steelAegis'))  dmg *= 0.75;   // takes 25% less
+    const ohD = getPStatus(0,'overheat');
+    if(ohD) dmg *= (ohD.take || 1.5);              // the cost of Overheat
+    const sa = getPStatus(0,'spikeArmour');
+    if(sa) dmg *= (1 - (sa.reduce||0.20));
+    const st = getPStatus(0,'steelAegis');
+    if(st) dmg *= (1 - (st.reduce||0.30));
+    const cw = getPStatus(0,'curseWard');
+    if(cw) dmg *= (1 - (cw.reduce||0));             // Curse + / ✦ also shields
     const sh = getPStatus(0,'shell');
     if(sh && sh.reduce) dmg *= (1 - sh.reduce);    // Lava Shell
     const soul = getPStatus(0,'steelSoul');
@@ -3587,77 +3668,78 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
 }
 
 /* Apply a Very High status move. Returns {msg, directDamage:[{idx,dmg}] } for UI. */
-function applyVeryHighEffect(type, casterMon, casterAtk, targets){
+function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
   const uid = casterMon.uid;
   const res = { msg:'', hits:[] };
-  const T = STATUS_TURNS;
+  const d = veryHighDef(type, plus||0) || {};
+  const T = d.turns || STATUS_TURNS;
   switch(type){
     case 'Fire': // Overheat — whole party trades defence for offence
-      setPStatus(uid,{type:'overheat'});
-      res.msg = `Your whole team overheats! +50% damage dealt and taken for ${T} turns.`;
+      setPStatus(uid,{type:'overheat', turnsLeft:T+1, deal:d.deal, take:d.take, burn:d.burn||0, atk:casterAtk});
+      res.msg = d.text;
       break;
 
     case 'Water': { // Ice Tomb — freezes the current wave for 2 turns
-      livingEnemies().forEach(e=> addEStatus(e, { type:'iceTomb', turnsLeft:ICE_TOMB_TURNS }));
-      res.msg = `The enemy wave is entombed in ice for ${ICE_TOMB_TURNS} turns! They can't act, and take only 80% damage.`;
+      livingEnemies().forEach(e=> addEStatus(e, { type:'iceTomb', turnsLeft:d.freeze||2, taken:d.taken||0.8 }));
+      if(d.field){ applyFieldStatus({ type:'iceField', turnsLeft:d.turns||2, taken:d.taken||1 }); }
+      res.msg = d.text;
       break; }
 
     case 'Grass': // Leech Seed — field-wide; every hit feeds the WHOLE party
-      applyFieldStatus({ type:'leechSeed' });
-      res.msg = `Leech Seed takes root across the field! For ${T} turns every hit heals your whole team.`;
+      applyFieldStatus({ type:'leechSeed', turnsLeft:T, heal:d.heal, bite:d.bite||0, biteHeals:!!d.biteHeals });
+      res.msg = d.text;
       break;
 
     case 'Electric': // Overcharge — party-wide repeat chance
-      setPStatus(uid,{type:'overcharge', chance:0.25});
-      res.msg = `Your team is overcharged! 25% chance to repeat an attack for ${T} turns.`;
+      setPStatus(uid,{type:'overcharge', turnsLeft:T+1, chance:d.after, firstChance:d.first, fresh:true});
+      res.msg = d.text;
       break;
 
     case 'Ground': // Spike Armour — party-wide, softer than before
-      setPStatus(uid,{type:'spikeArmour'});
-      res.msg = `Spikes cover your team! 10% less damage taken and 0.2× ATK reflected for ${T} turns.`;
+      setPStatus(uid,{type:'spikeArmour', turnsLeft:T+1, reduce:d.reduce, thorns:d.thorns});
+      res.msg = d.text;
       break;
 
     case 'Flying': // Mirage — first attack always misses, then 20%
-      setPStatus(uid,{type:'mirage', guaranteed:true, chance:0.20});
-      res.msg = `A mirage shrouds your team! The next attack is guaranteed to miss, then 20% for ${T} turns.`;
+      setPStatus(uid,{type:'mirage', turnsLeft:T+1, window:(d.window||[1]).slice(), step:0, chance:d.after});
+      res.msg = d.text;
       break;
 
     case 'Physical': // Counter — first hit always countered, then 10%
-      setPStatus(uid,{type:'counter', guaranteed:true, chance:0.10});
-      res.msg = `Your team braces to counter! The next hit is guaranteed, then 10% for ${T} turns.`;
+      setPStatus(uid,{type:'counter', turnsLeft:T+1, guaranteed:d.guaranteed, ret:d.ret, chance:d.after});
+      res.msg = d.text;
       break;
 
     case 'Ghost': // Curse — field-wide fragility
-      applyFieldStatus({ type:'curse' });
-      res.msg = `A curse settles over the field! Every enemy takes 25% more damage for ${T} turns.`;
+      applyFieldStatus({ type:'curse', turnsLeft:T, extra:d.extra });
+      if(d.reduce) setPStatus(uid,{type:'curseWard', turnsLeft:T+1, reduce:d.reduce});
+      res.msg = d.text;
       break;
 
     case 'Psychic': // Discombobulate — first enemy hit is halved for certain,
                     // then each attack rolls 10% countered / 10% miss / 10% halved
-      applyFieldStatus({ type:'discombobulate', guaranteed:true });
+      applyFieldStatus({ type:'discombobulate', turnsLeft:T, guaranteed:true,
+                         roll:d.roll, counterRet:d.counterRet, second:d.second||0,
+                         openTurn:!!d.openTurn, softenTurn:false });
       res.msg = `The field reels! The next enemy attack is halved for certain, then 10% each to be countered, to miss, or to be halved.`;
       break;
 
     case 'Dragon': // Dragon Dance — multiplies WITH Overheat rather than replacing it
-      setPStatus(uid,{type:'dragonDance'});
-      res.msg = `Your team dances with dragon fire! ×1.25 damage for ${T} turns — this stacks with Overheat.`;
+      setPStatus(uid,{type:'dragonDance', turnsLeft:T+1, deal:d.deal, initiative:!!d.initiative});
+      res.msg = d.text;
       break;
 
     case 'Steel': // Steel Aegis — flat mitigation
-      setPStatus(uid,{type:'steelAegis'});
-      res.msg = `A steel aegis guards your team! 25% less damage taken for ${T} turns.`;
+      setPStatus(uid,{type:'steelAegis', turnsLeft:T+1, reduce:d.reduce, regen:d.regen||0});
+      if(d.block) grantBlock(casterMon, d.block, casterAtk);
+      res.msg = d.text;
       break;
 
-    case 'Fairy': { // Diamond Dust — cleanse the enemy, extend your own
-      const b = ui.battle;
-      let cleared = 0;
-      b.enemies.forEach(e=>{ cleared += eStatuses(e).length; e.statuses = []; });
-      b.fieldStatus = {};
-      const ps = partyStatuses();
-      const extended = Object.keys(ps).length;
-      Object.keys(ps).forEach(k=>{ ps[k].turnsLeft += STATUS_TURNS; });
-      res.msg = `Diamond dust scatters! ${cleared} enemy effect${cleared===1?'':'s'} swept away`
-              + (extended ? ` and your ${extended} own effect${extended===1?'':'s'} extended by ${STATUS_TURNS} turns.` : '.');
+    case 'Fairy': { // Diamond Dust — cleanse, ward, and (when refined) borrow
+      const cleared = diamondDustCleanse();
+      setPStatus(uid, { type:'diamondDust', turnsLeft:T+1, borrow:d.borrow||0 });
+      res.msg = d.text + (cleared ? ` ${cleared} enemy effect${cleared===1?'':'s'} swept away.` : '');
+      res.borrow = d.borrow || 0;          // the caller opens the picker
       break; }
 
     default:
@@ -3824,6 +3906,295 @@ function canUpgradeStone(st){
 }
 
 /* ============================================================
+   VERY HIGH SKILLS — base / + / ✦
+   One table drives the numbers, the behaviour and the tooltips, so a tier can
+   never say one thing and do another.
+   ============================================================ */
+const VERY_HIGH = {
+  Fire: { name:'Overheat', turns:5, tiers:[
+    { deal:1.5, take:1.5 },
+    { deal:1.5, take:1.3 },
+    { deal:1.5, take:1.1, burn:0.25 },
+  ], text:[
+    'Your team deals 1.5× damage — and takes 1.5× in return.',
+    'Your team deals 1.5× damage and takes only 1.3×.',
+    'Deals 1.5×, takes just 1.1×, and scorches every enemy for 0.25× ATK each turn.',
+  ]},
+  Water: { name:'Ice Tomb', turns:2, tiers:[
+    { freeze:2, taken:0.8 },
+    { freeze:2, taken:1.0 },
+    { freeze:1, taken:1.0, field:true },
+  ], text:[
+    'Freezes the current wave for 2 turns. Frozen monsters take 80% damage.',
+    'Freezes the current wave for 2 turns, and they take full damage while frozen.',
+    'A 2-turn field of ice: anything that steps onto the field is frozen for a turn, wave after wave, at full damage.',
+  ]},
+  Grass: { name:'Leech Seed', turns:5, tiers:[
+    { heal:0.15, bite:0 },
+    { heal:0.15, bite:0.10 },
+    { heal:0.15, bite:0.15, biteHeals:true },
+  ], text:[
+    'Every hit on a seeded enemy heals your whole team for 0.15× the attacker\'s ATK.',
+    'As base, and each hit also gnaws the enemy for 0.10× the attacker\'s ATK.',
+    'As base, and each hit gnaws for 0.15× — and that bite feeds the heal again.',
+  ]},
+  Electric: { name:'Overcharge', turns:5, tiers:[
+    { first:0.25, after:0.25 },
+    { first:0.75, after:0.25 },
+    { first:1.00, after:0.30 },
+  ], text:[
+    '25% chance to repeat a move. Very High skills never repeat.',
+    '75% to repeat this turn, 25% thereafter. Very High skills never repeat.',
+    'Guaranteed repeat this turn, 30% thereafter. Very High skills never repeat.',
+  ]},
+  Ground: { name:'Spike Armour', turns:5, tiers:[
+    { reduce:0.20, thorns:0.20 },
+    { reduce:0.25, thorns:0.30 },
+    { reduce:0.30, thorns:0.40 },
+  ], text:[
+    'Take 20% less damage and return 0.20× ATK to every attacker.',
+    'Take 25% less damage and return 0.30× ATK to every attacker.',
+    'Take 30% less damage and return 0.40× ATK to every attacker.',
+  ]},
+  Flying: { name:'Mirage', turns:5, tiers:[
+    { window:[1.00], after:0.20 },
+    { window:[1.00,0.75], after:0.20 },
+    { window:[1.00,0.75,0.75], after:0.30 },
+  ], text:[
+    'One turn of total evasion, then 20% each turn after.',
+    'One turn of total evasion, then 75%, then 20% each turn after.',
+    'One turn of total evasion, then 75% for two turns, then 30% each turn after.',
+  ]},
+  Physical: { name:'Counter', turns:5, tiers:[
+    { guaranteed:1, ret:0.50, after:0.10 },
+    { guaranteed:1, ret:1.00, after:0.15 },
+    { guaranteed:2, ret:1.50, after:0.15 },
+  ], text:[
+    'The next hit is returned for 50% of its damage, then 10% thereafter. Counters cannot be evaded.',
+    'The next hit is returned in full, then 15% thereafter. Counters cannot be evaded.',
+    'The next two hits are returned at 150%, then 15% thereafter. Counters cannot be evaded.',
+  ]},
+  Ghost: { name:'Curse', turns:5, tiers:[
+    { extra:0.25, reduce:0 },
+    { extra:0.25, reduce:0.10 },
+    { extra:0.30, reduce:0.15 },
+  ], text:[
+    'Every enemy takes 25% more damage.',
+    'Enemies take 25% more damage, and you take 10% less.',
+    'Enemies take 30% more damage, and you take 15% less.',
+  ]},
+  Psychic: { name:'Discombobulate', turns:5, tiers:[
+    { openHalf:1, roll:0.10, counterRet:0.50 },
+    { openHalf:1, roll:0.10, counterRet:0.75, openTurn:true },
+    { openHalf:1, second:0.25, roll:0.15, counterRet:1.00, openTurn:true },
+  ], text:[
+    'The next hit is halved, then every attack rolls 10% each to miss, be countered for 50%, or be halved.',
+    'Every hit next turn is halved, and attacks roll 10% each to miss, be countered in full, or be halved.',
+    'Every hit next turn is halved and the turn after reduced by 25%, with 15% each to miss, be countered at 150%, or be halved.',
+  ]},
+  Dragon: { name:'Dragon Dance', turns:5, tiers:[
+    { deal:1.25 },
+    { deal:1.30 },
+    { deal:1.35, initiative:true },
+  ], text:[
+    'Your team deals 25% more damage. Stacks with Overheat and Curse.',
+    'Your team deals 30% more damage.',
+    'Your team deals 35% more damage and always moves first, unless they have it too.',
+  ]},
+  Steel: { name:'Steel Aegis', turns:5, tiers:[
+    { reduce:0.30 },
+    { reduce:0.35, block:5 },
+    { reduce:0.40, block:5, regen:1 },
+  ], text:[
+    'Take 30% less damage.',
+    'Take 35% less damage, and gain 5 damage-block stacks.',
+    'Take 40% less damage, gain 5 block stacks, and regain one each turn.',
+  ]},
+  Fairy: { name:'Diamond Dust', turns:5, tiers:[
+    { cleanse:true },
+    { cleanse:true, passive:true, borrow:1 },
+    { cleanse:true, passive:true, borrow:2 },
+  ], text:[
+    'Sweeps away every enemy effect and keeps your own refreshed while it lasts.',
+    'Now a passive, active on entering the field. Using it actively also casts any one other + Very High skill.',
+    'Now a passive, active on entering the field. Using it actively also casts any two other ✦ Very High skills, one after the other.',
+  ]},
+};
+function veryHighDef(type, plus){
+  const v = VERY_HIGH[type];
+  if(!v) return null;
+  const t = Math.max(0, Math.min(2, plus||0));
+  return { name:v.name, turns:v.turns, text:v.text[t], ...v.tiers[t] };
+}
+
+/* ============================================================
+   STANCES — Guard, Airborne, Invisible, Preparation
+   Several sailor monsters open with a stance (a passive on entering the field)
+   that can also be re-applied actively, and an Ultimate that SPENDS the stance
+   for a much bigger hit. The pattern is shared so new ones cost nothing.
+   ============================================================ */
+const STANCE_EVASION = { airborne:0.70, invisible:0.80 };
+
+/* Apply whatever a move's `passive` block promises to its owner. */
+function applyPassiveGrant(holder, grant, atk){
+  if(!grant) return;
+  if(grant.block)     grantBlock(holder, grant.block, atk);
+  if(grant.guard)     holder.guard = true;
+  if(grant.airborne)  holder.airborne = (holder.airborne||0) + grant.airborne;
+  if(grant.invisible) holder.invisible = (holder.invisible||0) + grant.invisible;
+  if(grant.prep)      holder.prep = (holder.prep||0) + grant.prep;
+}
+/* Everything a monster starts the battle with, the moment it takes the field. */
+function applyEntryPassives(holder, species, level, atk){
+  (MOVES[species]||[]).forEach(mv=>{
+    const e = mv[6];
+    if(!e || !e.passive) return;
+    if((level||1) < mv[5]) return;
+    applyPassiveGrant(holder, e.passive, atk);
+  });
+}
+function stanceEvasion(holder){
+  let best = 0;
+  if(holder && holder.airborne  > 0) best = Math.max(best, STANCE_EVASION.airborne);
+  if(holder && holder.invisible > 0) best = Math.max(best, STANCE_EVASION.invisible);
+  return best;
+}
+/* A stance-spending Ultimate: consumes the stance for a far bigger multiplier. */
+function spendStance(mv, holder, baseFactor){
+  const sp = mv.spend;
+  if(!sp) return baseFactor;
+  const has = sp.status === 'guard'     ? !!holder.guard
+            : sp.status === 'airborne'  ? (holder.airborne||0) > 0
+            : sp.status === 'invisible' ? (holder.invisible||0) > 0 : false;
+  if(!has) return baseFactor;
+  let f = sp.mult;
+  if(sp.perStack) f += sp.perStack * blockStacksOf(holder);
+  if(sp.perPrep)  f += sp.perPrep  * (holder.prep||0);
+  // spending the stance clears it
+  if(sp.status === 'guard')     holder.guard = false;
+  if(sp.status === 'airborne')  holder.airborne = 0;
+  if(sp.status === 'invisible') holder.invisible = 0;
+  /* Iaijutsu cashes in its BLOCK stacks; Ansatsu cashes in its PREPARATION.
+     They are separate currencies and clearing the wrong one was robbing the
+     ninja of its whole payoff. */
+  if(sp.clearBlock) holder.blockStacks = 0;
+  if(sp.clearPrep)  holder.prep = 0;
+  return f;
+}
+/* Sweep the enemy board and top up your own. While Diamond Dust is up this
+   runs every round, so enemy statuses can't get a foothold. */
+function diamondDustCleanse(){
+  const b = ui.battle;
+  if(!b) return 0;
+  let cleared = 0;
+  b.enemies.forEach(e=>{ cleared += eStatuses(e).length; e.statuses = []; });
+  b.fieldStatus = {};
+  const ps = partyStatuses();
+  Object.keys(ps).forEach(k=>{
+    if(k === 'diamondDust') return;
+    ps[k].turnsLeft = Math.max(ps[k].turnsLeft, STATUS_TURNS + 1);   // refreshed, not stacked
+  });
+  return cleared;
+}
+
+/* The borrow grid: three across, four down, every OTHER element. The last row
+   holds Dragon and Steel only — Fairy cannot borrow itself. */
+const BORROW_GRID = ['Fire','Water','Grass','Electric','Ground','Flying','Physical','Ghost','Psychic','Dragon','Steel'];
+function openBorrowPicker(mon, plus, count, done){
+  const chosen = [];
+  const paint = ()=>{
+    const need = count - chosen.length;
+    ov.innerHTML = `<div class="borrow-card">
+      <div class="borrow-title">Diamond Dust</div>
+      <div class="borrow-sub">Choose <b>${need}</b> more ${UPGRADE_MARKS[plus].trim()||''} skill${need>1?'s':''} to cast.</div>
+      <div class="borrow-grid">
+        ${BORROW_GRID.map(t=>{
+          const d = veryHighDef(t, plus);
+          const picked = chosen.includes(t);
+          return `<button class="borrow-cell ${picked?'picked':''}" data-borrow="${t}">
+            <span class="gem tier-veryhigh" style="--g1:${TYPE_COLORS[t]};--g2:${TYPE_COLORS[t]};--g3:${TYPE_COLORS[t]};"></span>
+            <span class="borrow-name">${escapeHtml(d?d.name:t)}</span>
+          </button>`;
+        }).join('')}
+      </div>
+      ${chosen.length ? `<div class="borrow-picked">Chosen: ${chosen.map(t=>escapeHtml(veryHighDef(t,plus).name)).join(' → ')}</div>` : ''}
+      <button class="btn btn-ghost" id="borrowSkip" style="margin-top:10px;">Cast nothing</button>
+    </div>`;
+    ov.querySelectorAll('[data-borrow]').forEach(btn=>btn.addEventListener('click', ()=>{
+      const t = btn.dataset.borrow;
+      if(chosen.includes(t)) return;
+      chosen.push(t);
+      if(chosen.length >= count){ close(); return done(chosen); }
+      paint();
+    }));
+    ov.querySelector('#borrowSkip').addEventListener('click', ()=>{ close(); done(chosen); });
+  };
+  const ov = document.createElement('div');
+  ov.className = 'borrow-scrim';
+  document.body.appendChild(ov);
+  const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+  paint();
+}
+
+/* Fire the borrowed skills in the order they were chosen. */
+function castBorrowed(mon, atk, types, plus, done){
+  if(!types || !types.length) return done();
+  const next = (i)=>{
+    if(i >= types.length) return done();
+    const r = applyVeryHighEffect(types[i], mon, atk, livingEnemies(), plus);
+    renderStatusBadges();
+    battleMsg(`✨ Borrowed: ${r.msg}`);
+    setTimeout(()=> next(i+1), 1100);
+  };
+  next(0);
+}
+
+function stanceSummary(g){
+  const bits = [];
+  if(g.guard)     bits.push('on guard');
+  if(g.airborne)  bits.push('airborne');
+  if(g.invisible) bits.push('unseen');
+  if(g.block)     bits.push(`${g.block} block stack${g.block>1?'s':''}`);
+  if(g.prep)      bits.push(`${g.prep} preparation`);
+  return bits.join(', ') + '.';
+}
+function stancePills(m){
+  const out = [];
+  if(m && m.guard)        out.push('<span class="status-pill mine">🛡 Guard</span>');
+  if(m && m.airborne>0)   out.push('<span class="status-pill mine">🕊 Airborne</span>');
+  if(m && m.invisible>0)  out.push('<span class="status-pill mine">👤 Invisible</span>');
+  if(m && m.prep>0)       out.push(`<span class="status-pill mine">🎯 Prep ×${m.prep}</span>`);
+  return out.join('');
+}
+
+/* ============================================================
+   DAMAGE BLOCK STACKS
+   Each stack absorbs up to 100% of the CASTING monster's ATK from the next hit
+   it takes. Overflow still lands. Any blocked hit consumes a stack, even a weak
+   one — so a multi-hit move burns a stack per strike. Reduction (Spike Armour,
+   Steel Aegis, Curse…) is applied first; block is measured against the final
+   figure.
+   ============================================================ */
+function blockStacksOf(holder){ return (holder && holder.blockStacks) || 0; }
+function grantBlock(holder, n, atkAt){
+  if(!holder || n<=0) return;
+  holder.blockStacks = (holder.blockStacks||0) + n;
+  // each stack remembers the ATK it was minted at
+  holder.blockValue = atkAt || holder.blockValue || 0;
+}
+/* Consume one stack against `dmg`; returns what actually gets through. */
+function applyBlock(holder, dmg){
+  if(!holder || !holder.blockStacks || holder.blockStacks <= 0) return dmg;
+  holder.blockStacks--;
+  const absorbed = holder.blockValue || 0;
+  return Math.max(0, dmg - absorbed);
+}
+function blockPill(holder){
+  const n = blockStacksOf(holder);
+  return n ? `<span class="status-pill mine">🛡 Block ×${n}</span>` : '';
+}
+
+/* ============================================================
    INITIATIVE, PASSIVES, AND THE TWO ELECTRIC STATUSES
    ------------------------------------------------------------
    Several Electric monsters seize the first move of a round. Because the
@@ -3878,7 +4249,7 @@ function beginPlayerPhase(msg){
     b._enemyWentThisRound = true;
     renderBattle();
     const cat = livingEnemies().find(e => { const p = passiveOf(e); return p && p.first; });
-    battleMsg(cat ? `⚡ Cat Reflexes — ${SPECIES[cat.species].name} moves first!`
+    battleMsg(cat ? `⚡ Lightning Cat — ${SPECIES[cat.species].name} moves first!`
                   : '⚡ They seize the initiative!');
     return setTimeout(enemyTurn, 800);
   }
@@ -4176,7 +4547,11 @@ function beginBattle(config){
     state.party = [ally];
     ui.battle.activeIndex = 0;
   }
+  // clear last battle's stances, then arm this battle's opening passives
+  state.party.forEach(m=>{ m.guard=false; m.airborne=0; m.invisible=0; m.prep=0; m.blockStacks=0; m._entered=false; });
   loadWave(0);
+  const lead = activeMon();
+  if(lead){ lead._entered = true; applyEntryPassives(lead, lead.species, lead.level, monAtk(lead)); }
   playBattleMusic(!!config.isNpc, { silentIntro: !!config.silentIntro });
   go('battle');
   if(config.enemiesFirst){
@@ -4191,6 +4566,8 @@ function loadWave(i){
   if(b.leechSeed) b.enemies.forEach(e=> addEStatus(e, { type:'leechSeed' }));
   b.enemies.forEach(e=>{ if(!state.encounteredSpecies.includes(e.species)) state.encounteredSpecies.push(e.species); });
   if(b.onWaveStart) b.onWaveStart(i);
+  // stances and block stacks apply the moment a monster takes the field
+  b.enemies.forEach(e=> applyEntryPassives(e, e.species, e.level, e.atk));
   // a passive announces itself the moment its owner appears
   const withPassive = b.enemies.find(e=>passiveOf(e));
   if(withPassive){
@@ -4507,7 +4884,7 @@ function renderBattle(){
 const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
   counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed',
-  discombobulate:'🌀 Confused', leechSeed:'🌿 Seeded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
+  discombobulate:'🌀 Confused', leechSeed:'🌿 Seeded', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
 };
 function renderStatusBadges(){
@@ -4525,6 +4902,10 @@ function renderStatusBadges(){
     });
     const af = aftershockBonusHits();
     if(af) out.push(`<span class="status-pill mine">💥 Aftershock ×${af}</span>`);
+    const bp = blockPill(activeMon());
+    if(bp) out.push(bp);
+    const sp2 = stancePills(activeMon());
+    if(sp2) out.push(sp2);
     row.innerHTML = out.join('');
   }
   // Enemy statuses render on their OWN card, above that enemy's HP bar, so it's
@@ -4813,6 +5194,8 @@ function onSwitchPressed(){
   const options = state.party.map((m,i)=>({m,i})).filter(o=>o.i!==b.activeIndex && o.m.currentHp>0 && !isPassenger(o.m));
   if(options.length===0){ toast('No other monster can fight.'); return; }
   monsterChooser('Switch to…', options, (i)=>{
+    const sw = state.party[i];
+    if(sw && !sw._entered){ sw._entered = true; applyEntryPassives(sw, sw.species, sw.level, monAtk(sw)); }
     const c = chargeState();
     if(c && c.uid === activeMon().uid) triggerDragonLegacy();   // stored power passes on
     ui.battle.activeIndex=i; ui.battle.switchedThisTurn=true;
@@ -5324,6 +5707,19 @@ function resolveBattleMove(mv, target, results){
     playEffect(mv.name, { type:'Psychic' });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
+  if(mv.grant){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    if(mv.blockedWhile && (mv.blockedWhile==='guard' ? mon.guard : (mon[mv.blockedWhile]||0) > 0)){
+      ui.battle.phase='player';
+      toast(`${displayName(mon)} is already in that stance.`);
+      return renderBattle();
+    }
+    applyPassiveGrant(mon, mv.grant, monAtk(mon));
+    renderStatusBadges();
+    battleMsg(`${mv.name}! ${stanceSummary(mv.grant)}`);
+    playEffect(mv.name, { type: SPECIES[mon.species].types[0] });
+    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+  }
   if(mv.charm){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
     applyFieldStatus({ type:'charm', turnsLeft:mv.charm.turns, chance:mv.charm.chance });
@@ -5370,6 +5766,14 @@ function resolveBattleMove(mv, target, results){
   // Swift Strike can't grant the player an initiative they already have, so it
   // pays out as extra damage instead.
   if(mv.playerBonus) factor += mv.playerBonus;
+  // Iaijutsu / Dragon Dive / Ansatsu cash in their stance for a far bigger blow
+  if(mv.spend && factor > 0){
+    const spent = spendStance(mv, mon, factor);
+    if(spent !== factor){
+      factor = spent;
+      battleMsg(`${mv.name} — the stance is spent!`);
+    }
+  }
   if(ui.battle && ui.battle.bonusMult && ui.battle.bonusMult > 1){
     factor *= ui.battle.bonusMult;          // multiplies with everything else
     ui.battle.bonusMult = 0;
@@ -5413,6 +5817,11 @@ function resolveBattleMove(mv, target, results){
     return resolveAoeHits(mv, mon, factor, atk, targets);
   }
   const hits = targets.map(t=>{
+    // an airborne or unseen defender is hard to touch
+    const ev = stanceEvasion(t);
+    if(ev > 0 && Math.random() < ev){
+      return { t, idx:ui.battle.enemies.indexOf(t), oldHp:t.hp, newHp:t.hp, dmg:0, dodged:true };
+    }
     const dmg = computeDamage(factor, atk, monRef(mon), t, true);
     const idx=ui.battle.enemies.indexOf(t);
     return { t, idx, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg), dmg };
@@ -5470,6 +5879,16 @@ function resolveBattleMove(mv, target, results){
 /* apply a batch of {t,idx,oldHp,newHp} hits with flash + drain, mark fainted.
    Any hit on a Giga-Drain-marked enemy heals the active monster for 0.2x ATK. */
 function applyHits(hits){
+  // an enemy holding block stacks eats one per strike
+  hits.forEach(h=>{
+    if(!h || !h.t || !blockStacksOf(h.t)) return;
+    const through = applyBlock(h.t, h.dmg);
+    if(through !== h.dmg){
+      h.blocked = h.dmg - through;
+      h.dmg = through;
+      h.newHp = Math.max(0, h.oldHp - through);
+    }
+  });
   const mon = activeMon();
   if(hits && hits.length) playSfx('hit_dealt');
   let healed = 0;
@@ -5477,7 +5896,8 @@ function applyHits(hits){
     h.t.hp = h.newHp;
     flashHit(document.getElementById('enemy-'+h.idx));
     drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
-    if(getEStatus(h.t,'leechSeed')) healed += Math.ceil(0.15*monAtk(mon));   // 0.15x, and it heals the WHOLE party
+    const ls = getEStatus(h.t,'leechSeed');
+    if(ls) healed += Math.ceil((ls.heal||0.15)*monAtk(mon));
   });
   const ls = ui.battle && ui.battle.pendingLifesteal;
   if(ls){ healed += ls; ui.battle.pendingLifesteal = 0; }
@@ -5593,6 +6013,7 @@ function runCloneEchoes(mon, mv, done){
 function afterPlayerAttackReal(mon, hits){
   setTimeout(()=>{
     const oc = getPStatus(0,'overcharge');
+    const ocChance = oc ? (oc.fresh && oc.firstChance != null ? oc.firstChance : (oc.chance||0.25)) : 0;
     const canRepeat = oc && hits && hits.length && livingEnemies().length>0;
     if(canRepeat && Math.random()<oc.chance){
       battleMsg('⚡ Overcharge triggers — the attack repeats!');
@@ -5787,7 +6208,7 @@ function resolveStatusMove(mv, mon, target, correct){
   if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
   const atk=monAtk(mon);
   const targets = target ? [target] : [];
-  const res = applyVeryHighEffect(mv.stoneType, mon, atk, targets);
+  const res = applyVeryHighEffect(mv.stoneType, mon, atk, targets, mv.stonePlus||0);
   bob($('#playerBob'), +1);
   playEffect(mv.name, { type: mv.stoneType, tier:'veryhigh', at: target ? 'enemy-'+ui.battle.enemies.indexOf(target) : null });
   setTimeout(()=>{
@@ -5804,8 +6225,18 @@ function resolveStatusMove(mv, mon, target, correct){
     // part of applying the mark, not a separate attack.)
     setTimeout(()=>{
       if(livingEnemies().length===0){ setTimeout(onWaveCleared,600); return; }
+      /* A refined Diamond Dust also casts other Very High skills — pick them,
+         then fire them one after another before handing control back. */
+      if(res.borrow){
+        return openBorrowPicker(mon, mv.stonePlus||0, res.borrow, (picked)=>{
+          castBorrowed(mon, atk, picked, mv.stonePlus||0, ()=>{
+            ui.battle.phase = 'player';
+            renderBattle();
+            battleMsg('Diamond Dust settles. (instant — you can still attack!)');
+          });
+        });
+      }
       // Instant cast doesn't consume the turn, so control returns to the player.
-      // Without this the phase stays 'resolving' and every button softlocks.
       ui.battle.phase = 'player';
       renderBattle();
       battleMsg(res.msg + ' (instant — you can still attack!)');
@@ -5910,16 +6341,26 @@ function runEnemyAttack(i){
   /* Per-attack rolls: Discombobulate can make this one miss, be countered, or
      land at half; Mirage can make it miss. Both are rolled per attacker now. */
   const dis = getEStatus(e,'discombobulate');
-  let disHalve=false, disMiss=false, disCounter=false;
+  let disHalve=false, disMiss=false, disCounter=false, disSoften=0;
   if(dis){
+    const roll = dis.roll || 0.10;
+    /* Base halves only the NEXT HIT. Refined versions halve every hit for a
+       whole turn, and ✦ softens the turn after that as well. The random rolls
+       run alongside and stack with the guaranteed reduction. */
     if(dis.guaranteed){
-      disHalve = true; dis.guaranteed = false;
-      if(b.fieldStatus && b.fieldStatus.discombobulate) b.fieldStatus.discombobulate.guaranteed = false;
-      b.enemies.forEach(x=>{ const st=getEStatus(x,'discombobulate'); if(st) st.guaranteed = false; });
-    } else {
-      const r = Math.random();
-      if(r<0.10) disCounter = true; else if(r<0.20) disMiss = true; else if(r<0.30) disHalve = true;
+      disHalve = true;
+      if(!dis.openTurn){
+        dis.guaranteed = false;                // base: one hit only
+        if(b.fieldStatus && b.fieldStatus.discombobulate) b.fieldStatus.discombobulate.guaranteed = false;
+        b.enemies.forEach(x=>{ const st=getEStatus(x,'discombobulate'); if(st) st.guaranteed = false; });
+      }
+    } else if(dis.softenTurn && dis.second){
+      disSoften = dis.second;                  // ✦: the following turn is reduced 25%
     }
+    const r = Math.random();
+    if(r < roll) disCounter = true;
+    else if(r < roll*2) disMiss = true;
+    else if(r < roll*3) disHalve = true;
   }
   const mir = getPStatus(0,'mirage');
   const cl  = getPStatus(0,'clones');
@@ -5927,8 +6368,12 @@ function runEnemyAttack(i){
   /* Every evasion source rolls separately and stacks multiplicatively. */
   let evadeChance = 0;
   const tac = getPStatus(0,'tachy');
+  const mirChance = mir
+    ? ((mir.window && mir.step < mir.window.length) ? mir.window[mir.step] : (mir.chance||0.20))
+    : 0;
   const sources = [
-    mir ? (mir.guaranteed ? 1 : (mir.chance||0.20)) : 0,
+    stanceEvasion(mon),
+    mirChance,
     cl ? (cl.evade||0) : 0,
     (dotMiss && dotMiss.rider==='miss') ? (dotMiss.miss||0) : 0,
     tac ? (tac.fresh ? tac.evadeFirst : tac.evadeAfter) : 0,
@@ -5942,7 +6387,7 @@ function runEnemyAttack(i){
      has never once caused a miss, make this one miss. */
   const tacLast = tac && (tac.turnsLeft||0) <= 1 && !tac.evadedOnce;
   const evaded = disMiss || tacLast || (evadeChance>0 && Math.random() < evadeChance);
-  if(mir && mir.guaranteed && evaded) mir.guaranteed = false;
+  // the window advances once per ROUND, handled at round end
   if(evaded && tac) tac.evadedOnce = true;
 
   bob(document.getElementById('enemyBob-'+idx), -1);
@@ -5972,16 +6417,20 @@ function runEnemyAttack(i){
 
   setTimeout(()=>{
     let dmg = computeDamage(move[2], e.atk, e, monRef(mon), false);
-    if(disHalve) dmg = Math.ceil(dmg*0.5);
+    if(disHalve)  dmg = Math.ceil(dmg*0.5);
+    if(disSoften) dmg = Math.ceil(dmg*(1-disSoften));
 
     const counter = getPStatus(0,'counter');
     const spikes  = getPStatus(0,'spikeArmour');
-    const counterFires = disCounter || (counter && (counter.guaranteed || Math.random() < (counter.chance||0.10)));
+    const guaranteedLeft = counter ? (counter.guaranteed||0) : 0;
+    const counterFires = disCounter || (counter && (guaranteedLeft > 0 || Math.random() < (counter.chance||0.10)));
     let msg = '';
 
     if(counterFires){
-      if(counter && counter.guaranteed) counter.guaranteed = false;
-      const back = Math.ceil(dmg*0.5);
+      if(counter && counter.guaranteed > 0) counter.guaranteed--;
+      const ret = disCounter ? (getEStatus(e,'discombobulate')||{}).counterRet || 0.5
+                             : (counter ? (counter.ret||0.5) : 0.5);
+      const back = Math.ceil(dmg*ret);
       const oldHp=e.hp, newHp=Math.max(0,e.hp-back);
       e.hp = newHp;
       flashHit(document.getElementById('enemy-'+idx));
@@ -5990,6 +6439,10 @@ function runEnemyAttack(i){
       msg = `🛡️ Countered! ${back} reflected back at ${name}.`;
     } else {
       const oldHp = mon.currentHp;
+      // reduction has already been applied inside computeDamage; block is last
+      const beforeBlock = dmg;
+      dmg = applyBlock(mon, dmg);
+      if(dmg < beforeBlock) msg = `🛡 Blocked ${beforeBlock - dmg}! ` + msg;
       // scripted last stand: the dragon always survives on 1 HP
       const floor = ui.battle.allyUnkillable ? 1 : 0;
       mon.currentHp = Math.max(floor, mon.currentHp - dmg);
@@ -6010,7 +6463,7 @@ function runEnemyAttack(i){
         msg += ` Molten slag burned back for ${back}!`;
       }
       if(spikes && mon.currentHp>0){
-        const back = Math.ceil(0.2*monAtk(mon));
+        const back = Math.ceil((spikes.thorns||0.20)*monAtk(mon));
         const oh=e.hp, nh=Math.max(0,e.hp-back);
         e.hp = nh;
         flashHit(document.getElementById('enemy-'+idx));
@@ -6076,6 +6529,40 @@ function endEnemyRound(){
   // an unspent Cataclysm window closes on its own
   const c = chargeState();
   if(c){ c.turnsLeft--; if(c.turnsLeft <= 0){ clearCharge(); battleMsg('The gathered power disperses.'); } }
+  const gm = activeMon();
+  if(gm && gm.guard) grantBlock(gm, 1, monAtk(gm));    // Guard replenishes each turn
+  if(gm){
+    if(gm.airborne  > 0) gm.airborne--;                // stances last a turn
+    if(gm.invisible > 0) gm.invisible--;
+  }
+  livingEnemies().forEach(e=>{
+    if(e.guard) grantBlock(e, 1, e.atk);
+    if(e.airborne  > 0) e.airborne--;
+    if(e.invisible > 0) e.invisible--;
+  });
+  // Discombobulate's guaranteed window lasts a turn on + / ✦, then ✦ leaves a
+  // softer turn behind it before the plain rolls take over.
+  if(b.fieldStatus && b.fieldStatus.discombobulate){
+    const f = b.fieldStatus.discombobulate;
+    if(f.guaranteed && f.openTurn){
+      f.guaranteed = false;
+      if(f.second) f.softenTurn = true;
+    } else if(f.softenTurn){
+      f.softenTurn = false;
+    }
+    b.enemies.forEach(x=>{
+      const st = getEStatus(x,'discombobulate');
+      if(st){ st.guaranteed = f.guaranteed; st.softenTurn = f.softenTurn; }
+    });
+  }
+  const dd0 = getPStatus(0,'diamondDust');
+  if(dd0) diamondDustCleanse();          // keeps the enemy board clear round after round
+  const mir0 = getPStatus(0,'mirage');
+  if(mir0 && mir0.window && mir0.step < mir0.window.length) mir0.step++;
+  const ovc = getPStatus(0,'overcharge');
+  if(ovc && ovc.fresh) ovc.fresh = false;
+  const aeg = getPStatus(0,'steelAegis');
+  if(aeg && aeg.regen) grantBlock(activeMon(), aeg.regen, monAtk(activeMon()));
   const tac0 = getPStatus(0,'tachy');
   if(tac0){
     tac0.fresh = false;          // the sharpest evasion window is the first turn only
@@ -6096,6 +6583,8 @@ function onMonFainted(){
   const options=state.party.map((m,i)=>({m,i})).filter(o=>o.m.currentHp>0 && !isPassenger(o.m));
   monsterChooser('Send out…', options, (i)=>{
     ui.battle.activeIndex=i; ui.battle.switchedThisTurn=false;
+    const nm = state.party[i];
+    if(nm && !nm._entered){ nm._entered = true; applyEntryPassives(nm, nm.species, nm.level, monAtk(nm)); }
 
     if(livingEnemies().length===0){ renderBattle(); return setTimeout(()=>onWaveCleared(), 500); }
 
@@ -6638,6 +7127,7 @@ function renderInner(){
     case 'zone':          return renderZone();
     case 'caverns':       return renderCaverns();
     case 'plant':         return renderPlant();
+    case 'concert':       return renderConcert();
     case 'avatarPick':    return renderAvatarPick();
     case 'region2':       return renderStub('Region 2','🏞️','Region 2 is unlocked — its wilds and trainers arrive in a future phase. Earth Snake and Ground Starter will be catchable here.','region');
     case 'recover':       return renderRecover();
@@ -7819,23 +8309,33 @@ function openStoneDetail(uid){
   ov.querySelector('#stUse').addEventListener('click', ()=>{ close(); chooseStoneRecipient(s); });
 }
 
+/* Tooltips are generated from the same table that drives the mechanics, so a
+   refined stone always describes what it actually does. The old hard-coded
+   strings had drifted badly — they still mentioned Giga Drain and a 3-5 turn
+   Ice Tomb long after both had changed. */
 function stoneDescription(s){
-  const d = {
-    Fire:'Overheat: deal 1.5× damage, but take 1.5× damage too.',
-    Water:'Ice Tomb: freeze a foe 3–5 turns (it takes half damage while frozen).',
-    Grass:'Giga Drain: mark a foe — every hit on it heals your monster.',
-    Electric:'Overcharge: 25% chance to repeat your attacks.',
-    Ground:'Spike Armour: take 20% less damage, reflect 0.4× ATK.',
-    Flying:'Mirage: your whole team gains a 20% chance to evade.',
-    Physical:'Counter: negate the next hit and reflect 50% of it.',
-    Ghost:'Curse: the foe takes 25% more damage.',
-    Psychic:'Discombobulate: the foe deals 20% less damage.',
-  };
-  if(s.tier==='veryhigh') return (d[s.type]||'') + '<br><i>Once per battle.</i>';
-  if(s.tier==='ultra') return 'Hits 5–7 times across the enemies.<br><i>Once per battle.</i>';
-  if(s.tier==='high') return 'Strikes two different enemies.';
-  return '';
+  const plus = stonePlus(s);
+  const mark = UPGRADE_MARKS[plus].trim();
+  if(s.tier === 'veryhigh'){
+    const d = veryHighDef(s.type, plus);
+    if(!d) return '';
+    const head = `<b>${escapeHtml(d.name)}${mark ? ' '+mark : ''}</b>`;
+    const dur  = d.turns ? ` · ${d.turns} turns` : '';
+    return `${head}${dur}<br>${d.text}<br><i>Once per battle, restored by the recharge meter.</i>`;
+  }
+  if(s.tier === 'ultra'){
+    const r = ultraHitRange(s);
+    const m = stoneMult(s);
+    return `Hits <b>${r.min}–${r.max}</b> times across the enemies at ${m}× ATK each.` +
+           `<br><i>Once per battle, restored by the recharge meter.</i>`;
+  }
+  if(s.tier === 'high'){
+    return `Strikes <b>two different enemies</b> for ${stoneMult(s)}× ATK.` +
+           (livingEnemies && false ? '' : '<br>With three or more foes you choose the first target.');
+  }
+  return `Replaces the Basic move, dealing ${stoneMult(s)}× ATK.`;
 }
+
 
 /* pick which owned monster of the matching type learns the stone */
 function chooseStoneRecipient(s){
@@ -9036,16 +9536,31 @@ function renderChallengeR3(){
     <button class="back-link" id="backBtn">← Region</button>
     <div class="screen-title">Challenges</div>
     <div class="screen-sub">Port Akrotiri</div>
+    ${(state.progress.region3||{}).vaneShearSeen ? `
+      <div class="challenge-card" id="cConcert">
+        ${npcPortrait('electric_master','🎸',50,'#e0b53a')}
+        <div style="flex:1;">
+          <div class="cc-title">Band Competition ${concertState().bandCleared?'<span class="clear-tag">Cleared</span>':''}</div>
+          <div class="cc-desc">${concertState().bandCleared
+            ? 'The Electric Dojo owes you a favour.'
+            : `Five sailor fans and one very tired band · ${sailorsBeaten()}/5 seen off`}</div>
+        </div>
+      </div>` : ''}
     <div class="challenge-card" id="cDojo">
       ${npcPortrait('electric_master','⚡',50,'#e0b53a')}
       <div style="flex:1;">
-        <div class="cc-title">Electric Dojo <span class="clear-tag" style="background:var(--paper-3);color:var(--ink-soft);">Closed</span></div>
-        <div class="cc-desc">A hand-written sign hangs on the door.</div>
+        <div class="cc-title">Electric Dojo ${(state.progress.region3||{}).dojoOpen?'<span class="clear-tag">Open</span>':'<span class="clear-tag" style="background:var(--paper-3);color:var(--ink-soft);">Closed</span>'}</div>
+        <div class="cc-desc">${(state.progress.region3||{}).dojoOpen
+          ? 'They kept their word.'
+          : 'A hand-written sign hangs on the door.'}</div>
       </div>
     </div>
-    <div class="phase-flag">The band competition has emptied half the port. Challenges open when it ends.</div>
+    ${(state.progress.region3||{}).vaneShearSeen ? '' :
+      '<div class="phase-flag">The band competition has emptied half the port. Visit the RRS Vane Shear to learn more.</div>'}
   `;
   $('#backBtn').addEventListener('click', ()=>go('region'));
+  const cc = $('#cConcert');
+  if(cc) cc.addEventListener('click', ()=> go('concert'));
   $('#cDojo').addEventListener('click', ()=> storyModal(npcPortrait('electric_master','⚡',120,'transparent'),
     'Closed for the competition',
     `The sign reads, in a confident hand:<br><br>` +
@@ -10128,6 +10643,8 @@ async function onEngineerWin(){
 
 /* --- the ship, and the shuttered dojo --- */
 function vaneShearClosed(){
+  const r3 = state.progress.region3;
+  if(!r3.vaneShearSeen){ r3.vaneShearSeen = true; saveProfile(); }
   storyModal(npcPortrait('shipkeeper','⚓',120,'transparent'), 'RRS Vane Shear',
     `A woman with a clipboard blocks the gangway, not unkindly.<br><br>` +
     `"Nobody aboard, love. Sailors and researchers both — they've all gone up to town for the ` +
@@ -10240,6 +10757,214 @@ function wireDevPanel(){
       `from ${n<3?'those regions':'that region'} are removed.`,
       ()=> resetRegion(n));
   }));
+}
+
+
+/* ============================================================
+   THE ROCK BAND CONCERT
+   Region 3's Challenge. Three scenes set it up, then a pentagon of sailor fans
+   around the Electric Dojo band in the centre.
+   ============================================================ */
+function concertState(){
+  const r3 = state.progress.region3;
+  r3.concert = r3.concert || { seen:false, sailors:[], bandCleared:false, stage:0 };
+  return r3.concert;
+}
+function sailorsBeaten(){ return (concertState().sailors||[]).length; }
+function sailorDone(n){ return (concertState().sailors||[]).includes(n); }
+
+const SAILOR_WAVE1 = (lv)=>[
+  {species:'starfish', level:lv, ai:'power1'},
+  {species:'duck',     level:lv, ai:'power1'},
+  {species:'seahorse', level:lv, ai:'power1'},
+];
+const SAILORS = {
+  1: { label:'Sailor', waves:[ SAILOR_WAVE1(51),
+       [{species:'sea_turtle',level:55,ai:'best'},{species:'plesiosaur',level:55,ai:'best'}] ] },
+  2: { label:'Sailor', waves:[ SAILOR_WAVE1(52),
+       [{species:'plesiosaur',level:56,ai:'best'},{species:'otter',level:56,ai:'best'}] ] },
+  3: { label:'Sailor', waves:[ SAILOR_WAVE1(53),
+       [{species:'otter',level:57,ai:'best'},{species:'loong',level:57,ai:'best'}] ] },
+  4: { label:'Sailor', waves:[ SAILOR_WAVE1(54),
+       [{species:'loong',level:58,ai:'best'},{species:'ninja',level:58,ai:'best'}] ] },
+  5: { label:'Sailor', waves:[ SAILOR_WAVE1(60),
+       [{species:'sea_turtle',level:61,ai:'best'},{species:'sea_turtle',level:61,ai:'best'}],
+       [{species:'plesiosaur',level:62,ai:'best'}],
+       [{species:'otter',level:63,ai:'best'}],
+       [{species:'loong',level:64,ai:'best'}],
+       [{species:'ninja',level:65,ai:'best'}] ] },
+};
+
+const DOJO_WAVE1 = (lv)=>[
+  {species:'thunderdog',  level:lv, ai:'power1'},
+  {species:'zebra',       level:lv, ai:'power1'},
+  {species:'thunderlion', level:lv, ai:'power1'},
+];
+const ELECTRIC_BAND = [
+  { id:'electric_disciple1', label:'Electric Disciple', waves:[ DOJO_WAVE1(54),
+      [{species:'thundersquirrel',level:60,ai:'best'}] ] },
+  { id:'electric_disciple2', label:'Electric Disciple', waves:[ DOJO_WAVE1(55),
+      [{species:'magnet',level:60,ai:'best'}] ] },
+  { id:'electric_master',    label:'Electric Master',   waves:[ DOJO_WAVE1(58),
+      [{species:'thundersquirrel',level:61,ai:'best'},{species:'magnet',level:61,ai:'best'},{species:'tiger',level:61,ai:'best'}],
+      [{species:'electric_starter',level:65,ai:'best'},{species:'giraffe',level:65,ai:'best'}],
+      [{species:'thundercat',level:71,ai:'best'}] ] },
+  { id:'electric_disciple3', label:'Electric Disciple', waves:[ DOJO_WAVE1(56),
+      [{species:'tiger',level:60,ai:'best'}] ] },
+  { id:'electric_disciple4', label:'Electric Disciple', waves:[ DOJO_WAVE1(57),
+      [{species:'electric_starter',level:60,ai:'best'},{species:'giraffe',level:61,ai:'best'}] ] },
+];
+
+/* --- the three opening scenes --- */
+function concertIntro(){
+  storyModal('', 'The band competition',
+    `The whole port has emptied into one square. Stacked speakers, bunting strung between masts, ` +
+    `and a stage built out of cargo pallets that is somehow holding.<br><br>` +
+    `Someone is soundchecking a bass through what is clearly a ship's horn. It is <b>extremely loud</b> ` +
+    `and nobody seems to mind.`,
+    ()=>concertIntro2(), { bg:'band_concert', subtitle:'Band Competition' });
+}
+function concertIntro2(){
+  storyModal(npcPortrait('electric_master','⚡',130,'transparent'), 'Trouble backstage',
+    `Behind the stage you find five musicians in matching jackets trying very hard to rehearse — ` +
+    `and a knot of <b>sailors</b> pressed around them waving programmes and pens.<br><br>` +
+    `"One more, just one more—"<br>"Sign my hat!"<br>"Can you play the fast one again?"<br><br>` +
+    `Nobody in the band has managed to finish a bar.`,
+    ()=>concertIntro3(), { bg:'band_concert', subtitle:'Band Competition' });
+}
+async function concertIntro3(){
+  const c = concertState();
+  c.seen = true;
+  await saveProfile();
+  storyModal(npcPortrait('electric_master','⚡',130,'transparent'), 'The Electric Master',
+    `A young woman lowers her guitar and looks at you with the expression of someone at the end ` +
+    `of a long day.<br><br>` +
+    `"If you're here about the Dojo — it's shut until the competition's done. I'm sorry."<br><br>` +
+    `You explain: an organisation is stealing the cores of legendary monsters, and you are in a hurry.<br><br>` +
+    `She studies you for a moment, then jerks her chin at the crowd.<br><br>` +
+    `"Tell you what. Get rid of <b>these five</b> so we can actually rehearse, and I'll make time ` +
+    `for you. All five of us will."`,
+    ()=>go('challenge'), { bg:'band_concert', subtitle:'Band Competition' });
+}
+
+/* --- the zone screen --- */
+function renderConcert(){
+  const c = concertState();
+  if(!c.seen) return concertIntro();
+  setScreenBg('band_concert');
+  $('#brandSub').textContent = 'Band Competition';
+  const beaten = sailorsBeaten();
+
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Challenge</button>
+    <div class="zone-hero">
+      <img src="assets/zones/band_concert.png" alt="" class="zone-hero-img" onerror="this.style.display='none'">
+      <div class="zone-hero-name">Band Competition</div>
+    </div>
+    <div class="plant-note">Clear the sailor fans so the Electric Dojo can rehearse.
+      <b>${beaten}/5</b> seen off.</div>
+
+    <div class="pentagon">
+      <div class="pent-row top">
+        ${[1,5,2].map(n=>sailorButton(n)).join('')}
+      </div>
+      <button class="band-btn ${c.bandCleared?'done':''}" id="bandBtn">
+        ${ELECTRIC_BAND.map(m=>npcPortrait(m.id,'⚡',52,'transparent')).join('')}
+        <div class="band-label">${c.bandCleared?'The Electric Dojo — cleared':'The Electric Dojo'}</div>
+      </button>
+      <div class="pent-row bottom">
+        ${[3,4].map(n=>sailorButton(n)).join('')}
+      </div>
+    </div>
+
+    <button class="btn btn-ghost" id="returnBtn" style="margin-top:14px;">Return</button>
+  `;
+  $('#backBtn').addEventListener('click', ()=>go('challenge'));
+  $('#returnBtn').addEventListener('click', ()=>go('challenge'));
+  screenEl.querySelectorAll('[data-sailor]').forEach(b=>b.addEventListener('click', ()=>onSailorTap(+b.dataset.sailor)));
+  $('#bandBtn').addEventListener('click', onBandTap);
+}
+
+function sailorButton(n){
+  const done = sailorDone(n);
+  const locked = n===5 && sailorsBeaten() < 4;
+  return `<button class="sailor-btn ${done?'done':''} ${locked?'locked':''}" data-sailor="${n}">
+    ${npcPortrait('sailor'+n,'⚓',56,'transparent')}
+    ${done?'<span class="worker-done">✓</span>':''}
+  </button>`;
+}
+
+function onSailorTap(n){
+  if(sailorDone(n)) return toast('That one has already given up.');
+  if(n===5 && sailorsBeaten() < 4){
+    return storyModal(npcPortrait('sailor5','⚓',120,'transparent'), 'Not now',
+      `He doesn't even lower his camera.<br><br>"Leave me alone, I need to take pictures!"`,
+      ()=>go('concert'), { bg:'band_concert', subtitle:'Band Competition' });
+  }
+  const def = SAILORS[n];
+  if(!ensurePool()) return;
+  beginBattle({ isNpc:true, name:def.label, npcId:'sailor'+n,
+    waves: def.waves.map(w=>w.map(e=>({...e, nerfed:false}))),
+    bgKey:'battle_band_concert',
+    onWin: ()=> onSailorWin(n) });
+}
+
+async function onSailorWin(n){
+  const c = concertState();
+  if(!c.sailors.includes(n)) c.sailors.push(n);
+  await saveProfile();
+  const left = 5 - sailorsBeaten();
+  challengeResult('⚓', 'Sailor sent packing',
+    left ? `He shuffles off, grumbling. <b>${left}</b> still crowding the stage.`
+         : `The last of them wanders away. Behind you, a guitar finally makes it through a whole bar.`,
+    'concert');
+}
+
+function onBandTap(){
+  const c = concertState();
+  if(sailorsBeaten() < 5){
+    return storyModal(npcPortrait('electric_master','⚡',120,'transparent'), 'Not yet',
+      `She shakes her head before you've finished asking.<br><br>` +
+      `"That's not our deal. <b>Get rid of these pests first!</b>"`,
+      ()=>go('concert'), { bg:'band_concert', subtitle:'Band Competition' });
+  }
+  if(c.bandCleared) return toast('You have already beaten all five.');
+  confirmDialogHtml(
+    `All five of the Electric Dojo, <b>back to back</b>, with no chance to heal between them.<br><br>` +
+    `If your team falls you start again from the first.<br><br>` +
+    `Ready?`,
+    ()=> startBandGauntlet(0));
+}
+
+/* Five trainers, one continuous run. */
+function startBandGauntlet(i){
+  const m = ELECTRIC_BAND[i];
+  ui.bandIndex = i;
+  if(!ensurePool()) return;
+  beginBattle({ isNpc:true, name:m.label, npcId:m.id,
+    waves: m.waves.map(w=>w.map(e=>({...e, nerfed:false}))),
+    bgKey:'battle_band_concert',
+    bandRun:true,
+    onWin: ()=> onBandStageWin(i) });
+}
+async function onBandStageWin(i){
+  if(i < ELECTRIC_BAND.length-1){
+    const nxt = ELECTRIC_BAND[i+1];
+    return storyModal(npcPortrait(nxt.id,'⚡',120,'transparent'), 'Next!',
+      `No rest, no healing — the next one is already plugging in.<br><br>` +
+      `<b>${escapeHtml(nxt.label)}</b> steps up.`,
+      ()=> startBandGauntlet(i+1), { bg:'band_concert', subtitle:'Band Competition' });
+  }
+  const c = concertState();
+  c.bandCleared = true;
+  state.progress.region3.dojoOpen = true;
+  await saveProfile();
+  storyModal(npcPortrait('electric_master','⚡',130,'transparent'), 'The Dojo reopens',
+    `She is out of breath and grinning.<br><br>` +
+    `"All five. Nobody's done that." She wipes her hands on her jacket. ` +
+    `"The Dojo's yours whenever you want it — and if you're chasing core thieves, ` +
+    `you'll want to talk to the crew on the <b>Vane Shear</b>. They're back aboard now."`,
+    ()=>go('challenge'), { bg:'band_concert', subtitle:'Band Competition' });
 }
 
 /* ---------- SCREEN: region select ---------- */
