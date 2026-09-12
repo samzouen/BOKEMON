@@ -724,6 +724,8 @@
     background:var(--paper-3);color:var(--ink-soft);border:1px solid var(--line);opacity:.65;}
   .key-chip.have{background:rgba(47,143,111,.18);border-color:rgba(47,143,111,.5);color:var(--jade-dark);opacity:1;}
   .plant-note{font-size:12.5px;font-weight:600;color:var(--ink-soft);line-height:1.5;margin:10px 0;}
+  .dojo-sign{background:var(--paper-3);border:2px dashed var(--ink-soft);border-radius:10px;
+    padding:14px;text-align:center;font-size:13px;line-height:1.7;letter-spacing:.02em;margin-top:4px;}
   .failstar-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
     justify-items:center;margin-top:14px;}
   .sailor-btn.figlio{border-color:var(--gold);box-shadow:0 0 12px rgba(201,154,63,.5);}
@@ -10919,7 +10921,7 @@ function renderConcert(){
             ${failstarDone(f.id)?'<span class="worker-done">✓</span>':''}
           </button>`).join('')}
         <button class="sailor-btn figlio ${figlioDone()?'done':''}" data-figlio="1">
-          ${npcPortrait('Figlio','🎙️',56,'transparent')}
+          ${npcPortrait('figlio','🎙️',56,'transparent')}
           ${figlioDone()?'<span class="worker-done">✓</span>':''}
         </button>
       </div>
@@ -10996,7 +10998,10 @@ function bandAftermath(){
     `By evening the five of them are loading amplifiers onto a lorry, bound for a tour that takes ` +
     `in every region on the map.<br><br>` +
     `The Dojo doors stay shut. A new sign hangs on them:<br><br>` +
-    `<i>"ELECTRIC DOJO — CLOSED.<br>Seeking a new Dojo Master.<br>Enquire within, if you think you're up to it."</i>`,
+    `<div class="dojo-sign">ELECTRIC DOJO — <b>CLOSED</b><br><br>` +
+    `Our Master has hung up her gloves for a guitar.<br>` +
+    `We are <b>seeking a new Dojo Master</b>.<br><br>` +
+    `<i>Strength alone will not do. Come and be judged.</i></div>`,
     ()=>go('challenge'), { bg:'band_concert', subtitle:'Band Competition' });
 }
 
@@ -11061,15 +11066,20 @@ async function onBandStageWin(i){
    ============================================================ */
 const FAILSTAR_LV = 65;
 const FAILSTARS = [
-  { id:'failstar1', act:'a country ballad, on a banjo, very earnestly',
+  { id:'failstar1', act:'a country ballad on a banjo, with four extra verses nobody asked for',
+    robbed:'"Robbed! That was <b>storytelling</b>. Rock doesn\'t have storytelling."',
     zone:'Tranquil Forest', mons:['rat','bird','moth'] },
-  { id:'failstar2', act:'a rap about tree species, with no beat',
+  { id:'failstar2', act:'a slow blues number about a harbour crane',
+    robbed:'"They wouldn\'t know <b>soul</b> if it bit them. I was robbed and everyone knows it."',
     zone:'Sacred Grove', mons:['sparrow','squirrel','deer','grass_starter'] },
-  { id:'failstar3', act:'throat singing into a bucket for resonance',
+  { id:'failstar3', act:'a rap listing every tree species in the region, with no beat',
+    robbed:'"Sixteen bars, zero mistakes. <b>Robbed.</b> The judges couldn\'t keep up."',
     zone:'Rocky Caverns', mons:['earth_snake','ground_starter','golem','bat'] },
-  { id:'failstar4', act:'sea shanties, all of which are the same shanty',
+  { id:'failstar4', act:'hip-hop, over a backing track that is mostly seagulls',
+    robbed:'"That beat was ahead of its time. I was <b>robbed</b> by people who like guitars."',
     zone:'Water Dojo', mons:['starfish','seahorse','duck','water_starter'] },
-  { id:'failstar5', act:'interpretive dance. There is no music at all.',
+  { id:'failstar5', act:'breakdancing. There is no music at all.',
+    robbed:'"It\'s a <b>music</b> competition, they said. Well, I was robbed, and my knees are fine."',
     zone:'Volcanic Caldera', mons:['snail','boobybird','firefly','fire_starter','toad'] },
 ];
 
@@ -11099,9 +11109,9 @@ function openFailstar(i){
     </div>`;
   $('#fsKind').addEventListener('click', ()=>{
     document.body.classList.remove('in-scene');
-    storyModal(npcPortrait(f.id,'🎤',130,'transparent'), 'They glow',
-      `"I <i>knew</i> it. I knew it was working."<br><br>` +
-      `They go back to rehearsing, louder than before.`,
+    storyModal(npcPortrait(f.id,'🎤',130,'transparent'), 'Vindicated',
+      `Their whole face lights up.<br><br>${f.robbed}<br><br>` +
+      `<i>They go back to rehearsing, louder than before.</i>`,
       ()=>go('concert'), { bg:'band_concert', subtitle:'Band Competition' });
   });
   $('#fsHonest').addEventListener('click', ()=>{
@@ -11136,14 +11146,14 @@ async function onFailstarWin(i){
 /* --- Figlio: the runner-up, and rather more than that --- */
 function openFiglio(){
   if(figlioDone()) return toast('You have already heard him out.');
-  storyModal(npcPortrait('Figlio','🎙️',140,'transparent'), 'The runner-up',
+  storyModal(npcPortrait('figlio','🎙️',140,'transparent'), 'The runner-up',
     `He sings unaccompanied, standing very still, and the whole square goes quiet for it.<br><br>` +
     `When he finishes there is a pause before anyone remembers to applaud.<br><br>` +
     `He asks what you thought, and for once you don't have to be kind about it.`,
     ()=>figlioChallenge(), { bg:'band_concert', subtitle:'Band Competition' });
 }
 function figlioChallenge(){
-  storyModal(npcPortrait('Figlio','🎙️',140,'transparent'), '"Then prove it"',
+  storyModal(npcPortrait('figlio','🎙️',140,'transparent'), '"Then prove it"',
     `He accepts the praise with a small nod, and doesn't look pleased.<br><br>` +
     `"Second. Again." He straightens his collar. "I lost to that band. But <b>you</b> beat them — ` +
     `so if I beat you, that settles what I actually am."<br><br>` +
@@ -11152,7 +11162,7 @@ function figlioChallenge(){
 }
 function startFiglioFight(){
   if(!ensurePool()) return;
-  beginBattle({ isNpc:true, name:'Figlio', npcId:'Figlio', concertFight:true,
+  beginBattle({ isNpc:true, name:'Figlio', npcId:'figlio', concertFight:true,
     bgKey:'battle_band_concert',
     waves:[
       [{species:'ground_starter',  level:66, ai:'best'}],
@@ -11169,14 +11179,14 @@ async function onFiglioWin(){
   c.figlio = true;
   state.inventory.dragonStone = true;
   await saveProfile();
-  storyModal(npcPortrait('Figlio','🎙️',140,'transparent'), '"You know the name, then"',
+  storyModal(npcPortrait('figlio','🎙️',140,'transparent'), '"You know the name, then"',
     `He returns his last monster to its ball and studies you for a long moment.<br><br>` +
     `"You fight like someone who's been in the caverns." A pause. "You've met my father."<br><br>` +
     `<b>Padrino.</b> He says the name the way you'd hold something at arm's length.`,
     ()=>figlioReveal2(), { bg:'band_concert', subtitle:'Band Competition' });
 }
 function figlioReveal2(){
-  storyModal(npcPortrait('Figlio','🎙️',140,'transparent'), 'The prodigal son',
+  storyModal(npcPortrait('figlio','🎙️',140,'transparent'), 'The prodigal son',
     `"I was to be <b>Sottocapo</b>. Groomed for it since I could walk." He shrugs, and for the first ` +
     `time looks his age. "I wanted a life that was mine. So I sing."<br><br>` +
     `"He's found someone else, I hear. Some trainer he's <b>adopted</b> — young, talented, very keen ` +
