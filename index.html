@@ -724,6 +724,9 @@
     background:var(--paper-3);color:var(--ink-soft);border:1px solid var(--line);opacity:.65;}
   .key-chip.have{background:rgba(47,143,111,.18);border-color:rgba(47,143,111,.5);color:var(--jade-dark);opacity:1;}
   .plant-note{font-size:12.5px;font-weight:600;color:var(--ink-soft);line-height:1.5;margin:10px 0;}
+  .failstar-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
+    justify-items:center;margin-top:14px;}
+  .sailor-btn.figlio{border-color:var(--gold);box-shadow:0 0 12px rgba(201,154,63,.5);}
   .pentagon{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:14px;}
   .pent-row{display:flex;gap:18px;justify-content:center;}
   .pent-row.bottom{gap:90px;}
@@ -2267,6 +2270,8 @@ function normalizeProfile(p){
   p.encounteredSpecies = p.encounteredSpecies || [];
   p.recentWrong = p.recentWrong || [];
   p.inventory = p.inventory || {};
+  if(p.inventory.dragonStone===undefined)   p.inventory.dragonStone = false;
+  if(p.inventory.dragonStoneOn===undefined) p.inventory.dragonStoneOn = null;
   if(p.inventory.protein===undefined) p.inventory.protein = 0;
   if(p.inventory.strangeKey===undefined) p.inventory.strangeKey = false;
   if(p.inventory.tokens===undefined) p.inventory.tokens = 0;
@@ -2345,6 +2350,9 @@ function normalizeProfile(p){
   r3.vaneShearSeen = !!r3.vaneShearSeen;
   r3.dojoOpen = !!r3.dojoOpen;
   r3.concert = r3.concert || { seen:false, sailors:[], bandCleared:false, stage:0 };
+  r3.concert.failstars = r3.concert.failstars || [];
+  r3.concert.figlio = !!r3.concert.figlio;
+  r3.shipPass = !!r3.shipPass;
   p._needsEggDedupe = true;
   /* Skill Tokens used to cost 3 Bronze; they now cost 1. Refund two-thirds of
      everything already spent so nobody is punished for buying early. */
@@ -6634,6 +6642,11 @@ function onPlayerDefeated(){
    the region's best available cap applies. */
 const REGION_CAPS = { 1:21, 2:41, 3:61, 4:76 };
 function levelCap(){
+  /* The Band Competition is a Challenge rather than a zone, so it carries its
+     own ceiling; beating the band lifts the whole region. */
+  const r3 = (state.progress && state.progress.region3) || {};
+  if(ui.screen === 'concert' || (ui.battle && ui.battle.concertFight)) return 66;
+  if((state.progress||{}).currentRegion === 3 && r3.concert && r3.concert.bandCleared) return 71;
   const z = ui.currentZone && ui.currentZone.id;
   if(z && ZONE_LEVELS[z]) return ZONE_LEVELS[z].max;
   const rid = (state.progress && state.progress.currentRegion) || 1;
@@ -6674,7 +6687,9 @@ function awardXpToParty(fightsWorth){
     // Past this zone's cap: freeze progress rather than discarding it, so a
     // monster raised elsewhere doesn't lose a part-finished level on arrival.
     if(m.level >= levelCap()) return;
-    m.xpFights = (m.xpFights||0) + credit;
+    // a dragon carrying the Dragon Stone learns half again as fast
+    const stoneBoost = (state.inventory.dragonStoneOn === m.uid) ? 1.5 : 1;
+    m.xpFights = (m.xpFights||0) + credit * stoneBoost;
     const from = m.level;
     const evos = [], newMoves = [];
     while(m.level < levelCap() && m.xpFights >= fightsNeeded(m.level)){
@@ -7699,6 +7714,23 @@ function openRefineSheet(st, mon){
   });
 }
 
+/* The Dragon Stone lives in the inventory and can be moved between dragons. */
+function dragonStoneBlock(m){
+  if(!state.inventory.dragonStone) return '';
+  const isDragon = (SPECIES[m.species].types||[]).includes('Dragon');
+  if(!isDragon) return '';
+  const holder = state.inventory.dragonStoneOn;
+  const mine = holder === m.uid;
+  return `<div class="crown-panel" style="border-color:rgba(59,126,161,.55);background:rgba(59,126,161,.14);">
+    <div class="crown-title">${uiIcon('dragon_stone',18,'🐉')} Dragon Stone</div>
+    <div class="crown-sub">${mine
+      ? 'Attached — this dragon gains <b>1.5×</b> experience.'
+      : (holder ? 'Currently attached to another dragon.' : 'Attach it to gain <b>1.5×</b> experience.')}</div>
+    <button class="btn ${mine?'btn-ghost':'btn-primary'}" id="dragonStoneBtn" style="margin-top:9px;">
+      ${mine ? 'Detach' : 'Attach'}</button>
+  </div>`;
+}
+
 function crownBlock(m){
   if(isPassenger(m)) return '';
   const owned = state.inventory.crowns||0;
@@ -7814,6 +7846,7 @@ function renderStats(){
       ${nextIsFinal && !atCap ? `<div style="font-size:11px;font-weight:800;color:var(--gold);margin-top:4px;">⭐ The last boost is worth TRIPLE — finish the set!</div>` : ''}
       ${(state.inventory.protein>0 && !atCap) ? `<button class="btn btn-jade" id="useProtein" style="margin-top:10px;">Use Protein Supplement (${state.inventory.protein} left)</button>` : ''}
       ${crownBlock(m)}
+      ${dragonStoneBlock(m)}
       ${isDev() ? `<div class="dev-panel" style="margin-top:12px;">
         <div class="dev-head">🛠️ Set level</div>
         <div class="dev-btns" style="margin-top:6px;">
@@ -7899,6 +7932,13 @@ function renderStats(){
       renderStats();
     });
   }
+  const ds = $('#dragonStoneBtn');
+  if(ds) ds.addEventListener('click', async ()=>{
+    state.inventory.dragonStoneOn = (state.inventory.dragonStoneOn === m.uid) ? null : m.uid;
+    await saveProfile();
+    toast(state.inventory.dragonStoneOn ? 'Dragon Stone attached.' : 'Dragon Stone detached.');
+    renderStats();
+  });
   const cb = $('#useCrown');
   if(cb) cb.addEventListener('click', ()=> confirmCrown(m));
   const up = $('#useProtein');
@@ -10775,6 +10815,7 @@ function wireDevPanel(){
 function concertState(){
   const r3 = state.progress.region3;
   r3.concert = r3.concert || { seen:false, sailors:[], bandCleared:false, stage:0 };
+  r3.concert.failstars = r3.concert.failstars || [];
   return r3.concert;
 }
 function sailorsBeaten(){ return (concertState().sailors||[]).length; }
@@ -10868,6 +10909,21 @@ function renderConcert(){
       <img src="assets/zones/band_concert.png" alt="" class="zone-hero-img" onerror="this.style.display='none'">
       <div class="zone-hero-name">Band Competition</div>
     </div>
+    ${c.bandCleared ? `
+      <div class="plant-note">The band has gone on tour. The rest of the bill is still here,
+        and several of them would like your opinion.</div>
+      <div class="failstar-grid">
+        ${FAILSTARS.map((f,i)=>`
+          <button class="sailor-btn ${failstarDone(f.id)?'done':''}" data-failstar="${i}">
+            ${npcPortrait(f.id,'🎤',56,'transparent')}
+            ${failstarDone(f.id)?'<span class="worker-done">✓</span>':''}
+          </button>`).join('')}
+        <button class="sailor-btn figlio ${figlioDone()?'done':''}" data-figlio="1">
+          ${npcPortrait('Figlio','🎙️',56,'transparent')}
+          ${figlioDone()?'<span class="worker-done">✓</span>':''}
+        </button>
+      </div>
+    ` : `
     <div class="plant-note">Clear the sailor fans so the Electric Dojo can rehearse.
       <b>${beaten}/5</b> seen off.</div>
 
@@ -10882,14 +10938,18 @@ function renderConcert(){
       <div class="pent-row bottom">
         ${[3,4].map(n=>sailorButton(n)).join('')}
       </div>
-    </div>
+    </div>`}
 
     <button class="btn btn-ghost" id="returnBtn" style="margin-top:14px;">Return</button>
   `;
   $('#backBtn').addEventListener('click', ()=>go('challenge'));
   $('#returnBtn').addEventListener('click', ()=>go('challenge'));
   screenEl.querySelectorAll('[data-sailor]').forEach(b=>b.addEventListener('click', ()=>onSailorTap(+b.dataset.sailor)));
-  $('#bandBtn').addEventListener('click', onBandTap);
+  screenEl.querySelectorAll('[data-failstar]').forEach(b=>b.addEventListener('click', ()=>openFailstar(+b.dataset.failstar)));
+  const fg = screenEl.querySelector('[data-figlio]');
+  if(fg) fg.addEventListener('click', ()=>openFiglio());
+  const bb = $('#bandBtn');
+  if(bb) bb.addEventListener('click', onBandTap);
 }
 
 function sailorButton(n){
@@ -10919,12 +10979,25 @@ function onSailorTap(n){
 async function onSailorWin(n){
   const c = concertState();
   if(!c.sailors.includes(n)) c.sailors.push(n);
+  state.inventory.tokens = (state.inventory.tokens||0) + 5;
   await saveProfile();
   const left = 5 - sailorsBeaten();
   challengeResult('⚓', 'Sailor sent packing',
-    left ? `He shuffles off, grumbling. <b>${left}</b> still crowding the stage.`
-         : `The last of them wanders away. Behind you, a guitar finally makes it through a whole bar.`,
+    (left ? `He shuffles off, grumbling. <b>${left}</b> still crowding the stage.`
+          : `The last of them wanders away. Behind you, a guitar finally makes it through a whole bar.`) +
+    `<br><br><b>+5 Skill Tokens</b>`,
     'concert');
+}
+
+/* The competition result, and what it leaves behind. */
+function bandAftermath(){
+  storyModal(npcPortrait('electric_master','⚡',130,'transparent'), 'They win it',
+    `They win the competition, of course. You can hear it from the harbour.<br><br>` +
+    `By evening the five of them are loading amplifiers onto a lorry, bound for a tour that takes ` +
+    `in every region on the map.<br><br>` +
+    `The Dojo doors stay shut. A new sign hangs on them:<br><br>` +
+    `<i>"ELECTRIC DOJO — CLOSED.<br>Seeking a new Dojo Master.<br>Enquire within, if you think you're up to it."</i>`,
+    ()=>go('challenge'), { bg:'band_concert', subtitle:'Band Competition' });
 }
 
 function onBandTap(){
@@ -10964,14 +11037,164 @@ async function onBandStageWin(i){
   }
   const c = concertState();
   c.bandCleared = true;
-  state.progress.region3.dojoOpen = true;
+  const r3 = state.progress.region3;
+  r3.shipPass = true;
+  r3.dojoOpen = false;              // she is leaving; the Dojo needs a new master
+  state.inventory.protein = (state.inventory.protein||0) + 7;
   await saveProfile();
-  storyModal(npcPortrait('electric_master','⚡',130,'transparent'), 'The Dojo reopens',
-    `She is out of breath and grinning.<br><br>` +
-    `"All five. Nobody's done that." She wipes her hands on her jacket. ` +
-    `"The Dojo's yours whenever you want it — and if you're chasing core thieves, ` +
-    `you'll want to talk to the crew on the <b>Vane Shear</b>. They're back aboard now."`,
-    ()=>go('challenge'), { bg:'band_concert', subtitle:'Band Competition' });
+  storyModal(npcPortrait('electric_master','⚡',130,'transparent'), 'A swan song',
+    `She is out of breath and, oddly, delighted.<br><br>` +
+    `"All five. Nobody's done that." She unslings her guitar and looks at it for a moment.<br><br>` +
+    `"That was my <b>swan song</b>, you know. Win or lose today, I'm going pro — the band, the touring, ` +
+    `all of it. The Dojo's had the best of me."<br><br>` +
+    `She presses a crate of supplements into your arms, and a stamped card on top.<br><br>` +
+    `<b>+7 Protein Supplements</b><br><b>Ship pass — RRS Vane Shear</b><br><br>` +
+    `<i>"The sailors gave us that for putting up with them. You've earned it more than we have."</i>`,
+    ()=>bandAftermath(), { bg:'band_concert', subtitle:'Band Competition' });
+}
+
+
+/* ============================================================
+   THE LOSING ACTS
+   Once the band has gone, the rest of the bill is still hanging about. Five
+   comically wrong performers, and one who is genuinely good.
+   ============================================================ */
+const FAILSTAR_LV = 65;
+const FAILSTARS = [
+  { id:'failstar1', act:'a country ballad, on a banjo, very earnestly',
+    zone:'Tranquil Forest', mons:['rat','bird','moth'] },
+  { id:'failstar2', act:'a rap about tree species, with no beat',
+    zone:'Sacred Grove', mons:['sparrow','squirrel','deer','grass_starter'] },
+  { id:'failstar3', act:'throat singing into a bucket for resonance',
+    zone:'Rocky Caverns', mons:['earth_snake','ground_starter','golem','bat'] },
+  { id:'failstar4', act:'sea shanties, all of which are the same shanty',
+    zone:'Water Dojo', mons:['starfish','seahorse','duck','water_starter'] },
+  { id:'failstar5', act:'interpretive dance. There is no music at all.',
+    zone:'Volcanic Caldera', mons:['snail','boobybird','firefly','fire_starter','toad'] },
+];
+
+function failstarDone(id){ return (concertState().failstars||[]).includes(id); }
+function figlioDone(){ return !!concertState().figlio; }
+
+function openFailstar(i){
+  const f = FAILSTARS[i];
+  if(failstarDone(f.id)) return toast('They have played for you already.');
+  document.body.classList.add('in-scene');
+  window.scrollTo(0,0);
+  setScreenBg('band_concert');
+  $('#brandSub').textContent = 'Band Competition';
+  screenEl.innerHTML = `
+    <div class="scene">
+      <div class="scene-emblem">${npcPortrait(f.id,'🎤',140,'transparent')}</div>
+      <div class="scene-title">A performance</div>
+      <div class="scene-body">
+        <p>They perform <b>${escapeHtml(f.act)}</b></p>
+        <p>It goes on for some time.</p>
+        <p>Finally they stop, beaming, and ask what you thought.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px;">
+        <button class="btn btn-ghost" id="fsKind">"It was… really something."</button>
+        <button class="btn btn-primary" id="fsHonest">Tell them honestly</button>
+      </div>
+    </div>`;
+  $('#fsKind').addEventListener('click', ()=>{
+    document.body.classList.remove('in-scene');
+    storyModal(npcPortrait(f.id,'🎤',130,'transparent'), 'They glow',
+      `"I <i>knew</i> it. I knew it was working."<br><br>` +
+      `They go back to rehearsing, louder than before.`,
+      ()=>go('concert'), { bg:'band_concert', subtitle:'Band Competition' });
+  });
+  $('#fsHonest').addEventListener('click', ()=>{
+    document.body.classList.remove('in-scene');
+    storyModal(npcPortrait(f.id,'🎤',130,'transparent'), 'They take it badly',
+      `Their face falls, then hardens.<br><br>` +
+      `"Oh, a <b>critic</b>. Fine. Let's see how your <i>opinions</i> hold up in a battle."`,
+      ()=>startFailstarFight(i), { bg:'band_concert', subtitle:'Band Competition' });
+  });
+}
+
+function startFailstarFight(i){
+  const f = FAILSTARS[i];
+  if(!ensurePool()) return;
+  beginBattle({ isNpc:true, name:'Performer', npcId:f.id, concertFight:true,
+    bgKey:'battle_band_concert',
+    waves: f.mons.map(sp=>[{ species:sp, level:FAILSTAR_LV, ai:'best', nerfed:false }]),
+    onWin: ()=> onFailstarWin(i) });
+}
+async function onFailstarWin(i){
+  const f = FAILSTARS[i];
+  const c = concertState();
+  c.failstars = c.failstars || [];
+  if(!c.failstars.includes(f.id)) c.failstars.push(f.id);
+  state.inventory.tokens = (state.inventory.tokens||0) + 5;
+  await saveProfile();
+  challengeResult('🎤', 'A fair review',
+    `"…Alright. Maybe the banjo was a lot."<br><br>They shake your hand, grudgingly.<br><br>` +
+    `<b>+5 Skill Tokens</b>`, 'concert');
+}
+
+/* --- Figlio: the runner-up, and rather more than that --- */
+function openFiglio(){
+  if(figlioDone()) return toast('You have already heard him out.');
+  storyModal(npcPortrait('Figlio','🎙️',140,'transparent'), 'The runner-up',
+    `He sings unaccompanied, standing very still, and the whole square goes quiet for it.<br><br>` +
+    `When he finishes there is a pause before anyone remembers to applaud.<br><br>` +
+    `He asks what you thought, and for once you don't have to be kind about it.`,
+    ()=>figlioChallenge(), { bg:'band_concert', subtitle:'Band Competition' });
+}
+function figlioChallenge(){
+  storyModal(npcPortrait('Figlio','🎙️',140,'transparent'), '"Then prove it"',
+    `He accepts the praise with a small nod, and doesn't look pleased.<br><br>` +
+    `"Second. Again." He straightens his collar. "I lost to that band. But <b>you</b> beat them — ` +
+    `so if I beat you, that settles what I actually am."<br><br>` +
+    `"Humour me. As a trainer, not a singer."`,
+    ()=>startFiglioFight(), { bg:'band_concert', subtitle:'Band Competition' });
+}
+function startFiglioFight(){
+  if(!ensurePool()) return;
+  beginBattle({ isNpc:true, name:'Figlio', npcId:'Figlio', concertFight:true,
+    bgKey:'battle_band_concert',
+    waves:[
+      [{species:'ground_starter',  level:66, ai:'best'}],
+      [{species:'psychic_starter', level:67, ai:'best'}],
+      [{species:'ghost_starter',   level:68, ai:'best'}],
+      [{species:'physical_starter',level:69, ai:'best'}],
+      [{species:'flying_starter',  level:70, ai:'best'}],
+      [{species:'electric_starter',level:71, ai:'best', crowned:true, supplements:10}],
+    ],
+    onWin: onFiglioWin });
+}
+async function onFiglioWin(){
+  const c = concertState();
+  c.figlio = true;
+  state.inventory.dragonStone = true;
+  await saveProfile();
+  storyModal(npcPortrait('Figlio','🎙️',140,'transparent'), '"You know the name, then"',
+    `He returns his last monster to its ball and studies you for a long moment.<br><br>` +
+    `"You fight like someone who's been in the caverns." A pause. "You've met my father."<br><br>` +
+    `<b>Padrino.</b> He says the name the way you'd hold something at arm's length.`,
+    ()=>figlioReveal2(), { bg:'band_concert', subtitle:'Band Competition' });
+}
+function figlioReveal2(){
+  storyModal(npcPortrait('Figlio','🎙️',140,'transparent'), 'The prodigal son',
+    `"I was to be <b>Sottocapo</b>. Groomed for it since I could walk." He shrugs, and for the first ` +
+    `time looks his age. "I wanted a life that was mine. So I sing."<br><br>` +
+    `"He's found someone else, I hear. Some trainer he's <b>adopted</b> — young, talented, very keen ` +
+    `to belong to something." He looks away. "I almost feel sorry for them."<br><br>` +
+    `"I can't agree with what he wants. The <b>ultimate monster</b>, stitched together from stolen ` +
+    `cores. That isn't strength, it's collecting."`,
+    ()=>figlioGift(), { bg:'band_concert', subtitle:'Band Competition' });
+}
+function figlioGift(){
+  storyModal(uiIcon('dragon_stone', 130, '🐉'), 'The Dragon Stone',
+    `He presses a stone into your hand — the same shape as the rough one from the plant, but ` +
+    `cut and clear, and humming.<br><br>` +
+    `"A <b>Dragon Stone</b>. Attach it to any dragon you're raising and it will learn far faster. ` +
+    `You'll want that."<br><br>` +
+    `"There are <b>elemental stones</b> like it scattered about, and they're the only things I know of ` +
+    `that answer a stolen core. Collect them."<br><br>` +
+    `<i>"Good luck with my father. You'll need more than luck."</i>`,
+    ()=>go('concert'), { bg:'band_concert', subtitle:'Band Competition' });
 }
 
 /* ---------- SCREEN: region select ---------- */
