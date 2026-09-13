@@ -58,6 +58,10 @@ const SFX_MAP = {
 /* Music files, resolved MOST SPECIFIC FIRST. Every lookup walks a ladder and
    falls through to the next candidate if a file is absent, so you can add a
    bespoke track for one zone without supplying the rest. */
+/* Bump by 0.01 with every published change, so a glance at the home screen
+   confirms which build is actually loaded. */
+const GAME_VERSION = '1.01';
+
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
 

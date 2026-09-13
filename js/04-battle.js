@@ -1004,6 +1004,75 @@ function enemySeizesInitiative(){
 const MOVE_FIRST_NAMES = new Set(['Swift Strike','Lead Hook','Snap Kick','Whirl Step']);
 
 /* Hand the turn to whoever has the initiative. */
+/* ============================================================
+   THE ROUND
+   ------------------------------------------------------------
+   Every round runs the same four phases, in order. Anything new should be
+   slotted into a phase rather than bolted onto a handover, which is how the
+   old code ended up letting Swift Strikers act twice.
+
+     1. UPKEEP      pre-hits (Aftershock, Overheat ✦), Diamond Dust's sweep,
+                    stance decay — everything that happens TO the board before
+                    anyone chooses an action.
+     2. INITIATIVE  enemies that seize the first blow act ONCE, using only the
+                    move that earned them the initiative. They are then marked
+                    and skipped in phase 3.
+     3. PLAYER      you act. Tachypsychia and Overcharge may grant extra
+                    actions here; nothing else interrupts.
+     4. ENEMY       every enemy that has not already acted this round acts once.
+                    Then statuses tick and the round flags reset.
+
+   `beginRound` is the ONLY way into a player turn. Wave loads, swaps and
+   status interruptions all route through it, so no path can skip upkeep.
+   ============================================================ */
+function beginRound(msg){
+  const b = ui.battle;
+  if(!b) return;
+  b.acted = b.acted || [];          // enemies that have already acted this round
+
+  b.phase = 'resolving';
+  renderBattle();
+
+  // ---- 1. UPKEEP ----
+  runPreHits(()=>{
+    if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
+
+    // ---- 2. INITIATIVE ----
+    const strikers = initiativeStrikers();
+    if(strikers.length && !b._initiativeDone){
+      b._initiativeDone = true;
+      const names = [...new Set(strikers.map(e=>SPECIES[e.species].name))].join(' and ');
+      battleMsg(`⚡ ${names} seize${strikers.length===1?'s':''} the initiative!`);
+      b.attackQueue = strikers;
+      b.initiativeRun = true;                 // they may only use their fast move
+      return setTimeout(()=> runEnemyAttack(0), 700);
+    }
+
+    // ---- 3. PLAYER ----
+    beginPlayerPhase(msg);
+  });
+}
+
+/* Enemies that take the opening blow — and the move that earns it. */
+function initiativeStrikers(){
+  const b = ui.battle;
+  if(!b) return [];
+  if(b.alwaysFirst || b.figlio) return [];    // those routs use the normal enemy turn
+  return livingEnemies().filter(e=>{
+    if((b.acted||[]).includes(e)) return false;
+    if(getEStatus(e,'iceTomb') || getEStatus(e,'paralysed')) return false;
+    const p = passiveOf(e);
+    if(p && p.first) return true;
+    if(getEStatus(e,'disrupt')) return true;
+    return (MOVES[e.species]||[]).some(m => MOVE_FIRST_NAMES.has(m[1]) && (e.level||1) >= m[5]);
+  });
+}
+/* The fast move itself, so a Swift Striker uses Swift Strike and not its best. */
+function initiativeMoveFor(e){
+  const list = MOVES[e.species] || [];
+  return list.find(m => MOVE_FIRST_NAMES.has(m[1]) && (e.level||1) >= m[5]) || null;
+}
+
 function beginPlayerPhase(msg){
   const b = ui.battle;
   if(!b) return;
@@ -1024,25 +1093,17 @@ function beginPlayerPhase(msg){
     battleMsg(`💗 ${displayName(activeMon())} is charmed and loses its turn!`);
     return setTimeout(enemyTurn, 900);
   }
-  if(b._enemyWentThisRound){ b._enemyWentThisRound = false; }
-  else if(enemySeizesInitiative()){
+  /* Scripted routs keep the enemy moving first every round. */
+  if((b.alwaysFirst || b.figlio) && !b._routWent){
+    b._routWent = true;
     b.phase = 'resolving';
-    b._enemyWentThisRound = true;
     renderBattle();
-    const cat = livingEnemies().find(e => { const p = passiveOf(e); return p && p.first; });
-    battleMsg(cat ? `⚡ Lightning Cat — ${SPECIES[cat.species].name} moves first!`
-                  : '⚡ They seize the initiative!');
+    battleMsg('They strike first!');
     return setTimeout(enemyTurn, 800);
   }
-  /* Pre-hits land before the player may act. */
-  b.phase = 'resolving';
+  b.phase = 'player';
   renderBattle();
-  runPreHits(()=>{
-    if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
-    b.phase = 'player';
-    renderBattle();
-    if(msg) battleMsg(msg);
-  });
+  if(msg) battleMsg(msg);
 }
 
 /* ---------- BATTLE MODULE (Phase 3: wild encounters) ---------- */
@@ -1345,6 +1406,10 @@ function beginBattle(config){
   if(config.enemiesFirst){
     ui.battle.phase = 'resolving';
     setTimeout(()=>{ battleMsg('They strike first!'); setTimeout(enemyTurn, 700); }, 700);
+  } else {
+    /* Round one runs upkeep and initiative like any other — which is how a
+       Swift Striker gets its blow in before the player's first move. */
+    setTimeout(()=> beginRound('Choose a move.'), 900);
   }
 }
 function loadWave(i){
@@ -1376,7 +1441,12 @@ function loadWave(i){
     ? b.activeIndex
     : state.party.findIndex(m=>m.currentHp>0 && !isPassenger(m));
   if(ai<0) ai=0;
-  b.activeIndex = ai; b.switchedThisTurn=false; b.phase='player';
+  b.activeIndex = ai; b.switchedThisTurn=false;
+  /* A fresh wave starts a fresh round: reset who has acted so the new arrivals
+     can take the initiative, and let beginRound run upkeep on them. */
+  b.acted = [];
+  b._initiativeDone = false;
+  b.phase='resolving';
   saveProfile();
 }
 function onWaveCleared(){
@@ -1397,6 +1467,8 @@ function onWaveCleared(){
     loadWave(b.waveIndex);
     renderBattle();
     battleMsg(`Wave ${b.waveIndex+1} of ${b.waves.length}!`);
+    // the new arrivals face upkeep (Overheat, Aftershock) and may seize the initiative
+    setTimeout(()=> beginRound('Choose a move.'), 900);
   } else {
     if(b.isNpc) onChallengeWon();
     else onBattleWon();
@@ -1549,14 +1621,15 @@ function moveShapeSentence(mv, dmg){
   const n = mv.hits && mv.hits > 1 ? mv.hits : 0;
   if(mv.slot === 'UltraStone'){
     const r = mv.ultraStone ? ultraHitRange(mv.ultraStone) : { min:5, max:7 };
-    return `Hits enemies <b>${r.min}–${r.max}</b> times for <b>${dmg}</b> damage per hit.`;
+    return `Strikes <b>${r.min}–${r.max}</b> times across the enemies for <b>${dmg}</b> per hit — ` +
+           `<b>${dmg*r.min}–${dmg*r.max}</b> damage in total, spread over whoever is standing.`;
   }
   if(mv.target === 'SingleAOE')
     return `Hits one enemy for <b>${dmg}</b>, then every other enemy for <b>${Math.ceil(dmg*(mv.splash||0.5))}</b>.`;
-  if(mv.target === 'AOE' && n) return `Hits <b>all enemies ${n} times</b> for <b>${dmg}</b> damage per hit.`;
+  if(mv.target === 'AOE' && n) return `Hits <b>all enemies ${n} times</b> for <b>${dmg}</b> per hit — <b>${dmg*n}</b> to each enemy.`;
   if(mv.target === 'AOE')      return `Hits <b>all enemies</b> for <b>${dmg}</b> damage each.`;
   if(mv.target === 'Multi2')   return `Hits <b>2 enemies</b> for <b>${dmg}</b> damage each.`;
-  if(n)                        return `Hits <b>1 enemy ${n} times</b> for <b>${dmg}</b> damage per hit.`;
+  if(n)                        return `Hits <b>1 enemy ${n} times</b> for <b>${dmg}</b> per hit — <b>${dmg*n}</b> in total.`;
   return `Hits <b>1 enemy</b> for <b>${dmg}</b> damage.`;
 }
 
@@ -1641,9 +1714,11 @@ function moveDescription(mv, mon, atk){
     }
   }
   const dmg = estimateHit(mv, mon);
+  const effects = moveEffectText(mv, mon, atk);
   if(dmg != null) parts.push(moveShapeSentence(mv, dmg));
-  else if(!mv.passive) parts.push(`A support move — it deals no damage by itself.`);
-  moveEffectText(mv, mon, atk).forEach(t=>parts.push(t));
+  else if(!mv.passive && effects.length === 0)
+    parts.push(`A support move — it deals no damage by itself.`);
+  effects.forEach(t=>parts.push(t));
   if(mv.isStone && mv.stoneTier === 'ultra')
     parts.push(`<i>Once per battle, restored when the recharge meter fills.</i>`);
   if(dmg != null)

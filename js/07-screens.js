@@ -257,6 +257,7 @@ function renderHome(){
   playMusic('main_menu');
   $('#brandSub').textContent = state.name;
   screenEl.innerHTML = `
+    <div class="version-tag">v${GAME_VERSION}</div>
     ${playerAvatar() ? `<div class="home-hero">${avatarImg(playerAvatar(), 58)}<div>
         <div class="home-hero-name">${escapeHtml(state.name)}</div>
         <div class="home-hero-sub">Where to today?</div></div></div>`
@@ -339,7 +340,7 @@ function renderRegion(){
       <div class="menu-card" data-nav="recover"><span class="mc-emoji">💧</span><div class="mc-title">Recover</div><div class="mc-desc">Heal &amp; revise</div></div>
       <div class="menu-card full ${gated?'locked':''}" data-nav="shop"><span class="mc-emoji">🏪</span><div class="mc-title">Shop</div><div class="mc-desc">Spend medals earned from spelling</div></div>
     </div>
-    <div class="screen-sub" style="margin-top:18px;font-size:12px;">Level cap here: <b>${REGION_CAPS[rid]||21}</b></div>
+    <div class="screen-sub" style="margin-top:18px;font-size:12px;">Level cap here: <b>${levelCap()}</b></div>
     ${devPanel()}
   `;
   $('#backBtn').addEventListener('click', ()=>go('regionSelect'));
@@ -674,15 +675,21 @@ function renderStats(){
     const t = stoneTierDef(st.tier);
     const bi = moves.findIndex(x=>x.slot===slot);
     if(bi<0) return;
+    /* isStone / stoneTier / stoneType are what let moveDescription() reach the
+       Very High text. Without them a Steel Aegis read as "a support move that
+       deals no damage" and explained nothing. */
     moves[bi] = { slot, name:stoneDisplayName(st)+' 💎', mult:stoneMult(st), stone:st,
-      target:t.kind==='status'?'Status':(t.kind==='multi2'?'2 targets':'Single'),
+      isStone:true, stoneTier:st.tier, stoneType:st.type, stonePlus:stonePlus(st),
+      target:t.kind==='status'?'Status':(t.kind==='multi2'?'Multi2':'Single'),
       words:t.words, unlock:0, unlocked:true };
   });
   if(m.ultraStone){
     const t = stoneTierDef('ultra');
     const ur = ultraHitRange(m.ultraStone);
-    moves.push({ slot:'Ultra Stone', name:stoneDisplayName(m.ultraStone)+' 💎', mult:stoneMult(m.ultraStone),
-      stone:m.ultraStone, target:`${ur.min}–${ur.max} hits`, words:t.words, unlock:0, unlocked:true });
+    moves.push({ slot:'UltraStone', name:stoneDisplayName(m.ultraStone)+' 💎', mult:stoneMult(m.ultraStone),
+      stone:m.ultraStone, ultraStone:m.ultraStone, isStone:true, stoneTier:'ultra',
+      stoneType:m.ultraStone.type, stonePlus:stonePlus(m.ultraStone),
+      target:'MultiHit', words:t.words, unlock:0, unlocked:true });
   }
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Party</button>

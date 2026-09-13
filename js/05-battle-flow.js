@@ -1407,7 +1407,9 @@ function resolveStatusMove(mv, mon, target, correct){
    out a replacement and the turn passes back to them. */
 function enemyTurn(){
   const b = ui.battle;
-  const attackers = livingEnemies();
+  b.acted = b.acted || [];
+  // anyone who took the initiative this round has already had their action
+  const attackers = livingEnemies().filter(e=>!b.acted.includes(e));
 
   // Ice Tomb: frozen enemies lose their turn; tick the counter and thaw at zero
   const acting = [];
@@ -1430,10 +1432,13 @@ function enemyTurn(){
 
   if(acting.length===0){
     const left = Math.max(0, ...livingEnemies().map(e=>{ const i=getEStatus(e,'iceTomb'); return i?i.turnsLeft:0; }));
+    // everyone who could act already did, back in the initiative phase
+    const allStruck = frozenCount===0 && livingEnemies().length>0
+                   && livingEnemies().every(e=>(b.acted||[]).includes(e));
     battleMsg(frozenCount
       ? (left ? "🧊 The frozen enemies can't move! (" + left + ' more turn' + (left>1?'s':'') + ')'
               : "🧊 The frozen enemies can't move! The ice is cracking…")
-      : 'The enemy hesitates!');
+      : (allStruck ? 'They already struck this round.' : 'The enemy hesitates!'));
     renderStatusBadges();
     return endEnemyRound();
   }
@@ -1481,6 +1486,8 @@ function runEnemyAttack(i){
 
   const e = b.attackQueue[i];
   if(!e || e.hp <= 0) return runEnemyAttack(i+1);
+  b.acted = b.acted || [];
+  if(!b.acted.includes(e)) b.acted.push(e);
 
   // player-cast Disrupt jams a share of incoming attacks outright
   const jam = getPStatus(0,'disrupt');
@@ -1496,7 +1503,9 @@ function runEnemyAttack(i){
   }
 
   const idx  = b.enemies.indexOf(e);
-  const move = enemyMoveFor(e);
+  /* During the initiative phase a Swift Striker uses the move that earned it
+     the initiative — not its strongest. That is the whole bargain. */
+  const move = (b.initiativeRun && initiativeMoveFor(e)) || enemyMoveFor(e);
   const name = SPECIES[e.species].name;
 
   /* Per-attack rolls: Discombobulate can make this one miss, be countered, or
@@ -1696,6 +1705,18 @@ function runEnemyAttack(i){
 }
 
 function endEnemyRound(){
+  const b0 = ui.battle;
+  /* The initiative strike is not the end of the round — the player still acts. */
+  if(b0 && b0.initiativeRun){
+    b0.initiativeRun = false;
+    b0.attackQueue = null;
+    if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
+    if(!battleParty().some(m=>m.currentHp>0)) return onPlayerDefeated();
+    return setTimeout(()=> beginPlayerPhase('Choose a move.'), 600);
+  }
+  return endEnemyRoundReal();
+}
+function endEnemyRoundReal(){
   const b = ui.battle;
   b.attackQueue = null;
   if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
@@ -1750,9 +1771,13 @@ function endEnemyRound(){
     tac0.extras = 0;             // bonus actions are counted per turn
   }
   tickAftershock();
+  // ---- round is over: clear who acted so everyone gets a turn next round ----
+  b.acted = [];
+  b._initiativeDone = false;
+  b._routWent = false;
   const gone = tickStatuses();          // one full round has passed
   setTimeout(()=>{
-    beginPlayerPhase(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
+    beginRound(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
   }, 850);
 }
 function onMonFainted(){
