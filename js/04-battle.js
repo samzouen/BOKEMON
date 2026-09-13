@@ -83,7 +83,14 @@ const ICE_TOMB_TURNS = 2;
 function partyStatuses(){ return (ui.battle.partyStatus = ui.battle.partyStatus || {}); }
 /* uid is accepted but ignored — kept so existing call sites read naturally. */
 function getPStatus(uid, type){ return partyStatuses()[type]; }
+function removePStatus(uid, type){ delete partyStatuses()[type]; }
+/* Diamond Dust is enforced HERE rather than at each call site. Every status in
+   the game passes through setPStatus / addEStatus, so an enemy-owned effect
+   cannot land while it holds — including any effect added in future, provided
+   it is listed in STATUS_OWNER. Per-call-site checks were one forgotten line
+   away from a hole. */
 function setPStatus(uid, status){
+  if(status && isEnemyOwned(status.type) && getPStatus(0,'diamondDust')) return;
   const st = Object.assign({ turnsLeft: STATUS_TURNS }, status);
   partyStatuses()[status.type] = st;
   return st;
@@ -141,6 +148,8 @@ function tickStatuses(){
 function eStatuses(e){ if(!Array.isArray(e.statuses)) e.statuses = []; return e.statuses; }
 function getEStatus(e, type){ return eStatuses(e).find(s=>s.type===type); }
 function addEStatus(e, status){
+  // enemy self-buffs can't take hold while the dust is in the air
+  if(status && isEnemyOwned(status.type) && getPStatus(0,'diamondDust')) return;
   const arr = eStatuses(e);
   const i = arr.findIndex(s=>s.type===status.type);
   if(i>=0) arr[i] = status; else arr.push(status);
@@ -194,6 +203,8 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(sa) dmg *= (1 - (sa.reduce||0.20));
     const st = getPStatus(0,'steelAegis');
     if(st) dmg *= (1 - (st.reduce||0.30));
+    const soft = getPStatus(0,'softened');
+    if(soft){ dmg *= (1 - (soft.amount||0.5)); }
     const cw = getPStatus(0,'curseWard');
     if(cw) dmg *= (1 - (cw.reduce||0));             // Curse + / ✦ also shields
     const sh = getPStatus(0,'shell');
@@ -277,9 +288,12 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
 
     case 'Fairy': { // Diamond Dust — cleanse, ward, and (when refined) borrow
       const cleared = diamondDustCleanse();
-      setPStatus(uid, { type:'diamondDust', turnsLeft:T+1, borrow:d.borrow||0 });
+      setPStatus(uid, { type:'diamondDust', turnsLeft:T+1,
+                        borrowPick:d.borrowPick||0, borrowRandom:d.borrowRandom||0,
+                        borrowTier:d.borrowTier||0, owner:uid });
       res.msg = d.text + (cleared ? ` ${cleared} enemy effect${cleared===1?'':'s'} swept away.` : '');
-      res.borrow = d.borrow || 0;          // the caller opens the picker
+      res.borrowPick   = d.borrowPick || 0;     // how many the player chooses
+      res.borrowRandom = d.borrowRandom || 0;   // how many the stone chooses
       break; }
 
     default:
@@ -552,12 +566,12 @@ const VERY_HIGH = {
   ]},
   Fairy: { name:'Diamond Dust', turns:5, tiers:[
     { cleanse:true },
-    { cleanse:true, passive:true, borrow:1 },
-    { cleanse:true, passive:true, borrow:2 },
+    { cleanse:true, passive:true, borrowRandom:1, borrowTier:1 },
+    { cleanse:true, passive:true, borrowPick:1, borrowRandom:1, borrowTier:2 },
   ], text:[
-    'Sweeps away every enemy effect and keeps your own refreshed while it lasts.',
-    'Now a passive, active on entering the field. Using it actively also casts any one other + Very High skill.',
-    'Now a passive, active on entering the field. Using it actively also casts any two other ✦ Very High skills, one after the other.',
+    'Sweeps away every enemy effect — stuns, weakens, charms and their stances — and prevents new ones while it lasts. Your own effects stay refreshed.',
+    'Now a passive, active the moment this monster takes the field. Using it actively also scatters <b>one random other Very High skill at + strength</b> — the light never falls the same way twice.',
+    'Now a passive, active on entering the field. Using it actively casts <b>one Very High skill of your choosing at ✦ strength</b>, and <b>a second, different one at random</b> — two facets of the same stone.',
   ]},
 };
 function veryHighDef(type, plus){
@@ -578,11 +592,29 @@ const STANCE_EVASION = { airborne:0.70, invisible:0.80 };
 /* Apply whatever a move's `passive` block promises to its owner. */
 function applyPassiveGrant(holder, grant, atk){
   if(!grant) return;
+  // Diamond Dust keeps enemy stances from forming at all
+  const isFoe = !!(ui.battle && ui.battle.enemies && ui.battle.enemies.includes(holder));
+  if(isFoe && getPStatus(0,'diamondDust')) return;
   if(grant.block)     grantBlock(holder, grant.block, atk);
   if(grant.guard)     holder.guard = true;
   if(grant.airborne)  holder.airborne = (holder.airborne||0) + grant.airborne;
   if(grant.invisible) holder.invisible = (holder.invisible||0) + grant.invisible;
   if(grant.prep)      holder.prep = (holder.prep||0) + grant.prep;
+  /* A stance of readiness: strike it this turn and it strikes back. */
+  if(grant.counterTurns){
+    holder.counterTurns = (holder.counterTurns||0) + grant.counterTurns;
+    holder.counterRet = grant.counterRet || 0.5;
+  }
+  /* Perfect stillness — untouchable for a turn. */
+  if(grant.evadeTurns){
+    holder.evadeTurns = (holder.evadeTurns||0) + grant.evadeTurns;
+    holder.evadeChance = grant.evadeChance || 1.0;
+  }
+  /* Remembers which health thresholds it has already punished. */
+  if(grant.thresholdStun){
+    holder.thresholdStun = grant.thresholdStun.slice();
+    holder.thresholdsHit = [];
+  }
 }
 /* Everything a monster starts the battle with, the moment it takes the field. */
 function applyEntryPassives(holder, species, level, atk){
@@ -597,6 +629,7 @@ function stanceEvasion(holder){
   let best = 0;
   if(holder && holder.airborne  > 0) best = Math.max(best, STANCE_EVASION.airborne);
   if(holder && holder.invisible > 0) best = Math.max(best, STANCE_EVASION.invisible);
+  if(holder && holder.evadeTurns > 0) best = Math.max(best, holder.evadeChance || 1.0);
   return best;
 }
 /* A stance-spending Ultimate: consumes the stance for a far bigger multiplier. */
@@ -623,18 +656,70 @@ function spendStance(mv, holder, baseFactor){
 }
 /* Sweep the enemy board and top up your own. While Diamond Dust is up this
    runs every round, so enemy statuses can't get a foothold. */
+/* ============================================================
+   STATUS OWNERSHIP — the reference for what Diamond Dust touches
+   ------------------------------------------------------------
+   Ownership is about WHO BENEFITS, not where the data is stored. A stun sits in
+   the player's status bag but belongs to the enemy who caused it.
+
+     'enemy'  — the enemy benefits. Diamond Dust CLEANSES and PREVENTS these,
+                wherever they live.
+     'player' — you benefit. Diamond Dust REFRESHES these if they're on your
+                side, and LEAVES THEM ALONE if they're marks you placed on an
+                enemy (Leech Seed, Curse…). It must never undo your own work.
+
+   Anything not listed defaults to 'player', so a new *player* effect needs no
+   entry here — but a new ENEMY effect must be added or Diamond Dust will
+   wrongly protect it.
+   ============================================================ */
+const STATUS_OWNER = {
+  // inflicted on you by the enemy
+  stunned:'enemy', paralysed:'enemy', softened:'enemy', charmed:'enemy',
+  disrupt:'enemy', iceTombSelf:'enemy',
+  // enemy self-buffs held as statuses
+  dragonDance:'enemy', steelAegisFoe:'enemy',
+};
+/* Enemy self-buffs kept as plain fields rather than statuses. */
+const ENEMY_STANCE_FIELDS = ['guard','airborne','invisible','prep','counterTurns','evadeTurns','blockStacks','thresholdsHit'];
+
+function isEnemyOwned(type){ return STATUS_OWNER[type] === 'enemy'; }
+
 function diamondDustCleanse(){
   const b = ui.battle;
   if(!b) return 0;
   let cleared = 0;
-  b.enemies.forEach(e=>{ cleared += eStatuses(e).length; e.statuses = []; });
-  b.fieldStatus = {};
+
+  /* 1. Strip enemy-owned statuses from the player's side — a stun or a weaken
+        belongs to whoever inflicted it, not to whoever is carrying it. */
   const ps = partyStatuses();
   Object.keys(ps).forEach(k=>{
+    if(isEnemyOwned(k)){ delete ps[k]; cleared++; }
+  });
+
+  /* 2. Strip enemy self-buffs: their stances, their guard, their block. Your
+        OWN marks on them (Leech Seed, Curse, Ice Tomb…) are left standing. */
+  b.enemies.forEach(e=>{
+    eStatuses(e).slice().forEach(st=>{
+      if(isEnemyOwned(st.type)){ removeEStatus(e, st.type); cleared++; }
+    });
+    ENEMY_STANCE_FIELDS.forEach(f=>{
+      if(e[f]){ e[f] = Array.isArray(e[f]) ? [] : 0; cleared++; }
+    });
+    if(e.guard){ e.guard = false; }
+  });
+
+  /* 3. Keep your own effects going. */
+  Object.keys(ps).forEach(k=>{
     if(k === 'diamondDust') return;
-    ps[k].turnsLeft = Math.max(ps[k].turnsLeft, STATUS_TURNS + 1);   // refreshed, not stacked
+    ps[k].turnsLeft = Math.max(ps[k].turnsLeft, STATUS_TURNS + 1);
   });
   return cleared;
+}
+
+/* Prevention: while Diamond Dust is up, an enemy-owned status simply never
+   lands. Every enemy-side application routes through here. */
+function enemyStatusBlocked(type){
+  return !!getPStatus(0,'diamondDust') && isEnemyOwned(type);
 }
 
 /* The borrow grid: three across, four down, every OTHER element. The last row
@@ -683,7 +768,8 @@ function castBorrowed(mon, atk, types, plus, done){
     if(i >= types.length) return done();
     const r = applyVeryHighEffect(types[i], mon, atk, livingEnemies(), plus);
     renderStatusBadges();
-    battleMsg(`✨ Borrowed: ${r.msg}`);
+    const fd = veryHighDef(types[i], plus);
+    battleMsg(`💎 A facet catches the light — ${fd ? fd.name : types[i]}! ${r.msg}`);
     setTimeout(()=> next(i+1), 1100);
   };
   next(0);
@@ -810,6 +896,37 @@ function floatMiss(anchorId, text){
   setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 1200);
 }
 
+/* Leech Seed in one place. Heals the whole party, and on + / ✦ also gnaws the
+   enemy — with ✦ that bite feeds the heal again. Both the single-hit and the
+   multi-hit paths call this, so they can never drift apart. */
+function resolveLeech(target, mon){
+  const ls = getEStatus(target,'leechSeed');
+  if(!ls) return 0;
+  const atk = monAtk(mon);
+  let healed = Math.ceil((ls.heal || 0.15) * atk);
+  const bite = ls.bite || 0;
+  if(bite && target.hp > 0){
+    const dmg = Math.ceil(bite * atk);
+    const before = target.hp;
+    target.hp = Math.max(0, target.hp - dmg);
+    const idx = ui.battle.enemies.indexOf(target);
+    drainHp('enemyHp-'+idx, before, target.hp, target.maxHp);
+    showDamageNumber('enemy-'+idx, before - target.hp);
+    if(target.hp <= 0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
+    if(ls.biteHeals) healed += Math.ceil((ls.heal || 0.15) * atk);   // ✦ feeds twice
+  }
+  return healed;
+}
+function healParty(amount, mon){
+  if(amount <= 0) return;
+  battleParty().forEach(m=>{
+    if(m.currentHp<=0) return;
+    const before = m.currentHp, max = monMaxHp(m);
+    m.currentHp = Math.min(max, m.currentHp + amount);
+    if(m===mon) drainHp('playerHp', before, m.currentHp, max);
+  });
+}
+
 function blockBar(id, holder){
   const n = blockStacksOf(holder);
   if(!n) return `<div class="blk-wrap" id="${id}" style="display:none;"></div>`;
@@ -884,12 +1001,21 @@ function enemySeizesInitiative(){
     return (MOVES[e.species]||[]).some(m => MOVE_FIRST_NAMES.has(m[1]) && (e.level||1) >= m[5]);
   });
 }
-const MOVE_FIRST_NAMES = new Set(['Swift Strike']);
+const MOVE_FIRST_NAMES = new Set(['Swift Strike','Lead Hook','Snap Kick','Whirl Step']);
 
 /* Hand the turn to whoever has the initiative. */
 function beginPlayerPhase(msg){
   const b = ui.battle;
   if(!b) return;
+  // a stun costs the player their whole turn
+  const stun = getPStatus(0,'stunned');
+  if(stun){
+    removePStatus(0,'stunned');
+    b.phase = 'resolving';
+    renderBattle();
+    battleMsg(`💫 ${displayName(activeMon())} is stunned and can't move!`);
+    return setTimeout(enemyTurn, 900);
+  }
   // enemy-cast Charm may steal the player's turn before it begins
   const ch = getPStatus(0,'charmed');
   if(ch && Math.random() < (ch.chance||0.20)){
@@ -1225,7 +1351,8 @@ function loadWave(i){
   const b = ui.battle;
   b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll, crowned:spec.crowned }));
   // Leech Seed is a FIELD effect: it re-roots on every new wave.
-  if(b.leechSeed) b.enemies.forEach(e=> addEStatus(e, { type:'leechSeed' }));
+  /* (the tiered field-status re-application below handles Leech Seed; a bare
+      copy here used to overwrite it and strip the + / ✦ bite) */
   b.enemies.forEach(e=>{ if(!state.encounteredSpecies.includes(e.species)) state.encounteredSpecies.push(e.species); });
   /* Field effects re-apply to anything that walks onto the field, so a new wave
      arrives already seeded / entombed rather than stepping in clean. */
@@ -1660,7 +1787,7 @@ function renderBattle(){
 
 const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
-  counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed', stunned:'💫 Stunned',
+  counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed', stunned:'💫 Stunned', softened:'🌀 Weakened', counterTurns:'↩️ Ready', evadeTurns:'🧘 Still',
   discombobulate:'🌀 Confused', leechSeed:'🌿 Leeched', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
 };

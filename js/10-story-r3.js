@@ -248,7 +248,7 @@ function vaneShearClosed(){
     `Nobody boards while they're off her."<br><br>` +
     `He looks past you at the harbour, which ends the conversation.<br><br>` +
     `<i>"Come back when you've a reason I care about."</i>`,
-    ()=>go('explore'));
+    ()=>go('explore'), { bg:'vane_shear', subtitle:'RRS Vane Shear' });
 }
 
 
@@ -475,7 +475,7 @@ function renderConcert(){
             ${npcPortrait(f.id,'🎤',56,'transparent')}
             ${failstarDone(f.id)?'<span class="worker-done">✓</span>':''}
           </button>`).join('')}
-        <button class="sailor-btn figlio ${figlioDone()?'done':''}" data-figlio="1">
+        <button class="sailor-btn figlio ${figlioBeatenToday()?'done':''}" data-figlio="1">
           ${npcPortrait('figlio','🎙️',56,'transparent')}
           ${figlioDone()?'<span class="worker-done">✓</span>':''}
         </button>
@@ -698,15 +698,76 @@ async function onFailstarWin(i){
     `<b>+5 Skill Tokens</b>`, 'concert');
 }
 
+/* ============================================================
+   THE DOJO SUCCESSION
+   Two teams argue for the empty Electric Dojo: three siblings who want it to
+   stay electric, and three fighters sent by the Great Sage dojo. Each team is
+   fought straight through with no healing between members.
+   ============================================================ */
+const FIGHT_WAVE1 = (lv)=>[
+  {species:'boxer',   level:lv, ai:'power1'},
+  {species:'kicker',  level:lv, ai:'power1'},
+  {species:'spinner', level:lv, ai:'power1'},
+];
+const YOGA_WAVE  = (lv)=>[{species:'yoga',level:lv,ai:'best'},{species:'yoga',level:lv,ai:'best'}];
+const JUDO_WAVE  = (lv)=>[
+  {species:'judo_blue', level:lv, ai:'best'},
+  {species:'judo_red',  level:lv, ai:'best'},
+  {species:'weasel',    level:lv, ai:'best'},
+];
+const APE_WAVE   = (lv)=>[
+  {species:'fighting_ape', level:lv, ai:'best'},
+  {species:'lizardape',    level:lv, ai:'best'},
+  {species:'strongman',    level:lv, ai:'best'},
+];
+
+const GREAT_SAGE_TEAM = [
+  { id:'physical_disciple1', label:'Sage Disciple', waves:[ FIGHT_WAVE1(63), YOGA_WAVE(65) ] },
+  { id:'physical_disciple2', label:'Sage Disciple', waves:[ FIGHT_WAVE1(63), JUDO_WAVE(65) ] },
+  { id:'physical_disciple3', label:'Sage Disciple', waves:[ FIGHT_WAVE1(63), JUDO_WAVE(65), APE_WAVE(67) ] },
+];
+
+const DOJO_E_WAVE1 = (lv)=>[
+  {species:'thunderdog',  level:lv, ai:'power1'},
+  {species:'zebra',       level:lv, ai:'power1'},
+  {species:'thunderlion', level:lv, ai:'power1'},
+];
+const ELECTRIC_SIBLINGS = [
+  { id:'electric_new_master1', label:'Electric Sibling', waves:[ DOJO_E_WAVE1(63),
+      [{species:'thunderhound',level:67,ai:'best'},{species:'thundersquirrel',level:67,ai:'best'}],
+      [{species:'electric_starter',level:71,ai:'best',crowned:true,supplements:10}] ] },
+  { id:'electric_new_master2', label:'Electric Sibling', waves:[ DOJO_E_WAVE1(63),
+      [{species:'thunderhound',level:67,ai:'best'},{species:'magnet',level:67,ai:'best'}],
+      [{species:'giraffe',level:71,ai:'best',crowned:true,supplements:10}] ] },
+  { id:'electric_new_master3', label:'Electric Sibling', waves:[ DOJO_E_WAVE1(63),
+      [{species:'thunderhound',level:67,ai:'best'},{species:'tiger',level:67,ai:'best'}],
+      [{species:'thunderhound',level:71,ai:'best',crowned:true,supplements:10}] ] },
+];
+
 /* --- Figlio: the runner-up, and rather more than that --- */
 function openFiglio(){
-  if(figlioDone()) return toast('You have already heard him out.');
+  if(figlioBeatenToday())
+    return storyModal(npcPortrait('figlio','🎙️',130,'transparent'), 'Not today',
+      `He waves you off, good-naturedly.<br><br>` +
+      `"Once a day. I have a voice to look after."<br><br>` +
+      `<i>Come back tomorrow — he will be a little stronger.</i>`,
+      ()=>go('concert'), { bg:'band_concert', subtitle:'Band Competition' });
+  if(figlioDone()) return figlioRematch();
   storyModal(npcPortrait('figlio','🎙️',140,'transparent'), 'The runner-up',
     `He sings unaccompanied, standing very still, and the whole square goes quiet for it.<br><br>` +
     `When he finishes there is a pause before anyone remembers to applaud.<br><br>` +
     `He asks what you thought, and for once you don't have to be kind about it.`,
     ()=>figlioChallenge(), { bg:'band_concert', subtitle:'Band Competition' });
 }
+function figlioRematch(){
+  storyModal(npcPortrait('figlio','🎙️',140,'transparent'), 'Again, then',
+    `He is already reaching for a ball before you've said anything.<br><br>` +
+    `"Same terms. I've been training." A flicker of a smile. ` +
+    `"Beating you is the only review I trust."<br><br>` +
+    `<i>His team starts at level <b>${66+figlioBonus()}</b>.</i>`,
+    ()=>startFiglioFight(), { bg:'band_concert', subtitle:'Band Competition' });
+}
+
 function figlioChallenge(){
   storyModal(npcPortrait('figlio','🎙️',140,'transparent'), '"Then prove it"',
     `He accepts the praise with a small nod, and doesn't look pleased.<br><br>` +
@@ -715,25 +776,42 @@ function figlioChallenge(){
     `"Humour me. As a trainer, not a singer."`,
     ()=>startFiglioFight(), { bg:'band_concert', subtitle:'Band Competition' });
 }
+/* He can be met once a day, and he is a level stronger each time. */
+function today(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+function figlioBeatenToday(){ return concertState().figlioDay === today(); }
+function figlioBonus(){ return concertState().figlioWins || 0; }
+
 function startFiglioFight(){
   if(!ensurePool()) return;
+  const up = figlioBonus();          // +1 level per victory, forever
   beginBattle({ isNpc:true, name:'Figlio', npcId:'figlio', concertFight:true,
     bgKey:'battle_band_concert', figlio:true,
     waves:[
-      [{species:'ground_starter',  level:66, ai:'best'}],
-      [{species:'psychic_starter', level:67, ai:'best'}],
-      [{species:'ghost_starter',   level:68, ai:'best'}],
-      [{species:'physical_starter',level:69, ai:'best'}],
-      [{species:'flying_starter',  level:70, ai:'best'}],
-      [{species:'electric_starter',level:71, ai:'best', crowned:true, supplements:10}],
+      [{species:'ground_starter',  level:66+up, ai:'best'}],
+      [{species:'psychic_starter', level:67+up, ai:'best'}],
+      [{species:'ghost_starter',   level:68+up, ai:'best'}],
+      [{species:'physical_starter',level:69+up, ai:'best'}],
+      [{species:'flying_starter',  level:70+up, ai:'best'}],
+      [{species:'howler',level:71+up, ai:'best', crowned:true, supplements:10}],
     ],
     onWin: onFiglioWin });
 }
 async function onFiglioWin(){
   const c = concertState();
+  const firstTime = !c.figlio;
   c.figlio = true;
-  state.inventory.dragonStone = true;
+  c.figlioDay = today();
+  c.figlioWins = (c.figlioWins||0) + 1;
+  state.medals.silver = (state.medals.silver||0) + 3;
+  if(firstTime) state.inventory.dragonStone = true;
   await saveProfile();
+  if(!firstTime){
+    return challengeResult('🎙️', 'A closer thing each time',
+      `He straightens his collar, breathing hard.<br><br>` +
+      `"Better. I'll be better still tomorrow."<br><br>` +
+      `<b>+3 Silver Medals</b> · next time his team is level <b>${66+figlioBonus()}</b> and up.`,
+      'concert');
+  }
   storyModal(npcPortrait('figlio','🎙️',140,'transparent'), '"You know the name, then"',
     `He returns his last monster to its ball and studies you for a long moment.<br><br>` +
     `"You fight like someone who's been in the caverns." A pause. "You've met my father."<br><br>` +

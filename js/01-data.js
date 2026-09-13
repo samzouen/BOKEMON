@@ -86,6 +86,22 @@ const SPECIES = {
   loong:           { name:'Loong',      tier:'elite', types:['Water','Dragon'],   rate:11, nerfedRate:11, base:57, evo:[41],    evoMult:1.5, color:'#3f8fa8', glyph:'龙' },
   ninja:           { name:'Ninja',      tier:'elite', types:['Water','Physical'], rate:11, nerfedRate:11, base:58, evo:[21,41], color:'#4a4a5a', glyph:'忍' },
 
+  /* --- The Great Sage dojo challengers --- */
+  boxer:           { name:'Boxer',        tier:'wild',  types:['Physical'], rate:7,  nerfedRate:5,  base:63, evo:[],      color:'#c8564a', glyph:'拳' },
+  kicker:          { name:'Kicker',       tier:'wild',  types:['Physical'], rate:7,  nerfedRate:5,  base:63, evo:[],      color:'#b8704a', glyph:'腿' },
+  spinner:         { name:'Spinner',      tier:'wild',  types:['Physical'], rate:7,  nerfedRate:5,  base:63, evo:[],      color:'#a87a5a', glyph:'旋' },
+  judo_blue:       { name:'Judo Blue',    tier:'wild',  types:['Physical'], rate:7,  nerfedRate:5,  base:65, evo:[],      color:'#4a6a9a', glyph:'柔' },
+  judo_red:        { name:'Judo Red',     tier:'wild',  types:['Physical'], rate:7,  nerfedRate:5,  base:65, evo:[],      color:'#9a4a4a', glyph:'道' },
+  weasel:          { name:'Weasel',       tier:'wild',  types:['Physical'], rate:7,  nerfedRate:5,  base:65, evo:[18],    evoMult:1.5, color:'#b09a6a', glyph:'太' },
+  yoga:            { name:'Yoga',         tier:'wild',  types:['Physical'], rate:7,  nerfedRate:5,  base:65, evo:[11,25], color:'#8a6a9a', glyph:'瑜' },
+  fighting_ape:    { name:'Fighting Ape', tier:'wild',  types:['Physical'], rate:7,  nerfedRate:5,  base:67, evo:[18],    evoMult:1.5, color:'#7a5a4a', glyph:'猿' },
+  lizardape:       { name:'Lizardape',    tier:'elite', types:['Physical'], rate:11, nerfedRate:11, base:67, evo:[21,36], color:'#5a7a5a', glyph:'蜥' },
+  strongman:       { name:'Strongman',    tier:'wild',  types:['Physical'], rate:7,  nerfedRate:5,  base:67, evo:[11,25], color:'#8a5a3a', glyph:'力' },
+
+  /* --- Electric, for the siblings and Figlio --- */
+  thunderhound:    { name:'Thunderhound', tier:'elite', types:['Electric'], rate:11, nerfedRate:11, base:67, evo:[21],    evoMult:1.5, color:'#d8a83a', glyph:'獒' },
+  howler:          { name:'Howler',       tier:'elite', types:['Electric'], rate:11, nerfedRate:11, base:71, evo:[25],    evoMult:1.5, color:'#c89a4a', glyph:'嚎' },
+
   /* --- Legendaries & story --- */
   /* --- Region 2: Rocky Caverns starters --- */
   flying_starter:  { name:'Raven',       tier:'starter',   types:['Flying'],        rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#6b7a8f', glyph:'鸦' },
@@ -262,6 +278,66 @@ const MOVES = {
                     ['Power2','Onkei-jutsu',null,'Self',4,21,{passive:{invisible:1}, grant:{invisible:1, prep:1}}],
                     ['Ultimate','Ansatsu',1.0,'Single',8,41,{spend:{status:'invisible', clearPrep:true, mult:1.5, perPrep:0.3}}],
                     ['Max','Ansatsu Max',1.2,'Single',8,51,{spend:{status:'invisible', clearPrep:true, mult:1.7, perPrep:0.4}}]],
+
+  /* --- Great Sage dojo. The first three strike before the player, as the
+         Electric trio do; the rest trade their AOE Power2 for a passive stance
+         and take a weak AOE on Power1 instead. --- */
+  boxer:           [['Basic','Jab',0.2,'Single',2,1],
+                    ['Power1','Lead Hook',0.3,'Single',4,1,{first:true, playerBonus:0.2}],
+                    ['Power2','Body Blow',0.5,'AOE',8,18],
+                    ['Ultimate','Combination',0.5,'Single',8,25,{hits:3}]],
+  kicker:          [['Basic','Low Kick',0.2,'Single',2,1],
+                    ['Power1','Snap Kick',0.3,'Single',4,1,{first:true, playerBonus:0.2}],
+                    ['Power2','Roundhouse',0.5,'AOE',8,18],
+                    ['Ultimate','Axe Kick',1.5,'Single',8,25]],
+  spinner:         [['Basic','Palm Strike',0.2,'Single',2,1],
+                    ['Power1','Whirl Step',0.3,'Single',4,1,{first:true, playerBonus:0.2}],
+                    ['Power2','Cyclone Sweep',0.5,'AOE',8,18],
+                    ['Ultimate','Drill Spin',0.5,'Single',8,25,{hits:3}]],
+
+  judo_blue:       [['Basic','Grip',0.2,'Single',2,1],
+                    ['Power1','Osoto Gari',0.3,'AOE',4,1],
+                    ['Power2','Kumi-kata',null,'Passive',0,21,{passive:{block:1}}],
+                    ['Ultimate','Seoi Nage',null,'Single',8,25,{reflect:1.0}]],
+  judo_red:        [['Basic','Grip',0.2,'Single',2,1],
+                    ['Power1','Harai Goshi',0.3,'AOE',4,1],
+                    ['Power2','Kumi-kata',null,'Passive',0,21,{passive:{block:1}}],
+                    ['Ultimate','Seoi Nage',null,'Single',8,25,{reflect:1.0}]],
+  weasel:          [['Basic','Push Hands',0.2,'Single',2,1],
+                    ['Power1','Cloud Hands',0.3,'AOE',4,1],
+                    ['Power2','Silk Reeling',null,'Passive',0,21,{passive:{counterTurns:1, counterRet:0.5}}],
+                    ['Ultimate','Four Ounces',null,'Single',8,25,{reflect:1.0}]],
+
+  yoga:            [['Basic','Breath Strike',0.2,'Single',2,1],
+                    ['Power1','Sun Salutation',0.3,'AOE',4,1],
+                    ['Power2','Stillness',null,'Passive',0,21,{passive:{evadeTurns:1, evadeChance:1.0}}],
+                    ['Ultimate','Asana Flow',0.2,'Single',8,25,{hits:6, fullHpDouble:true}]],
+
+  fighting_ape:    [['Basic','Knuckle Drag',0.2,'Single',2,1],
+                    ['Power1','Chest Beat',0.3,'AOE',4,1],
+                    ['Power2','Iron Hide',null,'Passive',0,21,{passive:{block:1}}],
+                    ['Ultimate','Ground Pound',0.6,'AOE',8,25]],
+  lizardape:       [['Basic','Tail Lash',0.35,'Single',2,1],
+                    ['Power1','Seismic Roar',0.5,'AOE',4,1],
+                    ['Power2','Scaled Stance',null,'Passive',0,21,{passive:{block:1, counterTurns:1, counterRet:0.5}}],
+                    ['Ultimate','Primal Rend',0.5,'Single',8,41,{hits:3}],
+                    ['Max','Primal Rend Max',0.4,'Single',8,51,{hits:4, fullHpDouble:true}]],
+  strongman:       [['Basic','Shoulder Barge',0.2,'Single',2,1],
+                    ['Power1','Shockwave Clap',0.3,'AOE',4,1],
+                    ['Power2','Braced Stance',null,'Passive',0,21,{passive:{block:2}}],
+                    ['Ultimate','Bearhug',1.0,'Single',8,25,{stunHit:0.50}]],
+
+  /* --- Electric --- */
+  thunderhound:    [['Basic','Snap',0.2,'Single',2,1],
+                    ['Power1','Rolling Thunder',0.6,'AOE',4,1],
+                    ['Power2','Hunter\'s Instinct',null,'Passive',0,21,{passive:{thresholdStun:[0.75,0.50,0.25]}}],
+                    ['Ultimate','Throat Take',1.2,'Single',8,41],
+                    ['Max','Throat Take Max',1.5,'Single',8,51,{stunnedMult:2.0}]],
+  howler:          [['Basic','Bark',0.2,'Single',2,1],
+                    ['Power1','Static Howl',0.5,'AOE',4,1],
+                    ['Power2','Alpha Call',null,'Passive',0,21,{passive:{block:1}}],
+                    ['Ultimate','Sky Splitter',1.0,'AOE',8,41],
+                    ['Max','Sky Splitter Max',1.25,'AOE',8,51,{stunHit:0.25, softenHit:{chance:0.50, amount:0.50}}]],
 
   sacred_seed:     [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 };

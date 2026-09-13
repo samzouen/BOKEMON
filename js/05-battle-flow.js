@@ -587,7 +587,9 @@ function resolveChargeSpend(mv, mon){
 
   setTimeout(()=>{
     applyHits(hits);
-    reportHits(hits);          // Unleash / Hyperbeam were landing silently
+    reportHits(hits);
+    checkThresholdStuns();
+    if(getPStatus(0,'softened')) removePStatus(0,'softened');   // it blunts one blow only          // Unleash / Hyperbeam were landing silently
     c.turnsLeft--;
     if(c.turnsLeft <= 0){
       clearCharge();
@@ -875,6 +877,29 @@ function resolveBattleMove(mv, target, results){
     }
   }
 
+  /* Seoi Nage / Four Ounces return the exact figure last taken — guard
+     absorption included — rather than scaling off ATK at all. */
+  if(mv.reflect){
+    const back = Math.ceil((mon.lastDamageTaken||0) * mv.reflect);
+    const t = (target && target.hp>0) ? target : livingEnemies()[0];
+    if(!t) return afterPlayerAttack(mon, []);
+    if(back <= 0){
+      battleMsg(`${mv.name}! But there was nothing to give back.`);
+      return setTimeout(()=> afterPlayerAttack(mon, []), 800);
+    }
+    const h = [{ t, idx:ui.battle.enemies.indexOf(t), dmg:back, oldHp:t.hp, newHp:Math.max(0,t.hp-back) }];
+    battleMsg(`${mv.name}! Their own force is turned against them.`);
+    bob($('#playerBob'), +1);
+    return setTimeout(()=>{ applyHits(h); reportHits(h); setTimeout(()=> afterPlayerAttack(mon, h), 700); }, 380);
+  }
+  /* Asana Flow / Primal Rend Max hit twice as hard from an untouched body. */
+  if(mv.fullHpDouble && mon.currentHp >= monMaxHp(mon)){
+    factor *= 2;
+    battleMsg('Untouched — the strike lands at full force!');
+  }
+  /* Throat Take Max punishes a stunned target. */
+  if(mv.stunnedMult && target && getEStatus(target,'paralysed')) factor = mv.stunnedMult;
+
   const targets = mv.target==='AOE' ? livingEnemies() : [target];
 
   /* A bonus move offers its optional second quiz BEFORE any damage resolves,
@@ -902,6 +927,20 @@ function resolveBattleMove(mv, target, results){
     }
     const dmg = computeDamage(factor, atk, monRef(mon), t, true);
     const idx=ui.battle.enemies.indexOf(t);
+    // Silk Reeling / Scaled Stance: striking them this turn costs you
+    if(t.counterTurns > 0){
+      const back = Math.ceil(dmg * (t.counterRet || 0.5));
+      setTimeout(()=>{
+        if(mon.currentHp <= 0) return;
+        const before = mon.currentHp;
+        mon.currentHp = Math.max(0, mon.currentHp - back);
+        mon.lastDamageTaken = back;
+        counterDrift(document.getElementById('enemyBob-'+idx), document.getElementById('enemyBob-'+idx));
+        drainHp('playerHp', before, mon.currentHp, monMaxHp(mon));
+        showDamageNumber('playerBob', back);
+        battleMsg(`↩️ ${SPECIES[t.species].name} turns your force back on you!`);
+      }, 520);
+    }
     return { t, idx, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg), dmg };
   });
   let effMsg=''; hits.forEach(h=>{ const m=typeMultiplier(SPECIES[mon.species].types, h.t.types); if(m!==1) effMsg=effectivenessLabel(m); });
@@ -957,6 +996,7 @@ function resolveBattleMove(mv, target, results){
 /* apply a batch of {t,idx,oldHp,newHp} hits with flash + drain, mark fainted.
    Any hit on a Giga-Drain-marked enemy heals the active monster for 0.2x ATK. */
 function applyHits(hits){
+  hits.forEach(h=>{ if(h && h.t) h.t.lastDamageTaken = h.dmg; });
   // an enemy holding block stacks eats one per strike
   hits.forEach(h=>{
     if(!h || !h.t || !blockStacksOf(h.t)) return;
@@ -974,8 +1014,7 @@ function applyHits(hits){
     h.t.hp = h.newHp;
     flashHit(document.getElementById('enemy-'+h.idx));
     drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
-    const ls = getEStatus(h.t,'leechSeed');
-    if(ls) healed += Math.ceil((ls.heal||0.15)*monAtk(mon));
+    healed += resolveLeech(h.t, mon);
   });
   const ls = ui.battle && ui.battle.pendingLifesteal;
   if(ls){ healed += ls; ui.battle.pendingLifesteal = 0; }
@@ -1260,6 +1299,28 @@ function invertScreen(ms){
 function releaseInvert(){ document.body.classList.remove('ultra-invert'); }
 /* play pre-computed hits one at a time, applying HP as each lands.
    fast=true halves the gap (the multi-hit "2x speed" rule). */
+/* Thunderhound punishes each health threshold it is driven below, once each. */
+function checkThresholdStuns(){
+  const b = ui.battle;
+  if(!b) return;
+  livingEnemies().forEach(e=>{
+    if(!e.thresholdStun || !e.thresholdStun.length) return;
+    const frac = e.hp / Math.max(1, e.maxHp);
+    e.thresholdStun.forEach(th=>{
+      if(frac <= th && !e.thresholdsHit.includes(th)){
+        e.thresholdsHit.push(th);
+        const mon = activeMon();
+        if(mon && mon.currentHp > 0 && !getPStatus(0,'stunned')){
+          if(enemyStatusBlocked('stunned')){ battleMsg('💎 The diamond dust turns the howl aside.'); }
+          else setPStatus(0, { type:'stunned', turnsLeft:2 });
+          renderStatusBadges();
+          setTimeout(()=> battleMsg(`💫 ${SPECIES[e.species].name} howls — ${displayName(mon)} is stunned!`), 500);
+        }
+      }
+    });
+  });
+}
+
 function playSuccessiveHits(hits, i, done, fast){
   if(i>=hits.length){ done(); return; }
   const h = hits[i];
@@ -1267,15 +1328,9 @@ function playSuccessiveHits(hits, i, done, fast){
   h.t.hp = h.newHp;
   flashHit(document.getElementById('enemy-'+h.idx));
   drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
-  if(getEStatus(h.t,'leechSeed')){
+  {
     const mon = activeMon();
-    const amount = Math.ceil(0.15*monAtk(mon));
-    battleParty().forEach(m=>{
-      if(m.currentHp<=0) return;
-      const before = m.currentHp, max = monMaxHp(m);
-      m.currentHp = Math.min(max, m.currentHp + amount);
-      if(m===mon) drainHp('playerHp', before, m.currentHp, max);
-    });
+    healParty(resolveLeech(h.t, mon), mon);   // same resolver as the single-hit path
   }
   if(h.newHp<=0){ const el=document.getElementById('enemy-'+h.idx); if(el) el.classList.add('fainted'); }
   setTimeout(()=> playSuccessiveHits(hits, i+1, done, fast), gap);
@@ -1305,14 +1360,37 @@ function resolveStatusMove(mv, mon, target, correct){
       if(livingEnemies().length===0){ setTimeout(onWaveCleared,600); return; }
       /* A refined Diamond Dust also casts other Very High skills — pick them,
          then fire them one after another before handing control back. */
-      if(res.borrow){
-        return openBorrowPicker(mon, mv.stonePlus||0, res.borrow, (picked)=>{
-          castBorrowed(mon, atk, picked, mv.stonePlus||0, ()=>{
-            ui.battle.phase = 'player';
-            renderBattle();
-            battleMsg('Diamond Dust settles. (instant — you can still attack!)');
+      if(res.borrowPick || res.borrowRandom){
+        const dd = getPStatus(0,'diamondDust') || {};
+        const bt = dd.borrowTier != null ? dd.borrowTier : (mv.stonePlus||0);
+        const done = ()=>{
+          ui.battle.phase = 'player';
+          renderBattle();
+          battleMsg('Diamond Dust settles. (instant — you can still attack!)');
+        };
+        /* A random facet, never the one already chosen. */
+        const randomFacet = (exclude)=>{
+          const pool = BORROW_GRID.filter(t=>!exclude.includes(t));
+          return pool[Math.floor(Math.random()*pool.length)];
+        };
+        if(res.borrowPick){
+          // ✦ — one of your choosing, then one the stone chooses
+          return openBorrowPicker(mon, bt, res.borrowPick, (picked)=>{
+            const chosen = picked.slice();
+            if(res.borrowRandom){
+              const extra = randomFacet(chosen);
+              if(extra) chosen.push(extra);
+            }
+            castBorrowed(mon, atk, chosen, bt, done);
           });
-        });
+        }
+        // + — no menu at all; the light falls where it falls
+        const roll = [];
+        for(let k=0;k<res.borrowRandom;k++){
+          const t = randomFacet(roll);
+          if(t) roll.push(t);
+        }
+        return castBorrowed(mon, atk, roll, bt, done);
       }
       // Instant cast doesn't consume the turn, so control returns to the player.
       ui.battle.phase = 'player';
@@ -1528,6 +1606,8 @@ function runEnemyAttack(i){
       // reduction has already been applied inside computeDamage; block is last
       const beforeBlock = dmg;
       dmg = applyBlock(mon, dmg, 'playerBlk');
+      mon.lastDamageTaken = beforeBlock;     // reflection returns the FULL figure
+      
       if(dmg < beforeBlock) msg = `🛡 Blocked ${beforeBlock - dmg}! ` + msg;
       // scripted last stand: the dragon always survives on 1 HP
       const floor = ui.battle.allyUnkillable ? 1 : 0;
@@ -1562,17 +1642,26 @@ function runEnemyAttack(i){
     // Life-stealing moves restore the attacker from its own ATK
     /* Enemy-cast Charm / Disrupt land on the player's side of the field. */
     if(move[1] === 'Charm'){
-      setPStatus(0, { type:'charmed', turnsLeft:6, chance:0.20 });
+      if(enemyStatusBlocked('charmed')){ msg += ' The diamond dust scatters the charm.'; }
+      else { setPStatus(0, { type:'charmed', turnsLeft:6, chance:0.20 }); msg += ' Your team is charmed!'; }
       renderStatusBadges();
-      msg += ' Your team is charmed!';
     }
     if(move[1] === 'Disrupt'){
-      addEStatus(e, { type:'disrupt', turnsLeft:6 });
-      b.fieldStatus = b.fieldStatus || {};
-      b.fieldStatus.disrupt = { type:'disrupt', turnsLeft:6 };
-      livingEnemies().forEach(x=> addEStatus(x, { type:'disrupt', turnsLeft:6 }));
+      if(enemyStatusBlocked('disrupt')){ msg += ' The diamond dust jams their signal instead.'; }
+      else {
+        b.fieldStatus = b.fieldStatus || {};
+        b.fieldStatus.disrupt = { type:'disrupt', turnsLeft:6 };
+        livingEnemies().forEach(x=> addEStatus(x, { type:'disrupt', turnsLeft:6 }));
+        msg += ' They seize the initiative!';
+      }
       renderStatusBadges();
-      msg += ' They seize the initiative!';
+    }
+    /* Sky Splitter Max leaves them reeling: their next move may land soft. */
+    const sf = move[6] && move[6].softenHit;
+    if(sf && Math.random() < sf.chance){
+      if(enemyStatusBlocked('softened')){ msg += ' The diamond dust holds your strength intact.'; }
+      else { setPStatus(0, { type:'softened', turnsLeft:2, amount:sf.amount }); msg += ' Your next attack is weakened!'; }
+      renderStatusBadges();
     }
     const pct = LIFESTEAL[move[1]];
     if(pct && e.hp>0){
@@ -1620,11 +1709,15 @@ function endEnemyRound(){
   if(gm){
     if(gm.airborne  > 0) gm.airborne--;                // stances last a turn
     if(gm.invisible > 0) gm.invisible--;
+    if(gm.counterTurns > 0) gm.counterTurns--;
+    if(gm.evadeTurns   > 0) gm.evadeTurns--;
   }
   livingEnemies().forEach(e=>{
     if(e.guard) grantBlock(e, 1, e.atk);
     if(e.airborne  > 0) e.airborne--;
     if(e.invisible > 0) e.invisible--;
+    if(e.counterTurns > 0) e.counterTurns--;
+    if(e.evadeTurns   > 0) e.evadeTurns--;
   });
   // Discombobulate's guaranteed window lasts a turn on + / ✦, then ✦ leaves a
   // softer turn behind it before the plain rolls take over.
@@ -1642,7 +1735,9 @@ function endEnemyRound(){
     });
   }
   const dd0 = getPStatus(0,'diamondDust');
-  if(dd0) diamondDustCleanse();          // keeps the enemy board clear round after round
+  if(dd0){
+    diamondDustCleanse();                // keeps the enemy board clear round after round
+  }
   const mir0 = getPStatus(0,'mirage');
   if(mir0 && mir0.window && mir0.step < mir0.window.length) mir0.step++;
   const ovc = getPStatus(0,'overcharge');

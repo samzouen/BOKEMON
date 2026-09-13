@@ -238,7 +238,10 @@ const MUSIC_FADE_MS = 2000;
 function playMusic(name, opts){
   opts = opts || {};
   try{
-    if(!BGM_MAP[name]) return;
+    /* bgmFile() derives `<key>.mp3` for anything not in the table — but this
+       guard rejected those keys before it was ever consulted, so every derived
+       track (zone_band_concert, battle_region3…) silently did nothing. */
+    if(!bgmFile(name)) return;
     audio.musicName = name;
     if(!audio.unlocked) return;
     if(audio.musicEl && audio.musicEl.dataset.track === name && !opts.restart) return;
