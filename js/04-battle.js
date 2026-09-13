@@ -80,7 +80,12 @@ function moveFactor(slot, baseMult, words, correct){
 const STATUS_TURNS = 5;
 const ICE_TOMB_TURNS = 2;
 
-function partyStatuses(){ return (ui.battle.partyStatus = ui.battle.partyStatus || {}); }
+/* Read outside battle too — the Stats page estimates damage with whatever
+   buffs are active, and there is no battle there. Never assume ui.battle. */
+function partyStatuses(){
+  if(!ui.battle) return {};
+  return (ui.battle.partyStatus = ui.battle.partyStatus || {});
+}
 /* uid is accepted but ignored — kept so existing call sites read naturally. */
 function getPStatus(uid, type){ return partyStatuses()[type]; }
 function removePStatus(uid, type){ delete partyStatuses()[type]; }
@@ -90,6 +95,7 @@ function removePStatus(uid, type){ delete partyStatuses()[type]; }
    it is listed in STATUS_OWNER. Per-call-site checks were one forgotten line
    away from a hole. */
 function setPStatus(uid, status){
+  if(!ui.battle) return null;
   if(status && isEnemyOwned(status.type) && getPStatus(0,'diamondDust')) return;
   const st = Object.assign({ turnsLeft: STATUS_TURNS }, status);
   partyStatuses()[status.type] = st;
@@ -145,7 +151,7 @@ function tickStatuses(){
 
 /* Enemy statuses STACK: each enemy carries a list, not a single slot.
    Re-applying the same type refreshes it rather than adding a duplicate. */
-function eStatuses(e){ if(!Array.isArray(e.statuses)) e.statuses = []; return e.statuses; }
+function eStatuses(e){ if(!e) return []; if(!Array.isArray(e.statuses)) e.statuses = []; return e.statuses; }
 function getEStatus(e, type){ return eStatuses(e).find(s=>s.type===type); }
 function addEStatus(e, status){
   // enemy self-buffs can't take hold while the dust is in the air
@@ -1583,8 +1589,10 @@ function ultraFizz(plus){
    varies per target — but after the multipliers the player controls. */
 function ownBuffMultiplier(){
   let m = 1;
-  if(getPStatus(0,'overheat'))    m *= 1.5;
-  if(getPStatus(0,'dragonDance')) m *= 1.25;
+  const oh = getPStatus(0,'overheat');
+  if(oh) m *= (oh.deal || 1.5);            // honour the refined tiers
+  const dd = getPStatus(0,'dragonDance');
+  if(dd) m *= (dd.deal || 1.25);
   if(ui.battle && ui.battle.legacyBonus) m *= (1 + ui.battle.legacyBonus);
   return m;
 }
