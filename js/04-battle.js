@@ -856,6 +856,7 @@ function grantBlock(holder, n, atkAt){
   holder.blockStacks = (holder.blockStacks||0) + n;
   // each stack remembers the ATK it was minted at
   holder.blockValue = atkAt || holder.blockValue || 0;
+  setTimeout(refreshAllBlockBars, 0);      // show it at once, not next render
 }
 /* Consume one stack against `dmg`; returns what actually gets through. */
 function applyBlock(holder, dmg, barId){
@@ -944,6 +945,30 @@ function blockBar(id, holder){
     <span class="blk-val">${val}</span>
   </div>`;
 }
+/* Rebuild a bar in place. Stacks are GAINED mid-battle — Steel Aegis, Guard's
+   per-turn top-up, a passive firing as a monster enters — and without this the
+   bar stayed hidden until the next full re-render. */
+function refreshBlockBar(id, holder){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const n = blockStacksOf(holder);
+  if(!n){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display = '';
+  el.dataset.max = n;
+  el.innerHTML =
+    `<span class="blk-shield">🛡</span>` +
+    `<span class="blk-count">×${n}</span>` +
+    `<span class="blk-track">${Array.from({length:n},()=>'<i></i>').join('')}</span>` +
+    `<span class="blk-val">${holder.blockValue||0}</span>`;
+}
+function refreshAllBlockBars(){
+  const b = ui.battle;
+  if(!b) return;
+  const mon = activeMon();
+  if(mon) refreshBlockBar('playerBlk', mon);
+  (b.enemies||[]).forEach((e,i)=> refreshBlockBar('enemyBlk-'+i, e));
+}
+
 /* Deplete segments with the same weight as an HP drain. */
 function drainBlock(id, before, after){
   const el = document.getElementById(id);
@@ -1906,8 +1931,7 @@ function renderStatusBadges(){
     });
     const af = aftershockBonusHits();
     if(af) out.push(`<span class="status-pill mine">💥 Aftershock ×${af}</span>`);
-    const bp = blockPill(activeMon());
-    if(bp) out.push(bp);
+    refreshAllBlockBars();
     const sp2 = stancePills(activeMon());
     if(sp2) out.push(sp2);
     row.innerHTML = out.join('');

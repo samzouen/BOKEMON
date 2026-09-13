@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '1.03';
+const GAME_VERSION = '1.06';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -207,8 +207,19 @@ function playSfx(event){
       }
       audio.sfxCache[file] = entry;
     }
-    if(entry.gain) entry.gain.gain.value = 1;      // reset after any previous fade
-    else entry.el.volume = sfxVolume();            // non-Web-Audio fallback
+    /* A previous fadeOutSfx() SCHEDULED a gain ramp. Assigning .value does not
+       cancel pending automation — the old ramp keeps winning and the sound
+       plays silently forever after its first fade. Cancel, then set. */
+    if(entry.gain){
+      try{
+        const now = (actx && actx.currentTime) || 0;
+        entry.gain.gain.cancelScheduledValues(now);
+        entry.gain.gain.setValueAtTime(1, now);
+      }catch(e){ entry.gain.gain.value = 1; }
+    } else {
+      entry.el.volume = sfxVolume();               // non-Web-Audio fallback
+    }
+    entry._fadeTimer && clearTimeout(entry._fadeTimer);
     entry.el.currentTime = 0;
     const p = entry.el.play();
     if(p && p.catch) p.catch(()=>{});
@@ -225,7 +236,15 @@ function fadeOutSfx(event, ms){
     if(!entry) return;
     const dur = ms || 500;
     if(entry.gain && actx){
-      rampGain(entry.gain, 0.0001, dur, ()=>{ try{ entry.el.pause(); entry.el.currentTime = 0; }catch(e){} });
+      rampGain(entry.gain, 0.0001, dur, ()=>{
+        try{
+          entry.el.pause(); entry.el.currentTime = 0;
+          // hand the gain back at full so the next play isn't silent
+          const now = (actx && actx.currentTime) || 0;
+          entry.gain.gain.cancelScheduledValues(now);
+          entry.gain.gain.setValueAtTime(1, now);
+        }catch(e){}
+      });
     } else {
       const el = entry.el, start = el.volume || 1, steps = 12;
       let i = 0;
