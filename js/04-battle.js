@@ -924,7 +924,11 @@ function resolveLeech(target, mon){
   }
   return healed;
 }
-function healParty(amount, mon){
+/* NOT the recovery-pool healParty(pct) in 08-screens2.js. These files share one
+   global scope, so the later definition used to overwrite this one — leech
+   drain was calling the recovery version, playing its chime and treating the
+   HP figure as a PERCENTAGE. Distinct names, permanently. */
+function leechHealParty(amount, mon){
   if(amount <= 0) return;
   battleParty().forEach(m=>{
     if(m.currentHp<=0) return;
@@ -1494,10 +1498,15 @@ function onWaveCleared(){
     return;
   }
   if(b.waveIndex < b.waves.length-1){
+    /* The round still happened even though no enemy lived to take its turn.
+       Without this, one-shotting each wave meant statuses NEVER aged — a
+       turn-one Overheat was still running six waves later. */
+    const gone = tickStatuses();
     b.waveIndex++;
     loadWave(b.waveIndex);
     renderBattle();
-    battleMsg(`Wave ${b.waveIndex+1} of ${b.waves.length}!`);
+    battleMsg(`Wave ${b.waveIndex+1} of ${b.waves.length}!`
+      + (gone.length ? ` (${gone.join(' and ')} wore off.)` : ''));
     // the new arrivals face upkeep (Overheat, Aftershock) and may seize the initiative
     setTimeout(()=> beginRound('Choose a move.'), 900);
   } else {

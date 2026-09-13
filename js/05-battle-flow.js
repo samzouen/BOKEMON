@@ -1165,13 +1165,16 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
   const per = mv.split ? factor / mv.hits : factor;
   const sim = new Map(targets.map(t=>[t, t.hp]));
   const all = [];
+  let dodged = 0;
   for(let k=0;k<totalHits;k++){
     targets.forEach(t=>{
       if(sim.get(t) <= 0) return;
+      const idx = b.enemies.indexOf(t);
+      if(rollDodge(t, idx, 330 + (k*targets.length)*350)){ dodged++; return; }
       const dmg = computeDamage(per, atk, monRef(mon), t, true);
       const oldHp = sim.get(t), newHp = Math.max(0, oldHp - dmg);
       sim.set(t, newHp);
-      all.push({ t, idx:b.enemies.indexOf(t), dmg, oldHp, newHp });
+      all.push({ t, idx, dmg, oldHp, newHp });
     });
   }
   logBattle(`${displayName(mon)} used ${mv.name} — ${totalHits} strikes on ${targets.length} target(s)`);
@@ -1182,8 +1185,9 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
     reportHits(all);
     saveProfile();
     applySelfDamage(mv, mon);
-    battleMsg(`${mv.name} struck ${totalHits} times!`
-      + (extra ? ` (+${extra} from Aftershock)` : ''));
+    battleMsg(`${mv.name} struck ${all.length} time${all.length===1?'':'s'}!`
+      + (extra ? ` (+${extra} from Aftershock)` : '')
+      + (dodged ? ` (${dodged} dodged)` : ''));
     if(mon.currentHp<=0){
       if(livingEnemies().length===0){ setTimeout(()=>onWaveCleared(), 900); return; }
       setTimeout(()=>onMonFainted(), 900); return;
@@ -1192,17 +1196,30 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
   }, true), 330);
 }
 
+/* Every damage path must roll evasion, not just the single-hit one. Airborne
+   and Unseen were being ignored entirely by multi-hit moves, so a Loong at 70%
+   evasion never dodged a single strike of a six-hit barrage. */
+function rollDodge(t, idx, delay){
+  const ev = stanceEvasion(t);
+  if(ev <= 0 || Math.random() >= ev) return false;
+  setTimeout(()=>{ dodgeEnemy(idx); floatMiss('enemy-'+idx, 'MISS'); }, delay||0);
+  return true;
+}
+
 function resolveSplitHits(mv, mon, factor, atk, target){
   const n = mv.hits;
   const per = mv.split ? factor / n : factor;   // split shares the total; others hit full each time
+  const tIdx = ui.battle.enemies.indexOf(target);
   const hits = [];
   let simHp = target.hp;
+  let dodged = 0;
   for(let i=0;i<n;i++){
     if(simHp<=0) break;
+    if(rollDodge(target, tIdx, 330 + i*350)){ dodged++; continue; }   // each strike rolls
     const dmg = computeDamage(per, atk, monRef(mon), target, true);
     const oldHp = simHp, newHp = Math.max(0, simHp-dmg);
     simHp = newHp;
-    hits.push({ t:target, idx:ui.battle.enemies.indexOf(target), dmg, oldHp, newHp });
+    hits.push({ t:target, idx:tIdx, dmg, oldHp, newHp });
   }
   logBattle(`${displayName(mon)} used ${mv.name} — ${hits.length} strikes on ${SPECIES[target.species].name}`);
   hits.forEach((h,i)=>logBattle(`  strike ${i+1}: ${h.dmg} (${h.oldHp}→${h.newHp})`));
@@ -1211,7 +1228,8 @@ function resolveSplitHits(mv, mon, factor, atk, target){
   playEffect(mv.name, { type: SPECIES[mon.species].types[0], at:'enemy-'+hits[0].idx });
   setTimeout(()=> playSuccessiveHits(hits, 0, ()=>{
     saveProfile();
-    battleMsg(`${mv.name} struck ${hits.length} times!`);
+    battleMsg(`${mv.name} struck ${hits.length} time${hits.length===1?'':'s'}!`
+      + (dodged ? ` (${dodged} dodged)` : ''));
     afterPlayerAttack(mon, hits);
   }, true), 330);
 }
@@ -1259,15 +1277,18 @@ function resolveMultiHit(mv, mon, correct){
   // but leave real HP untouched until the animation plays it back hit by hit
   const sim = new Map(ui.battle.enemies.map(e=>[e, e.hp]));
   const hits=[];
+  let dodged = 0;
   for(let i=0;i<n;i++){
     const alive = ui.battle.enemies.filter(e=>sim.get(e)>0);
     if(alive.length===0) break;
     const t = alive[Math.floor(Math.random()*alive.length)];
+    const idx = ui.battle.enemies.indexOf(t);
+    if(rollDodge(t, idx, 330 + i*350)){ dodged++; continue; }   // an unseen foe slips the blow
     const dmg = computeDamage(mv.mult, atk, monRef(mon), t, true);
     const oldHp = sim.get(t);
     const newHp = Math.max(0, oldHp - dmg);
     sim.set(t, newHp);
-    hits.push({ t, idx:ui.battle.enemies.indexOf(t), oldHp, newHp, dmg });
+    hits.push({ t, idx, oldHp, newHp, dmg });
   }
   invertScreen();
   logBattle(`${displayName(mon)} used ${mv.name} (Ultra) — rolled ${n} hits, landed ${hits.length}`);
@@ -1330,7 +1351,7 @@ function playSuccessiveHits(hits, i, done, fast){
   drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
   {
     const mon = activeMon();
-    healParty(resolveLeech(h.t, mon), mon);   // same resolver as the single-hit path
+    leechHealParty(resolveLeech(h.t, mon), mon);   // same resolver as the single-hit path
   }
   if(h.newHp<=0){ const el=document.getElementById('enemy-'+h.idx); if(el) el.classList.add('fainted'); }
   setTimeout(()=> playSuccessiveHits(hits, i+1, done, fast), gap);
