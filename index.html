@@ -350,6 +350,19 @@
     box-shadow:inset 0 0 0 1px rgba(255,255,255,0.5);
     transition:border-color .2s, background .2s;
   }
+  /* `touch-action` is NOT inherited, and the stroke actually lands on the SVG
+     inside this box. Without this, iOS could decide mid-stroke that the finger
+     was starting a pan, fire touchcancel, and leave half a stroke behind —
+     much more eagerly in a standalone home-screen app than in Safari, where
+     the browser chrome absorbs some of that gesture handling. */
+  .write-box *, .write-box svg, .write-box svg *{
+    touch-action:none;
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none;
+  }
+  /* Nothing scrolls while a stroke is in progress. */
+  body.writing{ overscroll-behavior:none; -webkit-tap-highlight-color:transparent; }
+  body.writing .write-wrap{ touch-action:none; }
   /* faint guide cross, like practice paper */
   .write-box::before, .write-box::after{
     content:''; position:absolute; background:rgba(200,69,58,0.16); pointer-events:none;
