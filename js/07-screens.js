@@ -576,6 +576,19 @@ function dragonStoneBlock(m){
 
 /* Every move explains itself: what it hits, for how much, and — for anything
    with an effect — exactly what that effect does. */
+/* The one-line summary under a move's name. Mirrors the battle button so the
+   two never disagree — the old line claimed "0.1× ATK · Single" for a move that
+   actually strikes three times. */
+function statsMoveLine(mv, mon){
+  const bits = [`${mv.words} words`];
+  const dmg = estimateHit(mv, mon);
+  if(dmg != null) bits.unshift(`${dmg} dmg`);
+  else bits.unshift('Support');
+  const shape = moveShape(mv);
+  if(shape) bits.splice(1, 0, shape);
+  return bits.join(' · ');
+}
+
 function openMoveInfo(mv, mon){
   const atk = monAtk(mon);
   const st = mv.stone;
@@ -666,9 +679,13 @@ function renderStats(){
   const atCap = (m.supplements||0) >= suppCap;
   const nextIsFinal = (m.supplements||0) === suppCap-1;
   const moves = MOVES[m.species].map(mv=>{
-    const [slot,name,mult,target,words,unlock]=mv;
+    const [slot,name,mult,target,words,unlock,extras]=mv;
     const unlocked = name!=null && m.level>=unlock;
-    return { slot,name,mult,target,words,unlock,unlocked };
+    /* Spread the extras — `soul`, `tachy`, `hits`, `spend`, `bonus` and the
+       rest live in mv[6], and discarding them left every effect move with
+       nothing to describe but "a support move". Same trap as the old
+       allow-list in unlockedMoves(). */
+    return { slot,name,mult,target,words,unlock,unlocked, ...(extras||{}) };
   });
   [[m.equippedStone,'Basic'], [m.power1Stone,'Power1']].forEach(([st, slot])=>{
     if(!st) return;
@@ -744,9 +761,7 @@ function renderStats(){
             <div style="font-size:11px;font-weight:800;color:var(--ink-soft);">${mv.slot}</div>
           </div>
           <div style="font-size:12px;color:var(--ink-soft);font-weight:600;margin-top:3px;">
-            ${mv.unlocked
-              ? `${mv.mult!=null?(mv.mult+'× ATK'):'Support'} · ${mv.target} · ${mv.words} words`
-              : `Unlocks at Lv ${mv.unlock}`}
+            ${mv.unlocked ? statsMoveLine(mv, m) : `Unlocks at Lv ${mv.unlock}`}
           </div>
           ${mv.unlocked ? `<div class="refine-hint">${mv.stone ? 'tap to read or refine' : 'tap to read'}</div>` : ''}
         </div>

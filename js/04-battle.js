@@ -1697,7 +1697,24 @@ function moveEffectText(mv, mon, atk){
     `<b>${Math.round(mv.clones.evade*100)}%</b> of attacks.`);
   if(mv.charge) out.push(
     `Gathers power instead of attacking. Spend the charge later for a far heavier blow.`);
-  if(mv.passive) out.push(`<b>Passive.</b> This works on its own the moment the monster enters battle.`);
+  /* Passives describe their payload, not just their existence. */
+  if(mv.passive){
+    const p = mv.passive;
+    const bits = [];
+    if(p.block)        bits.push(`starts with <b>${p.block} damage-block stack${p.block>1?'s':''}</b> worth <b>${atk}</b> each`);
+    if(p.guard)        bits.push(`starts <b>on guard</b>, gaining a block stack each turn`);
+    if(p.airborne)     bits.push(`starts <b>airborne</b>, dodging <b>70%</b> of attacks for a turn`);
+    if(p.invisible)    bits.push(`starts <b>unseen</b>, dodging <b>80%</b> of attacks for a turn`);
+    if(p.evadeTurns)   bits.push(`begins in perfect <b>stillness</b> — every attack misses for ${p.evadeTurns} turn${p.evadeTurns>1?'s':''}`);
+    if(p.counterTurns) bits.push(`begins <b>ready to counter</b> — strike it this turn and it returns <b>${Math.round((p.counterRet||0.5)*100)}%</b> of the damage`);
+    if(p.first)        bits.push(`always takes the <b>first move</b> of the round`);
+    if(p.playerDouble) bits.push(`has a <b>${Math.round(p.playerDouble*100)}% chance to strike a second time</b>`);
+    if(p.thresholdStun) bits.push(
+      `punishes each health threshold it is driven below — <b>${p.thresholdStun.map(t=>Math.round(t*100)+'%').join(', ')}</b> — ` +
+      `<b>stunning the attacker for a turn</b>, once per threshold`);
+    out.push(`<b>Passive.</b> Active the moment it enters battle: this monster ` +
+             (bits.length ? bits.join(', and ') + '.' : 'gains its stance at once.'));
+  }
   return out;
 }
 
