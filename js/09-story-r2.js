@@ -487,10 +487,18 @@ function renderChallengeR3(){
     <div class="challenge-card" id="cDojo">
       ${npcPortrait('electric_master','⚡',50,'#e0b53a')}
       <div style="flex:1;">
-        <div class="cc-title">Electric Dojo <span class="clear-tag" style="background:var(--paper-3);color:var(--ink-soft);">Closed</span></div>
-        <div class="cc-desc">${concertState().bandCleared
-          ? 'Seeking a new Dojo Master.'
-          : 'A hand-written sign hangs on the door.'}</div>
+        <div class="cc-title">Electric Dojo ${(()=>{
+          const d = (state.progress.region3||{}).dojo || {};
+          if(d.verdict) return '<span class="clear-tag">Settled</span>';
+          if(concertState().bandCleared) return '<span class="clear-tag" style="background:var(--gold);color:#fff;">Open</span>';
+          return '<span class="clear-tag" style="background:var(--paper-3);color:var(--ink-soft);">Closed</span>';
+        })()}</div>
+        <div class="cc-desc">${(()=>{
+          const d = (state.progress.region3||{}).dojo || {};
+          if(d.verdict) return d.verdict==='electric' ? 'The siblings kept the hall.' : 'The Sage disciples hold the hall.';
+          if(concertState().bandCleared) return 'Two claims on an empty hall. Someone must judge.';
+          return 'A hand-written sign hangs on the door.';
+        })()}</div>
       </div>
     </div>
     ${(state.progress.region3||{}).vaneShearSeen ? '' :
@@ -499,7 +507,10 @@ function renderChallengeR3(){
   $('#backBtn').addEventListener('click', ()=>go('region'));
   const cc = $('#cConcert');
   if(cc) cc.addEventListener('click', ()=> go('concert'));
-  $('#cDojo').addEventListener('click', ()=> storyModal(npcPortrait('electric_master','⚡',120,'transparent'),
+  $('#cDojo').addEventListener('click', ()=>{
+    // once the band has gone the hall is contested, and you are the judge
+    if(concertState().bandCleared) return go('dojo');
+    return storyModal(npcPortrait('electric_master','⚡',120,'transparent'),
     concertState().bandCleared ? 'Under new management. Eventually.' : 'Closed for the competition',
     concertState().bandCleared
       ? `<div class="dojo-sign">ELECTRIC DOJO — <b>CLOSED</b><br><br>` +
@@ -510,7 +521,8 @@ function renderChallengeR3(){
       : `The sign reads, in a confident hand:<br><br>` +
         `<i>"GONE TO THE BAND COMPETITION. All of us. Yes, all. Spar amongst yourselves."</i><br><br>` +
         `Through the shutters you can hear something enormous being tuned.`,
-    ()=>go('challenge')));
+      ()=>go('challenge'));
+  });
 }
 
 function renderChallengeR2(){

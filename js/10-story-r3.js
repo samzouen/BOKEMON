@@ -367,6 +367,7 @@ function wireDevPanel(){
 function concertState(){
   const r3 = state.progress.region3;
   r3.concert = r3.concert || { seen:false, sailors:[], bandCleared:false, stage:0 };
+  r3.dojo = r3.dojo || { started:false, electricDone:false, sageDone:false, verdict:null, stone:false };
   r3.concert.failstars = r3.concert.failstars || [];
   return r3.concert;
 }
@@ -743,6 +744,227 @@ const ELECTRIC_SIBLINGS = [
       [{species:'thunderhound',level:67,ai:'best'},{species:'tiger',level:67,ai:'best'}],
       [{species:'thunderhound',level:71,ai:'best',crowned:true,supplements:10}] ] },
 ];
+
+/* ============================================================
+   THE SUCCESSION — who should hold the Electric Dojo?
+   Two teams, each fought straight through without healing. You may rest
+   between teams. Then you decide, and something very old turns up to watch.
+   ============================================================ */
+function dojoState(){
+  const r3 = state.progress.region3;
+  r3.dojo = r3.dojo || { started:false, electricDone:false, sageDone:false,
+                          verdict:null, stone:false };
+  return r3.dojo;
+}
+function hasNewt(){
+  return state.party.concat(state.storage).some(m=>m.species==='newt' || m.species==='newt_baby');
+}
+
+function renderDojo(){
+  const d = dojoState();
+  if(!d.started) return dojoIntro();
+  setScreenBg('challenge');
+  playMusicChain(['zone_electric_dojo','region3','region']);
+  $('#brandSub').textContent = 'Electric Dojo';
+  const both = d.electricDone && d.sageDone;
+
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Challenge</button>
+    <div class="screen-title">The Electric Dojo</div>
+    <div class="screen-sub">Two claims. One hall.</div>
+
+    <div class="challenge-card ${d.electricDone?'cleared':''}" id="teamE">
+      ${ELECTRIC_SIBLINGS.map(m=>npcPortrait(m.id,'⚡',44,'transparent')).join('')}
+      <div style="flex:1;">
+        <div class="cc-title">The Siblings ${d.electricDone?'<span class="clear-tag">Judged</span>':''}</div>
+        <div class="cc-desc">Three of them, back to back. They grew up in this hall.</div>
+      </div>
+    </div>
+
+    <div class="challenge-card ${d.sageDone?'cleared':''}" id="teamS">
+      ${GREAT_SAGE_TEAM.map(m=>npcPortrait(m.id,'🥋',44,'transparent')).join('')}
+      <div style="flex:1;">
+        <div class="cc-title">The Sage Disciples ${d.sageDone?'<span class="clear-tag">Judged</span>':''}</div>
+        <div class="cc-desc">Three of them, back to back. They came a very long way.</div>
+      </div>
+    </div>
+
+    ${both ? `<button class="btn btn-primary" id="giveVerdict" style="margin-top:14px;">Give your verdict</button>`
+           : `<div class="phase-flag">Test both teams before you decide. You may rest in between.</div>`}
+    <button class="btn btn-ghost" id="returnBtn" style="margin-top:10px;">Return</button>
+  `;
+  $('#backBtn').addEventListener('click', ()=>go('challenge'));
+  $('#returnBtn').addEventListener('click', ()=>go('challenge'));
+  $('#teamE').addEventListener('click', ()=>{ if(!d.electricDone) startTeamRun('electric', 0); else toast('You have already tested them.'); });
+  $('#teamS').addEventListener('click', ()=>{ if(!d.sageDone) startTeamRun('sage', 0); else toast('You have already tested them.'); });
+  const gv = $('#giveVerdict');
+  if(gv) gv.addEventListener('click', ()=> dojoVerdict());
+}
+
+async function dojoIntro(){
+  const d = dojoState();
+  d.started = true;
+  await saveProfile();
+  storyModal(npcPortrait('electric_new_master3','⚡',140,'transparent'), 'Two claims',
+    `The Dojo doors are open again, but the hall is not quiet.<br><br>` +
+    `On one side stand <b>three siblings</b>, sleeves rolled, arguing that the hall has been ` +
+    `electric for four generations and ought to stay that way.<br><br>` +
+    `On the other, <b>three fighters</b> in unfamiliar colours, who bow very correctly and say ` +
+    `nothing at all until spoken to.`,
+    ()=>dojoIntro2(), { bg:'challenge', subtitle:'Electric Dojo' });
+}
+function dojoIntro2(){
+  storyModal(npcPortrait('physical_disciple2','🥋',140,'transparent'), 'The Great Sage dojo',
+    `"We are sent by the <b>Great Sage Grandmaster</b>," the tallest says. "Standards here have ` +
+    `slipped. A hall without a master is a hall going to waste."<br><br>` +
+    `"We have taken three dojos already. We will take this one properly — by being better."<br><br>` +
+    `The siblings look as though they would like to say something and have decided not to.`,
+    ()=>dojoIntro3(), { bg:'challenge', subtitle:'Electric Dojo' });
+}
+function dojoIntro3(){
+  storyModal(npcPortrait('electric_new_master3','⚡',140,'transparent'), '"You decide"',
+    `The eldest sibling turns to you.<br><br>` +
+    `"You beat the band. Every one of them, back to back." She says it without resentment. ` +
+    `"Nobody here can say you don't know what strong looks like."<br><br>` +
+    `"So test us. Both teams, however you like. Then <b>say who should have the hall</b>, and ` +
+    `we'll all of us live with it."<br><br>` +
+    `<i>Each team is fought straight through, without healing. You may rest between teams.</i>`,
+    ()=>go('dojo'), { bg:'challenge', subtitle:'Electric Dojo' });
+}
+
+/* Each team is a continuous run, like the band gauntlet. */
+function teamRoster(which){ return which==='electric' ? ELECTRIC_SIBLINGS : GREAT_SAGE_TEAM; }
+function startTeamRun(which, i){
+  const roster = teamRoster(which);
+  const m = roster[i];
+  if(!ensurePool()) return;
+  ui.dojoRun = { which, i };
+  beginBattle({ isNpc:true, name:m.label, npcId:m.id, concertFight:true,
+    bgKey:'battle_electric_dojo',
+    waves: m.waves.map(w=>w.map(e=>({...e, nerfed:false}))),
+    onWin: ()=> onTeamStageWin(which, i) });
+}
+async function onTeamStageWin(which, i){
+  const roster = teamRoster(which);
+  if(i < roster.length-1){
+    const nxt = roster[i+1];
+    return storyModal(npcPortrait(nxt.id, which==='electric'?'⚡':'🥋', 120,'transparent'), 'Next!',
+      `No rest — the next one is already stepping onto the mat.`,
+      ()=> startTeamRun(which, i+1), { bg:'challenge', subtitle:'Electric Dojo' });
+  }
+  const d = dojoState();
+  if(which==='electric') d.electricDone = true; else d.sageDone = true;
+  await saveProfile();
+  storyModal(npcPortrait(roster[i].id, which==='electric'?'⚡':'🥋', 120,'transparent'), 'All three',
+    which==='electric'
+      ? `The siblings sit down where they stand, grinning at the ceiling.<br><br>` +
+        `"That's us done. Whatever you decide — that was a good fight."`
+      : `The disciples bow, deeply and without complaint.<br><br>` +
+        `"Thank you. That was instructive."`,
+    ()=>go('dojo'), { bg:'challenge', subtitle:'Electric Dojo' });
+}
+
+/* --- the verdict --- */
+function dojoVerdict(){
+  document.body.classList.add('in-scene');
+  window.scrollTo(0,0);
+  setScreenBg('challenge');
+  $('#brandSub').textContent = 'Electric Dojo';
+  screenEl.innerHTML = `
+    <div class="scene">
+      <div class="scene-title">Who should have the hall?</div>
+      <div class="scene-body">
+        <p>Both teams line up. Nobody is pretending this doesn't matter.</p>
+        <p>Whatever you say, they have agreed to live with.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px;">
+        <button class="btn btn-primary" id="vE">⚡ The siblings — it is their home</button>
+        <button class="btn btn-primary" id="vS">🥋 The Sage disciples — they are stronger</button>
+      </div>
+    </div>`;
+  $('#vE').addEventListener('click', ()=>settleVerdict('electric'));
+  $('#vS').addEventListener('click', ()=>settleVerdict('sage'));
+}
+
+async function settleVerdict(pick){
+  document.body.classList.remove('in-scene');
+  const d = dojoState();
+  d.verdict = pick;
+  await saveProfile();
+  storyModal(npcPortrait(pick==='electric'?'electric_new_master3':'physical_disciple3',
+                         pick==='electric'?'⚡':'🥋',140,'transparent'),
+    pick==='electric' ? 'The hall stays electric' : 'The hall changes hands',
+    pick==='electric'
+      ? `The siblings do not cheer. The eldest simply bows, once, and holds it a long moment.<br><br>` +
+        `The disciples accept it without argument. "Then we were not better. We will come back when ` +
+        `we are."`
+      : `The disciples bow as one. "We will not waste it."<br><br>` +
+        `The siblings take it standing. "Teach it properly," the eldest says, "or we'll be back."`,
+    ()=>monkeyArrives(pick), { bg:'challenge', subtitle:'Electric Dojo' });
+}
+
+/* --- and then the sky gets his attention --- */
+function monkeyArrives(pick){
+  storyModal(monPortrait('monkey_king',150,{view:'front',bare:true,stage:1}), 'Something older',
+    `The doors do not open. He is simply there, sitting on a beam that nobody remembers being ` +
+    `strong enough to hold anything.<br><br>` +
+    `All three Sage disciples are on the floor before you register them moving — foreheads down, ` +
+    `arms out.<br><br>` +
+    `<b>"Great Sage."</b><br><br>` +
+    `He does not look at them.`,
+    ()=>monkeyVerdict(pick), { bg:'challenge', subtitle:'Electric Dojo' });
+}
+function monkeyVerdict(pick){
+  storyModal(monPortrait('monkey_king',150,{view:'front',bare:true,stage:1}),
+    pick==='sage' ? '"Adequate."' : '"You lost."',
+    pick==='sage'
+      ? `He glances at the kneeling disciples once.<br><br><b>"Adequate."</b><br><br>` +
+        `They stay down. He has already stopped considering them.`
+      : `He glances at the kneeling disciples once.<br><br><b>"You lost. To a child."</b><br><br>` +
+        `Nobody gets up.`,
+    ()=>monkeyToPlayer(), { bg:'challenge', subtitle:'Electric Dojo' });
+}
+function monkeyToPlayer(){
+  storyModal(monPortrait('monkey_king',150,{view:'front',bare:true,stage:1}), 'To you',
+    `Now he looks at you. It is not a comfortable thing.<br><br>` +
+    `<b>"You've grown."</b><br><br>` +
+    `A pause.<br><br>` +
+    `<b>"Not enough. My friend who keeps that dojo would end you. The man with my crown ` +
+    `would not need to try."</b><br><br>` +
+    `<b>"Find the stones. Then come and find me."</b><br><br>` +
+    `The beam is empty. It may always have been.`,
+    ()=>dojoReward(), { bg:'challenge', subtitle:'Electric Dojo' });
+}
+
+/* --- the siblings settle up --- */
+async function dojoReward(){
+  const d = dojoState();
+  if(hasNewt()){
+    d.stone = true;
+    state.inventory.electricStone = true;
+    await saveProfile();
+    return storyModal(uiIcon('electric_stone',130,'⚡'), 'The Electric Stone',
+      `The youngest sibling has been staring at your party for some time.<br><br>` +
+      `"That's… you have it. You actually have it." She turns out her pack and presses a stone ` +
+      `into your hands, still warm.<br><br>` +
+      `"We came here for the <b>Thunder Newt</b>. We heard one was hurt — that something had been ` +
+      `<b>taken</b> out of it." She swallows. "We brought this to help. It should be yours now, ` +
+      `since you're the one carrying it."<br><br>` +
+      `<b>Electric Stone received.</b>`,
+      ()=>go('challenge'), { bg:'challenge', subtitle:'Electric Dojo' });
+  }
+  await saveProfile();
+  storyModal(npcPortrait('electric_new_master3','⚡',140,'transparent'), 'What they came for',
+    `The eldest sibling stops you before you reach the door.<br><br>` +
+    `"We didn't come here for the hall. Not really." She shows you a stone in her palm — ` +
+    `an <b>Electric Stone</b>, bright as a struck match.<br><br>` +
+    `"There's a <b>Thunder Newt</b> somewhere in this region. Something was cut out of it and ` +
+    `it's been dying slowly ever since. This would mend it."<br><br>` +
+    `"They say it's gone deep — into the <b>volcano</b>, where it's warm. And that it only shows ` +
+    `itself to trainers strong enough to be worth the risk."<br><br>` +
+    `<i>"If you find it before we do — come back. The stone is for the Newt, not for us."</i>`,
+    ()=>go('challenge'), { bg:'challenge', subtitle:'Electric Dojo' });
+}
 
 /* --- Figlio: the runner-up, and rather more than that --- */
 function openFiglio(){

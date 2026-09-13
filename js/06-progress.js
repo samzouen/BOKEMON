@@ -521,6 +521,7 @@ function renderInner(){
     case 'caverns':       return renderCaverns();
     case 'plant':         return renderPlant();
     case 'concert':       return renderConcert();
+    case 'dojo':          return renderDojo();
     case 'avatarPick':    return renderAvatarPick();
     case 'region2':       return renderStub('Region 2','🏞️','Region 2 is unlocked — its wilds and trainers arrive in a future phase. Earth Snake and Ground Starter will be catchable here.','region');
     case 'recover':       return renderRecover();
