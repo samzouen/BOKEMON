@@ -1317,6 +1317,14 @@ function beginPlayerPhase(msg){
   const b = ui.battle;
   if(!b) return;
 
+  // a jammed player may seize up before acting
+  const jam = getPStatus(0,'disrupt');
+  if(jam && Math.random() < (jam.stun || 0.15)){
+    b.phase = 'resolving';
+    renderBattle();
+    battleMsg(`📡 ${displayName(activeMon())} seizes up — your signals are scrambled!`);
+    return setTimeout(advanceTurn, 900);
+  }
   const stun = getPStatus(0,'stunned');
   if(stun){
     removePStatus(0,'stunned');
@@ -1664,6 +1672,7 @@ function loadWave(i){
   if(fs.leechSeed) b.enemies.forEach(e=> addEStatus(e, Object.assign({}, fs.leechSeed)));
   if(fs.iceField)  b.enemies.forEach(e=> addEStatus(e, { type:'iceTomb', turnsLeft:1, taken:fs.iceField.taken }));
   if(fs.curse)     b.enemies.forEach(e=> addEStatus(e, Object.assign({}, fs.curse)));
+  if(fs.disruptField) b.enemies.forEach(e=> addEStatus(e, { type:'disrupt', turnsLeft:fs.disruptField.turnsLeft, stun:fs.disruptField.stun }));
   if(b.onWaveStart) b.onWaveStart(i);
   // stances and block stacks apply the moment a monster takes the field
   b.enemies.forEach(e=> applyEntryPassives(e, e.species, e.level, e.atk));
@@ -2166,6 +2175,8 @@ function renderStatusBadges(){
        rendering explicitly — otherwise a Loong's 70% evasion is invisible and
        the fight just feels like bad luck. */
     const extras = [];
+    if(isElusive(e))     extras.push('<span class="status-pill foe">💨 Elusive</span>');
+    if(e.gooed)          extras.push('<span class="status-pill foe">🌋 Pinned</span>');
     if(e.guard)          extras.push('<span class="status-pill foe">🛡 Guard</span>');
     if(e.airborne > 0)   extras.push('<span class="status-pill foe">🕊 Airborne</span>');
     if(e.invisible > 0)  extras.push('<span class="status-pill foe">👤 Unseen</span>');

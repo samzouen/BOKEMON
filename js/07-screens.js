@@ -44,6 +44,7 @@ function renderProfileSelect(){
     const p = await loadProfileById(card.dataset.pid);
     if(!p){ toast("Couldn't open that trainer."); return; }
     state = p;
+    await runProfileMigrations();     // back-payments apply here too, not just at boot
     await saveProfile();
     go('home');
   }));
@@ -262,9 +263,11 @@ function dailyPanel(){
 
   const square = (i)=>{
     const r = DAILY_CYCLE[i];
-    // a day is complete if the cycle has moved past it, or the cycle wrapped
-    const done = allDone || i < step || (d.done && i === step);
-    const current = !done && i === step;
+    /* `step` ALREADY points at tomorrow once today is claimed, so `i < step`
+       covers every completed day on its own. The extra `i === step` clause was
+       also ticking the day that hasn't been earned yet. */
+    const done = allDone || i < step;
+    const current = !done && i === step && !d.done;
     const icon = r.gold   ? `<span class="dq-icon">🥇</span>`
                : r.silver ? `<span class="dq-icon">🥈</span>`
                : `<span class="dq-icon">${tokenIcon(26)}</span>`;

@@ -234,7 +234,7 @@ const MOVES = {
   magnet:          [['Basic','Spark',0.2,'Single',2,1],
                     ['Power1','Magnet Pulse',0.4,'Multi2',5,1],
                     ['Power2','Magnet Wave',0.5,'AOE',8,18],
-                    ['Ultimate','Disrupt',null,'Single',8,25,{disrupt:{turns:5, playerBlock:0.15}}]],
+                    ['Ultimate','Disrupt',null,'Single',8,25,{disrupt:{turns:5, stun:0.15}}]],
   tiger:           [['Basic','Tackle',0.2,'Single',2,1],
                     ['Power1','Thunderfist',0.5,'Single',4,1],
                     ['Power2','Thunderlariat',0.6,'AOE',8,21],

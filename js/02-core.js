@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '1.24';
+const GAME_VERSION = '1.26';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -845,6 +845,41 @@ async function migrateLegacyProfile(){
   }catch(e){ return null; }
 }
 
+/* One-time corrections applied to a profile. Called whenever a profile is
+   loaded — at boot OR from the picker. Doing this only in boot() meant anyone
+   who chose a profile by hand never got their back-payments. */
+async function runProfileMigrations(){
+  if(!state) return;
+  let changed = false;
+
+  // Skill Tokens now come TWO per Bronze Medal; settle the difference once.
+  if(!state._tokenRateToppedUp){
+    state._tokenRateToppedUp = true;
+    const earned = (state.masteryAwarded && state.masteryAwarded.bronze || 0)
+                 + (state.overmasteryAwarded && state.overmasteryAwarded.bronze || 0);
+    const spent = Math.max(0, earned - (state.medals.bronze||0));
+    if(spent > 0){
+      state.inventory.tokens = (state.inventory.tokens||0) + spent;
+      setTimeout(()=>toast(`🎟️ ${spent} extra Skill Tokens — Bronze now buys two apiece.`), 2600);
+    }
+    changed = true;
+  }
+  // The earlier 3-Bronze-per-token era: two thirds of that spend came back.
+  if(!state._bronzeRefunded){
+    state._bronzeRefunded = true;
+    const earned = (state.masteryAwarded && state.masteryAwarded.bronze || 0)
+                 + (state.overmasteryAwarded && state.overmasteryAwarded.bronze || 0);
+    const spent = Math.max(0, earned - (state.medals.bronze||0));
+    const refund = Math.round(spent * 2/3);
+    if(refund > 0){
+      state.medals.bronze = (state.medals.bronze||0) + refund;
+      setTimeout(()=>toast(`🥉 ${refund} Bronze Medals refunded from the old token price.`), 3600);
+    }
+    changed = true;
+  }
+  if(changed) await saveProfile();
+}
+
 function normalizeProfile(p){
   // backfill fields introduced in later phases so older saves keep working
   if(!p.id) p.id = newProfileId();
@@ -944,10 +979,8 @@ function normalizeProfile(p){
   p._needsEggDedupe = true;
   /* Skill Tokens used to cost 3 Bronze; they now cost 1. Refund two-thirds of
      everything already spent so nobody is punished for buying early. */
-  p._needsBronzeRefund = !p._bronzeRefunded;
-  /* Skill Tokens now come two per Bronze Medal. Everyone who bought at the old
-     one-for-one rate is owed the difference. */
-  p._needsTokenTopUp = !p._tokenRateToppedUp;
+
+
   r2.waterDojo = r2.waterDojo || [];
   p.settings = p.settings || {};
   if(p.settings.volume===undefined) p.settings.volume = 0.8;

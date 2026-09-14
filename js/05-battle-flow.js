@@ -815,14 +815,15 @@ function resolveBattleMove(mv, target, results){
   }
   if(mv.disrupt){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
-    // In the player's hands it can't grant an initiative they already have, so
-    // it jams the enemy's attacks instead.
-    /* Cast by you it is a debuff on THEM: every enemy loses an initiative
-       point, and a share of their attacks fail outright. */
-    livingEnemies().forEach(t=> addEStatus(t, { type:'disrupt', turnsLeft:mv.disrupt.turns+1 }));
-    setPStatus(0, { type:'disruptJam', turnsLeft:mv.disrupt.turns+1, block:mv.disrupt.playerBlock });
+    /* Identical in either pair of hands: a 5-turn field jam on the opposing
+       side. −1 initiative to every enemy, including ones that arrive later,
+       and a 15% chance each turn that one of them simply seizes up. */
+    const pct = mv.disrupt.stun || 0.15;
+    applyFieldStatus({ type:'disruptField', turnsLeft:mv.disrupt.turns, stun:pct });
+    livingEnemies().forEach(t=> addEStatus(t, { type:'disrupt', turnsLeft:mv.disrupt.turns, stun:pct }));
     renderStatusBadges();
-    battleMsg(`${mv.name}! Their signals are jammed — they lose the initiative, and ${Math.round(mv.disrupt.playerBlock*100)}% of their attacks will fail for ${mv.disrupt.turns} turns.`);
+    battleMsg(`${mv.name}! Their signals are jammed for ${mv.disrupt.turns} turns — ` +
+      `they lose the initiative, and ${Math.round(pct*100)}% of the time a monster seizes up entirely.`);
     playEffect(mv.name, { type:'Electric' });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
@@ -1584,10 +1585,10 @@ function runEnemyAttack(i){
     }, 800);
   }
 
-  // player-cast Disrupt jams a share of incoming attacks outright
-  const jam = getPStatus(0,'disruptJam');
-  if(jam && jam.block && Math.random() < jam.block){
-    battleMsg(`📡 ${SPECIES[e.species].name}'s attack is jammed!`);
+  // a jammed enemy may seize up entirely
+  const jammed = getEStatus(e,'disrupt');
+  if(jammed && Math.random() < (jammed.stun || 0.15)){
+    battleMsg(`📡 ${SPECIES[e.species].name} seizes up — its signals are scrambled!`);
     return setTimeout(()=> runEnemyAttack(i+1), 700);
   }
   // enemy-side Charm: a charmed enemy may lose its turn outright
@@ -1768,8 +1769,9 @@ function runEnemyAttack(i){
          it acts is the counter. */
       if(enemyStatusBlocked('disrupt')){ msg += ' The diamond dust holds your signal clear.'; }
       else {
-        setPStatus(0, { type:'disrupt', turnsLeft:6 });
-        msg += ' Your signals are jammed — they will move first!';
+        const dpct = (move[6] && move[6].disrupt && move[6].disrupt.stun) || 0.15;
+        setPStatus(0, { type:'disrupt', turnsLeft:5, stun:dpct });
+        msg += ' Your signals are jammed — they move first, and you may seize up!';
       }
       renderStatusBadges();
     }

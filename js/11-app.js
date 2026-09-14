@@ -856,6 +856,7 @@ function escapeHtml(s){
     state = await loadProfileById(lastId);
   }
 
+  if(state) await runProfileMigrations();
   if(state && state._needsMasteryReconcile){
     delete state._needsMasteryReconcile;
     const g = reconcileMastery();
