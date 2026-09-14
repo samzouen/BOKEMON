@@ -1164,6 +1164,26 @@
   body.has-bg .hp-card .pc-name,
   body.has-bg .hp-card div{ text-shadow:0 1px 2px rgba(255,255,255,0.9); }
   .col-empty{font-size:11px;color:var(--ink-soft);font-weight:600;font-style:italic;text-align:center;padding:14px 4px;}
+  /* crown / stone panels: the art earns its space on the left */
+  .crown-panel.wide{display:flex;align-items:center;gap:14px;}
+  .cp-art{flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    width:62px;align-self:center;}
+  .cp-art img{width:62px;height:62px;object-fit:contain;}
+  .cp-text{flex:1;min-width:0;}
+  .stone-page-btn{width:100%;font-size:12.5px;padding:10px;margin-bottom:9px;
+    display:flex;align-items:center;justify-content:center;gap:8px;}
+  .stone-page-btn span{font-size:11px;color:var(--ink-soft);font-weight:700;}
+  .stone-intro{background:var(--paper-2);border:1px solid var(--line);border-radius:13px;
+    padding:13px;font-size:12.5px;line-height:1.6;margin-bottom:14px;}
+  .es-row{display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;
+    background:rgba(59,126,161,.12);border:1px solid rgba(59,126,161,.4);margin-bottom:9px;}
+  .es-icon{flex:0 0 auto;display:flex;}
+  .es-icon img{width:54px;height:54px;object-fit:contain;}
+  .es-body{flex:1;min-width:0;}
+  .es-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:15px;}
+  .es-sub{font-size:11.5px;color:var(--ink-soft);font-weight:600;line-height:1.4;margin-top:2px;}
+  .es-actions{flex:0 0 auto;}
+  .btn.es-btn{width:auto;padding:9px 14px;font-size:12px;margin:0;}
   .stone-shelf{display:flex;flex-direction:column;gap:7px;margin-bottom:10px;}
   .shelf-row{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:12px;
     background:rgba(59,126,161,.13);border:1px solid rgba(59,126,161,.45);}
