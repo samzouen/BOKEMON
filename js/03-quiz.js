@@ -332,8 +332,13 @@ function renderQuiz(){
 
   renderMistakeDots();
   initQuizChar(0);
-  if(!q.config.relaxed) startTimer();
-  setTimeout(()=> speakWord(word), 400);
+  /* The stroke data is fetched asynchronously. Starting the clock here meant a
+     slow character could time out before it ever appeared — failing a word the
+     child was never shown. Wait until the strokes are actually on screen. */
+  whenWriterReady(()=>{
+    if(!q.config.relaxed) startTimer();
+    setTimeout(()=> speakWord(word), 200);
+  });
 }
 
 /* Re-fit the writing box when the device rotates or the window resizes. */
@@ -389,6 +394,36 @@ function startTimer(){
   }, 100);
 }
 function resetTimer(){ if(ui.quiz) ui.quiz.timeLeft = TIMER_SECONDS; updateTimerBar(); }
+
+/* The clock covers the whole PHRASE, so a slow second or third character would
+   eat time the child never had. Hold it while strokes load and resume with the
+   time that was left — no reset, no free seconds either. */
+function holdTimerForLoad(){
+  const q = ui.quiz;
+  if(!q || q.config.relaxed) return;
+  stopTimer();
+  whenWriterReady((ok)=>{
+    if(!ok || !ui.quiz || ui.quiz.resolved) return;
+    resumeTimer();
+  });
+}
+function resumeTimer(){
+  const q = ui.quiz;
+  if(!q || q.config.relaxed) return;
+  stopTimer();
+  const myToken = q.token;
+  quizTimer = setInterval(()=>{
+    if(!ui.quiz || ui.quiz.token !== myToken || ui.quiz.resolved){
+      clearInterval(quizTimer); quizTimer = null; return;
+    }
+    ui.quiz.timeLeft -= 0.1;
+    if(ui.quiz.timeLeft <= 0){
+      ui.quiz.timeLeft = 0;
+      updateTimerBar();
+      resolveWord(false, true);
+    } else updateTimerBar();
+  }, 100);
+}
 function stopTimer(){ if(quizTimer){ clearInterval(quizTimer); quizTimer = null; } }
 function updateTimerBar(){
   const q = ui.quiz;
@@ -436,6 +471,69 @@ function initQuizChar(i){
   }));
 }
 
+/* Resolve once the current character is actually drawn, or give up quietly so
+   a failed load can't leave the quiz frozen with no clock and no way on. */
+function whenWriterReady(cb, waited){
+  waited = waited || 0;
+  const box = document.getElementById('qbox-' + ((ui.quiz && ui.quiz.charIndex) || 0));
+  if(!ui.quiz || ui.quiz.resolved) return;
+  if(box && box.querySelector('svg path')) return cb(true);
+  /* Five seconds of grace. After that we stop waiting and let the retry notice
+     take over, rather than leaving the quiz in limbo. */
+  if(waited >= 5000) return cb(false);
+  setTimeout(()=> whenWriterReady(cb, waited + 120), 120);
+}
+
+/* ---- stroke-data loading: cached, retried, and never silently stuck ---- */
+const CHAR_CACHE_PREFIX = 'hzchar:';
+const charMemCache = {};
+
+function loadCharData(ch, onComplete, onError){
+  if(charMemCache[ch]) return onComplete(charMemCache[ch]);
+  try{
+    const cached = localStorage.getItem(CHAR_CACHE_PREFIX + ch);
+    if(cached){
+      const data = JSON.parse(cached);
+      charMemCache[ch] = data;
+      return onComplete(data);
+    }
+  }catch(e){}
+
+  const url = 'https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0/' + encodeURIComponent(ch) + '.json';
+  let settled = false;
+  const finish = (data)=>{
+    if(settled) return; settled = true;
+    charMemCache[ch] = data;
+    try{ localStorage.setItem(CHAR_CACHE_PREFIX + ch, JSON.stringify(data)); }catch(e){}
+    onComplete(data);
+  };
+  const fail = (why)=>{
+    if(settled) return; settled = true;
+    console.warn('stroke data failed for', ch, why);
+    if(onError) onError(new Error(why));
+  };
+
+  const attempt = (tries)=>{
+    if(settled) return;
+    const ctl = ('AbortController' in window) ? new AbortController() : null;
+    // don't let a hung request sit there forever
+    const timer = setTimeout(()=>{
+      if(ctl) try{ ctl.abort(); }catch(e){}
+      if(tries > 0) attempt(tries - 1); else fail('timed out');
+    }, 5000);
+    fetch(url, ctl ? { signal: ctl.signal } : undefined)
+      .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(d=>{ clearTimeout(timer); finish(d); })
+      .catch(err=>{
+        clearTimeout(timer);
+        if(settled) return;
+        if(tries > 0) setTimeout(()=>attempt(tries - 1), 400);
+        else fail(err && err.message);
+      });
+  };
+  attempt(2);          // one try plus two retries
+}
+
 function buildWriter(i, box){
   const q = ui.quiz;
   const size = writeBoxSize();
@@ -461,8 +559,36 @@ function buildWriter(i, box){
     showCharacter:false, showOutline:false, showHintAfterMisses:false,
     strokeColor:'#232019', drawingColor:'#232019', drawingWidth:Math.max(24, Math.round(size*0.075)),
     highlightColor:'#c8453a',
+    /* Stroke data comes off a CDN. A character the browser has never seen needs
+       a live fetch, and with no handling a slow or failed request left the pad
+       blank and unresponsive — which is why it stalled on NEW words and why
+       backgrounding the app (forcing a re-render, and a retry) unstuck it.
+       Cached locally after the first success, so each character is fetched once
+       ever and later practice works offline. */
+    charDataLoader: (ch, onComplete, onError) => loadCharData(ch, onComplete, onError),
   });
   q.writers[i] = writer;
+  // show that something is happening while the strokes are fetched
+  if(!box.querySelector('svg path')){
+    const wait = document.createElement('div');
+    wait.className = 'write-loading';
+    wait.textContent = '…';
+    box.appendChild(wait);
+    whenWriterReady(()=>{ if(wait.parentNode) wait.remove(); });
+  }
+  /* Last resort: if the strokes never arrive, tell the player rather than
+     leaving a blank square they can draw on but never complete. */
+  clearTimeout(q._loadGuard);
+  q._loadGuard = setTimeout(()=>{
+    if(!box || !box.querySelector('svg path')){
+      const note = document.createElement('div');
+      note.className = 'write-stall';
+      note.innerHTML = `Couldn't load this character.<br><button class="btn btn-ghost" id="wrRetry">Try again</button>`;
+      box.appendChild(note);
+      const r = note.querySelector('#wrRetry');
+      if(r) r.addEventListener('click', ()=>{ note.remove(); renderQuiz(); });
+    }
+  }, 5200);            // just after the grace period ends
   writer.quiz({
     leniency: leniency,
     showHintAfterMisses: hintAfter,
@@ -496,6 +622,7 @@ function buildWriter(i, box){
         setTimeout(()=>{
           if(box) box.classList.remove('char-done');
           initQuizChar(i+1);
+          holdTimerForLoad();       // pause while the next character's strokes arrive
         }, 280);
       } else {
         if(box) box.classList.add('char-done');

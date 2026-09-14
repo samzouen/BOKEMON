@@ -13,8 +13,8 @@ function levelCap(){
   /* The Band Competition is a Challenge rather than a zone, so it carries its
      own ceiling; beating the band lifts the whole region. */
   const r3 = (state.progress && state.progress.region3) || {};
-  if(ui.screen === 'concert' || (ui.battle && ui.battle.concertFight)) return 66;
-  // Once the Power Stone is in hand, Region 3 opens all the way up.
+  /* Region 3 has ONE rule: the Power Stone opens it to 71, everywhere.
+     The old 66-in-the-concert override kept snapping it back down. */
   if((state.progress||{}).currentRegion === 3 && r3.powerStone) return 71;
   const z = ui.currentZone && ui.currentZone.id;
   if(z && ZONE_LEVELS[z]) return ZONE_LEVELS[z].max;
@@ -57,7 +57,7 @@ function awardXpToParty(fightsWorth){
     // monster raised elsewhere doesn't lose a part-finished level on arrival.
     if(m.level >= levelCap()) return;
     // a dragon carrying the Dragon Stone learns half again as fast
-    const stoneBoost = (state.inventory.dragonStoneOn === m.uid) ? 1.5 : 1;
+    const stoneBoost = stoneXpBonus(m);      // whichever elemental stone it carries
     m.xpFights = (m.xpFights||0) + credit * stoneBoost;
     const from = m.level;
     const evos = [], newMoves = [];
@@ -85,11 +85,12 @@ function awardXpToParty(fightsWorth){
     if((isEgg(m) || SPECIES[m.species].isBaby) && m.level >= (SPECIES[m.species].hatchesAt||31)){
       const into = SPECIES[m.species].hatchesInto;
       const hatchedName = displayName(m);
+      const wasSpecies = m.species;      // read it BEFORE the reassignment below
       m.species = into;
       m.currentHp = computeMaxHp(into, m.level, m.supplements||0, m);
       if(!state.caughtSpecies.includes(into)) state.caughtSpecies.push(into);
       if(!state.encounteredSpecies.includes(into)) state.encounteredSpecies.push(into);
-      events.push({ uid:m.uid, species:into, fromSpecies:m.species, name:hatchedName, from, to:m.level, evos:[m.level], newMoves:[], hatched:true });
+      events.push({ uid:m.uid, species:into, fromSpecies:wasSpecies, name:hatchedName, from, to:m.level, evos:[m.level], newMoves:[], hatched:true });
       return;
     }
     if(m.level !== from) events.push({ uid:m.uid, species:m.species, name:displayName(m), from, to:m.level, evos, newMoves });

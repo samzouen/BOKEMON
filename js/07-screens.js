@@ -558,18 +558,18 @@ function openRefineSheet(st, mon){
 }
 
 /* The Dragon Stone lives in the inventory and can be moved between dragons. */
+/* Shows whichever elemental stone this monster's type can carry. */
 function dragonStoneBlock(m){
-  if(!state.inventory.dragonStone) return '';
-  const isDragon = (SPECIES[m.species].types||[]).includes('Dragon');
-  if(!isDragon) return '';
-  const holder = state.inventory.dragonStoneOn;
+  const st = stoneFor(m);
+  if(!st || !state.inventory[st.id]) return '';
+  const holder = stoneHolder(st.id);
   const mine = holder === m.uid;
   return `<div class="crown-panel" style="border-color:rgba(59,126,161,.55);background:rgba(59,126,161,.14);">
-    <div class="crown-title">${uiIcon('dragon_stone',18,'🐉')} Dragon Stone</div>
+    <div class="crown-title">${uiIcon(st.icon,18,st.emoji)} ${escapeHtml(st.name)}</div>
     <div class="crown-sub">${mine
-      ? 'Attached — this dragon gains <b>1.5×</b> experience.'
-      : (holder ? 'Currently attached to another dragon.' : 'Attach it to gain <b>1.5×</b> experience.')}</div>
-    <button class="btn ${mine?'btn-ghost':'btn-primary'}" id="dragonStoneBtn" style="margin-top:9px;">
+      ? `Attached — this monster gains <b>${st.xp}×</b> experience.`
+      : (holder ? 'Currently attached to another monster.' : `Attach it to gain <b>${st.xp}×</b> experience.`)}</div>
+    <button class="btn ${mine?'btn-ghost':'btn-primary'}" id="dragonStoneBtn" data-stone="${st.id}" style="margin-top:9px;">
       ${mine ? 'Detach' : 'Attach'}</button>
   </div>`;
 }
@@ -823,9 +823,12 @@ function renderStats(){
   }
   const ds = $('#dragonStoneBtn');
   if(ds) ds.addEventListener('click', async ()=>{
-    state.inventory.dragonStoneOn = (state.inventory.dragonStoneOn === m.uid) ? null : m.uid;
+    const id = ds.dataset.stone;
+    const key = stoneOnKey(id);
+    const def = ELEMENTAL_STONES.find(x=>x.id===id);
+    state.inventory[key] = (state.inventory[key] === m.uid) ? null : m.uid;
     await saveProfile();
-    toast(state.inventory.dragonStoneOn ? 'Dragon Stone attached.' : 'Dragon Stone detached.');
+    toast(state.inventory[key] ? `${def.name} attached.` : `${def.name} detached.`);
     renderStats();
   });
   const cb = $('#useCrown');
@@ -878,7 +881,8 @@ function renderStorage(){
         <div id="storageList"></div>
       </div>
       <div class="storage-col col-stones">
-        ${recycleAllBar()}
+        ${elementalStoneShelf()}
+      ${recycleAllBar()}
       <div class="col-head">💎 Skills <span>${tokenIcon(16)} ${state.inventory.tokens||0}</span></div>
         <div id="stoneList"></div>
       </div>
@@ -911,9 +915,41 @@ function renderStorage(){
   }
   renderStoneList();
   wireRecycleAll();
+  wireStoneShelf();
 }
 
 /* Low and Mid stones pile up fast, so they can be cleared in one go. */
+/* A shelf of the elemental stones you hold, showing who carries each and
+   letting you take it back without hunting through the party. */
+function elementalStoneShelf(){
+  const held = heldStones();
+  if(!held.length) return '';
+  return `<div class="stone-shelf">
+    ${held.map(st=>{
+      const holderUid = stoneHolder(st.id);
+      const mon = holderUid && state.party.concat(state.storage).find(m=>m.uid===holderUid);
+      return `<div class="shelf-row">
+        <span class="shelf-icon">${uiIcon(st.icon, 26, st.emoji)}</span>
+        <span class="shelf-text">
+          <b>${escapeHtml(st.name)}</b>
+          <span>${mon ? 'on ' + escapeHtml(displayName(mon)) : 'not attached'} · ${st.blurb}</span>
+        </span>
+        ${mon ? `<button class="btn btn-ghost shelf-btn" data-unstone="${st.id}">Detach</button>` : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+function wireStoneShelf(){
+  screenEl.querySelectorAll('[data-unstone]').forEach(b=>b.addEventListener('click', async ()=>{
+    const id = b.dataset.unstone;
+    state.inventory[stoneOnKey(id)] = null;
+    await saveProfile();
+    const def = ELEMENTAL_STONES.find(x=>x.id===id);
+    toast(`${def.name} detached.`);
+    renderStorage();
+  }));
+}
+
 function recycleAllBar(){
   const counts = { low:0, mid:0 };
   state.moveStones.forEach(st=>{ if(counts[st.tier]!==undefined) counts[st.tier]++; });

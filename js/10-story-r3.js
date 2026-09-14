@@ -789,8 +789,10 @@ function renderDojo(){
       </div>
     </div>
 
-    ${both ? `<button class="btn btn-primary" id="giveVerdict" style="margin-top:14px;">Give your verdict</button>`
-           : `<div class="phase-flag">Test both teams before you decide. You may rest in between.</div>`}
+    ${d.verdict
+      ? `<div class="phase-flag">You gave the hall to <b>${d.verdict==='electric'?'the siblings':'the Sage disciples'}</b>. It is settled.</div>`
+      : (both ? `<button class="btn btn-primary" id="giveVerdict" style="margin-top:14px;">Give your verdict</button>`
+              : `<div class="phase-flag">Test both teams before you decide. You may rest in between.</div>`)}
     <button class="btn btn-ghost" id="returnBtn" style="margin-top:10px;">Return</button>
   `;
   $('#backBtn').addEventListener('click', ()=>go('challenge'));
@@ -798,7 +800,7 @@ function renderDojo(){
   $('#teamE').addEventListener('click', ()=>{ if(!d.electricDone) startTeamRun('electric', 0); else toast('You have already tested them.'); });
   $('#teamS').addEventListener('click', ()=>{ if(!d.sageDone) startTeamRun('sage', 0); else toast('You have already tested them.'); });
   const gv = $('#giveVerdict');
-  if(gv) gv.addEventListener('click', ()=> dojoVerdict());
+  if(gv && !d.verdict) gv.addEventListener('click', ()=> dojoVerdict());
 }
 
 async function dojoIntro(){
@@ -846,10 +848,12 @@ function startTeamRun(which, i){
 }
 async function onTeamStageWin(which, i){
   const roster = teamRoster(which);
+  state.inventory.protein = (state.inventory.protein||0) + 3;   // every one of them pays
+  await saveProfile();
   if(i < roster.length-1){
     const nxt = roster[i+1];
     return storyModal(npcPortrait(nxt.id, which==='electric'?'⚡':'🥋', 120,'transparent'), 'Next!',
-      `No rest — the next one is already stepping onto the mat.`,
+      `<b>+3 Protein Supplements</b><br><br>No rest — the next one is already stepping onto the mat.`,
       ()=> startTeamRun(which, i+1), { bg:'challenge', subtitle:'Electric Dojo' });
   }
   const d = dojoState();
@@ -858,9 +862,10 @@ async function onTeamStageWin(which, i){
   storyModal(npcPortrait(roster[i].id, which==='electric'?'⚡':'🥋', 120,'transparent'), 'All three',
     which==='electric'
       ? `The siblings sit down where they stand, grinning at the ceiling.<br><br>` +
-        `"That's us done. Whatever you decide — that was a good fight."`
+        `"That's us done. Whatever you decide — that was a good fight."<br><br><b>+3 Protein Supplements</b>`
       : `The disciples bow, deeply and without complaint.<br><br>` +
-        `"Thank you. That was instructive."`,
+        `"Thank you. That was instructive."<br><br><b>+3 Protein Supplements</b>`,
+    
     ()=>go('dojo'), { bg:'challenge', subtitle:'Electric Dojo' });
 }
 
@@ -889,6 +894,7 @@ function dojoVerdict(){
 async function settleVerdict(pick){
   document.body.classList.remove('in-scene');
   const d = dojoState();
+  if(d.verdict) return go('dojo');      // already settled; no second stone
   d.verdict = pick;
   await saveProfile();
   storyModal(npcPortrait(pick==='electric'?'electric_new_master3':'physical_disciple3',
@@ -939,6 +945,7 @@ function monkeyToPlayer(){
 /* --- the siblings settle up --- */
 async function dojoReward(){
   const d = dojoState();
+  if(d.stone) return go('challenge');   // the stone is given once, ever
   if(hasNewt()){
     d.stone = true;
     state.inventory.electricStone = true;
@@ -1005,7 +1012,9 @@ function figlioBonus(){ return concertState().figlioWins || 0; }
 
 function startFiglioFight(){
   if(!ensurePool()) return;
-  const up = figlioBonus();          // +1 level per victory, forever
+  /* +1 level per victory, but the staircase flattens at 91 so it stays a
+     hard fight rather than an impossible one. */
+  const up = Math.min(figlioBonus(), 20);
   beginBattle({ isNpc:true, name:'Figlio', npcId:'figlio', concertFight:true,
     bgKey:'battle_band_concert', figlio:true,
     waves:[

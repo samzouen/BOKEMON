@@ -129,13 +129,27 @@ function tickStatuses(){
     });
     if(total) battleMsg(`🔥 ${dot.label} burns for ${total}!`);
   }
+  /* Diamond Dust holds your own effects open. This lives INSIDE the tick so
+     every path honours it — clearing a wave ticks statuses without going
+     through the end-of-round handler, and those rounds were quietly ageing
+     buffs the dust was supposed to be sustaining. */
+  const dust = getPStatus(0,'diamondDust');
   const ps = partyStatuses();
   Object.keys(ps).forEach(k=>{
+    if(dust && k !== 'diamondDust' && !isEnemyOwned(k)){
+      ps[k].turnsLeft = STATUS_TURNS + 1;     // refreshed, never ages
+      return;
+    }
     ps[k].turnsLeft--;
     if(ps[k].turnsLeft <= 0){ delete ps[k]; expired.push(STATUS_LABELS[k]||k); }
   });
   if(b.fieldStatus){
     Object.keys(b.fieldStatus).forEach(k=>{
+      if(dust && !isEnemyOwned(k)){
+        b.fieldStatus[k].turnsLeft = STATUS_TURNS;
+        b.enemies.forEach(e=>{ const st = getEStatus(e,k); if(st) st.turnsLeft = STATUS_TURNS; });
+        return;
+      }
       b.fieldStatus[k].turnsLeft--;
       if(b.fieldStatus[k].turnsLeft <= 0){
         delete b.fieldStatus[k];
@@ -683,10 +697,18 @@ const STATUS_OWNER = {
   stunned:'enemy', paralysed:'enemy', softened:'enemy', charmed:'enemy',
   disrupt:'enemy', iceTombSelf:'enemy',
   // enemy self-buffs held as statuses
-  dragonDance:'enemy', steelAegisFoe:'enemy',
+  /* Dragon Dance and Steel Aegis are PLAYER buffs — listing them here made the
+     dust's own chokepoint refuse to let you cast them. An enemy version would
+     live on the enemy's side and be caught by the stance sweep instead. */
 };
-/* Enemy self-buffs kept as plain fields rather than statuses. */
-const ENEMY_STANCE_FIELDS = ['guard','airborne','invisible','prep','counterTurns','evadeTurns','blockStacks','thresholdsHit'];
+/* Enemy advantages held as plain fields rather than statuses.
+   THE LINE: a thing with a duration or a consumable count is a temporary
+   advantage and the dust sweeps it away. A thing with neither is what the
+   creature IS — Lightning Cat, Hunter's Instinct — and stays.
+   `thresholdsHit` is deliberately NOT here: it records which thresholds a
+   Thunderhound has already spent, so clearing it would let the dust hand the
+   enemy its stuns back. */
+const ENEMY_STANCE_FIELDS = ['guard','airborne','invisible','prep','counterTurns','evadeTurns','blockStacks'];
 
 function isEnemyOwned(type){ return STATUS_OWNER[type] === 'enemy'; }
 
@@ -714,11 +736,7 @@ function diamondDustCleanse(){
     if(e.guard){ e.guard = false; }
   });
 
-  /* 3. Keep your own effects going. */
-  Object.keys(ps).forEach(k=>{
-    if(k === 'diamondDust') return;
-    ps[k].turnsLeft = Math.max(ps[k].turnsLeft, STATUS_TURNS + 1);
-  });
+  /* Refreshing happens in tickStatuses() so that every path gets it. */
   return cleared;
 }
 
@@ -797,6 +815,29 @@ function stancePills(m){
   if(m && m.invisible>0)  out.push('<span class="status-pill mine">👤 Invisible</span>');
   if(m && m.prep>0)       out.push(`<span class="status-pill mine">🎯 Prep ×${m.prep}</span>`);
   return out.join('');
+}
+
+/* ============================================================
+   ELEMENTAL STONES
+   Held in the inventory, attached to one monster at a time, and freely moved.
+   Adding a new element means one row here and nothing else.
+   ============================================================ */
+const ELEMENTAL_STONES = [
+  { id:'dragonStone',   name:'Dragon Stone',   icon:'dragon_stone',   emoji:'🐉',
+    type:'Dragon',   xp:1.5, blurb:'A dragon carrying it learns half again as fast.' },
+  { id:'electricStone', name:'Electric Stone', icon:'electric_stone', emoji:'⚡',
+    type:'Electric', xp:1.5, blurb:'An electric monster carrying it learns half again as fast.' },
+];
+function heldStones(){ return ELEMENTAL_STONES.filter(s=>state.inventory[s.id]); }
+function stoneOnKey(id){ return id + 'On'; }
+function stoneHolder(id){ return state.inventory[stoneOnKey(id)] || null; }
+/* The multiplier for one monster, from whichever stone it carries. */
+function stoneXpBonus(m){
+  const s = ELEMENTAL_STONES.find(st=>stoneHolder(st.id) === m.uid);
+  return s ? s.xp : 1;
+}
+function stoneFor(m){
+  return ELEMENTAL_STONES.find(st=>(SPECIES[m.species].types||[]).includes(st.type));
 }
 
 /* ============================================================
@@ -1064,6 +1105,7 @@ function beginRound(msg){
   const b = ui.battle;
   if(!b) return;
   b.acted = b.acted || [];          // enemies that have already acted this round
+  b._roundClosed = false;           // a fresh round may be closed again
 
   b.phase = 'resolving';
   renderBattle();
@@ -1407,6 +1449,7 @@ function beginBattle(config){
        Region 1 keeps its gentler rules so the early game stays forgiving. */
     noFlee: !!config.noFlee || (!!config.isNpc && (state.progress.currentRegion||1) >= 2),
     concertFight: !!config.concertFight,
+    figlio: !!config.figlio,          // he leads every round
     scriptedLoss: config.scriptedLoss||null,
     scriptedAlly: config.scriptedAlly||null, allyMove: config.allyMove||null,
     allyUnkillable: !!config.allyUnkillable, enemiesFirst: !!config.enemiesFirst,

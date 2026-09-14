@@ -1727,6 +1727,10 @@ function runEnemyAttack(i){
 
 function endEnemyRound(){
   const b0 = ui.battle;
+  /* Guard against a second entry in the same round. A Swift Strike round calls
+     this once for the initiative volley and again for the (empty) enemy phase,
+     and each call was ageing every status — buffs drained twice as fast. */
+  if(b0 && b0._roundClosed) return;
   /* The initiative strike is not the end of the round — the player still acts. */
   if(b0 && b0.initiativeRun){
     b0.initiativeRun = false;
@@ -1793,6 +1797,7 @@ function endEnemyRoundReal(){
   }
   tickAftershock();
   // ---- round is over: clear who acted so everyone gets a turn next round ----
+  b._roundClosed = true;                 // released by beginRound
   b.acted = [];
   b._initiativeDone = false;
   b._routWent = false;

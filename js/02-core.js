@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '1.08';
+const GAME_VERSION = '1.14';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -856,6 +856,7 @@ function normalizeProfile(p){
   p.inventory = p.inventory || {};
   if(p.inventory.dragonStone===undefined)   p.inventory.dragonStone = false;
   if(p.inventory.electricStone===undefined) p.inventory.electricStone = false;
+  if(p.inventory.electricStoneOn===undefined) p.inventory.electricStoneOn = null;
   if(p.inventory.dragonStoneOn===undefined) p.inventory.dragonStoneOn = null;
   if(p.inventory.protein===undefined) p.inventory.protein = 0;
   if(p.inventory.strangeKey===undefined) p.inventory.strangeKey = false;
