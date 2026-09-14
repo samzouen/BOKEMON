@@ -171,7 +171,7 @@ function onBattleWon(){
     ui.cavernAdvanceOnWin = null;
     advancePath(pid);
   }
-  const enemyNames = b.enemies.map(e=>SPECIES[e.species].name).join(' & ');
+  const enemyNames = b.enemies.filter(e=>!e.fled).map(e=>SPECIES[e.species].name).join(' & ');
   const levelUps = awardXpToParty();
   const tokens = rollTokenDrop();
   saveProfile();
@@ -322,6 +322,7 @@ function exploreFurther(){
     return go((ui.currentZone||{}).id==='rocky_caverns' && !cavernsComplete() ? 'caverns' : 'zone');
   }
   if(ui.cavernPath && !cavernsComplete()) return exploreCavernPath(ui.cavernPath);
+  if((ui.currentZone||{}).id==='plant_generator')  return go('generator');
   if((ui.currentZone||{}).id==='geothermal_plant') return go('plant');
   return startWildEncounter({ silentIntro:true });
 }
@@ -339,7 +340,9 @@ function showVictory(enemyNames, levelUps, tokens){
   const b = ui.battle;
   $('#brandSub').textContent = 'Victory';
   // determine catchable target(s): wild only, species not already caught
-  const catchable = b.enemies.filter(e=>e.hp<=0 && SPECIES[e.species].tier!=='npc' && !state.caughtSpecies.includes(e.species));
+  /* `e.fled` also sits at 0 HP, but it left with the loot rather than being
+     beaten — only what you actually took down can be caught. */
+  const catchable = b.enemies.filter(e=>e.hp<=0 && !e.fled && SPECIES[e.species].tier!=='npc' && !state.caughtSpecies.includes(e.species));
   screenEl.innerHTML = `
     <div style="text-align:center;padding:14px 0;">
       <div style="font-size:42px;">🎉</div>
@@ -522,6 +525,7 @@ function renderInner(){
     case 'caverns':       return renderCaverns();
     case 'plant':         return renderPlant();
     case 'concert':       return renderConcert();
+    case 'generator':     return renderGenerator();
     case 'dojo':          return renderDojo();
     case 'avatarPick':    return renderAvatarPick();
     case 'region2':       return renderStub('Region 2','🏞️','Region 2 is unlocked — its wilds and trainers arrive in a future phase. Earth Snake and Ground Starter will be catchable here.','region');

@@ -50,6 +50,7 @@ function renderZone(){
   // into a normal explorable zone.
   if(z.id === 'rocky_caverns' && !cavernsComplete()) return renderCaverns();
   if(z.id === 'geothermal_plant') return renderPlant();
+  if(z.id === 'plant_generator') return renderGenerator();
   if(z.id === 'vane_shear') return vaneShearClosed();
   return renderZonePlain();
 }
@@ -143,6 +144,7 @@ function renderExplore(){
           const locked =
             (z.locksUntil==='r2ChallengeDone' && !(state.progress.region2||{}).challengeDone) ||
             (z.locksUntil==='r3MonkeyMet' && !r3.monkeyMet) ||
+            (z.locksUntil==='r3PowerStone' && !r3.powerStone) ||
             (z.locksUntil==='never');
           return `
           <div class="zone-item">

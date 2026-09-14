@@ -258,6 +258,19 @@ function renderHome(){
   $('#brandSub').textContent = state.name;
   screenEl.innerHTML = `
     <div class="version-tag">v${GAME_VERSION}</div>
+    ${(()=>{ const d = dailyState(); const r = dailyReward();
+      const pct = Math.min(100, d.count/DAILY_TARGET*100);
+      const label = d.done
+        ? 'Today is done — come back tomorrow'
+        : `${d.count} / ${DAILY_TARGET} phrases today`;
+      const prize = [r.tokens?`${r.tokens}🎟`:'', r.silver?`${r.silver}🥈`:'', r.gold?`${r.gold}🥇`:'']
+        .filter(Boolean).join('  ');
+      return `<div class="daily-card ${d.done?'done':''}">
+        <div class="daily-head">🗓️ Day ${(d.step % DAILY_CYCLE.length) + 1} of ${DAILY_CYCLE.length}
+          <span>${escapeHtml(prize)}</span></div>
+        <div class="trial-bar"><span style="width:${pct}%"></span></div>
+        <div class="daily-sub">${label}</div>
+      </div>`; })()}
     ${playerAvatar() ? `<div class="home-hero">${avatarImg(playerAvatar(), 58)}<div>
         <div class="home-hero-name">${escapeHtml(state.name)}</div>
         <div class="home-hero-sub">Where to today?</div></div></div>`

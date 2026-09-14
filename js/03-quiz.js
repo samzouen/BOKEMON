@@ -5,6 +5,61 @@
    one global scope, exactly as when this was a single file.
    ========================================================== */
 /* ============================================================
+   THE DAILY CYCLE
+   Twenty-five phrases in a day completes that day's step. The cycle runs six
+   deep and NEVER resets for a missed day — it simply waits. Coming back after
+   a fortnight resumes exactly where they left off, so a holiday costs nothing.
+   ============================================================ */
+const DAILY_TARGET = 25;
+const DAILY_CYCLE = [
+  { tokens:25 },
+  { tokens:25 },
+  { tokens:25, silver:5 },
+  { tokens:25, silver:10 },
+  { tokens:25, gold:5 },
+  { tokens:25, gold:10 },
+];
+function dailyState(){
+  state.daily = state.daily || { day:null, count:0, step:0, done:false };
+  if(state.daily.day !== today()){
+    state.daily.day = today();
+    state.daily.count = 0;
+    state.daily.done = false;      // `step` deliberately survives — no reset
+  }
+  return state.daily;
+}
+function dailyReward(){ return DAILY_CYCLE[(dailyState().step) % DAILY_CYCLE.length]; }
+function announceDaily(r){
+  const bits = [];
+  if(r.tokens) bits.push(`${tokenIcon(20)} ${r.tokens} Skill Tokens`);
+  if(r.silver) bits.push(`🥈 ${r.silver} Silver Medals`);
+  if(r.gold)   bits.push(`🥇 ${r.gold} Gold Medals`);
+  const d = dailyState();
+  const nextStep = (d.step % DAILY_CYCLE.length) + 1;
+  storyModal('🗓️', `Day ${((d.step + DAILY_CYCLE.length - 1) % DAILY_CYCLE.length) + 1} complete!`,
+    `<b>${DAILY_TARGET} phrases written today.</b><br><br>` +
+    bits.join('<br>') +
+    `<br><br><i>Tomorrow is day ${nextStep} of the cycle. Miss a day and nothing is lost — ` +
+    `it simply waits for you.</i>`,
+    ()=>go(ui.screen === 'quiz' ? 'home' : ui.screen), { subtitle:'Daily' });
+}
+
+/* Called once per scored phrase. Returns the reward if this was the 25th. */
+function noteDailyPhrase(){
+  const d = dailyState();
+  if(d.done) return null;
+  d.count++;
+  if(d.count < DAILY_TARGET) return null;
+  const r = dailyReward();
+  d.done = true;
+  d.step = (d.step + 1) % DAILY_CYCLE.length;
+  state.inventory.tokens = (state.inventory.tokens||0) + (r.tokens||0);
+  if(r.silver) state.medals.silver = (state.medals.silver||0) + r.silver;
+  if(r.gold)   state.medals.gold   = (state.medals.gold||0)   + r.gold;
+  return r;
+}
+
+/* ============================================================
    OVERMASTERY
    Reps beyond a word's gold threshold (25) still represent real effort, so
    they pool together across ALL phrases and pay out on the same 5 / 15 / 25
@@ -647,6 +702,8 @@ function resolveWord(passed, timedOut){
     noteAttempt(word);                 // drives the tapering hint curve
     if(passed){
       q.masteryReward = recordMastery(word) || q.masteryReward;
+      const daily = noteDailyPhrase();
+      if(daily) q.dailyReward = daily;
     }
     saveProfile();
   }
@@ -694,6 +751,7 @@ function masteryChip(word){
 function advanceQuiz(){
   const q = ui.quiz;
   if(q.masteryReward){ announceMastery(q.masteryReward); q.masteryReward = null; }
+  if(q.dailyReward){ const r = q.dailyReward; q.dailyReward = null; setTimeout(()=>announceDaily(r), 1200); }
   const last = q.results[q.results.length-1];
   if(q.config.stopAtFirstMiss && last && !last.passed){
     stopTimer(); if(q.config.onComplete) q.config.onComplete(q.results); return;

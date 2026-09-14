@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '1.14';
+const GAME_VERSION = '1.17';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -864,6 +864,7 @@ function normalizeProfile(p){
   if(p.inventory.eliteTokens===undefined) p.inventory.eliteTokens = 0;
   p.wordMastery = p.wordMastery || {};
   p.wordAttempts = p.wordAttempts || {};
+  p.daily = p.daily || { day:null, count:0, step:0, done:false };
   p.isDev = !!p.isDev;
   // passengers always sit at exactly 1 HP; a stray 0 makes them look fainted
   (p.party||[]).forEach(m=>{ const sp=SPECIES[m.species]; if(sp && (sp.isSeed||sp.isEgg)) m.currentHp = 1; });

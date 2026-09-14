@@ -146,6 +146,161 @@ async function ankyloRefuse(mon){
     ()=>go('region'), { subtitle:'Geothermal Plant' });
 }
 
+/* ============================================================
+   GEOTHERMAL PLANT — THE GENERATOR FLOOR
+   The pipes below are quiet; now something is siphoning the turbines up top.
+   Red pulses bloom across the plant and fade in under a second. Catch one and
+   a fight starts — but these thieves are here for the power, not for you.
+   ============================================================ */
+const GEN_MIN_LV = 55, GEN_MAX_LV = 65;
+const GEN_TARGET = 5;                       // suppressed fights for the daily reward
+const GEN_PULSE_MIN = 800, GEN_PULSE_MAX = 1000;
+
+/* Base forms only — the cute ones. Weighted so elites stay rare. */
+const GEN_COMMON = ['thunderdog','zebra','thunderlion','thundersquirrel','magnet','tiger'];
+const GEN_ELITE  = ['giraffe','thunderhound','thundercat'];
+
+function genState(){
+  const r3 = state.progress.region3;
+  r3.generator = r3.generator || { day:null, wins:0, claimed:false };
+  if(r3.generator.day !== today()){ r3.generator.day = today(); r3.generator.wins = 0; r3.generator.claimed = false; }
+  return r3.generator;
+}
+function genUnlocked(){ return !!(state.progress.region3||{}).powerStone; }
+
+/* Level tracks the player, inside the zone's own band. */
+function genLevel(){
+  const best = Math.max(...battleParty().map(m=>m.level), GEN_MIN_LV);
+  return Math.max(GEN_MIN_LV, Math.min(GEN_MAX_LV, best));
+}
+function genPickSpecies(){
+  const r = Math.random();
+  if(r < 0.05) return GEN_ELITE[Math.floor(Math.random()*GEN_ELITE.length)];
+  if(r < 0.20) return 'electric_starter';
+  return GEN_COMMON[Math.floor(Math.random()*GEN_COMMON.length)];
+}
+function genWave(){
+  const n = Math.random() < 0.5 ? 2 : 3;     // always a pack
+  const lv = genLevel();
+  return Array.from({length:n}, ()=>({
+    species: genPickSpecies(),
+    level: lv + Math.floor(Math.random()*3) - 1,
+    forceStage: 0,                           // base form, always
+    elusive: true,
+    nerfed: false,
+  }));
+}
+
+function renderGenerator(){
+  if(!genUnlocked()) return go('explore');
+  const g = genState();
+  stopGenLoop();
+  setScreenBg('plant_generator');
+  playMusicChain(['zone_plant_generator','zone_geothermal_plant','region3','region']);
+  $('#brandSub').textContent = 'Generator Floor';
+  const canFight = battleParty().some(m=>m.currentHp>0);
+  const pct = Math.min(100, g.wins/GEN_TARGET*100);
+
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Explore</button>
+    <div class="gen-note">Electric monsters are feeding off the turbines. Tap a <b>red pulse</b>
+      the moment you see it — they vanish in under a second.</div>
+
+    <!-- the cutaway diagram the pulses appear on — separate from the zone art -->
+    <div class="gen-stage" id="genStage">
+      <img src="assets/zones/plant_generator_map.png" alt="" class="gen-img"
+           onerror="this.style.display='none';this.parentNode.classList.add('gen-noart')">
+    </div>
+
+    <div class="trial-bar" style="margin:10px 0 4px;"><span style="width:${pct}%"></span></div>
+    <div class="trial-count">${g.wins} / ${GEN_TARGET} suppressed today${
+      g.claimed ? ' · reward claimed' : (g.wins>=GEN_TARGET ? ' · reward ready!' : '')}</div>
+
+
+
+    <button class="btn btn-ghost" id="returnBtn" style="margin-top:10px;">Return</button>
+  `;
+  $('#backBtn').addEventListener('click', ()=>{ stopGenLoop(); go('explore'); });
+  $('#returnBtn').addEventListener('click', ()=>{ stopGenLoop(); go('explore'); });
+  // the boss pays out the moment the fifth is seen off
+  if(ui.pendingGenReward){ ui.pendingGenReward = false; return setTimeout(genReward, 300); }
+  if(canFight) startGenLoop();
+}
+
+/* --- the pulses --- */
+let _genTimer = null, _genLive = null, _genRunning = false;
+function stopGenLoop(){
+  clearTimeout(_genTimer); _genTimer = null;
+  if(_genLive && _genLive.el && _genLive.el.parentNode) _genLive.el.remove();
+  _genLive = null; _genRunning = false;
+}
+function startGenLoop(){
+  stopGenLoop();
+  _genRunning = true;
+  const schedule = ()=>{
+    _genTimer = setTimeout(()=>{
+      const stage = document.getElementById('genStage');
+      if(!_genRunning || !stage) return stopGenLoop();
+      spawnPulse(stage, schedule);
+    }, 600 + Math.random()*1600);
+  };
+  schedule();
+}
+function spawnPulse(stage, next){
+  const el = document.createElement('div');
+  el.className = 'gen-pulse';
+  // keep clear of the very edges so a small finger can land on it
+  el.style.left = (12 + Math.random()*72) + '%';
+  el.style.top  = (14 + Math.random()*64) + '%';
+  stage.appendChild(el);
+  const window_ = GEN_PULSE_MIN + Math.random()*(GEN_PULSE_MAX - GEN_PULSE_MIN);
+  el.style.setProperty('--pulse-ms', window_ + 'ms');
+  const live = { el };
+  _genLive = live;
+  el.addEventListener('click', ()=>{
+    if(_genLive !== live) return;
+    _genLive = null;
+    el.remove();
+    stopGenLoop();
+    startGenFight();
+  });
+  setTimeout(()=>{
+    if(_genLive !== live) return;
+    _genLive = null;
+    el.classList.add('gone');
+    setTimeout(()=>{ if(el.parentNode) el.remove(); }, 260);
+    next();
+  }, window_);
+}
+
+function startGenFight(){
+  if(!ensurePool()) return;
+  ui.currentZone = { id:'plant_generator', name:'Generator Floor' };
+  beginBattle({
+    waves:[ genWave() ], isNpc:false, allowCatch:true, name:'Power thieves',
+    bgKey:'battle_plant_generator',
+    onWin: ()=> onGenWin(),
+  });
+}
+async function onGenWin(){
+  const g = genState();
+  g.wins++;
+  const hitTarget = (g.wins === GEN_TARGET && !g.claimed);
+  if(hitTarget){ g.claimed = true; state.inventory.tokens = (state.inventory.tokens||0) + 10; }
+  await saveProfile();
+  if(hitTarget){
+    ui.pendingGenReward = true;      // the boss thanks you after the victory screen
+  }
+  resumeVictory();          // the ordinary victory screen, so catching still works
+}
+function genReward(){
+  storyModal(npcPortrait('plant_boss','🧑‍🏭',130,'transparent'), 'Turbines holding',
+    `"Five of the little thieves seen off. Output's back where it should be."<br><br>` +
+    `He counts something into your hand without looking up.<br><br>` +
+    `<b>+10 Skill Tokens</b><br><br><i>Come back tomorrow — they always come back.</i>`,
+    ()=>go('generator'), { bg:'plant_generator', subtitle:'Generator Floor' });
+}
+
 /* --- Plant: the boss, the stone, the engineer --- */
 async function plantIntro(){
   const r3 = state.progress.region3;

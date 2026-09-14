@@ -318,7 +318,7 @@ function onFlee(){
   toast('Got away safely!');
   const zid = (ui.currentZone||{}).id;
   const inPaths = zid==='rocky_caverns' && !cavernsComplete();
-  go(ui.battle.isNpc ? 'challenge' : (inPaths ? 'caverns' : (zid==='geothermal_plant' ? 'plant' : 'zone')));
+  go(ui.battle.isNpc ? 'challenge' : (inPaths ? 'caverns' : (zid==='geothermal_plant' ? 'plant' : (zid==='plant_generator' ? 'generator' : 'zone'))));
 }
 
 /* A modal the player must dismiss — a toast is too easy to miss. */
@@ -761,9 +761,17 @@ function resolveBattleMove(mv, target, results){
   if(mv.dot){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
     const tick = applyDot(mv, mon);
+    /* The noflee rider pins them down — and being stuck to the floor costs them
+       the Elusive edge entirely. This must come AFTER the word check: a failed
+       Magma Goo should not glue anything. */
+    let pinned = 0;
+    if(mv.dot.rider === 'noflee'){
+      livingEnemies().forEach(t=>{ if(pinDown(t)) pinned++; });
+    }
     renderStatusBadges();
     battleMsg(`${mv.name}! ${tick} damage a turn for ${mv.dot.turns} turns` +
       (mv.dot.rider==='noflee' ? ' — and nothing is getting away.' : ` — and they'll miss more often.`));
+    if(pinned) setTimeout(()=> battleMsg(`🌋 ${pinned} of them ${pinned===1?'is':'are'} stuck fast — no more slipping away!`), 900);
     playEffect(mv.name, { type:SPECIES[mon.species].types[0] });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
@@ -1510,6 +1518,17 @@ function runEnemyAttack(i){
   b.acted = b.acted || [];
   if(!b.acted.includes(e)) b.acted.push(e);
 
+  /* An Elusive thief spends its turn leaving. Thundercat takes the initiative
+     and uses it to bolt before you can act at all. */
+  if(isElusive(e)){
+    elusiveFlee(e);
+    renderStatusBadges();
+    return setTimeout(()=>{
+      if(livingEnemies().length === 0) return onElusiveFieldEmpty();
+      runEnemyAttack(i+1);
+    }, 800);
+  }
+
   // player-cast Disrupt jams a share of incoming attacks outright
   const jam = getPStatus(0,'disrupt');
   if(jam && jam.block && Math.random() < jam.block){
@@ -1723,6 +1742,26 @@ function runEnemyAttack(i){
     }
     setTimeout(()=> runEnemyAttack(i+1), 850);
   }, 330);
+}
+
+/* Everything left the field. If nothing was actually beaten there is no XP and
+   nothing to catch — the encounter simply ends. If something WAS beaten, the
+   fight counts as won and only that monster can be caught. */
+function onElusiveFieldEmpty(){
+  const b = ui.battle;
+  if(!b) return;
+  const beaten = (b.enemies||[]).filter(e=>e.hp<=0 && !e.fled);
+  if(beaten.length) return onWaveCleared();
+  b.phase = 'resolving';
+  renderBattle();
+  setTimeout(()=>{
+    stopMusic();
+    challengeResult('💨', 'They got away',
+      `Every one of them slipped off into the pipework with what it came for.<br><br>` +
+      `<i>Nothing caught, nothing learned. Strike faster next time — or pin one down ` +
+      `with <b>Magma Goo</b>.</i>`,
+      (ui.currentZone && ui.currentZone.id === 'plant_generator') ? 'generator' : 'explore');
+  }, 700);
 }
 
 function endEnemyRound(){

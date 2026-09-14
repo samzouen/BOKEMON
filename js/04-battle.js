@@ -212,6 +212,7 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
 
   // defender-side modifiers
   if(isPlayerAttacking){ // defender is an enemy
+    if(isElusive(defender)) dmg *= (1 - ELUSIVE_REDUCTION);   // slippery as wet soap
     const ice = getEStatus(defender,'iceTomb');
     if(ice) dmg *= (ice.taken != null ? ice.taken : 0.8);
     const cur = getEStatus(defender,'curse');
@@ -734,6 +735,7 @@ function diamondDustCleanse(){
       if(e[f]){ e[f] = Array.isArray(e[f]) ? [] : 0; cleared++; }
     });
     if(e.guard){ e.guard = false; }
+    if(e.elusive){ e.elusive = false; e.gooed = true; cleared++; }   // pinned by the dust
   });
 
   /* Refreshing happens in tickStatuses() so that every path gets it. */
@@ -815,6 +817,36 @@ function stancePills(m){
   if(m && m.invisible>0)  out.push('<span class="status-pill mine">👤 Invisible</span>');
   if(m && m.prep>0)       out.push(`<span class="status-pill mine">🎯 Prep ×${m.prep}</span>`);
   return out.join('');
+}
+
+/* ============================================================
+   ELUSIVE
+   The generator thieves are here for the power, not a fight. They take a fifth
+   of the damage they should, and they bolt the moment their turn comes round.
+   Three answers: kill one before it moves, glue it down with Magma Goo, or
+   sweep the status away with Diamond Dust.
+   ============================================================ */
+const ELUSIVE_REDUCTION = 0.80;          // takes 20% of normal damage
+
+function isElusive(e){ return !!(e && e.elusive && !e.gooed); }
+/* Magma Goo (and anything else with the noflee rider) pins them down and the
+   status drops entirely — after that they fight like anything else. */
+function pinDown(e){
+  if(!e || !e.elusive) return false;
+  e.gooed = true;
+  e.elusive = false;
+  return true;
+}
+/* Everything that fled is gone; anything KO'd is still catchable. */
+function elusiveFlee(e){
+  const b = ui.battle;
+  if(!b) return;
+  e.fled = true;
+  e.hp = 0;                              // off the field, but never counted as beaten
+  const idx = b.enemies.indexOf(e);
+  const el = document.getElementById('enemy-'+idx);
+  if(el) el.classList.add('fled');
+  battleMsg(`💨 ${SPECIES[e.species].name} snatches what it came for and bolts!`);
 }
 
 /* ============================================================
@@ -1073,6 +1105,13 @@ function enemySeizesInitiative(){
      first one — checking only the already-chosen move meant the player could
      wipe them out before they ever acted, which defeated the attrition. */
   return livingEnemies().some(e => {
+    /* An Elusive thief isn't trying to win the exchange — it wants out. Swift
+       Strike is set aside while it is looking for the door. Thundercat keeps
+       Lightning Cat, which is precisely why it is so hard to pin. */
+    if(isElusive(e)){
+      const p = passiveOf(e);
+      return !!(p && p.first);
+    }
     if(e.move && MOVE_FIRST_NAMES.has(e.move[1])) return true;
     return (MOVES[e.species]||[]).some(m => MOVE_FIRST_NAMES.has(m[1]) && (e.level||1) >= m[5]);
   });
@@ -1213,6 +1252,7 @@ const REGION_ZONES = {
        { id:'rocky_caverns', name:'Rocky Caverns', tint:'#8a7a5b', locksUntil:'r2ChallengeDone' } ],
   3: [ { id:'volcanic_caldera', name:'Volcanic Caldera', tint:'#b0503a' },
        { id:'geothermal_plant', name:'Geothermal Plant', tint:'#c98a3a', locksUntil:'r3MonkeyMet' },
+       { id:'plant_generator',  name:'Generator Floor',  tint:'#c8a33a', locksUntil:'r3PowerStone' },
        { id:'vane_shear',       name:'RRS Vane Shear',   tint:'#4a6a8a' } ],
 };
 
@@ -1340,6 +1380,7 @@ function makeEnemy(species, level, opts){
      Evolved wilds also fight unpredictably (see enemyMoveFor). */
   const maxStage = (sp.evo||[]).filter(lv=>level>=lv).length;
   let stage = maxStage;
+  if(opts.forceStage != null) stage = Math.min(opts.forceStage, maxStage);   // generator wilds stay cute
   if(opts.wildRoll && maxStage > 0){
     const r = Math.random();
     if(maxStage === 1)      stage = r < 0.67 ? 0 : 1;
@@ -1362,7 +1403,9 @@ function makeEnemy(species, level, opts){
   else if(ai==='power1') move = bySlot('Power1') || bySlot('Basic');
   else move = bySlot('Basic');
   if(!move) move = avail[0] || MOVES[species][0];
-  return { species, level, maxHp:hp, hp:hp, atk:stat, move, types:sp.types, stage, tier:sp.tier, ai, nerfed, boss:!!opts.boss, crowned:!!opts.crowned };
+  const e = { species, level, maxHp:hp, hp:hp, atk:stat, move, types:sp.types, stage, tier:sp.tier, ai, nerfed, boss:!!opts.boss, crowned:!!opts.crowned };
+  if(opts.elusive) e.elusive = true;      // see ELUSIVE below
+  return e;
 }
 
 /* Sacred Grove runs its own encounter table while the trial is unresolved. */
@@ -1461,7 +1504,12 @@ function beginBattle(config){
 
     partyStatus:{},          // party-wide buffs, each with a turn counter
     fieldStatus:{},          // debuffs stamped on every enemy, inherited by later waves
-    usedVeryHigh:{}, usedUltra:{},   // uid -> true, once-per-battle usage
+    /* COOLDOWN RULE — only these two ever go on cooldown.
+       Basic, Power1, Power2, Ultimate and Max are NATURAL moves and are
+       available every single turn, always. Only a VERY HIGH or an ULTRA stone
+       is spent once per battle, and the 100-word recharge meter gives both
+       back. Nothing else should ever be added to these maps. */
+    usedVeryHigh:{}, usedUltra:{},
   };
   if(config.scriptedAlly){
     // The player rides a borrowed monster: the real party is set aside and
@@ -1492,7 +1540,7 @@ function beginBattle(config){
 }
 function loadWave(i){
   const b = ui.battle;
-  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll, crowned:spec.crowned }));
+  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll, crowned:spec.crowned, forceStage:spec.forceStage, elusive:spec.elusive }));
   // Leech Seed is a FIELD effect: it re-roots on every new wave.
   /* (the tiered field-status re-application below handles Leech Seed; a bare
       copy here used to overwrite it and strip the + / ✦ bite) */
@@ -1965,7 +2013,7 @@ function renderBattle(){
 const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
   counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed', stunned:'💫 Stunned', softened:'🌀 Weakened', counterTurns:'↩️ Ready', evadeTurns:'🧘 Still',
-  discombobulate:'🌀 Confused', leechSeed:'🌿 Leeched', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
+  discombobulate:'🌀 Confused', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
 };
 function renderStatusBadges(){
