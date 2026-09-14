@@ -448,70 +448,169 @@ function renderArenaGate(){
   $('#pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
 }
 
+/* ============================================================
+   TEST ARENA
+   A bench for checking mechanics against real monsters. Your whole party goes
+   in; the opposition is a real species at a real level, with every lever a
+   tester needs exposed.
+   ============================================================ */
+const ARENA_TYPES = ['Physical','Fire','Water','Grass','Electric','Flying','Ground','Ghost','Psychic','Dragon','Steel','Fairy'];
+
+function arenaCfg(){
+  ui.arena = ui.arena || {
+    type:'Electric', species:null, count:1, level:null,
+    acts:false,            // dummies skip their turn by default
+    immortal:false,        // both sides die normally by default
+    move:'auto',           // which slot the dummy uses
+    buffs:{},              // elusive, first, …
+    advanced:false,
+  };
+  return ui.arena;
+}
+function arenaSpeciesOfType(t){
+  return Object.keys(SPECIES).filter(k=>(SPECIES[k].types||[]).includes(t));
+}
+function arenaDefaultLevel(){
+  return Math.max(...state.party.concat(state.storage).map(m=>m.level), 5);
+}
+
 function renderArena(){
   $('#brandSub').textContent = 'Test Arena';
-  const all = [...state.party, ...state.storage];
+  const c = arenaCfg();
+  const list = arenaSpeciesOfType(c.type);
+  if(!c.species || !list.includes(c.species)) c.species = list[0];
+  if(c.level == null) c.level = arenaDefaultLevel();
+  const sp = SPECIES[c.species];
+  const moveSlots = sp ? MOVES[c.species].filter(m=>m[1]!=null).map(m=>m[0]) : [];
+
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Back</button>
     <div class="screen-title">Test Arena</div>
-    <div class="screen-sub">No spelling required. Every move unlocked. Dummies have ${ARENA_DUMMY_HP} HP and respawn forever.</div>
+    <div class="screen-sub">No spelling. Every move unlocked. Your whole party comes in.</div>
 
     <div class="hp-card" style="margin-bottom:12px;">
-      <div style="font-weight:800;font-size:13px;margin-bottom:8px;">Fighter</div>
-      <select id="arenaMon" style="width:100%;padding:10px;border-radius:10px;border:2px solid var(--line);background:#fff9ec;font-family:'Nunito';font-weight:700;font-size:14px;">
-        ${all.map((m,i)=>`<option value="${m.uid}">${escapeHtml(displayName(m))} · Lv ${m.level} · ${SPECIES[m.species].types.join('/')}</option>`).join('')}
+      <div class="ar-label">Opponent type</div>
+      <select id="arType" class="ar-select">
+        ${ARENA_TYPES.map(t=>`<option value="${t}" ${t===c.type?'selected':''}>${t}</option>`).join('')}
       </select>
-      <div style="font-weight:800;font-size:13px;margin:12px 0 8px;">Dummies</div>
-      <div style="display:flex;gap:8px;">
-        ${[1,2,3].map(n=>`<button class="btn btn-ghost pill arena-n ${n===1?'sel':''}" data-n="${n}" style="flex:1;">${n}</button>`).join('')}
+
+      <div class="ar-label">Species <span>${list.length} of this type</span></div>
+      <select id="arSpecies" class="ar-select">
+        ${list.map(k=>`<option value="${k}" ${k===c.species?'selected':''}>${escapeHtml(SPECIES[k].name)} · ${SPECIES[k].tier} · rate ${SPECIES[k].rate}</option>`).join('')}
+      </select>
+
+      <div class="ar-row">
+        <div style="flex:1;">
+          <div class="ar-label">Level</div>
+          <input type="number" id="arLevel" class="ar-num" value="${c.level}" min="1" max="100">
+        </div>
+        <div style="flex:1;">
+          <div class="ar-label">How many</div>
+          <div style="display:flex;gap:6px;">
+            ${[1,2,3].map(n=>`<button class="btn btn-ghost pill ar-n ${n===c.count?'sel':''}" data-n="${n}" style="flex:1;">${n}</button>`).join('')}
+          </div>
+        </div>
       </div>
-      <div style="font-weight:800;font-size:13px;margin:12px 0 8px;">Dummy type (for effectiveness tests)</div>
-      <select id="arenaType" style="width:100%;padding:10px;border-radius:10px;border:2px solid var(--line);background:#fff9ec;font-family:'Nunito';font-weight:700;font-size:14px;">
-        ${['Physical','Fire','Water','Grass','Electric','Flying','Ground','Ghost','Psychic'].map(t=>`<option value="${t}">${t}</option>`).join('')}
-      </select>
+
+      <div class="ar-label">Behaviour</div>
+      <div class="ar-row">
+        <button class="btn btn-ghost pill ar-tog ${c.acts?'':'sel'}" data-acts="0" style="flex:1;">😴 Skips turn</button>
+        <button class="btn btn-ghost pill ar-tog ${c.acts?'sel':''}" data-acts="1" style="flex:1;">⚔️ Attacks</button>
+      </div>
+      <div class="ar-row">
+        <button class="btn btn-ghost pill ar-imm ${c.immortal?'':'sel'}" data-imm="0" style="flex:1;">💀 Regular</button>
+        <button class="btn btn-ghost pill ar-imm ${c.immortal?'sel':''}" data-imm="1" style="flex:1;">♾️ Immortal</button>
+      </div>
+      <div class="ar-hint">${c.immortal
+        ? 'Both sides heal to full when they would be knocked out — the test runs forever.'
+        : 'A knock-out ends the test. Nothing respawns.'}</div>
+
+      <button class="btn btn-ghost" id="arAdv" style="margin-top:10px;">${c.advanced?'▾':'▸'} Advanced options</button>
+
+      ${c.advanced ? `
+        <div class="ar-adv">
+          <div class="ar-label">Move the opponent uses</div>
+          <select id="arMove" class="ar-select">
+            <option value="auto" ${c.move==='auto'?'selected':''}>Auto (its usual AI)</option>
+            ${moveSlots.map(sl=>`<option value="${sl}" ${c.move===sl?'selected':''}>${sl}</option>`).join('')}
+            <option value="vh1" ${c.move==='vh1'?'selected':''}>Very High — ${escapeHtml(sp.types[0])}</option>
+            ${sp.types[1] ? `<option value="vh2" ${c.move==='vh2'?'selected':''}>Very High — ${escapeHtml(sp.types[1])}</option>` : ''}
+            <option value="ultra" ${c.move==='ultra'?'selected':''}>Ultra stone</option>
+          </select>
+
+          <div class="ar-label">Buffs on the opponent</div>
+          <div class="ar-buffs">
+            ${[['elusive','💨 Elusive'],['first','⚡ Goes first'],['guard','🛡 Guard (1 stack)'],
+               ['airborne','🕊 Airborne'],['invisible','👤 Unseen'],['counter','↩️ Counter stance'],
+               ['block3','🛡 Block ×3'],['crowned','✦ Crowned'],['maxProtein','💪 Max protein']]
+              .map(([k,lbl])=>`<button class="btn btn-ghost pill ar-buff ${c.buffs[k]?'sel':''}" data-buff="${k}">${lbl}</button>`).join('')}
+          </div>
+        </div>` : ''}
     </div>
 
     <button class="btn btn-primary" id="arenaStart">⚔️ Enter Arena</button>
-    <div class="phase-flag">Developer testing area.</div>
+    <div class="phase-flag">Your party enters as it stands. Statuses, stones and levels are real.</div>
   `;
   $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
-  ui.arenaCount = ui.arenaCount || 1;
-  screenEl.querySelectorAll('.arena-n').forEach(b=>b.addEventListener('click', ()=>{
-    ui.arenaCount = +b.dataset.n;
-    screenEl.querySelectorAll('.arena-n').forEach(x=>x.classList.toggle('sel', x===b));
+  $('#arType').addEventListener('change', e=>{ c.type = e.target.value; c.species = null; renderArena(); });
+  $('#arSpecies').addEventListener('change', e=>{ c.species = e.target.value; renderArena(); });
+  $('#arLevel').addEventListener('change', e=>{ c.level = Math.max(1, Math.min(100, +e.target.value||1)); });
+  screenEl.querySelectorAll('.ar-n').forEach(b=>b.addEventListener('click', ()=>{ c.count=+b.dataset.n; renderArena(); }));
+  screenEl.querySelectorAll('.ar-tog').forEach(b=>b.addEventListener('click', ()=>{ c.acts = b.dataset.acts==='1'; renderArena(); }));
+  screenEl.querySelectorAll('.ar-imm').forEach(b=>b.addEventListener('click', ()=>{ c.immortal = b.dataset.imm==='1'; renderArena(); }));
+  $('#arAdv').addEventListener('click', ()=>{ c.advanced = !c.advanced; renderArena(); });
+  const mv = $('#arMove'); if(mv) mv.addEventListener('change', e=>{ c.move = e.target.value; });
+  screenEl.querySelectorAll('.ar-buff').forEach(b=>b.addEventListener('click', ()=>{
+    const k=b.dataset.buff; c.buffs[k] = !c.buffs[k]; renderArena();
   }));
-  $('#arenaStart').addEventListener('click', ()=>{
-    const uid = $('#arenaMon').value;
-    startArena(uid, ui.arenaCount||1, $('#arenaType').value);
-  });
+  $('#arenaStart').addEventListener('click', ()=> startArena());
 }
 
+/* A real monster, built to the tester's specification. */
 function makeDummy(type){
-  return {
-    species:'rat', level:1, maxHp:ARENA_DUMMY_HP, hp:ARENA_DUMMY_HP, atk:10,
-    move:['Basic','Test Jab',0.2,'Single',1,1],
-    types:[type], stage:0, tier:'wild', ai:'basic', nerfed:true,
-    isDummy:true, dummyType:type,
-  };
+  const c = arenaCfg();
+  const species = c.species || 'rat';
+  const lvl = c.level || 50;
+  const e = makeEnemy(species, lvl, {
+    nerfed:false, crowned:!!c.buffs.crowned,
+    supplements: c.buffs.maxProtein ? 10 : 0,
+    ai: c.move === 'auto' ? undefined : 'best',
+  });
+  e.isDummy = true;
+  e.dummyType = type;
+  e.arenaActs = !!c.acts;
+  e.arenaMove = c.move;
+  if(c.buffs.elusive)   e.elusive = true;
+  if(c.buffs.guard)     { e.guard = true; grantBlock(e, 1, e.atk); }
+  if(c.buffs.block3)    grantBlock(e, 3, e.atk);
+  if(c.buffs.airborne)  e.airborne = 99;
+  if(c.buffs.invisible) e.invisible = 99;
+  if(c.buffs.counter)   { e.counterTurns = 99; e.counterRet = 0.5; }
+  if(c.buffs.first)     e.arenaFirst = true;
+  return e;
 }
 
-function startArena(uid, count, type){
-  const idx = state.party.findIndex(m=>m.uid===uid);
-  if(idx<0){
-    // pull the chosen monster out of storage into slot 0 for testing
-    const si = state.storage.findIndex(m=>m.uid===uid);
-    if(si>=0){ const [m]=state.storage.splice(si,1); state.party.unshift(m); saveProfile(); }
-  }
-  const ai = state.party.findIndex(m=>m.uid===uid);
+function startArena(){
+  const c = arenaCfg();
+  if(!battleParty().some(m=>m.currentHp>0)) return toast('Your party needs healing first.');
   ui.battle = {
     waves:[[]], waveIndex:0, isNpc:false, allowCatch:false, name:'Test Arena',
     onWin:null, switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     partyStatus:{}, fieldStatus:{}, usedVeryHigh:{}, usedUltra:{},
-    arena:true, arenaCount:count, arenaType:type,
+    acted:[], preHits:[], aftershock:[],
+    arena:true, arenaCount:c.count, arenaType:c.type,
+    arenaImmortal:!!c.immortal,
   };
-  ui.battle.enemies = Array.from({length:count}, ()=>makeDummy(type));
+  ui.battle.enemies = Array.from({length:c.count}, ()=>makeDummy(c.type));
+  // the party enters as it stands
+  state.party.forEach(m=>{ m.guard=false; m.airborne=0; m.invisible=0; m.prep=0; m.blockStacks=0; m._entered=false; });
+  let ai = state.party.findIndex(m=>m.currentHp>0 && !isPassenger(m));
   ui.battle.activeIndex = ai>=0?ai:0;
+  const lead = activeMon();
+  if(lead){ lead._entered = true; applyEntryPassives(lead, lead.species, lead.level, monAtk(lead)); }
+  ui.battle.enemies.forEach(e=> applyEntryPassives(e, e.species, e.level, e.atk));
   go('battle');
+  setTimeout(()=> beginRound('Test arena — choose a move.'), 600);
 }
 
 /* In arena mode every move is available and skips the quiz entirely. */

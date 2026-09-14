@@ -297,7 +297,10 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       break;
 
     case 'Dragon': // Dragon Dance — multiplies WITH Overheat rather than replacing it
-      setPStatus(uid,{type:'dragonDance', turnsLeft:T+1, deal:d.deal, initiative:!!d.initiative});
+      setPStatus(uid,{type:'dragonDance', turnsLeft:T+1, deal:d.deal});
+      /* The speed is its own status so Diamond Dust can refresh it, and so the
+         order can read a tier rather than guess from the damage figure. */
+      if(d.mach) setPStatus(uid,{type:'machDragon', turnsLeft:T+1, tier:d.mach});
       res.msg = d.text;
       break;
 
@@ -569,12 +572,12 @@ const VERY_HIGH = {
   ]},
   Dragon: { name:'Dragon Dance', turns:5, tiers:[
     { deal:1.25 },
-    { deal:1.30 },
-    { deal:1.35, initiative:true },
+    { deal:1.30, mach:1 },
+    { deal:1.35, mach:2 },
   ], text:[
     'Your team deals 25% more damage. Stacks with Overheat and Curse.',
-    'Your team deals 30% more damage.',
-    'Your team deals 35% more damage and always moves first, unless they have it too.',
+    'Your team deals 30% more damage, and gains <b>Mach Dragon</b> for 5 turns — your monsters move before anything that lacks it.',
+    'Your team deals 35% more damage, and gains <b>Mach Dragon ✦</b> for 5 turns — outranking even a <b>+</b> Mach Dragon on the other side.',
   ]},
   Steel: { name:'Steel Aegis', turns:5, tiers:[
     { reduce:0.30 },
@@ -1104,6 +1107,7 @@ function enemySeizesInitiative(){
   /* A Swift Striker takes the opening blow of the ROUND, including the very
      first one — checking only the already-chosen move meant the player could
      wipe them out before they ever acted, which defeated the attrition. */
+  if(livingEnemies().some(e=>e.arenaFirst)) return true;   // arena lever
   return livingEnemies().some(e => {
     /* An Elusive thief isn't trying to win the exchange — it wants out. Swift
        Strike is set aside while it is looking for the door. Thundercat keeps
@@ -1140,83 +1144,187 @@ const MOVE_FIRST_NAMES = new Set(['Swift Strike','Lead Hook','Snap Kick','Whirl 
    `beginRound` is the ONLY way into a player turn. Wave loads, swaps and
    status interruptions all route through it, so no path can skip upkeep.
    ============================================================ */
+/* ============================================================
+   THE ROUND — per-monster initiative
+   ------------------------------------------------------------
+   1. UPKEEP      pre-hits, Diamond Dust; passives are already in place
+   2. INITIATIVE  every living monster is scored ONCE, then sorted
+   3. ACTIONS     each takes its turn in order; a monster is marked the moment
+                  it acts, so nobody can be handed a second turn
+   4. END         once every monster has acted or fallen — statuses tick
+
+   Scoring, additive within a tier:
+     tier 2   Mach Dragon ✦        outranks everything below
+     tier 1   Mach Dragon +
+     tier 0   everything else, summed:
+                +1  scripted rout (Padrino, Figlio) — a head start, no more
+                +1  first-strike passive (Lightning Cat), either side
+                -1  Disrupt, as a debuff on whoever it is cast against
+   Ties: the player first. Within a side: field order, left to right.
+   Computed ONCE per round — casting Dragon Dance takes effect NEXT round.
+   ============================================================ */
 function beginRound(msg){
   const b = ui.battle;
   if(!b) return;
-  b.acted = b.acted || [];          // enemies that have already acted this round
-  b._roundClosed = false;           // a fresh round may be closed again
-
+  b.roundMsg = msg || null;
   b.phase = 'resolving';
   renderBattle();
 
-  // ---- 1. UPKEEP ----
   runPreHits(()=>{
+    if(!ui.battle) return;
     if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
-
-    // ---- 2. INITIATIVE ----
-    const strikers = initiativeStrikers();
-    if(strikers.length && !b._initiativeDone){
-      b._initiativeDone = true;
-      const names = [...new Set(strikers.map(e=>SPECIES[e.species].name))].join(' and ');
-      battleMsg(`⚡ ${names} seize${strikers.length===1?'s':''} the initiative!`);
-      b.attackQueue = strikers;
-      b.initiativeRun = true;                 // they may only use their fast move
-      return setTimeout(()=> runEnemyAttack(0), 700);
-    }
-
-    // ---- 3. PLAYER ----
-    beginPlayerPhase(msg);
+    if(!battleParty().some(m=>m.currentHp>0)) return onPlayerDefeated();
+    b.order = buildInitiativeOrder();
+    b.orderStep = 0;
+    runTurnStep();
   });
 }
 
-/* Enemies that take the opening blow — and the move that earns it. */
-function initiativeStrikers(){
+function machTier(side){
+  const st = (side === 'player')
+    ? getPStatus(0,'machDragon')
+    : livingEnemies().map(e=>getEStatus(e,'machDragon')).find(Boolean);
+  return st ? (st.tier || 1) : 0;
+}
+function initiativeOf(side, mon){
+  let v = 0;
   const b = ui.battle;
-  if(!b) return [];
-  if(b.alwaysFirst || b.figlio) return [];    // those routs use the normal enemy turn
-  return livingEnemies().filter(e=>{
-    if((b.acted||[]).includes(e)) return false;
-    if(getEStatus(e,'iceTomb') || getEStatus(e,'paralysed')) return false;
-    const p = passiveOf(e);
-    if(p && p.first) return true;
-    if(getEStatus(e,'disrupt')) return true;
-    return (MOVES[e.species]||[]).some(m => MOVE_FIRST_NAMES.has(m[1]) && (e.level||1) >= m[5]);
-  });
-}
-/* The fast move itself, so a Swift Striker uses Swift Strike and not its best. */
-function initiativeMoveFor(e){
-  const list = MOVES[e.species] || [];
-  return list.find(m => MOVE_FIRST_NAMES.has(m[1]) && (e.level||1) >= m[5]) || null;
+  const p = passiveOf(mon);
+  if(p && p.first) v += 1;                                   // Lightning Cat, either side
+  if(side === 'enemy'){
+    if(b && (b.alwaysFirst || b.figlio)) v += 1;
+    if(mon.arenaFirst) v += 1;
+    if(getEStatus(mon,'disrupt')) v -= 1;                    // your jamming slows it
+  } else {
+    if(getPStatus(0,'disrupt')) v -= 1;                      // their jamming slows you
+  }
+  return v;
 }
 
+function buildInitiativeOrder(){
+  const rows = [];
+  const me = activeMon();
+  if(me && me.currentHp > 0){
+    rows.push({ side:'player', mon:me, idx:-1,
+                tier:machTier('player'), value:initiativeOf('player', me) });
+  }
+  livingEnemies().forEach(e=>{
+    rows.push({ side:'enemy', mon:e, idx:ui.battle.enemies.indexOf(e),
+                tier:machTier('enemy'), value:initiativeOf('enemy', e) });
+  });
+  rows.sort((a,c)=>{
+    if(c.tier !== a.tier) return c.tier - a.tier;
+    if(c.value !== a.value) return c.value - a.value;
+    if(a.side !== c.side) return a.side === 'player' ? -1 : 1;
+    return a.idx - c.idx;
+  });
+  return rows;
+}
+
+function runTurnStep(){
+  const b = ui.battle;
+  if(!b || !b.order) return;
+  if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
+  if(!battleParty().some(m=>m.currentHp>0)) return onPlayerDefeated();
+
+  while(b.orderStep < b.order.length){
+    const row = b.order[b.orderStep];
+    const alive = row.side === 'player'
+      ? (row.mon && row.mon.currentHp > 0)
+      : (row.mon && row.mon.hp > 0);
+    if(!alive || row.acted){ b.orderStep++; continue; }
+    row.acted = true;
+    if(row.side === 'player') return beginPlayerPhase(b.roundMsg || 'Choose a move.');
+    b.phase = 'resolving';
+    renderBattle();
+    return setTimeout(()=> runSingleEnemyTurn(row.mon), 600);
+  }
+  return endRound();
+}
+function advanceTurn(){
+  const b = ui.battle;
+  if(!b) return;
+  b.orderStep = (b.orderStep || 0) + 1;
+  b.roundMsg = null;
+  runTurnStep();
+}
+
+/* ---- END: reached only when every monster has acted or fallen ---- */
+function endRound(){
+  const b = ui.battle;
+  if(!b) return;
+  b.switchedThisTurn = false;
+
+  const c = chargeState();
+  if(c){ c.turnsLeft--; if(c.turnsLeft <= 0){ clearCharge(); battleMsg('The gathered power disperses.'); } }
+
+  const gm = activeMon();
+  if(gm){
+    if(gm.guard) grantBlock(gm, 1, monAtk(gm));
+    if(gm.airborne  > 0) gm.airborne--;
+    if(gm.invisible > 0) gm.invisible--;
+    if(gm.counterTurns > 0) gm.counterTurns--;
+    if(gm.evadeTurns   > 0) gm.evadeTurns--;
+  }
+  livingEnemies().forEach(e=>{
+    if(e.guard) grantBlock(e, 1, e.atk);
+    if(e.airborne  > 0) e.airborne--;
+    if(e.invisible > 0) e.invisible--;
+    if(e.counterTurns > 0) e.counterTurns--;
+    if(e.evadeTurns   > 0) e.evadeTurns--;
+  });
+
+  const mir0 = getPStatus(0,'mirage');
+  if(mir0 && mir0.window && mir0.step < mir0.window.length) mir0.step++;
+  const ovc = getPStatus(0,'overcharge');
+  if(ovc && ovc.fresh) ovc.fresh = false;
+  const aeg = getPStatus(0,'steelAegis');
+  if(aeg && aeg.regen && gm) grantBlock(gm, aeg.regen, monAtk(gm));
+  const tac0 = getPStatus(0,'tachy');
+  if(tac0){ tac0.fresh = false; tac0.extras = 0; }
+  const dd0 = getPStatus(0,'diamondDust');
+  if(dd0) diamondDustCleanse();
+
+  if(b.fieldStatus && b.fieldStatus.discombobulate){
+    const f = b.fieldStatus.discombobulate;
+    if(f.guaranteed && f.openTurn){ f.guaranteed = false; if(f.second) f.softenTurn = true; }
+    else if(f.softenTurn){ f.softenTurn = false; }
+    b.enemies.forEach(x=>{
+      const st = getEStatus(x,'discombobulate');
+      if(st){ st.guaranteed = f.guaranteed; st.softenTurn = f.softenTurn; }
+    });
+  }
+
+  const gone = tickStatuses();
+  renderStatusBadges();
+  setTimeout(()=>{
+    if(!ui.battle) return;
+    beginRound(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
+  }, gone.length ? 900 : 500);
+}
+
+/* The player's slice of the round. It decides nothing about order — losing the
+   turn to a stun or a charm simply hands straight on to the next step. */
 function beginPlayerPhase(msg){
   const b = ui.battle;
   if(!b) return;
-  // a stun costs the player their whole turn
+
   const stun = getPStatus(0,'stunned');
   if(stun){
     removePStatus(0,'stunned');
     b.phase = 'resolving';
     renderBattle();
     battleMsg(`💫 ${displayName(activeMon())} is stunned and can't move!`);
-    return setTimeout(enemyTurn, 900);
+    return setTimeout(advanceTurn, 900);
   }
-  // enemy-cast Charm may steal the player's turn before it begins
   const ch = getPStatus(0,'charmed');
   if(ch && Math.random() < (ch.chance||0.20)){
     b.phase = 'resolving';
     renderBattle();
     battleMsg(`💗 ${displayName(activeMon())} is charmed and loses its turn!`);
-    return setTimeout(enemyTurn, 900);
+    return setTimeout(advanceTurn, 900);
   }
-  /* Scripted routs keep the enemy moving first every round. */
-  if((b.alwaysFirst || b.figlio) && !b._routWent){
-    b._routWent = true;
-    b.phase = 'resolving';
-    renderBattle();
-    battleMsg('They strike first!');
-    return setTimeout(enemyTurn, 800);
-  }
+
   b.phase = 'player';
   renderBattle();
   if(msg) battleMsg(msg);
@@ -1499,7 +1607,8 @@ function beginBattle(config){
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     charge:null, legacyBonus:0,
     aftershock:[], aftershockPending:false, bonusMult:0, _bonusResolved:false,
-    _passiveUsed:false, _enemyWentThisRound:false,
+    _passiveUsed:false,
+    turnOrder:null, turnStep:0,
     rechargeWords:0,         // every word written this battle feeds the meter
 
     partyStatus:{},          // party-wide buffs, each with a turn counter
@@ -1529,14 +1638,10 @@ function beginBattle(config){
   if(lead){ lead._entered = true; applyEntryPassives(lead, lead.species, lead.level, monAtk(lead)); }
   playBattleMusic(!!config.isNpc, { silentIntro: !!config.silentIntro });
   go('battle');
-  if(config.enemiesFirst){
-    ui.battle.phase = 'resolving';
-    setTimeout(()=>{ battleMsg('They strike first!'); setTimeout(enemyTurn, 700); }, 700);
-  } else {
-    /* Round one runs upkeep and initiative like any other — which is how a
-       Swift Striker gets its blow in before the player's first move. */
-    setTimeout(()=> beginRound('Choose a move.'), 900);
-  }
+  /* Every battle, scripted or not, starts a normal round. `enemiesFirst` is
+     just another initiative rule now (see enemyHasInitiative). */
+  if(config.enemiesFirst) ui.battle.alwaysFirst = true;
+  setTimeout(()=> beginRound('Choose a move.'), 900);
 }
 function loadWave(i){
   const b = ui.battle;
@@ -1571,7 +1676,6 @@ function loadWave(i){
   /* A fresh wave starts a fresh round: reset who has acted so the new arrivals
      can take the initiative, and let beginRound run upkeep on them. */
   b.acted = [];
-  b._initiativeDone = false;
   b.phase='resolving';
   saveProfile();
 }
@@ -1580,13 +1684,12 @@ function onWaveCleared(){
 
   const b = ui.battle;
   if(b.arena){
-    // infinite waves: respawn fresh dummies, keep statuses and HP as-is
-    b.enemies = Array.from({length:b.arenaCount}, ()=>makeDummy(b.arenaType));
-    b.switchedThisTurn=false;
-    b.phase='player';
-    renderBattle();
-    battleMsg('Dummies respawned. Keep testing!');
-    return;
+    /* No more respawning — immortality is the way to keep a test running now,
+       and a knock-out should be observable rather than papered over. */
+    stopMusic();
+    return challengeResult('⚔️', 'Test complete',
+      `Every opponent is down.<br><br><i>Turn on <b>Immortal</b> in the arena setup if you want ` +
+      `the test to keep running past a knock-out.</i>`, 'arena');
   }
   if(b.waveIndex < b.waves.length-1){
     /* The round still happened even though no enemy lived to take its turn.
@@ -1981,6 +2084,7 @@ function renderBattle(){
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
         <button class="side-btn" id="switchBtn" ${(b.switchedThisTurn || !canAct)?'disabled':''}>🔄 Switch</button>
+        ${b.arena ? `<button class="side-btn" id="skipBtn" ${canAct?'':'disabled'}>⏭️ Skip turn</button>` : ''}
         <button class="side-btn" id="fleeBtn" ${(b.noFlee || !canAct)?'disabled':''}>${b.arena?'🚪 Exit':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
         ${b.arena?'<button class="side-btn" id="arenaMoveBtn" style="background:var(--gold);color:#fff;" '+(canAct?'':'disabled')+'>🧪 Test move</button>':''}
       </div>
@@ -1998,6 +2102,14 @@ function renderBattle(){
   `;
   screenEl.querySelectorAll('.move-btn:not(.locked)').forEach(btn=> btn.addEventListener('click', ()=>onMoveChosen(+btn.dataset.move)));
   $('#switchBtn').addEventListener('click', onSwitchPressed);
+  const sk = $('#skipBtn');
+  if(sk) sk.addEventListener('click', ()=>{
+    // pass the turn without acting, so statuses and pre-hits can be watched
+    ui.battle.phase = 'resolving';
+    renderBattle();
+    battleMsg('⏭️ Turn skipped.');
+    setTimeout(()=> afterPlayerAttack(activeMon(), []), 500);
+  });
   $('#fleeBtn').addEventListener('click', onFlee);
   const amb = $('#arenaMoveBtn');
   if(amb) amb.addEventListener('click', renderArenaMoveSheet);
@@ -2012,7 +2124,7 @@ function renderBattle(){
 
 const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
-  counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed', stunned:'💫 Stunned', softened:'🌀 Weakened', counterTurns:'↩️ Ready', evadeTurns:'🧘 Still',
+  counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed', stunned:'💫 Stunned', machDragon:'🐉 Mach Dragon', softened:'🌀 Weakened', counterTurns:'↩️ Ready', evadeTurns:'🧘 Still',
   discombobulate:'🌀 Confused', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
 };

@@ -252,25 +252,51 @@ function renderStarterSelect(){
 }
 
 /* ---------- SCREEN: home ---------- */
+/* Six squares, one per day of the cycle. Completed days grey out with a tick;
+   the day you're working on glows. */
+function dailyPanel(){
+  const d = dailyState();
+  const step = d.step % DAILY_CYCLE.length;          // the day being worked on
+  const pct = Math.min(100, d.count/DAILY_TARGET*100);
+  const allDone = d.done && step === 0;              // a full cycle just closed
+
+  const square = (i)=>{
+    const r = DAILY_CYCLE[i];
+    // a day is complete if the cycle has moved past it, or the cycle wrapped
+    const done = allDone || i < step || (d.done && i === step);
+    const current = !done && i === step;
+    const icon = r.gold   ? `<span class="dq-icon">🥇</span>`
+               : r.silver ? `<span class="dq-icon">🥈</span>`
+               : `<span class="dq-icon">${tokenIcon(26)}</span>`;
+    const amt = r.gold || r.silver || r.tokens;
+    return `<div class="daily-sq ${done?'done':''} ${current?'current':''} ${i===5?'finale':''}">
+      <div class="dq-day">Day ${i+1}</div>
+      ${icon}
+      <div class="dq-amt">${amt}</div>
+      ${done ? `<svg class="dq-tick" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 12.5 L9.5 18 L20 6" fill="none" stroke="currentColor"
+              stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
+    </div>`;
+  };
+
+  return `<div class="daily-card">
+    <div class="daily-head">🗓️ Daily — ${DAILY_TARGET} phrases a day
+      <span>${d.done ? 'done today' : `${d.count} / ${DAILY_TARGET}`}</span></div>
+    <div class="trial-bar"><span style="width:${pct}%"></span></div>
+    <div class="daily-grid">${DAILY_CYCLE.map((_,i)=>square(i)).join('')}</div>
+    <div class="daily-sub">${d.done
+      ? 'Today is done. Tomorrow carries on from here — a missed day costs nothing.'
+      : `Write ${DAILY_TARGET - d.count} more phrase${DAILY_TARGET-d.count===1?'':'s'} to claim day ${step+1}.`}</div>
+  </div>`;
+}
+
 function renderHome(){
   setScreenBg('home');
   playMusic('main_menu');
   $('#brandSub').textContent = state.name;
   screenEl.innerHTML = `
     <div class="version-tag">v${GAME_VERSION}</div>
-    ${(()=>{ const d = dailyState(); const r = dailyReward();
-      const pct = Math.min(100, d.count/DAILY_TARGET*100);
-      const label = d.done
-        ? 'Today is done — come back tomorrow'
-        : `${d.count} / ${DAILY_TARGET} phrases today`;
-      const prize = [r.tokens?`${r.tokens}🎟`:'', r.silver?`${r.silver}🥈`:'', r.gold?`${r.gold}🥇`:'']
-        .filter(Boolean).join('  ');
-      return `<div class="daily-card ${d.done?'done':''}">
-        <div class="daily-head">🗓️ Day ${(d.step % DAILY_CYCLE.length) + 1} of ${DAILY_CYCLE.length}
-          <span>${escapeHtml(prize)}</span></div>
-        <div class="trial-bar"><span style="width:${pct}%"></span></div>
-        <div class="daily-sub">${label}</div>
-      </div>`; })()}
+    ${dailyPanel()}
     ${playerAvatar() ? `<div class="home-hero">${avatarImg(playerAvatar(), 58)}<div>
         <div class="home-hero-name">${escapeHtml(state.name)}</div>
         <div class="home-hero-sub">Where to today?</div></div></div>`

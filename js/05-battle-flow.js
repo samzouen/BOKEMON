@@ -552,7 +552,7 @@ function runChargeQuiz(mv, mon){
       if(correct < mv.words){
         battleMsg(`${mv.name} fizzled out! (${correct}/${mv.words} words)`);
         playSfx('move_miss');
-        return setTimeout(enemyTurn, 900);
+        return setTimeout(advanceTurn, 900);
       }
       if(ui.battle) ui.battle.wordCarry = Math.max(0, correct - mv.words);
       startCharge(mon, def);
@@ -561,7 +561,7 @@ function runChargeQuiz(mv, mon){
       battleMsg(`⚡ Power gathers… ${c.charges} charge${c.charges>1?'s':''} held. The turn passes.`);
       logBattle(`${displayName(mon)} charged — ${c.charges}/${c.def.max}, window ${c.turnsLeft} turns`);
       renderBattle();
-      setTimeout(enemyTurn, 1100);
+      setTimeout(advanceTurn, 1100);
     },
     onExit:()=>{ go('battle'); },
   });
@@ -759,7 +759,7 @@ function resolveBattleMove(mv, target, results){
 
   /* Tactical moves resolve before the ordinary damage path. */
   if(mv.dot){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
     const tick = applyDot(mv, mon);
     /* The noflee rider pins them down — and being stuck to the floor costs them
        the Elusive edge entirely. This must come AFTER the word check: a failed
@@ -776,7 +776,7 @@ function resolveBattleMove(mv, target, results){
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
   if(mv.shell && mv.mult==null){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
     applyShell(mv, mon);
     renderStatusBadges();
     battleMsg(`${mv.name}! Damage taken cut by ${Math.round(mv.shell.reduce*100)}%, and attackers get burned.`);
@@ -784,7 +784,7 @@ function resolveBattleMove(mv, target, results){
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
   if(mv.tachy){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
     setPStatus(0, { type:'tachy', turnsLeft:mv.tachy.turns+1, bonusAction:mv.tachy.bonusAction,
                     evadeFirst:mv.tachy.evadeFirst, evadeAfter:mv.tachy.evadeAfter, fresh:true });
     renderStatusBadges();
@@ -793,7 +793,7 @@ function resolveBattleMove(mv, target, results){
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
   if(mv.grant){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
     if(mv.blockedWhile && (mv.blockedWhile==='guard' ? mon.guard : (mon[mv.blockedWhile]||0) > 0)){
       ui.battle.phase='player';
       toast(`${displayName(mon)} is already in that stance.`);
@@ -806,7 +806,7 @@ function resolveBattleMove(mv, target, results){
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
   if(mv.charm){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
     applyFieldStatus({ type:'charm', turnsLeft:mv.charm.turns, chance:mv.charm.chance });
     renderStatusBadges();
     battleMsg(`${mv.name}! For ${mv.charm.turns} turns each enemy may be charmed into losing its turn.`);
@@ -814,17 +814,20 @@ function resolveBattleMove(mv, target, results){
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
   if(mv.disrupt){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
     // In the player's hands it can't grant an initiative they already have, so
     // it jams the enemy's attacks instead.
-    setPStatus(0, { type:'disrupt', turnsLeft:mv.disrupt.turns+1, block:mv.disrupt.playerBlock });
+    /* Cast by you it is a debuff on THEM: every enemy loses an initiative
+       point, and a share of their attacks fail outright. */
+    livingEnemies().forEach(t=> addEStatus(t, { type:'disrupt', turnsLeft:mv.disrupt.turns+1 }));
+    setPStatus(0, { type:'disruptJam', turnsLeft:mv.disrupt.turns+1, block:mv.disrupt.playerBlock });
     renderStatusBadges();
-    battleMsg(`${mv.name}! Their signals are jammed — ${Math.round(mv.disrupt.playerBlock*100)}% of enemy attacks will fail for ${mv.disrupt.turns} turns.`);
+    battleMsg(`${mv.name}! Their signals are jammed — they lose the initiative, and ${Math.round(mv.disrupt.playerBlock*100)}% of their attacks will fail for ${mv.disrupt.turns} turns.`);
     playEffect(mv.name, { type:'Electric' });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
   if(mv.soul){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
     setPStatus(0, { type:'steelSoul', turnsLeft:mv.soul.turns+1, reduce:mv.soul.reduce,
                     bonus:mv.soul.bonus, owner:mon.uid });
     renderStatusBadges();
@@ -833,7 +836,7 @@ function resolveBattleMove(mv, target, results){
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
   if(mv.clones){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(enemyTurn,900); }
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
     applyClones(mv, mon);
     renderStatusBadges();
     battleMsg(`${mv.name}! Two clones fight alongside you for ${mv.clones.turns} turns.`);
@@ -864,7 +867,7 @@ function resolveBattleMove(mv, target, results){
     factor *= ui.battle.bonusMult;          // multiplies with everything else
     ui.battle.bonusMult = 0;
   }
-  if(factor<=0){ playSfx('move_miss'); battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
+  if(factor<=0){ playSfx('move_miss'); battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(advanceTurn,900); return; }
   const atk=monAtk(mon);
   /* SingleAOE: one main target at full power, everyone else at `splash`. */
   if(mv.target === 'SingleAOE' && mv.splash){
@@ -1005,6 +1008,13 @@ function resolveBattleMove(mv, target, results){
    Any hit on a Giga-Drain-marked enemy heals the active monster for 0.2x ATK. */
 function applyHits(hits){
   hits.forEach(h=>{ if(h && h.t) h.t.lastDamageTaken = h.dmg; });
+  /* Arena immortality: a knock-out becomes a full heal, so a test runs as long
+     as the tester wants without anything respawning. */
+  if(ui.battle && ui.battle.arenaImmortal){
+    hits.forEach(h=>{
+      if(h && h.t && h.newHp <= 0){ h.newHp = h.t.maxHp; h.t.hp = h.t.maxHp; }
+    });
+  }
   // an enemy holding block stacks eats one per strike
   hits.forEach(h=>{
     if(!h || !h.t || !blockStacksOf(h.t)) return;
@@ -1158,7 +1168,8 @@ function afterPlayerAttackReal(mon, hits){
 }
 function finishPlayerTurn(){
   if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
-  setTimeout(enemyTurn,850);
+  // hand back to the round's order rather than assuming the enemy is next
+  setTimeout(advanceTurn, 850);
 }
 
 /* An Ultimate that strikes the same target repeatedly. */
@@ -1244,7 +1255,7 @@ function resolveSplitHits(mv, mon, factor, atk, target){
 
 /* High tier: hit 2 different living enemies at 0.8x each (or the single enemy once if only 1 exists) */
 function resolveMulti2(mv, mon, correct, target){
-  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
+  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(advanceTurn,900); return; }
   const atk=monAtk(mon);
   const living = livingEnemies();
   let targets;
@@ -1275,7 +1286,7 @@ function resolveMulti2(mv, mon, correct, target){
 /* Ultra tier: 5-7 random hits (45/35/20) spread across enemies, may repeat a target.
    Screen inverts briefly on use; hits animate at 2x speed in succession. */
 function resolveMultiHit(mv, mon, correct){
-  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
+  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(advanceTurn,900); return; }
   /* Hit count widens as the stone is refined: 5-7 → 6-8 → 7-9. */
   const range = mv.ultraStone ? ultraHitRange(mv.ultraStone) : { min:5, max:7 };
   const r=Math.random();
@@ -1367,7 +1378,7 @@ function playSuccessiveHits(hits, i, done, fast){
 
 /* Very High tier: single status application, per-type effect (see applyVeryHighEffect) */
 function resolveStatusMove(mv, mon, target, correct){
-  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(enemyTurn,900); return; }
+  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(advanceTurn,900); return; }
   const atk=monAtk(mon);
   const targets = target ? [target] : [];
   const res = applyVeryHighEffect(mv.stoneType, mon, atk, targets, mv.stonePlus||0);
@@ -1434,11 +1445,50 @@ function resolveStatusMove(mv, mon, target, correct){
    wave builds pressure blow by blow. If the active monster faints partway
    through, the remaining attackers do NOT get their swings — the player sends
    out a replacement and the turn passes back to them. */
+/* A single enemy takes its slot in the order. The old enemyTurn() ran the
+   whole wave at once, which is what made per-monster initiative impossible. */
+function runSingleEnemyTurn(e){
+  const b = ui.battle;
+  if(!b || !e || e.hp <= 0) return advanceTurn();
+
+  // a skipping arena dummy simply stands there
+  if(e.isDummy && !e.arenaActs) return advanceTurn();
+
+  // frozen or stunned: it holds its slot but loses the action
+  const ice = getEStatus(e,'iceTomb');
+  if(ice){
+    ice.turnsLeft--;
+    if(ice.turnsLeft<=0) removeEStatus(e,'iceTomb');
+    renderStatusBadges();
+    battleMsg(`🧊 ${SPECIES[e.species].name} is frozen solid!`);
+    return setTimeout(advanceTurn, 700);
+  }
+  if(getEStatus(e,'paralysed')){
+    removeEStatus(e,'paralysed');
+    renderStatusBadges();
+    battleMsg(`💫 ${SPECIES[e.species].name} is stunned and can't move!`);
+    return setTimeout(advanceTurn, 700);
+  }
+  // an Elusive thief spends its slot leaving
+  if(isElusive(e)){
+    elusiveFlee(e);
+    renderStatusBadges();
+    return setTimeout(()=>{
+      if(livingEnemies().length === 0) return onElusiveFieldEmpty();
+      advanceTurn();
+    }, 800);
+  }
+  b.attackQueue = [e];
+  runEnemyAttack(0);
+}
+
 function enemyTurn(){
   const b = ui.battle;
   b.acted = b.acted || [];
   // anyone who took the initiative this round has already had their action
-  const attackers = livingEnemies().filter(e=>!b.acted.includes(e));
+  let attackers = livingEnemies().filter(e=>!b.acted.includes(e));
+  // arena dummies set to 'skips turn' never act at all
+  attackers = attackers.filter(e=>!(e.isDummy && !e.arenaActs));
 
   // Ice Tomb: frozen enemies lose their turn; tick the counter and thaw at zero
   const acting = [];
@@ -1511,7 +1561,12 @@ function runEnemyAttack(i){
     return setTimeout(onMonFainted, 650);
   }
   if(livingEnemies().length === 0){ b.attackQueue = null; return setTimeout(onWaveCleared, 650); }
-  if(!b.attackQueue || i >= b.attackQueue.length) return endEnemyRound();
+  if(!b.attackQueue || i >= b.attackQueue.length){
+    b.attackQueue = null;
+    if(livingEnemies().length===0){ return setTimeout(onWaveCleared,700); }
+    if(activeMon() && activeMon().currentHp<=0){ return setTimeout(onMonFainted,700); }
+    return setTimeout(advanceTurn, 450);
+  }
 
   const e = b.attackQueue[i];
   if(!e || e.hp <= 0) return runEnemyAttack(i+1);
@@ -1530,7 +1585,7 @@ function runEnemyAttack(i){
   }
 
   // player-cast Disrupt jams a share of incoming attacks outright
-  const jam = getPStatus(0,'disrupt');
+  const jam = getPStatus(0,'disruptJam');
   if(jam && jam.block && Math.random() < jam.block){
     battleMsg(`📡 ${SPECIES[e.species].name}'s attack is jammed!`);
     return setTimeout(()=> runEnemyAttack(i+1), 700);
@@ -1545,7 +1600,15 @@ function runEnemyAttack(i){
   const idx  = b.enemies.indexOf(e);
   /* During the initiative phase a Swift Striker uses the move that earned it
      the initiative — not its strongest. That is the whole bargain. */
-  const move = (b.initiativeRun && initiativeMoveFor(e)) || enemyMoveFor(e);
+  /* An arena dummy can be pinned to one slot so a tester can watch a single
+     move over and over. */
+  const leading = b.turnOrder && b.turnOrder[0] === 'enemy' && (b.turnStep||0) === 0;
+  let move = (leading && initiativeMoveFor(e)) || enemyMoveFor(e);
+  if(e.isDummy && e.arenaMove && e.arenaMove !== 'auto'){
+    const list = MOVES[e.species] || [];
+    const forced = list.find(m=>m[0] === e.arenaMove && m[1] != null);
+    if(forced) move = forced;
+  }
   const name = SPECIES[e.species].name;
 
   /* Per-attack rolls: Discombobulate can make this one miss, be countered, or
@@ -1661,6 +1724,10 @@ function runEnemyAttack(i){
       // scripted last stand: the dragon always survives on 1 HP
       const floor = ui.battle.allyUnkillable ? 1 : 0;
       mon.currentHp = Math.max(floor, mon.currentHp - dmg);
+      if(ui.battle.arenaImmortal && mon.currentHp <= 0){
+        mon.currentHp = monMaxHp(mon);          // back to full, test continues
+        msg += ' (immortal — restored)';
+      }
       flashHit($('#playerBob'));
       showDamageNumber('playerBob', oldHp - mon.currentHp);
       playSfx('hit_taken');
@@ -1696,12 +1763,13 @@ function runEnemyAttack(i){
       renderStatusBadges();
     }
     if(move[1] === 'Disrupt'){
-      if(enemyStatusBlocked('disrupt')){ msg += ' The diamond dust jams their signal instead.'; }
+      /* A DEBUFF on the player's side: their signals are jammed, so every one
+         of your monsters loses an initiative point. Killing the Magnet before
+         it acts is the counter. */
+      if(enemyStatusBlocked('disrupt')){ msg += ' The diamond dust holds your signal clear.'; }
       else {
-        b.fieldStatus = b.fieldStatus || {};
-        b.fieldStatus.disrupt = { type:'disrupt', turnsLeft:6 };
-        livingEnemies().forEach(x=> addEStatus(x, { type:'disrupt', turnsLeft:6 }));
-        msg += ' They seize the initiative!';
+        setPStatus(0, { type:'disrupt', turnsLeft:6 });
+        msg += ' Your signals are jammed — they will move first!';
       }
       renderStatusBadges();
     }
@@ -1764,87 +1832,19 @@ function onElusiveFieldEmpty(){
   }, 700);
 }
 
+/* The enemy side has finished its slice of the round. All the per-turn upkeep
+   that used to live here (stance decay, charge window, Discombobulate's
+   window) belongs to the END of the round, so it now happens in endRound().
+   This function only hands control on. */
 function endEnemyRound(){
-  const b0 = ui.battle;
-  /* Guard against a second entry in the same round. A Swift Strike round calls
-     this once for the initiative volley and again for the (empty) enemy phase,
-     and each call was ageing every status — buffs drained twice as fast. */
-  if(b0 && b0._roundClosed) return;
-  /* The initiative strike is not the end of the round — the player still acts. */
-  if(b0 && b0.initiativeRun){
-    b0.initiativeRun = false;
-    b0.attackQueue = null;
-    if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
-    if(!battleParty().some(m=>m.currentHp>0)) return onPlayerDefeated();
-    return setTimeout(()=> beginPlayerPhase('Choose a move.'), 600);
-  }
-  return endEnemyRoundReal();
-}
-function endEnemyRoundReal(){
   const b = ui.battle;
+  if(!b) return;
   b.attackQueue = null;
   if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
-  if(activeMon().currentHp<=0){ setTimeout(onMonFainted,700); return; }
-  b.switchedThisTurn = false;
-  // an unspent Cataclysm window closes on its own
-  const c = chargeState();
-  if(c){ c.turnsLeft--; if(c.turnsLeft <= 0){ clearCharge(); battleMsg('The gathered power disperses.'); } }
-  const gm = activeMon();
-  if(gm && gm.guard) grantBlock(gm, 1, monAtk(gm));    // Guard replenishes each turn
-  if(gm){
-    if(gm.airborne  > 0) gm.airborne--;                // stances last a turn
-    if(gm.invisible > 0) gm.invisible--;
-    if(gm.counterTurns > 0) gm.counterTurns--;
-    if(gm.evadeTurns   > 0) gm.evadeTurns--;
-  }
-  livingEnemies().forEach(e=>{
-    if(e.guard) grantBlock(e, 1, e.atk);
-    if(e.airborne  > 0) e.airborne--;
-    if(e.invisible > 0) e.invisible--;
-    if(e.counterTurns > 0) e.counterTurns--;
-    if(e.evadeTurns   > 0) e.evadeTurns--;
-  });
-  // Discombobulate's guaranteed window lasts a turn on + / ✦, then ✦ leaves a
-  // softer turn behind it before the plain rolls take over.
-  if(b.fieldStatus && b.fieldStatus.discombobulate){
-    const f = b.fieldStatus.discombobulate;
-    if(f.guaranteed && f.openTurn){
-      f.guaranteed = false;
-      if(f.second) f.softenTurn = true;
-    } else if(f.softenTurn){
-      f.softenTurn = false;
-    }
-    b.enemies.forEach(x=>{
-      const st = getEStatus(x,'discombobulate');
-      if(st){ st.guaranteed = f.guaranteed; st.softenTurn = f.softenTurn; }
-    });
-  }
-  const dd0 = getPStatus(0,'diamondDust');
-  if(dd0){
-    diamondDustCleanse();                // keeps the enemy board clear round after round
-  }
-  const mir0 = getPStatus(0,'mirage');
-  if(mir0 && mir0.window && mir0.step < mir0.window.length) mir0.step++;
-  const ovc = getPStatus(0,'overcharge');
-  if(ovc && ovc.fresh) ovc.fresh = false;
-  const aeg = getPStatus(0,'steelAegis');
-  if(aeg && aeg.regen) grantBlock(activeMon(), aeg.regen, monAtk(activeMon()));
-  const tac0 = getPStatus(0,'tachy');
-  if(tac0){
-    tac0.fresh = false;          // the sharpest evasion window is the first turn only
-    tac0.extras = 0;             // bonus actions are counted per turn
-  }
-  tickAftershock();
-  // ---- round is over: clear who acted so everyone gets a turn next round ----
-  b._roundClosed = true;                 // released by beginRound
-  b.acted = [];
-  b._initiativeDone = false;
-  b._routWent = false;
-  const gone = tickStatuses();          // one full round has passed
-  setTimeout(()=>{
-    beginRound(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
-  }, 850);
+  if(activeMon() && activeMon().currentHp<=0){ setTimeout(onMonFainted,700); return; }
+  setTimeout(advanceTurn, 500);
 }
+
 function onMonFainted(){
   const c = chargeState();
   if(c && activeMon() && c.uid === activeMon().uid) triggerDragonLegacy();
@@ -1859,15 +1859,20 @@ function onMonFainted(){
 
     if(livingEnemies().length===0){ renderBattle(); return setTimeout(()=>onWaveCleared(), 500); }
 
-    /* Set the phase BEFORE painting. Rendering first drew the move buttons
-       while the phase was still 'resolving', so they came out greyed and
-       nothing re-rendered afterwards — the menu stayed dead until the app was
-       backgrounded and forced a repaint. */
-    if(ui.battle.alwaysFirst){
-      ui.battle.phase='resolving';
+    /* The replacement steps into the round already under way. Whether it acts
+       now depends on whose slice we are in, so resume the order rather than
+       guessing. Note the phase is set before painting — rendering first left
+       the buttons greyed with nothing to re-render them. */
+    /* The replacement steps into the round already under way and INHERITS the
+       fallen monster's slot. Without this, chain-fainting would hand the player
+       a fresh action every time. */
+    const b2 = ui.battle;
+    const row = (b2.order||[]).find(r=>r.side==='player');
+    if(row){ row.mon = state.party[i]; }
+    if(row && row.acted){
+      b2.phase = 'resolving';
       renderBattle();
-      battleMsg('They strike again!');
-      return setTimeout(enemyTurn, 800);
+      return setTimeout(advanceTurn, 700);
     }
     ui.battle.phase='player';
     renderBattle();
