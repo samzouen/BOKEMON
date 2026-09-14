@@ -490,6 +490,13 @@
   .av-row{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-start;}
   .av-opt{background:none;border:3px solid transparent;border-radius:18px;padding:2px;cursor:pointer;line-height:0;}
   .av-opt.sel{border-color:var(--cinnabar);background:#fbf3e2;}
+  .daily-card{background:rgba(201,154,63,.16);border:1px solid rgba(201,154,63,.5);
+    border-radius:13px;padding:10px 12px;margin-bottom:12px;}
+  .daily-card.done{opacity:.7;}
+  .daily-head{display:flex;justify-content:space-between;align-items:center;
+    font-family:'Baloo 2',cursive;font-weight:800;font-size:13px;margin-bottom:6px;}
+  .daily-head span{font-size:11.5px;font-weight:700;color:var(--ink-soft);letter-spacing:.02em;}
+  .daily-sub{font-size:11px;font-weight:700;color:var(--ink-soft);margin-top:4px;}
   .version-tag{position:absolute;top:6px;right:10px;font-size:10px;font-weight:800;
     color:var(--ink-soft);opacity:.7;letter-spacing:.04em;z-index:5;}
   .home-hero{display:flex;align-items:center;gap:13px;margin:4px 0 16px;}
@@ -774,6 +781,26 @@
   .band-label{width:100%;text-align:center;font-family:'Baloo 2',cursive;font-weight:800;
     font-size:14px;margin-top:6px;}
   .sailor-btn img,.band-btn img{box-shadow:none !important;background:transparent !important;}
+  .gen-note{font-size:12.5px;font-weight:600;color:var(--ink-soft);line-height:1.5;margin:10px 0;}
+  .gen-stage{position:relative;width:100%;aspect-ratio:16/10;border-radius:14px;overflow:hidden;
+    background:var(--paper-2);border:2px solid var(--line);}
+  .gen-stage.gen-noart{background:repeating-linear-gradient(135deg,var(--paper-2),var(--paper-2) 12px,var(--paper-3) 12px,var(--paper-3) 24px);}
+  .gen-img{width:100%;height:100%;object-fit:cover;display:block;}
+  .gen-pulse{
+    position:absolute;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;
+    cursor:pointer;z-index:3;
+    background:radial-gradient(circle,rgba(200,69,58,.95) 0%,rgba(200,69,58,.55) 40%,rgba(200,69,58,0) 70%);
+    animation:genPulse var(--pulse-ms,900ms) ease-out forwards;
+  }
+  .gen-pulse::after{
+    content:'';position:absolute;inset:0;border-radius:50%;
+    border:3px solid rgba(255,120,90,.95);
+    animation:genRipple var(--pulse-ms,900ms) ease-out forwards;
+  }
+  @keyframes genPulse{ 0%{transform:scale(.45);opacity:0;} 18%{transform:scale(1);opacity:1;} 75%{opacity:.9;} 100%{opacity:0;} }
+  @keyframes genRipple{ 0%{transform:scale(.5);opacity:1;} 100%{transform:scale(2.1);opacity:0;} }
+  .gen-pulse.gone{ animation:none;opacity:0;transition:opacity .25s; }
+  .enemy-card.fled{ opacity:.3;filter:grayscale(1) blur(1px); }
   .worker-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
   .worker{
     position:relative;aspect-ratio:1/1;border-radius:14px;cursor:pointer;
