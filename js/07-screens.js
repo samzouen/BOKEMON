@@ -603,13 +603,16 @@ function dragonStoneBlock(m){
   if(!st || !state.inventory[st.id]) return '';
   const holder = stoneHolder(st.id);
   const mine = holder === m.uid;
-  return `<div class="crown-panel" style="border-color:rgba(59,126,161,.55);background:rgba(59,126,161,.14);">
-    <div class="crown-title">${uiIcon(st.icon,18,st.emoji)} ${escapeHtml(st.name)}</div>
-    <div class="crown-sub">${mine
-      ? `Attached — this monster gains <b>${st.xp}×</b> experience.`
-      : (holder ? 'Currently attached to another monster.' : `Attach it to gain <b>${st.xp}×</b> experience.`)}</div>
-    <button class="btn ${mine?'btn-ghost':'btn-primary'}" id="dragonStoneBtn" data-stone="${st.id}" style="margin-top:9px;">
-      ${mine ? 'Detach' : 'Attach'}</button>
+  return `<div class="crown-panel wide" style="border-color:rgba(59,126,161,.55);background:rgba(59,126,161,.14);">
+    <div class="cp-art">${uiIcon(st.icon, 62, st.emoji)}</div>
+    <div class="cp-text">
+      <div class="crown-title">${escapeHtml(st.name)}</div>
+      <div class="crown-sub">${mine
+        ? `Attached — this monster gains <b>${st.xp}×</b> experience.`
+        : (holder ? 'Currently attached to another monster.' : `Attach it to gain <b>${st.xp}×</b> experience.`)}</div>
+      <button class="btn ${mine?'btn-ghost':'btn-primary'}" id="dragonStoneBtn" data-stone="${st.id}" style="margin-top:9px;">
+        ${mine ? 'Detach' : 'Attach'}</button>
+    </div>
   </div>`;
 }
 
@@ -664,14 +667,17 @@ function crownBlock(m){
   }
   const ok = crownEligible(m);
   const why = ok ? '' : crownBlockReason(m);
-  return `<div class="crown-panel">
-    <div class="crown-title">${crownIcon(18)} Crown <span>${owned} held</span></div>
+  return `<div class="crown-panel wide">
+    <div class="cp-art">${crownIcon(62)}</div>
+    <div class="cp-text">
+    <div class="crown-title">Crown <span>${owned} held</span></div>
     <div class="crown-sub">${baseTier(m.species)==='legendary'
       ? 'Would grant three more evolutions\' worth of strength.'
       : 'Would raise this monster to legendary growth and unlock the legendary protein cap.'}</div>
     ${ok && owned>0
       ? `<button class="btn btn-primary" id="useCrown" style="margin-top:10px;">Use a Crown</button>`
       : `<div class="crown-why">${owned>0 ? escapeHtml(why) : 'You have no Crowns.'}</div>`}
+    </div>
   </div>`;
 }
 
@@ -920,7 +926,8 @@ function renderStorage(){
         <div id="storageList"></div>
       </div>
       <div class="storage-col col-stones">
-        ${elementalStoneShelf()}
+        ${heldStones().length ? `<button class="btn btn-ghost stone-page-btn" id="openStones">
+        💠 Element Stones <span>${heldStones().length} held</span></button>` : ''}
       ${recycleAllBar()}
       <div class="col-head">💎 Skills <span>${tokenIcon(16)} ${state.inventory.tokens||0}</span></div>
         <div id="stoneList"></div>
@@ -954,38 +961,68 @@ function renderStorage(){
   }
   renderStoneList();
   wireRecycleAll();
-  wireStoneShelf();
+  const os = $('#openStones');
+  if(os) os.addEventListener('click', ()=>go('elementStones'));
 }
 
 /* Low and Mid stones pile up fast, so they can be cleared in one go. */
 /* A shelf of the elemental stones you hold, showing who carries each and
    letting you take it back without hunting through the party. */
-function elementalStoneShelf(){
+/* A page of its own: what the stones do, then a row per stone you hold. */
+function renderElementStones(){
+  $('#brandSub').textContent = 'Element Stones';
+  setScreenBg('home');
   const held = heldStones();
-  if(!held.length) return '';
-  return `<div class="stone-shelf">
-    ${held.map(st=>{
+  const all = state.party.concat(state.storage);
+
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Storage</button>
+    <div class="screen-title">Element Stones</div>
+    <div class="stone-intro">
+      An Element Stone attaches to one monster of its own type and gives it
+      <b>1.5× experience</b> from every fight. Move it whenever you like — a stone
+      helps a monster that is falling behind far more than one already grown.
+      <br><br><i>Only one monster may carry a given stone at a time.</i>
+    </div>
+
+    ${held.length ? held.map(st=>{
       const holderUid = stoneHolder(st.id);
-      const mon = holderUid && state.party.concat(state.storage).find(m=>m.uid===holderUid);
-      return `<div class="shelf-row">
-        <span class="shelf-icon">${uiIcon(st.icon, 26, st.emoji)}</span>
-        <span class="shelf-text">
-          <b>${escapeHtml(st.name)}</b>
-          <span>${mon ? 'on ' + escapeHtml(displayName(mon)) : 'not attached'} · ${st.blurb}</span>
-        </span>
-        ${mon ? `<button class="btn btn-ghost shelf-btn" data-unstone="${st.id}">Detach</button>` : ''}
+      const mon = holderUid && all.find(m=>m.uid===holderUid);
+      const eligible = all.filter(m=>(SPECIES[m.species].types||[]).includes(st.type) && !isPassenger(m));
+      return `<div class="es-row">
+        <div class="es-icon">${uiIcon(st.icon, 54, st.emoji)}</div>
+        <div class="es-body">
+          <div class="es-name">${escapeHtml(st.name)}</div>
+          <div class="es-sub">${mon
+            ? `Carried by <b>${escapeHtml(displayName(mon))}</b> · Lv ${mon.level}`
+            : (eligible.length ? `${eligible.length} ${st.type} monster${eligible.length>1?'s':''} can carry it`
+                               : `No ${st.type} monster to carry it yet`)}</div>
+        </div>
+        <div class="es-actions">
+          ${mon ? `<button class="btn btn-ghost es-btn" data-detach="${st.id}">Detach</button>`
+                : `<button class="btn btn-primary es-btn" data-attach="${st.id}" ${eligible.length?'':'disabled'}>Attach</button>`}
+        </div>
       </div>`;
-    }).join('')}
-  </div>`;
-}
-function wireStoneShelf(){
-  screenEl.querySelectorAll('[data-unstone]').forEach(b=>b.addEventListener('click', async ()=>{
-    const id = b.dataset.unstone;
+    }).join('') : `<div class="phase-flag">You haven't found any Element Stones yet.</div>`}
+  `;
+  $('#backBtn').addEventListener('click', ()=>go('storage'));
+  screenEl.querySelectorAll('[data-detach]').forEach(b=>b.addEventListener('click', async ()=>{
+    const id = b.dataset.detach;
     state.inventory[stoneOnKey(id)] = null;
     await saveProfile();
-    const def = ELEMENTAL_STONES.find(x=>x.id===id);
-    toast(`${def.name} detached.`);
-    renderStorage();
+    toast(`${ELEMENTAL_STONES.find(x=>x.id===id).name} detached.`);
+    renderElementStones();
+  }));
+  screenEl.querySelectorAll('[data-attach]').forEach(b=>b.addEventListener('click', ()=>{
+    const st = ELEMENTAL_STONES.find(x=>x.id===b.dataset.attach);
+    const eligible = all.map((m,i)=>({m,i})).filter(o=>
+      (SPECIES[o.m.species].types||[]).includes(st.type) && !isPassenger(o.m));
+    monsterChooser(`Give the ${st.name} to…`, eligible, async (i)=>{
+      state.inventory[stoneOnKey(st.id)] = all[i].uid;
+      await saveProfile();
+      toast(`${st.name} attached to ${displayName(all[i])}.`);
+      renderElementStones();
+    });
   }));
 }
 

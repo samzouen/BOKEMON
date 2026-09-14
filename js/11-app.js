@@ -864,6 +864,22 @@ function escapeHtml(s){
     if(g) setTimeout(()=>announceMastery(g), 900);
     if(o) setTimeout(()=>announceOvermastery(o), 1700);
   }
+  /* Skill Tokens now come TWO per Bronze Medal. Anyone who bought at the old
+     one-for-one rate is owed the difference, worked out from total Bronze
+     earned minus what is still held. Runs once, ever. */
+  if(state && state._needsTokenTopUp){
+    delete state._needsTokenTopUp;
+    if(!state._tokenRateToppedUp){
+      state._tokenRateToppedUp = true;
+      const earned = (state.masteryAwarded.bronze||0) + ((state.overmasteryAwarded||{}).bronze||0);
+      const spent = Math.max(0, earned - (state.medals.bronze||0));
+      if(spent > 0){
+        state.inventory.tokens = (state.inventory.tokens||0) + spent;   // +1 each, to reach 2
+        await saveProfile();
+        setTimeout(()=>toast(`🎟️ ${spent} extra Skill Tokens — Bronze now buys two apiece.`), 2600);
+      }
+    }
+  }
   if(state && state._needsBronzeRefund){
     delete state._needsBronzeRefund;
     if(!state._bronzeRefunded){

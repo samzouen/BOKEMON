@@ -473,6 +473,11 @@ function gotcha(enemy){
 function go(screen){
   if(screen !== 'quiz') document.body.classList.remove('writing');
   document.body.classList.remove('in-scene');
+  /* A daily reward held back during a fight gets its moment once the player is
+     somewhere it can safely take over the screen. */
+  if(!['battle','quiz'].includes(screen) && typeof flushPendingDaily === 'function'){
+    setTimeout(flushPendingDaily, 350);
+  }
   if(!['zone','caverns','battle','quiz'].includes(screen)) document.body.classList.remove('zone-dark','zone-tinted');
   // Protected screens re-lock as soon as you leave them, so the password is
   // required on every visit. The arena stays unlocked while you're actually
@@ -526,6 +531,7 @@ function renderInner(){
     case 'plant':         return renderPlant();
     case 'concert':       return renderConcert();
     case 'generator':     return renderGenerator();
+    case 'elementStones': return renderElementStones();
     case 'dojo':          return renderDojo();
     case 'avatarPick':    return renderAvatarPick();
     case 'region2':       return renderStub('Region 2','🏞️','Region 2 is unlocked — its wilds and trainers arrive in a future phase. Earth Snake and Ground Starter will be catchable here.','region');

@@ -10,7 +10,7 @@
    not random drops — the long grind converts into a chosen reward.
    ============================================================ */
 const SHOP_PRICES = {
-  skillToken:   { cur:'bronze', cost:1  },   // 1:1 with Bronze now   // 3 Bronze -> 1 Skill Token
+  skillToken:   { cur:'bronze', cost:1, yields:2 },   // 1 Bronze buys TWO Skill Tokens
   randomStone:  { cur:'tokens', cost:TOKENS_PER_ROLL },
   protein:      { cur:'silver', cost:10 },
   eliteStone:   { cur:'gold',   cost:25 },
@@ -18,7 +18,7 @@ const SHOP_PRICES = {
   veryHighSkill:{ cur:'gold',   cost:50 },
   ultraSkill:   { cur:'gold',   cost:100 },
   crown:        { cur:'gold',   cost:100 },
-  goldMedal:    { cur:'tokens', cost:5  },   // Region 5+: buy gold with tickets
+  goldMedal:    { cur:'tokens', cost:15 },   // Region 5+: buy gold with tokens
   voidStone:    { cur:'tokens', cost:50 },
 };
 const SHOP_GREETINGS = [
@@ -101,7 +101,7 @@ function renderShop(){
   /* Stock arrives with the regions, so the shop grows as the story does.
      `from` is the earliest region that carries the item. */
   const wares = [
-    { id:'skillToken',    from:1, icon:tokenIcon(44), name:'Skill Token',            desc:'Spin for a random Skill Stone (5 tokens per spin).', qty:true },
+    { id:'skillToken',    from:1, icon:tokenIcon(44), name:'Skill Token',            desc:'Two tokens per Bronze Medal. Spins cost 5 tokens.', qty:true },
     { id:'randomStone',   from:1, icon:gemIcon('mid'), name:'Random Skill Stone', desc:'One spin, right now. Any tier, any type.' },
     { id:'protein',       from:2, icon:'💪', name:'Protein Supplement',     desc:'Permanently raises one monster\'s stats.' },
     { id:'eliteStone',    from:2, icon:gemIcon('veryhigh'), name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
@@ -183,7 +183,7 @@ function openQtyPurchase(w){
     const before = medalCount(pr.cur);
     if(!await spend(pr.cur, qty*pr.cost)) return;
     if(w.id==='goldMedal') state.medals.gold = (state.medals.gold||0) + qty;
-    else state.inventory.tokens = (state.inventory.tokens||0) + qty;
+    else state.inventory.tokens = (state.inventory.tokens||0) + qty * (pr.yields||1);
     const sv = showSyncingOverlay('Syncing…');
     const ok = await saveProfile({ awaitCloud:true });
     hideSyncingOverlay(sv);

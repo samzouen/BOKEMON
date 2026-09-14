@@ -858,11 +858,19 @@ function elusiveFlee(e){
    Adding a new element means one row here and nothing else.
    ============================================================ */
 const ELEMENTAL_STONES = [
-  { id:'dragonStone',   name:'Dragon Stone',   icon:'dragon_stone',   emoji:'🐉',
-    type:'Dragon',   xp:1.5, blurb:'A dragon carrying it learns half again as fast.' },
-  { id:'electricStone', name:'Electric Stone', icon:'electric_stone', emoji:'⚡',
-    type:'Electric', xp:1.5, blurb:'An electric monster carrying it learns half again as fast.' },
-];
+  { id:'waterStone',    name:'Water Stone',    icon:'water_stone',    emoji:'💧', type:'Water' },
+  { id:'fireStone',     name:'Fire Stone',     icon:'fire_stone',     emoji:'🔥', type:'Fire' },
+  { id:'grassStone',    name:'Grass Stone',    icon:'grass_stone',    emoji:'🌿', type:'Grass' },
+  { id:'electricStone', name:'Electric Stone', icon:'electric_stone', emoji:'⚡', type:'Electric' },
+  { id:'flyingStone',   name:'Flying Stone',   icon:'flying_stone',   emoji:'🕊', type:'Flying' },
+  { id:'groundStone',   name:'Ground Stone',   icon:'ground_stone',   emoji:'⛰', type:'Ground' },
+  { id:'physicalStone', name:'Physical Stone', icon:'physical_stone', emoji:'👊', type:'Physical' },
+  { id:'psychicStone',  name:'Psychic Stone',  icon:'psychic_stone',  emoji:'🔮', type:'Psychic' },
+  { id:'ghostStone',    name:'Ghost Stone',    icon:'ghost_stone',    emoji:'👻', type:'Ghost' },
+  { id:'dragonStone',   name:'Dragon Stone',   icon:'dragon_stone',   emoji:'🐉', type:'Dragon' },
+  { id:'steelStone',    name:'Steel Stone',    icon:'steel_stone',    emoji:'🛡', type:'Steel' },
+  { id:'fairyStone',    name:'Fairy Stone',    icon:'fairy_stone',    emoji:'✨', type:'Fairy' },
+].map(s=>Object.assign(s, { xp:1.5, blurb:`A ${s.type} monster carrying it learns half again as fast.` }));
 function heldStones(){ return ELEMENTAL_STONES.filter(s=>state.inventory[s.id]); }
 function stoneOnKey(id){ return id + 'On'; }
 function stoneHolder(id){ return state.inventory[stoneOnKey(id)] || null; }

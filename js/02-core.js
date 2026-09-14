@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '1.21';
+const GAME_VERSION = '1.24';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -865,6 +865,7 @@ function normalizeProfile(p){
   p.wordMastery = p.wordMastery || {};
   p.wordAttempts = p.wordAttempts || {};
   p.daily = p.daily || { day:null, count:0, step:0, done:false };
+  p.dailyWeeks = p.dailyWeeks || [];   // a record of every completed six-day cycle
   p.isDev = !!p.isDev;
   // passengers always sit at exactly 1 HP; a stray 0 makes them look fainted
   (p.party||[]).forEach(m=>{ const sp=SPECIES[m.species]; if(sp && (sp.isSeed||sp.isEgg)) m.currentHp = 1; });
@@ -944,6 +945,9 @@ function normalizeProfile(p){
   /* Skill Tokens used to cost 3 Bronze; they now cost 1. Refund two-thirds of
      everything already spent so nobody is punished for buying early. */
   p._needsBronzeRefund = !p._bronzeRefunded;
+  /* Skill Tokens now come two per Bronze Medal. Everyone who bought at the old
+     one-for-one rate is owed the difference. */
+  p._needsTokenTopUp = !p._tokenRateToppedUp;
   r2.waterDojo = r2.waterDojo || [];
   p.settings = p.settings || {};
   if(p.settings.volume===undefined) p.settings.volume = 0.8;

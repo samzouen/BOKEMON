@@ -29,19 +29,49 @@ function dailyState(){
   return state.daily;
 }
 function dailyReward(){ return DAILY_CYCLE[(dailyState().step) % DAILY_CYCLE.length]; }
+/* The celebration takes over the whole screen, which is fine on the home page
+   and disastrous in the middle of a battle — it navigated away and left the
+   fight unfinished. So during a fight we only toast, and hold the full scene
+   until the player is somewhere it can safely interrupt. */
 function announceDaily(r){
   const bits = [];
   if(r.tokens) bits.push(`${tokenIcon(20)} ${r.tokens} Skill Tokens`);
   if(r.silver) bits.push(`🥈 ${r.silver} Silver Medals`);
   if(r.gold)   bits.push(`🥇 ${r.gold} Gold Medals`);
   const d = dailyState();
+  const done = ((d.step + DAILY_CYCLE.length - 1) % DAILY_CYCLE.length) + 1;
   const nextStep = (d.step % DAILY_CYCLE.length) + 1;
-  storyModal('🗓️', `Day ${((d.step + DAILY_CYCLE.length - 1) % DAILY_CYCLE.length) + 1} complete!`,
+
+  if(ui.battle){
+    // the rewards are already banked; just say so and carry on fighting
+    ui.pendingDaily = { r, done, nextStep };
+    toast(`🗓️ Day ${done} complete — rewards banked!`);
+    return;
+  }
+  showDailyScene(r, done, nextStep);
+}
+
+function showDailyScene(r, done, nextStep){
+  const bits = [];
+  if(r.tokens) bits.push(`${tokenIcon(20)} ${r.tokens} Skill Tokens`);
+  if(r.silver) bits.push(`🥈 ${r.silver} Silver Medals`);
+  if(r.gold)   bits.push(`🥇 ${r.gold} Gold Medals`);
+  const back = ui.screen;
+  storyModal('🗓️', `Day ${done} complete!`,
     `<b>${DAILY_TARGET} phrases written today.</b><br><br>` +
     bits.join('<br>') +
     `<br><br><i>Tomorrow is day ${nextStep} of the cycle. Miss a day and nothing is lost — ` +
     `it simply waits for you.</i>`,
-    ()=>go(ui.screen === 'quiz' ? 'home' : ui.screen), { subtitle:'Daily' });
+    ()=>go(back === 'quiz' || back === 'battle' ? 'home' : back), { subtitle:'Daily' });
+}
+
+/* Shown the moment the player reaches a screen that can spare the interruption. */
+function flushPendingDaily(){
+  if(!ui.pendingDaily || ui.battle) return;
+  if(['battle','quiz'].includes(ui.screen)) return;
+  const p = ui.pendingDaily;
+  ui.pendingDaily = null;
+  setTimeout(()=> showDailyScene(p.r, p.done, p.nextStep), 500);
 }
 
 /* Called once per scored phrase. Returns the reward if this was the 25th. */
@@ -52,7 +82,14 @@ function noteDailyPhrase(){
   if(d.count < DAILY_TARGET) return null;
   const r = dailyReward();
   d.done = true;
+  const finishing = d.step;
   d.step = (d.step + 1) % DAILY_CYCLE.length;
+  /* A full six-day cycle is recorded so rewards can be reconciled later if we
+     ever need to. Kept small: a date and the day count. */
+  if(finishing === DAILY_CYCLE.length - 1){
+    state.dailyWeeks = state.dailyWeeks || [];
+    state.dailyWeeks.push({ completed: today(), days: DAILY_CYCLE.length });
+  }
   state.inventory.tokens = (state.inventory.tokens||0) + (r.tokens||0);
   if(r.silver) state.medals.silver = (state.medals.silver||0) + r.silver;
   if(r.gold)   state.medals.gold   = (state.medals.gold||0)   + r.gold;
