@@ -278,6 +278,20 @@ function onSwitchPressed(){
     ui.battle.activeIndex=i; ui.battle.switchedThisTurn=true;
     ui.battle.phase = 'player';        // a free switch never hands the turn over
     renderBattle();
+    /* Bringing the Whalelord back discharges everything he is owed — free, and
+     it does not cost the turn the switch already gave you. */
+    const back = activeMon();
+    const owed = back && (MOVES[back.species]||[]).some(m=>m[6] && m[6].wrath) && wrathStacks() > 0;
+    if(owed){
+      ui.battle.phase = 'resolving';
+      renderBattle();
+      return vengefulWrath(back, ()=>{
+        if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
+        ui.battle.phase = 'player';
+        renderBattle();
+        battleMsg('Now choose a move.');
+      });
+    }
     if(!ui.battle.legacyBonus) battleMsg('Switched! Now choose a move.');
   });
 }
@@ -758,6 +772,44 @@ function resolveBattleMove(mv, target, results){
   if(mv.isStone && mv.stoneTier==='veryhigh') ui.battle.usedVeryHigh[mon.uid]=true;
 
   /* Tactical moves resolve before the ordinary damage path. */
+  /* Haunting Aria — instant, does not spend the turn. */
+  if(mv.aria){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
+    if(ariaActive()){ battleMsg('The aria is already singing.'); return setTimeout(advanceTurn,700); }
+    castAria(mon, mv.aria, false);
+    ui.battle.phase = 'player';
+    renderBattle();
+    battleMsg('The aria settles. (instant — you can still attack!)');
+    return;
+  }
+  /* Grudge — flat plus three quarters of everything he has lost. */
+  if(mv.grudge){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
+    const dmg = grudgeDamage(mon, mv.grudge);
+    const foes = livingEnemies();
+    const hits = foes.map(t=>({ t, idx:ui.battle.enemies.indexOf(t), dmg,
+                                oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }));
+    battleMsg(`${mv.name}! Everything he has lost, given back at once.`);
+    bob($('#playerBob'), +1);
+    return setTimeout(()=>{ applyHits(hits); reportHits(hits);
+      setTimeout(()=> afterPlayerAttack(mon, hits), 700); }, 380);
+  }
+  /* Vengeance — one hit, then the grudge begins gathering. */
+  if(mv.wrath){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
+    const w = mv.wrath;
+    setPStatus(0, { type:'wrath', turnsLeft:w.turns + 1, stacks:wrathStacks(),
+                    per:w.per, bonus:w.bonus, bonusCap:w.bonusCap, dmgCap:w.dmgCap });
+    renderStatusBadges();
+    const t = target && target.hp > 0 ? target : livingEnemies()[0];
+    if(!t) return setTimeout(()=> afterPlayerAttack(mon, []), 700);
+    const dmg = computeDamage(mv.mult, monAtk(mon), monRef(mon), t, true);
+    const hits = [{ t, idx:ui.battle.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) }];
+    battleMsg(`${mv.name}! Every blow from here will be remembered.`);
+    bob($('#playerBob'), +1);
+    return setTimeout(()=>{ applyHits(hits); reportHits(hits);
+      setTimeout(()=> offerVengeanceSwap(mon, hits), 800); }, 380);
+  }
   if(mv.dot){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
     const tick = applyDot(mv, mon);
@@ -939,20 +991,7 @@ function resolveBattleMove(mv, target, results){
     }
     const dmg = computeDamage(factor, atk, monRef(mon), t, true);
     const idx=ui.battle.enemies.indexOf(t);
-    // Silk Reeling / Scaled Stance: striking them this turn costs you
-    if(t.counterTurns > 0){
-      const back = Math.ceil(dmg * (t.counterRet || 0.5));
-      setTimeout(()=>{
-        if(mon.currentHp <= 0) return;
-        const before = mon.currentHp;
-        mon.currentHp = Math.max(0, mon.currentHp - back);
-        mon.lastDamageTaken = back;
-        counterDrift(document.getElementById('enemyBob-'+idx), document.getElementById('enemyBob-'+idx));
-        drainHp('playerHp', before, mon.currentHp, monMaxHp(mon));
-        showDamageNumber('playerBob', back);
-        battleMsg(`↩️ ${SPECIES[t.species].name} turns your force back on you!`);
-      }, 520);
-    }
+    enemyCounter(t, idx, dmg, 520);      // Silk Reeling / Scaled Stance
     return { t, idx, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg), dmg };
   });
   let effMsg=''; hits.forEach(h=>{ const m=typeMultiplier(SPECIES[mon.species].types, h.t.types); if(m!==1) effMsg=effectivenessLabel(m); });
@@ -1173,6 +1212,46 @@ function afterPlayerAttackReal(mon, hits){
     finishPlayerTurn();
   }, 850);
 }
+/* Vengeance pushes him off the field — but it is your choice, so the button is
+   there to refuse. */
+function offerVengeanceSwap(mon, hits){
+  const others = state.party.map((m,i)=>({m,i}))
+    .filter(o=>o.m.currentHp>0 && o.m !== mon && !isPassenger(o.m));
+  if(!others.length) return afterPlayerAttack(mon, hits);
+  const ov = document.createElement('div');
+  ov.className = 'refine-scrim';
+  ov.innerHTML = `
+    <div class="refine-card">
+      <div class="refine-name">The wake carries him off</div>
+      <div class="refine-sub">Send someone into the field he has made?</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+        ${others.map(o=>`<button class="btn btn-primary" data-vsw="${o.i}">
+          ${escapeHtml(displayName(o.m))} · Lv ${o.m.level}</button>`).join('')}
+        <button class="btn btn-ghost" id="vswNo">Do not switch monster</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+  ov.querySelectorAll('[data-vsw]').forEach(b=>b.addEventListener('click', ()=>{
+    close();
+    const i = +b.dataset.vsw;
+    ui.battle.activeIndex = i;
+    const nm = activeMon();
+    if(nm && !nm._entered){ nm._entered = true; applyEntryPassives(nm, nm.species, nm.level, monAtk(nm)); }
+    // the successor inherits the Whalelord's slot — no free extra action
+    const row = (ui.battle.order||[]).find(r=>r.side==='player');
+    if(row) row.mon = nm;
+    renderBattle();
+    battleMsg(`${displayName(nm)} steps into the wake.`);
+    setTimeout(()=> afterPlayerAttack(nm, hits), 700);
+  }));
+  ov.querySelector('#vswNo').addEventListener('click', ()=>{
+    close();
+    battleMsg('He stays where he is.');
+    setTimeout(()=> afterPlayerAttack(mon, hits), 500);
+  });
+}
+
 function finishPlayerTurn(){
   if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
   // hand back to the round's order rather than assuming the enemy is next
@@ -1200,6 +1279,7 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
       const dmg = computeDamage(per, atk, monRef(mon), t, true);
       const oldHp = sim.get(t), newHp = Math.max(0, oldHp - dmg);
       sim.set(t, newHp);
+      enemyCounter(t, idx, dmg, 520 + (k*targets.length)*350);
       all.push({ t, idx, dmg, oldHp, newHp });
     });
   }
@@ -1225,6 +1305,37 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
 /* Every damage path must roll evasion, not just the single-hit one. Airborne
    and Unseen were being ignored entirely by multi-hit moves, so a Loong at 70%
    evasion never dodged a single strike of a six-hit barrage. */
+/* ------------------------------------------------------------
+   COUNTER
+   A defender in a counter stance answers EVERY strike it takes from a move the
+   player chose — single, twin, AOE and every hit of a barrage alike, each at
+   the stance's own ratio.
+
+   It deliberately does NOT answer pre-action-phase damage (Overheat's burn,
+   Aftershock, the Haunting Aria's retaliation). Those hits are small and
+   frequent, and letting them soak the counter would waste a stance the enemy
+   paid for — the player would simply chip it away for free.
+   ------------------------------------------------------------ */
+function enemyCounter(t, idx, dmg, delay){
+  if(!t || !(t.counterTurns > 0) || dmg <= 0) return 0;
+  const mon = activeMon();
+  if(!mon || mon.currentHp <= 0) return 0;
+  const back = Math.ceil(dmg * (t.counterRet || 0.5));
+  setTimeout(()=>{
+    const m = activeMon();
+    if(!m || m.currentHp <= 0) return;
+    const before = m.currentHp;
+    m.currentHp = Math.max(0, m.currentHp - back);
+    m.lastDamageTaken = back;
+    const ar = ariaState(); if(ar) ar.struck = true;
+    counterDrift(document.getElementById('enemyBob-'+idx), document.getElementById('enemyBob-'+idx));
+    drainHp('playerHp', before, m.currentHp, monMaxHp(m));
+    showDamageNumber('playerBob', back);
+    battleMsg(`↩️ ${SPECIES[t.species].name} turns your force back on you — ${back}!`);
+  }, delay || 520);
+  return back;
+}
+
 function rollDodge(t, idx, delay){
   const ev = stanceEvasion(t);
   if(ev <= 0 || Math.random() >= ev) return false;
@@ -1245,6 +1356,7 @@ function resolveSplitHits(mv, mon, factor, atk, target){
     const dmg = computeDamage(per, atk, monRef(mon), target, true);
     const oldHp = simHp, newHp = Math.max(0, simHp-dmg);
     simHp = newHp;
+    enemyCounter(target, tIdx, dmg, 520 + i*350);   // each strike is answered
     hits.push({ t:target, idx:tIdx, dmg, oldHp, newHp });
   }
   logBattle(`${displayName(mon)} used ${mv.name} — ${hits.length} strikes on ${SPECIES[target.species].name}`);
@@ -1314,6 +1426,7 @@ function resolveMultiHit(mv, mon, correct){
     const oldHp = sim.get(t);
     const newHp = Math.max(0, oldHp - dmg);
     sim.set(t, newHp);
+    enemyCounter(t, idx, dmg, 520 + i*350);
     hits.push({ t, idx, oldHp, newHp, dmg });
   }
   invertScreen();
@@ -1633,6 +1746,10 @@ function runEnemyAttack(i){
      move over and over. */
   const leading = b.turnOrder && b.turnOrder[0] === 'enemy' && (b.turnStep||0) === 0;
   let move = (leading && initiativeMoveFor(e)) || enemyMoveFor(e);
+  if(e.enraged){
+    const dc = (MOVES[e.species]||[]).find(m=>m[1]==='Depth Charge');
+    if(dc) move = dc;
+  }
   if(e.isDummy && e.arenaMove && e.arenaMove !== 'auto'){
     const list = MOVES[e.species] || [];
     const forced = list.find(m=>m[0] === e.arenaMove && m[1] != null);
@@ -1685,6 +1802,21 @@ function runEnemyAttack(i){
     sources.forEach(x=>{ hitChance *= (1-x); });
     evadeChance = 1 - hitChance;
   }
+  /* Every damaging move an enemy ATTEMPTS is remembered — once per move,
+     landed or not. */
+  noteWrath();
+  /* A turn of Haunting Aria covers the whole FIELD, so whoever stands in it is
+     untouchable; and if the Whalelord is struck with no Aria running, he sings
+     by reflex and the blow finds nothing where he was. */
+  const ariaCover = ariaFieldEvasion() > 0;
+  const d0 = activeMon();
+  const canReflex = !ariaCover && d0 && !ariaActive()
+                 && (MOVES[d0.species]||[]).some(m=>m[6] && m[6].aria);
+  if(ariaCover || (canReflex && ariaReflex(d0))){
+    dodgePlayer(); floatMiss('playerBob', 'MISS');
+    if(ariaCover) battleMsg('👻 The aria is still in the water — nothing lands.');
+    return setTimeout(()=> runEnemyAttack(i+1), 800);
+  }
   /* Same reasoning as the bonus action: if Tachypsychia is about to expire and
      has never once caused a miss, make this one miss. */
   const tacLast = tac && (tac.turnsLeft||0) <= 1 && !tac.evadedOnce;
@@ -1720,7 +1852,28 @@ function runEnemyAttack(i){
   playEffect(move[1], { type: e.types[0], at:'playerBob' });
 
   setTimeout(()=>{
-    let dmg = computeDamage(move[2], e.atk, e, monRef(mon), false);
+    const ex = move[6] || {};
+    let dmg;
+    if(ex.reflect){
+      /* Seoi Nage / Four Ounces in ENEMY hands: the exact figure it last took,
+         guard absorption included. computeDamage would have been handed a null
+         multiplier and returned nothing at all. */
+      dmg = Math.ceil((e.lastDamageTaken || 0) * ex.reflect);
+      if(dmg <= 0){
+        battleMsg(`${SPECIES[e.species].name} tried ${move[1]} — but there was nothing to give back.`);
+        return setTimeout(()=> runEnemyAttack(i+1), 800);
+      }
+      battleMsg(`↩️ ${SPECIES[e.species].name} returns your own force — ${dmg}!`);
+    } else if(ex.grudge){
+      dmg = Math.ceil((ex.grudge.flat||0.25) * e.atk
+                    + (ex.grudge.missing||0.75) * Math.max(0, e.maxHp - e.hp));
+    } else {
+      dmg = computeDamage(move[2], e.atk, e, monRef(mon), false);
+    }
+    if(ex.fullHpDouble && e.hp >= e.maxHp){
+      dmg = Math.ceil(dmg * 2);
+      battleMsg(`${SPECIES[e.species].name} is untouched — the blow lands at full force!`);
+    }
     if(disHalve)  dmg = Math.ceil(dmg*0.5);
     if(disSoften) dmg = Math.ceil(dmg*(1-disSoften));
 
@@ -1748,6 +1901,8 @@ function runEnemyAttack(i){
       const beforeBlock = dmg;
       dmg = applyBlock(mon, dmg, 'playerBlk');
       mon.lastDamageTaken = beforeBlock;     // reflection returns the FULL figure
+      const ar = ariaState();
+      if(ar) ar.struck = true;                // the dead whale takes note
       
       if(dmg < beforeBlock) msg = `🛡 Blocked ${beforeBlock - dmg}! ` + msg;
       // scripted last stand: the dragon always survives on 1 HP

@@ -213,6 +213,7 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
   // defender-side modifiers
   if(isPlayerAttacking){ // defender is an enemy
     if(isElusive(defender)) dmg *= (1 - ELUSIVE_REDUCTION);   // slippery as wet soap
+    if(defender && defender.takeMult) dmg *= defender.takeMult;
     const ice = getEStatus(defender,'iceTomb');
     if(ice) dmg *= (ice.taken != null ? ice.taken : 0.8);
     const cur = getEStatus(defender,'curse');
@@ -827,6 +828,112 @@ function stancePills(m){
 }
 
 /* ============================================================
+   CUAIN — the Whalelord's kit
+   Three moves that all pay more the worse things are going.
+     Grudge          scales with HIS missing health
+     Haunting Aria   punishes the enemy for landing hits at all
+     Gathering Wrath scales with how much the TEAM has been hurt
+   ============================================================ */
+
+/* ---- Haunting Aria: a 5-turn field the whole party stands in ---- */
+function ariaState(){ return ui.battle ? getPStatus(0,'aria') : null; }
+function ariaActive(){ const a = ariaState(); return !!(a && a.turnsLeft > 0); }
+
+function castAria(mon, def, byReflex){
+  const b = ui.battle;
+  if(!b || ariaActive()) return false;
+  setPStatus(0, {
+    type:'aria', turnsLeft:(def.turns||5) + 1,
+    pulse:def.pulse || 0.5, chance:def.chance || 0.5,
+    atk: monAtk(mon), owner: mon.uid,
+    fieldEvade: 1,                 // one turn of total evasion, for ANYONE on the field
+    struck: false,
+  });
+  renderStatusBadges();
+  battleMsg(byReflex
+    ? `👻 ${displayName(mon)} was not there — a Haunting Aria answers instead!`
+    : `👻 ${displayName(mon)} sings, and the water goes cold.`);
+  return true;
+}
+/* The turn of untouchability belongs to the FIELD, so a monster swapping in
+   during it inherits the protection. */
+function ariaFieldEvasion(){
+  const a = ariaState();
+  return (a && a.fieldEvade > 0) ? 1 : 0;
+}
+/* The passive: struck while the Aria is not running, it sings by reflex and the
+   blow misses. Costs no turn and no words. */
+function ariaReflex(mon){
+  if(ariaActive()) return false;
+  const mv = (MOVES[mon.species]||[]).find(m=>m[6] && m[6].aria);
+  if(!mv) return false;
+  return castAria(mon, mv[6].aria, true);
+}
+/* End of round: if anything of yours was hit, the dead whale may surface. */
+function ariaRetaliate(done){
+  const a = ariaState();
+  if(!a || !a.struck){ if(a) a.struck = false; return done(); }
+  a.struck = false;
+  if(Math.random() >= (a.chance || 0.5)) return done();
+  const foes = livingEnemies();
+  if(!foes.length) return done();
+  const dmg = Math.ceil((a.pulse || 0.5) * a.atk * ownBuffMultiplier());
+  const hits = foes.map(t=>({ t, idx:ui.battle.enemies.indexOf(t), dmg,
+                              oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }));
+  battleMsg('👻 Something enormous surfaces out of nowhere and is gone again.');
+  applyHits(hits, { noLeech:true });
+  reportHits(hits);
+  setTimeout(done, 850);
+}
+
+/* ---- Gathering Wrath ---- */
+function wrathState(){ return ui.battle ? getPStatus(0,'wrath') : null; }
+function wrathStacks(){ const w = wrathState(); return w ? (w.stacks||0) : 0; }
+/* The standing damage bonus, capped well below what the cash-in can use. */
+function wrathDamageBonus(){
+  const w = wrathState();
+  if(!w || !w.stacks) return 1;
+  return 1 + Math.min(w.stacks * w.bonus, w.bonusCap);
+}
+/* One stack per enemy MOVE — not per hit, and whether or not it lands. */
+function noteWrath(){
+  const w = wrathState();
+  if(!w || w.turnsLeft <= 0) return;
+  w.stacks = (w.stacks || 0) + 1;
+  renderStatusBadges();
+}
+/* Cashing in: free, no words, on swapping Cuain back into the fight. */
+function vengefulWrath(mon, done){
+  const w = wrathState();
+  const n = w ? (w.stacks||0) : 0;
+  if(!n) return done();
+  const counted = Math.min(n, w.dmgCap || 15);
+  const per = Math.ceil(w.per * monAtk(mon));
+  /* The bonus applies BEFORE the stacks are cleared, so the blow rides the
+     anger that produced it. */
+  const dmg = Math.ceil(counted * per * wrathDamageBonus() * ownBuffMultiplier());
+  const foes = livingEnemies();
+  if(!foes.length){ w.stacks = 0; return done(); }
+  const hits = foes.map(t=>({ t, idx:ui.battle.enemies.indexOf(t), dmg,
+                              oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }));
+  battleMsg(`🌊 <b>VENGEFUL WRATH</b> — ${n} grudge${n>1?'s':''} come due!`);
+  setTimeout(()=>{
+    applyHits(hits, { noLeech:true });
+    reportHits(hits);
+    w.stacks = 0;
+    renderStatusBadges();
+    setTimeout(done, 900);
+  }, 600);
+}
+
+/* ---- Grudge: worth more the closer he is to gone ---- */
+function grudgeDamage(mon, def){
+  const missing = Math.max(0, monMaxHp(mon) - mon.currentHp);
+  return Math.ceil(((def.flat || 0.25) * monAtk(mon) + (def.missing || 0.75) * missing)
+                   * ownBuffMultiplier());
+}
+
+/* ============================================================
    ELUSIVE
    The generator thieves are here for the power, not a fight. They take a fifth
    of the damage they should, and they bolt the moment their turn comes round.
@@ -1322,12 +1429,19 @@ function endRound(){
     });
   }
 
-  const gone = tickStatuses();
-  renderStatusBadges();
-  setTimeout(()=>{
+  const ar = getPStatus(0,'aria');
+  if(ar && ar.fieldEvade > 0) ar.fieldEvade--;   // the untouchable turn lapses
+
+  ariaRetaliate(()=>{
     if(!ui.battle) return;
-    beginRound(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
-  }, gone.length ? 900 : 500);
+    if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
+    const gone = tickStatuses();
+    renderStatusBadges();
+    setTimeout(()=>{
+      if(!ui.battle) return;
+      beginRound(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
+    }, gone.length ? 900 : 500);
+  });
 }
 
 /* The player's slice of the round. It decides nothing about order — losing the
@@ -1399,6 +1513,10 @@ const REGION_ZONES = {
        { id:'geothermal_plant', name:'Geothermal Plant', tint:'#c98a3a', locksUntil:'r3MonkeyMet' },
        { id:'plant_generator',  name:'Generator Floor',  tint:'#c8a33a', locksUntil:'r3PowerStone' },
        { id:'vane_shear',       name:'RRS Vane Shear',   tint:'#4a6a8a' } ],
+  /* Region 4 is one place: the ship. Its three decks are the zones. */
+  4: [ { id:'weather_deck',    name:'Weather Deck',   tint:'#5a8aaa' },
+       { id:'cabin_deck',      name:'Cabin Deck',     tint:'#6a7a8a' },
+       { id:'laboratory_deck', name:'Laboratory Deck', tint:'#4a7a8a', locksUntil:'r4GhostMet' } ],
 };
 
 /* --- Region 2, first scripted sequence: the Trial of Courage ---
@@ -1550,6 +1668,13 @@ function makeEnemy(species, level, opts){
   if(!move) move = avail[0] || MOVES[species][0];
   const e = { species, level, maxHp:hp, hp:hp, atk:stat, move, types:sp.types, stage, tier:sp.tier, ai, nerfed, boss:!!opts.boss, crowned:!!opts.crowned };
   if(opts.elusive) e.elusive = true;      // see ELUSIVE below
+  /* Enraged: while the Whalelord is unavenged his people fight like this —
+     one move, nothing else, harder and tougher. */
+  if(opts.enraged){
+    e.enraged = true;
+    e.dealMult = 1.25;
+    e.takeMult = 0.75;
+  }
   return e;
 }
 
@@ -1682,7 +1807,7 @@ function beginBattle(config){
 }
 function loadWave(i){
   const b = ui.battle;
-  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll, crowned:spec.crowned, forceStage:spec.forceStage, elusive:spec.elusive }));
+  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll, crowned:spec.crowned, forceStage:spec.forceStage, elusive:spec.elusive, enraged:spec.enraged }));
   // Leech Seed is a FIELD effect: it re-roots on every new wave.
   /* (the tiered field-status re-application below handles Leech Seed; a bare
       copy here used to overwrite it and strip the + / ✦ bite) */
@@ -1859,6 +1984,7 @@ function ownBuffMultiplier(){
   if(oh) m *= (oh.deal || 1.5);            // honour the refined tiers
   const dd = getPStatus(0,'dragonDance');
   if(dd) m *= (dd.deal || 1.25);
+  m *= wrathDamageBonus();                 // every grudge held makes you hit harder
   if(ui.battle && ui.battle.legacyBonus) m *= (1 + ui.battle.legacyBonus);
   return m;
 }
@@ -2163,7 +2289,7 @@ function renderBattle(){
 const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
   counter:'↩️ Counter', iceTomb:'🧊 Frozen', curse:'👻 Cursed', stunned:'💫 Stunned', machDragon:'🐉 Mach Dragon', softened:'🌀 Weakened', counterTurns:'↩️ Ready', evadeTurns:'🧘 Still',
-  discombobulate:'🌀 Confused', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
+  discombobulate:'🌀 Confused', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', enraged:'🐋 Enraged', aria:'👻 Haunting Aria', wrath:'🌊 Gathering Wrath', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
 };
 function renderStatusBadges(){
@@ -2182,6 +2308,8 @@ function renderStatusBadges(){
     const af = aftershockBonusHits();
     if(af) out.push(`<span class="status-pill mine">💥 Aftershock ×${af}</span>`);
     refreshAllBlockBars();
+    const wr = getPStatus(0,'wrath');
+    if(wr && wr.stacks) out.push(`<span class="status-pill">🌊 Wrath ×${wr.stacks}</span>`);
     const sp2 = stancePills(activeMon());
     if(sp2) out.push(sp2);
     row.innerHTML = out.join('');
@@ -2197,6 +2325,7 @@ function renderStatusBadges(){
        the fight just feels like bad luck. */
     const extras = [];
     if(isElusive(e))     extras.push('<span class="status-pill foe">💨 Elusive</span>');
+    if(e.enraged)        extras.push('<span class="status-pill foe">🐋 Enraged</span>');
     if(e.gooed)          extras.push('<span class="status-pill foe">🌋 Pinned</span>');
     if(e.guard)          extras.push('<span class="status-pill foe">🛡 Guard</span>');
     if(e.airborne > 0)   extras.push('<span class="status-pill foe">🕊 Airborne</span>');

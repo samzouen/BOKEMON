@@ -101,7 +101,7 @@ function renderShop(){
   /* Stock arrives with the regions, so the shop grows as the story does.
      `from` is the earliest region that carries the item. */
   const wares = [
-    { id:'skillToken',    from:1, icon:tokenIcon(44), name:'Skill Token',            desc:'Two tokens per Bronze Medal. Spins cost 5 tokens.', qty:true },
+    { id:'skillToken',    from:1, icon:tokenIcon(44), name:'Skill Tokens ×2',        desc:'Each Bronze Medal buys TWO tokens. Spins cost 5.', qty:true },
     { id:'randomStone',   from:1, icon:gemIcon('mid'), name:'Random Skill Stone', desc:'One spin, right now. Any tier, any type.' },
     { id:'protein',       from:2, icon:'💪', name:'Protein Supplement',     desc:'Permanently raises one monster\'s stats.' },
     { id:'eliteStone',    from:2, icon:gemIcon('veryhigh'), name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
@@ -154,7 +154,8 @@ function openQtyPurchase(w){
     <div class="qty-card">
       <div class="ware-icon big">${w.icon}</div>
       <div class="ware-name" style="font-size:19px;">${escapeHtml(w.name)}</div>
-      <div class="ware-desc" style="margin-bottom:14px;">${curIcon(pr.cur)} ${pr.cost} ${curName(pr.cur)} each</div>
+      <div class="ware-desc" style="margin-bottom:14px;">${curIcon(pr.cur)} ${pr.cost} ${curName(pr.cur)}
+        ${(pr.yields||1) > 1 ? `→ ${tokenIcon(15)} <b>${pr.yields}</b> each time` : 'each'}</div>
       <div class="qty-row">
         <button class="qty-btn" id="qMinus">−</button>
         <div class="qty-val" id="qVal">${qty}</div>
@@ -167,7 +168,10 @@ function openQtyPurchase(w){
     </div>`);
   const refresh = ()=>{
     ov.querySelector('#qVal').textContent = qty;
-    ov.querySelector('#qTotal').textContent = qty ? `Total: ${curIcon(pr.cur)} ${qty*pr.cost}` : 'Not enough medals.';
+    ov.querySelector('#qTotal').innerHTML = qty
+      ? `Pay ${curIcon(pr.cur)} <b>${qty*pr.cost}</b> &nbsp;·&nbsp; receive ` +
+        (w.id==='goldMedal' ? `🥇 <b>${qty}</b>` : `${tokenIcon(15)} <b>${qty*(pr.yields||1)}</b>`)
+      : 'Not enough medals.';
     ov.querySelector('#qPlus').disabled = qty >= max;
     ov.querySelector('#qMinus').disabled = qty <= 1;
     ov.querySelector('#qBuy').disabled = qty < 1;
@@ -187,7 +191,13 @@ function openQtyPurchase(w){
     const sv = showSyncingOverlay('Syncing…');
     const ok = await saveProfile({ awaitCloud:true });
     hideSyncingOverlay(sv);
-    if(!ok){ state.medals[pr.cur] = before; state.inventory.tokens -= qty; showSyncFailure(); return; }
+    if(!ok){
+      state.medals[pr.cur] = before;
+      // roll back what was actually granted, not the purchase count
+      if(w.id==='goldMedal') state.medals.gold -= qty;
+      else state.inventory.tokens -= qty * (pr.yields||1);
+      showSyncFailure(); return;
+    }
     playSfx('stone_low');
     close();
     toast(`Bought ${qty} Skill Token${qty>1?'s':''}!`);
@@ -514,7 +524,7 @@ function renderChallengeR3(){
     concertState().bandCleared ? 'Under new management. Eventually.' : 'Closed for the competition',
     concertState().bandCleared
       ? `<div class="dojo-sign">ELECTRIC DOJO — <b>CLOSED</b><br><br>` +
-        `Our Master has hung up her gloves for a guitar.<br>` +
+        `<b>Djenta</b> has hung up her gloves for a guitar.<br>` +
         `We are <b>seeking a new Dojo Master</b>.<br><br>` +
         `<i>Strength alone will not do. Come and be judged.</i></div><br>` +
         `Through the shutters, the hall is dark and the mats are stacked.`
@@ -1095,13 +1105,16 @@ function storyModal(emblem, title, html, onClose, opts){
       <div class="scene-emblem">${emblem}</div>
       <div class="scene-title">${escapeHtml(title)}</div>
       <div class="scene-body">${html}</div>
-      <button class="btn btn-primary" id="sceneNext" style="margin-top:16px;">Continue</button>
+      ${opts.action ? `<button class="btn btn-primary" id="sceneAct" style="margin-top:16px;">${escapeHtml(opts.action.label)}</button>` : ''}
+      <button class="btn ${opts.action ? 'btn-ghost' : 'btn-primary'}" id="sceneNext" style="margin-top:${opts.action?'8':'16'}px;">${escapeHtml(opts.confirm ? 'Dive' : (opts.action ? 'Leave it' : 'Continue'))}</button>
+      ${opts.confirm ? `<button class="btn btn-ghost" id="sceneBack" style="margin-top:8px;">Not yet</button>` : ''}
     </div>`;
-  $('#sceneNext').addEventListener('click', ()=>{
-    document.body.classList.remove('in-scene');
-    document.body.classList.remove('in-scene');
-    if(onClose) onClose();
-  });
+  const leave = ()=>{ document.body.classList.remove('in-scene'); };
+  const act = $('#sceneAct');
+  if(act) act.addEventListener('click', ()=>{ leave(); opts.action.fn(); });
+  $('#sceneNext').addEventListener('click', ()=>{ leave(); if(onClose) onClose(); });
+  const bk = $('#sceneBack');
+  if(bk) bk.addEventListener('click', ()=>{ leave(); if(opts.onCancel) opts.onCancel(); else go(ui.prevScreen||'explore'); });
 }
 
 

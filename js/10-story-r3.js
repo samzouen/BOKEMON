@@ -596,7 +596,7 @@ async function concertIntro3(){
   const c = concertState();
   c.seen = true;
   await saveProfile();
-  storyModal(npcPortrait('electric_master','⚡',130,'transparent'), 'The Electric Master',
+  storyModal(npcPortrait('electric_master','⚡',130,'transparent'), 'Djenta',
     `A young woman lowers her guitar and looks at you with the expression of someone at the end ` +
     `of a long day.<br><br>` +
     `"If you're here about the Dojo — it's shut until the competition's done. I'm sorry."<br><br>` +
@@ -710,7 +710,7 @@ function bandAftermath(){
     `in every region on the map.<br><br>` +
     `The Dojo doors stay shut. A new sign hangs on them:<br><br>` +
     `<div class="dojo-sign">ELECTRIC DOJO — <b>CLOSED</b><br><br>` +
-    `Our Master has hung up her gloves for a guitar.<br>` +
+    `<b>Djenta</b> has hung up her gloves for a guitar.<br>` +
     `We are <b>seeking a new Dojo Master</b>.<br><br>` +
     `<i>Strength alone will not do. Come and be judged.</i></div>`,
     ()=>go('challenge'), { bg:'band_concert', subtitle:'Band Competition' });
@@ -758,7 +758,7 @@ async function onBandStageWin(i){
   r3.dojoOpen = false;              // she is leaving; the Dojo needs a new master
   state.inventory.protein = (state.inventory.protein||0) + 7;
   await saveProfile();
-  storyModal(npcPortrait('electric_master','⚡',130,'transparent'), 'A swan song',
+  storyModal(npcPortrait('electric_master','⚡',130,'transparent'), "Djenta's swan song",
     `She is out of breath and, oddly, delighted.<br><br>` +
     `"All five. Nobody's done that." She unslings her guitar and looks at it for a moment.<br><br>` +
     `"That was my <b>swan song</b>, you know. Win or lose today, I'm going pro — the band, the touring, ` +

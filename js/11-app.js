@@ -50,6 +50,9 @@ function renderZone(){
   // into a normal explorable zone.
   if(z.id === 'rocky_caverns' && !cavernsComplete()) return renderCaverns();
   if(z.id === 'geothermal_plant') return renderPlant();
+  if(z.id === 'weather_deck')       return renderWeatherDeck();
+  if(z.id === 'cabin_deck')  return renderCabinDeck();
+  if(z.id === 'laboratory_deck')  return renderLaboratoryDeck();
   if(z.id === 'plant_generator') return renderGenerator();
   if(z.id === 'vane_shear') return vaneShearClosed();
   return renderZonePlain();
@@ -145,6 +148,7 @@ function renderExplore(){
             (z.locksUntil==='r2ChallengeDone' && !(state.progress.region2||{}).challengeDone) ||
             (z.locksUntil==='r3MonkeyMet' && !r3.monkeyMet) ||
             (z.locksUntil==='r3PowerStone' && !r3.powerStone) ||
+            (z.locksUntil==='r4GhostMet' && !(state.progress.region4||{}).ghostMet) ||
             (z.locksUntil==='never');
           return `
           <div class="zone-item">

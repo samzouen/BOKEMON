@@ -8,7 +8,7 @@
 /* The cap belongs to the ZONE you're standing in, not the region — Rocky
    Caverns lets you push past the rest of Emerald March. Away from any zone,
    the region's best available cap applies. */
-const REGION_CAPS = { 1:21, 2:41, 3:61, 4:76 };
+const REGION_CAPS = { 1:21, 2:41, 3:61, 4:85 };
 function levelCap(){
   /* The Band Competition is a Challenge rather than a zone, so it carries its
      own ceiling; beating the band lifts the whole region. */
@@ -532,6 +532,11 @@ function renderInner(){
     case 'concert':       return renderConcert();
     case 'generator':     return renderGenerator();
     case 'elementStones': return renderElementStones();
+    case 'weather_deck':      return renderWeatherDeck();
+    case 'cabin_deck': return renderCabinDeck();
+    case 'laboratory_deck': return renderLaboratoryDeck();
+    case 'accuse':        return renderAccuse();
+    case 'accuse':        return renderAccuse();
     case 'dojo':          return renderDojo();
     case 'avatarPick':    return renderAvatarPick();
     case 'region2':       return renderStub('Region 2','🏞️','Region 2 is unlocked — its wilds and trainers arrive in a future phase. Earth Snake and Ground Starter will be catchable here.','region');

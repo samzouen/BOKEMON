@@ -102,6 +102,14 @@ const SPECIES = {
   thunderhound:    { name:'Thunderhound', tier:'elite', types:['Electric'], rate:11, nerfedRate:11, base:67, evo:[21],    evoMult:1.5, color:'#d8a83a', glyph:'獒' },
   howler:          { name:'Howler',       tier:'elite', types:['Electric'], rate:11, nerfedRate:11, base:71, evo:[25],    evoMult:1.5, color:'#c89a4a', glyph:'嚎' },
 
+  /* --- Region 4: the North Sea --- */
+  whale:           { name:'Whale',     tier:'wild',      types:['Water'],        rate:7,  nerfedRate:5,  base:70, evo:[25], evoMult:1.5, color:'#4a7a9a', glyph:'鲸' },
+  /* Cuain. A legendary running on a hole where his core should be — elite in
+     every respect until Region 5 gives it back. One evolution's worth of stats
+     baked in, like Phoenix: he arrives already grown. */
+  whalelord:       { name:'Whalelord', tier:'legendary', types:['Water','Ghost'], rate:13, nerfedRate:11, base:66, evo:[], evoMult:1.5,
+                     color:'#3a5a7a', glyph:'鲲', nerfedUntilCrowned:true, storyCrownOnly:true, preEvolved:true },
+
   /* --- Legendaries & story --- */
   /* --- Region 2: Rocky Caverns starters --- */
   flying_starter:  { name:'Raven',       tier:'starter',   types:['Flying'],        rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#6b7a8f', glyph:'鸦' },
@@ -341,6 +349,18 @@ const MOVES = {
                     ['Power2','Alpha Call',null,'Passive',0,21,{passive:{block:1}}],
                     ['Ultimate','Sky Splitter',1.0,'AOE',8,41],
                     ['Max','Sky Splitter Max',1.25,'AOE',8,51,{stunHit:0.25, softenHit:{chance:0.50, amount:0.50}}]],
+
+  whale:           [['Basic','Tail Slap',0.25,'Single',2,1],
+                    ['Power1','Breaching Swell',0.4,'AOE',4,1],
+                    ['Power2','Bulk',null,'Passive',0,1,{passive:{block:2}}],
+                    ['Ultimate','Depth Charge',1.5,'Single',8,25]],
+
+  /* Every move pays more the worse things are going. */
+  whalelord:       [['Basic','Malice',0.3,'Single',2,1],
+                    ['Power1','Grudge',null,'AOE',5,1,{grudge:{flat:0.25, missing:0.75}, passive:{noFlee:true}}],
+                    ['Power2','Haunting Aria',null,'Self',5,1,{aria:{turns:5, pulse:0.5, chance:0.50}}],
+                    ['Ultimate','Vengeance',1.25,'Single',8,1,{wrath:{turns:5, per:0.2, bonus:0.03, bonusCap:0.30, dmgCap:15}}],
+                    ['Max','Vengeance Max',1.5,'Single',10,1,{wrath:{turns:5, per:0.3, bonus:0.05, bonusCap:0.50, dmgCap:15}}]],
 
   sacred_seed:     [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 };
