@@ -213,7 +213,7 @@ const MOVES = {
                     ['Max','Volt Concussion Max',0.4,'Single',8,999,{hits:4, paralyse:0.20, coreOnly:true}]],
   ankylosaurus:    [['Basic','Hammertail',0.1,'Single',4,1,{hits:3}],
                     ['Power1','Seismic Shock',0.2,'AOE',8,1,{hits:2}],
-                    ['Power2','Steel Soul',null,'Self',4,35,{soul:{turns:3, reduce:0.5, bonus:0.1}}],
+                    ['Power2','Steel Soul',null,'Self',4,35,{soul:{turns:3, reduce:0.2, bonus:0.1}}],
                     ['Ultimate','Rampage',0.2,'AOE',8,45,{hits:5}],
                     ['Max','Rampage Max',0.3,'AOE',8,55,{hits:5, bonus:{words:2, aftershock:true}}]],
   /* Swift Strike: an enemy using it seizes the initiative; the player, who

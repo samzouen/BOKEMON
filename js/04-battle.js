@@ -354,6 +354,10 @@ function startCharge(mon, def){
   b.charge.charges = Math.min(def.max, b.charge.charges + 1);
   b.charge.def = def;
   b.charge.turnsLeft = b.charge.charges + 1;   // 1 charge -> 2 turns, 2 -> 3
+  /* The round you charge on ends immediately afterwards, and its end phase
+     would age the window straight away — costing you one of the turns you just
+     paid for. Skip that first tick. */
+  b.charge.fresh = true;
   saveProfile();
 }
 function clearCharge(){ if(ui.battle) ui.battle.charge = null; }
@@ -927,7 +931,8 @@ function runPreHits(done){
       if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
       return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
     });
-    applyHits(hits); reportHits(hits);
+    applyHits(hits, { noLeech:true });   // upkeep damage never feeds Leech Seed
+    reportHits(hits);
     battleMsg(p.label);
     setTimeout(step, 850);
   };
@@ -1272,7 +1277,13 @@ function endRound(){
   b.switchedThisTurn = false;
 
   const c = chargeState();
-  if(c){ c.turnsLeft--; if(c.turnsLeft <= 0){ clearCharge(); battleMsg('The gathered power disperses.'); } }
+  if(c){
+    if(c.fresh){ c.fresh = false; }          // the round it was gathered doesn't count
+    else {
+      c.turnsLeft--;
+      if(c.turnsLeft <= 0){ clearCharge(); battleMsg('The gathered power disperses.'); }
+    }
+  }
 
   const gm = activeMon();
   if(gm){

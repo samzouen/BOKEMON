@@ -1007,7 +1007,11 @@ function resolveBattleMove(mv, target, results){
 
 /* apply a batch of {t,idx,oldHp,newHp} hits with flash + drain, mark fainted.
    Any hit on a Giga-Drain-marked enemy heals the active monster for 0.2x ATK. */
-function applyHits(hits){
+/* `opts.noLeech` marks damage that did NOT come from an attack the player
+   chose — pre-hits like Overheat ✦'s burn and Aftershock. Those should not
+   feed Leech Seed, or a seeded field would heal the team and gnaw the enemy
+   before a single move was made. */
+function applyHits(hits, opts){
   hits.forEach(h=>{ if(h && h.t) h.t.lastDamageTaken = h.dmg; });
   /* Arena immortality: a knock-out becomes a full heal, so a test runs as long
      as the tester wants without anything respawning. */
@@ -1033,7 +1037,7 @@ function applyHits(hits){
     h.t.hp = h.newHp;
     flashHit(document.getElementById('enemy-'+h.idx));
     drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
-    healed += resolveLeech(h.t, mon);
+    if(!(opts && opts.noLeech)) healed += resolveLeech(h.t, mon);
   });
   const ls = ui.battle && ui.battle.pendingLifesteal;
   if(ls){ healed += ls; ui.battle.pendingLifesteal = 0; }
@@ -1049,7 +1053,9 @@ function applyHits(hits){
     const before = mon.currentHp;
     mon.currentHp = Math.min(max, mon.currentHp + healed);
     drainHp('playerHp', before, mon.currentHp, max);
-    battleMsg(`Giga Drain restored ${mon.currentHp-before} HP!`);
+    const others = battleParty().filter(m=>m.currentHp>0 && m!==mon).length;
+    battleMsg(`🌿 The seed drinks deep — <b>${mon.currentHp-before} HP</b> to ${displayName(mon)}` +
+      (others ? ` and every one of your other ${others} monster${others>1?'s':''}.` : '.'));
   }
   saveProfile();
   hits.forEach(h=>{ if(h.newHp<=0){ const el=document.getElementById('enemy-'+h.idx); if(el) el.classList.add('fainted'); } });
@@ -1363,15 +1369,31 @@ function checkThresholdStuns(){
 }
 
 function playSuccessiveHits(hits, i, done, fast){
-  if(i>=hits.length){ done(); return; }
+  if(i>=hits.length){
+    const tally = ui.battle && ui.battle._leechTally;
+    if(tally > 0){
+      ui.battle._leechTally = 0;
+      const n = battleParty().filter(m=>m.currentHp>0).length;
+      setTimeout(()=> battleMsg(
+        `🌿 The seeds drink deep — <b>${tally} HP</b> to each of your ${n} standing monster${n>1?'s':''}.`), 350);
+    }
+    done(); return;
+  }
   const h = hits[i];
   const gap = fast ? 350 : 350;   // Ultra strikes now dwell as long as normal ones
   h.t.hp = h.newHp;
   flashHit(document.getElementById('enemy-'+h.idx));
   drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
   {
+    /* Leech Seed on a multi-hit move healed silently — no message, and only the
+       active monster's bar moves — so there was no way to tell it had worked.
+       Tally it and announce the total when the barrage finishes. */
     const mon = activeMon();
-    leechHealParty(resolveLeech(h.t, mon), mon);   // same resolver as the single-hit path
+    const got = resolveLeech(h.t, mon);
+    if(got > 0){
+      leechHealParty(got, mon);
+      if(ui.battle) ui.battle._leechTally = (ui.battle._leechTally||0) + got;
+    }
   }
   if(h.newHp<=0){ const el=document.getElementById('enemy-'+h.idx); if(el) el.classList.add('fainted'); }
   setTimeout(()=> playSuccessiveHits(hits, i+1, done, fast), gap);
