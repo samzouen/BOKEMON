@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '1.26';
+const GAME_VERSION = '1.30';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -496,9 +496,24 @@ const CROWN_LEGENDARY_STAGES = 3;
 
 function isCrowned(m){ return !!(m && m.crowned); }
 function baseTier(species){ return (SPECIES[species]||{}).tier; }
+
+/* ------------------------------------------------------------
+   STOLEN CORES
+   Monkey King, the Water Dragon, Thunder Newt — and the Whalelord to come —
+   are legendaries running on a hole where their core should be. Until it is
+   returned they are ELITE in every respect: elite growth rate AND the elite
+   protein cap. The player can never crown them; the story does it, and the
+   moment it does they become legendary in both at once.
+   ------------------------------------------------------------ */
+function coreStolen(m, fallbackSpecies){
+  const sp = SPECIES[(m && m.species) || fallbackSpecies] || {};
+  return !!sp.nerfedUntilCrowned && !isCrowned(m);
+}
 /* The tier a monster actually behaves as, once crowning is taken into account. */
 function effectiveTier(m, fallbackSpecies){
   const t = baseTier((m && m.species) || fallbackSpecies);
+  // a legendary without its core behaves as an elite, protein cap included
+  if(coreStolen(m, fallbackSpecies)) return 'elite';
   if(isCrowned(m) && (t==='starter' || t==='elite' || t==='special')) return 'legendary';
   return t;
 }

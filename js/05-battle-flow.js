@@ -1557,8 +1557,10 @@ function runEnemyAttack(i){
 
   // The active monster went down mid-sequence: stop here, no free swings.
   if(mon.currentHp <= 0){
+    /* No tick here. Statuses age in endRound() and nowhere else — this
+       leftover from the old two-sided model was a second tick whenever the
+       active monster fell mid-sequence. */
     b.attackQueue = null;
-    tickStatuses();              // the round still happened — age the statuses
     return setTimeout(onMonFainted, 650);
   }
   if(livingEnemies().length === 0){ b.attackQueue = null; return setTimeout(onWaveCleared, 650); }
@@ -1585,12 +1587,16 @@ function runEnemyAttack(i){
     }, 800);
   }
 
-  // a jammed enemy may seize up entirely
+  /* A jammed enemy may seize up — but never twice running. Without this, an
+     unlucky streak could keep a monster frozen for a whole fight, which reads
+     as a lockout rather than interference. */
   const jammed = getEStatus(e,'disrupt');
-  if(jammed && Math.random() < (jammed.stun || 0.15)){
+  if(jammed && !e._seizedLastTurn && Math.random() < (jammed.stun || 0.15)){
+    e._seizedLastTurn = true;
     battleMsg(`📡 ${SPECIES[e.species].name} seizes up — its signals are scrambled!`);
     return setTimeout(()=> runEnemyAttack(i+1), 700);
   }
+  e._seizedLastTurn = false;
   // enemy-side Charm: a charmed enemy may lose its turn outright
   const chm = getEStatus(e,'charm');
   if(chm && Math.random() < (chm.chance||0.20)){

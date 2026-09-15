@@ -120,7 +120,10 @@ const SPECIES = {
   /* --- Story monsters --- */
   lanternfish:     { name:'Lanternfish', tier:'wild',      types:['Water','Electric'], rate:7, nerfedRate:5, base:5, evo:[18], evoMult:1.5, color:'#4fa8b8', glyph:'灯' },
   water_dragon:    { name:'Water Dragon',tier:'legendary', types:['Water','Dragon'],rate:13, nerfedRate:13, base:100, evo:[31],    evoMult:1.5, color:'#2f7fa8', glyph:'龙', bossOnly:true },
-  water_dragon_nerfed:{ name:'Water Dragon', tier:'elite', types:['Water','Dragon'],rate:11, nerfedRate:11, base:31, evo:[31],    evoMult:1.5, color:'#5a92a8', glyph:'龙', weakened:true },
+  /* Hatched from the egg with its core still missing: legendary by nature,
+     elite in practice until Region 5 returns what was taken. */
+  water_dragon_nerfed:{ name:'Water Dragon', tier:'legendary', types:['Water','Dragon'],rate:13, nerfedRate:11, base:31, evo:[31], evoMult:1.5,
+                     color:'#5a92a8', glyph:'龙', weakened:true, nerfedUntilCrowned:true, storyCrownOnly:true },
   dragon_egg:      { name:'Dragon Egg',  tier:'special',   types:['Water','Dragon'],rate:0,  nerfedRate:0,  base:1,   evo:[],      color:'#7fa8b8', glyph:'卵', isEgg:true, hatchesAt:31, hatchesInto:'water_dragon_nerfed' },
 
   phoenix:         { name:'Phoenix',     tier:'legendary', types:['Fire','Flying'], rate:13, nerfedRate:13, base:25,  evo:[],      evoMult:1.5, color:'#c8453a', glyph:'凤', frozenRegion1:true, bonusStages:1 },

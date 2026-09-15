@@ -879,8 +879,16 @@ function stoneXpBonus(m){
   const s = ELEMENTAL_STONES.find(st=>stoneHolder(st.id) === m.uid);
   return s ? s.xp : 1;
 }
+/* A dual-type monster matches more than one stone. Prefer the one it already
+   carries, then any you own, and only then the first by type — otherwise a
+   Water Dragon matched the Water Stone you don't have and showed no panel at
+   all, hiding the Dragon Stone you do. */
 function stoneFor(m){
-  return ELEMENTAL_STONES.find(st=>(SPECIES[m.species].types||[]).includes(st.type));
+  const types = SPECIES[m.species].types || [];
+  const matches = ELEMENTAL_STONES.filter(st=>types.includes(st.type));
+  return matches.find(st=>stoneHolder(st.id) === m.uid)
+      || matches.find(st=>state.inventory[st.id])
+      || matches[0];
 }
 
 /* ============================================================
@@ -1319,12 +1327,14 @@ function beginPlayerPhase(msg){
 
   // a jammed player may seize up before acting
   const jam = getPStatus(0,'disrupt');
-  if(jam && Math.random() < (jam.stun || 0.15)){
+  if(jam && !b._playerSeized && Math.random() < (jam.stun || 0.15)){
+    b._playerSeized = true;            // never two turns running
     b.phase = 'resolving';
     renderBattle();
     battleMsg(`📡 ${displayName(activeMon())} seizes up — your signals are scrambled!`);
     return setTimeout(advanceTurn, 900);
   }
+  b._playerSeized = false;
   const stun = getPStatus(0,'stunned');
   if(stun){
     removePStatus(0,'stunned');
