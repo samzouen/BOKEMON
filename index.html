@@ -810,6 +810,71 @@
   .band-label{width:100%;text-align:center;font-family:'Baloo 2',cursive;font-weight:800;
     font-size:14px;margin-top:6px;}
   .sailor-btn img,.band-btn img{box-shadow:none !important;background:transparent !important;}
+  .sci-top{display:flex;justify-content:center;gap:26px;margin:12px 0 16px;}
+  .sci-top .deck-sprite{display:flex;flex-direction:column;align-items:center;gap:5px;}
+  .sci-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px;}
+  .sci-cell{position:relative;background:var(--paper-2);border:2px solid var(--line);
+    border-radius:13px;padding:9px 4px;cursor:pointer;transition:transform .16s;}
+  .sci-cell:active{transform:scale(.95);}
+  .sci-cell.beaten{opacity:.45;filter:grayscale(.7);}
+  .sci-tick{position:absolute;inset:0;margin:auto;width:34px;height:34px;color:var(--jade);
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));}
+  .clue-box{background:rgba(58,90,122,.14);border:1px solid rgba(58,90,122,.45);
+    border-radius:13px;padding:12px;margin-bottom:12px;}
+  .clue-box.tight{padding:9px;margin:0;font-size:11.5px;}
+  .clue-head{font-family:'Baloo 2',cursive;font-weight:800;font-size:13px;margin-bottom:7px;}
+  .clue-line{font-size:12.5px;line-height:1.55;margin-bottom:7px;}
+  .clue-line:last-child{margin-bottom:0;}
+  .acc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;}
+  .acc-cell{background:var(--paper-2);border:2px solid var(--line);border-radius:13px;
+    padding:8px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;}
+  .acc-cell:active{transform:scale(.95);}
+  .acc-mons{display:flex;gap:3px;}
+  .focus-mons{display:flex;justify-content:center;gap:22px;margin-top:12px;}
+  .focus-mons>div{display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .fm-name{font-size:11px;font-weight:800;color:var(--ink-soft);}
+  .sci-top, .inv-top{display:flex;gap:26px;justify-content:center;margin:12px 0 16px;}
+  .sci-grid, .inv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px;}
+  .sci-cell, .inv-cell{background:var(--paper-2);border:2px solid var(--line);border-radius:14px;
+    padding:10px 4px 7px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;
+    transition:transform .15s,border-color .2s;}
+  .sci-cell:active, .inv-cell:active{transform:scale(.95);}
+  .sci-cell.done, .inv-cell.done{border-color:var(--jade);background:rgba(95,168,107,.14);}
+  .sci-name, .inv-name{font-size:10px;font-weight:800;color:var(--ink-soft);}
+  .sci-mons{display:flex;gap:3px;justify-content:center;margin-top:3px;}
+  .sci-mons img{width:22px;height:22px;object-fit:contain;}
+  .sci-focus{display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .sci-focus .big-mons{display:flex;gap:12px;}
+  .sci-focus .big-mons img{width:66px;height:66px;object-fit:contain;}
+  .clue-box{background:rgba(59,126,161,.13);border:1px solid rgba(59,126,161,.45);
+    border-radius:12px;padding:11px;font-size:12px;line-height:1.55;text-align:left;margin-bottom:12px;}
+  .deck-wrap{position:relative;width:100%;min-height:340px;margin:10px 0;}
+  .deck-sprite{background:none;border:none;padding:0;cursor:pointer;transition:transform .18s;}
+  .deck-sprite:active{transform:scale(.93);}
+  .deck-sailors{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:22px;}
+  .deck-fishers{position:absolute;right:2px;top:0;display:flex;flex-direction:column;gap:14px;}
+  .deck-divers{position:absolute;left:2px;top:90px;display:flex;flex-direction:column;
+    align-items:center;gap:6px;opacity:.75;}
+  .deck-divers.open{opacity:1;}
+  .deck-keeper{position:absolute;right:2px;bottom:10px;display:flex;flex-direction:column;
+    align-items:center;gap:6px;}
+  .hunt-box{background:var(--paper-2);border:1px solid var(--line);border-radius:13px;
+    padding:11px;margin-top:12px;}
+  .hunt-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:13px;margin-bottom:8px;}
+  .hunt-row{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:700;
+    padding:6px 0;border-bottom:1px dashed var(--line);}
+  .hunt-row:last-of-type{border-bottom:none;}
+  .hunt-row.done{opacity:.45;}
+  .hunt-row span:first-of-type{flex:1;}
+  .hunt-pay{font-weight:900;color:var(--gold);display:flex;align-items:center;gap:3px;}
+  .hunt-note{font-size:10.5px;color:var(--ink-soft);font-weight:600;margin-top:7px;}
+  .deck-canteen{position:absolute;left:2px;bottom:10px;display:flex;flex-direction:column;
+    align-items:center;gap:6px;}
+  .deck-cabin{display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:30px;}
+  .dive-label{font-size:11px;font-weight:800;color:var(--ink-soft);
+    background:rgba(244,236,216,.8);padding:3px 9px;border-radius:9px;white-space:nowrap;}
+  .ghost-here{position:absolute;right:14px;bottom:6px;animation:ghostBob 3.2s ease-in-out infinite;}
+  @keyframes ghostBob{0%,100%{transform:translateY(0);opacity:.85;}50%{transform:translateY(-9px);opacity:1;}}
   .gen-note{font-size:12.5px;font-weight:600;color:var(--ink-soft);line-height:1.5;margin:10px 0;}
   .gen-stage{position:relative;width:100%;aspect-ratio:16/10;border-radius:14px;overflow:hidden;
     background:var(--paper-2);border:2px solid var(--line);}
@@ -1306,7 +1371,8 @@
   <script src="js/08-screens2.js"></script>
   <script src="js/09-story-r2.js"></script>
   <script src="js/10-story-r3.js"></script>
+  <script src="js/12-story-r4.js"></script>
   <script src="js/11-app.js"></script>
 
 </body>
-</html> 
+</html>
