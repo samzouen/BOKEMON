@@ -62,43 +62,47 @@ function renderWeatherDeck(){
 
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Explore</button>
-    <div class="deck-wrap">
-      <!-- the sailors, loafing amidships -->
-      <div class="deck-sailors">
-        ${[1,2,3].map(n=>`<button class="deck-sprite" data-sailor="${n}">
-          ${npcPortrait('sailor'+n,'⚓',58,'transparent')}</button>`).join('')}
-      </div>
+    <!-- Pinned to the plan of the ship: bow at the top, stern at the bottom.
+         Every position is a percentage of the artwork, so it holds at any size. -->
+    <div class="ship-deck" id="shipDeck">
+      <img src="assets/zones/weather_deck.png" alt="" class="ship-img"
+           onerror="this.style.display='none';this.parentNode.classList.add('no-art')">
 
-      <!-- fishermen down the starboard rail -->
-      <div class="deck-fishers">
-        ${[1,2,3,4,5].map(n=>`<button class="deck-sprite fisher" data-fisher="${n}">
-          ${npcPortrait('fisherman'+n,'🎣',46,'transparent')}</button>`).join('')}
-      </div>
+      <!-- Nothing stands here that does not have a job. The fishermen are a
+           reaction test: five possible positions, under a second to react, on
+           artwork already full of winches and nets. Anything else on deck is
+           noise the eye has to rule out first. The off-duty sailors are below,
+           on the cabin deck, where talking belongs. -->
 
-      <!-- the shipkeeper, by the hold -->
-      <div class="deck-keeper">
-        <button class="deck-sprite" data-keeper="1">
-          ${npcPortrait('shipkeeper','⚓',60,'transparent')}
-          <div class="dive-label">Salvage</div>
-        </button>
-      </div>
+      <!-- five fishermen down the starboard rail, alongside the nets -->
+      ${[[78,40],[80,47],[81,54],[80,61],[78,68]].map((p,i)=>`
+        <button class="deck-pin fisher" style="left:${p[0]}%;top:${p[1]}%;" data-fisher="${i+1}">
+          ${npcPortrait('fisherman'+(i+1),'🎣',40,'transparent')}</button>`).join('')}
 
-      <!-- the dive platform, port side -->
-      <div class="deck-divers ${g.diversBeaten?'open':''}">
-        ${[1,2].map(n=>`<button class="deck-sprite" data-diver="${n}">
-          ${npcPortrait('diver'+n,'🤿',62,'transparent')}</button>`).join('')}
+      <!-- the dive platform: the grating on the port side, by the hanging suits -->
+      <div class="deck-pin dive-pin ${g.diversBeaten?'open':''}" style="left:20%;top:45%;">
+        <div class="pin-pair">
+          ${[1,2].map(n=>`<button class="deck-sprite" data-diver="${n}">
+            ${npcPortrait('diver'+n,'🤿',48,'transparent')}</button>`).join('')}
+        </div>
         <div class="dive-label">${g.diversBeaten ? '🌊 Dive' : '🚫 Blocked'}</div>
       </div>
 
-      ${g.ghostAccepted && !g.rivalBeaten ? `<button class="deck-sprite ghost-here" data-ghost="1">
-        ${monPortrait('whalelord',72,{view:'front',bare:true})}</button>` : ''}
+      <!-- the shipkeeper, by the stern winch -->
+      <button class="deck-pin" style="left:50%;top:87%;" data-keeper="1">
+        ${npcPortrait('shipkeeper','⚓',52,'transparent')}
+        <div class="dive-label">Salvage</div>
+      </button>
+
+      ${g.ghostAccepted && !g.rivalBeaten ? `
+        <button class="deck-pin ghost-here" style="left:22%;top:80%;" data-ghost="1">
+          ${monPortrait('whalelord',60,{view:'front',bare:true})}</button>` : ''}
     </div>
     <div class="phase-flag">${g.diversBeaten
       ? 'Tap the divers to go over the side.'
       : 'The divers are not letting anyone past.'}</div>
   `;
   $('#backBtn').addEventListener('click', ()=>{ stopBirdLoop(); go('explore'); });
-  screenEl.querySelectorAll('[data-sailor]').forEach(b=>b.addEventListener('click', ()=>sailorChat(+b.dataset.sailor)));
   screenEl.querySelectorAll('[data-fisher]').forEach(b=>b.addEventListener('click', ()=>fisherChat()));
   // the birds come and go whether or not you are watching
   if(battleParty().some(m=>m.currentHp>0)) startBirdLoop(); else stopBirdLoop();
@@ -112,6 +116,7 @@ function renderWeatherDeck(){
   if(gh) gh.addEventListener('click', ()=>ghostChat('top'));
 }
 
+/* All five are off duty on the cabin deck — the weather deck is for working. */
 const SAILOR_LINES = [
   `"Oi — it's you." He has the decency to look sheepish. "Look, about the competition. ` +
   `We'd had a few. We're not usually like that."`,
@@ -120,11 +125,13 @@ const SAILOR_LINES = [
   `He looks at it like it's a relic. "Best night of my life, that."`,
   `"You beat the whole band. The <i>whole</i> band." He shakes his head slowly. ` +
   `"Djenta shook your hand and everything. I'd not have washed it."`,
+  `"Six weeks at sea and the cook's run out of onions. <i>Onions.</i>"`,
+  `"You're the one the captain's banking on." She studies you. "No pressure."`,
 ];
 function sailorChat(n){
-  storyModal(npcPortrait('sailor'+n,'⚓',120,'transparent'), 'On deck',
+  storyModal(npcPortrait('sailor'+n,'⚓',120,'transparent'), 'Below decks',
     SAILOR_LINES[(n-1) % SAILOR_LINES.length],
-    ()=>go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
+    ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck' });
 }
 /* ---------- the raids ---------- */
 let _birdTimer = null, _birdLive = null, _birdRunning = false;
@@ -139,7 +146,7 @@ function startBirdLoop(){
   const schedule = ()=>{
     _birdTimer = setTimeout(()=>{
       if(!_birdRunning) return stopBirdLoop();
-      const marks = Array.from(document.querySelectorAll('.deck-fishers .deck-sprite'));
+      const marks = Array.from(document.querySelectorAll('.deck-pin.fisher'));
       if(!marks.length) return stopBirdLoop();
       pulseFisher(marks[Math.floor(Math.random()*marks.length)], schedule);
     }, 700 + Math.random()*1800);
@@ -384,8 +391,8 @@ function renderCabinDeck(){
     <button class="back-link" id="backBtn">← Explore</button>
     <div class="deck-wrap">
       <div class="deck-sailors">
-        ${[4,5].map(n=>`<button class="deck-sprite" data-sailor="${n}">
-          ${npcPortrait('sailor'+n,'⚓',58,'transparent')}</button>`).join('')}
+        ${[1,2,3,4,5].map(n=>`<button class="deck-sprite" data-sailor="${n}">
+          ${npcPortrait('sailor'+n,'⚓',54,'transparent')}</button>`).join('')}
       </div>
       <!-- the canteen, aft -->
       <div class="deck-canteen">
@@ -403,13 +410,7 @@ function renderCabinDeck(){
     </div>
   `;
   $('#backBtn').addEventListener('click', ()=>go('explore'));
-  screenEl.querySelectorAll('[data-sailor]').forEach(b=>b.addEventListener('click', ()=>{
-    const n = +b.dataset.sailor;
-    storyModal(npcPortrait('sailor'+n,'⚓',120,'transparent'), 'Below decks',
-      n===4 ? `"Six weeks at sea and the cook's run out of onions. <i>Onions.</i>"`
-            : `"You're the one the captain's banking on." She studies you. "No pressure."`,
-      ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck' });
-  }));
+  screenEl.querySelectorAll('[data-sailor]').forEach(b=>b.addEventListener('click', ()=>sailorChat(+b.dataset.sailor)));
   const ck = screenEl.querySelector('[data-cook]');
   if(ck) ck.addEventListener('click', ()=>cookChat());
   const rb = screenEl.querySelector('[data-rival]');
