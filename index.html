@@ -848,6 +848,20 @@
   .sci-focus .big-mons img{width:66px;height:66px;object-fit:contain;}
   .clue-box{background:rgba(59,126,161,.13);border:1px solid rgba(59,126,161,.45);
     border-radius:12px;padding:11px;font-size:12px;line-height:1.55;text-align:left;margin-bottom:12px;}
+  /* The deck is the artwork. Every sprite is pinned by percentage, so the
+     layout holds whatever size the phone renders it at. */
+  .ship-deck{position:relative;width:100%;aspect-ratio:797/1209;margin:8px 0 4px;
+    border-radius:14px;overflow:hidden;}
+  .ship-deck.no-art{background:repeating-linear-gradient(135deg,var(--paper-2),var(--paper-2) 14px,var(--paper-3) 14px,var(--paper-3) 28px);}
+  .ship-img{width:100%;height:100%;object-fit:contain;display:block;}
+  .deck-pin{position:absolute;transform:translate(-50%,-50%);background:none;border:none;
+    padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;
+    transition:transform .16s;z-index:3;}
+  .deck-pin:active{transform:translate(-50%,-50%) scale(.9);}
+  .deck-pin img{filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));}
+  .pin-pair{display:flex;gap:2px;}
+  .dive-pin{opacity:.8;}
+  .dive-pin.open{opacity:1;}
   .deck-wrap{position:relative;width:100%;min-height:340px;margin:10px 0;}
   .deck-sprite{background:none;border:none;padding:0;cursor:pointer;transition:transform .18s;}
   .deck-sprite:active{transform:scale(.93);}
@@ -880,6 +894,7 @@
     background:var(--paper-2);border:2px solid var(--line);}
   .gen-stage.gen-noart{background:repeating-linear-gradient(135deg,var(--paper-2),var(--paper-2) 12px,var(--paper-3) 12px,var(--paper-3) 24px);}
   .gen-img{width:100%;height:100%;object-fit:cover;display:block;}
+  .deck-pin.fisher{ position:absolute; }
   .bird-pulse{ width:46px;height:46px;margin:-23px 0 0 -23px;left:50%;top:40%; }
   .gen-pulse{
     position:absolute;width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;
