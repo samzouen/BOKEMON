@@ -395,6 +395,8 @@ async function onEngineerWin(){
 function vaneShearClosed(){
   const r3 = state.progress.region3;
   if(!r3.vaneShearSeen){ r3.vaneShearSeen = true; saveProfile(); }
+  /* Once the band is beaten the crew comes back aboard and he has his reason. */
+  if(r3.shipPass) return vaneShearOpen();
   storyModal(npcPortrait('shipkeeper','⚓',120,'transparent'), 'RRS Vane Shear',
     `A white-bearded giant blocks the gangway. He folds his arms, which takes a moment.<br><br>` +
     `"No."<br><br>` +
@@ -406,6 +408,28 @@ function vaneShearClosed(){
     ()=>go('explore'), { bg:'vane_shear', subtitle:'RRS Vane Shear' });
 }
 
+
+/* He remembers you beat the lot of them, which is a reason he cares about. */
+function vaneShearOpen(){
+  storyModal(npcPortrait('shipkeeper','⚓',130,'transparent'), 'RRS Vane Shear',
+    `The gangway is down and the crew are aboard, and the white-bearded giant is ` +
+    `standing exactly where he was before.<br><br>` +
+    `He looks at you for a while.<br><br>` +
+    `<b>"You beat the whole band."</b> It is not quite a question.<br><br>` +
+    `<b>"Aye. That'll do."</b> He steps aside — barely. <b>"Captain's on the weather deck. ` +
+    `We're sailing east on the tide, and she'll want a word before we go."</b>`,
+    ()=> boardTheShip(), { bg:'vane_shear', subtitle:'RRS Vane Shear' });
+}
+async function boardTheShip(){
+  state.progress.currentRegion = 4;
+  state.progress.region4 = state.progress.region4 || {};
+  await saveProfile();
+  storyModal(npcPortrait('ship_captain','⚓',140,'transparent'), 'Under way',
+    `Port Akrotiri slides astern faster than you expect.<br><br>` +
+    `<i>You are aboard the RRS Vane Shear, bound east across the North Sea.</i><br><br>` +
+    `<b>The Weather Deck, the Cabin Deck and the Laboratory are yours to explore.</b>`,
+    ()=> go('explore'), { bg:'weather_deck', subtitle:'Weather Deck' });
+}
 
 /* ============================================================
    DEVELOPER PROFILE
@@ -932,7 +956,9 @@ function renderDojo(){
       ${ELECTRIC_SIBLINGS.map(m=>npcPortrait(m.id,'⚡',44,'transparent')).join('')}
       <div style="flex:1;">
         <div class="cc-title">The Siblings ${d.electricDone?'<span class="clear-tag">Judged</span>':''}</div>
-        <div class="cc-desc">Three of them, back to back. They grew up in this hall.</div>
+        <div class="cc-desc">${d.electricDone
+          ? 'Judged — but they will go again any time, for the exercise.'
+          : 'Three of them, back to back. They grew up in this hall.'}</div>
       </div>
     </div>
 
@@ -940,7 +966,9 @@ function renderDojo(){
       ${GREAT_SAGE_TEAM.map(m=>npcPortrait(m.id,'🥋',44,'transparent')).join('')}
       <div style="flex:1;">
         <div class="cc-title">The Sage Disciples ${d.sageDone?'<span class="clear-tag">Judged</span>':''}</div>
-        <div class="cc-desc">Three of them, back to back. They came a very long way.</div>
+        <div class="cc-desc">${d.sageDone
+          ? 'Judged — but they will go again any time, for the exercise.'
+          : 'Three of them, back to back. They came a very long way.'}</div>
       </div>
     </div>
 
@@ -952,8 +980,9 @@ function renderDojo(){
   `;
   $('#backBtn').addEventListener('click', ()=>go('challenge'));
   $('#returnBtn').addEventListener('click', ()=>go('challenge'));
-  $('#teamE').addEventListener('click', ()=>{ if(!d.electricDone) startTeamRun('electric', 0); else toast('You have already tested them.'); });
-  $('#teamS').addEventListener('click', ()=>{ if(!d.sageDone) startTeamRun('sage', 0); else toast('You have already tested them.'); });
+  /* Both teams will go again as often as you like — for the exercise only. */
+  $('#teamE').addEventListener('click', ()=> d.electricDone ? rematchTeam('electric') : startTeamRun('electric', 0));
+  $('#teamS').addEventListener('click', ()=> d.sageDone    ? rematchTeam('sage', 0)   : startTeamRun('sage', 0));
   const gv = $('#giveVerdict');
   if(gv && !d.verdict) gv.addEventListener('click', ()=> dojoVerdict());
 }
@@ -989,27 +1018,46 @@ function dojoIntro3(){
     ()=>go('dojo'), { bg:'challenge', subtitle:'Electric Dojo' });
 }
 
+/* A friendly rematch: the same fights, XP only, no tokens and no proteins. */
+function rematchTeam(which){
+  const first = which === 'electric' ? ELECTRIC_SIBLINGS[0] : GREAT_SAGE_TEAM[0];
+  storyModal(npcPortrait(first.id, which==='electric'?'⚡':'🥋', 130, 'transparent'),
+    which==='electric' ? 'The siblings want another go' : 'The disciples want another go',
+    which === 'electric'
+      ? `The eldest is already rolling her shoulders.<br><br>` +
+        `<b>"You caught us cold last time. Again — properly."</b><br><br>` +
+        `<i>All three, back to back. Nothing at stake but the exercise.</i>`
+      : `They are lined up before you have finished crossing the hall.<br><br>` +
+        `<b>"We have been drilling. We would like to know whether it helped."</b><br><br>` +
+        `<i>All three, back to back. Nothing at stake but the exercise.</i>`,
+    ()=> startTeamRun(which, 0, true),
+    { bg:'challenge', subtitle:'Electric Dojo' });
+}
+
 /* Each team is a continuous run, like the band gauntlet. */
 function teamRoster(which){ return which==='electric' ? ELECTRIC_SIBLINGS : GREAT_SAGE_TEAM; }
-function startTeamRun(which, i){
+function startTeamRun(which, i, rematch){
   const roster = teamRoster(which);
   const m = roster[i];
   if(!ensurePool()) return;
-  ui.dojoRun = { which, i };
+  ui.dojoRun = { which, i, rematch:!!rematch };
   beginBattle({ isNpc:true, name:m.label, npcId:m.id, concertFight:true,
     bgKey:'battle_electric_dojo',
     waves: m.waves.map(w=>w.map(e=>({...e, nerfed:false}))),
-    onWin: ()=> onTeamStageWin(which, i) });
+    onWin: ()=> onTeamStageWin(which, i, !!rematch) });
 }
-async function onTeamStageWin(which, i){
+async function onTeamStageWin(which, i, rematch){
   const roster = teamRoster(which);
-  state.inventory.protein = (state.inventory.protein||0) + 3;   // every one of them pays
-  await saveProfile();
+  // a rematch is for the exercise: experience only, nothing else changes hands
+  if(!rematch){
+    state.inventory.protein = (state.inventory.protein||0) + 3;
+    await saveProfile();
+  }
   if(i < roster.length-1){
     const nxt = roster[i+1];
     return storyModal(npcPortrait(nxt.id, which==='electric'?'⚡':'🥋', 120,'transparent'), 'Next!',
-      `<b>+3 Protein Supplements</b><br><br>No rest — the next one is already stepping onto the mat.`,
-      ()=> startTeamRun(which, i+1), { bg:'challenge', subtitle:'Electric Dojo' });
+      (rematch ? '' : `<b>+3 Protein Supplements</b><br><br>`) + `No rest — the next one is already stepping onto the mat.`,
+      ()=> startTeamRun(which, i+1, rematch), { bg:'challenge', subtitle:'Electric Dojo' });
   }
   const d = dojoState();
   if(which==='electric') d.electricDone = true; else d.sageDone = true;

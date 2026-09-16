@@ -468,7 +468,7 @@ const R2_RIVAL_WAVES = [
   [{species:'bat',level:41}],
   [{species:'electric_starter',level:44}],
   [{species:'ground_starter',level:44}],
-  [{species:'phoenix',level:46}],
+  [{species:'eagle',level:46,ai:'stoop'}],
 ];
 /* His last monster counters the player's own starter, as in Region 1. */
 function r2RivalWaves(){

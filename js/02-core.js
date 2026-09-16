@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '1.38';
+const GAME_VERSION = '1.63';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -572,14 +572,21 @@ function hpScale(level){
 function computeMaxHp(species, level, supplements, mon){
   const sp = SPECIES[species];
   if(sp && (sp.isSeed || sp.isEgg || sp.isBaby)) return 1;   // passengers are always 1 HP
-  return Math.ceil(computeMaxStat(species, level, supplements, mon) * hpScale(level));
+  return Math.ceil(computeMaxStat(species, level, supplements, mon, true) * hpScale(level));
 }
 
-function computeMaxStat(species, level, supplements, mon){
+/* `forHp` asks for the health figure rather than the attack one. They are the
+   same number for almost everything — PACIFICUS is the exception, trading half
+   of Caladrius's attack away to make it enormously hard to kill. */
+function computeMaxStat(species, level, supplements, mon, forHp){
   const s = SPECIES[species];
   const crowned = mon && mon.crowned;
   let rate = (crowned && s.tier!=='legendary') ? 13 : s.rate;
   if(s.nerfedUntilCrowned && !crowned) rate = 11;   // Monkey King without his crown
+  if(s.pacificus){
+    // half the attack away, and the same amount again on top of the health
+    rate = forHp ? rate * 1.5 : rate * 0.5;
+  }
   let stat = Math.ceil((rate/5) * level);
   const stages = evolutionStage(species, level) + (s.bonusStages||0);
   stat += Math.ceil(stages * rate * (s.evoMult||1));

@@ -11,6 +11,8 @@ const REGIONS = [
     unlocked:()=>!!(state.progress.region1||{}).guardianCleared },
   { id:3, name:'Port Akrotiri', desc:'Lava tubes, steam and salt air.',
     unlocked:()=>!!(state.progress.region2||{}).cavernDone },
+  { id:4, name:'The North Sea', desc:'A working ship, and something under it.',
+    unlocked:()=>!!(state.progress.region3||{}).shipPass },
 ];
 
 function renderRegionSelect(){

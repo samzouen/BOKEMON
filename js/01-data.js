@@ -102,6 +102,21 @@ const SPECIES = {
   thunderhound:    { name:'Thunderhound', tier:'elite', types:['Electric'], rate:11, nerfedRate:11, base:67, evo:[21],    evoMult:1.5, color:'#d8a83a', glyph:'獒' },
   howler:          { name:'Howler',       tier:'elite', types:['Electric'], rate:11, nerfedRate:11, base:71, evo:[25],    evoMult:1.5, color:'#c89a4a', glyph:'嚎' },
 
+  /* --- Weather Deck: the birds that raid the hauls --- */
+  pelican:         { name:'Pelican',   tier:'wild',  types:['Flying'],          rate:7,  nerfedRate:5,  base:60, evo:[25], evoMult:1.5, color:'#c8b89a', glyph:'鹈' },
+  swan:            { name:'Swan',      tier:'wild',  types:['Flying'],          rate:7,  nerfedRate:5,  base:60, evo:[25], evoMult:1.5, color:'#e8e4dc', glyph:'鹅' },
+  cormorant:       { name:'Cormorant', tier:'wild',  types:['Water','Flying'],  rate:7,  nerfedRate:5,  base:60, evo:[],   color:'#4a5a5a', glyph:'鸬' },
+  mantaray:        { name:'Manta Ray', tier:'wild',  types:['Water','Flying'],  rate:7,  nerfedRate:5,  base:60, evo:[25], evoMult:1.5, color:'#3a5a7a', glyph:'鳐' },
+  moon_swan:       { name:'Moon Swan', tier:'elite', types:['Water','Psychic'], rate:11, nerfedRate:11, base:62, evo:[],   color:'#b8c8e8', glyph:'月' },
+
+  /* --- Caladrius: the bird that looks at the sick --- */
+  caladrius:       { name:'Caladrius', tier:'legendary', types:['Water','Flying'], rate:13, nerfedRate:13,
+                     base:60, evo:[], evoMult:1.5, bonusStages:1, pacificus:true,
+                     color:'#cfe4f0', glyph:'鹤' },
+
+  /* --- The Rival's bird --- */
+  eagle:           { name:'Eagle', tier:'elite', types:['Flying'], rate:11, nerfedRate:11, base:40, evo:[25], evoMult:1.5, color:'#8a7a4a', glyph:'鹰' },
+
   /* --- Region 4: the North Sea --- */
   whale:           { name:'Whale',     tier:'wild',      types:['Water'],        rate:7,  nerfedRate:5,  base:70, evo:[25], evoMult:1.5, color:'#4a7a9a', glyph:'鲸' },
   /* Cuain. A legendary running on a hole where his core should be — elite in
@@ -207,7 +222,7 @@ const MOVES = {
                     ['Max','Cataclysm Max',null,'Charge',10,999,{charge:{max:3, unleash:1.25, hyper:1.75}, coreOnly:true}]],
   dragon_egg:      [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 
-  phoenix:         [['Basic','Ember',0.3,'Single',4,1],['Power1','Firestorm',0.6,'AOE',8,5],['Power2','Nova',1.0,'AOE',8,35],
+  phoenix:         [['Basic','Ember',0.3,'Single',4,1],['Power1','Firestorm',0.6,'AOE',8,5],['Power2','Nova',1.0,'AOE',8,35,{purge:{enemyBuffs:1, playerDebuffs:1}}],
                     ['Ultimate','Incinerate',1.25,'Single',8,45,{scale:{per:0.15,max:2.0}}],
                     ['Max','Incinerate Max',1.5,'Single',8,55,{scale:{per:0.15,max:2.5}}]],
   forest_fairy:    [['Basic','Fairy Wind',0.4,'Single',2,1],['Power1','Giga Drain',0.8,'Single',5,5],['Power2','Overgrowth',0.7,'AOE',8,35],
@@ -316,7 +331,7 @@ const MOVES = {
                     ['Ultimate','Seoi Nage',null,'Single',8,25,{reflect:1.0}]],
   weasel:          [['Basic','Push Hands',0.2,'Single',2,1],
                     ['Power1','Cloud Hands',0.3,'AOE',4,1],
-                    ['Power2','Silk Reeling',null,'Passive',0,21,{passive:{counterTurns:1, counterRet:0.5}}],
+                    ['Power2','Silk Reeling',null,'Passive',0,21,{passive:{counterStack:1}}],
                     ['Ultimate','Four Ounces',null,'Single',8,25,{reflect:1.0}]],
 
   yoga:            [['Basic','Breath Strike',0.2,'Single',2,1],
@@ -330,7 +345,7 @@ const MOVES = {
                     ['Ultimate','Ground Pound',0.6,'AOE',8,25]],
   lizardape:       [['Basic','Tail Lash',0.35,'Single',2,1],
                     ['Power1','Seismic Roar',0.5,'AOE',4,1],
-                    ['Power2','Scaled Stance',null,'Passive',0,21,{passive:{block:1, counterTurns:1, counterRet:0.5}}],
+                    ['Power2','Scaled Stance',null,'Passive',0,21,{passive:{block:1, counterStack:1}}],
                     ['Ultimate','Primal Rend',0.5,'Single',8,41,{hits:3}],
                     ['Max','Primal Rend Max',0.4,'Single',8,51,{hits:4, fullHpDouble:true}]],
   strongman:       [['Basic','Shoulder Barge',0.2,'Single',2,1],
@@ -349,6 +364,46 @@ const MOVES = {
                     ['Power2','Alpha Call',null,'Passive',0,21,{passive:{block:1}}],
                     ['Ultimate','Sky Splitter',1.0,'AOE',8,41],
                     ['Max','Sky Splitter Max',1.25,'AOE',8,51,{stunHit:0.25, softenHit:{chance:0.50, amount:0.50}}]],
+
+  /* Piercing Stoop ignores everything — evasion, guards, reductions, buffs —
+     and removes HP outright, scaled off the eagle's own maximum. */
+  pelican:         [['Basic','Beak Jab',0.3,'Single',2,1],
+                    ['Power1','Gullet Scoop',0.5,'Single',4,1],
+                    ['Power2','Wing Slam',0.7,'AOE',8,18],
+                    ['Ultimate','Deluge',1.2,'AOE',8,25]],
+  swan:            [['Basic','Preen',0.25,'Single',2,1],
+                    ['Power1','Wing Buffet',0.5,'AOE',4,1],
+                    ['Power2','Neck Strike',0.8,'Single',8,18],
+                    ['Ultimate','Swan Song',1.3,'Single',8,25]],
+  /* Dives and dives and dives, and sometimes comes up with lunch. */
+  cormorant:       [['Basic','Snap',0.3,'Single',2,1],
+                    ['Power1','Plunge',0.5,'Single',4,1],
+                    ['Power2','Oiled Feathers',0.7,'AOE',8,18],
+                    ['Ultimate','Dive',0.9,'Single',8,1,{fish:{chance:0.25, heal:0.25}}]],
+  mantaray:        [['Basic','Tail Whip',0.25,'Single',2,1],
+                    ['Power1','Glide',0.4,'AOE',4,1],
+                    ['Power2','Shadowed Wings',null,'Passive',0,1,{passive:{evadeAlways:0.35, unsweepable:true}}],
+                    ['Ultimate','Breach',0.8,'AOE',8,25]],
+  /* It sings things to sleep the harder it is pressed. */
+  moon_swan:       [['Basic','Moonlight',0.3,'Single',2,1],
+                    ['Power1','Lunar Wake',0.5,'AOE',4,1],
+                    ['Power2','Nocturne',null,'Passive',0,1,{passive:{thresholdSleep:[0.75,0.50,0.25]}}],
+                    ['Ultimate','Lunacy',1.5,'Single',8,25,{lunacy:{chance:0.25, turns:1, ffPower:1.0}}]],
+
+  /* No Max move: the slot is taken by PACIFICUS, which is not a move at all but
+     the conversion that makes this bird what it is. Its Ultimate is therefore
+     never replaced. */
+  caladrius:       [['Basic','Glance',0.3,'Single',4,1],
+                    ['Power1','Pinion',0.5,'AOE',6,1],
+                    ['Power2','Vita',null,'Self',8,1,{vita:{turns:5, pulse:0.2}}],
+                    ['Ultimate','Conversio',null,'Self',8,1,{conversio:{revives:2, pct:0.33, direct:0.33}}],
+                    ['Max','Pacificus',null,'Passive',0,1,{statNote:true}]],
+
+  eagle:           [['Basic','Talon Rake',0.3,'Single',2,1],
+                    ['Power1','Wind Shear',0.5,'AOE',4,1],
+                    ['Power2','Keen Eye',null,'Passive',0,21,{passive:{first:true}}],
+                    ['Ultimate','Piercing Stoop',null,'Charge',8,25,{stoop:{max:3, evade:[0.25,0.50,0.75], pierce:[0.50,0.75,1.00]}}],
+                    ['Max','Piercing Stoop Max',null,'Charge',10,51,{stoop:{max:3, evade:[0.25,0.50,0.75], pierce:[0.60,0.90,1.20]}}]],
 
   whale:           [['Basic','Tail Slap',0.25,'Single',2,1],
                     ['Power1','Breaching Swell',0.4,'AOE',4,1],

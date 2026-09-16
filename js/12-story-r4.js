@@ -97,9 +97,11 @@ function renderWeatherDeck(){
       ? 'Tap the divers to go over the side.'
       : 'The divers are not letting anyone past.'}</div>
   `;
-  $('#backBtn').addEventListener('click', ()=>go('explore'));
+  $('#backBtn').addEventListener('click', ()=>{ stopBirdLoop(); go('explore'); });
   screenEl.querySelectorAll('[data-sailor]').forEach(b=>b.addEventListener('click', ()=>sailorChat(+b.dataset.sailor)));
   screenEl.querySelectorAll('[data-fisher]').forEach(b=>b.addEventListener('click', ()=>fisherChat()));
+  // the birds come and go whether or not you are watching
+  if(battleParty().some(m=>m.currentHp>0)) startBirdLoop(); else stopBirdLoop();
   const kp = screenEl.querySelector('[data-keeper]');
   if(kp) kp.addEventListener('click', ()=>shipkeeperShop());
   screenEl.querySelectorAll('[data-diver]').forEach(b=>b.addEventListener('click', ()=>{
@@ -124,11 +126,62 @@ function sailorChat(n){
     SAILOR_LINES[(n-1) % SAILOR_LINES.length],
     ()=>go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
 }
+/* ---------- the raids ---------- */
+let _birdTimer = null, _birdLive = null, _birdRunning = false;
+function stopBirdLoop(){
+  clearTimeout(_birdTimer); _birdTimer = null;
+  if(_birdLive && _birdLive.el && _birdLive.el.parentNode) _birdLive.el.remove();
+  _birdLive = null; _birdRunning = false;
+}
+function startBirdLoop(){
+  stopBirdLoop();
+  _birdRunning = true;
+  const schedule = ()=>{
+    _birdTimer = setTimeout(()=>{
+      if(!_birdRunning) return stopBirdLoop();
+      const marks = Array.from(document.querySelectorAll('.deck-fishers .deck-sprite'));
+      if(!marks.length) return stopBirdLoop();
+      pulseFisher(marks[Math.floor(Math.random()*marks.length)], schedule);
+    }, 700 + Math.random()*1800);
+  };
+  schedule();
+}
+function pulseFisher(host, next){
+  const el = document.createElement('div');
+  el.className = 'gen-pulse bird-pulse';
+  const win = 800 + Math.random()*200;           // 0.8–1.0s, as on the Generator Floor
+  el.style.setProperty('--pulse-ms', win + 'ms');
+  host.style.position = 'relative';
+  host.appendChild(el);
+  const live = { el }; _birdLive = live;
+  el.addEventListener('click', (ev)=>{
+    ev.stopPropagation();
+    if(_birdLive !== live) return;
+    _birdLive = null; el.remove(); stopBirdLoop();
+    startBirdRaid();
+  });
+  setTimeout(()=>{
+    if(_birdLive !== live) return;
+    _birdLive = null;
+    el.classList.add('gone');
+    setTimeout(()=>{ if(el.parentNode) el.remove(); }, 260);
+    next();
+  }, win);
+}
+
+const FISHER_LINES = [
+  `"Birds." He says it the way other men swear. "Every haul, the moment it's up. ` +
+  `Faster than you'd credit."`,
+  `"Third net this week." He holds up something torn. "Whatever's coming up is ` +
+  `bigger than what we're fishing for."`,
+  `"Used to be you'd get herring." She looks at the water without affection. ` +
+  `"Now you get whatever's angry."`,
+  `"Keep an eye on the rail. When it goes red, something's already moving."`,
+];
 function fisherChat(){
   storyModal('🎣', 'Starboard rail',
-    `"Birds." He says it the way other men swear. "Every haul, the moment it's up. ` +
-    `Faster than you'd credit."<br><br>` +
-    `<i>He goes back to watching the water. Something about this feels unfinished.</i>`,
+    FISHER_LINES[Math.floor(Math.random()*FISHER_LINES.length)] +
+    `<br><br><i>Tap a red pulse the moment it appears.</i>`,
     ()=>go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
 }
 
@@ -965,4 +1018,148 @@ function huntsPanel(){
     ${row('a','doneA')}${row('b','doneB')}
     <div class="hunt-note">Bring them back by defeating one while diving.</div>
   </div>`;
+}
+
+/* ============================================================
+   THE WEATHER DECK — BIRD RAIDS
+   Five fishermen, red pulses, 0.8–1.0s to react. The roster is base-form only,
+   Lv 60–65, and one of them is not a bird you fight.
+   ============================================================ */
+const BIRD_COMMON = ['pelican','swan','cormorant','mantaray'];
+const BIRD_MIN_LV = 60, BIRD_MAX_LV = 65;
+
+function birdLevel(){
+  const best = Math.max(...battleParty().map(m=>m.level), BIRD_MIN_LV);
+  return Math.max(BIRD_MIN_LV, Math.min(BIRD_MAX_LV, best));
+}
+/* Caladrius is not in the ordinary roll — it has its own schedule. */
+function caladriusStage(){
+  const g = r4();
+  if(!g.wallFound) return 'none';        // it only appears once the ship has stopped
+  if(!g.caladriusSeen) return 'plea';    // the first meeting, guaranteed
+  if(!g.solved) return 'none';           // it will not return until the truth is out
+  if(!g.caladriusHealed) return 'heal';  // the second meeting, guaranteed
+  return 'wild';                          // thereafter, rarely, and hard to hold
+}
+/* What comes up on the line when it isn't a bird. Loong arrives GROWN — it is
+   not a hatchling anybody hauls over a rail by accident. */
+const HAUL_COMMON = ['starfish','seahorse','duck','sea_turtle','lanternfish'];
+
+function birdRoll(){
+  const stage = caladriusStage();
+  if(stage === 'plea' || stage === 'heal') return 'caladrius';
+  const r = Math.random();
+  if(stage === 'wild' && r < 0.03) return 'caladrius';
+  if(r < 0.08) return 'moon_swan';        // 5%, above the caladrius slice
+  return BIRD_COMMON[Math.floor(Math.random()*BIRD_COMMON.length)];
+}
+function haulRoll(){
+  const r = Math.random();
+  if(r < 0.05) return 'loong';            // grown, and thoroughly unimpressed
+  return HAUL_COMMON[Math.floor(Math.random()*HAUL_COMMON.length)];
+}
+
+/* Two thirds of the time it is birds on the catch. The rest of the time the
+   catch itself is the problem. */
+function startBirdRaid(){
+  if(!ensurePool()) return;
+  const stage = caladriusStage();
+  if(stage === 'plea' || stage === 'heal'){
+    const first = birdRoll();
+    if(first === 'caladrius') return stage === 'plea' ? caladriusPlea() : caladriusHeals();
+  }
+  const haul = Math.random() < 0.35;
+  ui.currentZone = { id:'weather_deck', name:haul ? 'The haul' : 'The rail' };
+  const lv = birdLevel();
+
+  if(haul){
+    const n = 1 + Math.floor(Math.random()*3);
+    const wave = Array.from({length:n}, ()=>{
+      const sp = haulRoll();
+      // a Loong is hauled up fully grown; everything else comes up small
+      return sp === 'loong'
+        ? { species:'loong', level:Math.max(lv, 41), ai:'best' }
+        : { species:sp, level:lv + Math.floor(Math.random()*3)-1, forceStage:0 };
+    });
+    return beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'In the net',
+      bgKey:'battle_weather_deck', onWin: ()=> resumeVictory() });
+  }
+
+  const pick = birdRoll();
+  const n = 1 + Math.floor(Math.random()*3);
+  const wave = Array.from({length:n}, ()=>{
+    const sp = birdRoll();
+    const spec = { species:(sp==='caladrius'?'moon_swan':sp), level:lv + Math.floor(Math.random()*3)-1, forceStage:0 };
+    if(spec.species === 'mantaray' || spec.species === 'moon_swan') spec.elusive = true;
+    return spec;
+  });
+  if(pick === 'caladrius'){
+    wave.length = 1;
+    wave[0] = { species:'caladrius', level:lv, forceStage:0, elusive:true, ai:'caladrius' };
+  }
+  beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Raid on the hauls',
+    bgKey:'battle_weather_deck', onWin: ()=> resumeVictory() });
+}
+
+/* --- the first meeting: it asks --- */
+async function caladriusPlea(){
+  const g = r4();
+  g.caladriusSeen = true;
+  await saveProfile();
+  storyModal(monPortrait('caladrius',150,{view:'front',bare:true}), 'A white bird',
+    `The gulls scatter all at once, and what lands on the rail is not a gull.<br><br>` +
+    `It is white to the point of glare. It does not startle, and it does not look away. ` +
+    `It turns its head and holds your eye — <b>steadily, for far longer than a bird should</b> — ` +
+    `and its whole body is angled toward the water behind it.<br><br>` +
+    `Twice it looks down at the sea, and twice back at you.<br><br>` +
+    `<i>You are fairly sure it is asking you for something. Something is down there, and it ` +
+    `matters to this bird, and it does not believe it can manage alone.</i><br><br>` +
+    `Then it opens its wings and is simply gone.`,
+    ()=>go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
+}
+
+/* --- the second meeting: it helps --- */
+const CALADRIUS_XP_FIGHTS = 30;
+async function caladriusHeals(){
+  const g = r4();
+  const cuain = state.party.concat(state.storage).find(m=>m.species==='whalelord');
+  if(!cuain) return startBirdRaid();          // nothing to heal yet
+  g.caladriusHealed = true;
+  await saveProfile();
+  storyModal(monPortrait('caladrius',150,{view:'front',bare:true}), 'It came back',
+    `It is on the rail again, and this time it is not looking at you at all.<br><br>` +
+    `Its head is fixed on the cold grey shape that has followed you up from the deep. ` +
+    `Something in the set of its shoulders changes — it draws itself up, the way a small ` +
+    `animal does when it has decided to do something difficult.<br><br>` +
+    `<i>It knew he was there. You think it has known since the first time.</i><br><br>` +
+    `The Whalelord does not move. For once, he has nothing to say.`,
+    ()=>caladriusHeals2(cuain), { bg:'weather_deck', subtitle:'Weather Deck' });
+}
+async function caladriusHeals2(cuain){
+  const before = cuain.level;
+  /* Thirty fights' worth, given to Cuain alone — the party XP path expects a
+     party, so we credit him directly and then let the usual level-up run. */
+  const cap = levelCap();
+  cuain.xpFights = (cuain.xpFights||0) + CALADRIUS_XP_FIGHTS;
+  while(cuain.level < cap && cuain.xpFights >= fightsNeeded(cuain.level)){
+    cuain.xpFights -= fightsNeeded(cuain.level);
+    const beforeMax = computeMaxHp(cuain.species, cuain.level, cuain.supplements, cuain);
+    cuain.level++;
+    const afterMax = computeMaxHp(cuain.species, cuain.level, cuain.supplements, cuain);
+    cuain.currentHp = Math.min(afterMax, cuain.currentHp + (afterMax - beforeMax));
+  }
+  await saveProfile();
+  storyModal(uiIcon('whalelord_core',140,'🔵'), 'A temporary mending',
+    `The bird spreads its wings over the water and holds them there, and does not move ` +
+    `again for a long time.<br><br>` +
+    `Light goes out of it and into the dead whale, and for a moment you can see what he ` +
+    `used to be — vast, and whole, and unhurried.<br><br>` +
+    `When it finally folds its wings it looks thinner than it did, and it will not meet ` +
+    `your eye. <i>You get the distinct impression it is embarrassed that this is all it ` +
+    `can do.</i><br><br>` +
+    `<b>${escapeHtml(displayName(cuain))} is strengthened.</b>` +
+    (cuain.level > before ? ` <i>Lv ${before} → Lv ${cuain.level}</i>` : '') + `<br><br>` +
+    `<b>Whalelord:</b> "It is not my core. It will not hold."<br><br>` +
+    `The bird has already gone.`,
+    ()=>go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
 }

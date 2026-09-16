@@ -275,8 +275,16 @@ function onSwitchPressed(){
     if(sw && !sw._entered){ sw._entered = true; applyEntryPassives(sw, sw.species, sw.level, monAtk(sw)); }
     const c = chargeState();
     if(c && c.uid === activeMon().uid) triggerDragonLegacy();   // stored power passes on
+    const outgoing = activeMon();
     ui.battle.activeIndex=i; ui.battle.switchedThisTurn=true;
+    carryBlockOnSwitch(outgoing, activeMon());   // the shield walks with your side
     ui.battle.phase = 'player';        // a free switch never hands the turn over
+    /* Entry passives fire on a swap as well as on the opening monster — a
+       Dragon Dance + carrier brought in mid-fight takes the initiative at once,
+       and a Steel Aegis carrier arrives already holding block. */
+    const inc = activeMon();
+    if(inc && !inc._entered){ inc._entered = true; applyEntryPassives(inc, inc.species, inc.level, monAtk(inc)); }
+    else if(inc) applyStonePassives(inc);
     renderBattle();
     /* Bringing the Whalelord back discharges everything he is owed — free, and
      it does not cost the turn the switch already gave you. */
@@ -533,6 +541,9 @@ function feedRecharge(words){
   b.rechargeWords -= RECHARGE_TARGET;
   b.usedVeryHigh = {};
   b.usedUltra = {};
+  /* A refined stone's free passive re-arms with the same bar that restores a
+     cast — so it fires again the next time its carrier takes the field. */
+  b.passiveFired = {};
   return true;
 }
 
@@ -603,6 +614,7 @@ function resolveChargeSpend(mv, mon){
     applyHits(hits);
     reportHits(hits);
     checkThresholdStuns();
+    checkThresholdSleeps();
     if(getPStatus(0,'softened')) removePStatus(0,'softened');   // it blunts one blow only          // Unleash / Hyperbeam were landing silently
     c.turnsLeft--;
     if(c.turnsLeft <= 0){
@@ -772,6 +784,18 @@ function resolveBattleMove(mv, target, results){
   if(mv.isStone && mv.stoneTier==='veryhigh') ui.battle.usedVeryHigh[mon.uid]=true;
 
   /* Tactical moves resolve before the ordinary damage path. */
+  /* Vita — a pulse now, and a light that stays. */
+  if(mv.vita){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
+    castVita(mon, mv.vita);
+    playEffect(mv.name, { type:'Water' });
+    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+  }
+  /* Conversio — it spends itself to bring others back. */
+  if(mv.conversio){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
+    return runConversio(mon, mv.conversio);
+  }
   /* Haunting Aria — instant, does not spend the turn. */
   if(mv.aria){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
@@ -871,8 +895,8 @@ function resolveBattleMove(mv, target, results){
        side. −1 initiative to every enemy, including ones that arrive later,
        and a 15% chance each turn that one of them simply seizes up. */
     const pct = mv.disrupt.stun || 0.15;
-    applyFieldStatus({ type:'disruptField', turnsLeft:mv.disrupt.turns, stun:pct });
-    livingEnemies().forEach(t=> addEStatus(t, { type:'disrupt', turnsLeft:mv.disrupt.turns, stun:pct }));
+    applyFieldStatus({ type:'disruptField', turnsLeft:mv.disrupt.turns, stun:pct, mine:true });
+    livingEnemies().forEach(t=> addEStatus(t, { type:'disrupt', turnsLeft:mv.disrupt.turns, stun:pct, mine:true }));
     renderStatusBadges();
     battleMsg(`${mv.name}! Their signals are jammed for ${mv.disrupt.turns} turns — ` +
       `they lose the initiative, and ${Math.round(pct*100)}% of the time a monster seizes up entirely.`);
@@ -989,8 +1013,9 @@ function resolveBattleMove(mv, target, results){
       setTimeout(()=>{ dodgeEnemy(idx); floatMiss('enemy-'+idx, 'MISS'); }, 240);
       return { t, idx, oldHp:t.hp, newHp:t.hp, dmg:0, dodged:true };
     }
-    const dmg = computeDamage(factor, atk, monRef(mon), t, true);
+    let dmg = computeDamage(factor, atk, monRef(mon), t, true);
     const idx=ui.battle.enemies.indexOf(t);
+    dmg = enemyGuard(t, dmg);
     enemyCounter(t, idx, dmg, 520);      // Silk Reeling / Scaled Stance
     return { t, idx, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg), dmg };
   });
@@ -1252,9 +1277,79 @@ function offerVengeanceSwap(mon, hits){
   });
 }
 
+/* A Combo is spent by the attack that benefited from it. */
+function spendComboAfterAttack(mon){ clearCombo(mon); renderStatusBadges(); }
+
+/* Conversio. Choose the fallen one at a time; each costs a Mors mark, and the
+   third mark takes the bird with it. With nobody to raise, the power turns
+   outward instead and simply removes health. */
+function runConversio(mon, def){
+  const fallen = ()=> state.party.map((m,i)=>({m,i}))
+    .filter(o=>o.m.currentHp <= 0 && !isPassenger(o.m) && o.m !== mon);
+
+  if(!fallen().length){
+    const t = livingEnemies()[0];
+    if(!t) return afterPlayerAttack(mon, []);
+    const dmg = Math.ceil((def.direct || 0.33) * monMaxHp(mon));
+    const idx = ui.battle.enemies.indexOf(t);
+    battleMsg(`🕊 With nobody to raise, the light turns outward — and simply takes.`);
+    return setTimeout(()=>{
+      const before = t.hp;
+      t.hp = Math.max(0, t.hp - dmg);       // direct removal: no guard, no reduction
+      flashHit(document.getElementById('enemy-'+idx));
+      drainHp('enemyHp-'+idx, before, t.hp, t.maxHp);
+      showDamageNumber('enemy-'+idx, before - t.hp);
+      if(t.hp <= 0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
+      setTimeout(()=> afterPlayerAttack(mon, []), 800);
+    }, 500);
+  }
+
+  let raised = 0;
+  const step = ()=>{
+    const left = def.revives - raised;
+    const room = MORS_LIMIT - morsMarks(mon);      // it cannot spend what it has not got
+    const pool = fallen();
+    if(raised >= def.revives || room <= 0 || !pool.length){
+      if(raised) battleMsg(`🕊 ${raised} brought back. ${displayName(mon)} carries <b>${morsMarks(mon)}</b> mark${morsMarks(mon)===1?'':'s'}.`);
+      return setTimeout(()=> afterPlayerAttack(mon, []), 800);
+    }
+    const ov = document.createElement('div');
+    ov.className = 'refine-scrim';
+    ov.innerHTML = `
+      <div class="refine-card">
+        <div class="refine-name">Conversio</div>
+        <div class="refine-sub">${raised} of ${def.revives} raised · ${room} mark${room===1?'':'s'} left before it falls</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+          ${pool.map(o=>`<button class="btn btn-primary" data-rev="${o.i}">
+            ${escapeHtml(displayName(o.m))} · Lv ${o.m.level}</button>`).join('')}
+          <button class="btn btn-ghost" id="revStop">Stop here</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+    ov.querySelectorAll('[data-rev]').forEach(b=>b.addEventListener('click', ()=>{
+      close();
+      const m = state.party[+b.dataset.rev];
+      m.currentHp = Math.max(1, Math.ceil((def.pct || 0.33) * monMaxHp(m)));
+      raised++;
+      battleMsg(`🕊 ${displayName(m)} draws breath again.`);
+      addMors(mon, 1);
+      renderBattle();
+      setTimeout(step, 900);
+    }));
+    ov.querySelector('#revStop').addEventListener('click', ()=>{
+      close();
+      if(raised) battleMsg(`🕊 ${raised} brought back.`);
+      setTimeout(()=> afterPlayerAttack(mon, []), 700);
+    });
+  };
+  step();
+}
+
 function finishPlayerTurn(){
   if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
   // hand back to the round's order rather than assuming the enemy is next
+  spendComboAfterAttack(activeMon());
   setTimeout(advanceTurn, 850);
 }
 
@@ -1276,7 +1371,8 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
       if(sim.get(t) <= 0) return;
       const idx = b.enemies.indexOf(t);
       if(rollDodge(t, idx, 330 + (k*targets.length)*350)){ dodged++; return; }
-      const dmg = computeDamage(per, atk, monRef(mon), t, true);
+      let dmg = computeDamage(per, atk, monRef(mon), t, true);
+      dmg = enemyGuard(t, dmg);
       const oldHp = sim.get(t), newHp = Math.max(0, oldHp - dmg);
       sim.set(t, newHp);
       enemyCounter(t, idx, dmg, 520 + (k*targets.length)*350);
@@ -1316,7 +1412,18 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
    frequent, and letting them soak the counter would waste a stance the enemy
    paid for — the player would simply chip it away for free.
    ------------------------------------------------------------ */
+/* An enemy holding Counter stacks guards instead of returning damage — the
+   same 80% as yours, and it comes out of the exchange with a Combo. Called
+   before the damage is committed so the reduction actually applies. */
+function enemyGuard(t, dmg){
+  if(!t || !counterCountOf(t) || dmg <= 0) return dmg;
+  return Math.ceil(dmg * spendEnemyCounter(t));
+}
+/* Superseded by enemyGuard(); kept inert so older call sites cannot misfire. */
 function enemyCounter(t, idx, dmg, delay){
+  return 0;
+}
+function enemyCounter_unused(t, idx, dmg, delay){
   if(!t || !(t.counterTurns > 0) || dmg <= 0) return 0;
   const mon = activeMon();
   if(!mon || mon.currentHp <= 0) return 0;
@@ -1336,6 +1443,42 @@ function enemyCounter(t, idx, dmg, delay){
   return back;
 }
 
+/* A confused monster swings at its own side. With friends on the field it picks
+   one at random; alone, it hits itself. Either way something visibly happens. */
+function confusedStrike(e, done){
+  const b = ui.battle;
+  const mates = livingEnemies().filter(x=>x !== e);
+  const victim = mates.length ? mates[Math.floor(Math.random()*mates.length)] : e;
+  const mv = enemyMoveFor(e) || (MOVES[e.species]||[])[0];
+  const mult = (mv && mv[2]) || 0.3;
+  /* Higher tiers do not turn more swings — they make the turned ones hurt. */
+  const conf = getEStatus(e,'discombobulate');
+  const power = (conf && conf.ffPower) || 0.60;
+  const dmg = Math.max(1, Math.ceil(mult * e.atk * power));
+  const idx = b.enemies.indexOf(victim);
+  const from = b.enemies.indexOf(e);
+  battleMsg(victim === e
+    ? `🌀 ${SPECIES[e.species].name} is too dizzy to tell which way is out — it hits itself!`
+    : `🌀 ${SPECIES[e.species].name} swings wildly and clouts ${SPECIES[victim.species].name}!`);
+  bob(document.getElementById('enemyBob-'+from), -1);
+  setTimeout(()=>{
+    const before = victim.hp;
+    victim.hp = Math.max(0, victim.hp - dmg);
+    flashHit(document.getElementById('enemy-'+idx));
+    drainHp('enemyHp-'+idx, before, victim.hp, victim.maxHp);
+    showDamageNumber('enemy-'+idx, dmg);
+    if(victim.hp <= 0){
+      const el = document.getElementById('enemy-'+idx);
+      if(el) el.classList.add('fainted');
+      battleMsg(`${SPECIES[victim.species].name} is knocked out by its own side!`);
+    }
+    setTimeout(()=>{
+      if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
+      done();
+    }, 800);
+  }, 420);
+}
+
 function rollDodge(t, idx, delay){
   const ev = stanceEvasion(t);
   if(ev <= 0 || Math.random() >= ev) return false;
@@ -1353,7 +1496,8 @@ function resolveSplitHits(mv, mon, factor, atk, target){
   for(let i=0;i<n;i++){
     if(simHp<=0) break;
     if(rollDodge(target, tIdx, 330 + i*350)){ dodged++; continue; }   // each strike rolls
-    const dmg = computeDamage(per, atk, monRef(mon), target, true);
+    let dmg = computeDamage(per, atk, monRef(mon), target, true);
+    dmg = enemyGuard(target, dmg);
     const oldHp = simHp, newHp = Math.max(0, simHp-dmg);
     simHp = newHp;
     enemyCounter(target, tIdx, dmg, 520 + i*350);   // each strike is answered
@@ -1422,7 +1566,8 @@ function resolveMultiHit(mv, mon, correct){
     const t = alive[Math.floor(Math.random()*alive.length)];
     const idx = ui.battle.enemies.indexOf(t);
     if(rollDodge(t, idx, 330 + i*350)){ dodged++; continue; }   // an unseen foe slips the blow
-    const dmg = computeDamage(mv.mult, atk, monRef(mon), t, true);
+    let dmg = computeDamage(mv.mult, atk, monRef(mon), t, true);
+    dmg = enemyGuard(t, dmg);
     const oldHp = sim.get(t);
     const newHp = Math.max(0, oldHp - dmg);
     sim.set(t, newHp);
@@ -1460,6 +1605,28 @@ function releaseInvert(){ document.body.classList.remove('ultra-invert'); }
 /* play pre-computed hits one at a time, applying HP as each lands.
    fast=true halves the gap (the multi-hit "2x speed" rule). */
 /* Thunderhound punishes each health threshold it is driven below, once each. */
+/* Moon Swan's Nocturne. Same shape as Hunter's Instinct, but it sings you
+   under instead of rattling you. */
+function checkThresholdSleeps(){
+  const b = ui.battle;
+  if(!b) return;
+  livingEnemies().forEach(e=>{
+    if(!e.thresholdSleep || !e.thresholdSleep.length) return;
+    const frac = e.hp / Math.max(1, e.maxHp);
+    e.thresholdSleep.forEach(th=>{
+      if(frac <= th && !e.sleepThresholdsHit.includes(th)){
+        e.sleepThresholdsHit.push(th);
+        const mon = activeMon();
+        if(mon && mon.currentHp > 0 && !getPStatus(0,'asleep')){
+          setPStatus(0, { type:'asleep', turnsLeft:2 });
+          renderStatusBadges();
+          setTimeout(()=> battleMsg(`💤 ${SPECIES[e.species].name} sings — ${displayName(mon)} cannot keep its eyes open!`), 500);
+        }
+      }
+    });
+  });
+}
+
 function checkThresholdStuns(){
   const b = ui.battle;
   if(!b) return;
@@ -1750,6 +1917,26 @@ function runEnemyAttack(i){
     const dc = (MOVES[e.species]||[]).find(m=>m[1]==='Depth Charge');
     if(dc) move = dc;
   }
+  /* A cormorant does one thing. */
+  /* The eagle climbs for three turns and then falls on you. */
+  if(e.ai === 'stoop'){
+    const list = MOVES[e.species] || [];
+    const stoop = list.find(m=>m[6] && m[6].stoop);
+    const st = stoopState(e);
+    if(stoop && st.charges < (stoop[6].stoop.max || 3)) move = stoop;
+    else if(stoop) move = stoop;
+  }
+  if(e.species === 'cormorant'){
+    const dv = (MOVES.cormorant||[]).find(m=>m[1]==='Dive');
+    if(dv) move = dv;
+  }
+  /* Caladrius steadies itself once, then simply keeps going. */
+  if(e.species === 'caladrius'){
+    const list = MOVES.caladrius || [];
+    e._vitaCast = e._vitaCast || false;
+    move = (!e._vitaCast ? list.find(m=>m[1]==='Vita') : list.find(m=>m[1]==='Conversio')) || move;
+    if(move && move[1]==='Vita') e._vitaCast = true;
+  }
   if(e.isDummy && e.arenaMove && e.arenaMove !== 'auto'){
     const list = MOVES[e.species] || [];
     const forced = list.find(m=>m[0] === e.arenaMove && m[1] != null);
@@ -1802,12 +1989,57 @@ function runEnemyAttack(i){
     sources.forEach(x=>{ hitChance *= (1-x); });
     evadeChance = 1 - hitChance;
   }
+  /* Asleep: it does nothing at all, and wakes a turn later. */
+  const nap = getEStatus(e,'asleep');
+  if(nap){
+    nap.turnsLeft--;
+    if(nap.turnsLeft <= 0) removeEStatus(e,'asleep');
+    renderStatusBadges();
+    const el = document.getElementById('enemy-'+ui.battle.enemies.indexOf(e));
+    if(el) el.classList.add('is-asleep');
+    battleMsg(`💤 ${SPECIES[e.species].name} is fast asleep.`);
+    return setTimeout(()=> runEnemyAttack(i+1), 900);
+  }
+  /* Discombobulated: certain on its first swing, occasional after. It turns on
+     its own side — on ITSELF if it is the only one left. */
+  const conf = getEStatus(e,'discombobulate');
+  if(conf){
+    const opening = !e._confusedFirst;
+    e._confusedFirst = true;
+    /* Two independent rolls. Friendly fire is checked first, so when both come
+       up the swing happens and the nap is forgotten — the visible thing wins. */
+    const ffChance = opening ? (conf.first || 1.0) : (conf.after || 0.20);
+    if(Math.random() < ffChance) return confusedStrike(e, ()=> runEnemyAttack(i+1));
+    if(conf.sleep && Math.random() < conf.sleep){
+      addEStatus(e, { type:'asleep', turnsLeft:(conf.sleepTurns||1) + 1, mine:true });
+      renderStatusBadges();
+      const el0 = document.getElementById('enemy-'+ui.battle.enemies.indexOf(e));
+      if(el0) el0.classList.add('is-asleep');
+      battleMsg(`💤 ${SPECIES[e.species].name} gets muddled, sits down and falls asleep!`);
+      return setTimeout(()=> runEnemyAttack(i+1), 1000);
+    }
+  }
   /* Every damaging move an enemy ATTEMPTS is remembered — once per move,
      landed or not. */
   noteWrath();
   /* A turn of Haunting Aria covers the whole FIELD, so whoever stands in it is
      untouchable; and if the Whalelord is struck with no Aria running, he sings
      by reflex and the blow finds nothing where he was. */
+  /* A Counter stack reads the whole attack — every hit of it — and is spent.
+     Only ever during an action phase; pre-hits and end-phase damage cannot
+     waste one. */
+  /* A Counter stack braces against the WHOLE attack — however many hits it
+     carries — and turns away four fifths of it. The blow still lands, which is
+     what makes the Enrage feel earned. */
+  const defender1 = activeMon();
+  let counterMult = 1;
+  if(defender1 && counterStacks() > 0){
+    counterMult = spendCounterStack(defender1);
+    if(counterMult < 1){
+      counterDrift(document.getElementById('playerBob'), document.getElementById('playerBob'));
+      floatMiss('playerBob', 'GUARD');
+    }
+  }
   const ariaCover = ariaFieldEvasion() > 0;
   const d0 = activeMon();
   const canReflex = !ariaCover && d0 && !ariaActive()
@@ -1831,6 +2063,7 @@ function runEnemyAttack(i){
     setTimeout(()=>{
       dodgePlayer();
       floatMiss('playerBob', 'MISS');
+      noteMirageDodge();          // every evaded blow leaves a copy standing
       battleMsg(disMiss ? `🌀 ${name} is confused — the attack went wide!`
                : (tac ? `⚡ Lightning reflexes — ${name} missed!`
                       : `💨 The mirage shimmers — ${name} missed!`));
@@ -1868,46 +2101,51 @@ function runEnemyAttack(i){
       dmg = Math.ceil((ex.grudge.flat||0.25) * e.atk
                     + (ex.grudge.missing||0.75) * Math.max(0, e.maxHp - e.hp));
     } else {
-      dmg = computeDamage(move[2], e.atk, e, monRef(mon), false);
+      /* `split` means the multiplier is the TOTAL, shared across the strikes —
+         Verdant Wrath Max is 1.8 over three hits, not 1.8 three times. Without
+         this the Forest Fairy would hit for 5.4× its ATK. */
+      const per = (ex.hits > 1 && ex.split) ? move[2] / ex.hits : move[2];
+      dmg = computeDamage(per, e.atk, e, monRef(mon), false);
+      // a guard it pulled off earlier makes this swing heavier
+      if(e.comboStacks){
+        dmg = Math.ceil(dmg * (1 + e.comboStacks * 0.25));
+        e.comboStacks = 0;
+      }
     }
     if(ex.fullHpDouble && e.hp >= e.maxHp){
       dmg = Math.ceil(dmg * 2);
       battleMsg(`${SPECIES[e.species].name} is untouched — the blow lands at full force!`);
     }
+    if(counterMult < 1) dmg = Math.ceil(dmg * counterMult);   // taken on the guard
     if(disHalve)  dmg = Math.ceil(dmg*0.5);
     if(disSoften) dmg = Math.ceil(dmg*(1-disSoften));
 
-    const counter = getPStatus(0,'counter');
-    const spikes  = getPStatus(0,'spikeArmour');
-    const guaranteedLeft = counter ? (counter.guaranteed||0) : 0;
-    const counterFires = disCounter || (counter && (guaranteedLeft > 0 || Math.random() < (counter.chance||0.10)));
+    const spikes = getPStatus(0,'spikeArmour');
     let msg = '';
 
-    if(counterFires){
-      if(counter && counter.guaranteed > 0) counter.guaranteed--;
-      counterDrift(document.getElementById('playerBob'), document.getElementById('playerBob'));
-      const ret = disCounter ? (getEStatus(e,'discombobulate')||{}).counterRet || 0.5
-                             : (counter ? (counter.ret||0.5) : 0.5);
-      const back = Math.ceil(dmg*ret);
-      const oldHp=e.hp, newHp=Math.max(0,e.hp-back);
-      e.hp = newHp;
-      flashHit(document.getElementById('enemy-'+idx));
-      drainHp('enemyHp-'+idx, oldHp, newHp, e.maxHp);
-      if(newHp<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
-      msg = `🛡️ Countered! ${back} reflected back at ${name}.`;
-    } else {
+    /* An enemy's multi-hit move now actually strikes that many times. It only
+       ever landed once, so a Verdant Wrath Max was dealing a third of its
+       designed damage and Volt Concussion a quarter. The Counter guard covers
+       the WHOLE attack (it was already applied above), and block is spent per
+       strike, exactly as it is when the player swings. */
+    const hitCount = Math.max(1, (ex.hits && !ex.reflect && !ex.grudge) ? ex.hits : 1);
+    {
       const oldHp = mon.currentHp;
-      // reduction has already been applied inside computeDamage; block is last
-      const beforeBlock = dmg;
-      dmg = applyBlock(mon, dmg, 'playerBlk');
-      mon.lastDamageTaken = beforeBlock;     // reflection returns the FULL figure
+      let totalBlocked = 0, totalTaken = 0;
+      for(let k = 0; k < hitCount; k++){
+        if(mon.currentHp <= 0 && !ui.battle.allyUnkillable) break;
+        let thisHit = dmg;
+        const beforeBlock = thisHit;
+        thisHit = applyBlock(mon, thisHit, 'playerBlk');   // one stack per strike
+        totalBlocked += beforeBlock - thisHit;
+        mon.lastDamageTaken = beforeBlock;   // reflection returns the FULL figure
+        const floor = ui.battle.allyUnkillable ? 1 : 0;
+        mon.currentHp = Math.max(floor, mon.currentHp - thisHit);
+        totalTaken += thisHit;
+      }
       const ar = ariaState();
       if(ar) ar.struck = true;                // the dead whale takes note
-      
-      if(dmg < beforeBlock) msg = `🛡 Blocked ${beforeBlock - dmg}! ` + msg;
-      // scripted last stand: the dragon always survives on 1 HP
-      const floor = ui.battle.allyUnkillable ? 1 : 0;
-      mon.currentHp = Math.max(floor, mon.currentHp - dmg);
+      if(totalBlocked > 0) msg = `🛡 Blocked ${totalBlocked}! ` + msg;
       if(ui.battle.arenaImmortal && mon.currentHp <= 0){
         mon.currentHp = monMaxHp(mon);          // back to full, test continues
         msg += ' (immortal — restored)';
@@ -1916,7 +2154,9 @@ function runEnemyAttack(i){
       showDamageNumber('playerBob', oldHp - mon.currentHp);
       playSfx('hit_taken');
       drainHp('playerHp', oldHp, mon.currentHp, monMaxHp(mon));
-      msg = `${name} dealt ${dmg} damage!`;
+      msg = hitCount > 1
+        ? `${name} struck ${hitCount} times for ${totalTaken} damage!`
+        : `${name} dealt ${totalTaken} damage!`;
 
       const shell = getPStatus(0,'shell');
       if(shell && shell.thorns && mon.currentHp>0){
@@ -1957,6 +2197,51 @@ function runEnemyAttack(i){
         msg += ' Your signals are jammed — they move first, and you may seize up!';
       }
       renderStatusBadges();
+    }
+    /* Piercing Stoop: climb, or fall. Nothing intervenes on the way down. */
+    const stp = move[6] && move[6].stoop;
+    if(stp){
+      const st = stoopState(e);
+      if(st.charges < (stp.max || 3)){
+        const n = stoopCharge(e, stp);
+        renderStatusBadges();
+        battleMsg(`🦅 ${SPECIES[e.species].name} climbs — <b>${n}</b> of ${stp.max}. It is much harder to see up there.`);
+        return setTimeout(()=> runEnemyAttack(i+1), 900);
+      }
+      const rel = stoopRelease(e, stp);
+      const before = mon.currentHp;
+      mon.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, mon.currentHp - rel.hits);
+      flashHit($('#playerBob'));
+      showDamageNumber('playerBob', before - mon.currentHp);
+      drainHp('playerHp', before, mon.currentHp, monMaxHp(mon));
+      playSfx('hit_taken');
+      battleMsg(`🦅 <b>PIERCING STOOP</b> — it comes down out of the sun. ` +
+                `<b>${before - mon.currentHp}</b> health simply gone. Nothing stops it.`);
+      renderStatusBadges();
+      return setTimeout(()=>{
+        if(mon.currentHp <= 0) return setTimeout(onMonFainted, 650);
+        runEnemyAttack(i+1);
+      }, 1000);
+    }
+    /* Lunacy is Discombobulate wearing a different hat — one turn of certain
+       friendly fire at full power. Reusing the field means the animation, the
+       self-targeting and the messages all come for free. */
+    /* A quarter of its dives come up with something worth eating. */
+    const fish = move[6] && move[6].fish;
+    if(fish && Math.random() < fish.chance){
+      const back = Math.ceil(fish.heal * e.maxHp);
+      const before = e.hp;
+      e.hp = Math.min(e.maxHp, e.hp + back);
+      drainHp('enemyHp-'+idx, before, e.hp, e.maxHp);
+      setTimeout(()=> battleMsg(`🐟 ${SPECIES[e.species].name} surfaces with a fish and swallows it whole — <b>+${e.hp-before} HP</b>.`), 700);
+    }
+    const lun = move[6] && move[6].lunacy;
+    if(lun && Math.random() < lun.chance){
+      applyFieldStatus({ type:'discombobulate', turnsLeft:(lun.turns||1) + 1, mine:true,
+                         first:1.0, after:0, ffPower:lun.ffPower||1.0, sleep:0 });
+      livingEnemies().forEach(x=>{ x._confusedFirst = false; });
+      renderStatusBadges();
+      msg += ' The moonlight gets into their heads!';
     }
     /* Sky Splitter Max leaves them reeling: their next move may land soft. */
     const sf = move[6] && move[6].softenHit;
