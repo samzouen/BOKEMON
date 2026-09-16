@@ -56,7 +56,9 @@ function captainIntro2(){
 function renderWeatherDeck(){
   const g = r4();
   if(!g.captainMet) return captainIntro();
-  setScreenBg('weather_deck');
+  /* The deck plan is shown full-size below, so the backdrop must be something
+     else — using the same key would paint the ship behind itself. */
+  setScreenBg('sea');
   playMusicChain(['zone_weather_deck','region4','region']);
   $('#brandSub').textContent = 'Weather Deck';
 
@@ -401,6 +403,14 @@ function renderCabinDeck(){
           <div class="dive-label">Canteen</div>
         </button>
       </div>
+      <!-- the chart room, forward, under the bridge -->
+      <div class="deck-chart">
+        <button class="deck-sprite" data-captain="1">
+          ${npcPortrait('ship_captain','⚓',62,'transparent')}
+          <div class="dive-label">Chart room</div>
+        </button>
+      </div>
+
       <div class="deck-cabin">
         <button class="deck-sprite" data-rival="1">${npcPortrait('rival','🧑',76,'transparent')}</button>
         <div class="dive-label">${g.rivalBeaten ? 'Nothing left to bet' : "Someone's cabin"}</div>
@@ -411,12 +421,61 @@ function renderCabinDeck(){
   `;
   $('#backBtn').addEventListener('click', ()=>go('explore'));
   screenEl.querySelectorAll('[data-sailor]').forEach(b=>b.addEventListener('click', ()=>sailorChat(+b.dataset.sailor)));
+  const cp = screenEl.querySelector('[data-captain]');
+  if(cp) cp.addEventListener('click', ()=>chartRoom());
   const ck = screenEl.querySelector('[data-cook]');
   if(ck) ck.addEventListener('click', ()=>cookChat());
   const rb = screenEl.querySelector('[data-rival]');
   if(rb) rb.addEventListener('click', ()=>rivalCabin());
   const gh = screenEl.querySelector('[data-ghost]');
   if(gh) gh.addEventListener('click', ()=>ghostChat('quarters'));
+}
+
+/* The chart room. He is always working on the same problem, and what he says
+   depends entirely on how far you have got with it. */
+const CHART_LINES = {
+  early: [
+    `He has the same chart out, and it has more crossings-out than it did yesterday.<br><br>` +
+    `"Forty years I've plotted this run. Never once had to draw a line round something."`,
+    `"Researchers want samples. Crew want to be somewhere else. And I want to know ` +
+    `what's got into the whales."<br><br>He taps the chart. "One of those I can actually do something about."`,
+  ],
+  blocked: [
+    `He does not look up.<br><br>` +
+    `"Still there. All of them. Not feeding, not moving, not going round us."<br><br>` +
+    `"An animal that won't move for a ship is an animal that's decided something."`,
+    `"I've tried going north about. Tried south. They shift with us." He rubs his eyes. ` +
+    `"That's not instinct. That's a picket line."`,
+    `"Three days behind schedule and nothing to put in the log but <i>whales, still</i>."<br><br>` +
+    `He is quieter for a moment. "They're not attacking us, you know. They're just... not letting us past."`,
+  ],
+  knowing: [
+    `"You've been down there. You've seen whatever it is." He studies you. ` +
+    `"I'll not ask you to explain. I've stopped expecting this trip to make sense."<br><br>` +
+    `"Just tell me when I can sail."`,
+    `"Whatever you're doing about it — keep doing it." A pause. "Faster, if you can manage it."`,
+  ],
+  solved: [
+    `The chart is rolled up for the first time since you came aboard.<br><br>` +
+    `"Lane's clear. Whales went at first light, all together, like somebody called them."<br><br>` +
+    `Then his face changes. "Two of my researchers. In irons. On my ship."`,
+    `"I signed her on myself." He says it flatly. "Read her papers. Shook her hand."<br><br>` +
+    `"And the supervisor — I'd have trusted that man with the ship."`,
+    `"Cosa Nostia." He says the name like something he has found in the bilges.<br><br>` +
+    `"We've been carrying a delivery for them the whole way out, and I plotted the course myself."`,
+    `"You'll forgive me if I'm not celebrating." He almost smiles. "I'm glad, mind. ` +
+    `I'm just going to be some time being glad about it."`,
+  ],
+};
+function chartRoom(){
+  const g = r4();
+  const stage = g.solved ? 'solved'
+              : g.ghostAccepted ? 'knowing'
+              : g.wallFound ? 'blocked' : 'early';
+  const lines = CHART_LINES[stage];
+  storyModal(npcPortrait('ship_captain','⚓',130,'transparent'), 'The chart room',
+    lines[Math.floor(Math.random()*lines.length)],
+    ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck' });
 }
 
 /* The cook has opinions, and one of them turns out to matter. */

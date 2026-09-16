@@ -30,6 +30,10 @@
    background. Opacity is deliberately low so text stays readable. */
 const BG_DIR = 'assets/bg/';
 const BG_MAP = {
+  /* Open water, used behind the deck plans — those are shown full-size in the
+     page and must not be painted behind themselves. Falls through to
+     region4.png then region.png if you never draw a sea.png. */
+  sea:            'sea.png',
   home:      'home.png',
   region:    'region.png',     // fallback for any region
   region1:   'region1.png',
