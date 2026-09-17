@@ -344,7 +344,15 @@ function onFlee(){
   toast('Got away safely!');
   const zid = (ui.currentZone||{}).id;
   const inPaths = zid==='rocky_caverns' && !cavernsComplete();
-  go(ui.battle.isNpc ? 'challenge' : (inPaths ? 'caverns' : (zid==='geothermal_plant' ? 'plant' : (zid==='plant_generator' ? 'generator' : 'zone'))));
+  /* Region 4 has no generic zone screen — falling through to 'zone' dropped
+     the player into Region 1's wild pool, capped at 21. */
+  const r4Zone = { diving:'diving', weather_deck:'weather_deck',
+                   cabin_deck:'cabin_deck', laboratory_deck:'laboratory_deck' }[zid];
+  go(ui.battle.isNpc ? 'challenge'
+     : (inPaths ? 'caverns'
+     : (zid==='geothermal_plant' ? 'plant'
+     : (zid==='plant_generator' ? 'generator'
+     : (r4Zone || 'zone')))));
 }
 
 /* A modal the player must dismiss — a toast is too easy to miss. */
@@ -1225,12 +1233,23 @@ function afterPlayerAttackReal(mon, hits){
     const oc = getPStatus(0,'overcharge');
     const ocChance = oc ? (oc.fresh && oc.firstChance != null ? oc.firstChance : (oc.chance||0.25)) : 0;
     const canRepeat = oc && hits && hits.length && livingEnemies().length>0;
-    if(canRepeat && Math.random()<oc.chance){
+    /* ocChance honours the ✦ tier's certain first strike; oc.chance alone was
+       using the base rate for every repeat. */
+    if(canRepeat && Math.random() < ocChance){
       battleMsg('⚡ Overcharge triggers — the attack repeats!');
-      const again = hits
-        .filter(h=>h.t.hp>0)
-        .map(h=>({ t:h.t, idx:h.idx, oldHp:h.t.hp, newHp:Math.max(0,h.t.hp-h.dmg), dmg:h.dmg }));
+      /* A blow that KILLED its target used to leave nothing to repeat — the
+         filter dropped the dead and the echo fizzled. It now falls on somebody
+         else who is still standing. */
+      const alive = livingEnemies();
+      const again = hits.map(h=>{
+        if(h.t.hp > 0) return { t:h.t, idx:h.idx, oldHp:h.t.hp, newHp:Math.max(0,h.t.hp-h.dmg), dmg:h.dmg };
+        const t = alive[Math.floor(Math.random()*alive.length)];
+        if(!t) return null;
+        return { t, idx:ui.battle.enemies.indexOf(t), oldHp:t.hp,
+                 newHp:Math.max(0, t.hp - h.dmg), dmg:h.dmg, redirected:true };
+      }).filter(Boolean);
       if(again.length===0){ finishPlayerTurn(); return; }
+      if(again.some(h=>h.redirected)) battleMsg('…and finds somebody else.');
       bob($('#playerBob'), +1);
       setTimeout(()=>{
         applyHits(again);
@@ -1552,12 +1571,14 @@ function resolveMulti2(mv, mon, correct, target){
 
 /* Ultra tier: 5-7 random hits (45/35/20) spread across enemies, may repeat a target.
    Screen inverts briefly on use; hits animate at 2x speed in succession. */
-function resolveMultiHit(mv, mon, correct){
+function resolveMultiHit(mv, mon, correct, driveTarget){
   if(correct<mv.words){ battleMsg(`${mv.name} missed! (${correct}/${mv.words} words)`); setTimeout(advanceTurn,900); return; }
   /* Hit count widens as the stone is refined: 5-7 → 6-8 → 7-9. */
+  /* A drive move has a fixed count; an Ultra stone widens as it is refined. */
   const range = mv.ultraStone ? ultraHitRange(mv.ultraStone) : { min:5, max:7 };
   const r=Math.random();
-  const n = r<0.45 ? range.min : (r<0.80 ? range.min+1 : range.max);
+  const n = mv.drive ? (mv.hits||3)
+          : (r<0.45 ? range.min : (r<0.80 ? range.min+1 : range.max));
   const atk=monAtk(mon);
   // simulate against a working copy of HP so targeting skips already-downed enemies,
   // but leave real HP untouched until the animation plays it back hit by hit
@@ -1567,7 +1588,11 @@ function resolveMultiHit(mv, mon, correct){
   for(let i=0;i<n;i++){
     const alive = ui.battle.enemies.filter(e=>sim.get(e)>0);
     if(alive.length===0) break;
-    const t = alive[Math.floor(Math.random()*alive.length)];
+    /* A `drive` move lands its FIRST blow where you aimed it, and scatters
+       afterwards — repeats on the same target are allowed. */
+    const t = (mv.drive && i === 0 && driveTarget && sim.get(driveTarget) > 0)
+      ? driveTarget
+      : alive[Math.floor(Math.random()*alive.length)];
     const idx = ui.battle.enemies.indexOf(t);
     if(rollDodge(t, idx, 330 + i*350)){ dodged++; continue; }   // an unseen foe slips the blow
     let dmg = computeDamage(mv.mult, atk, monRef(mon), t, true);
@@ -1622,7 +1647,7 @@ function checkThresholdSleeps(){
         e.sleepThresholdsHit.push(th);
         const mon = activeMon();
         if(mon && mon.currentHp > 0 && !getPStatus(0,'asleep')){
-          setPStatus(0, { type:'asleep', turnsLeft:2 });
+          setPStatus(0, { type:'asleep', turnsLeft:2 });   // enemy-owned: the dust clears it
           renderStatusBadges();
           setTimeout(()=> battleMsg(`💤 ${SPECIES[e.species].name} sings — ${displayName(mon)} cannot keep its eyes open!`), 500);
         }
@@ -1911,15 +1936,43 @@ function runEnemyAttack(i){
   }
 
   const idx  = b.enemies.indexOf(e);
-  /* During the initiative phase a Swift Striker uses the move that earned it
-     the initiative — not its strongest. That is the whole bargain. */
   /* An arena dummy can be pinned to one slot so a tester can watch a single
      move over and over. */
-  const leading = b.turnOrder && b.turnOrder[0] === 'enemy' && (b.turnStep||0) === 0;
-  let move = (leading && initiativeMoveFor(e)) || enemyMoveFor(e);
+  /* Removed: a call to initiativeMoveFor(), which never existed as a function.
+     It was guarded by b.turnOrder, which the per-monster initiative rewrite
+     left permanently null — so short-circuiting meant it never ran and never
+     threw. Dead either way, and a live grenade if turnOrder were ever set. */
+  let move = enemyMoveFor(e);
   if(e.enraged){
     const dc = (MOVES[e.species]||[]).find(m=>m[1]==='Depth Charge');
     if(dc) move = dc;
+  }
+  /* Jax's three run scripts, not judgement. Each opens by stacking everything
+     it has into one turn, then simply keeps swinging. */
+  if(e.ai === 'dragon'){
+    const list = MOVES.dragon || [];
+    e._t = (e._t||0) + 1;
+    if(e._t === 1){                       // Rage is instant: it does not cost the turn
+      const rg = list.find(m=>m[6] && m[6].rage);
+      if(rg){ rageState(e).forced = true; battleMsg(`🐉 ${SPECIES[e.species].name} works itself into a rage.`); }
+    }
+    move = list.find(m=>m[0]==='Max') || move;
+  }
+  if(e.ai === 'tricer'){
+    const list = MOVES.tricerarmor || [];
+    e._t = (e._t||0) + 1;
+    if(e._t === 1){
+      const op = list.find(m=>m[6] && m[6].overpower);
+      if(op) castOverpower(e, op[6].overpower);
+    }
+    move = list.find(m=>m[0]==='Max') || move;
+  }
+  if(e.ai === 'firehound'){
+    move = (MOVES.firehound||[]).find(m=>m[0]==='Max') || move;
+  }
+  /* Thundercat and Loong swing their biggest thing every time. */
+  if(e.ai === 'maxer'){
+    move = (MOVES[e.species]||[]).find(m=>m[0]==='Max') || move;
   }
   /* A cormorant does one thing. */
   /* The eagle climbs for three turns and then falls on you. */
@@ -2115,6 +2168,15 @@ function runEnemyAttack(i){
         dmg = Math.ceil(dmg * (1 + e.comboStacks * 0.25));
         e.comboStacks = 0;
       }
+      /* Rage: a free 20% critical, or a bought certainty. */
+      const rm = rageMultiplier(e);
+      if(rm !== 1) dmg = Math.ceil(dmg * rm);
+      /* Overpower: +25% outright, and a quarter again on anything smaller. */
+      const op = overpowerOf(e);
+      if(op){
+        dmg = Math.ceil(dmg * (1 + op.atk));
+        if(monAtk(mon) < e.atk) dmg = Math.ceil(dmg * op.bully);
+      }
     }
     if(ex.fullHpDouble && e.hp >= e.maxHp){
       dmg = Math.ceil(dmg * 2);
@@ -2201,6 +2263,14 @@ function runEnemyAttack(i){
         msg += ' Your signals are jammed — they move first, and you may seize up!';
       }
       renderStatusBadges();
+    }
+    /* Fiery Jaws: it takes hold, and what it has hold of does not leave. */
+    if(move[6] && move[6].jaws){
+      ui.battle.noFlee = true;
+      setPStatus(0, { type:'jaws', turnsLeft:3 });
+      livingEnemies().forEach(x=>{ if(x.elusive) pinDown(x); });   // dispel first
+      renderStatusBadges();
+      setTimeout(()=> battleMsg(`🔥 ${SPECIES[e.species].name} has hold of you — no switching, no running.`), 600);
     }
     /* Piercing Stoop: climb, or fall. Nothing intervenes on the way down. */
     const stp = move[6] && move[6].stoop;

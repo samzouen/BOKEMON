@@ -109,12 +109,17 @@ const SPECIES = {
   mantaray:        { name:'Manta Ray', tier:'wild',  types:['Water','Flying'],  rate:7,  nerfedRate:5,  base:60, evo:[25], evoMult:1.5, color:'#3a5a7a', glyph:'鳐' },
   moon_swan:       { name:'Moon Swan', tier:'elite', types:['Water','Psychic'], rate:11, nerfedRate:11, base:62, evo:[],   color:'#b8c8e8', glyph:'月' },
 
+  /* --- Jax's stable: borrowed power, worn well --- */
+  dragon:          { name:'Dragon',     tier:'elite', types:['Dragon','Flying'],  rate:11, nerfedRate:11, base:65, evo:[21,41], evoMult:1.5, color:'#8a5a4a', glyph:'龍' },
+  tricerarmor:     { name:'Tricerarmor',tier:'elite', types:['Steel','Physical'], rate:11, nerfedRate:11, base:66, evo:[21,41], evoMult:1.5, color:'#7a8a96', glyph:'甲' },
+  firehound:       { name:'Firehound',  tier:'elite', types:['Fire','Ghost'],     rate:11, nerfedRate:11, base:66, evo:[25],    evoMult:1.5, color:'#a84a3a', glyph:'獒' },
+
   /* --- Caladrius: the bird that looks at the sick --- */
   caladrius:       { name:'Caladrius', tier:'legendary', types:['Water','Flying'], rate:13, nerfedRate:13,
                      base:60, evo:[], evoMult:1.5, bonusStages:1, pacificus:true,
                      color:'#cfe4f0', glyph:'鹤' },
 
-  /* --- The Rival's bird --- */
+  /* --- Jax's bird --- */
   eagle:           { name:'Eagle', tier:'elite', types:['Flying'], rate:11, nerfedRate:11, base:40, evo:[25], evoMult:1.5, color:'#8a7a4a', glyph:'鹰' },
 
   /* --- Region 4: the North Sea --- */
@@ -367,6 +372,26 @@ const MOVES = {
 
   /* Piercing Stoop ignores everything — evasion, guards, reductions, buffs —
      and removes HP outright, scaled off the eagle's own maximum. */
+  /* Rage is a bargain: four words buy a certain critical, and the free 20% that
+     used to come for nothing goes quiet for five turns afterwards. */
+  dragon:          [['Basic','Talon',0.3,'Single',2,1],
+                    ['Power1','Gale',0.5,'AOE',4,1],
+                    ['Power2','Rage',null,'Self',4,21,{rage:{chance:0.20, crit:1.5, mute:5}}],
+                    ['Ultimate','Dragon Drive',0.6,'Single',8,41,{hits:2, drive:true}],
+                    ['Max','Dragon Drive Max',0.6,'Single',10,51,{hits:3, drive:true}]],
+  /* Overpower rewards picking on something smaller than you. */
+  tricerarmor:     [['Basic','Butt',0.3,'Single',2,1],
+                    ['Power1','Gore',0.5,'AOE',4,1],
+                    ['Power2','Overpower',null,'Self',5,21,{overpower:{turns:2, atk:0.25, bully:1.25}}],
+                    ['Ultimate','Charge',0.5,'Single',8,41,{hits:2, drive:true}],
+                    ['Max','Trample',0.5,'Single',10,51,{hits:3, drive:true}]],
+  /* Terrorize is what it IS, not what it holds — no sweep touches it. */
+  firehound:       [['Basic','Snarl',0.3,'Single',2,1],
+                    ['Power1','Cinders',0.5,'AOE',4,1],
+                    ['Power2','Terrorize',null,'Passive',0,21,{passive:{terrorize:0.20, unsweepable:true}}],
+                    ['Ultimate','Fiery Jaws',1.3,'Single',8,25,{jaws:true}],
+                    ['Max','Fiery Jaws Max',1.5,'Single',10,51,{jaws:true}]],
+
   pelican:         [['Basic','Beak Jab',0.3,'Single',2,1],
                     ['Power1','Gullet Scoop',0.5,'Single',4,1],
                     ['Power2','Wing Slam',0.7,'AOE',8,18],

@@ -257,7 +257,7 @@ async function onGuardianWin(){
 function startRival(){
   if(!ensurePool()) return;
   const eff = effectiveStarter();
-  beginBattle({ isNpc:true, name:'Rival', npcId:'rival',
+  beginBattle({ isNpc:true, name:'Jax', npcId:'rival',
     waves:[
       [{species:'rat',level:21,ai:'best',nerfed:false}],
       [{species:'bird',level:21,ai:'best',nerfed:false}],
@@ -272,9 +272,9 @@ async function onRivalWin(){
   state.progress.region1.rivalCleared = true;
   if(first) state.inventory.protein += 3;
   await saveProfile();
-  challengeResult('🏆','Rival defeated!',
-    first ? 'Your rival grins. "Not bad! Here, take these — you earned them." You received <b>3 Protein Supplements</b>!' :
-            'Your rival is out of rewards to give, but the win still felt good.',
+  challengeResult('🏆','Jax defeated!',
+    first ? 'Jax grins. "Not bad! Here, take these — you earned them." You received <b>3 Protein Supplements</b>!' :
+            'Jax is out of rewards to give, but the win still felt good.',
     'challenge');
 }
 
@@ -394,7 +394,7 @@ function renderChallenge(){
     <div class="challenge-card" id="cRival">
       ${npcPortrait('rival', '🥊', 50, '#c8453a')}
       <div style="flex:1;">
-        <div class="cc-title">Rival ${r1.rivalCleared?'<span class="clear-tag">Cleared</span>':''}</div>
+        <div class="cc-title">Jax ${r1.rivalCleared?'<span class="clear-tag">Cleared</span>':''}</div>
         <div class="cc-desc">${r1.rivalCleared?'Already beaten — no more rewards.':'One-time battle. Reward: 3 Protein Supplements.'}</div>
       </div>
     </div>
@@ -416,7 +416,7 @@ function renderChallenge(){
   $('#regionBtn').addEventListener('click', ()=>go('region'));
   $('#recoverBtn').addEventListener('click', ()=>go('recover'));
   $('#cGuardian').addEventListener('click', startGuardian);
-  $('#cRival').addEventListener('click', ()=>{ if(state.progress.region1.rivalCleared){ toast('You already beat your rival.'); } else startRival(); });
+  $('#cRival').addEventListener('click', ()=>{ if(state.progress.region1.rivalCleared){ toast('You already beat Jax.'); } else startRival(); });
   if(!investigateDone) $('#cInvestigate').addEventListener('click', doInvestigate);
 }
 

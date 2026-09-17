@@ -365,7 +365,9 @@ function renderRegion(){
 
   // Sacred Grove bars the way until the Trial of Courage is passed
   const gated = region2Locked();
-  const challengeLabel = rid===3 ? 'Electric Dojo (closed)' : (rid===2 ? 'Water Dojo' : 'Dojo, Rival & Thugs');
+  const challengeLabel = rid===4 ? 'Aboard the Vane Shear'
+    : rid===3 ? 'Electric Dojo (closed)'
+    : rid===2 ? 'Water Dojo' : 'Dojo, Jax & Thugs';
 
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Regions</button>

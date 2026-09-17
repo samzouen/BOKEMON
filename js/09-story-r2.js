@@ -19,6 +19,7 @@ const SHOP_PRICES = {
   ultraSkill:   { cur:'gold',   cost:100 },
   crown:        { cur:'gold',   cost:100 },
   goldMedal:    { cur:'tokens', cost:15 },   // Region 5+: buy gold with tokens
+  waterStone:   { cur:'tokens', cost:100 },  // Region 4 only, once ever
   voidStone:    { cur:'tokens', cost:50 },
 };
 const SHOP_GREETINGS = [
@@ -73,7 +74,8 @@ async function spend(cur, amount){
 }
 
 function renderShop(){
-  setScreenBg('shop');
+  // aboard the Vane Shear the shop is the shipkeeper's corner of the chart room
+  setScreenBg((state.progress.currentRegion === 4) ? 'battle_cabin_deck' : 'shop');
   $('#brandSub').textContent = 'Shop';
   if(!ui.shopGreeting) ui.shopGreeting = shopGreeting();
   const m = state.medals || {bronze:0,silver:0,gold:0};
@@ -102,6 +104,9 @@ function renderShop(){
      `from` is the earliest region that carries the item. */
   const wares = [
     { id:'skillToken',    from:1, icon:tokenIcon(44), name:'Skill Tokens ×2',        desc:'Each Bronze Medal buys TWO tokens. Spins cost 5.', qty:true },
+    /* Salvage out of the Vane Shear's hold. Region 4 only, and only ever one. */
+    { id:'waterStone',    from:4, only:4, icon:uiIcon('water_stone',44,'💧'), name:'Water Stone',
+      desc:'Attach it to any Water monster for 1.5× experience. One only, ever.' },
     { id:'randomStone',   from:1, icon:gemIcon('mid'), name:'Random Skill Stone', desc:'One spin, right now. Any tier, any type.' },
     { id:'protein',       from:2, icon:'💪', name:'Protein Supplement',     desc:'Permanently raises one monster\'s stats.' },
     { id:'eliteStone',    from:2, icon:gemIcon('veryhigh'), name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
@@ -116,7 +121,9 @@ function renderShop(){
   const box = $('#shopWares');
   box.innerHTML = wares.map(w=>{
     const pr = SHOP_PRICES[w.id];
-    const stocked = region >= w.from;
+    /* `only` pins a ware to a single region, and a one-off vanishes once taken. */
+    const stocked = region >= w.from && (!w.only || region === w.only)
+                  && !(w.id === 'waterStone' && state.inventory.waterStone);
     const afford = stocked && medalCount(pr.cur) >= pr.cost;
     return `<div class="ware ${stocked?(afford?'':'cant'):'oos'}" ${stocked?`data-ware="${w.id}"`:''}>
       <div class="ware-icon">${w.icon}</div>
@@ -187,6 +194,7 @@ function openQtyPurchase(w){
     const before = medalCount(pr.cur);
     if(!await spend(pr.cur, qty*pr.cost)) return;
     if(w.id==='goldMedal') state.medals.gold = (state.medals.gold||0) + qty;
+    else if(w.id==='waterStone') state.inventory.waterStone = true;
     else state.inventory.tokens = (state.inventory.tokens||0) + qty * (pr.yields||1);
     const sv = showSyncingOverlay('Syncing…');
     const ok = await saveProfile({ awaitCloud:true });
@@ -459,7 +467,7 @@ function grantLanternfish(){
 function waterDojoCleared(id){ return ((state.progress.region2||{}).waterDojo||[]).includes(id); }
 function nextWaterStage(){ return WATER_DOJO_STAGES.find(st=>!waterDojoCleared(st.id)); }
 
-/* The Rival returns, stronger — and only for players who already beat him in
+/* Jax returns, stronger — and only for players who already beat him in
    Region 1, so his reappearance means something. */
 /* Six monsters, one at a time — six waves, not three pairs. Fought singly they
    are a longer duel, and the XP is credited per wave rather than in bulk. */
@@ -570,7 +578,7 @@ function renderChallengeR2(){
   if(cr) cr.addEventListener('click', ()=>{
     if(r2.rivalCleared){ toast('You have already beaten him here.'); return; }
     if(!ensurePool()) return;
-    beginBattle({ isNpc:true, name:'Rival', npcId:'rival',
+    beginBattle({ isNpc:true, name:'Jax', npcId:'rival',
       waves: r2RivalWaves().map(w=>w.map(e=>({...e, ai:'best', nerfed:false}))),
       onWin:onR2RivalWin });
   });

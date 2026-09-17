@@ -223,7 +223,7 @@ function renderGenerator(){
   $('#backBtn').addEventListener('click', ()=>{ stopGenLoop(); go('explore'); });
   $('#returnBtn').addEventListener('click', ()=>{ stopGenLoop(); go('explore'); });
   // the boss pays out the moment the fifth is seen off
-  if(ui.pendingGenReward){ ui.pendingGenReward = false; return setTimeout(genReward, 300); }
+
   if(canFight) startGenLoop();
 }
 
@@ -288,9 +288,9 @@ async function onGenWin(){
   const hitTarget = (g.wins === GEN_TARGET && !g.claimed);
   if(hitTarget){ g.claimed = true; state.inventory.tokens = (state.inventory.tokens||0) + 10; }
   await saveProfile();
-  if(hitTarget){
-    ui.pendingGenReward = true;      // the boss thanks you after the victory screen
-  }
+  /* Thank them straight away, before the victory screen — it used to wait for
+     the floor to be re-entered, so the fifth win felt like nothing happened. */
+  if(hitTarget) return resumeVictory(true, genReward);
   resumeVictory();          // the ordinary victory screen, so catching still works
 }
 function genReward(){

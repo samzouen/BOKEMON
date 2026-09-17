@@ -287,10 +287,14 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       break;
 
     case 'Physical': { // Counter — stacks that eat a whole attack
-      const tier = plus;                       // 0 / 1 / 2 by refinement
-      addCounterStack(mon, tier, d.stacks||1);
-      setPStatus(uid,{type:'counter', turnsLeft:99, tier,
-                      regain:d.regain||0.10, combo:d.combo||0.25, enrage:d.enrage||0, owner:uid});
+      /* The parameter here is casterMon, not mon. Referencing `mon` threw, and
+         because the cast is wrapped the whole effect vanished silently — which
+         is why nothing appeared when Diamond Dust borrowed it. */
+      const tier = plus || 0;                  // 0 / 1 / 2 by refinement
+      addCounterStack(casterMon, tier, d.stacks || 1);
+      setPStatus(uid, { type:'counter', turnsLeft:99, tier,
+                        regain:d.regain||0.10, combo:d.combo||0.25,
+                        enrage:d.enrage||0, owner:uid });
       res.msg = d.text;
       break;
     }
@@ -313,7 +317,7 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       setPStatus(uid,{type:'dragonDance', turnsLeft:T+1, deal:d.deal});
       /* The speed is its own status so Diamond Dust can refresh it, and so the
          order can read a tier rather than guess from the damage figure. */
-      if(d.mach) setPStatus(uid,{type:'machDragon', turnsLeft:T+1, tier:d.mach});
+      if(d.mach) setPStatus(uid,{type:'machDragon', turnsLeft:T+1, tier:d.mach, mine:true});
       res.msg = d.text;
       break;
 
@@ -671,6 +675,11 @@ function applyPassiveGrant(holder, grant, atk){
     holder.evadeAlways = grant.evadeAlways;
     if(grant.unsweepable) holder.evadeUnsweepable = true;
   }
+  /* Terrorize sits on the monster and is read from the other side's damage. */
+  if(grant.terrorize){
+    holder._terrorize = grant.terrorize;
+    if(grant.unsweepable) holder._terrorizeUnsweepable = true;
+  }
   /* Sings them under, rather than stunning them. */
   if(grant.thresholdSleep){
     holder.thresholdSleep = grant.thresholdSleep.slice();
@@ -720,7 +729,7 @@ function applyStonePassives(mon){
        its whole sweep comes free, and casting buys the borrowed facet. */
     if(d.passiveOnly === 'mach'){
       const T = d.turns || veryHighDef(st.type, plus).turns || 5;
-      setPStatus(0, { type:'machDragon', turnsLeft:T + 1, tier:d.mach });
+      setPStatus(0, { type:'machDragon', turnsLeft:T + 1, tier:d.mach, mine:true });
       renderStatusBadges();
       return setTimeout(()=> battleMsg(`🐉 ${escapeHtml(d.name)} — the air moves out of the way.`), 400);
     }
@@ -796,6 +805,9 @@ const STATUS_OWNER = {
   // inflicted on you by the enemy
   stunned:'enemy', paralysed:'enemy', softened:'enemy', charmed:'enemy',
   disrupt:'enemy', iceTombSelf:'enemy',
+  /* Sleep and Mach Dragon exist on BOTH sides. Yours carry `mine:true` and are
+     protected; theirs are swept. */
+  asleep:'enemy', machDragon:'enemy',
   // enemy self-buffs held as statuses
   /* Dragon Dance and Steel Aegis are PLAYER buffs — listing them here made the
      dust's own chokepoint refuse to let you cast them. An enemy version would
@@ -843,6 +855,13 @@ function diamondDustCleanse(){
       if(e[f]){ e[f] = Array.isArray(e[f]) ? [] : 0; cleared++; }
     });
     if(e.evadeAlways && !e.evadeUnsweepable){ e.evadeAlways = 0; cleared++; }
+    /* Borrowed damage and durability. These reset to ONE, not zero — a swept
+       takeMult of 0 would make the monster immortal rather than ordinary. The
+       whale's own rage is left alone; that is what it is, not what it holds. */
+    if(!e.enraged){
+      if(e.dealMult && e.dealMult !== 1){ e.dealMult = 1; cleared++; }
+      if(e.takeMult && e.takeMult !== 1){ e.takeMult = 1; cleared++; }
+    }
     if(e.guard){ e.guard = false; }
     if(e.elusive){ e.elusive = false; e.gooed = true; cleared++; }   // pinned by the dust
   });
@@ -1072,6 +1091,120 @@ function clearAfterimages(){
     el.classList.add('fading');
     setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 420);
   });
+}
+
+/* ============================================================
+   JAX'S THREE: Rage · Overpower · Terrorize
+   ============================================================ */
+
+/* ---- RAGE ----------------------------------------------------------------
+   Free 20% criticals, until you spend it. Four words buy a certain critical
+   this turn, and the free chance then sleeps for five turns — the first move
+   in the game where using something makes it temporarily worse.            */
+function rageState(holder){
+  if(!holder._rage) holder._rage = { muted:0, forced:false };
+  return holder._rage;
+}
+function rageDef(holder){
+  const mv = (MOVES[holder.species]||[]).find(m=>m[6] && m[6].rage);
+  return mv ? mv[6].rage : null;
+}
+/* Returns the damage multiplier for this swing: 1, or the critical figure. */
+function rageMultiplier(holder){
+  const def = rageDef(holder);
+  if(!def) return 1;
+  const st = rageState(holder);
+  if(st.forced){
+    st.forced = false;
+    st.muted = def.mute || 5;            // the bargain comes due
+    battleMsg(`💥 <b>CRITICAL</b> — ${holder.uid ? displayName(holder) : SPECIES[holder.species].name} strikes with everything.`);
+    return def.crit || 1.5;
+  }
+  if(st.muted > 0) return 1;             // spent, and quiet for a while yet
+  if(Math.random() < (def.chance || 0.20)){
+    battleMsg(`💥 A critical!`);
+    return def.crit || 1.5;
+  }
+  return 1;
+}
+function tickRage(holder){
+  const st = holder && holder._rage;
+  if(st && st.muted > 0) st.muted--;
+}
+
+/* ---- OVERPOWER -----------------------------------------------------------
+   Two turns of +25% attack, and while it runs, anything weaker than you takes
+   a quarter again on top. Bullying, formalised.                            */
+function overpowerOf(holder){
+  const st = holder && holder._overpower;
+  return (st && st.turnsLeft > 0) ? st : null;
+}
+function castOverpower(holder, def){
+  holder._overpower = { turnsLeft:(def.turns||2) + 1, atk:def.atk||0.25, bully:def.bully||1.25 };
+  renderStatusBadges();
+  battleMsg(`💪 ${holder.uid ? displayName(holder) : SPECIES[holder.species].name} swells — <b>+${Math.round((def.atk||0.25)*100)}% attack</b>, and it means to use it.`);
+}
+function tickOverpower(holder){
+  const st = holder && holder._overpower;
+  if(st && st.turnsLeft > 0) st.turnsLeft--;
+}
+
+/* ---- TERRORIZE -----------------------------------------------------------
+   Simply being looked at by this thing makes you hit softer. It is what the
+   creature IS, so no sweep removes it.                                     */
+function terrorizeFactor(defenderSideMon){
+  const b = ui.battle;
+  if(!b) return 1;
+  let worst = 1;
+  (b.enemies || []).forEach(e=>{
+    if(e.hp <= 0) return;
+    const p = passiveOf(e);
+    const t = (p && p.terrorize) || (e._terrorize || 0);
+    if(t) worst = Math.min(worst, 1 - t);
+  });
+  return worst;
+}
+
+/* ============================================================
+   ENEMY VERY-HIGH STONES
+   A trainer's monster can walk in already carrying a refined skill. Only the
+   handful Jax actually uses are implemented — the rest fall through
+   harmlessly rather than pretending.
+   ============================================================ */
+function applyEnemyVeryHigh(e, type, plus){
+  const d = veryHighDef(type, plus||0);
+  if(!d) return;
+  const T = d.turns || 5;
+  switch(type){
+    case 'Fire':
+      /* Overheat in enemy hands: it hits harder and takes more, exactly as it
+         would for you. Firehound is built to exploit the first half. */
+      e.dealMult = (e.dealMult || 1) * (d.deal || 1.5);
+      e.takeMult = (e.takeMult || 1) * (d.take || 1.5);
+      break;
+    case 'Dragon':
+      e.dealMult = (e.dealMult || 1) * (d.deal || 1.25);
+      if(d.mach) addEStatus(e, { type:'machDragon', turnsLeft:T + 1, tier:d.mach });
+      break;
+    case 'Steel':
+      e.takeMult = (e.takeMult || 1) * (1 - (d.reduce || 0.30));
+      if(d.block) grantBlock(e, d.block, e.atk);
+      if(d.passiveBlock) grantBlock(e, d.passiveBlock, e.atk);
+      break;
+    case 'Flying':
+      e.evadeAlways = Math.max(e.evadeAlways || 0, d.after || 0.15);
+      e.airborne = Math.max(e.airborne || 0, 1);      // the opening untouchable turn
+      break;
+    case 'Water': {
+      /* Ice Tomb in enemy hands freezes YOU rather than them. */
+      const mon = activeMon();
+      if(mon) setPStatus(0, { type:'asleep', turnsLeft:(d.freeze || 2) + 1 });
+      break;
+    }
+    default: return;
+  }
+  renderStatusBadges();
+  setTimeout(()=> battleMsg(`💎 ${SPECIES[e.species].name} carries <b>${escapeHtml(d.name)}</b>.`), 500);
 }
 
 /* ============================================================
@@ -1746,6 +1879,7 @@ function endRound(){
 
   const gm = activeMon();
   if(gm){
+    tickRage(gm); tickOverpower(gm);
     if(gm.guard) grantBlock(gm, 1, monAtk(gm));
     if(gm.airborne  > 0) gm.airborne--;
     if(gm.invisible > 0) gm.invisible--;
@@ -1753,6 +1887,7 @@ function endRound(){
     if(gm.evadeTurns   > 0) gm.evadeTurns--;
   }
   livingEnemies().forEach(e=>{
+    tickRage(e); tickOverpower(e);
     if(e.guard) grantBlock(e, 1, e.atk);
     if(e.airborne  > 0) e.airborne--;
     if(e.invisible > 0) e.invisible--;
@@ -2144,7 +2279,7 @@ function beginBattle(config){
     charge:null, legacyBonus:0,
     aftershock:[], aftershockPending:false, bonusMult:0, _bonusResolved:false,
     _passiveUsed:false,
-    turnOrder:null, turnStep:0,
+    turnStep:0,          // turnOrder retired with the per-monster initiative
     rechargeWords:0,         // every word written this battle feeds the meter
 
     partyStatus:{},          // party-wide buffs, each with a turn counter
@@ -2195,7 +2330,11 @@ function loadWave(i){
   if(fs.disruptField) b.enemies.forEach(e=> addEStatus(e, { type:'disrupt', turnsLeft:fs.disruptField.turnsLeft, stun:fs.disruptField.stun, mine:!!fs.disruptField.mine }));
   if(b.onWaveStart) b.onWaveStart(i);
   // stances and block stacks apply the moment a monster takes the field
-  b.enemies.forEach(e=> applyEntryPassives(e, e.species, e.level, e.atk));
+  b.enemies.forEach((e,i)=>{
+    applyEntryPassives(e, e.species, e.level, e.atk);
+    const spec = (b.waves[b.waveIndex]||[])[i];
+    if(spec && spec.veryHigh) applyEnemyVeryHigh(e, spec.veryHigh.type, spec.veryHigh.plus||0);
+  });
   // a passive announces itself the moment its owner appears
   const withPassive = b.enemies.find(e=>passiveOf(e));
   if(withPassive){
@@ -2369,6 +2508,7 @@ function ownBuffMultiplier(){
   if(dd) m *= (dd.deal || 1.25);
   m *= wrathDamageBonus();                 // every grudge held makes you hit harder
   m *= comboMultiplier(activeMon());       // a blow you read makes the next one bigger
+  m *= terrorizeFactor();                  // something on the field is frightening
   if(ui.battle && ui.battle.legacyBonus) m *= (1 + ui.battle.legacyBonus);
   return m;
 }

@@ -183,7 +183,24 @@ function onBattleWon(){
   ui.pendingVictory = ()=> showVictory(enemyNames, levelUps, tokens);
   const finish = ()=> b.onWin ? b.onWin(levelUps) : showVictory(enemyNames, levelUps, tokens);
   if(evolvers.length){
-    playEvolutions(evolvers, finish);
+    /* One animation per EVOLUTION, not per monster. A Magnet that crosses both
+       11 and 25 in one payout used to play a single flicker from stage 0 to
+       stage 2 — the middle form never appeared at all. Each crossing now gets
+       its own scene with the correct consecutive pair. */
+    const scenes = [];
+    evolvers.forEach(e=>{
+      if(e.hatched || e.crowned){ scenes.push(e); return; }   // those are one-offs
+      e.evos.forEach((lvl, k)=>{
+        const last = k === e.evos.length - 1;
+        scenes.push(Object.assign({}, e, {
+          from: lvl - 1, to: lvl, evos:[lvl],
+          stageFrom: evolutionStage(e.species, lvl - 1),
+          stageTo:   evolutionStage(e.species, lvl),
+          newMoves: last ? e.newMoves : [],     // the learning line belongs to the last
+        }));
+      });
+    });
+    playEvolutions(scenes, finish);
   } else {
     finish();
   }
@@ -218,8 +235,11 @@ function playEvolutions(list, done){
     const ev = list[i++];
     playSfx('evolution');
     const sp = SPECIES[ev.species];
-    const fromStage = evolutionStage(ev.species, ev.from);
-    const toStage   = evolutionStage(ev.species, ev.to);
+    /* Explicit stages when the caller worked them out; otherwise derive them.
+       The pair must always be CONSECUTIVE — the form you were, and the form you
+       are about to become. */
+    const fromStage = (ev.stageFrom != null) ? ev.stageFrom : evolutionStage(ev.species, ev.from);
+    const toStage   = (ev.stageTo   != null) ? ev.stageTo   : evolutionStage(ev.species, ev.to);
 
     const ov = document.createElement('div');
     ov.className = 'evo-overlay';
@@ -322,6 +342,8 @@ function exploreFurther(){
     return go((ui.currentZone||{}).id==='rocky_caverns' && !cavernsComplete() ? 'caverns' : 'zone');
   }
   if(ui.cavernPath && !cavernsComplete()) return exploreCavernPath(ui.cavernPath);
+  if((ui.currentZone||{}).id==='diving')           return startDive();   // straight back in
+  if((ui.currentZone||{}).id==='weather_deck')     return go('weather_deck');
   if((ui.currentZone||{}).id==='plant_generator')  return go('generator');
   if((ui.currentZone||{}).id==='geothermal_plant') return go('plant');
   return startWildEncounter({ silentIntro:true });
@@ -520,7 +542,7 @@ function renderInner(){
     case 'region':        return renderRegion();
     case 'explore':       return renderExplore();
     case 'battle':        return renderBattle();
-    case 'challenge':     return renderChallenge();
+    case 'challenge':     return (state.progress.currentRegion === 4) ? renderChallengeR4() : renderChallenge();
     case 'party':         return renderPartyStub();
     case 'stats':         return renderStats();
     case 'storage':       return renderStorage();
@@ -531,6 +553,7 @@ function renderInner(){
     case 'plant':         return renderPlant();
     case 'concert':       return renderConcert();
     case 'generator':     return renderGenerator();
+    case 'diving':        return go('weather_deck');
     case 'elementStones': return renderElementStones();
     case 'weather_deck':      return renderWeatherDeck();
     case 'cabin_deck': return renderCabinDeck();
