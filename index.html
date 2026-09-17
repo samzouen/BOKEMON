@@ -86,6 +86,8 @@
     opacity:0;transition:opacity .45s ease;
   }
   .screen-bg.on{ opacity:0.30; }
+  /* Deck plans: show the whole height, never crop it. */
+  .screen-bg.fit-h{ background-size:auto 100%; }
   /* Safari's rubber-band scroll could drag a story scene away and leave the
      frozen battle behind it. Scenes own the viewport and scroll internally. */
   /* A story scene owns the viewport: fixed, self-scrolling and above the
@@ -872,6 +874,23 @@
   .deck-divers.open{opacity:1;}
   .deck-keeper{position:absolute;right:2px;bottom:10px;display:flex;flex-direction:column;
     align-items:center;gap:6px;}
+  .exped{background:var(--paper-2);border:1px solid var(--line);border-radius:13px;
+    padding:11px 13px 9px;margin:10px 0;}
+  .exped-head{display:flex;justify-content:space-between;align-items:baseline;
+    font-family:'Baloo 2',cursive;font-weight:800;font-size:13px;margin-bottom:9px;}
+  .exped-pct{font-size:12px;color:var(--ink-soft);font-weight:700;}
+  .exped-track{position:relative;height:12px;border-radius:7px;
+    background:linear-gradient(180deg,#cfe4ef,#b8d6e6);overflow:visible;
+    border:1px solid rgba(58,90,122,.28);}
+  .exped-fill{position:absolute;left:0;top:0;bottom:0;border-radius:7px 0 0 7px;
+    background:linear-gradient(180deg,#8fc3dd,#5d9dc2);transition:width .6s ease;}
+  .exped-wall{position:absolute;top:-3px;bottom:-3px;width:3px;border-radius:2px;
+    background:repeating-linear-gradient(180deg,#3a5a7a,#3a5a7a 3px,transparent 3px,transparent 6px);}
+  .exped-ship{position:absolute;top:50%;width:34px;height:22px;
+    transform:translate(-50%,-52%);transition:left .6s ease;pointer-events:none;}
+  .exped-ship svg{width:100%;height:100%;overflow:visible;
+    filter:drop-shadow(0 1px 1px rgba(0,0,0,.25));}
+  .exped-note{font-size:10.5px;color:var(--ink-soft);font-weight:600;margin-top:9px;}
   .hunt-box{background:var(--paper-2);border:1px solid var(--line);border-radius:13px;
     padding:11px;margin-top:12px;}
   .hunt-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:13px;margin-bottom:8px;}
@@ -896,10 +915,36 @@
     background:var(--paper-2);border:2px solid var(--line);}
   .gen-stage.gen-noart{background:repeating-linear-gradient(135deg,var(--paper-2),var(--paper-2) 12px,var(--paper-3) 12px,var(--paper-3) 24px);}
   .gen-img{width:100%;height:100%;object-fit:cover;display:block;}
+  .sci-pin .sci-tick{position:absolute;right:-4px;bottom:-2px;width:18px;height:18px;
+    color:var(--jade);background:var(--paper);border-radius:50%;padding:1px;}
+  .sci-pin.beaten{opacity:.55;}
   .deck-pin.fisher{ position:absolute; }
   /* Centred on its fisherman, and never part of the button's layout. */
   /* Suspicion, not alarm. A slow violet breath that fades and returns rather
      than a red alert — it invites a look instead of demanding a reflex. */
+  /* The dive platform: a slow blue breath on a long cycle. It is an invitation,
+     not a reflex test — nothing is lost by missing it. */
+  .dive-pulse{
+    position:absolute; width:58px; height:58px; left:50%; top:50%;
+    margin:-29px 0 0 -29px; border-radius:50%; pointer-events:none; z-index:1;
+    background:radial-gradient(circle,rgba(70,150,210,.42) 0%,rgba(70,150,210,.16) 48%,rgba(70,150,210,0) 72%);
+    animation:diveBreathe 5.5s ease-in-out infinite;
+  }
+  .dive-pulse::after{
+    content:''; position:absolute; inset:0; border-radius:50%;
+    border:2px solid rgba(90,170,225,.6);
+    animation:diveRing 5.5s ease-out infinite;
+  }
+  @keyframes diveBreathe{
+    0%,70%,100%{ transform:scale(.8); opacity:.25; }
+    35%        { transform:scale(1.05); opacity:.85; }
+  }
+  @keyframes diveRing{
+    0%  { transform:scale(.65); opacity:0; }
+    18% { opacity:.7; }
+    45% { transform:scale(1.5); opacity:0; }
+    100%{ transform:scale(1.5); opacity:0; }
+  }
   .suspect-pulse{
     position:absolute; width:62px; height:62px; left:50%; top:50%;
     margin:-31px 0 0 -31px; border-radius:50%; pointer-events:none; z-index:2;
