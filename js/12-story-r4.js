@@ -57,7 +57,14 @@ function r4(){
 }
 const R4_WILD   = ['starfish','seahorse','duck','sea_turtle','lanternfish'];
 const R4_ELITE  = ['plesiosaur','otter','loong','ninja'];
-const DIVES_TO_WALL = 30;
+/* ------------------------------------------------------------
+   THE EXPEDITION
+   Every fight won aboard — over the side or at the rail — is a day of sailing.
+   The bar fills at 80. The whales stop the ship at 40, halfway, when the crew
+   have settled and nobody is expecting anything.
+   ------------------------------------------------------------ */
+const EXPEDITION_TOTAL = 80;
+const WALL_AT          = 40;
 const WHALE_DIVES_TO_GHOST = 3;
 
 function r4Level(){
@@ -131,6 +138,7 @@ function renderWeatherDeck(){
         <button class="deck-pin ghost-here" style="left:22%;top:80%;" data-ghost="1">
           ${monPortrait('whalelord',60,{view:'front',bare:true})}</button>` : ''}
     </div>
+    ${expeditionBar()}
     ${g.diversBeaten ? '' : `<div class="phase-flag">The divers are not letting anyone past.</div>`}
   `;
   $('#backBtn').addEventListener('click', ()=>{ stopBirdLoop(); go('explore'); });
@@ -146,6 +154,36 @@ function renderWeatherDeck(){
   if(gh) gh.addEventListener('click', ()=>ghostChat('top'));
 }
 
+/* ------------------------------------------------------------
+   When the ship stops, everybody aboard has an opinion about it — and each of
+   them is a different kind of frightened.
+   ------------------------------------------------------------ */
+const BLOCKED_LINES = {
+  sailor1: `<b>"We've stopped."</b> He keeps looking at the rail and then away again.<br><br>` +
+           `<b>"Six weeks out and we've stopped for fish. I know how that sounds."</b>`,
+  sailor2: `He is holding the signed drumstick and not really seeing it.<br><br>` +
+           `<b>"Djenta'd have a song about this. Whole sea saying no."</b>`,
+  sailor3: `<b>"I counted them."</b> He does not say how many.<br><br>` +
+           `<b>"Gave up. Went below. Came back and counted again."</b>`,
+  sailor4: `<b>"Cook's rationing. That's when you know."</b><br><br>` +
+           `<i>He is trying to make it a joke and it is not working.</i>`,
+  sailor5: `<b>"They're not hunting us. That's the part I don't like."</b><br><br>` +
+           `<b>"A thing that wants to eat you, you can understand."</b>`,
+  ship_captain: `He does not look up from the chart.<br><br>` +
+           `<b>"I've plotted round ice. Round weather. Round war, once."</b><br><br>` +
+           `<b>"Never had to plot round something that was waiting."</b>`,
+  shipkeeper: `He has stopped sorting salvage. The crates are open and untouched.<br><br>` +
+           `<b>"Forty years I've been at sea and I've never once been told to stop."</b><br><br>` +
+           `<i>"Something down there is doing the telling."</i>`,
+  cook: `<b>"They won't eat."</b> He means the crew.<br><br>` +
+           `<b>"Made the good stew and all. Sat there going cold."</b>`,
+  rival: `He is at the porthole for once, actually looking.<br><br>` +
+           `<b>"Hundreds of them. Just sitting there."</b><br><br>` +
+           `He catches himself being interested and puts it away. ` +
+           `<b>"Nothing to do with me."</b>`,
+};
+function blockedLine(id){ return BLOCKED_LINES[id] || null; }
+
 /* All five are off duty on the cabin deck — the weather deck is for working. */
 const SAILOR_LINES = [
   `"Oi — it's you." He has the decency to look sheepish. "Look, about the competition. ` +
@@ -159,8 +197,10 @@ const SAILOR_LINES = [
   `"You're the one the captain's banking on." He looks you over. "No pressure."`,
 ];
 function sailorChat(n){
+  const g = r4();
+  const blocked = (g.wallFound && !g.solved) ? blockedLine('sailor'+n) : null;
   storyModal(npcPortrait('sailor'+n,'⚓',120,'transparent'), crewName('sailor'+n),
-    SAILOR_LINES[(n-1) % SAILOR_LINES.length],
+    blocked || SAILOR_LINES[(n-1) % SAILOR_LINES.length],
     ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck' });
 }
 /* ---------- the raids ---------- */
@@ -304,13 +344,81 @@ function startDive(){
 
 /* Thirty won dives and the ship stops. No bar, no counter — the dives simply
    feel like time passing, because they are. */
-async function onDiveWin(){
+/* Both kinds of fight feed the same meter. Returns true if the wall just
+   appeared, so the caller can hand over to the captain instead of the usual
+   victory screen. */
+async function logExpedition(){
   const g = r4();
-  const fell = ((ui.battle && ui.battle.enemies) || []).filter(e=>e.hp<=0).map(e=>e.species);
-  if(!g.wallFound){
-    g.dives++;
-    if(g.dives >= DIVES_TO_WALL){ g.wallFound = true; await saveProfile(); return resumeVictory(true, whaleWallFound); }
+  /* Nothing moves while the whales are across the lane. The ship is not
+     sailing anywhere, and the bar should say so — you are not making progress
+     east by fighting whales, you are making progress towards understanding
+     why they are there. */
+  if(g.wallFound && !g.solved) return false;
+
+  /* Once the truth is out the ship runs for open water and the last half goes
+     twice as fast: forty more in twenty encounters. */
+  const step = g.solved ? 2 : 1;
+  g.dives = Math.min(EXPEDITION_TOTAL, (g.dives || 0) + step);
+
+  if(!g.wallFound && g.dives >= WALL_AT){
+    g.dives = WALL_AT;                   // stop exactly on the mark
+    g.wallFound = true;
+    await saveProfile();
+    return true;
   }
+  await saveProfile();
+  return false;
+}
+/* A little ship crossing the North Sea. Bow to the right, a bow wave under it,
+   and a wake trailing back the way it came. */
+function expeditionBar(){
+  const g = r4();
+  const pct = expeditionPct();
+  const done = g.solved;
+  return `<div class="exped">
+    <div class="exped-head">
+      <span>${done ? 'Passage east' : 'Expedition'}</span>
+      <span class="exped-pct">${done ? 'clear' : pct + '%'}</span>
+    </div>
+    <div class="exped-track">
+      <div class="exped-fill" style="width:${pct}%"></div>
+      ${g.wallFound && !done ? `<div class="exped-wall" style="left:50%"></div>` : ''}
+      <div class="exped-ship" style="left:${pct}%">
+        <svg viewBox="0 0 34 22" aria-hidden="true">
+          <path d="M3 14 h26 l-4 5 H6 Z" fill="#3a5a7a"/>
+          <path d="M9 14 V6 h9 l-2 4 h-3 v4 Z" fill="#f4ecd8" stroke="#3a5a7a" stroke-width="1.1" stroke-linejoin="round"/>
+          <path d="M19 14 V7 l7 7 Z" fill="#f4ecd8" stroke="#3a5a7a" stroke-width="1.1" stroke-linejoin="round"/>
+          <path d="M1 18 q3 2 6 0" fill="none" stroke="#7fb0cc" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+    <div class="exped-note">${
+      done ? `Running east, and making up the time. <b>Every win counts double.</b>`
+      : g.wallFound ? 'Dead in the water. Nothing moves until this is settled.'
+      : 'Days at sea, counted in the fights you win over the side and at the rail.'
+    }</div>
+  </div>`;
+}
+
+function expeditionPct(){
+  return Math.min(100, Math.round(((r4().dives || 0) / EXPEDITION_TOTAL) * 100));
+}
+
+async function onDiveWin(){
+  const fell = ((ui.battle && ui.battle.enemies) || []).filter(e=>e.hp<=0).map(e=>e.species);
+  const blocked = await logExpedition();
+  if(blocked) return resumeVictory(true, whaleWallFound);
+  const got = await checkHunts(fell);
+  await saveProfile();
+  if(got && got.length) return resumeVictory(true, ()=>huntPaid(got));
+  resumeVictory();
+}
+
+/* A raid or a haul at the rail counts exactly the same. */
+async function onRailWin(){
+  const fell = ((ui.battle && ui.battle.enemies) || []).filter(e=>e.hp<=0).map(e=>e.species);
+  const blocked = await logExpedition();
+  if(blocked) return resumeVictory(true, whaleWallFound);
   const got = await checkHunts(fell);
   await saveProfile();
   if(got && got.length) return resumeVictory(true, ()=>huntPaid(got));
@@ -363,7 +471,10 @@ function startWhaleFight(){
   beginBattle({
     waves: Array.from({length:6}, (_,i)=>whaleWave(i)),
     isNpc:false, allowCatch:true, name:'The wall', bgKey:'battle_whales',
-    onWin: ()=> resumeVictory() });
+    /* A trip through the wall is a day at sea like any other, so it feeds the
+       meter too — otherwise the bar froze at the halfway mark and nothing the
+       player did between the block and the truth appeared to matter. */
+    onWin: ()=> onDiveWin() });
 }
 
 /* The fourth dive: they let you through. */
@@ -415,8 +526,10 @@ async function ghostAccept(){
 
 function ghostChat(where){
   const g = r4();
-  const body = g.rivalBeaten
+  const done = g.rivalBeaten && g.stoneWon;
+  const body = done
     ? `<b>"I have watched him fight now. That is not the power that opened me."</b><br><br>` +
+      `<b>"The borrowed thing he carried is off him and onto you, and he is no lighter for it."</b><br><br>` +
       `<b>"Look to the ones in white coats."</b>`
     : (where === 'quarters'
       ? `It hangs in the passage outside one particular cabin and will not move on.<br><br>` +
@@ -569,8 +682,9 @@ function cookChat(){
     body = `"Six weeks out and I'm down to the tinned stuff." He looks genuinely wounded by this.<br><br>` +
            `"You eat, though. Whatever else you're doing up there, you eat."`;
   }
+  const blocked = (g.wallFound && !g.solved) ? blockedLine('cook') : null;
   storyModal(npcPortrait('cook','🧑‍🍳',130,'transparent'), crewName('cook'),
-    body, ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck' });
+    blocked || body, ()=>go('cabin_deck'), { bg:'battle_cabin_deck', subtitle:'Cabin Deck' });
 }
 
 /* Each crew member is two waves of what they happen to own. */
@@ -729,8 +843,10 @@ const JAX_IDLE = [
   `<b>"When there's something worth my time, I'll know."</b>`,
 ];
 function rivalIdle(){
+  const g = r4();
+  const blocked = (g.wallFound && !g.solved) ? blockedLine('rival') : null;
   storyModal(npcPortrait('rival','🧑',140,'transparent'), 'Jax',
-    JAX_IDLE[Math.floor(Math.random()*JAX_IDLE.length)],
+    blocked || JAX_IDLE[Math.floor(Math.random()*JAX_IDLE.length)],
     ()=>go('cabin_deck'), { bg:'battle_cabin_deck', subtitle:'Cabin Deck' });
 }
 
@@ -860,36 +976,76 @@ function allBeaten(){ return SCI.every(s=>sciBeaten(s.n)); }
 function guessesLeft(){ return Math.max(0, GUESSES_PER_DAY - inv().guesses); }
 
 /* ---------- the deck ---------- */
-function renderLaboratoryDeck(){
+/* ------------------------------------------------------------
+   THE LABORATORY DECK — three stages.
+
+   1  BLOCKED. The ship has stopped and nobody knows why. The nine are simply
+      puzzled, and two of them are a shade less puzzled than they should be.
+   2  INVESTIGATION. Only once Jax has handed over the Ghost Stone and been
+      cleared does the Whalelord come down here and start naming people.
+   3  SOLVED. Rhona runs the deck, and the requests come in.
+   ------------------------------------------------------------ */
+function labStage(){
   const g = r4();
-  setScreenBg('laboratory_deck');
+  if(g.solved) return 'after';
+  /* The Whalelord will not accuse a room full of scientists while it still has
+     a question about the boy upstairs. Jax first, and completely. */
+  if(g.rivalBeaten && g.stoneWon && g.ghostAccepted) return 'investigation';
+  return 'blocked';
+}
+
+/* What the nine make of a sea that has stopped letting them past. Two of these
+   are a slip, and both vanish the moment the investigation opens — by then
+   everybody is being careful. */
+const PUZZLED = {
+  1: `He is holding a flask up to the light and not looking at it.<br><br>` +
+     `<b>"Chemistry doesn't do this. Chemistry doesn't hold a grudge."</b>`,
+  2: `<b>"I've run it four times."</b> He pushes his glasses up. <b>"The pod structure is wrong. ` +
+     `They're not organised for feeding or for breeding."</b><br><br>` +
+     `<b>"They're organised for... standing somewhere."</b>`,
+  3: `He turns the journal round so you can see. Page after page of the same tally.<br><br>` +
+     `<b>"Day eleven. Still there. Day twelve. Still there."</b>`,
+  4: `<b>"It's a blockade."</b> He is enjoying being the one to say it.<br><br>` +
+     `<b>"Say what you like about animals not having politics."</b>`,
+  5: `<b>"Barnaby says not to worry the crew."</b> She is worrying anyway.<br><br>` +
+     `<b>"How am I meant to write this up? <i>The sea declined?</i>"</b>`,
+  /* Mireille. She is not puzzled at all, and she nearly says so. */
+  6: `She does not look up from the sink.<br><br>` +
+     `<b>"They're grieving."</b><br><br>` +
+     `A pause, slightly too long. <b>"Whales do that. It's in the literature."</b><br><br>` +
+     `<i>You did not tell her anything had died.</i>`,
+  7: `<b>"Forty years of migration charts, all useless in a fortnight."</b><br><br>` +
+     `He does not seem sorry about it. <b>"Something changed. I would like to know what."</b>`,
+  8: `<b>"An animal will move for a ship. Every time. Always has."</b><br><br>` +
+     `He taps the bench. <b>"Unless something matters more than the ship."</b>`,
+  9: `She is in a wetsuit, half out of it, hair still wet.<br><br>` +
+     `<b>"I've been down twice. They let me right through."</b> She looks genuinely thrilled. ` +
+     `<b>"They're not angry at <i>us</i>."</b>`,
+};
+/* Supervisor Barnaby. Kindly, reassuring, and far too precise about the date. */
+const PUZZLED_SUP =
+  `He is eating a sandwich and being calm at everyone.<br><br>` +
+  `<b>"They'll move. Animals always move. We'll be under way by the weekend."</b><br><br>` +
+  `He says it warmly, and then, half to himself:<br><br>` +
+  `<b>"It only started on the ninth. That's nothing, in whale terms."</b><br><br>` +
+  `<i>Nobody on this ship has told you when it started.</i>`;
+
+function renderLaboratoryDeck(){
+  const stage = labStage();
+  if(stage === 'after') return renderLaboratoryAfter();
+  setScreenBg('sea');
   playMusicChain(['zone_laboratory_deck','region4','region']);
   $('#brandSub').textContent = 'Laboratory';
 
-  if(!g.rivalBeaten){
-    screenEl.innerHTML = `
-      <button class="back-link" id="backBtn">← Explore</button>
-      <div class="screen-title">Laboratory Deck</div>
-      <div class="phase-flag">The Whalelord will not come down here while it still has
-        questions about the man in the cabin above.</div>`;
-    return $('#backBtn').addEventListener('click', ()=>go('explore'));
-  }
-  if(g.solved) return renderLaboratoryAfter();
-
   const v = inv();
-  /* Pinned to the plan: dry work forward, cold rooms amidships, wet work aft
-     by the tanks. Mireille is in the wet lab, which is exactly how she had a
-     reason to be near a diving suit at two in the morning. */
+  const investigating = stage === 'investigation';
+  /* Pinned to the plan: dry work forward, cold rooms amidships, wet work aft by
+     the tanks. Mireille is in the wet lab, which is exactly how she had reason
+     to be near a diving suit at two in the morning. */
   const STATIONS = [
-    { n:1, x:33, y:17 },   // dry lab, forward port
-    { n:2, x:66, y:22 },   // bench, forward starboard
-    { n:3, x:32, y:34 },   // charts and notes
-    { n:4, x:66, y:38 },   // cold room
-    { n:5, x:33, y:47 },   // microscopes
-    { n:6, x:64, y:57 },   // WET LAB — sinks, aft
-    { n:7, x:33, y:60 },   // instruments
-    { n:8, x:34, y:72 },   // cold store
-    { n:9, x:66, y:72 },   // tank bench
+    { n:1, x:33, y:17 }, { n:2, x:66, y:22 }, { n:3, x:32, y:34 },
+    { n:4, x:66, y:38 }, { n:5, x:33, y:47 }, { n:6, x:64, y:57 },
+    { n:7, x:33, y:60 }, { n:8, x:34, y:72 }, { n:9, x:66, y:72 },
   ];
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Explore</button>
@@ -899,279 +1055,57 @@ function renderLaboratoryDeck(){
 
       <button class="deck-pin" style="left:50%;top:10%;" data-sup="1">
         ${npcPortrait('scientist_supervisor','🧑‍🔬',48,'transparent')}</button>
-      <button class="deck-pin" style="left:50%;top:88%;" data-ghost="1">
-        ${monPortrait('whalelord',52,{view:'front',bare:true})}</button>
+
+      ${investigating ? `<button class="deck-pin" style="left:50%;top:88%;" data-ghost="1">
+        ${monPortrait('whalelord',52,{view:'front',bare:true})}</button>` : ''}
 
       ${STATIONS.map(st=>`
-        <button class="deck-pin sci-pin ${sciBeaten(st.n)?'beaten':''}"
+        <button class="deck-pin sci-pin ${investigating && sciBeaten(st.n) ? 'beaten' : ''}"
                 style="left:${st.x}%;top:${st.y}%;" data-sci="${st.n}">
+          ${investigating && !sciBeaten(st.n) ? '<div class="suspect-pulse"></div>' : ''}
           ${npcPortrait('scientist'+st.n,'🧑‍🔬',44,'transparent')}
-          ${sciBeaten(st.n) ? `<svg class="sci-tick" viewBox="0 0 24 24"><path d="M4 12.5 L9.5 18 L20 6"
+          ${investigating && sciBeaten(st.n) ? `<svg class="sci-tick" viewBox="0 0 24 24"><path d="M4 12.5 L9.5 18 L20 6"
             fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
         </button>`).join('')}
     </div>
 
-    <div class="phase-flag">${allBeaten()
-      ? (guessesLeft() ? `All nine beaten. Tap the supervisor to name someone. <b>${guessesLeft()} guess${guessesLeft()>1?'es':''} left today.</b>`
-                       : `No guesses left today. Think it over and come back tomorrow.`)
-      : `Beat all nine to earn a guess. <b>${inv().beaten.length} / 9</b>`}</div>
+    <div class="phase-flag">${
+      !investigating
+        ? 'Nine researchers, and not one of them can explain it.'
+        : (allBeaten()
+            ? (guessesLeft()
+                ? `All nine beaten. Tap the supervisor to name someone. <b>${guessesLeft()} guess${guessesLeft()>1?'es':''} left today.</b>`
+                : `No guesses left today. Think it over and come back tomorrow.`)
+            : `Beat all nine to earn a guess. <b>${v.beaten.length} / 9</b>`)
+    }</div>
   `;
   $('#backBtn').addEventListener('click', ()=>go('explore'));
-  screenEl.querySelectorAll('[data-sci]').forEach(b=>b.addEventListener('click', ()=>fightScientist(+b.dataset.sci)));
-  screenEl.querySelector('[data-ghost]').addEventListener('click', ()=>showClues());
+  screenEl.querySelectorAll('[data-sci]').forEach(b=>b.addEventListener('click', ()=>{
+    const n = +b.dataset.sci;
+    if(!investigating) return puzzledChat(n);
+    fightScientist(n);
+  }));
   screenEl.querySelector('[data-sup]').addEventListener('click', ()=>{
-    if(!allBeaten()) return storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'),
-      'Not yet', `"You've not spoken to everyone." He says it kindly, as he says everything.<br><br>` +
-      `"Come back when you have."`, ()=>go('laboratory_deck'), { bg:'laboratory_deck' });
-    if(!guessesLeft()) return storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'),
-      'Sleep on it', `"You've made two accusations today. That's two more than most people make in a lifetime."<br><br>` +
-      `"Take some time. Think it through properly."`, ()=>go('laboratory_deck'), { bg:'laboratory_deck' });
+    if(!investigating) return puzzledSup();
+    if(!allBeaten()) return supervisorNudge();
+    if(!guessesLeft()) return supervisorPatience();
     go('accuse');
   });
+  const gh = screenEl.querySelector('[data-ghost]');
+  if(gh) gh.addEventListener('click', ()=>showClues());
 }
 
-function showClues(){
-  const v = inv();
-  storyModal(monPortrait('whalelord',140,{view:'front',bare:true}), 'What it saw',
-    `<b>"Two of them swam beside the people who took it from me."</b><br><br>` +
-    CLUES.slice(0, v.clues).map((c,i)=>`<div class="clue-line"><b>${i+1}.</b> ${c}</div>`).join('') +
-    (v.clues < CLUES.length
-      ? `<br><i>It remembers more. It has not thought of it yet.</i>`
-      : `<br><i>That is everything.</i>`),
-    ()=>go('laboratory_deck'), { bg:'laboratory_deck', subtitle:'Laboratory' });
+function puzzledChat(n){
+  storyModal(npcPortrait('scientist'+n,'🧑‍🔬',130,'transparent'), crewName('scientist'+n),
+    PUZZLED[n] || `<b>"I have nothing useful to tell you."</b>`,
+    ()=>go('laboratory_deck'), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+function puzzledSup(){
+  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'),
+    crewName('scientist_supervisor'), PUZZLED_SUP,
+    ()=>go('laboratory_deck'), { bg:'battle_laboratory', subtitle:'Laboratory' });
 }
 
-/* ---------- fighting one of them ---------- */
-function fightScientist(n){
-  const s = SCI.find(x=>x.n===n);
-  if(!ensurePool()) return;
-  ui.r4Sci = n;
-  beginBattle({ isNpc:true, name:crewName('scientist'+n), npcId:'scientist'+n, bgKey:'battle_laboratory',
-    waves:[ s.wild.map(sp=>({species:sp, level:65, ai:'best'})),
-            [{species:s.elite, level:65, ai:'best'}] ],
-    onWin: ()=> onSciWin(n) });
-}
-async function onSciWin(n){
-  const v = inv();
-  const first = !v.firstWins.includes(n);
-  if(!v.beaten.includes(n)) v.beaten.push(n);
-  if(first){ v.firstWins.push(n); state.inventory.protein = (state.inventory.protein||0) + 1; }
-  await saveProfile();
-  storyModal(npcPortrait('scientist'+n,'🧑‍🔬',120,'transparent'), 'Beaten',
-    `They pack their monsters away without much grace.<br><br>` +
-    (first ? `<b>+1 Protein Supplement</b><br><br>` : '') +
-    (allBeaten() ? `<i>That is all nine. The supervisor is waiting.</i>`
-                 : `<i>${9 - inv().beaten.length} still to go.</i>`),
-    ()=>go('laboratory_deck'), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-
-/* ---------- the accusation board ---------- */
-function renderAccuse(){
-  const v = inv();
-  setScreenBg('laboratory_deck');
-  $('#brandSub').textContent = 'Name someone';
-  screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Research Deck</button>
-    <div class="clue-box">
-      <div class="clue-head">👻 What the Whalelord saw</div>
-      ${CLUES.slice(0, v.clues).map((c,i)=>`<div class="clue-line"><b>${i+1}.</b> ${c}</div>`).join('')}
-    </div>
-    <div class="phase-flag">${guessesLeft()} guess${guessesLeft()>1?'es':''} left today. Tap someone to look closer.</div>
-    <div class="acc-grid">
-      ${SCI.map(s=>`<button class="acc-cell" data-acc="${s.n}">
-        <div class="acc-face">${npcPortrait('scientist'+s.n,'🧑‍🔬',52,'transparent')}</div>
-        <div class="acc-mons">
-          ${monPortrait(s.wild[0],30,{bare:true})}${monPortrait(s.elite,30,{bare:true})}
-        </div>
-      </button>`).join('')}
-    </div>
-  `;
-  $('#backBtn').addEventListener('click', ()=>go('laboratory_deck'));
-  screenEl.querySelectorAll('[data-acc]').forEach(b=>b.addEventListener('click', ()=>focusScientist(+b.dataset.acc)));
-}
-
-/* A closer look at one of them, with their two creatures big enough to judge. */
-function focusScientist(n){
-  const s = SCI.find(x=>x.n===n), v = inv();
-  const ov = document.createElement('div');
-  ov.className = 'refine-scrim';
-  ov.innerHTML = `
-    <div class="refine-card">
-      <div class="clue-box tight">
-        ${CLUES.slice(0, v.clues).map((c,i)=>`<div class="clue-line"><b>${i+1}.</b> ${c}</div>`).join('')}
-      </div>
-      <div style="margin:14px 0 6px;">${npcPortrait('scientist'+n,'🧑‍🔬',92,'transparent')}</div>
-      <div class="refine-sub">${escapeHtml(s.look)}</div>
-      <div class="focus-mons">
-        <div>${monPortrait(s.wild[0],64,{bare:true})}
-          <div class="fm-name">${escapeHtml(SPECIES[s.wild[0]].name)}</div></div>
-        <div>${monPortrait(s.elite,64,{bare:true})}
-          <div class="fm-name">${escapeHtml(SPECIES[s.elite].name)}</div></div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
-        <button class="btn btn-primary" id="accYes">You're the culprit!</button>
-        <button class="btn btn-ghost" id="accNo">Back</button>
-      </div>
-    </div>`;
-  document.body.appendChild(ov);
-  const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
-  ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
-  ov.querySelector('#accNo').addEventListener('click', close);
-  ov.querySelector('#accYes').addEventListener('click', ()=>{ close(); accuse(n); });
-}
-
-async function accuse(n){
-  const v = inv();
-  v.guesses++;
-  await saveProfile();
-  if(n === CULPRIT) return accuseCulprit();
-
-  // wrong: an alibi, and someone to confirm it
-  const buddy = ALIBI[n];
-  if(v.clues < CLUES.length){ v.clues++; await saveProfile(); }
-  storyModal(npcPortrait('scientist'+n,'🧑‍🔬',130,'transparent'), 'An alibi',
-    `<b>"Me?"</b> They look more baffled than offended.<br><br>` +
-    `<b>"I was in the wet lab all night. Ask ${buddy===9?'her':'them'}."</b>`,
-    ()=>alibiConfirm(n, buddy), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-function alibiConfirm(n, buddy){
-  const v = inv();
-  storyModal(npcPortrait('scientist'+buddy,'🧑‍🔬',130,'transparent'), 'Confirmed',
-    `<b>"They were. I was there too — we were arguing about salinity, which took some hours."</b><br><br>` +
-    `The supervisor appears at your elbow, gentle as ever.<br><br>` +
-    `<b>"Easy does it. An accusation is a serious thing on a small ship."</b><br><br>` +
-    `<b>"Look again. Take your time."</b>` +
-    (v.clues <= CLUES.length ? `<br><br><i>The Whalelord has remembered something else.</i>` : ''),
-    ()=>go('laboratory_deck'), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-
-/* ---------- the culprit ---------- */
-function accuseCulprit(){
-  storyModal(npcPortrait('scientist6','🧑‍🔬',130,'transparent'), '"Me?"',
-    `<b>"Me?"</b> She actually laughs.<br><br>` +
-    `<b>"I was with the supervisor. All evening. Inventory."</b>`,
-    ()=>culprit2(), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-function culprit2(){
-  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'), 'He vouches for her',
-    `<b>"She was. I'd stake my post on it."</b><br><br>` +
-    `A beat. He turns to go.`,
-    ()=>culprit3(), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-function culprit3(){
-  storyModal(npcPortrait('scientist9','🧑‍🔬',130,'transparent'), '"Wait."',
-    `She has not moved from the rail.<br><br>` +
-    `<b>"That's not what you were doing."</b><br><br>` +
-    `<b>"I saw you at the dive platform. Two in the morning. In a suit."</b>`,
-    ()=>culprit4(), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-function culprit4(){
-  storyModal(npcPortrait('diver1','🤿',130,'transparent'), 'The borrowed suit',
-    `<b>"…He borrowed mine."</b> He looks ill. <b>"Said he'd dropped something over the side."</b><br><br>` +
-    `<b>"He was gone about an hour."</b>`,
-    ()=>culprit5(), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-function culprit5(){
-  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'), 'The mask comes off',
-    `The supervisor stops smiling. It is a small change and it makes him unrecognisable.<br><br>` +
-    `<b>"An hour is generous. It took forty minutes."</b>`,
-    ()=>culprit6(), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-function culprit6(){
-  storyModal(npcPortrait('scientist6','🧑‍🔬',130,'transparent'), '"No point hiding it"',
-    `<b>"No point hiding it any more, then."</b><br><br>` +
-    `She sets down the clipboard she has been carrying all week.<br><br>` +
-    `<b>"Do you know what it costs to keep a ship like this at sea? We were three months ` +
-    `from being shut down. Nobody would pay for us."</b>`,
-    ()=>culprit7(), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-function culprit7(){
-  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'), 'Who would pay',
-    `<b>"<span style="color:var(--cinnabar)">Padrino</span> would. He offered us everything we needed — for one thing in return."</b><br><br>` +
-    `<b>"The core. We were taking it to him in <b>Cosa Nostia</b>. That is where this ship has ` +
-    `been sailing all along."</b><br><br>` +
-    `<b>"Two more days east and it would have been his. You have cost us a great deal."</b>`,
-    ()=>startCulpritFight(0), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-
-/* She was holding most of it back. He was holding all of it. */
-const CULPRIT_WAVES = [
-  [{species:'lanternfish',level:78},{species:'lanternfish',level:78}],
-  [{species:'seahorse',level:79},{species:'starfish',level:79},{species:'duck',level:79}],
-  [{species:'plesiosaur',level:80},{species:'otter',level:80}],
-  [{species:'loong',level:82,crowned:false}],
-];
-const SUP_WAVES = [
-  [{species:'duck',level:80},{species:'starfish',level:80},{species:'seahorse',level:80}],
-  [{species:'sea_turtle',level:81},{species:'sea_turtle',level:81}],
-  [{species:'lanternfish',level:82},{species:'otter',level:82}],
-  [{species:'ninja',level:83},{species:'plesiosaur',level:83}],
-  [{species:'loong',level:84}],
-  [{species:'water_dragon',level:85,crowned:true,supplements:10}],
-];
-function startCulpritFight(i){
-  if(!ensurePool()) return;
-  const who = i===0 ? { id:'scientist6', name:'Researcher', waves:CULPRIT_WAVES }
-                    : { id:'scientist_supervisor', name:'Supervisor', waves:SUP_WAVES };
-  beginBattle({ isNpc:true, name:who.name, npcId:who.id, bgKey:'battle_laboratory',
-    waves: who.waves.map(w=>w.map(e=>({...e, ai:'best'}))),
-    onWin: ()=> i===0 ? nextCulprit() : onMysterySolved() });
-}
-function nextCulprit(){
-  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'), 'His turn',
-    `He has not moved. He is not going to run.<br><br>` +
-    `<b>"She was always the better researcher. I am the better trainer."</b>`,
-    ()=>startCulpritFight(1), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-
-/* ---------- the ending ---------- */
-async function onMysterySolved(){
-  const g = r4();
-  g.solved = true;
-  await saveProfile();
-  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'), 'Taken below',
-    `The crew take them below. Nobody says much.<br><br>` +
-    `<b>"You understand nothing. That creature was <i>dying</i>. We took what it could no ` +
-    `longer use — and Padrino paid us enough to keep forty people in work."</b><br><br>` +
-    `<b>Whalelord:</b> "You took it while I still swam."`,
-    ()=>theTheft(), { bg:'laboratory_deck', subtitle:'Laboratory' });
-}
-function theTheft(){
-  storyModal(npcPortrait('rival','🧑',140,'transparent'), 'Over the rail',
-    `The core is in a crate on the deck, wrapped in oilcloth, and the captain is sending ` +
-    `for a guard.<br><br>` +
-    `She does not arrive in time.<br><br>` +
-    `He is over the rail before anyone shouts, and the thing rising out of the dark behind ` +
-    `him is enormous and has wings.`,
-    ()=>theTheft2(), { bg:'weather_deck', subtitle:'Weather Deck' });
-}
-function theTheft2(){
-  storyModal(npcPortrait('rival','🧑',140,'transparent'), '"I\'m not, really"',
-    `<b>"Sorry. I'm not, really."</b><br><br>` +
-    `<b>"You know what this is? It's <span style="color:var(--cinnabar)">power</span>. Real power — the kind that made a ` +
-    `dragon out of a rock and a king out of a monkey."</b><br><br>` +
-    `<b>"Padrino's going to give me everything he has. His people, his money, all of it. ` +
-    `And when he's finished, <u>I'll be the one in charge</u>."</b><br><br>` +
-    `<b>"I want to be the strongest there has ever been. You never did. That's the whole ` +
-    `difference between us."</b><br><br>` +
-    `<i>And he is gone, east, with the core.</i>`,
-    ()=>cuainJoins(), { bg:'weather_deck', subtitle:'Weather Deck' });
-}
-async function cuainJoins(){
-  const mon = newMonster('whalelord', 66);
-  if(state.party.length < 6) state.party.push(mon); else state.storage.push(mon);
-  if(!state.caughtSpecies.includes('whalelord')) state.caughtSpecies.push('whalelord');
-  await saveProfile();
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'It comes with you',
-    `<b>"Then it is not here."</b> It sounds, impossibly, relieved. <b>"It is somewhere. ` +
-    `That is more than I had this morning."</b><br><br>` +
-    `<b>"I will come with you. I am less than I was — but not so little that you must carry me."</b><br><br>` +
-    `Below, the whales part. The lane east is open.<br><br>` +
-    `<b>The Whalelord joined your team at Lv 66.</b>`,
-    ()=>go('laboratory_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
-}
-
-/* ---------- afterwards: scientist 9 takes over ---------- */
 function renderLaboratoryAfter(){
   const g = r4();
   g.after = g.after || { day:null, beaten:false };
@@ -1332,8 +1266,10 @@ const KEEPER_LINES = [
   `He turns back to his crates. <i>"Mind how you go."</i>`,
 ];
 function shipkeeperShop(){
+  const g = r4();
+  const blocked = (g.wallFound && !g.solved) ? blockedLine('shipkeeper') : null;
   storyModal(npcPortrait('shipkeeper','⚓',130,'transparent'), crewName('shipkeeper'),
-    KEEPER_LINES[Math.floor(Math.random()*KEEPER_LINES.length)],
+    blocked || KEEPER_LINES[Math.floor(Math.random()*KEEPER_LINES.length)],
     ()=>go('cabin_deck'),
     { bg:'battle_cabin_deck', subtitle:'Cabin Deck',
       action:{ label:'🛒 Shop', fn:()=>go('shop') } });
@@ -1481,7 +1417,7 @@ function startBirdRaid(){
         : { species:sp, level:lv + Math.floor(Math.random()*3)-1, forceStage:0 };
     });
     return beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'In the net',
-      bgKey:'battle_weather_deck', onWin: ()=> resumeVictory() });
+      bgKey:'battle_weather_deck', onWin: ()=> onRailWin() });
   }
 
   const pick = birdRoll();
@@ -1497,7 +1433,7 @@ function startBirdRaid(){
     wave[0] = { species:'caladrius', level:lv, forceStage:0, elusive:true, ai:'caladrius' };
   }
   beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Raid on the hauls',
-    bgKey:'battle_weather_deck', onWin: ()=> resumeVictory() });
+    bgKey:'battle_weather_deck', onWin: ()=> onRailWin() });
 }
 
 /* --- the first meeting: it asks --- */
@@ -1561,4 +1497,263 @@ async function caladriusHeals2(cuain){
     `<b>Whalelord:</b> "It is not my core. It will not hold."<br><br>` +
     `The bird has already gone.`,
     ()=>go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
+}
+
+/* ============================================================
+   THE INVESTIGATION — the nine, the clues, the accusation
+   ============================================================ */
+const SCI_LV = 68;
+
+function sciDef(n){ return SCI.find(x=>x.n === n); }
+
+function fightScientist(n){
+  if(!ensurePool()) return;
+  const d = sciDef(n);
+  if(!d) return;
+  beginBattle({ isNpc:true, name:crewName('scientist'+n), npcId:'scientist'+n,
+    bgKey:'battle_laboratory',
+    waves:[ d.wild.map(sp=>({species:sp, level:SCI_LV, ai:'best'})),
+            [{species:d.elite, level:SCI_LV+1, ai:'best'}] ],
+    onWin: ()=> onScientistWin(n) });
+}
+async function onScientistWin(n){
+  const v = inv();
+  const first = !v.beaten.includes(n);
+  if(first){
+    v.beaten.push(n);
+    state.inventory.protein = (state.inventory.protein||0) + 1;
+    await saveProfile();
+  }
+  storyModal(npcPortrait('scientist'+n,'🧑‍🔬',130,'transparent'), crewName('scientist'+n),
+    `<b>"Well fought. Honestly."</b><br><br>` +
+    (first ? `<b>+1 Protein Supplement</b><br><br>` : '') +
+    (allBeaten() ? `<i>That is all nine. ${crewFirst('scientist_supervisor')} will hear your report.</i>`
+                 : `<i>${v.beaten.length} of 9 tested.</i>`),
+    ()=>go('laboratory_deck'), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+
+/* What the Whalelord remembers, as much of it as you have earned. */
+function showClues(){
+  const v = inv();
+  storyModal(monPortrait('whalelord',140,{view:'front',bare:true}), 'What we know',
+    `<b>Two creatures swam beside them.</b> A researcher is worth suspecting if ` +
+    `<i>either</i> of theirs fits.<br><br>` +
+    CLUES.slice(0, v.clues).map((c,k)=>`<b>${k+1}.</b> ${c}`).join('<br><br>') +
+    (v.clues < CLUES.length
+      ? `<br><br><i>It remembers more, but not clearly. Name somebody and be wrong, and it will try harder.</i>`
+      : ''),
+    ()=>go('laboratory_deck'), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+function supervisorNudge(){
+  const v = inv();
+  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'),
+    crewName('scientist_supervisor'),
+    `He is eating a sandwich and seems delighted to be interrupted.<br><br>` +
+    `<b>"Talk to all of them first. Every single one."</b> He says it warmly. ` +
+    `<b>"You can't clear a person you haven't met."</b><br><br>` +
+    `<i>${v.beaten.length} of 9 tested.</i>`,
+    ()=>go('laboratory_deck'), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+function supervisorPatience(){
+  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'),
+    crewName('scientist_supervisor'), `<b>"That's twice today."</b> Still kindly, still patient.<br><br>` +
+    `<b>"These are people you're naming, and they have to work alongside whoever you pick."</b><br><br>` +
+    `<b>"Take some time. Think it through. They'll still be here tomorrow."</b>`,
+    ()=>go('laboratory_deck'), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+
+/* ---------- the accusation board ---------- */
+function renderAccuse(){
+  const v = inv();
+  setScreenBg('battle_laboratory');
+  $('#brandSub').textContent = 'Name someone';
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Laboratory</button>
+    <div class="clue-box">
+      <b>What the Whalelord remembers</b><br><br>
+      ${CLUES.slice(0, v.clues).map((c,k)=>`<b>${k+1}.</b> ${c}`).join('<br><br>')}
+    </div>
+    <div class="sci-grid">
+      ${SCI.map(d=>`
+        <button class="sci-cell" data-acc="${d.n}">
+          ${npcPortrait('scientist'+d.n,'🧑‍🔬',46,'transparent')}
+          <div class="sci-name">${escapeHtml(crewFirst('scientist'+d.n))}</div>
+          <div class="sci-mons">
+            ${monPortrait(d.wild[0], 22, {view:'front', bare:true})}
+            ${monPortrait(d.elite, 22, {view:'front', bare:true})}
+          </div>
+        </button>`).join('')}
+    </div>
+    <div class="phase-flag"><b>${guessesLeft()}</b> accusation${guessesLeft()===1?'':'s'} left today.</div>
+  `;
+  $('#backBtn').addEventListener('click', ()=>go('laboratory_deck'));
+  screenEl.querySelectorAll('[data-acc]').forEach(b=>
+    b.addEventListener('click', ()=>focusScientist(+b.dataset.acc)));
+}
+
+/* A closer look before you commit. */
+function focusScientist(n){
+  const d = sciDef(n), v = inv();
+  const ov = document.createElement('div');
+  ov.className = 'refine-scrim';
+  ov.innerHTML = `
+    <div class="refine-card">
+      <div class="sci-focus">
+        ${npcPortrait('scientist'+n,'🧑‍🔬',110,'transparent')}
+        <div class="refine-name">${escapeHtml(crewName('scientist'+n))}</div>
+        <div class="refine-sub">${escapeHtml(d.look)}</div>
+        <div class="big-mons">
+          ${monPortrait(d.wild[0], 66, {view:'front', bare:true})}
+          ${monPortrait(d.elite, 66, {view:'front', bare:true})}
+        </div>
+      </div>
+      <div class="clue-box" style="margin-top:12px;">
+        ${CLUES.slice(0, v.clues).map((c,k)=>`<b>${k+1}.</b> ${c}`).join('<br><br>')}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
+        <button class="btn btn-primary" id="accYes">You're the culprit!</button>
+        <button class="btn btn-ghost" id="accNo">Back</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+  ov.querySelector('#accNo').addEventListener('click', close);
+  ov.querySelector('#accYes').addEventListener('click', ()=>{ close(); accuse(n); });
+}
+
+async function accuse(n){
+  const v = inv();
+  v.guesses++;
+  if(n === CULPRIT){ await saveProfile(); return accuseCulprit(); }
+  /* Wrong. Their alibi partner speaks up, and the Whalelord tries harder. */
+  if(v.clues < CLUES.length) v.clues++;
+  await saveProfile();
+  alibiConfirm(n);
+}
+function alibiConfirm(n){
+  const buddy = ALIBI[n];
+  const v = inv();
+  storyModal(npcPortrait('scientist'+buddy,'🧑‍🔬',130,'transparent'), crewName('scientist'+buddy),
+    `<b>"No. Not a chance."</b> ${crewFirst('scientist'+buddy)} does not even look up.<br><br>` +
+    `<b>"We were both on shift. All night, every night that week. Ask anyone."</b><br><br>` +
+    `<i>${crewFirst('scientist'+n)} is cleared.</i>` +
+    (v.clues < CLUES.length || v.clues === CLUES.length
+      ? `<br><br>👻 <i>The Whalelord strains, and remembers something else.</i>` : ''),
+    ()=>go('laboratory_deck'), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+
+/* ---------- the culprit, and what follows ---------- */
+function accuseCulprit(){
+  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'),
+    crewName('scientist_supervisor'),
+    `<b>"Mireille?"</b> He actually laughs. <b>"No, no. She was with me."</b><br><br>` +
+    `<b>"Both of us, the whole night. Inventory."</b> He is still smiling. ` +
+    `<b>"Dull work, but it does rather settle the question."</b>`,
+    ()=>culprit2(), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+function culprit2(){
+  storyModal(npcPortrait('scientist9','🧑‍🔬',130,'transparent'), crewName('scientist9'),
+    `<b>"That's not right."</b><br><br>` +
+    `${crewFirst('scientist9')} has gone very still.<br><br>` +
+    `<b>"I was up at two. I couldn't sleep, so I went to check the tanks."</b><br><br>` +
+    `<b>"You weren't doing inventory. Neither of you were here at all."</b>`,
+    ()=>culprit3(), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+function culprit3(){
+  storyModal(npcPortrait('diver1','🤿',130,'transparent'), crewName('diver1'),
+    `The diver has been standing in the hatchway for a while.<br><br>` +
+    `<b>"Somebody borrowed a suit that week."</b> He says it slowly, working it out ` +
+    `as he goes. <b>"Signed it back in wet. I thought it was one of the lads."</b><br><br>` +
+    `He looks at the woman by the sink.<br><br>` +
+    `<b>"It was your handwriting."</b>`,
+    ()=>culprit4(), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+function culprit4(){
+  storyModal(npcPortrait('scientist6','🧑‍🔬',130,'transparent'), crewName('scientist6'),
+    `She puts down what she is holding and dries her hands, unhurried.<br><br>` +
+    `<b>"It was already dying."</b><br><br>` +
+    `<b>"Somebody had opened it from jaw to fin and left it to sink, and it didn't. ` +
+    `It swam three hundred miles with a hole in it."</b> Her voice does not rise at all. ` +
+    `<b>"We were only ever going to be the ones who finished it."</b>`,
+    ()=>culprit5(), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+function culprit5(){
+  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'),
+    crewName('scientist_supervisor'),
+    `The warmth goes out of him like a light switched off. It is the speed of it ` +
+    `that is frightening.<br><br>` +
+    `<b>"A core like that funds a department for twenty years."</b><br><br>` +
+    `<b>"Cosa Nostia paid for this berth, this equipment, and half of your captain's fuel. ` +
+    `They asked for one thing."</b><br><br>` +
+    `<i>He rolls up his sleeves.</i> <b>"You should have kept counting whales."</b>`,
+    ()=>startCulpritFight(0), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+
+function startCulpritFight(i){
+  if(!ensurePool()) return;
+  if(i === 0){
+    return beginBattle({ isNpc:true, name:crewName('scientist6'), npcId:'scientist6',
+      bgKey:'battle_laboratory',
+      waves:[ [{species:'lanternfish',level:78,ai:'best'},{species:'lanternfish',level:78,ai:'best'}],
+              [{species:'moon_swan',level:79,ai:'best'},{species:'cormorant',level:79,ai:'best'}],
+              [{species:'plesiosaur',level:80,ai:'best'},{species:'otter',level:80,ai:'best'}],
+              [{species:'loong',level:82,ai:'best',forceStage:R4_MAXSTAGE}] ],
+      onWin: ()=> startCulpritFight(1) });
+  }
+  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'),
+    crewName('scientist_supervisor'),
+    `<b>"She was the hands."</b> He steps over her fallen monsters without looking down.<br><br>` +
+    `<b>"I was the reason."</b>`,
+    ()=> beginBattle({ isNpc:true, name:crewName('scientist_supervisor'),
+      npcId:'scientist_supervisor', bgKey:'battle_laboratory',
+      waves:[ [{species:'sea_turtle',level:80,ai:'best'},{species:'duck',level:80,ai:'best'},{species:'seahorse',level:80,ai:'best'}],
+              [{species:'pelican',level:81,ai:'best'},{species:'swan',level:81,ai:'best'}],
+              [{species:'mantaray',level:82,ai:'best'},{species:'cormorant',level:82,ai:'best'}],
+              [{species:'whale',level:83,ai:'best',forceStage:R4_MAXSTAGE}],
+              [{species:'moon_swan',level:84,ai:'best'},{species:'plesiosaur',level:84,ai:'best'}],
+              [{species:'ninja',level:85,ai:'best',forceStage:R4_MAXSTAGE,crowned:true,supplements:10}] ],
+      onWin: ()=> theTheft() }),
+    { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+
+/* Jax was listening the whole time. */
+function theTheft(){
+  storyModal(npcPortrait('rival','🧑',140,'transparent'), 'Jax',
+    `The freezer door is already open.<br><br>` +
+    `He is holding something the colour of deep water, turning it over, ` +
+    `entirely unbothered by the room full of people watching him do it.<br><br>` +
+    `<b>"Sorry. Were you using this?"</b>`,
+    ()=>theTheft2(), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+function theTheft2(){
+  storyModal(uiIcon('whalelord_core',140,'🔵'), "Cuain's core",
+    `<b>Jax:</b> "Don't look at me like that. They were going to sell it."<br><br>` +
+    `<b>"I'm going to <i>use</i> it."</b><br><br>` +
+    `<i>He is over the side and into a launch before anybody moves. The engine ` +
+    `note fades east, towards the place the whales have been keeping everyone out of.</i>`,
+    ()=>cuainJoins(), { bg:'battle_laboratory', subtitle:'Laboratory' });
+}
+async function cuainJoins(){
+  const g = r4();
+  g.solved = true;
+  await saveProfile();
+  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'Cuain',
+    `Out on the water, all at once and without a sound, the whales turn and go.<br><br>` +
+    `The cold grey shape does not go with them.<br><br>` +
+    `<b>"They can rest. That is most of what I wanted."</b><br><br>` +
+    `<b>"The rest of it is sitting in a boy's pocket, heading east."</b> ` +
+    `Something enormous settles at your shoulder and stays there.<br><br>` +
+    `<b>"So I am coming with you."</b>`,
+    ()=>giveCuain(), { bg:'sea', subtitle:'The North Sea' });
+}
+async function giveCuain(){
+  const mon = newMonster('whalelord', 66);
+  if(state.party.length < 6) state.party.push(mon); else state.storage.push(mon);
+  await saveProfile();
+  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'Cuain joins you',
+    `<b>Cuain, the Whalelord</b> — Lv 66, Water/Ghost.<br><br>` +
+    `<i>He does not ask, and he does not offer you a choice. He simply follows, ` +
+    `the way weather follows a ship.</i><br><br>` +
+    `<b>The lane east is open.</b>`,
+    ()=>go('explore'), { bg:'sea', subtitle:'The North Sea' });
 }

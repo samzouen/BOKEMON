@@ -201,7 +201,11 @@ function playEffect(moveName, opts, done){
   return;
 }
 
-function battleMsg(t){ const el=$('#battleMsg'); if(el) el.textContent=t; }
+/* Messages carry <b> for the figures that matter, so this must be innerHTML.
+   With textContent the tags rendered as literal text on screen. Everything
+   passed here is written by the game, never by the player — the one place a
+   name could arrive is escaped at the call site. */
+function battleMsg(t){ const el=$('#battleMsg'); if(el) el.innerHTML = t; }
 
 /* ---------- battle animations (item 4 & 5) ---------- */
 /* ---------- BATTLE LOG (arena debugging) ---------- */
@@ -2010,28 +2014,12 @@ function runEnemyAttack(i){
 
   /* Per-attack rolls: Discombobulate can make this one miss, be countered, or
      land at half; Mirage can make it miss. Both are rolled per attacker now. */
-  const dis = getEStatus(e,'discombobulate');
+  /* The OLD Discombobulate lived here — a guaranteed halving plus three 10%
+     rolls. The rework moved it up into runEnemyAttack as visible friendly fire,
+     but this block was never removed, so both were firing at once: the swing
+     turned on its own side AND the survivors were being halved and made to
+     miss. Gone. */
   let disHalve=false, disMiss=false, disCounter=false, disSoften=0;
-  if(dis){
-    const roll = dis.roll || 0.10;
-    /* Base halves only the NEXT HIT. Refined versions halve every hit for a
-       whole turn, and ✦ softens the turn after that as well. The random rolls
-       run alongside and stack with the guaranteed reduction. */
-    if(dis.guaranteed){
-      disHalve = true;
-      if(!dis.openTurn){
-        dis.guaranteed = false;                // base: one hit only
-        if(b.fieldStatus && b.fieldStatus.discombobulate) b.fieldStatus.discombobulate.guaranteed = false;
-        b.enemies.forEach(x=>{ const st=getEStatus(x,'discombobulate'); if(st) st.guaranteed = false; });
-      }
-    } else if(dis.softenTurn && dis.second){
-      disSoften = dis.second;                  // ✦: the following turn is reduced 25%
-    }
-    const r = Math.random();
-    if(r < roll) disCounter = true;
-    else if(r < roll*2) disMiss = true;
-    else if(r < roll*3) disHalve = true;
-  }
   const mir = getPStatus(0,'mirage');
   const cl  = getPStatus(0,'clones');
   const dotMiss = getEStatus(e,'dot');

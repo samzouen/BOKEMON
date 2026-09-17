@@ -292,7 +292,7 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
          is why nothing appeared when Diamond Dust borrowed it. */
       const tier = plus || 0;                  // 0 / 1 / 2 by refinement
       addCounterStack(casterMon, tier, d.stacks || 1);
-      setPStatus(uid, { type:'counter', turnsLeft:99, tier,
+      setPStatus(uid, { type:'counter', turnsLeft:STATUS_TURNS + 1, tier,
                         regain:d.regain||0.10, combo:d.combo||0.25,
                         enrage:d.enrage||0, owner:uid });
       res.msg = d.text;
@@ -2025,7 +2025,7 @@ const REGION_ZONES = {
   /* Region 4 is one place: the ship. Its three decks are the zones. */
   4: [ { id:'weather_deck',    name:'Weather Deck',   tint:'#5a8aaa' },
        { id:'cabin_deck',      name:'Cabin Deck',     tint:'#6a7a8a' },
-       { id:'laboratory_deck', name:'Laboratory Deck', tint:'#4a7a8a', locksUntil:'r4GhostMet' } ],
+       { id:'laboratory_deck', name:'Laboratory Deck', tint:'#4a7a8a', locksUntil:'r4Blocked' } ],
 };
 
 /* --- Region 2, first scripted sequence: the Trial of Courage ---
@@ -2259,6 +2259,16 @@ function startWildEncounter(encOpts){
 
 /* ---------- shared multi-wave battle engine ---------- */
 function beginBattle(config){
+  /* Counter stacks, Combo, Enrage and the rest live ON the monster so they can
+     follow it between switches. That means they also followed it between
+     BATTLES — you could walk into a wild fight already holding four guards.
+     Every fight starts clean. */
+  state.party.concat(state.storage || []).forEach(m=>{
+    m.counterStack = []; m.comboStacks = 0; m.enrageStacks = 0;
+    m.blockStacks = 0;   m.blockValue = 0;
+    m._rage = null;      m._overpower = null;  m._stoop = null;
+    m.morsMarks = 0;     m._entered = false;   m._aegisPassiveDone = false;
+  });
   ui.battle = {
     waves: config.waves, waveIndex:0,
     isNpc: !!config.isNpc, allowCatch: !!config.allowCatch,

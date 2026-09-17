@@ -150,7 +150,7 @@ function renderExplore(){
             (z.locksUntil==='r2ChallengeDone' && !(state.progress.region2||{}).challengeDone) ||
             (z.locksUntil==='r3MonkeyMet' && !r3.monkeyMet) ||
             (z.locksUntil==='r3PowerStone' && !r3.powerStone) ||
-            (z.locksUntil==='r4GhostMet' && !(state.progress.region4||{}).ghostMet) ||
+            (z.locksUntil==='r4Blocked' && !(state.progress.region4||{}).wallFound) ||
             (z.locksUntil==='never');
           return `
           <div class="zone-item">

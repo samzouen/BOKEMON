@@ -1479,6 +1479,7 @@ function renderMonsterIndex(){
   const all = Object.keys(SPECIES);
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Home</button>
+    ${(state.progress.currentRegion === 4 && typeof expeditionBar === 'function') ? expeditionBar() : ''}
     <div class="screen-title">Monster Index</div>
     <div class="screen-sub">${seen.length} / ${all.length} monsters discovered</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">

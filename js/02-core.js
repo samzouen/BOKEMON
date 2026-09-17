@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '1.90';
+const GAME_VERSION = '2.00';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1262,8 +1262,12 @@ function crownIconFallback(img){
     img.outerHTML = `<span class="crown-icon-fb ${cls}" style="font-size:${px}px;">👑</span>`;
   }catch(e){}
 }
+/* Battle messages are rendered as HTML so that <b> works, and a nickname is the
+   one string in them a child typed. Angle brackets are stripped here rather
+   than at every call site. */
 function displayName(mon){
-  return mon.nickname || SPECIES[mon.species].name;
+  const n = mon.nickname || SPECIES[mon.species].name;
+  return String(n).replace(/[<>]/g, '');
 }
 
 /* ---------- WORD LIST MODULE ----------
