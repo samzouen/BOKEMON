@@ -120,20 +120,18 @@ function renderWeatherDeck(){
       <!-- the dive platform: one at each end of the port grating, so they read
            as flanking the ladder rather than huddling together -->
       <button class="deck-pin dive-pin ${g.diversBeaten?'open':''}" style="left:24%;top:40%;" data-diver="1">
+        ${g.diversBeaten ? '<div class="dive-pulse"></div>' : ''}
         ${npcPortrait('diver1','🤿',48,'transparent')}</button>
       <button class="deck-pin dive-pin ${g.diversBeaten?'open':''}" style="left:24%;top:52%;" data-diver="2">
-        ${npcPortrait('diver2','🤿',48,'transparent')}
-        <div class="dive-label">${g.diversBeaten ? '🌊 Dive' : '🚫 Blocked'}</div>
-      </button>
+        ${g.diversBeaten ? '<div class="dive-pulse"></div>' : ''}
+        ${npcPortrait('diver2','🤿',48,'transparent')}</button>
 
 
       ${g.ghostAccepted && !g.rivalBeaten ? `
         <button class="deck-pin ghost-here" style="left:22%;top:80%;" data-ghost="1">
           ${monPortrait('whalelord',60,{view:'front',bare:true})}</button>` : ''}
     </div>
-    <div class="phase-flag">${g.diversBeaten
-      ? 'Tap the divers to go over the side.'
-      : 'The divers are not letting anyone past.'}</div>
+    ${g.diversBeaten ? '' : `<div class="phase-flag">The divers are not letting anyone past.</div>`}
   `;
   $('#backBtn').addEventListener('click', ()=>{ stopBirdLoop(); go('explore'); });
   screenEl.querySelectorAll('[data-fisher]').forEach(b=>b.addEventListener('click', ()=>fisherChat()));
@@ -461,31 +459,28 @@ function renderCabinDeck(){
       <!-- the chart room, forward under the bridge. The shipkeeper keeps his
            salvage here now, where a quartermaster would actually keep it. -->
       <button class="deck-pin" style="left:44%;top:17%;" data-captain="1">
-        ${npcPortrait('ship_captain','⚓',50,'transparent')}
-        <div class="dive-label">Chart room</div>
-      </button>
+        ${pings('ship_captain') ? '<div class="suspect-pulse"></div>' : ''}
+        ${npcPortrait('ship_captain','⚓',50,'transparent')}</button>
       <button class="deck-pin" style="left:36%;top:24%;" data-keeper="1">
-        ${npcPortrait('shipkeeper','⚓',50,'transparent')}
-        <div class="dive-label">Salvage</div>
-      </button>
+        ${pings('shipkeeper') ? '<div class="suspect-pulse"></div>' : ''}
+        ${npcPortrait('shipkeeper','⚓',50,'transparent')}</button>
 
       <!-- six cabins -->
       ${occupants.map((o,i)=>{
         const c = CABINS[i];
         return o.kind === 'rival'
           ? `<button class="deck-pin" style="left:${c.x}%;top:${c.y}%;" data-rival="1">
-               ${npcPortrait('rival','🧑',54,'transparent')}
-               <div class="dive-label">${g.rivalBeaten ? 'Nothing to bet' : "Someone's cabin"}</div>
-             </button>`
+               ${pings('rival') ? '<div class="suspect-pulse"></div>' : ''}
+               ${npcPortrait('rival','🧑',54,'transparent')}</button>`
           : `<button class="deck-pin" style="left:${c.x}%;top:${c.y}%;" data-sailor="${o.n}">
+               ${pings('sailor'+o.n) ? '<div class="suspect-pulse"></div>' : ''}
                ${npcPortrait('sailor'+o.n,'⚓',48,'transparent')}</button>`;
       }).join('')}
 
       <!-- the galley, aft -->
       <button class="deck-pin" style="left:63%;top:79%;" data-cook="1">
-        ${npcPortrait('cook','🧑‍🍳',50,'transparent')}
-        <div class="dive-label">Galley</div>
-      </button>
+        ${pings('cook') ? '<div class="suspect-pulse"></div>' : ''}
+        ${npcPortrait('cook','🧑‍🍳',50,'transparent')}</button>
 
       ${g.ghostAccepted && !g.rivalBeaten ? `
         <button class="deck-pin ghost-here" style="left:38%;top:88%;" data-ghost="1">
@@ -493,13 +488,18 @@ function renderCabinDeck(){
     </div>
   `;
   $('#backBtn').addEventListener('click', ()=>go('explore'));
-  screenEl.querySelectorAll('[data-sailor]').forEach(b=>b.addEventListener('click', ()=>sailorChat(+b.dataset.sailor)));
+  /* While the hunt is on, anyone still pinging wants a fight; everyone else
+     carries on being themselves. */
+  screenEl.querySelectorAll('[data-sailor]').forEach(b=>b.addEventListener('click', ()=>{
+    const id = 'sailor'+b.dataset.sailor;
+    pings(id) ? crewChallenge(id) : sailorChat(+b.dataset.sailor);
+  }));
   const cp = screenEl.querySelector('[data-captain]');
-  if(cp) cp.addEventListener('click', ()=>chartRoom());
+  if(cp) cp.addEventListener('click', ()=> pings('ship_captain') ? crewChallenge('ship_captain') : chartRoom());
   const kp = screenEl.querySelector('[data-keeper]');
-  if(kp) kp.addEventListener('click', ()=>shipkeeperShop());
+  if(kp) kp.addEventListener('click', ()=> pings('shipkeeper') ? crewChallenge('shipkeeper') : shipkeeperShop());
   const ck = screenEl.querySelector('[data-cook]');
-  if(ck) ck.addEventListener('click', ()=>cookChat());
+  if(ck) ck.addEventListener('click', ()=> pings('cook') ? crewChallenge('cook') : cookChat());
   const rb = screenEl.querySelector('[data-rival]');
   if(rb) rb.addEventListener('click', ()=>rivalCabin());
   const gh = screenEl.querySelector('[data-ghost]');
@@ -571,6 +571,54 @@ function cookChat(){
   }
   storyModal(npcPortrait('cook','🧑‍🍳',130,'transparent'), crewName('cook'),
     body, ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck' });
+}
+
+/* Each crew member is two waves of what they happen to own. */
+/* The Whalelord hangs behind whoever it wants looked at next. */
+function crewChallenge(id){
+  storyModal(npcPortrait(id, '⚓', 130, 'transparent'), crewName(id),
+    `The Whalelord drifts in behind you and settles, watching.<br><br>` +
+    `<b>"…All right."</b> ${crewFirst(id)} sets down whatever they were holding. ` +
+    `<b>"If it clears the air, let's have it."</b>`,
+    ()=>fightCrew(id), { bg:'battle_cabin_deck', subtitle:'Cabin Deck' });
+}
+
+function crewTeam(id){
+  const lv = 68;
+  const R3 = { sailor1:['starfish','starfish','starfish'], sailor2:['duck','duck','duck'],
+               sailor3:['seahorse','seahorse','seahorse'], sailor4:['starfish','duck','seahorse'],
+               sailor5:['duck','duck','seahorse'] };
+  if(R3[id]) return [ R3[id].map(s=>({species:s, level:lv, ai:'best'})),
+                      [{species:'water_starter', level:lv+1, ai:'best'}] ];
+  if(id === 'cook')        return [ [{species:'duck',level:lv,ai:'best'},{species:'pelican',level:lv,ai:'best'}],
+                                    [{species:'cormorant',level:lv+1,ai:'best'}] ];
+  if(id === 'ship_captain') return CAPTAIN_TEAM.waves;
+  if(id === 'shipkeeper')   return SHIPKEEPER_TEAM.waves;
+  return [[{species:'duck', level:lv, ai:'best'}]];
+}
+function fightCrew(id){
+  if(!ensurePool()) return;
+  beginBattle({ isNpc:true, name:crewName(id), npcId:id, bgKey:'battle_cabin_deck',
+    waves: crewTeam(id).map(w=>w.map(e=>({...e}))),
+    onWin: ()=> onCrewWin(id) });
+}
+async function onCrewWin(id){
+  const h = hunt();
+  const first = !h.beaten.includes(id);
+  if(first){
+    h.beaten.push(id);
+    state.inventory.protein = (state.inventory.protein||0) + 1;
+    if(id === 'ship_captain') r4().captainBeaten = true;
+    if(id === 'shipkeeper')   r4().keeperBeaten  = true;
+    await saveProfile();
+  }
+  const left = CABIN_FOES.filter(x=>!huntBeaten(x)).length;
+  storyModal(npcPortrait(id, '⚓', 130, 'transparent'), crewName(id),
+    `<b>"Well fought."</b><br><br>` +
+    (first ? `<b>+1 Protein Supplement</b><br><br>` : '') +
+    (left ? `<i>${left} still to see. The Whalelord is watching each of them go.</i>`
+          : `<i>That is everyone. The Whalelord turns, at last, towards one particular cabin.</i>`),
+    ()=>go('cabin_deck'), { bg:'battle_cabin_deck', subtitle:'Cabin Deck' });
 }
 
 /* ============================================================
@@ -646,7 +694,49 @@ function r4StoneName(id){
   return d ? d.name : id;
 }
 
+/* ------------------------------------------------------------
+   The order of the cabin deck hunt.
+   Nothing on this deck is challengeable until the Whalelord has come aboard
+   and said it smells something down here. Then the crew ping. Jax pings LAST,
+   once everyone else has been cleared — the Whalelord will not name the boy
+   until it has ruled out every other person on the deck.
+   ------------------------------------------------------------ */
+const CABIN_FOES = ['sailor1','sailor2','sailor3','sailor4','sailor5',
+                    'ship_captain','shipkeeper','cook'];
+function hunt(){
+  const g = r4();
+  g.hunt = g.hunt || { beaten:[] };
+  return g.hunt;
+}
+function huntOpen(){ return !!r4().ghostAccepted; }
+function huntBeaten(id){ return hunt().beaten.includes(id); }
+function crewCleared(){ return CABIN_FOES.every(huntBeaten); }
+/* A crew member pings while the hunt is open and they have not been beaten. */
+function pings(id){
+  if(!huntOpen()) return false;
+  if(id === 'rival') return crewCleared() && !r4().rivalBeaten;
+  return !huntBeaten(id);
+}
+
+/* Before any of that, he is simply insufferable. */
+const JAX_IDLE = [
+  `He is lying on the bunk with his boots on, reading nothing.<br><br>` +
+  `<b>"You're on this boat too. Of course you are."</b><br><br>` +
+  `He does not get up.`,
+  `<b>"Whales."</b> He says it to the ceiling. <b>"Everyone's very excited about whales."</b><br><br>` +
+  `<i>He has not asked you a single question since you came aboard.</i>`,
+  `He glances at your party and looks away again.<br><br>` +
+  `<b>"When there's something worth my time, I'll know."</b>`,
+];
+function rivalIdle(){
+  storyModal(npcPortrait('rival','🧑',140,'transparent'), 'Jax',
+    JAX_IDLE[Math.floor(Math.random()*JAX_IDLE.length)],
+    ()=>go('cabin_deck'), { bg:'battle_cabin_deck', subtitle:'Cabin Deck' });
+}
+
 function rivalCabin(){
+  /* He will not be drawn until the Whalelord has cleared everybody else. */
+  if(!huntOpen() || !crewCleared()) return rivalIdle();
   const g = r4();
   if(!rivalStake()) return storyModal(npcPortrait('rival','🧑',140,'transparent'), 'Nothing left',
     `<b>"That's the lot."</b> He is smiling, and it doesn't reach anything.<br><br>` +
@@ -787,25 +877,38 @@ function renderLaboratoryDeck(){
   if(g.solved) return renderLaboratoryAfter();
 
   const v = inv();
+  /* Pinned to the plan: dry work forward, cold rooms amidships, wet work aft
+     by the tanks. Mireille is in the wet lab, which is exactly how she had a
+     reason to be near a diving suit at two in the morning. */
+  const STATIONS = [
+    { n:1, x:33, y:17 },   // dry lab, forward port
+    { n:2, x:66, y:22 },   // bench, forward starboard
+    { n:3, x:32, y:34 },   // charts and notes
+    { n:4, x:66, y:38 },   // cold room
+    { n:5, x:33, y:47 },   // microscopes
+    { n:6, x:64, y:57 },   // WET LAB — sinks, aft
+    { n:7, x:33, y:60 },   // instruments
+    { n:8, x:34, y:72 },   // cold store
+    { n:9, x:66, y:72 },   // tank bench
+  ];
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Explore</button>
-    <div class="sci-top">
-      <button class="deck-sprite" data-sup="1">
-        ${npcPortrait('scientist_supervisor','🧑‍🔬',70,'transparent')}
-        <div class="dive-label">${allBeaten() ? 'Report' : 'Supervisor'}</div>
-      </button>
-      <button class="deck-sprite ghost-here" style="position:static;" data-ghost="1">
-        ${monPortrait('whalelord',70,{view:'front',bare:true})}
-        <div class="dive-label">Clues</div>
-      </button>
-    </div>
+    <div class="ship-deck" id="labDeck">
+      <img src="assets/zones/laboratory_deck.png" alt="" class="ship-img"
+           onerror="this.style.display='none';this.parentNode.classList.add('no-art')">
 
-    <div class="sci-grid">
-      ${SCI.map(s=>`<button class="sci-cell ${sciBeaten(s.n)?'beaten':''}" data-sci="${s.n}">
-        ${npcPortrait('scientist'+s.n,'🧑‍🔬',62,'transparent')}
-        ${sciBeaten(s.n) ? `<svg class="sci-tick" viewBox="0 0 24 24"><path d="M4 12.5 L9.5 18 L20 6"
-          fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
-      </button>`).join('')}
+      <button class="deck-pin" style="left:50%;top:10%;" data-sup="1">
+        ${npcPortrait('scientist_supervisor','🧑‍🔬',48,'transparent')}</button>
+      <button class="deck-pin" style="left:50%;top:88%;" data-ghost="1">
+        ${monPortrait('whalelord',52,{view:'front',bare:true})}</button>
+
+      ${STATIONS.map(st=>`
+        <button class="deck-pin sci-pin ${sciBeaten(st.n)?'beaten':''}"
+                style="left:${st.x}%;top:${st.y}%;" data-sci="${st.n}">
+          ${npcPortrait('scientist'+st.n,'🧑‍🔬',44,'transparent')}
+          ${sciBeaten(st.n) ? `<svg class="sci-tick" viewBox="0 0 24 24"><path d="M4 12.5 L9.5 18 L20 6"
+            fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
+        </button>`).join('')}
     </div>
 
     <div class="phase-flag">${allBeaten()

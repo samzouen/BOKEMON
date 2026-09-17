@@ -131,7 +131,7 @@ function renderPartyHpCard(){
 
 /* ---------- SCREEN: recover landing ---------- */
 function renderRecover(){
-  setScreenBg('recover');
+  setScreenBg(state.progress.currentRegion===4 ? 'battle_cabin_deck' : 'recover');
   $('#brandSub').textContent = 'Recover';
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Region</button>

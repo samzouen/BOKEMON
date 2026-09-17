@@ -85,9 +85,16 @@ function bgCandidates(key){
   return out.filter(u=>u && !u.endsWith('/'));
 }
 const bgMissing = {};
+/* Backdrops that are deck PLANS rather than scenery. `cover` crops a tall plan
+   on a tall phone, so the ship ends up magnified and cut off at both ends —
+   these fit the full height instead and let the sides fall where they will. */
+const FIT_HEIGHT_BGS = ['battle_diving','battle_weather_deck','battle_cabin_deck',
+                        'battle_laboratory','battle_whales','sea'];
+
 function setScreenBg(key){
   const el = document.getElementById('screenBg');
   if(!el) return;
+  el.classList.toggle('fit-h', FIT_HEIGHT_BGS.includes(key));
   const cands = bgCandidates(key).filter(u=>!bgMissing[u]);
   const clear = ()=>{ el.style.backgroundImage=''; el.classList.remove('on'); document.body.classList.remove('has-bg'); };
   if(cands.length===0) return clear();

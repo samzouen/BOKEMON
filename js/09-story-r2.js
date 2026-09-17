@@ -83,7 +83,7 @@ function renderShop(){
     <button class="back-link" id="backBtn">← Region</button>
 
     <div class="shop-keeper">
-      ${npcPortrait('shopkeeper'+(state.progress.currentRegion||1),'🧑‍🌾',110,'transparent')}
+      ${npcPortrait(state.progress.currentRegion===4 ? 'shipkeeper' : 'shopkeeper'+(state.progress.currentRegion||1),'🧑‍🌾',110,'transparent')}
       <div class="shop-bubble">${escapeHtml(ui.shopGreeting)}</div>
     </div>
 
