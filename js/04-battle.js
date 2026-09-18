@@ -207,7 +207,10 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     const soulAtk = getPStatus(0,'steelSoul');
     if(soulAtk && soulAtk.owner === attacker.uid) dmg += soulAtk.bonus * attackerAtk;
   } else {
-    if(getEStatus(attacker,'discombobulate')) dmg *= 0.8;   // enemy deals 20% less
+    /* Discombobulate used to ALSO shave 20% off everything a confused enemy
+       threw. The rework replaced that with visible friendly fire, but this line
+       survived — so a confused wave was both hitting itself and hitting softer.
+       The whole effect is the turned swing now. */
   }
 
   // defender-side modifiers
@@ -2875,8 +2878,10 @@ function renderStatusBadges(){
     const extras = [];
     if(isElusive(e))     extras.push('<span class="status-pill foe">💨 Elusive</span>');
     if(e.enraged)        extras.push('<span class="status-pill foe">🐋 Enraged</span>');
-    if(getEStatus(e,'asleep'))       extras.push('<span class="status-pill foe">💤 Asleep</span>');
-    if(getEStatus(e,'discombobulate')) extras.push('<span class="status-pill foe">🌀 Confused</span>');
+    /* `asleep` and `discombobulate` are real statuses, so the generic loop
+       below already draws them from STATUS_LABELS. Pushing them here as well
+       put two icons on every confused monster. Only things that are NOT
+       statuses — stances, stacks, plain fields — belong in `extras`. */
     if(e.gooed)          extras.push('<span class="status-pill foe">🌋 Pinned</span>');
     if(counterCountOf(e)) extras.push(`<span class="status-pill foe">🛡 Counter ×${counterCountOf(e)}</span>`);
     if(e.comboStacks)     extras.push(`<span class="status-pill foe">👊 Combo ×${e.comboStacks}</span>`);

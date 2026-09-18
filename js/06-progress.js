@@ -350,9 +350,13 @@ function exploreFurther(){
 }
 
 /* Continue to the standard victory screen after a story beat. */
-function resumeVictory(){
+/* `then` runs INSTEAD of the victory screen — for the scenes that must
+   interrupt it, like the whales stopping the ship. Calls that pass arguments
+   used to have them silently ignored, which is why the wall never appeared. */
+function resumeVictory(interrupt, then){
   const f = ui.pendingVictory;
   ui.pendingVictory = null;
+  if(interrupt && typeof then === 'function') return then();
   if(f) f(); else go('region');
 }
 

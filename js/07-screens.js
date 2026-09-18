@@ -464,8 +464,12 @@ function renderPartyList(){
     if(isPassenger(pm)){ toast('This one stays with you.'); return; }
     e.stopPropagation();
     const uid=b.dataset.store;
-    if(state.party.length<=1){ toast('You need at least one monster in your party.'); return; }
+    if(battleParty().length<=1){ toast('You need at least one monster in your party.'); return; }
     const idx=state.party.findIndex(m=>m.uid===uid);
+    if(isPassenger(state.party[idx])){
+      toast(`${displayName(state.party[idx])} is not going anywhere.`);
+      return;
+    }
     const [m]=state.party.splice(idx,1);
     state.storage.push(m);
     ui.partyOpen=null;
@@ -1458,8 +1462,11 @@ function moveToParty(uid){
     toast(`${displayName(m)} joined your party.`);
     renderStorage();
   } else {
-    // party full — choose who to swap out
-    const options = state.party.map((m,i)=>({m,i}));
+    /* An egg, a seed or a baby rides along in its own slot — it is not one of
+       the six. Offering it here let a passenger be swapped OUT of the party
+       and lost, which is not something the player should be able to do. */
+    const options = state.party.map((m,i)=>({m,i})).filter(o=>!isPassenger(o.m));
+    if(!options.length){ toast('Nobody in your party can be swapped out.'); return; }
     monsterChooser('Party is full — swap out…', options, (i)=>{
       const stored = state.storage.splice(idx,1)[0];
       const removed = state.party.splice(i,1,stored)[0];

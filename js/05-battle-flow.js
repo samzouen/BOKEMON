@@ -89,7 +89,7 @@ const bgMissing = {};
    on a tall phone, so the ship ends up magnified and cut off at both ends —
    these fit the full height instead and let the sides fall where they will. */
 const FIT_HEIGHT_BGS = ['battle_diving','battle_weather_deck','battle_cabin_deck',
-                        'battle_laboratory','battle_whales','sea'];
+                        'battle_laboratory_deck','battle_whales','sea'];
 
 function setScreenBg(key){
   const el = document.getElementById('screenBg');
