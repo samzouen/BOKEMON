@@ -852,6 +852,43 @@
     border-radius:12px;padding:11px;font-size:12px;line-height:1.55;text-align:left;margin-bottom:12px;}
   /* The deck is the artwork. Every sprite is pinned by percentage, so the
      layout holds whatever size the phone renders it at. */
+  /* ---- walkable decks ---- */
+  .walk-stage{position:relative;aspect-ratio:1/1;width:100%;max-width:min(100%,calc(100dvh - 300px));
+    margin:6px auto;border-radius:12px;overflow:hidden;background:#cfe0e8;
+    box-shadow:0 2px 10px rgba(0,0,0,.22);}
+  .walk-world{position:absolute;left:50%;top:50%;transition:transform .23s linear;
+    will-change:transform;background-repeat:no-repeat;}
+  .walk-ent{position:absolute;width:32px;height:32px;display:flex;align-items:flex-end;
+    justify-content:center;font-size:20px;transition:transform .23s linear;}
+  .walk-ent img{width:100%;height:100%;object-fit:contain;object-position:bottom;
+    image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));}
+  .walk-ent.flat{opacity:0;}
+  .walk-you{z-index:3;}
+  @keyframes cutFloat{0%,100%{transform:scaleX(-1) translateY(0);}50%{transform:scaleX(-1) translateY(-9px);}}
+  .walk-ghost{z-index:2;opacity:.9;animation:ghostDrift 3.4s ease-in-out infinite;}
+  @keyframes ghostDrift{0%,100%{filter:brightness(1);}50%{filter:brightness(1.18);}}
+  .wact.ghost{background:#6a5a8a;border-color:#54446e;color:#fff;}
+  .walk-you.bumped{animation:walkBump .22s ease;}
+  @keyframes walkBump{0%,100%{filter:none;}50%{filter:brightness(1.4);}}
+  .walk-steps i{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;
+    background:rgba(40,35,25,.32);box-shadow:0 0 0 1.5px rgba(255,250,235,.55);}
+  .walk-pads{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px;}
+  .walk-dpad{display:grid;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);gap:4px;}
+  .walk-dpad i{display:block;}
+  .wkey{background:var(--paper-2);border:1px solid var(--line);border-radius:12px;
+    display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--ink-soft);
+    touch-action:manipulation;}
+  .wkey:active{background:var(--paper-3);transform:scale(.94);}
+  .walk-acts{display:flex;flex-direction:column;gap:6px;min-width:100px;}
+  .wact{min-height:44px;border-radius:14px;background:var(--paper-2);border:1px solid var(--line);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:'Baloo 2',cursive;font-weight:800;font-size:13px;color:var(--ink-soft);padding:5px 10px;}
+  .wact small{font-size:9px;font-weight:600;opacity:.85;margin-top:1px;}
+  .wact.live{background:var(--jade);color:#fff;border-color:#4a8a55;}
+  .wact:active{transform:scale(.95);}
+  .walk-acts.single .wact{width:76px;height:76px;border-radius:50%;align-self:center;}
+  .tile-wipe{position:fixed;inset:0;z-index:999;pointer-events:none;}
+  .tile-wipe i{position:absolute;background:#14110d;opacity:0;transition:opacity .15s;}
   .ship-deck{position:relative;width:100%;aspect-ratio:797/1209;margin:8px 0 4px;
     border-radius:14px;overflow:hidden;}
   .ship-deck.no-art{background:repeating-linear-gradient(135deg,var(--paper-2),var(--paper-2) 14px,var(--paper-3) 14px,var(--paper-3) 28px);}
@@ -1513,6 +1550,7 @@
   <script src="js/09-story-r2.js"></script>
   <script src="js/10-story-r3.js"></script>
   <script src="js/12-story-r4.js"></script>
+  <script src="js/13-walkmap.js"></script>
   <script src="js/11-app.js"></script>
 
 </body>
