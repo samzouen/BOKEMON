@@ -141,7 +141,7 @@ function renderRecover(){
     <button class="btn btn-jade" id="startBtn" style="margin-top:16px;">💧 Start recovering</button>
     <button class="btn btn-ghost" id="backBtn2" style="margin-top:10px;">Back to region</button>
   `;
-  $('#backBtn').addEventListener('click', ()=>go('region'));
+  $('#backBtn').addEventListener('click', ()=>go(backFromMenu()));
   $('#backBtn2').addEventListener('click', ()=>go('region'));
   $('#startBtn').addEventListener('click', ()=>{
     if(partyFull()){ toast('Your team is already at full health.'); return; }
