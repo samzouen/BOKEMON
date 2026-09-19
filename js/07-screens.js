@@ -416,11 +416,7 @@ function renderPartyStub(){
     </div>
     <div id="partyList" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;"></div>
   `;
-  /* opened from a deck? go back to the deck, standing where you left off */
-  $('#backBtn').addEventListener('click', ()=>{
-    const d = ui.walkBack; ui.walkBack = null;
-    go(d || 'region');
-  });
+  $('#backBtn').addEventListener('click', ()=> go(backFromMenu()));
   $('#storageBtn').addEventListener('click', ()=>{ ui.storageFrom='party'; go('storage'); });
   renderPartyList();
 }
