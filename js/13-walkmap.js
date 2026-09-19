@@ -19,7 +19,7 @@ let WALK_T = 44;                         // recomputed to fit the stage
 const DECKS = {
   weather_deck: {
     art:'weather_deck', music:'zone_weather_deck',
-    bx:-0.055, by:0.010, bs:0.032500,
+    bx:0.1750, by:0.010, bs:0.032500,
     rows:[
 "##########################","##########################","##########################","#############.############",
 "############...###########","###########.....##########","##########.......#########","#########..#####.#########",
@@ -33,6 +33,7 @@ const DECKS = {
 "###########.....##########","##########################","##########################",
     ],
     spawn:[16,9],
+    prizes:[[13,12],[13,24],[13,31],[13,36]],
     things:[
       /* one ladder over the side: Pell runs it, Ines just watches */
       { x:6,  y:17, sprite:'diver1', icon:'🤿', verb:'Dive', act:()=> diveFromDeck() },
@@ -47,43 +48,44 @@ const DECKS = {
   },
   cabin_deck: {
     art:'cabin_deck', music:'zone_cabin_deck',
-    bx:-4.1393, by:-0.7931, bs:0.031868,
+    bx:-4.1393, by:-0.5131, bs:0.031868,
     rows:[
 "###################","###################","###################","###################",
-"###################","###################","#######.###.#######","#######.###.#######",
-"######........#####","######.############","#####...###...#####","#####.#.###.#.#####",
-"####..#.###.#..####","####..#.###.#..####","#####.#.###.#.#####","#####.........#####",
+"###################","###################","#######.###.#######","#######......######",
+"######..###..######","######.############","#####...###...#####","#####.#.###.#.#####",
+"#####.#.###.#.#####","####..#.###.#..####","####...........####","#########.#########",
 "#########.#########","#####.........#####","#####...#.#...#####","#########.#########",
 "#########.#########","####...........####","####..###.##...####","####..###.#########",
-"#########.#########","#####.###.#....####","#####..........####","#####...#.#....####",
-"#########.#########","#####..##.#########","######.##.....#####","######....###.#####",
-"#######.......#####","#######...##.######","#########.#########","#########.#########",
+"#########.#########","#########.#....####","#####..........####","#####...#.#....####",
+"#########.#########","####...##.#########","######.##.....#####","#####.....###.#####",
+"#######...###.#####","#######.......#####","#########.#########","#########.#########",
 "###################","###################","###################",
     ],
     spawn:[13,8],
+    prizes:[[13,10],[4,29],[9,35]],
     things:[
       { x:11, y:6,  sprite:'ship_captain', icon:'⚓', verb:'Talk', act:()=> chartRoom(),
         extra:()=> suspectOf('ship_captain') },
       { x:7,  y:6,  sprite:'shipkeeper',   icon:'⚓', verb:'Shop', act:()=> shipkeeperShop(),
         extra:()=> suspectOf('shipkeeper') },
-      { x:13, y:8,  walk:true, verb:'Up',   where:'Weather Deck', act:()=> goDeck('weather_deck') },
-      { x:13, y:8,  walk:true, verb:'Down', where:'Laboratory',   act:()=> goDeck('laboratory_deck') },
+      { x:12, y:8,  walk:true, verb:'Up',   where:'Weather Deck', act:()=> goDeck('weather_deck') },
+      { x:12, y:8,  walk:true, verb:'Down', where:'Laboratory',   act:()=> goDeck('laboratory_deck') },
       { x:5,  y:17, sprite:'sailor1', icon:'⚓', verb:'Talk', act:()=> sailorChat(1), extra:()=> suspectOf('sailor1') },
       { x:13, y:17, sprite:'sailor2', icon:'⚓', verb:'Talk', act:()=> sailorChat(2), extra:()=> suspectOf('sailor2') },
       { x:4,  y:22, sprite:'sailor3', icon:'⚓', verb:'Talk', act:()=> sailorChat(3), extra:()=> suspectOf('sailor3') },
-      { x:13, y:21, sprite:'rival',   icon:'🧑', verb:'Talk', act:()=> rivalCabin(),
+      { x:13, y:22, sprite:'rival',   icon:'🧑', verb:'Talk', act:()=> rivalCabin(),
         extra:()=> suspectOf('rival') },
-      { x:5,  y:25, sprite:'sailor4', icon:'⚓', verb:'Talk', act:()=> sailorChat(4), extra:()=> suspectOf('sailor4') },
+      { x:5,  y:26, sprite:'sailor4', icon:'⚓', verb:'Talk', act:()=> sailorChat(4), extra:()=> suspectOf('sailor4') },
       { x:14, y:25, walk:true, verb:'Recover', act:()=> leaveDeck('recover') },
       { x:13, y:27, walk:true, verb:'Storage', act:()=> leaveDeck('storage') },
       { x:8,  y:32, sprite:'cook',    icon:'🧑‍🍳', verb:'Talk', act:()=> cookChat(),
         extra:()=> suspectOf('cook') },
-      { x:5,  y:29, sprite:'sailor5', icon:'⚓', verb:'Talk', act:()=> sailorChat(5), extra:()=> suspectOf('sailor5') },
+      { x:5,  y:31, sprite:'sailor5', icon:'⚓', verb:'Talk', act:()=> sailorChat(5), extra:()=> suspectOf('sailor5') },
     ],
   },
   laboratory_deck: {
     art:'laboratory_deck', music:'zone_laboratory_deck',
-    bx:-0.080, by:-0.910, bs:0.031500,
+    bx:-0.080, by:-0.6300, bs:0.031500,
     rows:[
 "##########################","##########################","##########################","##########################",
 "##########################","############...###########","###########......#########","###########.......########",
@@ -97,6 +99,8 @@ const DECKS = {
 "##########################","##########################","##########################",
     ],
     spawn:[16,8],
+    prizes:[[17,30],[10,33],[13,34]],
+    aquarium:[{sp:'starfish',x:11,y:35},{sp:'loong',x:13,y:36},{sp:'seahorse',x:16,y:35}],
     things:[
       { x:13, y:5,  sprite:'scientist_supervisor', icon:'🧑‍🔬', verb:'Report', act:()=> labSupervisor() },
       { x:16, y:8,  walk:true, verb:'Up', where:'Cabin Deck', act:()=> goDeck('cabin_deck') },
@@ -175,6 +179,109 @@ function TRI(dir){
   return `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">` +
          `<polygon points="${pts}" fill="currentColor"/></svg>`;
 }
+/* ------------------------------------------------------------
+   THE TANKS
+   Three specimens drifting in the aquarium at the stern of the laboratory.
+   Each wanders its own little box at its own pace: the starfish barely moves,
+   the seahorse ambles, the loong is comparatively busy. Facing follows the
+   direction of travel — front sprite going left, back sprite going right.
+
+   It runs on one 50ms tick rather than a 60fps loop: the motion is slow
+   enough that nothing is gained by drawing it sixty times a second, and the
+   phone stays cool.
+   ------------------------------------------------------------ */
+const SWIM = {
+  /* per second, as a fraction of a tile, and how often the vertical drift
+     changes its mind */
+  starfish: { sx:[0.015,0.035], sy:[0.010,0.022], flip:[4500,6200] },
+  seahorse: { sx:[0.030,0.060], sy:[0.020,0.040], flip:[3000,4000] },
+  loong:    { sx:[0.050,0.100], sy:[0.035,0.065], flip:[2000,2600] },
+};
+const SWIM_X = 0.45, SWIM_Y = 0.30;      // how far either way, in tiles
+const rnd = (a,b)=> a + Math.random()*(b-a);
+let _tank = null, _tankTimer = null;
+
+function buildAquarium(world, d){
+  if(!d.aquarium) return;
+  _tank = d.aquarium.map(f=>{
+    const el = document.createElement('div');
+    el.className = 'walk-fish';
+    el.style.cssText = `left:${f.x*WALK_T}px;top:${f.y*WALK_T}px;` +
+                       `width:${WALK_T}px;height:${WALK_T}px;`;
+    el.innerHTML = monPortrait(f.sp, Math.round(WALK_T*0.5), { view:'front', bare:true, stage:0 });
+    world.appendChild(el);
+    const k = SWIM[f.sp] || SWIM.seahorse;
+    return { el, k, sp:f.sp, dx:1, dy:1, x:rnd(-SWIM_X,SWIM_X), y:rnd(-SWIM_Y,SWIM_Y),
+             vx:rnd(k.sx[0],k.sx[1]), vy:rnd(k.sy[0],k.sy[1]),
+             next:performance.now()+rnd(k.flip[0],k.flip[1]), face:'front' };
+  });
+  clearInterval(_tankTimer);
+  _tankTimer = setInterval(swimTick, 50);
+}
+function stopAquarium(){ clearInterval(_tankTimer); _tankTimer = null; _tank = null; }
+function swimTick(){
+  if(!_tank) return;
+  const now = performance.now();
+  _tank.forEach(f=>{
+    f.x += f.dx * f.vx * 0.05;
+    if(f.x >  SWIM_X){ f.x =  SWIM_X; f.dx = -1; f.vx = rnd(f.k.sx[0], f.k.sx[1]); }
+    if(f.x < -SWIM_X){ f.x = -SWIM_X; f.dx =  1; f.vx = rnd(f.k.sx[0], f.k.sx[1]); }
+    /* it turns round to face the way it is going */
+    const want = f.dx < 0 ? 'front' : 'back';
+    if(want !== f.face){
+      f.face = want;
+      f.el.innerHTML = monPortrait(f.sp, Math.round(WALK_T*0.5),
+                                   { view:want, bare:true, stage:0 });
+    }
+    f.y += f.dy * f.vy * 0.05;
+    if(Math.abs(f.y) > SWIM_Y){ f.y = Math.sign(f.y)*SWIM_Y; f.dy *= -1; }
+    /* the vertical drift changes its mind on its own clock, without waiting
+       to reach an edge */
+    if(now > f.next){
+      f.dy *= -1;
+      f.vy = rnd(f.k.sy[0], f.k.sy[1]);
+      f.next = now + rnd(f.k.flip[0], f.k.flip[1]);
+    }
+    f.el.style.transform = `translate(${f.x*WALK_T}px, ${f.y*WALK_T}px)`;
+  });
+}
+
+/* ------------------------------------------------------------
+   SOMETHING FOR LOOKING
+   Nothing is drawn and nothing is hinted at. Walk onto the tile and ten skill
+   tokens arrive. Ten of them across the three decks, one hundred tokens for
+   nobody's reason but curiosity. Each is claimed once, ever.
+   ------------------------------------------------------------ */
+const PRIZE_TOKENS = 10;
+function prizeTaken(deck, i){
+  const g = r4();
+  g.found = g.found || {};
+  return !!(g.found[deck] || {})[i];
+}
+async function takePrize(deck, i){
+  const g = r4();
+  g.found = g.found || {};
+  g.found[deck] = g.found[deck] || {};
+  if(g.found[deck][i]) return;
+  g.found[deck][i] = true;
+  state.inventory.skillTokens = (state.inventory.skillTokens || 0) + PRIZE_TOKENS;
+  await saveProfile();
+  const total = Object.values(g.found).reduce((n,o)=>n + Object.keys(o).length, 0);
+  storyModal(tokenIcon(130), 'Tucked away',
+    `Something is wedged behind a locker where nobody would look.<br><br>` +
+    `<b>+${PRIZE_TOKENS} Skill Tokens</b><br><br>` +
+    `<i>${total} of 10 found.</i>`,
+    ()=> go(deck), { bg:'battle_cabin_deck', subtitle:'The Vane Shear' });
+}
+function checkPrize(){
+  const w = walkState(), d = DECKS[w.deck];
+  if(!d || !d.prizes) return false;
+  const p = w.at[w.deck];
+  const i = d.prizes.findIndex(q=> q[0]===p.x && q[1]===p.y);
+  if(i < 0 || prizeTaken(w.deck, i)) return false;
+  takePrize(w.deck, i);
+  return true;
+}
 function cuainAboard(){ const g = r4(); return !!g.ghostAccepted; }
 const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true : d.rows[y][x]==='#';
 
@@ -225,7 +332,7 @@ function renderWalkDeck(id){
         <div class="walk-acts" id="walkActs"></div>
       </div>
     </div>`;
-  $('#backBtn').addEventListener('click', ()=>{ stopRail(); go('explore'); });
+  $('#backBtn').addEventListener('click', ()=>{ stopRail(); stopAquarium(); go('explore'); });
   /* remember where to come back to, so Party does not dump you on the region
      screen with your place on the ship lost */
   $('#walkParty').addEventListener('click', ()=> leaveDeck('party'));
@@ -323,6 +430,7 @@ function renderWalkDeck(id){
   me.innerHTML = avatarImg(state.avatar || 'm1', WALK_T, { bare:true });
   world.appendChild(me);
 
+  buildAquarium(world, d);
   wireWalkKeys();
   refreshWalk();
   if(id === 'weather_deck') startRail(); else stopRail();
@@ -417,6 +525,7 @@ function walkMove(dir){
       w.ghostAt[w.deck] = { x:p.x, y:p.y };
     }
     p.x=nx; p.y=ny;
+    if(checkPrize()) return;          // stepping onto one ends the move
   }
   else {
     const me = $('#walkYou');
