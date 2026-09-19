@@ -168,6 +168,7 @@ function suspectOf(id){
 }
 /* Anything that takes you off the deck notes where to come back to. */
 function leaveDeck(where){
+  releaseKeys();
   ui.walkBack = walkState().deck;
   go(where);
 }
@@ -267,11 +268,23 @@ async function takePrize(deck, i){
   state.inventory.skillTokens = (state.inventory.skillTokens || 0) + PRIZE_TOKENS;
   await saveProfile();
   const total = Object.values(g.found).reduce((n,o)=>n + Object.keys(o).length, 0);
-  storyModal(tokenIcon(130), 'Tucked away',
-    `Something is wedged behind a locker where nobody would look.<br><br>` +
-    `<b>+${PRIZE_TOKENS} Skill Tokens</b><br><br>` +
+  /* Nothing about where it was or how it got there — a child who finds one in
+     a corridor should not be told they were rummaging in a locker. */
+  const OPENERS = [
+    `Oh, what's this?`,
+    `Hold on.`,
+    `Well now.`,
+    `Something glints.`,
+    `Lucky.`,
+    `Not everything on this ship is bolted down.`,
+    `Somebody was careless.`,
+    `Would you look at that.`,
+  ];
+  storyModal(tokenIcon(130), 'A find',
+    `${OPENERS[Math.floor(Math.random()*OPENERS.length)]}<br><br>` +
+    `You found <b>${PRIZE_TOKENS} Skill Tokens</b>!<br><br>` +
     `<i>${total} of 10 found.</i>`,
-    ()=> go(deck), { bg:'battle_cabin_deck', subtitle:'The Vane Shear' });
+    ()=> go(deck), { bg:'sea', subtitle:'The Vane Shear' });
 }
 function checkPrize(){
   const w = walkState(), d = DECKS[w.deck];
@@ -525,7 +538,11 @@ function walkMove(dir){
       w.ghostAt[w.deck] = { x:p.x, y:p.y };
     }
     p.x=nx; p.y=ny;
-    if(checkPrize()) return;          // stepping onto one ends the move
+    if(checkPrize()){                 // stepping onto one ends the move
+      releaseKeys();
+      refreshWalk();                  // draw the step BEFORE the window opens
+      return;
+    }
   }
   else {
     const me = $('#walkYou');
@@ -533,13 +550,25 @@ function walkMove(dir){
   }
   refreshWalk();
 }
+/* Every timer a held key has started. A modal or a deck change tears the
+   button out of the DOM, so its pointerup never arrives and the repeat used to
+   run on forever — which is why picking up a prize left you walking left. */
+let _keyTimers = [];
+function releaseKeys(){
+  _keyTimers.forEach(t=>{ clearTimeout(t); clearInterval(t); });
+  _keyTimers = [];
+}
 function wireWalkKeys(){
+  releaseKeys();
   screenEl.querySelectorAll('[data-d]').forEach(k=>{
     let delay=null, rep=null;
     const go1 = ()=> walkMove(k.dataset.d);
     k.addEventListener('pointerdown', e=>{
       e.preventDefault(); k.setPointerCapture(e.pointerId); go1();
-      delay = setTimeout(()=>{ rep = setInterval(go1, WALK_REP); }, WALK_HOLD);
+      delay = setTimeout(()=>{
+        rep = setInterval(go1, WALK_REP); _keyTimers.push(rep);
+      }, WALK_HOLD);
+      _keyTimers.push(delay);
     });
     const stop = ()=>{ clearTimeout(delay); clearInterval(rep); };
     ['pointerup','pointercancel','pointerleave'].forEach(ev=>k.addEventListener(ev, stop));
@@ -549,6 +578,7 @@ function wireWalkKeys(){
 /* ---------- moving between decks ---------- */
 function goDeck(id){
   const w = walkState();
+  releaseKeys();
   w.busy = true;
   tileWipe(()=>{ w.busy = false; go(id); });
 }
