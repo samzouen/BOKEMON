@@ -858,12 +858,19 @@
     box-shadow:0 2px 10px rgba(0,0,0,.22);}
   .walk-world{position:absolute;left:50%;top:50%;transition:transform .23s linear;
     will-change:transform;background-repeat:no-repeat;}
-  .walk-ent{position:absolute;width:32px;height:32px;display:flex;align-items:center;
-    justify-content:center;font-size:20px;transition:transform .23s linear;overflow:visible;}
+  /* The box was pinned at 32px while the tile grew to ~52px, so every sprite
+     sat small and shoved into the tile's top-left corner. It is now the tile. */
+  .walk-ent{position:absolute;width:var(--wt,32px);height:var(--wt,32px);display:flex;
+    align-items:center;justify-content:center;font-size:20px;
+    transition:transform .23s linear;overflow:visible;}
   /* a quarter bigger, grown from the middle so nobody drifts off their tile */
+  /* Crew are drawn much larger than the tile; the player and the ghost a
+     little less so. All grown from dead centre. */
   .walk-ent img{width:100%;height:100%;object-fit:contain;
-    transform:scale(1.5);transform-origin:center center;
+    transform:scale(2.55);transform-origin:center center;
     image-rendering:pixelated;}
+  .walk-you img{transform:scale(1.5);}
+  .walk-ghost img, .walk-ghost .mon-portrait img{transform:scale(1.95);}
   /* Nothing on the deck wears a tile plate: no bevel, no rounded backing, no
      drop shadow. They are people standing on a painting. */
   .walk-ent .mon-portrait, .walk-ent .avatar-img,
@@ -873,7 +880,7 @@
   .walk-ent .mon-portrait{width:100% !important;height:100% !important;}
   .walk-ent .mon-portrait img{transform:scale(1.5);transform-origin:center center;}
   .walk-ent.flat{opacity:0;}
-  .walk-you{z-index:3;}
+
   @keyframes cutFloat{0%,100%{transform:scaleX(-1) translateY(0);}50%{transform:scaleX(-1) translateY(-9px);}}
   .rail-call{position:absolute;top:-16px;left:50%;transform:translateX(-50%);
     font-size:15px;pointer-events:none;animation:railShout 1.1s ease-in-out infinite;
@@ -891,11 +898,17 @@
   .walk-shade{position:absolute;left:0;top:0;pointer-events:none;opacity:0;
     transition:opacity .28s ease;}
   .walk-shade i{position:absolute;display:block;background:#16202e;}
-  .walk-stage.pathing .walk-shade{opacity:.55;}
+  .walk-shade{z-index:1;}
+  .walk-stage.pathing .walk-shade{opacity:.35;}
   .walk-path{position:absolute;right:8px;top:8px;z-index:8;
     background:rgba(244,236,216,.88);border:1px solid var(--line);border-radius:9px;
     padding:5px 11px;font:800 11px system-ui;color:var(--ink-soft);}
   .walk-stage.pathing .walk-path{background:#2f4159;color:#f4ecd8;border-color:#22303f;}
+  /* Companionways get a drawn arrow, not an emoji: green down on the weather
+     deck, green up in the laboratory, white both ways on the cabin deck. */
+  .walk-stair{position:absolute;pointer-events:none;z-index:2;
+    animation:stairBob 2.4s ease-in-out infinite;}
+  @keyframes stairBob{0%,100%{transform:translateY(-5%);}50%{transform:translateY(5%);}}
   .walk-steps i{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;
     background:rgba(40,35,25,.32);box-shadow:0 0 0 1.5px rgba(255,250,235,.55);}
   /* The action side was much narrower than the d-pad and the buttons read as
@@ -913,8 +926,10 @@
   .walk-dpad{display:grid;grid-template-columns:repeat(3,62px);grid-template-rows:repeat(3,62px);gap:5px;}
   .walk-dpad i{display:block;}
   .wkey{background:var(--paper-2);border:1px solid var(--line);border-radius:12px;
-    display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--ink-soft);
-    touch-action:manipulation;}
+    display:flex;align-items:center;justify-content:center;color:var(--ink-soft);
+    touch-action:manipulation;user-select:none;-webkit-user-select:none;
+    -webkit-touch-callout:none;}
+  .wkey svg{pointer-events:none;}
   .wkey:active{background:var(--paper-3);transform:scale(.94);}
   .walk-acts{display:flex;flex-direction:column;gap:6px;}
   .wact{min-height:58px;width:100%;border-radius:14px;background:var(--paper-2);border:1px solid var(--line);
