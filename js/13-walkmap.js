@@ -11,7 +11,7 @@
 /* How close the camera sits. The stage is square, so this is how many tiles
    you see across it — nine makes the ship feel like somewhere to explore
    rather than a plan you are reading. */
-const WALK_VIEW = 9;
+const WALK_VIEW = 7;
 let WALK_T = 44;                         // recomputed to fit the stage
 
 /* Each deck: its grid, who stands where, and where its painting sits — all in
@@ -47,7 +47,7 @@ const DECKS = {
   },
   cabin_deck: {
     art:'cabin_deck', music:'zone_cabin_deck',
-    bx:-1.6131, by:1.3434, bs:0.025965,
+    bx:-1.9469, by:3.8430, bs:0.026745,
     rows:[
 "###################","###################","###################","###################",
 "###################","###################","#######.###.#######","#######.###.#######",
@@ -74,8 +74,8 @@ const DECKS = {
       { x:13, y:21, sprite:'rival',   icon:'🧑', verb:'Talk', act:()=> rivalCabin(),
         extra:()=> suspectOf('rival') },
       { x:5,  y:25, sprite:'sailor4', icon:'⚓', verb:'Talk', act:()=> sailorChat(4), extra:()=> suspectOf('sailor4') },
-      { x:14, y:25, walk:true, verb:'Recover', act:()=> go('recover') },
-      { x:13, y:27, walk:true, verb:'Storage', act:()=> go('storage') },
+      { x:14, y:25, walk:true, verb:'Recover', act:()=> leaveDeck('recover') },
+      { x:13, y:27, walk:true, verb:'Storage', act:()=> leaveDeck('storage') },
       { x:8,  y:32, sprite:'cook',    icon:'🧑‍🍳', verb:'Talk', act:()=> cookChat(),
         extra:()=> suspectOf('cook') },
       { x:5,  y:29, sprite:'sailor5', icon:'⚓', verb:'Talk', act:()=> sailorChat(5), extra:()=> suspectOf('sailor5') },
@@ -162,6 +162,11 @@ function suspectOf(id){
   return { verb:'🔍 Investigate',
            act:()=> (id === 'rival') ? rivalCabin() : crewChallenge(id) };
 }
+/* Anything that takes you off the deck notes where to come back to. */
+function leaveDeck(where){
+  ui.walkBack = walkState().deck;
+  go(where);
+}
 function cuainAboard(){ const g = r4(); return !!g.ghostAccepted; }
 const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true : d.rows[y][x]==='#';
 
@@ -193,6 +198,7 @@ function renderWalkDeck(id){
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Explore</button>
     <div class="walk-stage" id="walkStage">
+      <button class="walk-path" id="walkPath">Path</button>
       <div class="walk-world" id="walkWorld" style="
         width:${W*WALK_T}px;height:${H*WALK_T}px;
         background-image:url('assets/zones/${d.art}.png');
@@ -213,7 +219,13 @@ function renderWalkDeck(id){
   $('#backBtn').addEventListener('click', ()=>{ stopRail(); go('explore'); });
   /* remember where to come back to, so Party does not dump you on the region
      screen with your place on the ship lost */
-  $('#walkParty').addEventListener('click', ()=>{ ui.walkBack = id; go('party'); });
+  $('#walkParty').addEventListener('click', ()=> leaveDeck('party'));
+  /* the preference sticks between decks and between visits */
+  if(ui.walkPath) $('#walkStage').classList.add('pathing');
+  $('#walkPath').addEventListener('click', ()=>{
+    ui.walkPath = !ui.walkPath;
+    $('#walkStage').classList.toggle('pathing', ui.walkPath);
+  });
 
   const world = $('#walkWorld');
   /* people and doorways */
@@ -227,6 +239,20 @@ function renderWalkDeck(id){
       : `<span>${t.icon||''}</span>`;
     world.appendChild(e); t.el = e;
   });
+  /* Every wall tile, shaded. Drawn a pixel oversized so neighbours meet with
+     no seam, which makes the walkable deck read as one continuous path without
+     a single line being drawn on it. Off by default; the painting is the view. */
+  const shade = document.createElement('div');
+  shade.className = 'walk-shade'; shade.id = 'walkShade';
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    if(!wSolid(d,x,y)) continue;
+    const c = document.createElement('i');
+    c.style.cssText = `left:${x*WALK_T - 1}px;top:${y*WALK_T - 1}px;` +
+                      `width:${WALK_T + 2}px;height:${WALK_T + 2}px;`;
+    shade.appendChild(c);
+  }
+  world.appendChild(shade);
+
   const steps = document.createElement('div'); steps.className='walk-steps'; steps.id='walkSteps';
   world.appendChild(steps);
   /* Cuain, once he has come aboard. He stands where you last stood, so he can
@@ -284,7 +310,8 @@ function refreshWalk(){
   if(cuainAboard()){
     const b = document.createElement('button');
     b.className = 'wact live ghost';
-    b.innerHTML = monPortrait('whalelord', 30, { view:'front', bare:true }) + '<small>Cuain</small>';
+    b.innerHTML = monPortrait('whalelord', 34, { view:'front', bare:true }) +
+                  `<span>Talk to<br>Whalelord’s Ghost</span>`;
     b.addEventListener('click', ()=>{ if(!walkState().busy) ghostChat(walkState().deck); });
     acts.appendChild(b);
   }
