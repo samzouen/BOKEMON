@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.21';
+const GAME_VERSION = '2.25';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1063,6 +1063,14 @@ function confirmDialog(message, onYes){
      2. assets/mon/<species>.png        (generic, used everywhere else)
      3. the coloured placeholder tile   (nothing uploaded yet)
    `view` is 'back' | 'front' | 'icon'. `breathe` is 'normal' | 'weak' | null. */
+/* Where a menu should return to. A deck sets ui.walkBack before opening the
+   shop, the party, storage or recovery; everything else falls back to the
+   region screen. Reading it clears it, so it can never strand you later. */
+function backFromMenu(fallback){
+  const d = ui.walkBack; ui.walkBack = null;
+  return d || fallback || 'region';
+}
+
 function monPortrait(species, size, opts){
   opts = opts || {};
   const s = SPECIES[species];
