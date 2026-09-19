@@ -318,7 +318,23 @@ function onSwitchPressed(){
     if(!ui.battle.legacyBonus) battleMsg('Switched! Now choose a move.');
   });
 }
-function monsterChooser(title, options, onPick, dismissable=true){
+/* Revitalise's choice, made BEFORE the writing so ten right words always land.
+   Nobody down: a toast, no words spent, and it is still your turn. One down:
+   straight on to the words. Several: the same chooser as Switch, and Cancel
+   hands the turn back. */
+function chooseRevival(mv, mon, onPick){
+  const pool = revivableFallen(mon);
+  if(!pool.length){
+    ui.battle.phase = 'player';
+    toast(`Nobody has fainted yet — ${mv.name} brings back a fainted teammate.`);
+    return;
+  }
+  if(pool.length === 1) return onPick(pool[0]);
+  monsterChooser('Bring back…', pool.map(m=>({ m, i:state.party.indexOf(m) })),
+    i=> onPick(state.party[i]), true,
+    ()=>{ ui.battle.phase = 'player'; renderBattle(); });
+}
+function monsterChooser(title, options, onPick, dismissable=true, onCancel=null){
   const scrim=document.createElement('div');
   scrim.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:70;display:flex;align-items:flex-end;justify-content:center;';
   scrim.innerHTML=`<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;">
@@ -329,7 +345,8 @@ function monsterChooser(title, options, onPick, dismissable=true){
   </div>`;
   document.body.appendChild(scrim);
   const close=()=>document.body.removeChild(scrim);
-  if(dismissable){ scrim.querySelector('#chCancel').addEventListener('click',close); scrim.addEventListener('click',e=>{if(e.target===scrim)close();}); }
+  const cancel=()=>{ close(); if(onCancel) onCancel(); };
+  if(dismissable){ scrim.querySelector('#chCancel').addEventListener('click',cancel); scrim.addEventListener('click',e=>{if(e.target===scrim)cancel();}); }
   scrim.querySelectorAll('.sw-opt').forEach(b=>b.addEventListener('click',()=>{ close(); onPick(+b.dataset.i); }));
 }
 
@@ -404,6 +421,8 @@ function onMoveChosen(moveIdx){
   if(mv && mv.locked){ ui.battle.phase='player'; toast('Not while the Cataclysm is building.'); return; }
   if(mv && mv.chargeSpend) return resolveChargeSpend(mv, mon);
   if(mv && (mv.charge || mv.chargeMore)) return runChargeQuiz(mv, mon);
+  /* Revitalise: who comes back is chosen before the writing, not after. */
+  if(mv && mv.revitalise) return chooseRevival(mv, mon, m=>{ mv.reviveUid = m.uid; runMoveQuiz(mv, null); });
   if(mv.target==='Single' && livingEnemies().length>1){ promptTarget(mv); return; }
   if(mv.target==='Single'){ runMoveQuiz(mv, livingEnemies()[0]); return; }
   if(mv.target==='Status'){
@@ -818,6 +837,11 @@ function resolveBattleMove(mv, target, results){
   if(mv.conversio){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
     return runConversio(mon, mv.conversio);
+  }
+  /* Revitalise — the teammate chosen before the writing gets back up. */
+  if(mv.revitalise){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
+    return castRevitalise(mon, mv);
   }
   /* Haunting Aria — instant, does not spend the turn. */
   if(mv.aria){
@@ -1317,6 +1341,29 @@ function spendComboAfterAttack(mon){ clearCombo(mon); renderStatusBadges(); }
 /* Conversio. Choose the fallen one at a time; each costs a Mors mark, and the
    third mark takes the bird with it. With nobody to raise, the power turns
    outward instead and simply removes health. */
+/* Revitalise lands. The one chosen before the writing gets up with a tenth of
+   its health, never less than 1. Nothing moves while you write, so the choice
+   should still stand; if it somehow does not, the first still down takes it —
+   and if nobody is, the words were written, so the turn stays yours. */
+function castRevitalise(mon, mv){
+  const pool = revivableFallen(mon);
+  const m = pool.find(x=>x.uid === mv.reviveUid) || pool[0];
+  if(!m){
+    ui.battle.phase = 'player';
+    renderBattle();
+    battleMsg(`Nobody needed ${mv.name} after all — it's still your turn.`);
+    return;
+  }
+  const pct = (mv.revitalise && mv.revitalise.pct) || 0.10;
+  m.currentHp = Math.max(1, Math.ceil(pct * monMaxHp(m)));
+  playSfx('recovery_heal');
+  playEffect(mv.name, { type: SPECIES[mon.species].types[0] });
+  renderBattle();
+  battleMsg(`🌿 ${displayName(m)} is back on its feet with <b>${m.currentHp} HP</b>!`);
+  logBattle(`${displayName(mon)} used ${mv.name} — ${displayName(m)} revived with ${m.currentHp} HP`);
+  return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+}
+
 function runConversio(mon, def){
   const fallen = ()=> state.party.map((m,i)=>({m,i}))
     .filter(o=>o.m.currentHp <= 0 && !isPassenger(o.m) && o.m !== mon);
@@ -1647,12 +1694,22 @@ function releaseInvert(){ document.body.classList.remove('ultra-invert'); }
 /* Thunderhound punishes each health threshold it is driven below, once each. */
 /* Moon Swan's Nocturne. Same shape as Hunter's Instinct, but it sings you
    under instead of rattling you. */
+/* Under a ✦ Curse a threshold passive stays silent. The threshold is still
+   used up — it must not go off late once the curse lifts — but nothing happens. */
+function swallowThresholds(e, list, hit, frac){
+  const crossed = list.filter(th=> frac <= th && !hit.includes(th));
+  if(!crossed.length) return;
+  crossed.forEach(th=> hit.push(th));
+  const p = passiveDefOf(e);
+  setTimeout(()=> battleMsg(`🔇 The curse swallows ${SPECIES[e.species].name}'s ${p ? p.name : 'passive'}.`), 500);
+}
 function checkThresholdSleeps(){
   const b = ui.battle;
   if(!b) return;
   livingEnemies().forEach(e=>{
     if(!e.thresholdSleep || !e.thresholdSleep.length) return;
     const frac = e.hp / Math.max(1, e.maxHp);
+    if(passivesMuted(e)){ swallowThresholds(e, e.thresholdSleep, e.sleepThresholdsHit, frac); return; }
     e.thresholdSleep.forEach(th=>{
       if(frac <= th && !e.sleepThresholdsHit.includes(th)){
         e.sleepThresholdsHit.push(th);
@@ -1673,6 +1730,7 @@ function checkThresholdStuns(){
   livingEnemies().forEach(e=>{
     if(!e.thresholdStun || !e.thresholdStun.length) return;
     const frac = e.hp / Math.max(1, e.maxHp);
+    if(passivesMuted(e)){ swallowThresholds(e, e.thresholdStun, e.thresholdsHit, frac); return; }
     e.thresholdStun.forEach(th=>{
       if(frac <= th && !e.thresholdsHit.includes(th)){
         e.thresholdsHit.push(th);

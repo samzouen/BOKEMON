@@ -175,7 +175,7 @@ const MOVES = {
 
   rat:             [['Basic','Tackle',0.2,'Single',2,1],['Power1','Bite',0.4,'Single',4,5],['Power2','Fury Swipes',0.6,'AOE',8,11],['Ultimate','Super Fang',1.25,'Single',8,25]],
   bird:            [['Basic','Peck',0.2,'Single',2,1],['Power1','Claw',0.4,'Single',4,5],['Power2','Gust',0.6,'AOE',8,11],['Ultimate','Aerial Ace',1.25,'Single',8,25]],
-  moth:            [['Basic','Tackle',0.2,'Single',2,1],['Power1','Sting',0.4,'Single',4,5],['Power2','Poison Powder',0.6,'AOE',8,11],['Ultimate','Revitalise',null,'Support',10,25]],
+  moth:            [['Basic','Tackle',0.2,'Single',2,1],['Power1','Sting',0.4,'Single',4,5],['Power2','Poison Powder',0.6,'AOE',8,11],['Ultimate','Revitalise',null,'Ally',10,25,{revitalise:{pct:0.10}}]],
   earth_snake:     [['Basic','Tackle',0.2,'Single',2,1],['Power1','Bite',0.4,'Single',4,5],['Power2','Tail Whip',0.6,'AOE',8,11],['Ultimate','Constrict',1.25,'Single',8,25]],
 
   sparrow:         [['Basic','Peck',0.2,'Single',2,1],['Power1','Quick Attack',0.4,'Single',4,5],['Power2','Whirlwind',0.6,'AOE',8,18],['Ultimate','Sky Dive',1.25,'Single',8,28]],

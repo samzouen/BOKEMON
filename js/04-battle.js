@@ -303,7 +303,7 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
     }
 
     case 'Ghost': // Curse — field-wide fragility
-      applyFieldStatus({ type:'curse', turnsLeft:T, extra:d.extra });
+      applyFieldStatus({ type:'curse', turnsLeft:T, extra:d.extra, mute:!!d.mute });
       if(d.reduce) setPStatus(uid,{type:'curseWard', turnsLeft:T+1, reduce:d.reduce});
       res.msg = d.text;
       break;
@@ -584,11 +584,11 @@ const VERY_HIGH = {
   Ghost: { name:'Curse', turns:5, tiers:[
     { extra:0.25, reduce:0 },
     { extra:0.25, reduce:0.10 },
-    { extra:0.30, reduce:0.15 },
+    { extra:0.30, reduce:0.15, mute:true },
   ], text:[
     'Every enemy takes 25% more damage.',
     'Enemies take 25% more damage, and you take 10% less.',
-    'Enemies take 30% more damage, and you take 15% less.',
+    'Enemies take 30% more damage, you take 15% less, and enemy passives are muted while it lasts.',
   ]},
   /* Confusion you can SEE. A confused monster swings at its own side — or at
      itself, if it stands alone — which reads instantly and is far funnier than
@@ -676,6 +676,7 @@ function applyPassiveGrant(holder, grant, atk){
      wings. Marked unsweepable so Diamond Dust cannot argue with it. */
   if(grant.evadeAlways){
     holder.evadeAlways = grant.evadeAlways;
+    holder.passiveEvade = grant.evadeAlways;     // so a ✦ Curse can tell it apart
     if(grant.unsweepable) holder.evadeUnsweepable = true;
   }
   /* Terrorize sits on the monster and is read from the other side's damage. */
@@ -695,12 +696,21 @@ function applyPassiveGrant(holder, grant, atk){
   }
 }
 /* Everything a monster starts the battle with, the moment it takes the field. */
+/* The always-on parts of a passive. Arriving under a ✦ Curse, a monster keeps
+   only these — recorded but silent until the curse lifts — and no stance. */
+const PASSIVE_TRAITS = ['evadeAlways','unsweepable','terrorize','thresholdSleep','thresholdStun'];
+function passiveTraitsOnly(p){
+  const o = {};
+  PASSIVE_TRAITS.forEach(k=>{ if(p[k] !== undefined) o[k] = p[k]; });
+  return o;
+}
 function applyEntryPassives(holder, species, level, atk){
+  const quiet = passivesMuted(holder);
   (MOVES[species]||[]).forEach(mv=>{
     const e = mv[6];
     if(!e || !e.passive) return;
     if((level||1) < mv[5]) return;
-    applyPassiveGrant(holder, e.passive, atk);
+    applyPassiveGrant(holder, quiet ? passiveTraitsOnly(e.passive) : e.passive, atk);
   });
   /* A refined Very High stone can ALSO be a passive — Diamond Dust + and ✦ are
      meant to be working the moment their carrier takes the field, not waiting
@@ -758,7 +768,12 @@ function veryHighStatusKey(type){
 function stanceEvasion(holder){
   let best = 0;
   if(isElusive(holder)) best = Math.max(best, ELUSIVE_DODGE);   // it is not trying to trade
-  if(holder && holder.evadeAlways) best = Math.max(best, holder.evadeAlways);
+  /* A passive's own dodge (Shadowed Wings) goes quiet under a ✦ Curse; any
+     evasion something else has layered above it is a buff, and stays. */
+  if(holder && holder.evadeAlways){
+    const quiet = holder.passiveEvade && holder.evadeAlways <= holder.passiveEvade && passivesMuted(holder);
+    if(!quiet) best = Math.max(best, holder.evadeAlways);
+  }
   if(holder && holder.airborne  > 0) best = Math.max(best, STANCE_EVASION.airborne);
   if(holder && holder.invisible > 0) best = Math.max(best, STANCE_EVASION.invisible);
   if(holder && holder.evadeTurns > 0) best = Math.max(best, holder.evadeChance || 1.0);
@@ -1191,7 +1206,7 @@ function terrorizeFactor(defenderSideMon){
   (b.enemies || []).forEach(e=>{
     if(e.hp <= 0) return;
     const p = passiveOf(e);
-    const t = (p && p.terrorize) || (e._terrorize || 0);
+    const t = passivesMuted(e) ? 0 : ((p && p.terrorize) || (e._terrorize || 0));
     if(t) worst = Math.min(worst, 1 - t);
   });
   return worst;
@@ -1289,6 +1304,18 @@ function addMors(mon, n){
 }
 /* A marked Caladrius cannot be brought back — the marks simply take it again. */
 function morsBlocksRevival(mon){ return morsMarks(mon) >= MORS_LIMIT; }
+
+/* ============================================================
+   REVITALISE — Moth's Ultimate
+   One fainted teammate back on its feet at a tenth of its health. Who comes
+   back is chosen BEFORE the writing (chooseRevival, 05-battle-flow.js), so
+   ten right words are never spent on nobody. This list is the one rule for
+   who counts: fighters only (passengers never faint), not the caster, and
+   never a Caladrius the marks have taken.
+   ============================================================ */
+function revivableFallen(caster){
+  return battleParty().filter(m=> m.currentHp <= 0 && m !== caster && !morsBlocksRevival(m));
+}
 
 /* Vita: an immediate pulse, then a field that tends whoever is worst off. */
 function castVita(mon, def){
@@ -1717,11 +1744,32 @@ function blockPill(holder){
 
 /* A passive takes effect the moment its owner is on the field; it is never
    chosen as an action and never appears on the move menu. */
-function passiveOf(e){
+/* ============================================================
+   CURSE ✦ — MUTED PASSIVES
+   Diamond Dust strips what the enemy HAS: statuses, stances, block. A refined
+   Curse silences what the enemy IS: while a ✦ curse is on the field, enemy
+   passives do nothing. The always-on ones — first strike, Shadowed Wings'
+   dodge, Terrorize, Hunter's Instinct, Nocturne — go quiet and come back when
+   the curse lifts. A passive that fires on entry (Iron Shell, Guard, Soar…)
+   does not fire for anything arriving while it holds. Stances already raised
+   are buffs, and buffs are Diamond Dust's business. Enemies only: your own
+   side's passives are never muted.
+   ============================================================ */
+function passivesMuted(holder){
+  const b = ui.battle;
+  if(!b || !holder || !b.enemies || !b.enemies.includes(holder)) return false;
+  const c = b.fieldStatus && b.fieldStatus.curse;
+  return !!(c && c.mute);
+}
+/* The passive a monster HAS, working or not — for pills and announcements. */
+function passiveDefOf(e){
   const list = MOVES[e.species] || [];
   const mv = list.find(m => m[3] === 'Passive' && m[6] && m[6].passive && (e.level||1) >= m[5]);
   return mv ? { name: mv[1], ...mv[6].passive } : null;
 }
+/* The passive that is WORKING. Every behaviour reads this one, so a passive
+   added later is muted without having to be named here. */
+function passiveOf(e){ return passivesMuted(e) ? null : passiveDefOf(e); }
 function enemyHasFirstStrikePassive(){
   return livingEnemies().some(e => { const p = passiveOf(e); return p && p.first; });
 }
@@ -2379,11 +2427,12 @@ function loadWave(i){
     const spec = (b.waves[b.waveIndex]||[])[i];
     if(spec && spec.veryHigh) applyEnemyVeryHigh(e, spec.veryHigh.type, spec.veryHigh.plus||0);
   });
-  // a passive announces itself the moment its owner appears
-  const withPassive = b.enemies.find(e=>passiveOf(e));
+  // a passive announces itself the moment its owner appears — or that it can't
+  const withPassive = b.enemies.find(e=>passiveDefOf(e));
   if(withPassive){
-    const p = passiveOf(withPassive);
-    setTimeout(()=> battleMsg(`⚡ ${SPECIES[withPassive.species].name}'s ${p.name} is active!`), 600);
+    const p = passiveDefOf(withPassive);
+    const who = `${SPECIES[withPassive.species].name}'s ${p.name}`;
+    setTimeout(()=> battleMsg(passivesMuted(withPassive) ? `🔇 ${who} is silenced by the curse!` : `⚡ ${who} is active!`), 600);
   }
   /* A borrowed story monster is the only thing in the party, so it simply
      stays. Otherwise keep whoever was fighting, as long as they're standing. */
@@ -2578,6 +2627,7 @@ function moveShape(mv){
   if(mv.hits && mv.hits > 1) return `×${mv.hits}`;
   if(mv.target === 'AOE') return 'AOE';
   if(mv.target === 'Multi2') return '2 targets';
+  if(mv.revitalise) return 'Revive';
   return '';
 }
 /* ============================================================
@@ -2605,6 +2655,10 @@ function moveShapeSentence(mv, dmg){
    monster reusing a mechanic gets its description for free. */
 function moveEffectText(mv, mon, atk){
   const out = [];
+  if(mv.revitalise) out.push(
+    `<b>Revive.</b> Brings <b>one fainted teammate</b> back into the fight with ` +
+    `<b>${Math.round((mv.revitalise.pct||0.1)*100)}%</b> of its health. You choose who, then write the words. ` +
+    `If nobody has fainted, it costs nothing to try.`);
   if(mv.soul) out.push(
     `<b>Steel Soul.</b> For ${mv.soul.turns} turns this monster takes <b>half damage</b> and adds ` +
     `<b>+${Math.ceil(mv.soul.bonus*atk)}</b> to every hit it lands — including skill-stone moves. ` +
@@ -2712,6 +2766,8 @@ function moveDescription(mv, mon, atk){
 }
 
 function moveMeta(mv, mon){
+  /* Revitalise says up front whether there is anyone to bring back. */
+  if(mv.revitalise && ui.battle && !revivableFallen(mon).length) return `${mv.words}字 · Nobody fainted`;
   const bits = [`${mv.words}字`];
   const dmg = estimateHit(mv, mon);
   if(dmg != null){
@@ -2923,7 +2979,10 @@ function renderStatusBadges(){
     if(e.airborne > 0)   extras.push('<span class="status-pill foe">🕊 Airborne</span>');
     if(e.invisible > 0)  extras.push('<span class="status-pill foe">👤 Unseen</span>');
     if(e.prep > 0)       extras.push(`<span class="status-pill foe">🎯 Prep ×${e.prep}</span>`);
-    if(passiveOf(e))     extras.push(`<span class="status-pill foe">✨ ${passiveOf(e).name}</span>`);
+    const pd = passiveDefOf(e);
+    if(pd) extras.push(passivesMuted(e)
+      ? `<span class="status-pill foe" style="opacity:.75;text-decoration:line-through;">🔇 ${pd.name}</span>`
+      : `<span class="status-pill foe">✨ ${pd.name}</span>`);
     slot.innerHTML = eStatuses(e).map(st=>{
       const extra = st.type==='iceTomb' ? ` ${st.turnsLeft}` : '';
       return `<span class="status-pill foe">${STATUS_LABELS[st.type]||st.type}${extra}</span>`;

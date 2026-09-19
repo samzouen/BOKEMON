@@ -771,37 +771,30 @@ function crewChallenge(id){
 
 /* THE SAME FIVE, a year on and a long way north.
    They are the fans who crowded the Electric Dojo's stage in Region 3, and
-   their teams pick up exactly where those left off:
+   they bring back EXACTLY those teams — SAILORS in 10-story-r3.js: the same
+   monsters, the same levels, the same order, the same AI. The only addition is
+   a wave in FRONT: three of the birds that raid the fishermen's rail on the
+   weather deck, at that sailor's opening level and in the opener's gentle
+   Power1 style. SAILOR_BIRDS picks three of the four rail birds; the pelican
+   is the one left out. The manta brings its own 35% dodge (Shadowed Wings) —
+   a ✦ Curse mutes it. The 80% a manta shows at the rail is the Elusive flag
+   startBirdRaid adds, and that does not come with it into a sailor's team.
 
-     R3 opener   starfish · duck · seahorse          (the same three, level 51-60)
-     R3 closers  1 turtle+plesiosaur  2 plesiosaur+otter
-                 3 otter+loong        4 loong+ninja
-                 5 all five in sequence
-
-   Here each keeps his own pair and has added something caught north of the
-   shelf. The Region 1 trio is gone — base-5 monsters at level 68 was no fight
-   at all — but the turtle/plesiosaur/otter/loong/ninja ladder is preserved, so
-   a child who remembers the concert meets the same five men and the same
-   monsters, grown up. Sailor 5 is still the hardest of them. */
+   A fight holds six waves at most. Sailor 5 already fields six, so his team
+   comes back exactly as it was at the concert, with no birds. */
+const SAILOR_BIRDS = ['mantaray','swan','cormorant'];
+const SAILOR_WAVE_CAP = 6;
+function sailorTeam(n){
+  const waves = SAILORS[n].waves.map(w=>w.map(e=>({...e})));
+  if(waves.length >= SAILOR_WAVE_CAP) return waves;
+  const lv = waves[0][0].level;
+  return [ SAILOR_BIRDS.map(sp=>({ species:sp, level:lv, ai:'power1' })), ...waves ];
+}
 function crewTeam(id){
+  const sailor = /^sailor([1-5])$/.exec(id);
+  if(sailor) return sailorTeam(+sailor[1]);
   const lv = 67;
   const CREW_TEAMS = {
-    /* Rikk — "we'd had a few" */
-    sailor1: [ [{species:'cormorant',level:lv},{species:'sea_turtle',level:lv}],
-               [{species:'sea_turtle',level:lv+2},{species:'plesiosaur',level:lv+2}] ],
-    /* Dov — the one Djenta signed for */
-    sailor2: [ [{species:'swan',level:lv},{species:'pelican',level:lv}],
-               [{species:'plesiosaur',level:lv+2},{species:'otter',level:lv+2}] ],
-    /* Emre — counted them, gave up, counted again */
-    sailor3: [ [{species:'mantaray',level:lv},{species:'cormorant',level:lv}],
-               [{species:'otter',level:lv+2},{species:'loong',level:lv+2}] ],
-    /* Nils — lean and grim about the rationing */
-    sailor4: [ [{species:'pelican',level:lv},{species:'mantaray',level:lv}],
-               [{species:'loong',level:lv+2},{species:'ninja',level:lv+2}] ],
-    /* Cato — still the toughest of the five */
-    sailor5: [ [{species:'sea_turtle',level:lv+1},{species:'swan',level:lv+1}],
-               [{species:'plesiosaur',level:lv+2},{species:'otter',level:lv+2}],
-               [{species:'loong',level:lv+3},{species:'ninja',level:lv+3}] ],
     /* Gus — feeds a ship; everything here finds food */
     cook:    [ [{species:'pelican',level:lv},{species:'cormorant',level:lv}],
                [{species:'otter',level:lv+2}] ],
