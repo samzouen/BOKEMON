@@ -52,9 +52,10 @@ function renderZone(){
   // into a normal explorable zone.
   if(z.id === 'rocky_caverns' && !cavernsComplete()) return renderCaverns();
   if(z.id === 'geothermal_plant') return renderPlant();
-  if(z.id === 'weather_deck')       return renderWeatherDeck();
-  if(z.id === 'cabin_deck')  return renderCabinDeck();
-  if(z.id === 'laboratory_deck')  return renderLaboratoryDeck();
+  /* picked off the Explore screen: start at the companionway */
+  if(z.id === 'weather_deck')       { ui.walkFresh = true; return renderWeatherDeck(); }
+  if(z.id === 'cabin_deck')  { ui.walkFresh = true; return renderCabinDeck(); }
+  if(z.id === 'laboratory_deck')  { ui.walkFresh = true; return renderLaboratoryDeck(); }
   if(z.id === 'plant_generator') return renderGenerator();
   if(z.id === 'vane_shear') return vaneShearClosed();
   return renderZonePlain();

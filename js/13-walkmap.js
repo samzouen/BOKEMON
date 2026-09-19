@@ -8,14 +8,18 @@
    all local; only the usual save touches Firebase.
    ============================================================ */
 
-const WALK_T = 32;                       // one grid square, on screen
+/* How close the camera sits. The stage is square, so this is how many tiles
+   you see across it — nine makes the ship feel like somewhere to explore
+   rather than a plan you are reading. */
+const WALK_VIEW = 9;
+let WALK_T = 44;                         // recomputed to fit the stage
 
 /* Each deck: its grid, who stands where, and where its painting sits — all in
    TILE units, so the numbers mean the same at any zoom. */
 const DECKS = {
   weather_deck: {
     art:'weather_deck', music:'zone_weather_deck',
-    bx:-0.055, by:0.010, bs:0.03250,
+    bx:0.6042, by:3.4167, bs:0.027253,
     rows:[
 "##########################","##########################","##########################","#############.############",
 "############...###########","###########.....##########","##########.......#########","#########..#####.#########",
@@ -30,8 +34,9 @@ const DECKS = {
     ],
     spawn:[16,9],
     things:[
-      { x:6,  y:17, sprite:'diver1', icon:'🤿', verb:'Dive',  act:()=> diveFromDeck() },
-      { x:6,  y:19, sprite:'diver2', icon:'🤿', verb:'Dive',  act:()=> diveFromDeck() },
+      /* one ladder over the side: Pell runs it, Ines just watches */
+      { x:6,  y:17, sprite:'diver1', icon:'🤿', verb:'Dive', act:()=> diveFromDeck() },
+      { x:6,  y:19, sprite:'diver2', icon:'🤿', verb:'Talk', act:()=> diverChat() },
       { x:18, y:16, sprite:'fisherman1', icon:'🎣', verb:'Help', act:()=> railHelp(1) },
       { x:18, y:20, sprite:'fisherman2', icon:'🎣', verb:'Help', act:()=> railHelp(2) },
       { x:18, y:23, sprite:'fisherman3', icon:'🎣', verb:'Help', act:()=> railHelp(3) },
@@ -42,7 +47,7 @@ const DECKS = {
   },
   cabin_deck: {
     art:'cabin_deck', music:'zone_cabin_deck',
-    bx:-5.300, by:0.250, bs:0.04325,
+    bx:-1.6131, by:4.3434, bs:0.025965,
     rows:[
 "###################","###################","###################","###################",
 "###################","###################","#######.###.#######","#######.###.#######",
@@ -57,24 +62,28 @@ const DECKS = {
     ],
     spawn:[13,8],
     things:[
-      { x:11, y:6,  sprite:'ship_captain', icon:'⚓', verb:'Talk', act:()=> chartRoom() },
-      { x:7,  y:6,  sprite:'shipkeeper',   icon:'⚓', verb:'Shop', act:()=> shipkeeperShop() },
+      { x:11, y:6,  sprite:'ship_captain', icon:'⚓', verb:'Talk', act:()=> chartRoom(),
+        extra:()=> suspectOf('ship_captain') },
+      { x:7,  y:6,  sprite:'shipkeeper',   icon:'⚓', verb:'Shop', act:()=> shipkeeperShop(),
+        extra:()=> suspectOf('shipkeeper') },
       { x:13, y:8,  walk:true, verb:'Up',   where:'Weather Deck', act:()=> goDeck('weather_deck') },
       { x:13, y:8,  walk:true, verb:'Down', where:'Laboratory',   act:()=> goDeck('laboratory_deck') },
-      { x:5,  y:17, sprite:'sailor1', icon:'⚓', verb:'Talk', act:()=> sailorChat(1) },
-      { x:13, y:17, sprite:'sailor2', icon:'⚓', verb:'Talk', act:()=> sailorChat(2) },
-      { x:4,  y:22, sprite:'sailor3', icon:'⚓', verb:'Talk', act:()=> sailorChat(3) },
-      { x:13, y:21, sprite:'rival',   icon:'🧑', verb:'Talk', act:()=> rivalCabin() },
-      { x:5,  y:25, sprite:'sailor4', icon:'⚓', verb:'Talk', act:()=> sailorChat(4) },
+      { x:5,  y:17, sprite:'sailor1', icon:'⚓', verb:'Talk', act:()=> sailorChat(1), extra:()=> suspectOf('sailor1') },
+      { x:13, y:17, sprite:'sailor2', icon:'⚓', verb:'Talk', act:()=> sailorChat(2), extra:()=> suspectOf('sailor2') },
+      { x:4,  y:22, sprite:'sailor3', icon:'⚓', verb:'Talk', act:()=> sailorChat(3), extra:()=> suspectOf('sailor3') },
+      { x:13, y:21, sprite:'rival',   icon:'🧑', verb:'Talk', act:()=> rivalCabin(),
+        extra:()=> suspectOf('rival') },
+      { x:5,  y:25, sprite:'sailor4', icon:'⚓', verb:'Talk', act:()=> sailorChat(4), extra:()=> suspectOf('sailor4') },
       { x:14, y:25, walk:true, verb:'Recover', act:()=> go('recover') },
       { x:13, y:27, walk:true, verb:'Storage', act:()=> go('storage') },
-      { x:8,  y:32, sprite:'cook',    icon:'🧑‍🍳', verb:'Talk', act:()=> cookChat() },
-      { x:5,  y:29, sprite:'sailor5', icon:'⚓', verb:'Talk', act:()=> sailorChat(5) },
+      { x:8,  y:32, sprite:'cook',    icon:'🧑‍🍳', verb:'Talk', act:()=> cookChat(),
+        extra:()=> suspectOf('cook') },
+      { x:5,  y:29, sprite:'sailor5', icon:'⚓', verb:'Talk', act:()=> sailorChat(5), extra:()=> suspectOf('sailor5') },
     ],
   },
   laboratory_deck: {
     art:'laboratory_deck', music:'zone_laboratory_deck',
-    bx:-0.080, by:-0.910, bs:0.03150,
+    bx:2.5341, by:3.3343, bs:0.025502,
     rows:[
 "##########################","##########################","##########################","##########################",
 "##########################","############...###########","###########......#########","###########.......########",
@@ -109,6 +118,50 @@ function walkState(){
   ui.walk = ui.walk || { deck:null, at:{}, face:'d', last:0, busy:false };
   return ui.walk;
 }
+/* ------------------------------------------------------------
+   THE RAIL
+   A fisherman shouts for about half a minute, then gives up and gets on with
+   it for a bit before the next lot arrive. You are not being tested on
+   reactions here — you are being asked to come over.
+   ------------------------------------------------------------ */
+const CALL_FOR = 30000, REST_MIN = 10000, REST_VAR = 10000;
+function railState(){
+  ui.rail = ui.rail || { who:null, until:0, next:0 };
+  return ui.rail;
+}
+function railTick(){
+  const r = railState(), now = Date.now();
+  const g = r4();
+  /* nobody has time for birds while the whales are across the lane, and the
+     Whalelord will not hear of it at all */
+  if(!g.diversBeaten || whaleHolds() || (g.wallFound && !g.solved)){ r.who = null; return; }
+  if(r.who && now > r.until){ r.who = null; r.next = now + REST_MIN + Math.random()*REST_VAR; }
+  if(!r.who && now > r.next){ r.who = 1 + Math.floor(Math.random()*5); r.until = now + CALL_FOR; }
+  paintRail();
+}
+function paintRail(){
+  const r = railState();
+  document.querySelectorAll('.rail-call').forEach(e=>e.remove());
+  if(!r.who || walkState().deck !== 'weather_deck') return;
+  const d = DECKS.weather_deck;
+  const t = d.things.find(x=>x.sprite === 'fisherman'+r.who);
+  if(!t || !t.el) return;
+  const s = document.createElement('div');
+  s.className = 'rail-call';
+  s.textContent = '🆘';
+  t.el.appendChild(s);
+}
+let _railTimer = null;
+function startRail(){ clearInterval(_railTimer); _railTimer = setInterval(railTick, 1000); railTick(); }
+function stopRail(){ clearInterval(_railTimer); _railTimer = null; }
+
+/* Whoever is still pinging can be investigated. It is a separate button, so
+   talking to somebody never turns into accusing them by accident. */
+function suspectOf(id){
+  if(typeof pings !== 'function' || !pings(id)) return null;
+  return { verb:'🔍 Investigate',
+           act:()=> (id === 'rival') ? rivalCabin() : crewChallenge(id) };
+}
 function cuainAboard(){ const g = r4(); return !!g.ghostAccepted; }
 const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true : d.rows[y][x]==='#';
 
@@ -117,12 +170,15 @@ function renderWalkDeck(id){
   const d = DECKS[id]; if(!d) return go('explore');
   const w = walkState();
   w.deck = id;
-  /* You always arrive at the companionway — whether you came down a ladder or
-     picked the deck off the Explore screen. Each deck's spawn IS its staircase,
-     so a stair always ports to a stair and the two ways of playing land you in
-     the same place. */
-  w.at[id] = { x:d.spawn[0], y:d.spawn[1] };
-  w.face = 'd';
+  /* Arriving from Explore, or down a ladder, puts you on the companionway.
+     Coming BACK from a conversation, a shop or a fight puts you exactly where
+     you were standing — which is the only thing that feels right. */
+  if(ui.walkFresh || !w.at[id]){
+    w.at[id] = { x:d.spawn[0], y:d.spawn[1] };
+    w.face = 'd';
+    if(cuainAboard()){ w.ghostAt = w.ghostAt || {}; w.ghostAt[id] = { x:d.spawn[0], y:d.spawn[1] }; }
+  }
+  ui.walkFresh = false;
   const W = d.rows[0].length, H = d.rows.length;
 
   setScreenBg('sea');
@@ -131,6 +187,9 @@ function renderWalkDeck(id){
                                  laboratory_deck:'Laboratory' }[id];
 
   const nat = { weather_deck:[797,1209], cabin_deck:[832,1262], laboratory_deck:[832,1262] }[id];
+  /* fit nine tiles across whatever the stage turns out to be */
+  const avail = Math.min(window.innerWidth - 24, Math.max(220, window.innerHeight - 330));
+  WALK_T = Math.max(30, Math.round(avail / WALK_VIEW));
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Explore</button>
     <div class="walk-stage" id="walkStage">
@@ -146,9 +205,13 @@ function renderWalkDeck(id){
         <button class="wkey" data-d="l">◀</button><i></i><button class="wkey" data-d="r">▶</button>
         <i></i><button class="wkey" data-d="d">▼</button><i></i>
       </div>
-      <div class="walk-acts" id="walkActs"></div>
+      <div class="walk-side">
+        <button class="wact party" id="walkParty">Party</button>
+        <div class="walk-acts" id="walkActs"></div>
+      </div>
     </div>`;
-  $('#backBtn').addEventListener('click', ()=> go('explore'));
+  $('#backBtn').addEventListener('click', ()=>{ stopRail(); go('explore'); });
+  $('#walkParty').addEventListener('click', ()=> go('party'));
 
   const world = $('#walkWorld');
   /* people and doorways */
@@ -176,11 +239,12 @@ function renderWalkDeck(id){
     if(!w.ghostAt[id]) w.ghostAt[id] = { x:d.spawn[0], y:d.spawn[1] };
   }
   const me = document.createElement('div'); me.className='walk-ent walk-you'; me.id='walkYou';
-  me.innerHTML = `<img src="assets/npc/player.png" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'🧍'}))">`;
+  me.innerHTML = avatarImg(state.avatar || 'm1', WALK_T, { bare:true });
   world.appendChild(me);
 
   wireWalkKeys();
   refreshWalk();
+  if(id === 'weather_deck') startRail(); else stopRail();
 }
 
 function refreshWalk(){
@@ -218,7 +282,7 @@ function refreshWalk(){
   if(cuainAboard()){
     const b = document.createElement('button');
     b.className = 'wact live ghost';
-    b.innerHTML = '👻<small>Cuain</small>';
+    b.innerHTML = monPortrait('whalelord', 30, { view:'front', bare:true }) + '<small>Cuain</small>';
     b.addEventListener('click', ()=>{ if(!walkState().busy) ghostChat(walkState().deck); });
     acts.appendChild(b);
   }
@@ -230,6 +294,16 @@ function refreshWalk(){
     b.innerHTML = escapeHtml(t.verb) + (t.where ? `<small>${escapeHtml(t.where)}</small>` : '');
     b.addEventListener('click', ()=>{ if(!walkState().busy) t.act(); });
     acts.appendChild(b);
+    /* Some people are worth a second look. Talking stays what it was; the
+       investigation is a separate, deliberate choice. */
+    const ex = t.extra && t.extra();
+    if(ex){
+      const e=document.createElement('button');
+      e.className='wact live suspect';
+      e.innerHTML = escapeHtml(ex.verb);
+      e.addEventListener('click', ()=>{ if(!walkState().busy) ex.act(); });
+      acts.appendChild(e);
+    }
   });
 }
 
@@ -308,15 +382,68 @@ function tileWipe(then){
 }
 
 /* ---------- what the things do ---------- */
+/* Somebody says something before you go over the side. It costs one tap and it
+   is the difference between a menu and a place. Repeat dives skip it, because
+   Explore again goes straight back in. */
+const DIVE_LINES = [
+  `<b>"Tank's charged. Mind the cold."</b>`,
+  `<b>"Straight down and straight back. No wandering."</b>`,
+  `<b>"If something looks at you funny, come up."</b>`,
+];
+/* He has waited a week to be this close. He is not interested in fish. */
+function whaleImpatient(what){
+  const g = r4();
+  const lines = what === 'dive'
+    ? `He puts himself between you and the ladder.<br><br>` +
+      `<b>"No. Not now. Please."</b><br><br>` +
+      `<b>"My core is on this ship. I can feel it from here. My power. Everything ` +
+      `they cut out of me."</b><br><br>` +
+      `<b>"Go back inside and find who has it. You can swim afterwards. I have ` +
+      `waited so long."</b>`
+    : `He drifts across the rail before you can reach it.<br><br>` +
+      `<b>"Birds? You want to chase birds?"</b><br><br>` +
+      `<b>"My core is below our feet. My essence. The piece of me they took."</b><br><br>` +
+      `<b>"It will not be there forever. Please. Go and look."</b>`;
+  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
+    lines, ()=> go('weather_deck'), { bg:'region4', subtitle:'Weather Deck' });
+}
+/* Once he is aboard and until the truth is out, nothing else happens up here. */
+function whaleHolds(){ const g = r4(); return !!g.ghostAccepted && !g.solved; }
+
 function diveFromDeck(){
   const g = r4();
   if(!g.diversBeaten) return diversBlock();
-  startDive();
+  if(whaleHolds()) return whaleImpatient('dive');
+  if(g.wallFound && !g.solved) return confirmWhaleDive();
+  storyModal(npcPortrait('diver1','🤿',130,'transparent'), crewName('diver1'),
+    DIVE_LINES[Math.floor(Math.random()*DIVE_LINES.length)],
+    ()=> startDive(), { bg:'battle_diving', subtitle:'The dive platform' });
 }
+function diverChat(){
+  storyModal(npcPortrait('diver2','🤿',130,'transparent'), crewName('diver2'),
+    `She is checking a gauge and does not stop.<br><br>` +
+    `<b>"Pell handles the ladder. I handle whether you come back up."</b><br><br>` +
+    `<i>She almost smiles.</i>`,
+    ()=> go('weather_deck'), { bg:'battle_weather_deck', subtitle:'Weather Deck' });
+}
+
+const RAIL_LINES = [
+  `<b>"They're at it again!"</b> He is hauling with one arm and swatting with the other.<br><br>` +
+  `<b>"Get them off my catch!"</b>`,
+  `<b>"Every single haul!"</b> The net is boiling with something that is not fish.<br><br>` +
+  `<b>"Help me, would you?"</b>`,
+  `<b>"There — see it? Came right out of the sky."</b><br><br>` +
+  `<b>"I'm not losing another net to that thing."</b>`,
+];
 function railHelp(n){
-  /* the raids proper are built in 12-story-r4; this is the doorway to them */
-  if(typeof startBirdRaid === 'function') return startBirdRaid();
-  fisherChat();
+  if(whaleHolds()) return whaleImpatient('rail');
+  const r = railState();
+  /* answering the call clears it; the next one comes along in its own time */
+  if(r.who === n){ r.who = null; r.next = Date.now() + REST_MIN + Math.random()*REST_VAR; }
+  storyModal(npcPortrait('fisherman'+n,'🎣',130,'transparent'), crewName('fisherman'+n),
+    RAIL_LINES[Math.floor(Math.random()*RAIL_LINES.length)],
+    ()=> (typeof startBirdRaid === 'function') ? startBirdRaid() : go('weather_deck'),
+    { bg:'battle_weather_deck', subtitle:'Starboard rail' });
 }
 function labScientist(n){
   const stage = (typeof labStage === 'function') ? labStage() : 'blocked';

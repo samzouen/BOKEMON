@@ -39,6 +39,13 @@ const CREW = {
   scientist_supervisor:'Supervisor Barnaby',
 };
 function crewName(id){ return CREW[id] || 'Crew'; }
+/* Nobody aboard knows his name. He does not offer it, and he will not until
+   Region 5 gives him back his core — so he is simply the Whalelord for now. */
+function whaleName(){
+  const m = (state.party || []).concat(state.storage || [])
+    .find(x => x.species === 'whalelord');
+  return (m && m.crowned) ? 'Cuain' : 'Whalelord';
+}
 /* Just the given name, for when the role is already obvious from context. */
 function crewFirst(id){ const n = crewName(id); return n.split(' ').slice(1).join(' ') || n; }
 
@@ -520,9 +527,9 @@ async function ghostIntro(){
   storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'Something older',
     `It is dead. You know this the way you know which way is up.<br><br>` +
     `<b>"Child. You carry a dragon with a hole in it. So do I."</b><br><br>` +
-    `<b>"There was a man with a <span style="color:var(--cinnabar)">raven</span>. He held the power of cores that were never his — ` +
-    `many of them, all at once — and he opened me from jaw to fin and left me to sink."</b><br><br>` +
-    `<b>"I did not sink. I carried my core down where he could not follow, and I lived."</b>`,
+    `<b>"A man with a <span style="color:var(--cinnabar)">raven</span> did this. He was carrying the ` +
+    `power of a dozen cores that were not his, and he cut me open and left me to sink."</b><br><br>` +
+    `<b>"I did not sink. I took my core down deep where he could not follow, and I lived."</b>`,
     ()=>ghostIntro2(), { bg:'battle_diving', subtitle:'The deep' });
 }
 function ghostIntro2(){
@@ -530,7 +537,7 @@ function ghostIntro2(){
     `A long pause. The light through it shifts.<br><br>` +
     `<b>"Then other people came. Quieter ones. They knew where to look, which means somebody told them."</b><br><br>` +
     `Something enormous and old moves behind the words.<br><br>` +
-    `<b>"They took it while I still needed it. That is what killed me."</b><br><br>` +
+    `<b>"They cut out my core while I was still using it. That is what killed me."</b><br><br>` +
     `<b>"My people have no one to follow now. They will not move until this is finished."</b>`,
     ()=>ghostAsk(), { bg:'battle_diving', subtitle:'The deep' });
 }
@@ -565,33 +572,45 @@ function ghostChat(where){
   let body;
 
   if(g.solved){
-    body = `<b>"It is done, and it is not enough."</b><br><br>` +
-           `<b>"My people can rest. I cannot, until the rest of me comes home."</b>`;
+    body = `<b>"It is done. It is not enough."</b><br><br>` +
+           `<b>"My people can rest now. I cannot. Not until my core comes home."</b>`;
   } else if(g.stoneWon){
     /* the stone is his now, and it is not what he hoped */
     body = `He has been quiet since the boy handed the stone over.<br><br>` +
            `<b>"I was wrong. I am sorry."</b><br><br>` +
-           `<b>"That stone is brimming with ghost energy — but it is not mine. ` +
-           `It was so loud that I thought it was me."</b><br><br>` +
-           `<b>"Now that I am holding it, I can tell. My core is not on this ship. ` +
-           `Not anywhere."</b><br><br>` +
-           `<b>"Go down to the laboratory. Ask the scientists. If it is not there, ` +
-           `then somebody has taken it a long way away."</b>`;
+           `<b>"That stone is brimming with ghost energy, but it is not mine. ` +
+           `It was so loud I thought it was me."</b><br><br>` +
+           `<b>"Now I am holding it I can tell. My core is not on this ship. Not ` +
+           `anywhere on it."</b><br><br>` +
+           `<b>"Go down to the laboratory. Ask them. If my essence is not there ` +
+           `either, then somebody has carried it a very long way."</b>`;
   } else if(onLab){
-    body = `He drifts between the benches, not very interested.<br><br>` +
-           `<b>"It is not down here."</b><br><br>` +
-           `<b>"Whatever I can feel, it was much stronger upstairs. Go back up."</b>`;
+    body = `He drifts between the benches, barely looking.<br><br>` +
+           `<b>"My core is not down here."</b><br><br>` +
+           `<b>"I could feel it much more strongly upstairs. Take me back up."</b>`;
   } else if(onWeather){
-    body = `<b>"Nothing up here. Just rope and wind and tired men."</b><br><br>` +
-           `<b>"But below — below there is something that feels like mine. Go down."</b>`;
+    body = `<b>"Nothing up here. Rope and wind and tired men."</b><br><br>` +
+           `<b>"But below. Below I can feel my core. Take me down there."</b>`;
+  } else if(!crewCleared()){
+    /* he will not point at anybody until every other person has been ruled out */
+    const left = CABIN_FOES.filter(x=>!huntBeaten(x)).length;
+    body = `He drifts down the passage, stopping outside one door and then another.<br><br>` +
+           `<b>"My core is down here. Somebody on this deck has it."</b><br><br>` +
+           `<b>"I cannot tell which one through a door. Test them. Every single one."</b><br><br>` +
+           `<i>${left} still to see. Choose <b>Investigate</b> when you are beside somebody.</i>`;
   } else {
-    body = `He will not leave the passage outside one cabin.<br><br>` +
-           `<b>"In there. Something in that room feels like me."</b><br><br>` +
-           `<b>"It might be my core. I cannot be sure through a door."</b><br><br>` +
-           `<b>"Beat him. Make him show you what he is carrying."</b>`;
+    body = `He has stopped moving. He is facing one cabin and nothing else.<br><br>` +
+           `<b>"Him. It was never any of the others."</b><br><br>` +
+           `<b>"That boy is carrying my power. I can feel it through the door."</b><br><br>` +
+           `<b>"Beat him. Make him give me back my core."</b>`;
   }
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'Cuain',
-    body, ()=>go(deck), { bg:'battle_cabin_deck', subtitle:'The Vane Shear' });
+  /* He is spoken to in the place he is standing, not in a generic cabin. */
+  const BG = { weather_deck:'region4', cabin_deck:'battle_cabin_deck',
+               laboratory_deck:'battle_laboratory_deck' };
+  const SUB = { weather_deck:'Weather Deck', cabin_deck:'Cabin Deck',
+                laboratory_deck:'Laboratory' };
+  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
+    body, ()=>go(deck), { bg: BG[deck] || 'sea', subtitle: SUB[deck] || 'The Vane Shear' });
 }
 
 /* ---------- QUARTERS DECK ---------- */
@@ -1244,7 +1263,8 @@ function renderChallengeR4(){
     <button class="back-link" id="backBtn">← Region</button>
     <div class="screen-title">Challenge</div>
     ${!open ? `<div class="phase-flag">Nobody aboard wants a fight yet.</div>` : `
-      <div class="challenge-card" id="cCaptain">
+      <div class="phase-flag">The crew are aboard, not on a list. Go and find them.</div>
+      <div class="challenge-card" id="cCaptainHidden" style="display:none;">
         ${npcPortrait('ship_captain','⚓',54,'transparent')}
         <div style="flex:1;">
           <div class="cc-title">${crewName('ship_captain')} ${g.captainBeaten?'<span class="clear-tag">Beaten</span>':''}</div>
@@ -1253,7 +1273,7 @@ function renderChallengeR4(){
             : 'Six waves. Forty years of not losing a ship.'}</div>
         </div>
       </div>
-      <div class="challenge-card" id="cKeeper">
+      <div class="challenge-card" id="cKeeperHidden" style="display:none;">
         ${npcPortrait('shipkeeper','⚓',54,'transparent')}
         <div style="flex:1;">
           <div class="cc-title">${crewName('shipkeeper')} ${g.keeperBeaten?'<span class="clear-tag">Beaten</span>':''}</div>
@@ -1274,16 +1294,8 @@ function renderChallengeR4(){
   `;
   $('#backBtn').addEventListener('click', ()=>go('region'));
   $('#returnBtn').addEventListener('click', ()=>go('region'));
-  const cc = $('#cCaptain');
-  if(cc) cc.addEventListener('click', ()=>{
-    if(g.captainBeaten && !g.wallFound) return toast('He is busy with the charts.');
-    startOfficer('captain', g.captainBeaten);
-  });
-  const ck = $('#cKeeper');
-  if(ck) ck.addEventListener('click', ()=>{
-    if(g.keeperBeaten) return toast('He has made his point.');
-    startOfficer('keeper', false);
-  });
+  /* The captain and the shipkeeper are fought where they stand, on the deck —
+     a murder mystery should not have a menu of suspects. */
   const c9 = $('#cSci9');
   if(c9) c9.addEventListener('click', ()=> startSupervisorDaily());
   wireHuntRows();
@@ -1792,7 +1804,7 @@ function theTheft(){
   storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'Cuain',
     `He goes rigid before anyone has finished falling over.<br><br>` +
     `<b>"WAIT."</b><br><br>` +
-    `<b>"My core. I can feel it! It is close — it is ABOVE US!"</b><br><br>` +
+    `<b>"My core! I can feel my core! It is close — it is ABOVE US!"</b><br><br>` +
     `<b>"Hurry! Take me up there! NOW!"</b>`,
     ()=> jaxDeparture(), { bg:'battle_laboratory_deck', subtitle:'Laboratory' });
 }
@@ -1881,8 +1893,8 @@ async function cuainJoins(){
     `Out on the water, all at once and without a sound, the whales turn and go.<br><br>` +
     `The cold grey shape does not go with them.<br><br>` +
     `<b>"They can rest. They know who did it now, and that is most of what they wanted."</b><br><br>` +
-    `<b>"The rest of me is riding east in the belly of a dragon, a thousand feet up, ` +
-    `where I could not hear it if I listened for a hundred years."</b><br><br>` +
+    `<b>"My core is riding east in the belly of a dragon, a thousand feet up, where ` +
+    `I could not hear it if I listened for a hundred years."</b><br><br>` +
     `Something enormous settles at your shoulder and stays there.<br><br>` +
     `<b>"You go east. So do I."</b>`,
     ()=>giveCuain(), { bg:'sea', subtitle:'The North Sea' });
