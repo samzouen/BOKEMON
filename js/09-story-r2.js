@@ -80,7 +80,7 @@ function renderShop(){
   if(!ui.shopGreeting) ui.shopGreeting = shopGreeting();
   const m = state.medals || {bronze:0,silver:0,gold:0};
   screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Region</button>
+    <button class="back-link" id="backBtn">← ${ui.walkBack ? 'Back' : 'Region'}</button>
 
     <div class="shop-keeper">
       ${npcPortrait(state.progress.currentRegion===4 ? 'shipkeeper' : 'shopkeeper'+(state.progress.currentRegion||1),'🧑‍🌾',110,'transparent')}
@@ -96,7 +96,7 @@ function renderShop(){
     <button class="btn btn-ghost" id="shopStorage" style="margin-top:14px;">📦 Open Storage</button>
     ${ui.shopNote ? `<div class="shop-note">💎 ${escapeHtml(ui.shopNote)}</div>` : ''}
   `;
-  $('#backBtn').addEventListener('click', ()=>{ ui.shopGreeting=null; ui.shopNote=null; go('region'); });
+  $('#backBtn').addEventListener('click', ()=>{ ui.shopGreeting=null; ui.shopNote=null; go(backFromMenu()); });
   if(ui.shopNote) setTimeout(()=>{ ui.shopNote=null; }, 6000);
   $('#shopStorage').addEventListener('click', ()=>{ ui.storageFrom='shop'; go('storage'); });
 
