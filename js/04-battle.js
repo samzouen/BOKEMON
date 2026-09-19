@@ -972,8 +972,30 @@ const COUNTER_TIERS = [
   { tier:1, combo:0.25, enrage:0.20 },
   { tier:2, combo:0.25, enrage:0.20 },
 ];
+/* ------------------------------------------------------------
+   WHOSE STACKS ARE THEY?
+   A braced guard and the swing that follows it belong to the SIDE, not to the
+   animal holding them — swap out and your counter and combo come with you.
+   Enrage does not: that is a monster working itself up, and it stays with the
+   monster that earned it.
+
+   Enemies keep their own, because a wave stands on the field all at once;
+   there is no bench to carry anything to.
+   ------------------------------------------------------------ */
+function isOurs(holder){
+  if(!holder || !holder.uid) return false;
+  return (state.party || []).some(m => m.uid === holder.uid)
+      || (state.storage || []).some(m => m.uid === holder.uid);
+}
+function partyCounters(){
+  const b = ui.battle;
+  if(!b) return [];
+  if(!Array.isArray(b.pCounter)) b.pCounter = [];
+  return b.pCounter;
+}
 function counterList(holder){
   if(!holder) return [];
+  if(isOurs(holder)) return partyCounters();      // shared across the bench
   if(!Array.isArray(holder.counterStack)) holder.counterStack = [];
   return holder.counterStack;
 }
@@ -998,7 +1020,9 @@ function counterCountOf(holder){ return counterList(holder).length; }
 function spendCounterStack(mon){
   const st = takeBestCounter(mon);
   if(!st) return 1;
-  mon.comboStacks = (mon.comboStacks||0) + 1;
+  /* the combo travels with the side; the enrage stays with the animal */
+  if(isOurs(mon)) ui.battle.pCombo = (ui.battle.pCombo||0) + 1;
+  else            mon.comboStacks = (mon.comboStacks||0) + 1;
   if(st.enrage) mon.enrageStacks = (mon.enrageStacks||0) + 1;
   renderStatusBadges();
   paintEnrage(mon);
@@ -1019,11 +1043,16 @@ function spendEnemyCounter(e){
 /* Combo: additive, spent by the next attack. */
 function comboMultiplier(mon){
   const c = getPStatus(0,'counter');
-  const n = (mon && mon.comboStacks) || 0;
+  const n = (mon && isOurs(mon)) ? ((ui.battle && ui.battle.pCombo) || 0)
+                                 : ((mon && mon.comboStacks) || 0);
   if(!n) return 1;
   return 1 + n * ((c && c.combo) || 0.25);
 }
-function clearCombo(mon){ if(mon) mon.comboStacks = 0; }
+function clearCombo(mon){
+  if(!mon) return;
+  if(isOurs(mon)){ if(ui.battle) ui.battle.pCombo = 0; }
+  else mon.comboStacks = 0;
+}
 /* Enrage: permanent for the battle, a share of BASE attack, additive. */
 function enrageBonus(mon){
   const c = getPStatus(0,'counter');
@@ -2266,6 +2295,8 @@ function beginBattle(config){
      follow it between switches. That means they also followed it between
      BATTLES — you could walk into a wild fight already holding four guards.
      Every fight starts clean. */
+  /* the side's own stacks, not any one monster's */
+  if(ui.battle){ ui.battle.pCounter = []; ui.battle.pCombo = 0; }
   state.party.concat(state.storage || []).forEach(m=>{
     m.counterStack = []; m.comboStacks = 0; m.enrageStacks = 0;
     m.blockStacks = 0;   m.blockValue = 0;
@@ -2855,7 +2886,10 @@ function renderStatusBadges(){
       out.push(`<span class="status-pill">🛡 Counter ×${cl.length}${mark?' '+mark:''}</span>`);
     }
     const me0 = activeMon();
-    if(me0 && me0.comboStacks) out.push(`<span class="status-pill">👊 Combo ×${me0.comboStacks}</span>`);
+    const pc = (ui.battle && ui.battle.pCombo) || 0;
+    const ps = partyCounters().length;
+    if(ps) out.push(`<span class="status-pill">🛡 Counter ×${ps}</span>`);
+    if(pc) out.push(`<span class="status-pill">👊 Combo ×${pc}</span>`);
     if(me0 && me0.enrageStacks) out.push(`<span class="status-pill">🔥 Enrage ×${me0.enrageStacks} (+${enrageBonus(me0)} ATK)</span>`);
     if(me0) paintEnrage(me0);
     const mir1 = getPStatus(0,'mirage');

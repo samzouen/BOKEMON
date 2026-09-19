@@ -464,26 +464,37 @@ function renderMistakeDots(){
   }
 }
 
+/* THE BUG THAT FROZE THE CLOCK AFTER WORD ONE
+   A stale interval used to tidy up with `clearInterval(quizTimer)` — the
+   SHARED handle. By the time it woke and noticed its token was old, quizTimer
+   already pointed at the NEW word's interval, so it killed that one instead of
+   itself and set the handle to null. The new word's bar sat full while the old
+   interval ran on invisibly. An interval must only ever clear its own handle. */
+function tick(myToken){
+  if(!ui.quiz || ui.quiz.token !== myToken || ui.quiz.resolved) return false;
+  ui.quiz.timeLeft -= 0.1;
+  if(ui.quiz.timeLeft <= 0){
+    ui.quiz.timeLeft = 0;
+    updateTimerBar();
+    resolveWord(false, true);
+  } else updateTimerBar();
+  return true;
+}
+function runTimer(myToken){
+  const h = setInterval(()=>{
+    if(!tick(myToken)){
+      clearInterval(h);                       // its OWN handle, never the global
+      if(quizTimer === h) quizTimer = null;   // only disown it if it is still ours
+    }
+  }, 100);
+  quizTimer = h;
+}
 function startTimer(){
   const q = ui.quiz;
   q.timeLeft = TIMER_SECONDS;
   updateTimerBar();
   stopTimer();
-  const myToken = q.token;
-  quizTimer = setInterval(()=>{
-    // if the quiz moved on (new word/quiz) or resolved, this interval is stale — stop it
-    if(!ui.quiz || ui.quiz.token !== myToken || ui.quiz.resolved){
-      clearInterval(quizTimer); quizTimer = null; return;
-    }
-    ui.quiz.timeLeft -= 0.1;
-    if(ui.quiz.timeLeft <= 0){
-      ui.quiz.timeLeft = 0;
-      updateTimerBar();
-      resolveWord(false, true);
-    } else {
-      updateTimerBar();
-    }
-  }, 100);
+  runTimer(q.token);
 }
 function resetTimer(){ if(ui.quiz) ui.quiz.timeLeft = TIMER_SECONDS; updateTimerBar(); }
 
@@ -503,18 +514,7 @@ function resumeTimer(){
   const q = ui.quiz;
   if(!q || q.config.relaxed) return;
   stopTimer();
-  const myToken = q.token;
-  quizTimer = setInterval(()=>{
-    if(!ui.quiz || ui.quiz.token !== myToken || ui.quiz.resolved){
-      clearInterval(quizTimer); quizTimer = null; return;
-    }
-    ui.quiz.timeLeft -= 0.1;
-    if(ui.quiz.timeLeft <= 0){
-      ui.quiz.timeLeft = 0;
-      updateTimerBar();
-      resolveWord(false, true);
-    } else updateTimerBar();
-  }, 100);
+  runTimer(q.token);      // same rule: the interval owns its own handle
 }
 function stopTimer(){ if(quizTimer){ clearInterval(quizTimer); quizTimer = null; } }
 function updateTimerBar(){
@@ -565,15 +565,18 @@ function initQuizChar(i){
 
 /* Resolve once the current character is actually drawn, or give up quietly so
    a failed load can't leave the quiz frozen with no clock and no way on. */
-function whenWriterReady(cb, waited){
+function whenWriterReady(cb, waited, myToken){
   waited = waited || 0;
+  if(myToken == null) myToken = ui.quiz && ui.quiz.token;
   const box = document.getElementById('qbox-' + ((ui.quiz && ui.quiz.charIndex) || 0));
-  if(!ui.quiz || ui.quiz.resolved) return;
+  /* A poll chain started for an earlier word must die rather than fire its
+     callback into the current one. */
+  if(!ui.quiz || ui.quiz.resolved || ui.quiz.token !== myToken) return;
   if(box && box.querySelector('svg path')) return cb(true);
   /* Five seconds of grace. After that we stop waiting and let the retry notice
      take over, rather than leaving the quiz in limbo. */
   if(waited >= 5000) return cb(false);
-  setTimeout(()=> whenWriterReady(cb, waited + 120), 120);
+  setTimeout(()=> whenWriterReady(cb, waited + 120, myToken), 120);
 }
 
 /* ---- stroke-data loading: cached, retried, and never silently stuck ---- */

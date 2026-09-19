@@ -190,14 +190,26 @@ function onBattleWon(){
     const scenes = [];
     evolvers.forEach(e=>{
       if(e.hatched || e.crowned){ scenes.push(e); return; }   // those are one-offs
+      /* `evolutionStage(species, level)` reads the level and nothing else, so
+         a monster CAUGHT above its thresholds — a base form at 66, say — was
+         reported as already fully evolved, and the animation opened on the
+         form it was about to become. The truth is `monStageOf(m)`, which
+         respects evoFloor. Walk up from the stage it is actually in. */
+      const mon = (state.party || []).concat(state.storage || [])
+                    .find(x => x.uid === e.uid);
+      let stage = mon ? monStageOf(mon) : evolutionStage(e.species, e.from);
+      /* monStageOf reports where it has ALREADY arrived, so step back by the
+         number of evolutions this payout is about to play. */
+      stage = Math.max(0, stage - e.evos.length);
       e.evos.forEach((lvl, k)=>{
         const last = k === e.evos.length - 1;
         scenes.push(Object.assign({}, e, {
           from: lvl - 1, to: lvl, evos:[lvl],
-          stageFrom: evolutionStage(e.species, lvl - 1),
-          stageTo:   evolutionStage(e.species, lvl),
+          stageFrom: stage,
+          stageTo:   stage + 1,
           newMoves: last ? e.newMoves : [],     // the learning line belongs to the last
         }));
+        stage++;
       });
     });
     playEvolutions(scenes, finish);
@@ -232,8 +244,14 @@ function playEvolutions(list, done){
   let i = 0;
   const next = ()=>{
     if(i >= list.length){ done(); return; }
+    /* if a previous scene was cut short, its fanfare must not follow us */
+    if(playEvolutions._f) clearTimeout(playEvolutions._f);
     const ev = list[i++];
     playSfx('evolution');
+    /* The reveal lands on the same fanfare a Very High or Ultra stone gets —
+     the climb has been building for fourteen seconds and used to arrive in
+     silence. */
+    playEvolutions._f = setTimeout(()=> playSfx('stone_veryhigh'), EVO_FLASH_MS - 200);
     const sp = SPECIES[ev.species];
     /* Explicit stages when the caller worked them out; otherwise derive them.
        The pair must always be CONSECUTIVE — the form you were, and the form you
@@ -362,6 +380,10 @@ function resumeVictory(interrupt, then){
 
 function showVictory(enemyNames, levelUps, tokens){
   playSfx('victory'); fadeOutMusic(2000);
+  /* This used to be a comma expression buried in a template literal. It fired
+     while the string was being built, which is fragile and easy to lose to any
+     edit of the surrounding markup — and it did get lost. */
+  if(levelUps && levelUps.length) setTimeout(()=> playSfx('level_up'), 700);
   const breakNow = tallyBattleForEyeBreak();
   const b = ui.battle;
   $('#brandSub').textContent = 'Victory';
@@ -377,7 +399,7 @@ function showVictory(enemyNames, levelUps, tokens){
     </div>
     <div class="hp-card" style="margin-bottom:14px;">
       <div style="font-weight:800;font-size:13px;color:var(--ink-soft);margin-bottom:6px;">Your team earned a fight!</div>
-      ${(levelUps.length ? (playSfx('level_up'),'') : '')}${levelUps.length ? levelUps.map(e=>`<div style="font-weight:700;font-size:14px;">⬆️ ${escapeHtml(e.name)} grew to Lv ${e.to}!</div>`).join('') : `<div style="font-size:13px;color:var(--ink-soft);font-weight:600;">Everyone gained progress toward their next level.</div>`}
+      ${levelUps.length ? levelUps.map(e=>`<div style="font-weight:700;font-size:14px;">⬆️ ${escapeHtml(e.name)} grew to Lv ${e.to}!</div>`).join('') : `<div style="font-size:13px;color:var(--ink-soft);font-weight:600;">Everyone gained progress toward their next level.</div>`}
       ${tokens ? `<div style="font-weight:800;font-size:14px;color:var(--gold);margin-top:6px;">🎫 Found a Skill Token! (${state.inventory.tokens} total)</div>` : ''}
     </div>
     <div id="catchArea"></div>

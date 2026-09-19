@@ -769,15 +769,45 @@ function crewChallenge(id){
     ()=>fightCrew(id), { bg:'battle_cabin_deck', subtitle:'Cabin Deck' });
 }
 
+/* THE SAME FIVE, a year on and a long way north.
+   They are the fans who crowded the Electric Dojo's stage in Region 3, and
+   their teams pick up exactly where those left off:
+
+     R3 opener   starfish · duck · seahorse          (the same three, level 51-60)
+     R3 closers  1 turtle+plesiosaur  2 plesiosaur+otter
+                 3 otter+loong        4 loong+ninja
+                 5 all five in sequence
+
+   Here each keeps his own pair and has added something caught north of the
+   shelf. The Region 1 trio is gone — base-5 monsters at level 68 was no fight
+   at all — but the turtle/plesiosaur/otter/loong/ninja ladder is preserved, so
+   a child who remembers the concert meets the same five men and the same
+   monsters, grown up. Sailor 5 is still the hardest of them. */
 function crewTeam(id){
-  const lv = 68;
-  const R3 = { sailor1:['starfish','starfish','starfish'], sailor2:['duck','duck','duck'],
-               sailor3:['seahorse','seahorse','seahorse'], sailor4:['starfish','duck','seahorse'],
-               sailor5:['duck','duck','seahorse'] };
-  if(R3[id]) return [ R3[id].map(s=>({species:s, level:lv, ai:'best'})),
-                      [{species:'water_starter', level:lv+1, ai:'best'}] ];
-  if(id === 'cook')        return [ [{species:'duck',level:lv,ai:'best'},{species:'pelican',level:lv,ai:'best'}],
-                                    [{species:'cormorant',level:lv+1,ai:'best'}] ];
+  const lv = 67;
+  const CREW_TEAMS = {
+    /* Rikk — "we'd had a few" */
+    sailor1: [ [{species:'cormorant',level:lv},{species:'sea_turtle',level:lv}],
+               [{species:'sea_turtle',level:lv+2},{species:'plesiosaur',level:lv+2}] ],
+    /* Dov — the one Djenta signed for */
+    sailor2: [ [{species:'swan',level:lv},{species:'pelican',level:lv}],
+               [{species:'plesiosaur',level:lv+2},{species:'otter',level:lv+2}] ],
+    /* Emre — counted them, gave up, counted again */
+    sailor3: [ [{species:'mantaray',level:lv},{species:'cormorant',level:lv}],
+               [{species:'otter',level:lv+2},{species:'loong',level:lv+2}] ],
+    /* Nils — lean and grim about the rationing */
+    sailor4: [ [{species:'pelican',level:lv},{species:'mantaray',level:lv}],
+               [{species:'loong',level:lv+2},{species:'ninja',level:lv+2}] ],
+    /* Cato — still the toughest of the five */
+    sailor5: [ [{species:'sea_turtle',level:lv+1},{species:'swan',level:lv+1}],
+               [{species:'plesiosaur',level:lv+2},{species:'otter',level:lv+2}],
+               [{species:'loong',level:lv+3},{species:'ninja',level:lv+3}] ],
+    /* Gus — feeds a ship; everything here finds food */
+    cook:    [ [{species:'pelican',level:lv},{species:'cormorant',level:lv}],
+               [{species:'otter',level:lv+2}] ],
+  };
+  if(CREW_TEAMS[id])
+    return CREW_TEAMS[id].map(w=>w.map(e=>({...e, ai:'best'})));
   if(id === 'ship_captain') return CAPTAIN_TEAM.waves;
   if(id === 'shipkeeper')   return SHIPKEEPER_TEAM.waves;
   return [[{species:'duck', level:lv, ai:'best'}]];
