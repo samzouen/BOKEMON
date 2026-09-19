@@ -47,7 +47,7 @@ const DECKS = {
   },
   cabin_deck: {
     art:'cabin_deck', music:'zone_cabin_deck',
-    bx:-4.4652, by:0.0685, bs:0.032629,
+    bx:-4.1393, by:-0.7931, bs:0.031868,
     rows:[
 "###################","###################","###################","###################",
 "###################","###################","#######.###.#######","#######.###.#######",
@@ -265,20 +265,30 @@ function renderWalkDeck(id){
 
   /* one arrow per staircase, 70% of a tile, bobbing gently */
   const A = Math.round(WALK_T * 0.7);
+  /* Blocky, hand-drawn arrows — the shape of ⬇︎ without the tile behind it.
+     A thick dark keyline under a solid green body so they read against both
+     pale decking and dark water. All three are green. */
+  const SHAFT = 'M14 4 h12 v17 h8 L20 36 L6 21 h8 z';
   const ARROW = {
-    down: `<svg viewBox="0 0 40 40" width="${A}" height="${A}"><path d="M20 5 C21 14 21 20 20.5 27 M13 21 C16 26 18.5 30 20.5 33 C22.5 30 25 26 28 21"
-             fill="none" stroke="#3f9a55" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"
-             style="paint-order:stroke;stroke-opacity:.35"/>
-           <path d="M20 5 C21 14 21 20 20.5 27 M13 21 C16 26 18.5 30 20.5 33 C22.5 30 25 26 28 21"
-             fill="none" stroke="#5fd17c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    up:   `<svg viewBox="0 0 40 40" width="${A}" height="${A}"><path d="M20 35 C21 26 21 20 20.5 13 M13 19 C16 14 18.5 10 20.5 7 C22.5 10 25 14 28 19"
-             fill="none" stroke="#3f9a55" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".35"/>
-           <path d="M20 35 C21 26 21 20 20.5 13 M13 19 C16 14 18.5 10 20.5 7 C22.5 10 25 14 28 19"
-             fill="none" stroke="#5fd17c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    both: `<svg viewBox="0 0 40 40" width="${A}" height="${A}"><path d="M20 8 C20.6 18 20.6 22 20 32 M14 13 C16.5 10.5 18.5 8.5 20 6.5 C21.5 8.5 23.5 10.5 26 13 M14 27 C16.5 29.5 18.5 31.5 20 33.5 C21.5 31.5 23.5 29.5 26 27"
-             fill="none" stroke="#2b3444" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".4"/>
-           <path d="M20 8 C20.6 18 20.6 22 20 32 M14 13 C16.5 10.5 18.5 8.5 20 6.5 C21.5 8.5 23.5 10.5 26 13 M14 27 C16.5 29.5 18.5 31.5 20 33.5 C21.5 31.5 23.5 29.5 26 27"
-             fill="none" stroke="#fdf6e6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    down: `<svg viewBox="0 0 40 40" width="${A}" height="${A}">
+             <path d="${SHAFT}" fill="#1f3b26" stroke="#1f3b26" stroke-width="5"
+                   stroke-linejoin="round"/>
+             <path d="${SHAFT}" fill="#5fd17c" stroke="#8ee89f" stroke-width="1.4"
+                   stroke-linejoin="round"/></svg>`,
+    up:   `<svg viewBox="0 0 40 40" width="${A}" height="${A}"
+                style="transform:rotate(180deg)">
+             <path d="${SHAFT}" fill="#1f3b26" stroke="#1f3b26" stroke-width="5"
+                   stroke-linejoin="round"/>
+             <path d="${SHAFT}" fill="#5fd17c" stroke="#8ee89f" stroke-width="1.4"
+                   stroke-linejoin="round"/></svg>`,
+    /* both ways: one blocky head at each end of a shared shaft */
+    both: `<svg viewBox="0 0 40 40" width="${A}" height="${A}">
+             <path d="M14 13 h12 v14 h-12 z M14 13 h-8 L20 2 L34 13 h-8
+                      M14 27 h-8 L20 38 L34 27 h-8"
+                   fill="#1f3b26" stroke="#1f3b26" stroke-width="5" stroke-linejoin="round"/>
+             <path d="M14 13 h12 v14 h-12 z M14 13 h-8 L20 2 L34 13 h-8
+                      M14 27 h-8 L20 38 L34 27 h-8"
+                   fill="#5fd17c" stroke="#8ee89f" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
   };
   const stairs = d.things.filter(t=>t.where);
   const seen = new Set();
@@ -347,6 +357,12 @@ function refreshWalk(){
   /* one button per thing you are beside, or standing on */
   const near = d.things.filter(t=> Math.abs(t.x-p.x)+Math.abs(t.y-p.y) <= 1);
   d.things.forEach(t=> t.el && t.el.classList.toggle('near', near.includes(t)));
+  /* Rebuilding this on every single step was the choppiness: four dots and a
+     stack of buttons torn down and recreated several times a second. It now
+     only redraws when what you are standing beside actually changes. */
+  const sig = near.map(t=>t.x+','+t.y+t.verb).join('|') + '#' + (cuainAboard()?'g':'');
+  if(sig === w.actSig) return;
+  w.actSig = sig;
   const acts = $('#walkActs');
   acts.innerHTML = '';
   /* Cuain can be spoken to from anywhere — he is behind you, not beside you. */
