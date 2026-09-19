@@ -104,9 +104,6 @@ function renderShop(){
      `from` is the earliest region that carries the item. */
   const wares = [
     { id:'skillToken',    from:1, icon:tokenIcon(44), name:'Skill Tokens ×2',        desc:'Each Bronze Medal buys TWO tokens. Spins cost 5.', qty:true },
-    /* Salvage out of the Vane Shear's hold. Region 4 only, and only ever one. */
-    { id:'waterStone',    from:4, only:4, icon:uiIcon('water_stone',44,'💧'), name:'Water Stone',
-      desc:'Attach it to any Water monster for 1.5× experience. One only, ever.' },
     { id:'randomStone',   from:1, icon:gemIcon('mid'), name:'Random Skill Stone', desc:'One spin, right now. Any tier, any type.' },
     { id:'protein',       from:2, icon:'💪', name:'Protein Supplement',     desc:'Permanently raises one monster\'s stats.' },
     { id:'eliteStone',    from:2, icon:gemIcon('veryhigh'), name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
@@ -116,10 +113,16 @@ function renderShop(){
     { id:'crown',         from:4, icon:crownIcon(50), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
     { id:'voidStone',     from:3, icon:voidIcon(44), name:'Void Stone', desc:'Draws a learned skill back out of a monster.' },
     { id:'goldMedal',     from:5, icon:'🥇', name:'Gold Medal', desc:'Trade tickets for gold.', qty:true },
+    /* Salvage out of the Vane Shear's hold: the last thing on the shelf, sold
+       only aboard, and only ever one. */
+    { id:'waterStone',    from:4, only:4, icon:uiIcon('water_stone',44,'💧'), name:'Water Stone',
+      desc:'Attach it to any Water monster for 1.5× experience. One only, ever.' },
   ];
   const region = state.progress.currentRegion || 1;
   const box = $('#shopWares');
-  box.innerHTML = wares.map(w=>{
+  /* A ware pinned to one region is not merely out of stock elsewhere — it is
+     not on the shelf at all, and should not be shown greyed out. */
+  box.innerHTML = wares.filter(w=> !w.only || region === w.only).map(w=>{
     const pr = SHOP_PRICES[w.id];
     /* `only` pins a ware to a single region, and a one-off vanishes once taken. */
     const stocked = region >= w.from && (!w.only || region === w.only)
