@@ -47,7 +47,7 @@ const DECKS = {
   },
   cabin_deck: {
     art:'cabin_deck', music:'zone_cabin_deck',
-    bx:-1.9469, by:3.8430, bs:0.026745,
+    bx:-4.4652, by:0.0685, bs:0.032629,
     rows:[
 "###################","###################","###################","###################",
 "###################","###################","#######.###.#######","#######.###.#######",
@@ -167,6 +167,14 @@ function leaveDeck(where){
   ui.walkBack = walkState().deck;
   go(where);
 }
+/* Drawn triangles rather than ▲▼◀▶. The characters were real text, so a long
+   press selected them and popped up the copy menu mid-walk. */
+function TRI(dir){
+  const pts = { u:'12,6 20,18 4,18', d:'12,18 4,6 20,6',
+                l:'6,12 18,4 18,20', r:'18,12 6,4 6,20' }[dir];
+  return `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">` +
+         `<polygon points="${pts}" fill="currentColor"/></svg>`;
+}
 function cuainAboard(){ const g = r4(); return !!g.ghostAccepted; }
 const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true : d.rows[y][x]==='#';
 
@@ -200,6 +208,7 @@ function renderWalkDeck(id){
     <div class="walk-stage" id="walkStage">
       <button class="walk-path" id="walkPath">Path</button>
       <div class="walk-world" id="walkWorld" style="
+        --wt:${WALK_T}px;
         width:${W*WALK_T}px;height:${H*WALK_T}px;
         background-image:url('assets/zones/${d.art}.png');
         background-size:${nat[0]*d.bs*WALK_T}px ${nat[1]*d.bs*WALK_T}px;
@@ -207,9 +216,9 @@ function renderWalkDeck(id){
     </div>
     <div class="walk-pads">
       <div class="walk-dpad">
-        <i></i><button class="wkey" data-d="u">▲</button><i></i>
-        <button class="wkey" data-d="l">◀</button><i></i><button class="wkey" data-d="r">▶</button>
-        <i></i><button class="wkey" data-d="d">▼</button><i></i>
+        <i></i><button class="wkey" data-d="u">${TRI('u')}</button><i></i>
+        <button class="wkey" data-d="l">${TRI('l')}</button><i></i><button class="wkey" data-d="r">${TRI('r')}</button>
+        <i></i><button class="wkey" data-d="d">${TRI('d')}</button><i></i>
       </div>
       <div class="walk-side">
         <button class="wact party" id="walkParty">Party</button>
@@ -234,6 +243,7 @@ function renderWalkDeck(id){
     const e = document.createElement('div');
     e.className = 'walk-ent' + (t.walk ? ' flat' : '');
     e.style.transform = `translate3d(${t.x*WALK_T}px,${t.y*WALK_T}px,0)`;
+    e.style.zIndex = 10 + t.y;          // further down the deck = nearer to you
     e.innerHTML = t.sprite
       ? `<img src="assets/npc/${t.sprite}.png" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${t.icon||''}'}))">`
       : `<span>${t.icon||''}</span>`;
@@ -252,6 +262,39 @@ function renderWalkDeck(id){
     shade.appendChild(c);
   }
   world.appendChild(shade);
+
+  /* one arrow per staircase, 70% of a tile, bobbing gently */
+  const A = Math.round(WALK_T * 0.7);
+  const ARROW = {
+    down: `<svg viewBox="0 0 40 40" width="${A}" height="${A}"><path d="M20 5 C21 14 21 20 20.5 27 M13 21 C16 26 18.5 30 20.5 33 C22.5 30 25 26 28 21"
+             fill="none" stroke="#3f9a55" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"
+             style="paint-order:stroke;stroke-opacity:.35"/>
+           <path d="M20 5 C21 14 21 20 20.5 27 M13 21 C16 26 18.5 30 20.5 33 C22.5 30 25 26 28 21"
+             fill="none" stroke="#5fd17c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    up:   `<svg viewBox="0 0 40 40" width="${A}" height="${A}"><path d="M20 35 C21 26 21 20 20.5 13 M13 19 C16 14 18.5 10 20.5 7 C22.5 10 25 14 28 19"
+             fill="none" stroke="#3f9a55" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".35"/>
+           <path d="M20 35 C21 26 21 20 20.5 13 M13 19 C16 14 18.5 10 20.5 7 C22.5 10 25 14 28 19"
+             fill="none" stroke="#5fd17c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    both: `<svg viewBox="0 0 40 40" width="${A}" height="${A}"><path d="M20 8 C20.6 18 20.6 22 20 32 M14 13 C16.5 10.5 18.5 8.5 20 6.5 C21.5 8.5 23.5 10.5 26 13 M14 27 C16.5 29.5 18.5 31.5 20 33.5 C21.5 31.5 23.5 29.5 26 27"
+             fill="none" stroke="#2b3444" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".4"/>
+           <path d="M20 8 C20.6 18 20.6 22 20 32 M14 13 C16.5 10.5 18.5 8.5 20 6.5 C21.5 8.5 23.5 10.5 26 13 M14 27 C16.5 29.5 18.5 31.5 20 33.5 C21.5 31.5 23.5 29.5 26 27"
+             fill="none" stroke="#fdf6e6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  };
+  const stairs = d.things.filter(t=>t.where);
+  const seen = new Set();
+  stairs.forEach(t=>{
+    const key = t.x+','+t.y;
+    if(seen.has(key)) return;
+    seen.add(key);
+    const both = stairs.filter(x=>x.x===t.x&&x.y===t.y).length > 1;
+    const kind = both ? 'both' : (t.verb === 'Up' ? 'up' : 'down');
+    const e = document.createElement('div');
+    e.className = 'walk-stair';
+    e.style.left = (t.x*WALK_T + (WALK_T-A)/2) + 'px';
+    e.style.top  = (t.y*WALK_T + (WALK_T-A)/2) + 'px';
+    e.innerHTML = ARROW[kind];
+    world.appendChild(e);
+  });
 
   const steps = document.createElement('div'); steps.className='walk-steps'; steps.id='walkSteps';
   world.appendChild(steps);
@@ -282,10 +325,12 @@ function refreshWalk(){
   if(!world || !me) return;
   world.style.transform = `translate3d(${-p.x*WALK_T - WALK_T/2}px, ${-p.y*WALK_T - WALK_T/2}px, 0)`;
   me.style.transform = `translate3d(${p.x*WALK_T}px,${p.y*WALK_T}px,0)`;
+  me.style.zIndex = 10 + p.y;
   const gh = $('#walkGhost');
   if(gh && w.ghostAt && w.ghostAt[w.deck]){
     const q = w.ghostAt[w.deck];
     gh.style.transform = `translate3d(${q.x*WALK_T}px,${q.y*WALK_T}px,0)`;
+    gh.style.zIndex = 10 + q.y;
   }
 
   /* a mark on each tile you could step onto — the only question you have */
