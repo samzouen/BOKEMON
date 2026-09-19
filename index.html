@@ -906,6 +906,12 @@
   .walk-stage.pathing .walk-path{background:#2f4159;color:#f4ecd8;border-color:#22303f;}
   /* Companionways get a drawn arrow, not an emoji: green down on the weather
      deck, green up in the laboratory, white both ways on the cabin deck. */
+  /* Specimens in a tank are scenery. They sit BELOW the wall shading, so when
+     the path is toggled on they dim with the room rather than standing out
+     like somebody worth talking to. */
+  .walk-fish{position:absolute;display:flex;align-items:center;justify-content:center;
+    pointer-events:none;z-index:0;opacity:.92;}
+  .walk-fish .mon-portrait{box-shadow:none !important;background:none !important;}
   .walk-stair{position:absolute;pointer-events:none;z-index:2;
     animation:stairBob 2s ease-in-out infinite;}
   @keyframes stairBob{0%,100%{transform:translateY(-6%);}50%{transform:translateY(6%);}}
