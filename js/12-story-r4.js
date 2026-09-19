@@ -1351,7 +1351,11 @@ function shipkeeperShop(){
     blocked || KEEPER_LINES[Math.floor(Math.random()*KEEPER_LINES.length)],
     ()=>go('cabin_deck'),
     { bg:'battle_cabin_deck', subtitle:'Cabin Deck',
-      action:{ label:'🛒 Shop', fn:()=>go('shop') } });
+      action:{ label:'🛒 Shop', fn:()=>{
+        /* opened from the deck? the shop's Back should return there */
+        if(typeof walkState === 'function' && walkState().deck) ui.walkBack = walkState().deck;
+        go('shop');
+      } } });
 }
 
 /* ============================================================
