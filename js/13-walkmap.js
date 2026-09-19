@@ -19,7 +19,7 @@ let WALK_T = 44;                         // recomputed to fit the stage
 const DECKS = {
   weather_deck: {
     art:'weather_deck', music:'zone_weather_deck',
-    bx:0.6042, by:3.4167, bs:0.027253,
+    bx:-0.055, by:0.010, bs:0.032500,
     rows:[
 "##########################","##########################","##########################","#############.############",
 "############...###########","###########.....##########","##########.......#########","#########..#####.#########",
@@ -47,7 +47,7 @@ const DECKS = {
   },
   cabin_deck: {
     art:'cabin_deck', music:'zone_cabin_deck',
-    bx:-1.6131, by:4.3434, bs:0.025965,
+    bx:-1.6131, by:1.3434, bs:0.025965,
     rows:[
 "###################","###################","###################","###################",
 "###################","###################","#######.###.#######","#######.###.#######",
@@ -83,7 +83,7 @@ const DECKS = {
   },
   laboratory_deck: {
     art:'laboratory_deck', music:'zone_laboratory_deck',
-    bx:2.5341, by:3.3343, bs:0.025502,
+    bx:-0.080, by:-0.910, bs:0.031500,
     rows:[
 "##########################","##########################","##########################","##########################",
 "##########################","############...###########","###########......#########","###########.......########",
@@ -211,7 +211,9 @@ function renderWalkDeck(id){
       </div>
     </div>`;
   $('#backBtn').addEventListener('click', ()=>{ stopRail(); go('explore'); });
-  $('#walkParty').addEventListener('click', ()=> go('party'));
+  /* remember where to come back to, so Party does not dump you on the region
+     screen with your place on the ship lost */
+  $('#walkParty').addEventListener('click', ()=>{ ui.walkBack = id; go('party'); });
 
   const world = $('#walkWorld');
   /* people and doorways */

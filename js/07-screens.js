@@ -406,7 +406,7 @@ function renderPartyStub(){
   setScreenBg('home');
   $('#brandSub').textContent = 'Party';
   screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Region</button>
+    <button class="back-link" id="backBtn">← ${ui.walkBack ? 'Back' : 'Region'}</button>
     <div class="party-head-row">
       <div>
         <div class="screen-title" style="margin:0;">Your Party</div>
@@ -416,7 +416,11 @@ function renderPartyStub(){
     </div>
     <div id="partyList" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;"></div>
   `;
-  $('#backBtn').addEventListener('click', ()=>go('region'));
+  /* opened from a deck? go back to the deck, standing where you left off */
+  $('#backBtn').addEventListener('click', ()=>{
+    const d = ui.walkBack; ui.walkBack = null;
+    go(d || 'region');
+  });
   $('#storageBtn').addEventListener('click', ()=>{ ui.storageFrom='party'; go('storage'); });
   renderPartyList();
 }
