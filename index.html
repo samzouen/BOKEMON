@@ -862,8 +862,16 @@
     justify-content:center;font-size:20px;transition:transform .23s linear;overflow:visible;}
   /* a quarter bigger, grown from the middle so nobody drifts off their tile */
   .walk-ent img{width:100%;height:100%;object-fit:contain;
-    transform:scale(1.25);transform-origin:center center;
-    image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));}
+    transform:scale(1.5);transform-origin:center center;
+    image-rendering:pixelated;}
+  /* Nothing on the deck wears a tile plate: no bevel, no rounded backing, no
+     drop shadow. They are people standing on a painting. */
+  .walk-ent .mon-portrait, .walk-ent .avatar-img,
+  .wact.ghost .mon-portrait, .wact.ghost .avatar-img{
+    box-shadow:none !important; background:none !important; border-radius:0 !important;
+  }
+  .walk-ent .mon-portrait{width:100% !important;height:100% !important;}
+  .walk-ent .mon-portrait img{transform:scale(1.5);transform-origin:center center;}
   .walk-ent.flat{opacity:0;}
   .walk-you{z-index:3;}
   @keyframes cutFloat{0%,100%{transform:scaleX(-1) translateY(0);}50%{transform:scaleX(-1) translateY(-9px);}}
@@ -878,6 +886,16 @@
   .wact.ghost{background:#6a5a8a;border-color:#54446e;color:#fff;}
   .walk-you.bumped{animation:walkBump .22s ease;}
   @keyframes walkBump{0%,100%{filter:none;}50%{filter:brightness(1.4);}}
+  /* Walls in shadow, the walkable deck untouched. A cool blue-grey rather than
+     black — it sits with the watercolour and reads as shade, not damage. */
+  .walk-shade{position:absolute;left:0;top:0;pointer-events:none;opacity:0;
+    transition:opacity .28s ease;}
+  .walk-shade i{position:absolute;display:block;background:#16202e;}
+  .walk-stage.pathing .walk-shade{opacity:.55;}
+  .walk-path{position:absolute;right:8px;top:8px;z-index:8;
+    background:rgba(244,236,216,.88);border:1px solid var(--line);border-radius:9px;
+    padding:5px 11px;font:800 11px system-ui;color:var(--ink-soft);}
+  .walk-stage.pathing .walk-path{background:#2f4159;color:#f4ecd8;border-color:#22303f;}
   .walk-steps i{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;
     background:rgba(40,35,25,.32);box-shadow:0 0 0 1.5px rgba(255,250,235,.55);}
   /* The action side was much narrower than the d-pad and the buttons read as
@@ -887,7 +905,10 @@
   .wact.party{background:var(--paper-2);border:1px solid var(--line);color:var(--ink-soft);
     min-height:46px;font-family:'Baloo 2',cursive;font-weight:800;font-size:13px;
     border-radius:13px;display:flex;align-items:center;justify-content:center;}
-  .wact.ghost img{width:30px;height:30px;object-fit:contain;}
+    .wact.ghost{flex-direction:row;gap:8px;align-items:center;justify-content:center;text-align:left;line-height:1.25;}
+  .wact.ghost img{width:34px;height:34px;object-fit:contain;box-shadow:none;}
+  .wact.ghost .mon-portrait{width:34px !important;height:34px !important;
+    box-shadow:none !important;background:none !important;}
   .walk-pads{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px;}
   .walk-dpad{display:grid;grid-template-columns:repeat(3,62px);grid-template-rows:repeat(3,62px);gap:5px;}
   .walk-dpad i{display:block;}
