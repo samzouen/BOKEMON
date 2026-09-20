@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.40';
+const GAME_VERSION = '2.42';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1029,6 +1029,27 @@ function recordWrong(word){
 /* ---------- helpers ---------- */
 const $ = (sel)=>document.querySelector(sel);
 const screenEl = $('#screen');
+
+/* A beat of darkness between two scenes: the screen goes black, the next thing
+   is set up behind it, and the black lifts. Used when the story moves people
+   somewhere else without walking them there. */
+function blackoutTo(then, opts){
+  opts = (typeof opts === 'number') ? { hold: opts } : (opts || {});
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;inset:0;background:#000;opacity:0;z-index:9999;' +
+                     'display:flex;align-items:center;justify-content:center;' +
+                     'transition:opacity .4s ease;pointer-events:none;';
+  if(opts.text) el.innerHTML = `<div style="color:#fff;font-size:22px;letter-spacing:.06em;">` +
+                               `${escapeHtml(opts.text)}</div>`;
+  document.body.appendChild(el);
+  requestAnimationFrame(()=>{ el.style.opacity = '1'; });
+  setTimeout(()=>{
+    try { then(); }
+    finally {
+      requestAnimationFrame(()=>{ el.style.opacity = '0'; setTimeout(()=> el.remove(), 450); });
+    }
+  }, (opts.hold || 450) + 60);
+}
 
 function toast(msg){
   const t = $('#toast');

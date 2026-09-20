@@ -9,10 +9,29 @@
    ============================================================ */
 
 /* How close the camera sits. The stage is square, so this is how many tiles
-   you see across it — nine makes the ship feel like somewhere to explore
-   rather than a plan you are reading. */
-const WALK_VIEW = 7;
+   you see across it. Seven keeps a phone close to the action; a tablet has the
+   room for nine, which shows more of the ship and asks less of the paintings,
+   since each tile is then stretched less. Recomputed on every render, so
+   turning a tablet or resizing a window picks the right one up. */
+let WALK_VIEW = 7;
+function walkView(){ return Math.min(window.innerWidth, window.innerHeight) >= 700 ? 9 : 7; }
 let WALK_T = 44;                         // recomputed to fit the stage
+
+/* A thing can be bigger than one tile (the Whalelord's body is two by two) and
+   some are only there at a certain point in the story (`when`). Everything that
+   asks "what is standing here" goes through these, so the picture, the blocking
+   and the buttons can never disagree. */
+function deckThings(d){ return d.things.filter(t => !t.when || t.when()); }
+function thingCovers(t, x, y){
+  return x >= t.x && x < t.x + (t.w || 1) && y >= t.y && y < t.y + (t.h || 1);
+}
+function wThingAt(d, x, y){ return deckThings(d).find(t => thingCovers(t, x, y)); }
+function wBlockedBy(d, x, y){ const t = wThingAt(d, x, y); return !!(t && !t.walk); }
+function thingNear(t, p){
+  const dx = Math.max(t.x - p.x, 0, p.x - (t.x + (t.w || 1) - 1));
+  const dy = Math.max(t.y - p.y, 0, p.y - (t.y + (t.h || 1) - 1));
+  return dx + dy <= 1;
+}
 
 /* Each deck: its grid, who stands where, and where its painting sits — all in
    TILE units, so the numbers mean the same at any zoom. */
@@ -44,6 +63,17 @@ const DECKS = {
       { x:18, y:27, sprite:'fisherman4', icon:'🎣', verb:'Help', act:()=> railHelp(4) },
       { x:18, y:31, sprite:'fisherman5', icon:'🎣', verb:'Help', act:()=> railHelp(5) },
       { x:16, y:9,  walk:true, verb:'Down', where:'Cabin Deck', act:()=> goDeck('cabin_deck') },
+      /* The Whalelord's body, laid across the bow the way the fishermen left
+         it: two tiles by two, turned. It blocks the bow tip while it lies
+         there, which is what a whale on a foredeck would do. */
+      { x:12, y:4, w:2, h:2, sprite:'whalelord_corpse', rot:30, verb:'The body',
+        when:()=> !!(typeof r4 === 'function' && r4().corpseSeen),
+        act:()=> corpseChat() },
+      /* These two are only here while the scene on deck is playing. */
+      { x:13, y:6, sprite:'ship_captain', verb:'Captain',
+        when:()=> ui.corpseScene === 'deck', act:()=> corpseDeckCaptain() },
+      { x:14, y:6, sprite:'scientist_supervisor', verb:'Supervisor',
+        when:()=> ui.corpseScene === 'deck', act:()=> corpseDeckSupervisor() },
     ],
   },
   cabin_deck: {
@@ -199,6 +229,13 @@ const SWIM = {
   loong:    { sx:[0.050,0.100], sy:[0.035,0.065], flip:[2000,2600] },
 };
 const SWIM_X = 0.45, SWIM_Y = 0.30;      // how far either way, in tiles
+/* Drawn bigger than a tile. Only the picture changes: the drift box (SWIM_X /
+   SWIM_Y) and the speeds are in tiles and stay exactly as they were. */
+const SWIM_SCALE = { starfish:2, loong:2, seahorse:2 };
+function fishScale(sp){ return SWIM_SCALE[sp] || 1; }
+function fishArt(sp, view){
+  return monPortrait(sp, Math.round(WALK_T * 0.5 * fishScale(sp)), { view, bare:true, stage:0 });
+}
 const rnd = (a,b)=> a + Math.random()*(b-a);
 let _tank = null, _tankTimer = null;
 
@@ -207,9 +244,10 @@ function buildAquarium(world, d){
   _tank = d.aquarium.map(f=>{
     const el = document.createElement('div');
     el.className = 'walk-fish';
-    el.style.cssText = `left:${f.x*WALK_T}px;top:${f.y*WALK_T}px;` +
-                       `width:${WALK_T}px;height:${WALK_T}px;`;
-    el.innerHTML = monPortrait(f.sp, Math.round(WALK_T*0.5), { view:'front', bare:true, stage:0 });
+    const box = WALK_T * fishScale(f.sp), off = (box - WALK_T) / 2;
+    el.style.cssText = `left:${f.x*WALK_T - off}px;top:${f.y*WALK_T - off}px;` +
+                       `width:${box}px;height:${box}px;`;
+    el.innerHTML = fishArt(f.sp, 'front');
     world.appendChild(el);
     const k = SWIM[f.sp] || SWIM.seahorse;
     return { el, k, sp:f.sp, dx:1, dy:1, x:rnd(-SWIM_X,SWIM_X), y:rnd(-SWIM_Y,SWIM_Y),
@@ -231,8 +269,7 @@ function swimTick(){
     const want = f.dx < 0 ? 'front' : 'back';
     if(want !== f.face){
       f.face = want;
-      f.el.innerHTML = monPortrait(f.sp, Math.round(WALK_T*0.5),
-                                   { view:want, bare:true, stage:0 });
+      f.el.innerHTML = fishArt(f.sp, want);
     }
     f.y += f.dy * f.vy * 0.05;
     if(Math.abs(f.y) > SWIM_Y){ f.y = Math.sign(f.y)*SWIM_Y; f.dy *= -1; }
@@ -320,7 +357,10 @@ function renderWalkDeck(id){
                                  laboratory_deck:'Laboratory' }[id];
 
   const nat = { weather_deck:[797,1209], cabin_deck:[832,1262], laboratory_deck:[832,1262] }[id];
-  /* fit nine tiles across whatever the stage turns out to be */
+  /* A scene that was interrupted must never leave you frozen. */
+  if(!ui.corpseScene) walkState().busy = false;
+  /* fit the view across whatever the stage turns out to be */
+  WALK_VIEW = walkView();
   const avail = Math.min(window.innerWidth - 24, Math.max(220, window.innerHeight - 330));
   WALK_T = Math.max(30, Math.round(avail / WALK_VIEW));
   screenEl.innerHTML = `
@@ -358,14 +398,19 @@ function renderWalkDeck(id){
 
   const world = $('#walkWorld');
   /* people and doorways */
-  d.things.forEach(t=>{
-    if(t.el) t.el = null;
+  d.things.forEach(t=> { if(t.el) t.el = null; });
+  deckThings(d).forEach(t=>{
     const e = document.createElement('div');
     e.className = 'walk-ent' + (t.walk ? ' flat' : '');
     e.style.transform = `translate3d(${t.x*WALK_T}px,${t.y*WALK_T}px,0)`;
     e.style.zIndex = 10 + t.y;          // further down the deck = nearer to you
+    if(t.w || t.h){                     // a thing that covers more than its own tile
+      e.style.width  = (t.w || 1) * WALK_T + 'px';
+      e.style.height = (t.h || 1) * WALK_T + 'px';
+    }
+    const spin = t.rot ? ` style="transform:rotate(${t.rot}deg);"` : '';
     e.innerHTML = t.sprite
-      ? `<img src="assets/npc/${t.sprite}.png" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${t.icon||''}'}))">`
+      ? `<img src="assets/npc/${t.sprite}.png" alt=""${spin} onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${t.icon||''}'}))">`
       : `<span>${t.icon||''}</span>`;
     world.appendChild(e); t.el = e;
   });
@@ -449,12 +494,28 @@ function renderWalkDeck(id){
   if(id === 'weather_deck') startRail(); else stopRail();
 }
 
+/* The camera follows you until the map runs out. At an edge the map stops and
+   YOU carry on across the stage, so there is never a black margin beyond the
+   painting; walk back inland and you slide to the middle again. A map smaller
+   than the stage — a room inside a building — simply sits in the middle, and
+   you walk about inside it. The world is anchored at the middle of the stage
+   (left:50%, top:50%), so these offsets are measured from there. */
+function walkCam(centre, mapPx, stagePx){
+  if(mapPx <= stagePx) return -mapPx / 2;
+  return Math.max(stagePx / 2 - mapPx, Math.min(-stagePx / 2, -centre));
+}
 function refreshWalk(){
   const w = walkState(), d = DECKS[w.deck]; if(!d) return;
   const p = w.at[w.deck];
   const world = $('#walkWorld'), me = $('#walkYou'), steps = $('#walkSteps');
   if(!world || !me) return;
-  world.style.transform = `translate3d(${-p.x*WALK_T - WALK_T/2}px, ${-p.y*WALK_T - WALK_T/2}px, 0)`;
+  const stageEl = $('#walkStage');
+  const SW = (stageEl && stageEl.clientWidth)  || WALK_VIEW * WALK_T;
+  const SH = (stageEl && stageEl.clientHeight) || WALK_VIEW * WALK_T;
+  const cols = d.rows[0].length, rows = d.rows.length;
+  world.style.transform =
+    `translate3d(${walkCam(p.x*WALK_T + WALK_T/2, cols*WALK_T, SW)}px, ` +
+    `${walkCam(p.y*WALK_T + WALK_T/2, rows*WALK_T, SH)}px, 0)`;
   me.style.transform = `translate3d(${p.x*WALK_T}px,${p.y*WALK_T}px,0)`;
   me.style.zIndex = 10 + p.y;
   const gh = $('#walkGhost');
@@ -469,14 +530,14 @@ function refreshWalk(){
   [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dx,dy])=>{
     const nx=p.x+dx, ny=p.y+dy;
     if(wSolid(d,nx,ny)) return;
-    if(d.things.some(t=>t.x===nx&&t.y===ny&&!t.walk)) return;
+    if(wBlockedBy(d, nx, ny)) return;
     const i=document.createElement('i');
     i.style.left=(nx*WALK_T+WALK_T/2)+'px'; i.style.top=(ny*WALK_T+WALK_T/2)+'px';
     steps.appendChild(i);
   });
 
   /* one button per thing you are beside, or standing on */
-  const near = d.things.filter(t=> Math.abs(t.x-p.x)+Math.abs(t.y-p.y) <= 1);
+  const near = deckThings(d).filter(t=> thingNear(t, p));
   d.things.forEach(t=> t.el && t.el.classList.toggle('near', near.includes(t)));
   /* Rebuilding this on every single step was the choppiness: four dots and a
      stack of buttons torn down and recreated several times a second. It now
@@ -530,7 +591,7 @@ function walkMove(dir){
   w.last = now;
   const v = { l:[-1,0], r:[1,0], u:[0,-1], d:[0,1] }[dir];
   const nx = p.x+v[0], ny = p.y+v[1];
-  const blocked = d.things.some(t=> t.x===nx && t.y===ny && !t.walk);
+  const blocked = wBlockedBy(d, nx, ny);
   if(!wSolid(d,nx,ny) && !blocked){
     /* he takes the tile you are leaving — always one behind, never on top */
     if(cuainAboard()){

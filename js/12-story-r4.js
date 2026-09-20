@@ -553,8 +553,99 @@ async function ghostAccept(){
   await saveProfile();
   storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'It follows you up',
     `It rises with you, and it does not stop at the surface.<br><br>` +
-    `<i>The Whalelord can now be found aboard the ship. The <b>Research Deck</b> is open.</i>`,
-    ()=>go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
+    `<i>The Whalelord is aboard the ship now — and nobody but you can see him.</i>`,
+    ()=>whaleCorpseTell(), { bg:'weather_deck', subtitle:'Weather Deck' });
+}
+
+/* ------------------------------------------------------------
+   THE BODY
+   He is invisible to everybody but the player, so a child's word is all the
+   crew has — until there is something they CAN see. The body is what turns one
+   child's story into the captain's problem, and it is what puts every soul on
+   the ship, researchers included, onto the investigation.
+   ------------------------------------------------------------ */
+function whaleCorpseTell(){
+  /* You do not go looking for him. The moment the Whalelord is yours you are
+     standing in front of the captain, and you cannot walk off until the whole
+     thing has played out. */
+  const w = walkState();
+  w.busy = true; w.deck = 'cabin_deck'; w.at = w.at || {}; w.at.cabin_deck = { x:11, y:7 }; w.face = 'u';
+  ui.corpseScene = 'captain';
+  go('cabin_deck');
+  setTimeout(()=> storyModal(npcPortrait('ship_captain','⚓',140,'transparent'), crewName('ship_captain'),
+    `He looks up from the chart table. You are standing in front of him and you have not ` +
+    `said anything yet.<br><br>` +
+    `You tell him there is somebody beside you. He looks where you are pointing and sees a ` +
+    `doorway and a wet coat on a hook.<br><br>` +
+    `<b>"There's nothing there, child."</b><br><br>` +
+    `So you tell him the rest instead. The whales are not angry at the ship. ` +
+    `<b>Their lord has been murdered</b>, and they will not move until that is put right.<br><br>` +
+    `He does not laugh. He has been staring at a wall of whales for eleven days.`,
+    ()=> whaleCorpseHaul(), { bg:'battle_cabin_deck', subtitle:'Cabin Deck' }), 800);
+}
+function whaleCorpseHaul(){
+  storyModal(npcPortrait('ship_captain','⚓',140,'transparent'), 'Lines over the side',
+    `<b>"Then we'd best find him."</b> He is already at the door.<br><br>` +
+    `<b>"Every line we have and both winches, and I want the fishermen on all of them."</b><br><br>` +
+    `<b>"Slowly, mind. Bring him up whole."</b>`,
+    ()=> blackoutTo(()=> corpseSceneOnDeck(), { text:'Time passes…', hold:1600 }),
+    { bg:'battle_cabin_deck', subtitle:'Cabin Deck' });
+}
+/* The black lifts on the weather deck: the body across the bow, you under it,
+   the captain at your shoulder and the supervisor up from the laboratory. */
+async function corpseSceneOnDeck(){
+  const g = r4();
+  g.corpseSeen = true;                       // from here on, the body is part of the deck
+  await saveProfile();
+  const w = walkState();
+  w.deck = 'weather_deck'; w.at = w.at || {}; w.at.weather_deck = { x:12, y:6 };
+  w.busy = true; w.face = 'u';
+  ui.corpseScene = 'deck';
+  go('weather_deck');
+  setTimeout(()=> corpseDeckCaptain(), 1500); // a moment to look at him before anybody speaks
+}
+function corpseDeckCaptain(){
+  storyModal(npcPortrait('ship_captain','⚓',140,'transparent'), crewName('ship_captain'),
+    `They have laid him along the bow and he covers it end to end. The fishermen have their ` +
+    `caps off, and nobody told them to.<br><br>` +
+    `Under one flipper is a hole the size of a door. It is cut straight, and there is not a ` +
+    `tooth mark anywhere near it.<br><br>` +
+    `You say it out loud, because somebody has to: <b>whoever did this is on this ship</b>, and ` +
+    `until they are found the whales will not let anybody past.<br><br>` +
+    `<b>"On my ship."</b> He says it flatly. <b>"Then every soul aboard helps, starting now. ` +
+    `Deck crew, cooks, the lot."</b>`,
+    ()=> corpseDeckSupervisor(), { bg:'weather_deck', subtitle:'Weather Deck' });
+}
+function corpseDeckSupervisor(){
+  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'),
+    crewName('scientist_supervisor'),
+    `He has come up from the laboratory still holding a clipboard, and for once he is not ` +
+    `eating anything.<br><br>` +
+    `<b>"My researchers as well. All nine of them, and me."</b><br><br>` +
+    `<b>"Whatever you need to ask, ask it. Nobody down there is too busy for this."</b><br><br>` +
+    `<i>The <b>Research Deck</b> is open.</i>`,
+    ()=> corpseSceneEnd(), { bg:'weather_deck', subtitle:'Weather Deck' });
+}
+/* One more beat of black, and then it is just you and him again. */
+function corpseSceneEnd(){
+  blackoutTo(()=>{
+    ui.corpseScene = null;
+    const w = walkState();
+    w.deck = 'weather_deck'; w.at.weather_deck = { x:12, y:6 }; w.busy = false; w.face = 'u';
+    go('weather_deck');
+  }, { hold:700 });
+}
+/* Standing under him afterwards. He is not calm about it and should not be. */
+function corpseChat(){
+  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
+    `He hangs above his own body and does not look away from it.<br><br>` +
+    `<b>"That was mine. That was me."</b><br><br>` +
+    `<b>"Look at the cut. Straight. Unhurried. Somebody took their time over me while I was ` +
+    `still using it."</b><br><br>` +
+    `His voice drops, which is worse than if he shouted.<br><br>` +
+    `<b>"Find them, child. My people will not move, and I will not rest, until somebody ` +
+    `answers for this."</b>`,
+    ()=> go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
 }
 
 /* ------------------------------------------------------------
@@ -566,6 +657,9 @@ async function ghostAccept(){
    ------------------------------------------------------------ */
 function ghostChat(where){
   const g = r4();
+  /* He has been accepted but the captain has not been told: that scene first,
+     from wherever you are standing. */
+  if(g.ghostAccepted && !g.corpseSeen) return whaleCorpseTell();
   const deck = where || 'cabin_deck';
   const onLab = deck === 'laboratory_deck';
   const onWeather = deck === 'weather_deck';
@@ -574,6 +668,28 @@ function ghostChat(where){
   if(g.solved){
     body = `<b>"It is done. It is not enough."</b><br><br>` +
            `<b>"My people can rest now. I cannot. Not until my core comes home."</b>`;
+  } else if(onLab && labStage() === 'investigation'){
+    /* Once the investigation is open he is here to name people. The first time
+       he explains himself; after that every visit is what he can remember, and
+       a wrong name is what shakes another piece loose. */
+    const v = inv();
+    if(!v.labSpoken){
+      v.labSpoken = true;
+      saveProfile();
+      body = `He hangs above the benches and looks at them one at a time. Not one of them looks up.<br><br>` +
+             `<b>"They cannot see me. Only you."</b><br><br>` +
+             `<b>"Two creatures swam beside the ones who cut me. I saw them from underneath, and I ` +
+             `was already dying, so what I have is pieces."</b><br><br>` +
+             `<b>"Ask me again and I will give you what I have."</b>`;
+    } else {
+      body = `<b>"Pieces. It is all I have."</b><br><br>` +
+             CLUES.slice(0, v.clues).map((c,k)=>`<b>${k+1}.</b> ${c}`).join('<br><br>') +
+             (v.clues < CLUES.length
+               ? `<br><br><i>He strains at something further down and cannot reach it. Name somebody ` +
+                 `and be wrong, and he will try harder.</i>`
+               : `<br><br><i>That is everything he has.</i>`) +
+             `<br><br><i>${v.beaten.length} of 9 tested.</i>`;
+    }
   } else if(g.stoneWon){
     /* the stone is his now, and it is not what he hoped */
     body = `He has been quiet since the boy handed the stone over.<br><br>` +
@@ -1625,14 +1741,21 @@ function fightScientist(n){
 async function onScientistWin(n){
   const v = inv();
   const first = !v.beaten.includes(n);
+  /* The nine come round again after a wrong name, so the supplement is for the
+     first time you beat each of them, not for each round of testing. */
+  v.firstWins = v.firstWins || [];
+  const everFirst = first && !v.firstWins.includes(n);
   if(first){
     v.beaten.push(n);
-    state.inventory.protein = (state.inventory.protein||0) + 1;
+    if(everFirst){
+      v.firstWins.push(n);
+      state.inventory.protein = (state.inventory.protein||0) + 1;
+    }
     await saveProfile();
   }
   storyModal(npcPortrait('scientist'+n,'🧑‍🔬',130,'transparent'), crewName('scientist'+n),
     `<b>"Well fought. Honestly."</b><br><br>` +
-    (first ? `<b>+1 Protein Supplement</b><br><br>` : '') +
+    (everFirst ? `<b>+1 Protein Supplement</b><br><br>` : '') +
     (allBeaten() ? `<i>That is all nine. ${crewFirst('scientist_supervisor')} will hear your report.</i>`
                  : `<i>${v.beaten.length} of 9 tested.</i>`),
     ()=>go('laboratory_deck'), { bg:'battle_laboratory_deck', subtitle:'Laboratory' });
@@ -1731,8 +1854,11 @@ async function accuse(n){
   const v = inv();
   v.guesses++;
   if(n === CULPRIT){ await saveProfile(); return accuseCulprit(); }
-  /* Wrong. Their alibi partner speaks up, and the Whalelord tries harder. */
+  /* Wrong. Their alibi partner speaks up, the Whalelord tries harder — and the
+     nine have to be tested again from the top before anybody else can be named.
+     Being wrong costs the work, never the case. */
   if(v.clues < CLUES.length) v.clues++;
+  v.beaten = [];
   await saveProfile();
   alibiConfirm(n);
 }
@@ -1742,7 +1868,9 @@ function alibiConfirm(n){
   storyModal(npcPortrait('scientist'+buddy,'🧑‍🔬',130,'transparent'), crewName('scientist'+buddy),
     `<b>"No. Not a chance."</b> ${crewFirst('scientist'+buddy)} does not even look up.<br><br>` +
     `<b>"We were both on shift. All night, every night that week. Ask anyone."</b><br><br>` +
-    `<i>${crewFirst('scientist'+n)} is cleared.</i>` +
+    `<i>${crewFirst('scientist'+n)} is cleared.</i><br><br>` +
+    `<i>Word goes round the deck. All nine will have to be tested again before you can name ` +
+    `anybody else.</i>` +
     (v.clues < CLUES.length || v.clues === CLUES.length
       ? `<br><br>👻 <i>The Whalelord strains, and remembers something else.</i>` : ''),
     ()=>go('laboratory_deck'), { bg:'battle_laboratory_deck', subtitle:'Laboratory' });
