@@ -537,7 +537,8 @@ function ghostIntro2(){
     `A long pause. The light through it shifts.<br><br>` +
     `<b>"Then other people came. Quieter ones. They knew where to look, which means somebody told them."</b><br><br>` +
     `Something enormous and old moves behind the words.<br><br>` +
-    `<b>"They cut out my core while I was still using it. That is what killed me."</b><br><br>` +
+    `<b>"A legendary does not use its core. It is defined by its core."</b><br><br>` +
+    `<b>"They cut mine out. That is what killed me."</b><br><br>` +
     `<b>"My people have no one to follow now. They will not move until this is finished."</b>`,
     ()=>ghostAsk(), { bg:'battle_diving', subtitle:'The deep' });
 }
@@ -554,7 +555,7 @@ async function ghostAccept(){
   storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'It follows you up',
     `It rises with you, and it does not stop at the surface.<br><br>` +
     `<i>The Whalelord is aboard the ship now — and nobody but you can see him.</i>`,
-    ()=>whaleCorpseTell(), { bg:'weather_deck', subtitle:'Weather Deck' });
+    ()=>startCorpseScene(), { bg:'weather_deck', subtitle:'Weather Deck' });
 }
 
 /* ------------------------------------------------------------
@@ -564,15 +565,30 @@ async function ghostAccept(){
    child's story into the captain's problem, and it is what puts every soul on
    the ship, researchers included, onto the investigation.
    ------------------------------------------------------------ */
-function whaleCorpseTell(){
-  /* You do not go looking for him. The moment the Whalelord is yours you are
-     standing in front of the captain, and you cannot walk off until the whole
-     thing has played out. */
+/* Where the scene has you pinned, and the one thing you may do there. The
+   stage is kept in the save, so leaving the region, choosing another deck or
+   closing the app all put you back on the same tile with the same button. */
+function corpseLock(){
+  const g = r4();
+  if(g.corpseStage === 'captain')
+    return { deck:'cabin_deck', x:11, y:7,
+             label:'Tell the Captain what happened', act:()=> whaleCorpseTell() };
+  if(g.corpseStage === 'deck')
+    return { deck:'weather_deck', x:12, y:6,
+             label:'Speak to the Captain.', act:()=> corpseDeckCaptain() };
+  return null;
+}
+async function startCorpseScene(){
+  const g = r4();
+  g.corpseStage = 'captain';
+  await saveProfile();
   const w = walkState();
-  w.busy = true; w.deck = 'cabin_deck'; w.at = w.at || {}; w.at.cabin_deck = { x:11, y:7 }; w.face = 'u';
-  ui.corpseScene = 'captain';
+  w.deck = 'cabin_deck'; w.at = w.at || {}; w.at.cabin_deck = { x:11, y:7 };
+  w.face = 'u'; w.busy = true;
   go('cabin_deck');
-  setTimeout(()=> storyModal(npcPortrait('ship_captain','⚓',140,'transparent'), crewName('ship_captain'),
+}
+function whaleCorpseTell(){
+  storyModal(npcPortrait('ship_captain','⚓',140,'transparent'), crewName('ship_captain'),
     `He looks up from the chart table. You are standing in front of him and you have not ` +
     `said anything yet.<br><br>` +
     `You tell him there is somebody beside you. He looks where you are pointing and sees a ` +
@@ -581,7 +597,7 @@ function whaleCorpseTell(){
     `So you tell him the rest instead. The whales are not angry at the ship. ` +
     `<b>Their lord has been murdered</b>, and they will not move until that is put right.<br><br>` +
     `He does not laugh. He has been staring at a wall of whales for eleven days.`,
-    ()=> whaleCorpseHaul(), { bg:'battle_cabin_deck', subtitle:'Cabin Deck' }), 800);
+    ()=> whaleCorpseHaul(), { bg:'battle_cabin_deck', subtitle:'Cabin Deck' });
 }
 function whaleCorpseHaul(){
   storyModal(npcPortrait('ship_captain','⚓',140,'transparent'), 'Lines over the side',
@@ -596,13 +612,12 @@ function whaleCorpseHaul(){
 async function corpseSceneOnDeck(){
   const g = r4();
   g.corpseSeen = true;                       // from here on, the body is part of the deck
+  g.corpseStage = 'deck';
   await saveProfile();
   const w = walkState();
   w.deck = 'weather_deck'; w.at = w.at || {}; w.at.weather_deck = { x:12, y:6 };
-  w.busy = true; w.face = 'u';
-  ui.corpseScene = 'deck';
+  w.face = 'u'; w.busy = true;
   go('weather_deck');
-  setTimeout(()=> corpseDeckCaptain(), 1500); // a moment to look at him before anybody speaks
 }
 function corpseDeckCaptain(){
   storyModal(npcPortrait('ship_captain','⚓',140,'transparent'), crewName('ship_captain'),
@@ -626,23 +641,30 @@ function corpseDeckSupervisor(){
     `<i>The <b>Research Deck</b> is open.</i>`,
     ()=> corpseSceneEnd(), { bg:'weather_deck', subtitle:'Weather Deck' });
 }
-/* One more beat of black, and then it is just you and him again. */
-function corpseSceneEnd(){
+/* One more beat of black, and then it is just you and him again — and your
+   legs are yours. */
+async function corpseSceneEnd(){
+  const g = r4();
+  g.corpseStage = null;
+  await saveProfile();
   blackoutTo(()=>{
-    ui.corpseScene = null;
     const w = walkState();
     w.deck = 'weather_deck'; w.at.weather_deck = { x:12, y:6 }; w.busy = false; w.face = 'u';
     go('weather_deck');
   }, { hold:700 });
 }
-/* Standing under him afterwards. He is not calm about it and should not be. */
+/* Standing under him afterwards. A core is not a battery. It is everyone he
+   came from, and it is gone. */
 function corpseChat(){
   storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
     `He hangs above his own body and does not look away from it.<br><br>` +
-    `<b>"That was mine. That was me."</b><br><br>` +
-    `<b>"Look at the cut. Straight. Unhurried. Somebody took their time over me while I was ` +
-    `still using it."</b><br><br>` +
-    `His voice drops, which is worse than if he shouted.<br><br>` +
+    `<b>"That is not a wound. That is a theft."</b><br><br>` +
+    `<b>"A core is not something you carry. It is handed down. Parent to child, and on, and ` +
+    `on. Every one of them put something into it."</b><br><br>` +
+    `<b>"My father is in there. His mother is in there. A thousand years of my family is in ` +
+    `there."</b><br><br>` +
+    `<b>"They did not just kill me. They stole everyone I came from."</b><br><br>` +
+    `His voice drops, which is worse than shouting.<br><br>` +
     `<b>"Find them, child. My people will not move, and I will not rest, until somebody ` +
     `answers for this."</b>`,
     ()=> go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
@@ -659,7 +681,7 @@ function ghostChat(where){
   const g = r4();
   /* He has been accepted but the captain has not been told: that scene first,
      from wherever you are standing. */
-  if(g.ghostAccepted && !g.corpseSeen) return whaleCorpseTell();
+  if(g.ghostAccepted && !g.corpseSeen) return startCorpseScene();
   const deck = where || 'cabin_deck';
   const onLab = deck === 'laboratory_deck';
   const onWeather = deck === 'weather_deck';
