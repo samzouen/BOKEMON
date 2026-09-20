@@ -259,10 +259,13 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       livingEnemies().forEach(e=> addEStatus(e, { type:'iceTomb', turnsLeft:d.freeze||2, taken:d.taken||0.8 }));
       if(d.field){ applyFieldStatus({ type:'iceField', turnsLeft:d.turns||2, taken:d.taken||1, freeze:d.freeze||2, mine:true }); }
       /* Frost Armour: the cold closes over your own monster too. Block stacks
-         do not expire, so they guard a Cataclysm charge all the way through. */
+         do not expire, so they guard a Cataclysm charge all the way through.
+         The parameter is casterMon — this used `mon`, which exists nowhere
+         here, so + and ✦ threw right after the freeze: no armour, no message.
+         tools/undef-check.js now catches any name used but never declared. */
       if(d.frost){
-        grantBlock(mon, d.frost, monAtk(mon));
-        setTimeout(()=> battleMsg(`❄️ Frost Armour — ${d.frost} layers of ice close over ${displayName(mon)}.`), 500);
+        grantBlock(casterMon, d.frost, monAtk(casterMon));
+        setTimeout(()=> battleMsg(`❄️ Frost Armour — ${d.frost} layers of ice close over ${displayName(casterMon)}.`), 500);
       }
       res.msg = d.text;
       break; }

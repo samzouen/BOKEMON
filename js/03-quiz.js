@@ -418,7 +418,7 @@ function renderQuiz(){
   // ONE character at a time, in the largest square the screen can give it.
   renderCharProgress();
   const box = document.createElement('div');
-  box.id = 'qbox-0';
+  box.id = WRITE_BOX_ID;
   box.className = 'write-box';
   $('#charsRow').appendChild(box);
 
@@ -552,7 +552,7 @@ function initQuizChar(i){
   const q = ui.quiz;
   q.charIndex = i;
   renderCharProgress();
-  const box = $('#qbox-0');
+  const box = writeBoxEl();
   if(box) box.innerHTML = '';                 // reuse the one big box for each character
   // Wait for layout before measuring. Without this the FIRST character of a
   // phrase was sized from an unsettled layout (~2/3 size), which threw off
@@ -563,12 +563,23 @@ function initQuizChar(i){
   }));
 }
 
+/* THE BUG THAT FROZE THE CLOCK AFTER A PHRASE'S FIRST CHARACTER
+   There is ONE writing box, reused for every character of a phrase. This wait
+   used to look for 'qbox-' + charIndex — a box per character, from an older
+   layout. From the second character on, that box did not exist, so the wait
+   never saw the strokes arrive, gave up after five seconds, and the clock that
+   holdTimerForLoad() had paused was never resumed for the rest of the phrase.
+   (The '…' loading mark also hung on for those five seconds.) Everything finds
+   the box through writeBoxEl() now, so the two can never disagree again. */
+const WRITE_BOX_ID = 'qbox-0';
+function writeBoxEl(){ return document.getElementById(WRITE_BOX_ID); }
+
 /* Resolve once the current character is actually drawn, or give up quietly so
    a failed load can't leave the quiz frozen with no clock and no way on. */
 function whenWriterReady(cb, waited, myToken){
   waited = waited || 0;
   if(myToken == null) myToken = ui.quiz && ui.quiz.token;
-  const box = document.getElementById('qbox-' + ((ui.quiz && ui.quiz.charIndex) || 0));
+  const box = writeBoxEl();
   /* A poll chain started for an earlier word must die rather than fire its
      callback into the current one. */
   if(!ui.quiz || ui.quiz.resolved || ui.quiz.token !== myToken) return;
