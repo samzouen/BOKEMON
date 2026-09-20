@@ -21,6 +21,14 @@ let WALK_T = 44;                         // recomputed to fit the stage
    some are only there at a certain point in the story (`when`). Everything that
    asks "what is standing here" goes through these, so the picture, the blocking
    and the buttons can never disagree. */
+/* A picture that will not load must still show something. An invisible thing
+   that blocks four tiles is the worst of both worlds. */
+function walkArtMissing(img, icon, px, rot){
+  const s = document.createElement('span');
+  s.textContent = icon || '❓';
+  s.style.cssText = `font-size:${px}px;line-height:1;` + (rot ? `transform:rotate(${rot}deg);` : '');
+  img.replaceWith(s);
+}
 function deckThings(d){ return d.things.filter(t => !t.when || t.when()); }
 function thingCovers(t, x, y){
   return x >= t.x && x < t.x + (t.w || 1) && y >= t.y && y < t.y + (t.h || 1);
@@ -66,14 +74,15 @@ const DECKS = {
       /* The Whalelord's body, laid across the bow the way the fishermen left
          it: two tiles by two, turned. It blocks the bow tip while it lies
          there, which is what a whale on a foredeck would do. */
-      { x:12, y:4, w:2, h:2, sprite:'whalelord_corpse', rot:30, verb:'The body',
+      { x:12, y:4, w:2, h:2, sprite:'whalelord_corpse', rot:30, icon:'🐋', verb:'The body',
         when:()=> !!(typeof r4 === 'function' && r4().corpseSeen),
         act:()=> corpseChat() },
-      /* These two are only here while the scene on deck is playing. */
-      { x:13, y:6, sprite:'ship_captain', verb:'Captain',
-        when:()=> ui.corpseScene === 'deck', act:()=> corpseDeckCaptain() },
-      { x:14, y:6, sprite:'scientist_supervisor', verb:'Supervisor',
-        when:()=> ui.corpseScene === 'deck', act:()=> corpseDeckSupervisor() },
+      /* These two are only here while the scene on deck is playing — and that
+         is remembered in the save, so leaving and coming back finds them. */
+      { x:13, y:6, sprite:'ship_captain', icon:'⚓', verb:'Captain',
+        when:()=> !!(typeof r4 === 'function' && r4().corpseStage === 'deck'), act:()=> corpseDeckCaptain() },
+      { x:14, y:6, sprite:'scientist_supervisor', icon:'🧑‍🔬', verb:'Supervisor',
+        when:()=> !!(typeof r4 === 'function' && r4().corpseStage === 'deck'), act:()=> corpseDeckSupervisor() },
     ],
   },
   cabin_deck: {
@@ -337,9 +346,26 @@ const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? tru
 
 /* ---------- drawing ---------- */
 function renderWalkDeck(id){
+  /* A scene can pin you in place. Whichever deck you pick — and however you
+     leave the region and come back — you are put down where the story left
+     you, and you stay there until it is finished. The stage is in the save,
+     not in ui, so closing the app changes nothing. */
+  const lock = (typeof corpseLock === 'function') ? corpseLock() : null;
+  if(lock && id !== lock.deck) return renderWalkDeck(lock.deck);
   const d = DECKS[id]; if(!d) return go('explore');
   const w = walkState();
   w.deck = id;
+  /* The action panel is rebuilt only when what you stand beside changes — so a
+     fresh render has to forget the last signature, or the buttons come back
+     empty after a scene, a fight or a shop. */
+  w.actSig = null;
+  if(lock){
+    w.at = w.at || {};
+    w.at[id] = { x:lock.x, y:lock.y };
+    w.busy = true;                       // no walking until the scene is done
+  } else if(w.busy){
+    w.busy = false;                      // a scene left half-finished never freezes you
+  }
   /* Arriving from Explore, or down a ladder, puts you on the companionway.
      Coming BACK from a conversation, a shop or a fight puts you exactly where
      you were standing — which is the only thing that feels right. */
@@ -357,8 +383,6 @@ function renderWalkDeck(id){
                                  laboratory_deck:'Laboratory' }[id];
 
   const nat = { weather_deck:[797,1209], cabin_deck:[832,1262], laboratory_deck:[832,1262] }[id];
-  /* A scene that was interrupted must never leave you frozen. */
-  if(!ui.corpseScene) walkState().busy = false;
   /* fit the view across whatever the stage turns out to be */
   WALK_VIEW = walkView();
   const avail = Math.min(window.innerWidth - 24, Math.max(220, window.innerHeight - 330));
@@ -409,9 +433,10 @@ function renderWalkDeck(id){
       e.style.height = (t.h || 1) * WALK_T + 'px';
     }
     const spin = t.rot ? ` style="transform:rotate(${t.rot}deg);"` : '';
+    const fallPx = Math.round(WALK_T * 0.8 * (t.h || 1));
     e.innerHTML = t.sprite
-      ? `<img src="assets/npc/${t.sprite}.png" alt=""${spin} onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${t.icon||''}'}))">`
-      : `<span>${t.icon||''}</span>`;
+      ? `<img src="assets/npc/${t.sprite}.png" alt=""${spin} onerror="walkArtMissing(this,'${(t.icon||'').replace(/'/g,'')}',${fallPx},${t.rot||0})">`
+      : `<span style="font-size:${fallPx}px;line-height:1;">${t.icon||''}</span>`;
     world.appendChild(e); t.el = e;
   });
   /* Every wall tile, shaded. Drawn a pixel oversized so neighbours meet with
@@ -527,6 +552,24 @@ function refreshWalk(){
 
   /* a mark on each tile you could step onto — the only question you have */
   steps.innerHTML = '';
+  const lock = (typeof corpseLock === 'function') ? corpseLock() : null;
+  if(lock){
+    /* Pinned by a scene: no steps to offer, and one button. It is the only
+       thing you can do, but it is yours to press. */
+    const acts = $('#walkActs');
+    const sig = 'lock:' + lock.label;
+    if(sig !== w.actSig){
+      w.actSig = sig;
+      acts.classList.add('single');
+      acts.innerHTML = '';
+      const b = document.createElement('button');
+      b.className = 'wact live';
+      b.textContent = lock.label;
+      b.addEventListener('click', ()=> lock.act());
+      acts.appendChild(b);
+    }
+    return;
+  }
   [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dx,dy])=>{
     const nx=p.x+dx, ny=p.y+dy;
     if(wSolid(d,nx,ny)) return;
