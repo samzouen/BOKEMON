@@ -381,6 +381,7 @@ function eyeBreakRemaining(){
 const EYE_IDLE_RESET_MS = 20 * 60 * 1000;
 function tallyBattleForEyeBreak(){
   if(!state) return false;
+  battlesToday(); state.battlesToday.n++;           // every battle counts toward the day, breaks on or off
   const every = state.settings.eyeBreakEvery || 0;
   if(every <= 0) return false;                       // 0 disables the feature
   /* Twenty minutes without a battle is a rest in itself, so the count starts
@@ -465,8 +466,11 @@ function showEyeBreak(){
   tick();
   _eyeTimer = setInterval(tick, 250);
 }
-/* Re-assert the lock on any render, so a reload during a break stays locked. */
+/* Re-assert the locks on any render, so a reload stays locked. The day's limit
+   comes first: it is the bigger of the two. */
 function enforceEyeBreak(){
+  if(dailyLimitActive()) return showDailyLock();
+  if(dailyOverrideActive()) scheduleDailyRecheck();
   if(eyeBreakActive()) showEyeBreak();
 }
 
@@ -1421,5 +1425,120 @@ function plantBossReward(){
     ()=> resumeVictory(), { bg:'geothermal_plant', subtitle:'Geothermal Plant' });
 }
 
-
-
+/* ============================================================
+   BATTLES PER DAY
+   A blunter lever than eye breaks: how many battles one calendar day may hold
+   (0–100). Reaching it closes the game until tomorrow, or until a grown-up
+   opens it with the password for 1 to 60 minutes. At 0 it stays closed until a
+   grown-up opens it. Counts exactly what eye breaks count.
+   ============================================================ */
+const DAILY_DEFAULT = 100;
+let _dailyTimer = null;
+function dailyLimit(){
+  const v = state && state.settings && state.settings.dailyBattles;
+  return (v == null || isNaN(v)) ? DAILY_DEFAULT : Math.max(0, Math.min(100, +v));
+}
+function battlesToday(){
+  if(!state) return 0;
+  const t = today();
+  if(!state.battlesToday || state.battlesToday.day !== t) state.battlesToday = { day:t, n:0 };
+  return state.battlesToday.n;
+}
+/* Unlimited switches the daily limit off altogether (the number is kept for
+   when it is switched back on). */
+function dailyUnlimited(){ return !!(state && state.settings && state.settings.dailyUnlimited); }
+/* A grown-up has opened it: for a set number of minutes, or with no time limit
+   at all — that lasts until a grown-up locks it again from Settings. */
+function dailyOverrideActive(){
+  return !!(state && (state.dailyOverrideOpen || (state.dailyOverrideUntil && Date.now() < state.dailyOverrideUntil)));
+}
+function dailyLimitActive(){ return !!state && !dailyUnlimited() && !dailyOverrideActive() && battlesToday() >= dailyLimit(); }
+function lockDailyAgain(){
+  state.dailyOverrideOpen = false;
+  state.dailyOverrideUntil = 0;
+  if(_dailyTimer){ clearTimeout(_dailyTimer); _dailyTimer = null; }
+  saveProfile();
+}
+/* When a grown-up's time runs out, close it again — but never in the middle of
+   a battle or a spelling; that waits for the next screen. */
+function scheduleDailyRecheck(){
+  if(_dailyTimer){ clearTimeout(_dailyTimer); _dailyTimer = null; }
+  const ms = ((state && state.dailyOverrideUntil) || 0) - Date.now();
+  if(ms > 0) _dailyTimer = setTimeout(()=>{
+    _dailyTimer = null;
+    if(!['battle', 'quiz'].includes(ui.screen)) enforceEyeBreak();
+  }, ms + 300);
+}
+/* Keep a slider and a typed number in step, clamped to [min, max]. */
+function pairInputs(slider, num, min, max, onValue){
+  const clamp = v => Math.max(min, Math.min(max, Math.round(+v || 0)));
+  slider.addEventListener('input', ()=>{ num.value = slider.value; onValue(clamp(slider.value), false); });
+  slider.addEventListener('change', ()=> onValue(clamp(slider.value), true));
+  num.addEventListener('change', ()=>{ const v = clamp(num.value); num.value = v; slider.value = v; onValue(v, true); });
+}
+function showDailyLock(){
+  if(document.getElementById('dailyLockOverlay')) return;
+  const limit = dailyLimit();
+  const ov = document.createElement('div');
+  ov.className = 'eye-overlay';
+  ov.id = 'dailyLockOverlay';
+  ov.innerHTML = `
+    <div class="eye-card">
+      <div class="eye-emoji">🌙</div>
+      <div class="eye-title">${limit === 0 ? 'Battles are switched off' : "That's all for today"}</div>
+      <div class="eye-note">${limit === 0
+        ? 'A grown-up has switched the game off for now.'
+        : `You've had ${battlesToday()} battles today — the most for one day. See you tomorrow!`}</div>
+      <div id="dayGate" style="display:none;margin-top:16px;text-align:left;">
+        <input type="password" id="dayPw" placeholder="Password" inputmode="numeric" autocomplete="off"
+          style="width:100%;box-sizing:border-box;">
+        <label style="display:block;font-size:12px;font-weight:800;margin-top:10px;color:#f4ecd8;">
+          Open for <span id="dayMinsLbl">15</span> minutes</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="range" id="dayMins" min="1" max="60" step="1" value="15" style="flex:1;accent-color:var(--cinnabar);">
+          <input type="number" id="dayMinsNum" min="1" max="60" value="15" style="width:64px;">
+        </div>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;font-weight:700;color:#f4ecd8;">
+          <input type="checkbox" id="dayForever"> No time limit — until a grown-up locks it again
+        </label>
+        <div id="dayPwMsg" style="font-size:12px;font-weight:700;min-height:16px;margin-top:6px;color:#f3b7a8;"></div>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="btn btn-primary" id="dayGo" style="flex:1;">Open the game</button>
+          <button class="btn btn-ghost" id="dayNo" style="flex:1;">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <button id="dayOverride" aria-label="Grown-ups: open the game"
+      style="position:absolute;top:calc(env(safe-area-inset-top, 0px) + 12px);right:12px;
+             background:rgba(244,236,216,.12);color:#f4ecd8;border:1px solid rgba(244,236,216,.35);
+             border-radius:12px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer;">
+      🔒 Grown-ups
+    </button>`;
+  document.body.appendChild(ov);
+  document.body.classList.add('eye-locked');
+  const $o = s=> ov.querySelector(s);
+  let mins = 15;
+  pairInputs($o('#dayMins'), $o('#dayMinsNum'), 1, 60, v=>{ mins = v; $o('#dayMinsLbl').textContent = v; });
+  $o('#dayForever').addEventListener('change', ()=>{
+    const on = $o('#dayForever').checked;
+    $o('#dayMins').disabled = on; $o('#dayMinsNum').disabled = on;
+    $o('#dayMinsLbl').parentNode.style.opacity = on ? '.45' : '';
+  });
+  $o('#dayOverride').addEventListener('click', ()=>{
+    $o('#dayGate').style.display = 'block'; $o('#dayPwMsg').textContent = ''; $o('#dayPw').value = ''; $o('#dayPw').focus();
+  });
+  $o('#dayNo').addEventListener('click', ()=>{ $o('#dayGate').style.display = 'none'; });
+  const tryPw = ()=>{
+    if(!passOk($o('#dayPw').value.trim())){ $o('#dayPwMsg').textContent = 'Incorrect password.'; $o('#dayPw').value = ''; return; }
+    const forever = $o('#dayForever').checked;
+    state.dailyOverrideOpen = forever;
+    state.dailyOverrideUntil = forever ? 0 : Date.now() + mins * 60 * 1000;
+    saveProfile();
+    ov.remove();
+    if(!document.getElementById('eyeBreakOverlay')) document.body.classList.remove('eye-locked');
+    scheduleDailyRecheck();
+    toast(forever ? 'Open until a grown-up locks it again.' : `Open for ${mins} minute${mins === 1 ? '' : 's'}.`);
+  };
+  $o('#dayGo').addEventListener('click', tryPw);
+  $o('#dayPw').addEventListener('keydown', e=>{ if(e.key === 'Enter') tryPw(); });
+}

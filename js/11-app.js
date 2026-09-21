@@ -644,6 +644,9 @@ function renderParentArea(){
         <div>⚡ Levelling: <b>${XP_MODES[xpMode()].label}</b></div>
         <div>✍️ Leniency: <b>${lenLabel(state.settings.leniency||1)}</b></div>
         <div>👀 Eye breaks: <b>${every>0?`${mins} min every ${every} battles`:'off'}</b></div>
+        <div>📅 Battles a day: <b>${dailyUnlimited()?'unlimited':(dailyLimit()===0?'switched off':dailyLimit())}</b> · ${battlesToday()} so far today</div>
+        ${dailyOverrideActive() ? `<div>🔓 Opened by a grown-up: <b>${state.dailyOverrideOpen ? 'no time limit'
+          : 'until ' + new Date(state.dailyOverrideUntil).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}</b></div>` : ''}
       </div>
       <input type="password" id="pcPw" placeholder="Password to change" inputmode="numeric" autocomplete="off">
       
@@ -723,14 +726,36 @@ function renderParentArea(){
         </div>`).join('')}
     </div>
 
-    <div class="pc-block" style="border-bottom:none;padding-bottom:0;">
+    <div class="pc-block">
       <div class="pc-head">👀 Eye breaks</div>
       <div class="pc-sub">Counts battles only — Recovery and practice don't add up.</div>
       <label style="font-size:12px;font-weight:800;">Battles before a break: <span id="ebeLabel">${every||'off'}</span></label>
       <input type="range" id="ebeSlider" min="0" max="30" step="1" value="${every}" style="width:100%;accent-color:var(--cinnabar);">
       <label style="font-size:12px;font-weight:800;display:block;margin-top:8px;">Break length: <span id="ebmLabel">${mins} min</span></label>
-      <input type="range" id="ebmSlider" min="1" max="20" step="1" value="${mins}" style="width:100%;accent-color:var(--cinnabar);">
-      <div class="pc-sub" style="margin-top:6px;">Set battles to 0 to switch eye breaks off.</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="range" id="ebmSlider" min="1" max="120" step="1" value="${mins}" style="flex:1;accent-color:var(--cinnabar);">
+        <input type="number" id="ebmNum" min="1" max="120" value="${mins}" style="width:64px;" aria-label="Break length in minutes">
+      </div>
+      <div class="pc-sub" style="margin-top:6px;">Set battles to 0 to switch eye breaks off. Breaks can last up to 2 hours.</div>
+    </div>
+
+    <div class="pc-block" style="border-bottom:none;padding-bottom:0;">
+      <div class="pc-head">📅 Battles per day</div>
+      <div class="pc-sub">Counts battles the same way. Reaching the number closes the game until tomorrow;
+        a grown-up can open it again with the password for 1–60 minutes. At 0 it stays closed until a grown-up opens it.</div>
+      <label style="font-size:12px;font-weight:800;">Battles a day: <span id="dbLabel">${dailyUnlimited()?'unlimited':(dailyLimit()===0?'off':dailyLimit())}</span>
+        · ${battlesToday()} so far today</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="range" id="dbSlider" min="0" max="100" step="1" value="${dailyLimit()}" ${dailyUnlimited()?'disabled':''} style="flex:1;accent-color:var(--cinnabar);">
+        <input type="number" id="dbNum" min="0" max="100" value="${dailyLimit()}" ${dailyUnlimited()?'disabled':''} style="width:64px;" aria-label="Battles per day">
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;font-weight:700;">
+        <input type="checkbox" id="dbUnlimited" ${dailyUnlimited()?'checked':''}> Unlimited — no daily limit
+      </label>
+      ${dailyOverrideActive() ? `
+        <div class="pc-sub" style="margin-top:10px;">🔓 Opened by a grown-up — ${state.dailyOverrideOpen ? 'no time limit'
+          : 'until ' + new Date(state.dailyOverrideUntil).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'})}.</div>
+        <button class="btn btn-ghost" id="dbRelock" style="margin-top:6px;">Lock it again now</button>` : ''}
     </div>
   `;
 
@@ -783,8 +808,25 @@ function renderParentArea(){
   const a=$('#ebeSlider'), b=$('#ebmSlider');
   a.addEventListener('input', ()=>{ $('#ebeLabel').textContent = a.value>0?a.value:'off'; });
   a.addEventListener('change', async ()=>{ state.settings.eyeBreakEvery = +a.value; await saveProfile(); });
-  b.addEventListener('input', ()=>{ $('#ebmLabel').textContent = b.value+' min'; });
-  b.addEventListener('change', async ()=>{ state.settings.eyeBreakMins = +b.value; await saveProfile(); });
+  pairInputs(b, $('#ebmNum'), 1, 120, async (v, commit)=>{
+    $('#ebmLabel').textContent = v + ' min';
+    if(commit){ state.settings.eyeBreakMins = v; await saveProfile(); }
+  });
+  pairInputs($('#dbSlider'), $('#dbNum'), 0, 100, async (v, commit)=>{
+    $('#dbLabel').textContent = v === 0 ? 'off' : v;
+    if(commit){ state.settings.dailyBattles = v; await saveProfile(); }
+  });
+  $('#dbUnlimited').addEventListener('change', async e=>{
+    state.settings.dailyUnlimited = e.target.checked;
+    await saveProfile();
+    renderParentArea();
+  });
+  const relock = $('#dbRelock');
+  if(relock) relock.addEventListener('click', ()=>{
+    lockDailyAgain();
+    toast('Locked again. The daily limit is back in charge.');
+    renderParentArea();
+  });
 }
 
 /* ---------- HAMBURGER DRAWER ---------- */

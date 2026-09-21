@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.49';
+const GAME_VERSION = '2.51';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1013,6 +1013,10 @@ function normalizeProfile(p){
   if(p.settings.leniency===undefined) p.settings.leniency = 1.0;
   if(p.settings.eyeBreakEvery===undefined) p.settings.eyeBreakEvery = 10;
   if(p.settings.eyeBreakMins===undefined) p.settings.eyeBreakMins = 5;
+  if(p.settings.dailyBattles===undefined) p.settings.dailyBattles = 100;
+  if(p.settings.dailyUnlimited===undefined) p.settings.dailyUnlimited = (p.settings.dailyBattles === 100);
+  if(p.dailyOverrideUntil===undefined) p.dailyOverrideUntil = 0;
+  if(p.dailyOverrideOpen===undefined) p.dailyOverrideOpen = false;
   if(p.battlesSinceBreak===undefined) p.battlesSinceBreak = 0;
   if(p.eyeBreakUntil===undefined) p.eyeBreakUntil = 0;
   if(p.lastBattleAt===undefined) p.lastBattleAt = 0;
@@ -1197,8 +1201,9 @@ function isPassenger(m){ return isSeed(m) || isEgg(m) || isBaby(m) || (isCuain(m
 function isFixedMember(m){ return isPassenger(m) || isCuain(m); }
 /* The six: fighters that take a slot. Cuain never takes one. */
 function slottedCount(){ return battleParty().filter(m=> !isCuain(m)).length; }
-/* The Ghost Stone stays on him until he is crowned. */
-function stoneBound(id, m){ return id === 'ghostStone' && isCuain(m) && !m.crowned; }
+/* He may carry the Ghost Stone as soon as you own it, and take it off again.
+   Once Caladrius has set it in him, it stays until he is crowned. */
+function stoneBound(id, m){ return id === 'ghostStone' && isCuain(m) && !!m.revived && !m.crowned; }
 function battleParty(){ return state.party.filter(m=>!isPassenger(m)); }
 function hasSeed(){ return state.party.some(isSeed); }
 /* Put Cuain in the party as a passenger. An older save may already have him —

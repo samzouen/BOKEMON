@@ -1000,7 +1000,7 @@ function renderElementStones(){
     ${held.length ? held.map(st=>{
       const holderUid = stoneHolder(st.id);
       const mon = holderUid && all.find(m=>m.uid===holderUid);
-      const eligible = all.filter(m=>(SPECIES[m.species].types||[]).includes(st.type) && !isPassenger(m));
+      const eligible = all.filter(m=>(SPECIES[m.species].types||[]).includes(st.type) && (!isPassenger(m) || isCuain(m)));
       return `<div class="es-row">
         <div class="es-icon">${uiIcon(st.icon, 54, st.emoji)}</div>
         <div class="es-body">
@@ -1032,7 +1032,7 @@ function renderElementStones(){
   screenEl.querySelectorAll('[data-attach]').forEach(b=>b.addEventListener('click', ()=>{
     const st = ELEMENTAL_STONES.find(x=>x.id===b.dataset.attach);
     const eligible = all.map((m,i)=>({m,i})).filter(o=>
-      (SPECIES[o.m.species].types||[]).includes(st.type) && !isPassenger(o.m));
+      (SPECIES[o.m.species].types||[]).includes(st.type) && (!isPassenger(o.m) || isCuain(o.m)));
     monsterChooser(`Give the ${st.name} to…`, eligible, async (i)=>{
       state.inventory[stoneOnKey(st.id)] = all[i].uid;
       await saveProfile();
