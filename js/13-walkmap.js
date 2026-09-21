@@ -350,7 +350,7 @@ function renderWalkDeck(id){
      leave the region and come back — you are put down where the story left
      you, and you stay there until it is finished. The stage is in the save,
      not in ui, so closing the app changes nothing. */
-  const lock = (typeof corpseLock === 'function') ? corpseLock() : null;
+  const lock = (typeof storyLock === 'function') ? storyLock() : null;
   if(lock && id !== lock.deck) return renderWalkDeck(lock.deck);
   const d = DECKS[id]; if(!d) return go('explore');
   const w = walkState();
@@ -362,6 +362,8 @@ function renderWalkDeck(id){
   if(lock){
     w.at = w.at || {};
     w.at[id] = { x:lock.x, y:lock.y };
+    if(lock.ghost){ w.ghostAt = w.ghostAt || {}; w.ghostAt[id] = { x:lock.ghost.x, y:lock.ghost.y }; }
+    if(lock.face) w.face = lock.face;
     w.busy = true;                       // no walking until the scene is done
   } else if(w.busy){
     w.busy = false;                      // a scene left half-finished never freezes you
@@ -516,7 +518,11 @@ function renderWalkDeck(id){
   buildAquarium(world, d);
   wireWalkKeys();
   refreshWalk();
-  if(id === 'weather_deck') startRail(); else stopRail();
+  if(id === 'weather_deck' && !lock) startRail(); else stopRail();
+  /* A pinned scene sets out its people once the deck is drawn, and a scene
+     that plays by itself starts itself. */
+  if(lock && lock.stage) lock.stage();
+  if(lock && lock.auto && !ui.sceneRunning) lock.auto();
 }
 
 /* The camera follows you until the map runs out. At an edge the map stops and
@@ -552,21 +558,23 @@ function refreshWalk(){
 
   /* a mark on each tile you could step onto — the only question you have */
   steps.innerHTML = '';
-  const lock = (typeof corpseLock === 'function') ? corpseLock() : null;
+  const lock = (typeof storyLock === 'function') ? storyLock() : null;
   if(lock){
     /* Pinned by a scene: no steps to offer, and one button. It is the only
        thing you can do, but it is yours to press. */
     const acts = $('#walkActs');
-    const sig = 'lock:' + lock.label;
+    const sig = 'lock:' + (lock.label || '');
     if(sig !== w.actSig){
       w.actSig = sig;
       acts.classList.add('single');
       acts.innerHTML = '';
-      const b = document.createElement('button');
-      b.className = 'wact live';
-      b.textContent = lock.label;
-      b.addEventListener('click', ()=> lock.act());
-      acts.appendChild(b);
+      if(lock.label){                   // while a scene is playing there is nothing to press
+        const b = document.createElement('button');
+        b.className = 'wact live';
+        b.textContent = lock.label;
+        b.addEventListener('click', ()=> lock.act());
+        acts.appendChild(b);
+      }
     }
     return;
   }
@@ -780,7 +788,7 @@ function railHelp(n){
 }
 function labScientist(n){
   const stage = (typeof labStage === 'function') ? labStage() : 'blocked';
-  if(stage === 'investigation') return fightScientist(n);
+  if(stage === 'investigation') return sciAlibi(n);
   if(stage === 'after') return go('laboratory_deck');
   puzzledChat(n);
 }
@@ -791,3 +799,221 @@ function labSupervisor(){
   if(!guessesLeft()) return supervisorPatience();
   go('accuse');
 }
+
+/* ============================================================
+   CUTSCENES
+   A scene puts extra people on a deck for a while (actors), talks in small
+   windows that leave the deck in view, and moves things about. Actors are not
+   DECKS things: nobody bumps into them or talks to them. Every pause goes
+   through sceneWait, so one number (SCENE_SPEED) runs a whole scene at speed
+   in a test.
+   ============================================================ */
+let SCENE_SPEED = 1;
+const sceneWait = ms => new Promise(r => setTimeout(r, ms * SCENE_SPEED));
+
+function sceneCss(){
+  if(document.getElementById('sceneCss')) return;
+  const st = document.createElement('style');
+  st.id = 'sceneCss';
+  st.textContent = `
+    .scene-actor{position:absolute;pointer-events:none;}
+    .scene-actor .sa-in{width:100%;height:100%;display:flex;align-items:flex-end;justify-content:center;}
+    .scene-actor img{width:100%;height:100%;object-fit:contain;object-position:bottom;}
+    @keyframes sceneBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-12%)}}
+    .scene-actor.bob .sa-in{animation:sceneBob 1.6s ease-in-out infinite;}
+    .scene-say{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
+      width:min(94vw,480px);background:var(--paper);border-radius:18px;padding:14px 14px 12px;
+      box-shadow:0 10px 32px rgba(0,0,0,.35);z-index:85;display:flex;gap:12px;align-items:flex-start;}
+    .scene-say .ss-faces{display:flex;gap:6px;flex:0 0 auto;align-items:flex-end;}
+    .scene-say .ss-faces img{width:64px;height:64px;object-fit:contain;visibility:visible !important;}
+    .scene-say .ss-body{flex:1;text-align:left;font-size:14px;line-height:1.5;}
+    .scene-say .ss-name{font-weight:800;margin-bottom:4px;}
+    .scene-say .ss-go{display:flex;justify-content:flex-end;margin-top:10px;}
+    #sceneCurtain{position:fixed;inset:0;background:#000;opacity:0;z-index:95;pointer-events:none;
+      display:flex;align-items:center;justify-content:center;}
+    #sceneCurtain .sc-text{color:#fff;font-size:20px;line-height:1.5;text-align:center;padding:0 28px;opacity:0;}
+    #sceneFlash{position:fixed;inset:0;background:#fff;opacity:0;z-index:96;pointer-events:none;}
+    .scene-ball{position:absolute;border-radius:50%;pointer-events:none;z-index:40;opacity:.8;
+      background:radial-gradient(circle,#ffffff 0%,#e3fffb 28%,#86f4e8 55%,rgba(64,224,208,0) 71%);
+      box-shadow:0 0 36px 10px rgba(130,255,240,.5);}
+  `;
+  document.head.appendChild(st);
+}
+
+/* Put someone on the deck, or change them. x/y/w/h in tiles (x/y is the top-
+   left corner, and may be fractional). src is an image path; flip faces the
+   other way; faint lays them on their side, a fifth of a tile lower. */
+function sceneActor(id, o){
+  sceneCss();
+  const world = $('#walkWorld');
+  if(!world) return null;
+  let el = document.getElementById('sa-' + id);
+  if(!el){
+    el = document.createElement('div');
+    el.className = 'scene-actor';
+    el.id = 'sa-' + id;
+    el.innerHTML = '<div class="sa-in"></div>';
+    world.appendChild(el);
+  }
+  const a = el._o = Object.assign(el._o || {}, o || {});
+  const T = WALK_T, w = a.w || 1, h = a.h || 1;
+  el.style.left = (a.x * T) + 'px';
+  el.style.top = (a.y * T) + 'px';
+  el.style.width = (w * T) + 'px';
+  el.style.height = (h * T) + 'px';
+  el.style.zIndex = (a.z != null) ? a.z : (10 + Math.floor(a.y));
+  el.classList.toggle('bob', !!a.bob);
+  const inner = el.firstChild;
+  if(o && (o.src || o.icon) || !inner.firstChild){
+    inner.innerHTML = `<img src="${a.src}" alt="" ` +
+      `onerror="walkArtMissing(this,'${(a.icon||'').replace(/'/g,'')}',${Math.round(T*0.8*h)},0)">`;
+  }
+  const art = inner.firstChild;
+  if(art && art.style){
+    const t = [];
+    if(a.faint) t.push(`translateY(20%) rotate(${a.faint > 0 ? 90 : -90}deg)`);
+    if(a.flip)  t.push('scaleX(-1)');
+    art.style.transform = t.join(' ');
+  }
+  return el;
+}
+function sceneActorGone(id){ const el = document.getElementById('sa-' + id); if(el) el.remove(); }
+function sceneClear(){
+  document.querySelectorAll('.scene-actor, .scene-ball, .scene-say').forEach(e=> e.remove());
+}
+/* Lay the player down (or stand them back up) where they are. */
+function sceneFaintPlayer(dir){
+  const img = document.querySelector('#walkYou img');
+  if(img) img.style.transform = dir ? `translateY(20%) rotate(${dir > 0 ? 90 : -90}deg) scale(1.275)` : '';
+}
+
+/* A small window along the bottom: the deck stays in view above it. faces is
+   a list of picture HTML (one, or two side by side). */
+function sceneSay(faces, name, html, button){
+  sceneCss();
+  return new Promise(done=>{
+    const box = document.createElement('div');
+    box.className = 'scene-say';
+    box.innerHTML = `<div class="ss-faces">${(faces || []).join('')}</div>` +
+      `<div class="ss-body"><div class="ss-name">${escapeHtml(name || '')}</div><div>${html}</div>` +
+      `<div class="ss-go"><button class="btn btn-primary">${button || 'Continue'}</button></div></div>`;
+    document.body.appendChild(box);
+    box.querySelector('button').addEventListener('click', ()=>{ box.remove(); done(); });
+  });
+}
+function faceNpc(id, emoji){
+  return `<img src="assets/npc/${id}.png" alt="" onerror="walkArtMissing(this,'${emoji || '🧑'}',48,0)">`;
+}
+function faceImg(src, emoji){
+  return `<img src="${src}" alt="" onerror="walkArtMissing(this,'${emoji || '❓'}',48,0)">`;
+}
+function facePlayer(){ return avatarImg(state.avatar || 'm1', 64, { bare:true }); }
+function faceMon(sp, opts){ return monPortrait(sp, 64, Object.assign({ view:'front', bare:true }, opts || {})); }
+
+/* The black curtain, and white words on it. */
+function sceneCurtainEl(){
+  sceneCss();
+  let c = document.getElementById('sceneCurtain');
+  if(!c){
+    c = document.createElement('div');
+    c.id = 'sceneCurtain';
+    c.innerHTML = '<div class="sc-text"></div>';
+    document.body.appendChild(c);
+    void c.offsetWidth;
+  }
+  return c;
+}
+async function sceneCurtain(show, ms){
+  const c = sceneCurtainEl();
+  c.style.transition = `opacity ${ms * SCENE_SPEED}ms ease`;
+  void c.offsetWidth;
+  c.style.opacity = show ? '1' : '0';
+  await sceneWait(ms);
+  if(!show) c.remove();
+}
+async function sceneCurtainText(text, ms){
+  const t = sceneCurtainEl().querySelector('.sc-text');
+  t.textContent = text || '';
+  t.style.transition = `opacity ${ms * SCENE_SPEED}ms ease`;
+  void t.offsetWidth;
+  t.style.opacity = text ? '1' : '0';
+  await sceneWait(ms);
+}
+
+/* White from translucent to solid over inMs, held for holdMs (duringWhite runs
+   behind it), then lifted. */
+async function sceneFlash(inMs, holdMs, duringWhite){
+  sceneCss();
+  const f = document.createElement('div');
+  f.id = 'sceneFlash';
+  f.style.opacity = '0.3';
+  document.body.appendChild(f);
+  void f.offsetWidth;
+  f.style.transition = `opacity ${inMs * SCENE_SPEED}ms linear`;
+  f.style.opacity = '1';
+  await sceneWait(inMs);
+  if(duringWhite) duringWhite();
+  await sceneWait(holdMs);
+  f.style.transition = `opacity ${500 * SCENE_SPEED}ms ease`;
+  f.style.opacity = '0';
+  await sceneWait(500);
+  f.remove();
+}
+
+/* A glowing ball that breathes in and out while it grows, ending exactly
+   maxTiles across, centred on (cx, cy) in tile units. */
+function sceneBall(cx, cy, maxTiles, ms){
+  sceneCss();
+  const world = $('#walkWorld');
+  const b = document.createElement('div');
+  b.className = 'scene-ball';
+  b.id = 'sceneBall';
+  if(world) world.appendChild(b);
+  const T = WALK_T, dur = Math.max(1, ms * SCENE_SPEED), t0 = performance.now();
+  return new Promise(done=>{
+    const frame = now=>{
+      const t = Math.min(1, (now - t0) / dur);
+      const grow = 0.4 + (maxTiles - 0.4) * t;
+      const pulse = t < 1 ? 1 + 0.14 * Math.sin(t * Math.PI * 12) : 1;
+      const d = grow * pulse * T;
+      b.style.width = b.style.height = d + 'px';
+      b.style.left = (cx * T - d / 2) + 'px';
+      b.style.top = (cy * T - d / 2) + 'px';
+      if(t < 1) requestAnimationFrame(frame); else done(b);
+    };
+    requestAnimationFrame(frame);
+  });
+}
+
+/* Move an actor along a jump: straight across, up and over by `lift` tiles. */
+function sceneHop(id, x1, y1, lift, ms){
+  const el = document.getElementById('sa-' + id);
+  if(!el) return Promise.resolve();
+  const a = el._o, x0 = a.x, y0 = a.y, dur = Math.max(1, ms * SCENE_SPEED), t0 = performance.now();
+  return new Promise(done=>{
+    const frame = now=>{
+      const t = Math.min(1, (now - t0) / dur);
+      const x = x0 + (x1 - x0) * t;
+      const y = y0 + (y1 - y0) * t - 4 * lift * t * (1 - t);
+      el.style.left = (x * WALK_T) + 'px';
+      el.style.top = (y * WALK_T) + 'px';
+      if(t < 1) requestAnimationFrame(frame);
+      else { a.x = x1; a.y = y1; done(); }
+    };
+    requestAnimationFrame(frame);
+  });
+}
+/* Slide several actors by the same amount, together. */
+function sceneGlide(ids, dx, dy, ms){
+  const els = ids.map(id=> document.getElementById('sa-' + id)).filter(Boolean);
+  const dur = ms * SCENE_SPEED;
+  els.forEach(el=>{
+    el.style.transition = `left ${dur}ms ease-in, top ${dur}ms ease-in`;
+    void el.offsetWidth;
+    el._o.x += dx; el._o.y += dy;
+    el.style.left = (el._o.x * WALK_T) + 'px';
+    el.style.top = (el._o.y * WALK_T) + 'px';
+  });
+  return sceneWait(ms);
+}
+

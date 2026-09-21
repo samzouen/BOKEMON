@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.43';
+const GAME_VERSION = '2.44';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1015,6 +1015,7 @@ function normalizeProfile(p){
   if(p.settings.eyeBreakMins===undefined) p.settings.eyeBreakMins = 5;
   if(p.battlesSinceBreak===undefined) p.battlesSinceBreak = 0;
   if(p.eyeBreakUntil===undefined) p.eyeBreakUntil = 0;
+  if(p.lastBattleAt===undefined) p.lastBattleAt = 0;
   if(p.settings.sfxVolume===undefined) p.settings.sfxVolume = 0.55;
   if(p.settings.musicVolume===undefined) p.settings.musicVolume = 0.10;
   return p;

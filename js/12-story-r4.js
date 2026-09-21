@@ -682,6 +682,7 @@ function ghostChat(where){
   /* He has been accepted but the captain has not been told: that scene first,
      from wherever you are standing. */
   if(g.ghostAccepted && !g.corpseSeen) return startCorpseScene();
+  if(g.cuainJoined) return cuainQuip();          // he is with you now, and has opinions
   const deck = where || 'cabin_deck';
   const onLab = deck === 'laboratory_deck';
   const onWeather = deck === 'weather_deck';
@@ -1189,12 +1190,91 @@ const SCI = [
 ];
 const CULPRIT = 6;
 const ALIBI = { 1:5, 5:1, 2:7, 7:2, 3:8, 8:3, 4:9, 9:4 };
+/* What each of them says they were doing that night, in their own words. The
+   pairs back each other up. Mireille names the supervisor — who is the other
+   one who did it, so her story holds until somebody else was awake. */
+const SCI_ALIBI = {
+  1: `"Me? I was counting plankton samples with Odile until sunrise. Eleven thousand and six. She counted the other half — ask her."`,
+  2: `"I was in the darkroom with Osric, developing the sonar photographs. If that door opens, the pictures are ruined, so neither of us left. Honestly!"`,
+  3: `"Thaddeus and I spent the whole night in the map room, charting the whale lane. It's all in my journal — his handwriting on every other page."`,
+  4: `"Please. Rhona and I had the night watch on the tanks. Four hours of staring at bubbles. If I wanted excitement, I'd have joined the crew."`,
+  5: `"Aldous and I were counting plankton all night. My eyes still hurt. Look at the clipboard — both our names, every hour."`,
+  6: `"Inventory, with Barnaby. The whole night — jars, labels, crates, all of it." She smiles and does not look away. "Ask him, if you like. He'll tell you."`,
+  7: `"I was developing photographs in the darkroom with Pim. At my age, young one, one does not go swimming in the middle of the night."`,
+  8: `"Bertrand and I were charting the whale lane in the map room. Every line on that chart is ours, and it took us until dawn."`,
+  9: `"Casimir had the night watch on the tanks, and I sat up with him. I couldn't sleep anyway. We were there until dawn."`,
+};
+const ALIBI_WHAT = { 1:'counting plankton samples', 5:'counting plankton samples',
+  2:'in the darkroom with the sonar photographs', 7:'in the darkroom with the sonar photographs',
+  3:'charting the whale lane in the map room', 8:'charting the whale lane in the map room',
+  4:'on the night watch at the tanks', 9:'on the night watch at the tanks' };
+
+/* Before a test, each of them says where they were. You can leave it there
+   (Back) or test them anyway (Challenge). */
+function sciAlibi(n){
+  const d = sciDef(n); if(!d) return;
+  const v = inv();
+  const ov = document.createElement('div');
+  ov.className = 'refine-scrim';
+  ov.innerHTML = `
+    <div class="refine-card">
+      ${npcPortrait('scientist'+n,'🧑‍🔬',96,'transparent')}
+      <div class="refine-name">${escapeHtml(crewName('scientist'+n))}</div>
+      <div class="move-info-body">
+        <p><b>"I had nothing to do with it."</b></p>
+        <p>${SCI_ALIBI[n] || ''}</p>
+        ${v.beaten.includes(n) ? `<p><i>Already tested this round.</i></p>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
+        <button class="btn btn-primary" id="aliGo">Challenge</button>
+        <button class="btn btn-ghost" id="aliNo">Back</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = ()=>{ if(ov.parentNode) ov.remove(); };
+  ov.querySelector('#aliNo').addEventListener('click', close);
+  ov.querySelector('#aliGo').addEventListener('click', ()=>{ close(); fightScientist(n); });
+}
+
+/* The clues describe them as they are now, fully grown, so every picture on
+   the board is the last form, never the first. */
+function finalStage(sp){ const e = SPECIES[sp] && SPECIES[sp].evo; return e ? e.length : 0; }
+const FOCUS_PX = 165;       // 2.5 × the old 66
+const ZOOM_PX  = 330;       // 5 × the old 66
+function boardCss(){
+  if(document.getElementById('boardCss')) return;
+  const st = document.createElement('style');
+  st.id = 'boardCss';
+  st.textContent = `
+    .focus-pair{display:flex;width:100%;margin-top:8px;}
+    .focus-pair .fp-half{flex:1;display:flex;min-width:0;}
+    .focus-pair .fp-half.l{justify-content:flex-end;}
+    .focus-pair .fp-half.r{justify-content:flex-start;}
+    .focus-pair button{all:unset;cursor:zoom-in;display:block;line-height:0;max-width:100%;}
+    .focus-pair .mon-sprite, .mon-zoom .mon-sprite{filter:none !important;box-shadow:none !important;
+      background:transparent !important;}
+    .focus-pair .mon-sprite{max-width:100%;height:auto !important;aspect-ratio:1/1;}
+    .mon-zoom{position:fixed;inset:0;background:rgba(20,18,14,.72);z-index:90;
+      display:flex;align-items:center;justify-content:center;}
+    .mon-zoom .mon-sprite{max-width:92vw;height:auto !important;aspect-ratio:1/1;}
+  `;
+  document.head.appendChild(st);
+}
+function zoomMon(sp){
+  boardCss();
+  const z = document.createElement('div');
+  z.className = 'mon-zoom';
+  z.innerHTML = monPortrait(sp, ZOOM_PX, { view:'front', bare:true, stage:finalStage(sp) });
+  z.addEventListener('click', e=>{ if(e.target === z) z.remove(); });   // outside the picture only
+  document.body.appendChild(z);
+}
+
 const GUESSES_PER_DAY = 2;
 
 const CLUES = [
-  `"There was a red glow on one of them. I could not tell if they were eyes, or a stone set in its hide."`,
-  `"The other had no hands. No feet, no flippers. It moved the way weed moves."`,
-  `"And then it flashed — bright, all at once — and the water bit me. I have not felt that since I was small."`,
+  `"A red glow. One of their monsters had red eyes or a red stone in its body."`,
+  `"I... I think one of their monsters had no hands, feet or flippers. Fins only."`,
+  `"I remember more! One of their monsters shocked me - electricity! And it flashed brightly at me, I could barely see!"`,
 ];
 
 function inv(){
@@ -1824,14 +1904,15 @@ function renderAccuse(){
       <b>What the Whalelord remembers</b><br><br>
       ${CLUES.slice(0, v.clues).map((c,k)=>`<b>${k+1}.</b> ${c}`).join('<br><br>')}
     </div>
+    <div class="phase-flag">Tap to see their monster portraits more closely.</div>
     <div class="sci-grid">
       ${SCI.map(d=>`
         <button class="sci-cell" data-acc="${d.n}">
           ${npcPortrait('scientist'+d.n,'🧑‍🔬',46,'transparent')}
           <div class="sci-name">${escapeHtml(crewFirst('scientist'+d.n))}</div>
           <div class="sci-mons">
-            ${monPortrait(d.wild[0], 22, {view:'front', bare:true})}
-            ${monPortrait(d.elite, 22, {view:'front', bare:true})}
+            ${monPortrait(d.wild[0], 22, {view:'front', bare:true, stage:finalStage(d.wild[0])})}
+            ${monPortrait(d.elite, 22, {view:'front', bare:true, stage:finalStage(d.elite)})}
           </div>
         </button>`).join('')}
     </div>
@@ -1845,18 +1926,22 @@ function renderAccuse(){
 /* A closer look before you commit. */
 function focusScientist(n){
   const d = sciDef(n), v = inv();
+  boardCss();
+  const pics = [d.wild[0], d.elite];
   const ov = document.createElement('div');
   ov.className = 'refine-scrim';
   ov.innerHTML = `
-    <div class="refine-card">
+    <div class="refine-card" style="max-width:420px;">
       <div class="sci-focus">
         ${npcPortrait('scientist'+n,'🧑‍🔬',110,'transparent')}
         <div class="refine-name">${escapeHtml(crewName('scientist'+n))}</div>
         <div class="refine-sub">${escapeHtml(d.look)}</div>
-        <div class="big-mons">
-          ${monPortrait(d.wild[0], 66, {view:'front', bare:true})}
-          ${monPortrait(d.elite, 66, {view:'front', bare:true})}
+        <div class="focus-pair">
+          ${pics.map((sp, i)=>`<div class="fp-half ${i === 0 ? 'l' : 'r'}">
+            <button data-zoom="${sp}">${monPortrait(sp, FOCUS_PX, {view:'front', bare:true, stage:finalStage(sp)})}</button>
+          </div>`).join('')}
         </div>
+        <div class="refine-sub" style="margin-top:4px;">Tap a monster to see it at full size.</div>
       </div>
       <div class="clue-box" style="margin-top:12px;">
         ${CLUES.slice(0, v.clues).map((c,k)=>`<b>${k+1}.</b> ${c}`).join('<br><br>')}
@@ -1869,6 +1954,7 @@ function focusScientist(n){
   document.body.appendChild(ov);
   const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
   ov.querySelector('#accNo').addEventListener('click', close);
+  ov.querySelectorAll('[data-zoom]').forEach(b=> b.addEventListener('click', ()=> zoomMon(b.dataset.zoom)));
   ov.querySelector('#accYes').addEventListener('click', ()=>{ close(); accuse(n); });
 }
 
@@ -1889,7 +1975,7 @@ function alibiConfirm(n){
   const v = inv();
   storyModal(npcPortrait('scientist'+buddy,'🧑‍🔬',130,'transparent'), crewName('scientist'+buddy),
     `<b>"No. Not a chance."</b> ${crewFirst('scientist'+buddy)} does not even look up.<br><br>` +
-    `<b>"We were both on shift. All night, every night that week. Ask anyone."</b><br><br>` +
+    `<b>"We were both ${ALIBI_WHAT[n] || 'on shift'}. All night. Ask anyone."</b><br><br>` +
     `<i>${crewFirst('scientist'+n)} is cleared.</i><br><br>` +
     `<i>Word goes round the deck. All nine will have to be tested again before you can name ` +
     `anybody else.</i>` +
@@ -1968,122 +2054,254 @@ function startCulpritFight(i){
               [{species:'whale',level:83,ai:'best',forceStage:R4_MAXSTAGE}],
               [{species:'moon_swan',level:84,ai:'best'},{species:'plesiosaur',level:84,ai:'best'}],
               [{species:'ninja',level:85,ai:'best',forceStage:R4_MAXSTAGE,crowned:true,supplements:10}] ],
-      onWin: ()=> theTheft() }),
+      onWin: ()=> startEpilogue() }),
     { bg:'battle_laboratory_deck', subtitle:'Laboratory' });
 }
 
 /* ------------------------------------------------------------
-   THE CHASE UPSTAIRS
-   The scientists go down, and the moment they do Cuain feels it — because the
-   thing he has been hunting has finally come low enough to hear.
+   AFTER THE FIGHT, AND THE BOW
+   From the moment the two of them go down, every word is said in a small
+   window so the deck stays in view behind it. Each part is a stage kept in the
+   save (escapeStage), so a closed app or a trip off the ship puts the player
+   straight back into it: 'epilogue' in the laboratory, 'bow' on the weather
+   deck with one button, 'room' in the cabin while you come round.
    ------------------------------------------------------------ */
-function theTheft(){
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'Cuain',
-    `He goes rigid before anyone has finished falling over.<br><br>` +
+function escapeLock(){
+  const g = r4(), w = walkState();
+  if(g.escapeStage === 'epilogue'){
+    const p = (w.at && w.at.laboratory_deck) ||
+      { x:DECKS.laboratory_deck.spawn[0], y:DECKS.laboratory_deck.spawn[1] };
+    return { deck:'laboratory_deck', x:p.x, y:p.y, label:null, auto:()=> culpritEpilogue() };
+  }
+  if(g.escapeStage === 'bow')
+    return { deck:'weather_deck', x:14, y:4, ghost:{ x:14, y:5 }, face:'u',
+             label: ui.sceneRunning ? null : 'Stop Jax from leaving',
+             act:()=> runJaxEscape(), stage:()=> stageBow() };
+  if(g.escapeStage === 'room')
+    return { deck:'cabin_deck', x:14, y:25, ghost:{ x:14, y:26 }, face:'l',
+             label:null, stage:()=> stageRoom(), auto:()=> runWakeUp() };
+  return null;
+}
+/* Whatever scene has you, if any. The walkmap asks only this. */
+function storyLock(){ return corpseLock() || escapeLock(); }
+
+async function startEpilogue(){
+  const g = r4();
+  g.escapeStage = 'epilogue';
+  await saveProfile();
+  go('laboratory_deck');                       // the lock starts the epilogue itself
+}
+async function culpritEpilogue(){
+  if(ui.sceneRunning) return;
+  ui.sceneRunning = true;
+  await sceneWait(600);
+  const cap = faceNpc('ship_captain','⚓'), rhona = faceNpc('scientist9','🧑‍🔬');
+  await sceneSay([cap], crewName('ship_captain'),
+    `<b>"Twenty years I've carried scientists on this ship, and I have never once been ashamed ` +
+    `of it. Until today."</b><br><br>` +
+    `<b>"You cut open a living creature for money. Whatever Cosa Nostia paid you, it was never ` +
+    `yours to sell."</b>`);
+  await sceneSay([rhona], crewName('scientist9'),
+    `<b>"We came out here to learn from them. You turned our laboratory into a butcher's shop."</b><br><br>` +
+    `<b>"And for what? A bigger budget?"</b>`);
+  await sceneSay([cap], crewName('ship_captain'),
+    `He turns to you, and some of the hardness goes out of his face.<br><br>` +
+    `<b>"You found them when none of us could. Thank you."</b>`);
+  await sceneSay([rhona], crewName('scientist9'),
+    `<b>"Thank you. Truly."</b> She looks out at the water. <b>"Is that enough? Will they let us go now?"</b>`);
+  await sceneSay([faceMon('whalelord')], whaleName(),
     `<b>"WAIT."</b><br><br>` +
     `<b>"My core! I can feel my core! It is close — it is ABOVE US!"</b><br><br>` +
-    `<b>"Hurry! Take me up there! NOW!"</b>`,
-    ()=> jaxDeparture(), { bg:'battle_laboratory_deck', subtitle:'Laboratory' });
-}
-
-/* The weather deck, with a boy on the bow and a dragon hanging over him. */
-function jaxDeparture(){
-  if(typeof renderWalkDeck !== 'function') return jaxLines(0);
-  go('weather_deck');
-  setTimeout(()=>{
-    const world = $('#walkWorld');
-    if(!world) return jaxLines(0);
-    const T = (typeof WALK_T === 'number') ? WALK_T : 32;
-
-    /* the Loong: two squares by two, up and to the right of him, flipped so it
-       faces east, riding the air */
-    const dr = document.createElement('div');
-    dr.id = 'cutDragon';
-    dr.style.cssText = `position:absolute;left:${15*T}px;top:${2*T}px;width:${2*T}px;height:${2*T}px;
-      z-index:5;transform:scaleX(-1);animation:cutFloat 3s ease-in-out infinite;`;
-    dr.innerHTML = monPortrait('loong', 2*T, { view:'front', bare:true, crowned:true });
-    world.appendChild(dr);
-
-    const jx = document.createElement('div');
-    jx.id = 'cutJax';
-    jx.style.cssText = `position:absolute;left:${14*T}px;top:${4*T}px;width:${T}px;height:${T}px;z-index:6;`;
-    jx.innerHTML = `<img src="assets/npc/rival.png" alt="" style="width:100%;height:100%;object-fit:contain;object-position:bottom;"
-      onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'🧑'}))">`;
-    world.appendChild(jx);
-    jaxLines(0);
-  }, 420);
-}
-
-const JAX_EXIT = [
-  [`<b>Jax:</b> "Looking for this?"<br><br>` +
-   `He is leaning on the rail at the very front of the ship, entirely relaxed, ` +
-   `and there is something enormous in the air above him.`, 'rival'],
-  [`<b>Jax:</b> "Never hide a whale's treasure in the ocean."<br><br>` +
-   `<b>"The moment I took it, I knew those whales would come looking. So I never ` +
-   `kept it down here at all."</b>`, 'rival'],
-  [`<b>Jax:</b> "I had my Loong carry it. Flying high above your heads, the whole time."<br><br>` +
-   `<i>Cuain does not say anything. He has spent a week searching a ship for ` +
-   `something that was never on it.</i>`, 'loong'],
-];
-function jaxLines(i){
-  if(i >= JAX_EXIT.length) return jaxLeap();
-  const [body, who] = JAX_EXIT[i];
-  storyModal(who === 'loong'
-      ? monPortrait('loong',150,{view:'front',bare:true,crowned:true})
-      : npcPortrait('rival','🧑',140,'transparent'),
-    'Jax', body, ()=> jaxLines(i+1),
-    { bg:'battle_weather_deck', subtitle:'Weather Deck' });
-}
-
-/* He jumps up onto its back, and the pair of them go east and up. */
-function jaxLeap(){
-  const dr = document.getElementById('cutDragon'), jx = document.getElementById('cutJax');
-  if(!dr || !jx) return cuainJoins();
-  const T = (typeof WALK_T === 'number') ? WALK_T : 32;
-  /* two thirds across the dragon's square and a third down it */
-  jx.style.transition = 'left .5s cubic-bezier(.3,1.5,.5,1), top .5s cubic-bezier(.3,1.5,.5,1)';
-  jx.style.left = (15*T + (2*T)*0.66 - T/2) + 'px';
-  jx.style.top  = (2*T  + (2*T)*0.33 - T/2) + 'px';
-  setTimeout(()=>{
-    storyModal(npcPortrait('rival','🧑',140,'transparent'), 'Jax',
-      `<b>"Thanks for the swim."</b>`,
-      ()=> jaxFlyOff(), { bg:'battle_weather_deck', subtitle:'Weather Deck' });
-  }, 600);
-}
-function jaxFlyOff(){
-  const dr = document.getElementById('cutDragon'), jx = document.getElementById('cutJax');
-  [dr, jx].forEach(el=>{
-    if(!el) return;
-    el.style.transition = 'transform 2.6s cubic-bezier(.4,0,.7,1), opacity 2.6s linear';
-    const flip = el === dr ? ' scaleX(-1)' : '';
-    el.style.transform = `translate(520px,-420px)` + flip;
-    el.style.opacity = '0';
-  });
-  setTimeout(()=>{ if(dr) dr.remove(); if(jx) jx.remove(); cuainJoins(); }, 2700);
-}
-
-async function cuainJoins(){
+    `<b>"Hurry! Take me up there! NOW!"</b>`);
   const g = r4();
-  g.solved = true;
+  g.escapeStage = 'bow';
   await saveProfile();
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'Cuain',
-    `Out on the water, all at once and without a sound, the whales turn and go.<br><br>` +
-    `The cold grey shape does not go with them.<br><br>` +
-    `<b>"They can rest. They know who did it now, and that is most of what they wanted."</b><br><br>` +
-    `<b>"My core is riding east in the belly of a dragon, a thousand feet up, where ` +
-    `I could not hear it if I listened for a hundred years."</b><br><br>` +
-    `Something enormous settles at your shoulder and stays there.<br><br>` +
-    `<b>"You go east. So do I."</b>`,
-    ()=>giveCuain(), { bg:'sea', subtitle:'The North Sea' });
+  ui.sceneRunning = false;
+  blackoutTo(()=> go('weather_deck'), { hold:700 });
 }
-async function giveCuain(){
-  const mon = newMonster('whalelord', 66);
-  if(state.party.length < 6) state.party.push(mon); else state.storage.push(mon);
+
+/* The bow, before anybody moves: Jax at the very point of it, his Loong in
+   the air beside him, the crew below, and you with the Whalelord at your
+   back. Nothing happens until you press the one button. */
+function stageBow(){
+  sceneActor('jax',     { x:13, y:3, src:'assets/npc/rival.png', icon:'🧑', z:61 });
+  sceneActor('loong',   { x:14, y:2, w:2, h:2, src:'assets/mon/loong1_c_front.png', icon:'🐉', bob:true, z:60 });
+  sceneActor('captain', { x:12, y:6, src:'assets/npc/ship_captain.png', icon:'⚓' });
+  sceneActor('keeper',  { x:13, y:6, src:'assets/npc/shipkeeper.png', icon:'🧰' });
+  sceneActor('rhona',   { x:14, y:6, src:'assets/npc/scientist9.png', icon:'🧑‍🔬' });
+}
+function stageRoom(){
+  sceneActor('thaddeus', { x:13, y:25, src:'assets/npc/scientist8.png', icon:'🧑‍🔬' });
+}
+
+async function runJaxEscape(){
+  if(ui.sceneRunning) return;
+  ui.sceneRunning = true;
+  refreshWalk();                               // the button goes; from here you watch
+  const name = state.name || 'You';
+  const me = facePlayer(), jax = faceNpc('rival','🧑'), whale = faceMon('whalelord');
+  await sceneSay([me], name, `<b>"Jax, stop right there!"</b>`);
+  await sceneSay([jax, faceImg('assets/UI/whalelord_core.png','💠')], 'Jax', `<b>"Looking for this?"</b>`);
+  await sceneSay([whale], whaleName(), `<b>"My core! Give it back!"</b>`);
+  await sceneSay([jax], 'Jax',
+    `<b>"Never hide a whale's treasure in the ocean."</b><br><br>` +
+    `<b>"The moment I took it, I knew those whales would come looking. So I never kept it down ` +
+    `here at all."</b><br><br>` +
+    `<b>"I had my Loong carry it. Flying high above your heads, the whole time."</b>`);
+
+  await sceneWait(2000);
+  await sceneSay([faceNpc('ship_captain','⚓')], crewName('ship_captain'),
+    `<b>"You murderer. We gave you passage on our ship. Return that core at once!"</b>`);
+  await sceneSay([jax], 'Jax',
+    `<b>"Murderer? I never hurt the whale. Your scientists did all the work. They handed me the core."</b>`);
+  await sceneSay([faceNpc('scientist9','🧑‍🔬')], crewName('scientist9'),
+    `<b>"That doesn't matter. You're working for the same person, aren't you?"</b>`);
+  await sceneSay([faceNpc('shipkeeper','🧰')], crewName('shipkeeper'),
+    `<b>"If you won't hand the core over, we'll just have to force you to."</b>`);
+  await sceneSay([jax], 'Jax',
+    `<i>Jax laughs.</i><br><br>` +
+    `<b>"From what I've seen, none of you have what it takes. You see, I know a thing or two ` +
+    `about the power of the core."</b>`);
+  await sceneSay([whale], whaleName(), `<b>"Watch out, he's summoning my power!"</b>`);
+
+  /* The core's power, gathering over the middle of the deck. */
+  await sceneWait(500);
+  await sceneBall(13.5, 5.5, 3, 3000);
+  await sceneFlash(500, 2000, ()=>{
+    const b = document.getElementById('sceneBall'); if(b) b.remove();
+    sceneFaintPlayer(1);
+    sceneActor('captain', { faint:-1 });
+    sceneActor('keeper',  { faint:1 });
+    sceneActor('rhona',   { faint:-1 });
+    sceneActor('loong',   { flip:true });  // turned east, ready to go
+  });
+  await sceneSay([jax], 'Jax', `<b>"Thanks for the ride."</b>`);
+
+  /* Up onto its back: 0.6 of a tile above and 0.3 to the right of the point
+     where its four squares meet, in front of it. */
+  await sceneHop('jax', 15 + 0.3 - 0.5, 3 - 0.6 - 0.5, 1.2, 700);
+  ['jax','loong'].forEach(id=>{                // bob as one
+    const el = document.getElementById('sa-' + id); if(!el) return;
+    el._o.bob = true; el.classList.remove('bob'); void el.offsetWidth; el.classList.add('bob');
+  });
+  await sceneGlide(['jax','loong'], 12, 0, 2600);
+  sceneActorGone('jax'); sceneActorGone('loong');
+
+  await sceneWait(1000);
+  await sceneSay([whale], whaleName(), `<b>"${escapeHtml(name)}! ${escapeHtml(name)}!"</b>`);
+  await sceneSay([me], name, `<b>"... Ugh..."</b>`);
+
+  await sceneCurtain(true, 900);
+  await sceneWait(2000);
+  await sceneCurtainText('You wake up in your own room. Someone is attending to you.', 900);
+  await sceneWait(1800);
+  const g = r4();
+  g.escapeStage = 'room';
   await saveProfile();
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'Cuain joins you',
-    `<b>Cuain, the Whalelord</b> — Lv 66, Water/Ghost.<br><br>` +
-    `<i>He does not ask, and he does not offer you a choice. He simply follows, ` +
-    `the way weather follows a ship.</i><br><br>` +
-    `<b>The lane east is open.</b>`,
-    ()=>go('explore'), { bg:'sea', subtitle:'The North Sea' });
+  sceneClear();
+  go('cabin_deck');                            // the room is set, but it does not start itself
+  await sceneCurtainText('', 500);
+  await sceneCurtain(false, 900);
+  ui.sceneRunning = false;
+  await runWakeUp();
+}
+
+async function runWakeUp(){
+  if(ui.sceneRunning) return;
+  ui.sceneRunning = true;
+  stageRoom();
+  await sceneWait(2000);
+  const name = state.name || 'You';
+  const me = facePlayer(), whale = faceMon('whalelord'), th = faceNpc('scientist8','🧑‍🔬');
+  const wn = whaleName();
+  await sceneSay([th], crewName('scientist8'), `<b>"Don't move too much, you were hit badly."</b>`);
+  await sceneSay([me], name, `<b>"Jax... The core..."</b>`);
+  await sceneSay([whale], wn, `<b>"Take care of yourself. Rest."</b>`);
+  await sceneSay([me], name, `<b>"Whalelord... I'm sorry. I failed you."</b>`);
+  await sceneSay([whale], wn, `<b>"You did your best. I... I'm glad you're not too hurt."</b>`);
+  await sceneSay([whale], wn,
+    `<b>A moment of silence. The whalelord struggles with guilt.</b><br><br>` +
+    `<b>"I should thank you. All this while, I've been seeking my own revenge, and my core. ` +
+    `I never thought about the danger I was putting you through."</b>`);
+  await sceneSay([whale], wn,
+    `<b>"You helped me without ever asking anything in return. Now it's my turn to do my part. ` +
+    `Though I might be weak, I promise, I'll help you on your mission. Whatever it takes."</b>`);
+  await sceneSay([whale], wn,
+    `<b>"I will follow you from now on. My power... what's left of it... let's use it for good, ` +
+    `together."</b><br><br>` +
+    `<b>Whalelord has joined your party. He does not take up a monster slot.</b>`);
+  await sceneWait(1000);
+  await sceneSay([th], crewName('scientist8'),
+    `<b>"Um. You've been talking to yourself. We'd better take a second look at your head."</b>`);
+
+  await sceneCurtain(true, 900);
+  await sceneWait(2000);
+  const g = r4();
+  g.escapeStage = null;
+  g.solved = true;                             // the whales have their answer
+  g.cuainJoined = true;
+  /* With you, but not in one of your six: he waits in storage for the day
+     somebody wants to fight beside him. */
+  if(!state.party.concat(state.storage).some(m=> m.species === 'whalelord'))
+    state.storage.push(newMonster('whalelord', 66));
+  await saveProfile();
+  sceneClear();
+  ui.sceneRunning = false;
+  go('cabin_deck');
+  await sceneCurtain(false, 900);
+  toast('The whales have gone. The lane east is open.');
+}
+
+/* ------------------------------------------------------------
+   HIM, AFTERWARDS
+   He follows you everywhere now and has opinions about people. Talk to him
+   too much and he will tell you so — three times — and then pretend he cannot
+   hear you for ten minutes.
+   ------------------------------------------------------------ */
+const CUAIN_QUIPS = [
+  `You wash your hands in water and then dry them straight away. Why not just stay wet? It is lovely.`,
+  `You sleep lying down, with both eyes shut, for hours. Very brave. Or very foolish.`,
+  `You draw tiny pictures called words, and then worry whether the lines went in the right order. We just sing.`,
+  `You wrap your feet in little boats and call them shoes.`,
+  `Your young ones fall over all the time. Ours are born swimming.`,
+  `You sing only when nobody is listening. We sing so the whole ocean can hear.`,
+  `Why do you blow on hot soup? Just wait. Waiting is free.`,
+  `You carry a little glowing box and stare into it instead of the sea. The sea is right there.`,
+  `When a human says "five minutes", I have learned it means an hour.`,
+  `You give names to your boats, but not to your fish. Strange.`,
+  `When you are happy you show your teeth. When we show our teeth, it is not because we are happy.`,
+  `You make your bed neat every morning, and every night you mess it up again.`,
+  `Your captain drinks hot brown water and becomes kind. I would like to try this.`,
+  `You keep your treasure in boxes with locks. We keep ours in songs. Nobody can steal a song.`,
+  `You wave your front flippers at each other when you meet. I have started doing it too.`,
+  `The cook shouts at the soup. The soup does not listen. Still, he shouts.`,
+  `You count everything. Days, coins, words. Have you counted the waves yet? There are a lot.`,
+  `You put on a coat when you are cold. I simply grow more blubber. Much simpler.`,
+  `You hold hands when you are scared. I have no hands. I will hold your attention instead.`,
+  `Your faces leak when you are sad, and also when you laugh too hard. Very confusing.`,
+];
+const CUAIN_CHATTY_WINDOW = 2 * 60 * 1000, CUAIN_CHATTY_LIMIT = 10, CUAIN_SULK = 10 * 60 * 1000;
+function cuainQuip(){
+  const t = ui.cuainTalk = ui.cuainTalk || { times:[], chatty:0, quietUntil:0, bag:[] };
+  const now = Date.now();
+  if(t.quietUntil && now >= t.quietUntil){ t.times = []; t.chatty = 0; t.quietUntil = 0; }
+  t.times = t.times.filter(x=> now - x < CUAIN_CHATTY_WINDOW);
+  t.times.push(now);
+  const sulk = `<b>"..."</b><br><br><b>The whalelord pretends he can't hear you.</b>`;
+  let line;
+  if(t.quietUntil){
+    line = sulk;
+  } else if(t.times.length > CUAIN_CHATTY_LIMIT){
+    if(t.chatty < 3){ t.chatty++; line = `<b>"You're awfully chatty today. Shouldn't we get going?"</b>`; }
+    else { t.quietUntil = now + CUAIN_SULK; line = sulk; }
+  } else {
+    if(!t.bag.length){                         // every line once, in a new order, then again
+      t.bag = CUAIN_QUIPS.map((_, i)=> i);
+      for(let i = t.bag.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i + 1)); [t.bag[i], t.bag[j]] = [t.bag[j], t.bag[i]];
+      }
+    }
+    line = `<b>"${CUAIN_QUIPS[t.bag.pop()]}"</b>`;
+  }
+  return sceneSay([faceMon('whalelord')], whaleName(), line);
 }

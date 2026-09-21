@@ -378,10 +378,16 @@ function eyeBreakRemaining(){
   return Math.max(0, (state.eyeBreakUntil||0) - Date.now());
 }
 /* Called when a battle finishes. Returns true if a break has just begun. */
+const EYE_IDLE_RESET_MS = 20 * 60 * 1000;
 function tallyBattleForEyeBreak(){
   if(!state) return false;
   const every = state.settings.eyeBreakEvery || 0;
   if(every <= 0) return false;                       // 0 disables the feature
+  /* Twenty minutes without a battle is a rest in itself, so the count starts
+     again from nothing. */
+  const now = Date.now();
+  if(state.lastBattleAt && now - state.lastBattleAt >= EYE_IDLE_RESET_MS) state.battlesSinceBreak = 0;
+  state.lastBattleAt = now;
   state.battlesSinceBreak = (state.battlesSinceBreak||0) + 1;
   if(state.battlesSinceBreak >= every){
     state.battlesSinceBreak = 0;
