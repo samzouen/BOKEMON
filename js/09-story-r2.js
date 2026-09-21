@@ -495,7 +495,7 @@ function grantLanternfish(){
   state.lanternGranted = true;
   if(already) return null;
   const fish = newMonster('lanternfish', 25);
-  if(battleParty().length < 6) state.party.push(fish); else state.storage.push(fish);
+  if(slottedCount() < 6) state.party.push(fish); else state.storage.push(fish);
   if(!state.caughtSpecies.includes('lanternfish')) state.caughtSpecies.push('lanternfish');
   if(!state.encounteredSpecies.includes('lanternfish')) state.encounteredSpecies.push('lanternfish');
   return fish;

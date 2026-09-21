@@ -243,7 +243,7 @@ async function onGuardianWin(){
   // award a free Earth Snake at level 21 (direct, not a catch)
   if(!already){
     const gift = newMonster('ground_starter', 15);
-    if(state.party.length<6) state.party.push(gift); else state.storage.push(gift);
+    if(slottedCount()<6) state.party.push(gift); else state.storage.push(gift);
     if(!state.caughtSpecies.includes('ground_starter')) state.caughtSpecies.push('ground_starter');
     if(!state.encounteredSpecies.includes('ground_starter')) state.encounteredSpecies.push('ground_starter');
   }

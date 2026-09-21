@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.45';
+const GAME_VERSION = '2.47';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1018,6 +1018,14 @@ function normalizeProfile(p){
   if(p.lastBattleAt===undefined) p.lastBattleAt = 0;
   if(p.settings.sfxVolume===undefined) p.settings.sfxVolume = 0.55;
   if(p.settings.musicVolume===undefined) p.settings.musicVolume = 0.10;
+  /* Once he has joined, he rides with you as a passenger, whatever an older
+     version did with him. */
+  const g4 = p.progress && p.progress.region4;
+  if(g4 && (g4.cuainJoined || g4.solved)){
+    g4.cuainJoined = true;
+    if(!(p.party || []).some(isCuain) || (p.storage || []).some(m=> m.species === 'whalelord')) grantCuain(p);
+    if(g4.cuainRevived){ const c = p.party.find(isCuain); if(c) c.revived = true; }
+  }
   return p;
 }
 function recordWrong(word){
@@ -1167,9 +1175,44 @@ function monStage(m){ return monStageOf(m); }
 function isSeed(m){ return !!(m && SPECIES[m.species] && SPECIES[m.species].isSeed); }
 function isEgg(m){ return !!(m && SPECIES[m.species] && SPECIES[m.species].isEgg); }
 function isBaby(m){ return !!(m && SPECIES[m.species] && SPECIES[m.species].isBaby); }
-function isPassenger(m){ return isSeed(m) || isEgg(m) || isBaby(m); }
+/* Cuain — the Whalelord — rides with you from the end of Region 4. He is a
+   passenger like the Seed: never one of your six, never stored, swapped out
+   or released, never in a fight. Every path that protects passengers protects
+   him for free, because they all ask isPassenger(). Nobody names him either:
+   he keeps his title until he chooses to give his name. */
+function isCuain(m){ return !!(m && m.cuain); }
+/* Carried, not fighting. Cuain rides as a passenger until Caladrius gives him
+   back enough of himself to fight; after that he fights like anyone — a
+   seventh, never one of your six — but he can still never be put away. */
+function isPassenger(m){ return isSeed(m) || isEgg(m) || isBaby(m) || (isCuain(m) && !m.revived); }
+/* Who can never leave the party: every passenger, and Cuain always. Every
+   store, swap and release path asks this, not isPassenger. */
+function isFixedMember(m){ return isPassenger(m) || isCuain(m); }
+/* The six: fighters that take a slot. Cuain never takes one. */
+function slottedCount(){ return battleParty().filter(m=> !isCuain(m)).length; }
+/* The Ghost Stone stays on him until he is crowned. */
+function stoneBound(id, m){ return id === 'ghostStone' && isCuain(m) && !m.crowned; }
 function battleParty(){ return state.party.filter(m=>!isPassenger(m)); }
 function hasSeed(){ return state.party.some(isSeed); }
+/* Put Cuain in the party as a passenger. An older save may already have him —
+   in storage (2.44) or in a normal slot (before that) — and he is moved, not
+   copied. Works on any profile object, so loading a save can fix it. */
+function grantCuain(p){
+  p = p || state;
+  p.party = p.party || []; p.storage = p.storage || [];
+  let c = p.party.find(isCuain) || p.storage.find(isCuain) ||
+          p.party.find(m=> m.species === 'whalelord') || p.storage.find(m=> m.species === 'whalelord');
+  if(c){
+    p.storage = p.storage.filter(m=> m !== c);
+    p.party = p.party.filter(m=> m !== c);
+  } else {
+    c = newMonster('whalelord', 66);
+  }
+  c.cuain = true;
+  delete c.nickname; delete c.namedRegion;           // he is the Whalelord, and that is all
+  p.party.push(c);
+  return c;
+}
 function grantSacredSeed(){
   if(hasSeed()) return null;
   const seed = newMonster('sacred_seed', 1);

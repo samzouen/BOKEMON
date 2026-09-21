@@ -141,17 +141,23 @@ const DECKS = {
     prizes:[[17,30],[10,33],[13,34]],
     aquarium:[{sp:'starfish',x:11,y:35},{sp:'loong',x:13,y:36},{sp:'seahorse',x:16,y:35}],
     things:[
-      { x:13, y:5,  sprite:'scientist_supervisor', icon:'🧑‍🔬', verb:'Report', act:()=> labSupervisor() },
+      { x:13, y:5,  sprite:'scientist_supervisor', icon:'🧑‍🔬', verb:'Report', act:()=> labSupervisor(),
+        when:()=> labStage() !== 'after' },
+      /* Once it is over, Rhona stands where he stood — and means to earn it. */
+      { x:13, y:5,  sprite:'scientist9', icon:'🧑‍🔬', verb:'Talk', act:()=> rhonaTask(),
+        when:()=> labStage() === 'after', mark:()=> rhonaHasTask() },
       { x:16, y:8,  walk:true, verb:'Up', where:'Cabin Deck', act:()=> goDeck('cabin_deck') },
-      { x:8,  y:14, sprite:'scientist1', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(1) },
-      { x:8,  y:17, sprite:'scientist2', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(2) },
-      { x:18, y:17, sprite:'scientist3', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(3) },
-      { x:8,  y:22, sprite:'scientist4', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(4) },
-      { x:18, y:21, sprite:'scientist5', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(5) },
-      { x:8,  y:26, sprite:'scientist6', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(6) },
-      { x:18, y:26, sprite:'scientist7', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(7) },
-      { x:9,  y:30, sprite:'scientist8', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(8) },
-      { x:15, y:32, sprite:'scientist9', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(9) },
+      { x:8,  y:14, sprite:'scientist1', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(1) , mark:()=> sciHasHunt(1) },
+      { x:8,  y:17, sprite:'scientist2', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(2) , mark:()=> sciHasHunt(2) },
+      { x:18, y:17, sprite:'scientist3', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(3) , mark:()=> sciHasHunt(3) },
+      { x:8,  y:22, sprite:'scientist4', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(4) , mark:()=> sciHasHunt(4) },
+      { x:18, y:21, sprite:'scientist5', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(5) , mark:()=> sciHasHunt(5) },
+      { x:8,  y:26, sprite:'scientist6', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(6),
+        when:()=> labStage() !== 'after' },
+      { x:18, y:26, sprite:'scientist7', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(7) , mark:()=> sciHasHunt(7) },
+      { x:9,  y:30, sprite:'scientist8', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(8) , mark:()=> sciHasHunt(8) },
+      { x:15, y:32, sprite:'scientist9', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(9),
+        when:()=> labStage() !== 'after' },
     ],
   },
 };
@@ -345,7 +351,24 @@ function cuainAboard(){ const g = r4(); return !!g.ghostAccepted; }
 const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true : d.rows[y][x]==='#';
 
 /* ---------- drawing ---------- */
+const WALK_MARK_SVG = `<svg viewBox="0 0 40 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <rect x="9" y="4" width="22" height="60" rx="11" fill="#ffd21f" stroke="#111" stroke-width="4"/>
+  <circle cx="20" cy="82" r="10" fill="#ffd21f" stroke="#111" stroke-width="4"/></svg>`;
+function walkCss(){
+  if(document.getElementById('walkCss')) return;
+  const st = document.createElement('style');
+  st.id = 'walkCss';
+  st.textContent = `
+    .walk-still .walk-world, .walk-still .walk-ent{transition:none !important;}
+    .walk-mark{position:absolute;aspect-ratio:40/96;transform:translateX(-50%);pointer-events:none;
+      z-index:55;animation:walkMarkBob 1.1s ease-in-out infinite;}
+    .walk-mark svg{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.25));}
+    @keyframes walkMarkBob{0%,100%{translate:0 0}50%{translate:0 -14%}}
+  `;
+  document.head.appendChild(st);
+}
 function renderWalkDeck(id){
+  walkCss();
   /* A scene can pin you in place. Whichever deck you pick — and however you
      leave the region and come back — you are put down where the story left
      you, and you stay there until it is finished. The stage is in the save,
@@ -391,7 +414,7 @@ function renderWalkDeck(id){
   WALK_T = Math.max(30, Math.round(avail / WALK_VIEW));
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Explore</button>
-    <div class="walk-stage" id="walkStage">
+    <div class="walk-stage walk-still" id="walkStage">
       <button class="walk-path" id="walkPath">Path</button>
       <div class="walk-world" id="walkWorld" style="
         --wt:${WALK_T}px;
@@ -440,6 +463,16 @@ function renderWalkDeck(id){
       ? `<img src="assets/npc/${t.sprite}.png" alt=""${spin} onerror="walkArtMissing(this,'${(t.icon||'').replace(/'/g,'')}',${fallPx},${t.rot||0})">`
       : `<span style="font-size:${fallPx}px;line-height:1;">${t.icon||''}</span>`;
     world.appendChild(e); t.el = e;
+    /* A task: a yellow "!" bobbing over their head, nine tenths of a tile tall. */
+    if(t.mark && t.mark()){
+      const mk = document.createElement('div');
+      mk.className = 'walk-mark';
+      mk.style.left = ((t.x + (t.w || 1) / 2) * WALK_T) + 'px';
+      mk.style.top = (t.y * WALK_T - 0.9 * WALK_T) + 'px';
+      mk.style.height = (0.9 * WALK_T) + 'px';
+      mk.innerHTML = WALK_MARK_SVG;
+      world.appendChild(mk);
+    }
   });
   /* Every wall tile, shaded. Drawn a pixel oversized so neighbours meet with
      no seam, which makes the walkable deck read as one continuous path without
@@ -518,6 +551,11 @@ function renderWalkDeck(id){
   buildAquarium(world, d);
   wireWalkKeys();
   refreshWalk();
+  /* Everyone is put straight where they stand. Without this the sprites were
+     created at the map's corner and then slid across to their places. */
+  requestAnimationFrame(()=> requestAnimationFrame(()=>{
+    const st = $('#walkStage'); if(st) st.classList.remove('walk-still');
+  }));
   if(id === 'weather_deck' && !lock) startRail(); else stopRail();
   /* A pinned scene sets out its people once the deck is drawn, and a scene
      that plays by itself starts itself. */
@@ -789,7 +827,7 @@ function railHelp(n){
 function labScientist(n){
   const stage = (typeof labStage === 'function') ? labStage() : 'blocked';
   if(stage === 'investigation') return sciAlibi(n);
-  if(stage === 'after') return go('laboratory_deck');
+  if(stage === 'after') return sciAfterChat(n);
   puzzledChat(n);
 }
 function labSupervisor(){
@@ -896,9 +934,50 @@ function sceneShake(ms, amp){
     requestAnimationFrame(frame);
   });
 }
+/* A soft blue-white light around a point (tiles), fading in; z decides
+   whether it sits in front of or behind what it lights. */
+function sceneGlow(id, cx, cy, tiles, z){
+  sceneCss();
+  const world = $('#walkWorld'); if(!world) return null;
+  const T = WALK_T, d = tiles * T;
+  const g = document.createElement('div');
+  g.className = 'scene-glow'; g.id = 'sg-' + id;
+  g.style.cssText = `position:absolute;left:${cx*T - d/2}px;top:${cy*T - d/2}px;width:${d}px;height:${d}px;` +
+    `border-radius:50%;pointer-events:none;z-index:${z == null ? 59 : z};opacity:0;` +
+    `background:radial-gradient(circle,rgba(255,255,255,.95) 0%,rgba(205,235,255,.75) 35%,rgba(150,205,255,0) 70%);` +
+    `transition:opacity ${600 * SCENE_SPEED}ms ease;`;
+  world.appendChild(g);
+  void g.offsetWidth;
+  g.style.opacity = '1';
+  return g;
+}
+async function sceneGlowOut(ids, ms){
+  ids.forEach(id=>{ const g = document.getElementById('sg-' + id);
+    if(g){ g.style.transition = `opacity ${ms * SCENE_SPEED}ms ease`; g.style.opacity = '0'; } });
+  await sceneWait(ms);
+  ids.forEach(id=>{ const g = document.getElementById('sg-' + id); if(g) g.remove(); });
+}
+/* The screen shimmers white for ms: a quick flicker inside a slow swell. */
+function sceneShimmer(ms){
+  const f = document.createElement('div');
+  f.id = 'sceneShimmer';
+  f.style.cssText = 'position:fixed;inset:0;background:#fff;opacity:0;z-index:96;pointer-events:none;';
+  document.body.appendChild(f);
+  const dur = Math.max(1, ms * SCENE_SPEED), t0 = performance.now();
+  return new Promise(done=>{
+    const frame = now=>{
+      const e = now - t0, t = Math.min(1, e / dur);
+      const swell = Math.sin(Math.PI * t);
+      const flicker = 0.55 + 0.45 * Math.sin((e / SCENE_SPEED) / 1000 * Math.PI * 2 * 5);
+      f.style.opacity = (0.55 * swell * flicker).toFixed(3);
+      if(t < 1) requestAnimationFrame(frame); else { f.remove(); done(); }
+    };
+    requestAnimationFrame(frame);
+  });
+}
 function sceneActorGone(id){ const el = document.getElementById('sa-' + id); if(el) el.remove(); }
 function sceneClear(){
-  document.querySelectorAll('.scene-actor, .scene-ball, .scene-say').forEach(e=> e.remove());
+  document.querySelectorAll('.scene-actor, .scene-ball, .scene-say, .scene-glow').forEach(e=> e.remove());
   const st = $('#walkStage'); if(st) st.style.translate = '';
 }
 /* Lay the player down (or stand them back up) where they are. */

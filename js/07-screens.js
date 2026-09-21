@@ -445,7 +445,7 @@ function renderPartyList(){
           <button class="mini-btn" data-stats="${m.uid}">📊 Stats &amp; Moves</button>
           <button class="mini-btn" data-up="${idx}" ${idx===0?'disabled':''}>▲ Up</button>
           <button class="mini-btn" data-down="${idx}" ${idx===state.party.length-1?'disabled':''}>▼ Down</button>
-          ${isPassenger(m) ? '' : `<button class="mini-btn" data-store="${m.uid}" ${battleParty().length<=1?'disabled':''}>📦 To storage</button>`}
+          ${isFixedMember(m) ? '' : `<button class="mini-btn" data-store="${m.uid}" ${battleParty().length<=1?'disabled':''}>📦 To storage</button>`}
         </div>
       ` : ''}
     </div>`;
@@ -461,12 +461,12 @@ function renderPartyList(){
   list.querySelectorAll('[data-down]').forEach(b=>b.addEventListener('click', async e=>{ e.stopPropagation(); const i=+b.dataset.down; [state.party[i+1],state.party[i]]=[state.party[i],state.party[i+1]]; await saveProfile(); renderPartyList(); }));
   list.querySelectorAll('[data-store]').forEach(b=>b.addEventListener('click', async e=>{
     const pm = state.party.find(x=>x.uid===b.dataset.store);
-    if(isPassenger(pm)){ toast('This one stays with you.'); return; }
+    if(isFixedMember(pm)){ toast('This one stays with you.'); return; }
     e.stopPropagation();
     const uid=b.dataset.store;
     if(battleParty().length<=1){ toast('You need at least one monster in your party.'); return; }
     const idx=state.party.findIndex(m=>m.uid===uid);
-    if(isPassenger(state.party[idx])){
+    if(isFixedMember(state.party[idx])){
       toast(`${displayName(state.party[idx])} is not going anywhere.`);
       return;
     }
@@ -826,7 +826,10 @@ function renderStats(){
   // naming: unnamed can be named anytime; a named monster can be renamed once,
   // and only after progressing to a later region than where it was named.
   const nameArea = $('#nameArea');
-  if(nameArea){
+  if(nameArea && isCuain(m)){
+    nameArea.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);font-weight:600;">` +
+      `He will not answer to any other name. He is the Whalelord.</div>`;
+  } else if(nameArea){
     const unnamed = !m.nickname;
     const bronze = (state.medals && state.medals.bronze) || 0;
     const canRename = !unnamed && bronze > 0;      // renaming costs 1 Bronze Medal
@@ -1008,7 +1011,9 @@ function renderElementStones(){
                                : `No ${st.type} monster to carry it yet`)}</div>
         </div>
         <div class="es-actions">
-          ${mon ? `<button class="btn btn-ghost es-btn" data-detach="${st.id}">Detach</button>`
+          ${mon ? (stoneBound(st.id, mon)
+                    ? `<span class="es-sub" style="font-weight:700;">Bound to him until he is crowned</span>`
+                    : `<button class="btn btn-ghost es-btn" data-detach="${st.id}">Detach</button>`)
                 : `<button class="btn btn-primary es-btn" data-attach="${st.id}" ${eligible.length?'':'disabled'}>Attach</button>`}
         </div>
       </div>`;
@@ -1017,6 +1022,8 @@ function renderElementStones(){
   $('#backBtn').addEventListener('click', ()=>go('storage'));
   screenEl.querySelectorAll('[data-detach]').forEach(b=>b.addEventListener('click', async ()=>{
     const id = b.dataset.detach;
+    const holder = all.find(m=> m.uid === stoneHolder(id));
+    if(stoneBound(id, holder)){ toast('It will not come away from him.'); return; }
     state.inventory[stoneOnKey(id)] = null;
     await saveProfile();
     toast(`${ELEMENTAL_STONES.find(x=>x.id===id).name} detached.`);
@@ -1455,7 +1462,7 @@ function chooseStoneRecipient(s){
 function moveToParty(uid){
   const idx = state.storage.findIndex(m=>m.uid===uid);
   if(idx<0) return;
-  if(battleParty().length<6){
+  if(slottedCount()<6){
     const [m]=state.storage.splice(idx,1);
     state.party.push(m);
     saveProfile();
@@ -1465,7 +1472,7 @@ function moveToParty(uid){
     /* An egg, a seed or a baby rides along in its own slot — it is not one of
        the six. Offering it here let a passenger be swapped OUT of the party
        and lost, which is not something the player should be able to do. */
-    const options = state.party.map((m,i)=>({m,i})).filter(o=>!isPassenger(o.m));
+    const options = state.party.map((m,i)=>({m,i})).filter(o=>!isFixedMember(o.m));
     if(!options.length){ toast('Nobody in your party can be swapped out.'); return; }
     monsterChooser('Party is full — swap out…', options, (i)=>{
       const stored = state.storage.splice(idx,1)[0];

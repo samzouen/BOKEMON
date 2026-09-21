@@ -501,13 +501,13 @@ function gotcha(enemy){
     mon.evoFloorLevel = enemy.level;
   }
     if(nick){ mon.nickname = nick; mon.namedRegion = state.progress.currentRegion; }
-    if(battleParty().length < 6) state.party.push(mon);
+    if(slottedCount() < 6) state.party.push(mon);
     else state.storage.push(mon);
     if(!state.caughtSpecies.includes(enemy.species)) state.caughtSpecies.push(enemy.species);
     if(!state.encounteredSpecies.includes(enemy.species)) state.encounteredSpecies.push(enemy.species);
     await saveProfile();
     document.body.removeChild(ov);
-    const where = state.party.length<=6 && state.party.some(m=>m.uid===mon.uid) ? 'your party' : 'storage';
+    const where = state.party.some(m=>m.uid===mon.uid) ? 'your party' : 'storage';
     toast(`${displayName(mon)} joined ${where}!`);
     // Some catches carry a scene of their own.
     if(enemy.species === 'ankylosaurus') return ankyloConversation(mon);

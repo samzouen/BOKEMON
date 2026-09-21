@@ -420,7 +420,8 @@ async function onDiveWin(){
   if(blocked) return resumeVictory(true, whaleWallFound);
   const got = await checkHunts(fell);
   await saveProfile();
-  if(got && got.length) return resumeVictory(true, ()=>huntPaid(got));
+  if(got && got.length) await huntThanks(got);   // before the victory screen
+  if(revivalDue()) return resumeVictory(true, ()=> startRevivalCall());
   resumeVictory();
 }
 
@@ -431,17 +432,9 @@ async function onRailWin(){
   if(blocked) return resumeVictory(true, whaleWallFound);
   const got = await checkHunts(fell);
   await saveProfile();
-  if(got && got.length) return resumeVictory(true, ()=>huntPaid(got));
+  if(got && got.length) await huntThanks(got);   // before the victory screen
+  if(revivalDue()) return resumeVictory(true, ()=> startRevivalCall());
   resumeVictory();
-}
-function huntPaid(got){
-  const g = got[0];
-  const nm = SPECIES[g.species] ? SPECIES[g.species].name : g.species;
-  storyModal(npcPortrait('scientist'+g.sci,'🧑‍🔬',130,'transparent'), 'That is exactly it',
-    `They take the readings before you have finished surfacing.<br><br>` +
-    `<b>"A ${escapeHtml(nm)}. Do you know how long we have been asking for one?"</b><br><br>` +
-    got.map(x=>`<b>+${x.reward} Skill Tokens</b> — #${x.sci}`).join('<br>'),
-    ()=>go('weather_deck'), { bg:'laboratory_deck', subtitle:'Laboratory' });
 }
 function whaleWallFound(){
   /* Three of them, abreast, filling the screen before anybody says anything. */
@@ -512,7 +505,7 @@ async function onWhaleWin(){
 
 /* Once you have been through them: they let you past. */
 function quietWater(){
-  storyModal('🐋', 'They are not attacking',
+  storyModal('', 'They are not attacking',
     `They do not come for you.<br><br>` +
     `Two hundred tonnes of animal drifts past close enough to touch, and none of them so ` +
     `much as turns. Something has told them to let you through.<br><br>` +
@@ -537,8 +530,7 @@ function ghostIntro2(){
     `A long pause. The light through it shifts.<br><br>` +
     `<b>"Then other people came. Quieter ones. They knew where to look, which means somebody told them."</b><br><br>` +
     `Something enormous and old moves behind the words.<br><br>` +
-    `<b>"A legendary does not use its core. It is defined by its core."</b><br><br>` +
-    `<b>"They cut mine out. That is what killed me."</b><br><br>` +
+    `<b>"They cut out my core. That is what killed me."</b><br><br>` +
     `<b>"My people have no one to follow now. They will not move until this is finished."</b>`,
     ()=>ghostAsk(), { bg:'battle_diving', subtitle:'The deep' });
 }
@@ -659,10 +651,10 @@ function corpseChat(){
   storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
     `He hangs above his own body and does not look away from it.<br><br>` +
     `<b>"That is not a wound. That is a theft."</b><br><br>` +
-    `<b>"A core is not something you carry. It is handed down. Parent to child, and on, and ` +
+    `<b>"A core is not something you carry. It is handed down. Father to son, and on, and ` +
     `on. Every one of them put something into it."</b><br><br>` +
-    `<b>"My father is in there. His mother is in there. A thousand years of my family is in ` +
-    `there."</b><br><br>` +
+    `<b>"My father is in there, and his father before him. A thousand years of my ancestors ` +
+    `are in there."</b><br><br>` +
     `<b>"They did not just kill me. They stole everyone I came from."</b><br><br>` +
     `His voice drops, which is worse than shouting.<br><br>` +
     `<b>"Find them, child. My people will not move, and I will not rest, until somebody ` +
@@ -748,6 +740,16 @@ function ghostChat(where){
                laboratory_deck:'battle_laboratory_deck' };
   const SUB = { weather_deck:'Weather Deck', cabin_deck:'Cabin Deck',
                 laboratory_deck:'Laboratory' };
+  /* The story line first. After that he is not a recording: most taps get one
+     of his observations instead, and every fourth repeats where things stand.
+     The laboratory clues are exempt — they are the point of asking him there. */
+  if(!(onLab && labStage() === 'investigation')){
+    const key = body.slice(0, 48);
+    ui.ghostHeard = ui.ghostHeard || {};
+    const n = ui.ghostHeard[key] || 0;
+    ui.ghostHeard[key] = n + 1;
+    if(n > 0 && n % 4 !== 0) return cuainQuip();
+  }
   storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
     body, ()=>go(deck), { bg: BG[deck] || 'sea', subtitle: SUB[deck] || 'The Vane Shear' });
 }
@@ -1350,7 +1352,6 @@ const PUZZLED_SUP =
 
 function renderLaboratoryDeck(){
   const stage = labStage();
-  if(stage === 'after') return renderLaboratoryAfter();
   if(typeof renderWalkDeck === 'function') return renderWalkDeck('laboratory_deck');
   setScreenBg('sea');
   playMusicChain(['zone_laboratory_deck','region4','region']);
@@ -1433,29 +1434,6 @@ function puzzledSup(){
     ()=>go('laboratory_deck'), { bg:'battle_laboratory_deck', subtitle:'Laboratory' });
 }
 
-function renderLaboratoryAfter(){
-  const g = r4();
-  g.after = g.after || { day:null, beaten:false };
-  if(g.after.day !== today()){ g.after.day = today(); g.after.beaten = false; }
-  screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Explore</button>
-    <div class="screen-title">Laboratory Deck</div>
-    <div class="screen-sub">Under new management.</div>
-    <div class="sci-top">
-      <button class="deck-sprite" data-nine="1">
-        ${npcPortrait('scientist9','🧑‍🔬',80,'transparent')}
-        <div class="dive-label">${g.after.beaten ? 'Beaten today' : 'Challenge'}</div>
-      </button>
-    </div>
-    <div class="phase-flag">${g.after.beaten
-      ? 'She has had enough for one day.'
-      : 'Beat her for <b>5 Bronze Medals</b>. Once a day.'}</div>
-    ${huntsPanel()}
-  `;
-  $('#backBtn').addEventListener('click', ()=>go('explore'));
-  screenEl.querySelector('[data-nine]').addEventListener('click', ()=> startSupervisorDaily());
-  wireHuntRows();
-}
 /* The same two rows appear on the Laboratory Deck and the Challenge page. */
 function wireHuntRows(){
   screenEl.querySelectorAll('[data-hunt]').forEach(b=>
@@ -1606,8 +1584,10 @@ function shipkeeperShop(){
 function hunts(){
   const g = r4();
   g.hunts = g.hunts || { day:null, a:null, b:null, doneA:false, doneB:false };
-  if(g.hunts.day !== today()){
-    const pool = [1,2,3,4,5,7,8,9].filter(n=>n!==CULPRIT);
+  const hadRhona = [g.hunts.a, g.hunts.b].some(h=> h && h.sci === 9);
+  if(g.hunts.day !== today() || hadRhona){
+    /* Rhona has her own task now; the others take turns asking. */
+    const pool = [1,2,3,4,5,7,8].filter(n=>n!==CULPRIT);
     const who = pool.sort(()=>Math.random()-0.5).slice(0,2);
     g.hunts = {
       day: today(),
@@ -1696,58 +1676,33 @@ function caladriusStage(){
   const g = r4();
   if(!g.wallFound) return 'none';        // it only appears once the ship has stopped
   if(!g.caladriusSeen) return 'plea';    // the first meeting, guaranteed
-  if(!g.solved) return 'none';           // it will not return until the truth is out
-  if(!g.caladriusHealed) return 'heal';  // the second meeting, guaranteed
-  return 'wild';                          // thereafter, rarely, and hard to hold
+  if(!g.cuainRevived) return 'none';     // it will not come to the rail again until it has helped him
+  return 'wild';                          // thereafter, very rarely, and hard to hold
 }
-/* What comes up on the line when it isn't a bird. Loong arrives GROWN — it is
-   not a hatchling anybody hauls over a rail by accident. */
-const HAUL_COMMON = ['starfish','seahorse','duck','sea_turtle','lanternfish'];
-
+/* The rail's own roster: mostly birds (and the manta, which flies), a grown
+   Loong now and then — it is found on the line as well as in the deep — a
+   Moon Swan rarely, and Caladrius very rarely, once it has helped him. Nothing
+   from the sea floor comes up here. */
 function birdRoll(){
   const stage = caladriusStage();
-  if(stage === 'plea' || stage === 'heal') return 'caladrius';
+  if(stage === 'plea') return 'caladrius';
   const r = Math.random();
   if(stage === 'wild' && r < 0.03) return 'caladrius';
-  if(r < 0.08) return 'moon_swan';        // 5%, above the caladrius slice
+  if(r < 0.08) return 'moon_swan';
+  if(r < 0.14) return 'loong';
   return BIRD_COMMON[Math.floor(Math.random()*BIRD_COMMON.length)];
 }
-function haulRoll(){
-  const r = Math.random();
-  if(r < 0.05) return 'loong';            // grown, and thoroughly unimpressed
-  return HAUL_COMMON[Math.floor(Math.random()*HAUL_COMMON.length)];
-}
 
-/* Two thirds of the time it is birds on the catch. The rest of the time the
-   catch itself is the problem. */
 function startBirdRaid(){
   if(!ensurePool()) return;
-  const stage = caladriusStage();
-  if(stage === 'plea' || stage === 'heal'){
-    const first = birdRoll();
-    if(first === 'caladrius') return stage === 'plea' ? caladriusPlea() : caladriusHeals();
-  }
-  const haul = Math.random() < 0.35;
-  ui.currentZone = { id:'weather_deck', name:haul ? 'The haul' : 'The rail' };
+  if(caladriusStage() === 'plea') return caladriusPlea();
+  ui.currentZone = { id:'weather_deck', name:'The rail' };
   const lv = birdLevel();
-
-  if(haul){
-    const n = 1 + Math.floor(Math.random()*3);
-    const wave = Array.from({length:n}, ()=>{
-      const sp = haulRoll();
-      // a Loong is hauled up fully grown; everything else comes up small
-      return sp === 'loong'
-        ? { species:'loong', level:Math.max(lv, 41), ai:'best' }
-        : { species:sp, level:lv + Math.floor(Math.random()*3)-1, forceStage:0 };
-    });
-    return beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'In the net',
-      bgKey:'battle_weather_deck', onWin: ()=> onRailWin() });
-  }
-
   const pick = birdRoll();
   const n = 1 + Math.floor(Math.random()*3);
   const wave = Array.from({length:n}, ()=>{
     const sp = birdRoll();
+    if(sp === 'loong') return { species:'loong', level:Math.max(lv, 41), ai:'best' };   // grown
     const spec = { species:(sp==='caladrius'?'moon_swan':sp), level:lv + Math.floor(Math.random()*3)-1, forceStage:0 };
     if(spec.species === 'mantaray' || spec.species === 'moon_swan') spec.elusive = true;
     return spec;
@@ -1777,51 +1732,6 @@ async function caladriusPlea(){
     ()=>go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
 }
 
-/* --- the second meeting: it helps --- */
-const CALADRIUS_XP_FIGHTS = 30;
-async function caladriusHeals(){
-  const g = r4();
-  const cuain = state.party.concat(state.storage).find(m=>m.species==='whalelord');
-  if(!cuain) return startBirdRaid();          // nothing to heal yet
-  g.caladriusHealed = true;
-  await saveProfile();
-  storyModal(monPortrait('caladrius',150,{view:'front',bare:true}), 'It came back',
-    `It is on the rail again, and this time it is not looking at you at all.<br><br>` +
-    `Its head is fixed on the cold grey shape that has followed you up from the deep. ` +
-    `Something in the set of its shoulders changes — it draws itself up, the way a small ` +
-    `animal does when it has decided to do something difficult.<br><br>` +
-    `<i>It knew he was there. You think it has known since the first time.</i><br><br>` +
-    `The Whalelord does not move. For once, he has nothing to say.`,
-    ()=>caladriusHeals2(cuain), { bg:'weather_deck', subtitle:'Weather Deck' });
-}
-async function caladriusHeals2(cuain){
-  const before = cuain.level;
-  /* Thirty fights' worth, given to Cuain alone — the party XP path expects a
-     party, so we credit him directly and then let the usual level-up run. */
-  const cap = levelCap();
-  cuain.xpFights = (cuain.xpFights||0) + CALADRIUS_XP_FIGHTS;
-  while(cuain.level < cap && cuain.xpFights >= fightsNeeded(cuain.level)){
-    cuain.xpFights -= fightsNeeded(cuain.level);
-    const beforeMax = computeMaxHp(cuain.species, cuain.level, cuain.supplements, cuain);
-    cuain.level++;
-    const afterMax = computeMaxHp(cuain.species, cuain.level, cuain.supplements, cuain);
-    cuain.currentHp = Math.min(afterMax, cuain.currentHp + (afterMax - beforeMax));
-  }
-  await saveProfile();
-  storyModal(uiIcon('whalelord_core',140,'🔵'), 'A temporary mending',
-    `The bird spreads its wings over the water and holds them there, and does not move ` +
-    `again for a long time.<br><br>` +
-    `Light goes out of it and into the dead whale, and for a moment you can see what he ` +
-    `used to be — vast, and whole, and unhurried.<br><br>` +
-    `When it finally folds its wings it looks thinner than it did, and it will not meet ` +
-    `your eye. <i>You get the distinct impression it is embarrassed that this is all it ` +
-    `can do.</i><br><br>` +
-    `<b>${escapeHtml(displayName(cuain))} is strengthened.</b>` +
-    (cuain.level > before ? ` <i>Lv ${before} → Lv ${cuain.level}</i>` : '') + `<br><br>` +
-    `<b>Whalelord:</b> "It is not my core. It will not hold."<br><br>` +
-    `The bird has already gone.`,
-    ()=>go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
-}
 
 /* ============================================================
    THE INVESTIGATION — the nine, the clues, the accusation
@@ -2083,7 +1993,7 @@ function escapeLock(){
   return null;
 }
 /* Whatever scene has you, if any. The walkmap asks only this. */
-function storyLock(){ return corpseLock() || escapeLock(); }
+function storyLock(){ return corpseLock() || escapeLock() || revivalLock(); }
 
 async function startEpilogue(){
   const g = r4();
@@ -2254,16 +2164,200 @@ async function runWakeUp(){
   g.escapeStage = null;
   g.solved = true;                             // the whales have their answer
   g.cuainJoined = true;
-  /* With you, but not in one of your six: he waits in storage for the day
-     somebody wants to fight beside him. */
-  if(!state.party.concat(state.storage).some(m=> m.species === 'whalelord'))
-    state.storage.push(newMonster('whalelord', 66));
+  /* A passenger: in your party for good, never one of your six. */
+  grantCuain();
   await saveProfile();
   sceneClear();
   ui.sceneRunning = false;
   go('cabin_deck');
   await sceneCurtain(false, 900);
   toast('The whales have gone. The lane east is open.');
+}
+
+/* ------------------------------------------------------------
+   CALADRIUS, AND A SEVENTH
+   Past 60 on the expedition the Whalelord feels something good nearby. The
+   white bird binds the Ghost Stone to him and gives him back enough of his
+   strength to fight: from then on he battles, takes protein and learns skills
+   like anyone — a seventh, never one of your six, and still never put away.
+   Staged in the save (revivalStage: 'call', then 'deck') like the other scenes.
+   ------------------------------------------------------------ */
+const REVIVAL_AT = 60;
+function revivalLock(){
+  const g = r4(), w = walkState();
+  if(g.revivalStage === 'call'){
+    const d = (w.deck && DECKS[w.deck]) ? w.deck : 'weather_deck';
+    const p = (w.at && w.at[d]) || { x:DECKS[d].spawn[0], y:DECKS[d].spawn[1] };
+    return { deck:d, x:p.x, y:p.y, label:null, auto:()=> runRevivalCall() };
+  }
+  if(g.revivalStage === 'deck')
+    return { deck:'weather_deck', x:14, y:6, ghost:{ x:14, y:5 }, face:'u',
+             label: ui.sceneRunning ? null : 'Speak to the bird',
+             act:()=> runCaladrius(), stage:()=> stageCaladrius() };
+  return null;
+}
+/* After a win: has the expedition just passed the mark? */
+function revivalDue(){
+  const g = r4();
+  return !!(g.solved && !g.cuainRevived && !g.revivalStage && (g.dives || 0) >= REVIVAL_AT);
+}
+async function startRevivalCall(){
+  const g = r4();
+  g.revivalStage = 'call';
+  await saveProfile();
+  const w = walkState();
+  go((w.deck && DECKS[w.deck]) ? w.deck : 'weather_deck');   // the lock starts the call
+}
+async function runRevivalCall(){
+  if(ui.sceneRunning) return;
+  ui.sceneRunning = true;
+  await sceneWait(400);
+  const whale = faceMon('whalelord'), wn = whaleName();
+  await sceneSay([whale], wn, `<b>"Wait. Do you feel that?"</b>`);
+  await sceneSay([whale], wn,
+    `<b>"Something is here. Something old — a legendary, like me."</b><br><br>` +
+    `<b>"Not like the man with the raven. This one is... good."</b>`);
+  await sceneSay([whale], wn, `<b>"It is waiting for us on the weather deck. Come, quickly."</b>`);
+  const g = r4();
+  g.revivalStage = 'deck';
+  await saveProfile();
+  ui.sceneRunning = false;
+  blackoutTo(()=> go('weather_deck'), { hold:500 });
+}
+function stageCaladrius(){
+  sceneActor('caladrius', { x:14, y:3, w:2, h:2, src:'assets/mon/caladrius_front.png', icon:'🕊️', bob:true, z:60 });
+}
+/* The stone goes onto him for good — or until he is crowned. */
+async function bindGhostStone(){
+  const c = state.party.find(isCuain) || grantCuain();
+  state.inventory.ghostStone = true;
+  state.inventory[stoneOnKey('ghostStone')] = c.uid;
+  await saveProfile();
+  return c;
+}
+async function runCaladrius(){
+  if(ui.sceneRunning) return;
+  ui.sceneRunning = true;
+  refreshWalk();                                   // the button goes
+  const bird = faceMon('caladrius'), whale = faceMon('whalelord'), wn = whaleName();
+  const st = ELEMENTAL_STONES.find(s=> s.id === 'ghostStone') || { icon:'ghost_stone', emoji:'👻' };
+  await sceneSay([bird], 'The white bird',
+    `It does not speak. It does not need to — its thoughts arrive in your head as clearly as if ` +
+    `they were your own.<br><br>` +
+    `<i>It knows what was done to the Whalelord. It felt the great battle from far away — the man ` +
+    `with the raven, and power that was not his to use. It flew as fast as it could, and it came ` +
+    `too late.</i>`);
+  await sceneSay([bird], 'The white bird',
+    `<i>Its gaze moves to the Whalelord, and you feel what it finds there: a great, restless wish ` +
+    `to be more than a ghost at your shoulder. To fight beside you.</i>`);
+  await bindGhostStone();
+  await sceneSay([bird, uiIcon(st.icon, 64, st.emoji)], 'The white bird',
+    `<i>Its eyes drop to your bag. Before you quite understand, the Ghost Stone floats out of it, ` +
+    `crosses the air, and settles into the Whalelord like a key finding its lock.</i><br><br>` +
+    `<b>The Ghost Stone is bound to the Whalelord. It cannot be removed until he is crowned.</b>`);
+  await sceneSay([bird], 'The white bird',
+    `<i>Then it spreads its pure, icy wings, and summons its healing might.</i>`);
+
+  /* Both of them light up blue-white, and the screen shimmers for three seconds. */
+  sceneGlow('bird', 15, 4, 3.2, 59);             // the middle of its two-by-two square
+  sceneGlow('whale', 14.5, 5.5, 2.2, 1);          // behind him, on his tile
+  await sceneShimmer(3000);
+  await sceneGlowOut(['bird', 'whale'], 900);
+
+  await sceneSay([whale], wn, `<b>"My power, it's returned! Thank you, Caladrius."</b>`);
+  await sceneSay([bird], 'Caladrius',
+    `<i>It looks fatigued. One of the three feathers on its crown has turned dark, as if a ` +
+    `shadowy mark has fallen over it. But it looks glad for the Whalelord.</i>`);
+  await sceneSay([whale], wn, `<b>"I will repay you for this favour, noble Caladrius."</b>`);
+  await sceneSay([bird], 'Caladrius',
+    `<i>Caladrius seems to smile. Then it lifts its wings and soars into the sky.</i>`);
+
+  /* Away up and to the left, fifty degrees above the horizon. */
+  const a = 50 * Math.PI / 180, D = 14;
+  await sceneGlide(['caladrius'], -Math.cos(a) * D, -Math.sin(a) * D, 2200);
+  sceneActorGone('caladrius');
+  await sceneWait(2000);
+
+  await sceneSay([whale], wn, `<b>"Finally, I can fulfil my promise to you, dear friend."</b>`);
+  await sceneSay([whale], wn,
+    `<b>"My power isn't fully returned yet. For that, I'll need my core. But I can now fight ` +
+    `alongside you. Perhaps as a ghost, I'll be able to help you in new ways I never could while ` +
+    `I lived in the ocean."</b>`);
+  await sceneSay([whale], wn,
+    `<b>"That Caladrius could help us more, if he wished. But I suppose he has his pride as Lord ` +
+    `of the Northern Skies. Perhaps if you <u>battle enough with the birds</u>, he might deem you ` +
+    `worthy of a challenge."</b>`);
+
+  const g = r4();
+  g.revivalStage = null;
+  g.cuainRevived = true;
+  const c = state.party.find(isCuain) || grantCuain();
+  c.revived = true;                               // a seventh fighter from here on
+  await saveProfile();
+  sceneClear();
+  ui.sceneRunning = false;
+  go('weather_deck');
+  toast('The Whalelord can now fight beside you.');
+}
+
+/* Before the victory screen: whoever asked for it comes to collect. */
+async function huntThanks(got){
+  for(const x of got){
+    const nm = SPECIES[x.species] ? SPECIES[x.species].name : x.species;
+    await sceneSay([faceNpc('scientist' + x.sci, '🧑‍🔬')], crewName('scientist' + x.sci),
+      `<b>"A ${escapeHtml(nm)}! That's exactly the specimen I needed — thank you."</b><br><br>` +
+      `<b>"I'll only study it, I promise. The moment I'm done, it goes straight back to the sea."</b>` +
+      `<br><br><b>+${x.reward} tokens</b>`);
+  }
+}
+
+/* ---------- the laboratory, after it is over ---------- */
+function huntKeyFor(n){
+  const h = hunts();
+  if(h.a && h.a.sci === n && !h.doneA) return 'a';
+  if(h.b && h.b.sci === n && !h.doneB) return 'b';
+  return null;
+}
+function sciHasHunt(n){ return labStage() === 'after' && !!huntKeyFor(n); }
+function rhonaHasTask(){
+  if(labStage() !== 'after') return false;
+  const a = r4().after;
+  return !(a && a.day === today() && a.beaten);
+}
+function sciAfterChat(n){
+  const key = huntKeyFor(n);
+  if(key) return huntRequest(key);
+  storyModal(npcPortrait('scientist' + n, '🧑‍🔬', 120, 'transparent'), crewName('scientist' + n),
+    `<b>"Back to proper work at last. Thank you — for all of it."</b>`,
+    ()=> go('laboratory_deck'), { bg:'battle_laboratory_deck', subtitle:'Laboratory' });
+}
+/* Rhona has the supervisor's place now, and means to earn it. */
+function rhonaTask(){
+  const g = r4();
+  g.after = g.after || { day:null, beaten:false };
+  if(g.after.day !== today()){ g.after.day = today(); g.after.beaten = false; }
+  const done = g.after.beaten;
+  const ov = document.createElement('div');
+  ov.className = 'refine-scrim';
+  ov.innerHTML = `
+    <div class="refine-card">
+      ${npcPortrait('scientist9', '🧑‍🔬', 96, 'transparent')}
+      <div class="refine-name">${escapeHtml(crewName('scientist9'))}</div>
+      <div class="move-info-body">
+        <p><b>"${done ? `Again tomorrow. I'll have found something new by then.`
+                     : `I have to get stronger if I'm to be a supervisor worthy of respect.<br>Care to help me practise?`}"</b></p>
+        ${done ? '' : `<p><i>Once a day · 5 Bronze Medals</i></p>`}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
+        ${done ? '' : `<button class="btn btn-primary" id="rhGo">Challenge</button>`}
+        <button class="btn btn-ghost" id="rhNo">Back</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = ()=>{ if(ov.parentNode) ov.remove(); };
+  ov.querySelector('#rhNo').addEventListener('click', close);
+  const go_ = ov.querySelector('#rhGo');
+  if(go_) go_.addEventListener('click', ()=>{ close(); startSupervisorDaily(); });
 }
 
 /* ------------------------------------------------------------
