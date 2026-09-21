@@ -2481,7 +2481,10 @@ function onWaveCleared(){
   }
 }
 
-function activeMon(){ return state.party[ui.battle.activeIndex]; }
+/* Out of a battle there is no active monster. This used to throw, which took
+   down the stats screen whenever it was opened before the first fight of a
+   session — every move line estimates its damage through here. */
+function activeMon(){ return (ui.battle && state.party[ui.battle.activeIndex]) || null; }
 function monMaxHp(m){ return computeMaxHp(m.species, m.level, m.supplements, m); }
 /* Enrage is bolted on top of the natural figure, from the undressed base, so
    stacks stay additive and never compound with one another. */
@@ -2505,7 +2508,10 @@ function unlockedMoves(m){
   }
   /* 'Max' is an UPGRADE of Ultimate, not an extra button: once its level is
      reached it takes over the Ultimate slot entirely. */
-  const maxMv = MOVES[m.species].find(mv=>mv[0]==='Max' && mv[1]!=null && moveUnlockedFor(m, mv));
+  /* A Passive in the Max row (Caladrius's Pacificus) is not an upgrade — it
+     only holds the place. It used to take over the Ultimate and leave the bird
+     with a Pacificus button that did nothing, and no Conversio at all. */
+  const maxMv = MOVES[m.species].find(mv=>mv[0]==='Max' && mv[1]!=null && mv[3]!=='Passive' && moveUnlockedFor(m, mv));
   /* Passives take effect on entering the field; they never appear as buttons. */
   const base = MOVES[m.species].filter(mv=>mv[0]!=='Max' && mv[3]!=='Passive').map(mv=>{
     let [slot,name,mult,target,words,unlock,extra]=mv;
@@ -2597,6 +2603,7 @@ function ultraFizz(plus){
    hits, and whether it spreads. Deliberately BEFORE type effectiveness — that
    varies per target — but after the multipliers the player controls. */
 function ownBuffMultiplier(){
+  if(!ui.battle) return 1;                 // no battle, no buffs: the plain figure
   let m = 1;
   const oh = getPStatus(0,'overheat');
   if(oh) m *= (oh.deal || 1.5);            // honour the refined tiers
@@ -2658,6 +2665,24 @@ function moveShapeSentence(mv, dmg){
    monster reusing a mechanic gets its description for free. */
 function moveEffectText(mv, mon, atk){
   const out = [];
+  /* Caladrius: everything is measured against its own (enormous) max health. */
+  const maxHp = mon ? monMaxHp(mon) : 0;
+  const ofHp = f => maxHp ? `<b>${Math.ceil(f * maxHp)} HP</b> (${Math.round(f * 100)}% of its max health)`
+                          : `<b>${Math.round(f * 100)}%</b> of its max health`;
+  if(mv.vita) out.push(
+    `<b>Vita.</b> At once, everyone still standing on your side is healed by ${ofHp(mv.vita.pulse || 0.2)}. ` +
+    `Then the light stays for <b>${mv.vita.turns || 5} turns</b>, and every turn it heals whichever teammate ` +
+    `is worst off by the same amount. Casting it again starts the turns over; it never stacks.`);
+  if(mv.conversio) out.push(
+    `<b>Conversio.</b> Brings up to <b>${mv.conversio.revives || 2} fainted teammates</b> back with ` +
+    `<b>${Math.round((mv.conversio.pct || 0.33) * 100)}%</b> of their health. Every one it raises leaves a dark ` +
+    `<b>Mors mark</b> on this bird — at <b>3 marks</b> it folds its wings and falls, and nothing can bring it back. ` +
+    `If nobody has fainted, the light turns outward instead and takes ${ofHp(mv.conversio.direct || 0.33)} ` +
+    `from an enemy, straight through any guard. That does not mark it.`);
+  if(mv.statNote) out.push(
+    `<b>Pacificus.</b> Not a move at all — it is what this bird is. Half of its attack is given up for ` +
+    `health: its health grows half again as fast as other legendaries', and its attack only half as fast. ` +
+    `Vita and Conversio are both measured by that enormous health. It has no Max move; this is its place.`);
   if(mv.revitalise) out.push(
     `<b>Revive.</b> Brings <b>one fainted teammate</b> back into the fight with ` +
     `<b>${Math.round((mv.revitalise.pct||0.1)*100)}%</b> of its health. You choose who, then write the words. ` +

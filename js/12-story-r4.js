@@ -1677,7 +1677,8 @@ function caladriusStage(){
   if(!g.wallFound) return 'none';        // it only appears once the ship has stopped
   if(!g.caladriusSeen) return 'plea';    // the first meeting, guaranteed
   if(!g.cuainRevived) return 'none';     // it will not come to the rail again until it has helped him
-  return 'wild';                          // thereafter, very rarely, and hard to hold
+  if(legendaryTaken('caladrius')) return 'gone';   // one of each legendary: once caught, never again
+  return 'wild';                          // thereafter, very rarely
 }
 /* The rail's own roster: mostly birds (and the manta, which flies), a grown
    Loong now and then — it is found on the line as well as in the deep — a
@@ -1709,7 +1710,10 @@ function startBirdRaid(){
   });
   if(pick === 'caladrius'){
     wave.length = 1;
-    wave[0] = { species:'caladrius', level:lv, forceStage:0, elusive:true, ai:'caladrius' };
+    /* A heavenly bird: always 77, and Elusive — given the chance it simply
+       leaves. Pin it down (Magma Goo, or anything with the noflee rider) and it
+       has to fight: Vita once to steady itself, then Conversio again and again. */
+    wave[0] = { species:'caladrius', level:77, elusive:true, ai:'caladrius' };
   }
   beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Raid on the hauls',
     bgKey:'battle_weather_deck', onWin: ()=> onRailWin() });

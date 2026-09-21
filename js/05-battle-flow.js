@@ -1364,6 +1364,53 @@ function castRevitalise(mon, mv){
   return setTimeout(()=> afterPlayerAttack(mon, []), 900);
 }
 
+/* ---------- a wild Caladrius's Vita and Conversio ----------
+   The same gifts as in your hands, measured by ITS enormous health. */
+function enemyVita(e, def, next){
+  const heal = Math.ceil((def.pulse || 0.2) * e.maxHp);
+  livingEnemies().forEach(x=>{
+    const idx = ui.battle.enemies.indexOf(x), before = x.hp;
+    x.hp = Math.min(x.maxHp, x.hp + heal);
+    drainHp('enemyHp-' + idx, before, x.hp, x.maxHp);
+  });
+  e._vita = { turnsLeft: def.turns || 5, pulse: def.pulse || 0.2 };
+  battleMsg(`🕊 ${SPECIES[e.species].name} uses <b>Vita</b> — its side is healed, and the light stays behind.`);
+  renderStatusBadges();
+  setTimeout(next, 1100);
+}
+function enemyVitaTick(e){
+  const v = e._vita;
+  if(!v || v.turnsLeft <= 0) return false;
+  v.turnsLeft--;
+  const hurt = livingEnemies().filter(x=> x.hp < x.maxHp).sort((a, b)=> a.hp / a.maxHp - b.hp / b.maxHp);
+  if(!hurt.length) return false;
+  const t = hurt[0], idx = ui.battle.enemies.indexOf(t), before = t.hp;
+  t.hp = Math.min(t.maxHp, t.hp + Math.ceil(v.pulse * e.maxHp));
+  drainHp('enemyHp-' + idx, before, t.hp, t.maxHp);
+  battleMsg(`🕊 The light finds ${SPECIES[t.species].name} — <b>+${t.hp - before} HP</b>.`);
+  return true;
+}
+function enemyConversio(e, def, next){
+  const name = SPECIES[e.species].name;
+  const fallen = ui.battle.enemies.filter(x=> x !== e && x.hp <= 0);
+  if(fallen.length){
+    fallen.slice(0, def.revives || 2).forEach(x=>{ x.hp = Math.max(1, Math.ceil((def.pct || 0.33) * x.maxHp)); });
+    battleMsg(`🕊 ${name} uses <b>Conversio</b> — its fallen draw breath again.`);
+    renderBattle();
+    return setTimeout(next, 1100);
+  }
+  /* Nobody of its own to raise, so the light turns outward and simply takes —
+     straight through any guard, as it does in your hands. */
+  const mon = activeMon();
+  const dmg = Math.ceil((def.direct || 0.33) * e.maxHp);
+  const before = mon.currentHp;
+  mon.currentHp = Math.max(0, mon.currentHp - dmg);
+  drainHp('playerHp', before, mon.currentHp, monMaxHp(mon));
+  battleMsg(`🕊 ${name} uses <b>Conversio</b> — with nobody to raise, the light turns outward and takes ` +
+            `<b>${before - mon.currentHp}</b>.`);
+  setTimeout(next, 1100);
+}
+
 function runConversio(mon, def){
   const fallen = ()=> state.party.map((m,i)=>({m,i}))
     .filter(o=>o.m.currentHp <= 0 && !isPassenger(o.m) && o.m !== mon);
@@ -1976,6 +2023,10 @@ function runEnemyAttack(i){
   b.acted = b.acted || [];
   if(!b.acted.includes(e)) b.acted.push(e);
 
+  /* Vita's light, on the enemy's side, tends its worst-off each time it acts. */
+  if(!e._vitaTicked && enemyVitaTick(e)){ e._vitaTicked = true; return setTimeout(()=> runEnemyAttack(i), 800); }
+  e._vitaTicked = false;
+
   /* An Elusive thief spends its turn leaving. Thundercat takes the initiative
      and uses it to bolt before you can act at all. */
   if(isElusive(e)){
@@ -2063,6 +2114,10 @@ function runEnemyAttack(i){
     move = (!e._vitaCast ? list.find(m=>m[1]==='Vita') : list.find(m=>m[1]==='Conversio')) || move;
     if(move && move[1]==='Vita') e._vitaCast = true;
   }
+  /* Its two gifts, turned the other way. These have no damage figure, so they
+     must never fall through to the ordinary strike. */
+  if(move && move[6] && move[6].vita)      return enemyVita(e, move[6].vita, ()=> runEnemyAttack(i+1));
+  if(move && move[6] && move[6].conversio) return enemyConversio(e, move[6].conversio, ()=> runEnemyAttack(i+1));
   if(e.isDummy && e.arenaMove && e.arenaMove !== 'auto'){
     const list = MOVES[e.species] || [];
     const forced = list.find(m=>m[0] === e.arenaMove && m[1] != null);

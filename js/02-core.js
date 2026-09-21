@@ -60,7 +60,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.47';
+const GAME_VERSION = '2.49';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1181,6 +1181,13 @@ function isBaby(m){ return !!(m && SPECIES[m.species] && SPECIES[m.species].isBa
    him for free, because they all ask isPassenger(). Nobody names him either:
    he keeps his title until he chooses to give his name. */
 function isCuain(m){ return !!(m && m.cuain); }
+/* There is only ever one of each legendary. Once it has been caught (or is
+   owned at all) it never turns up in the wild again. */
+function legendaryTaken(sp){
+  if(!state) return false;
+  return (state.caughtSpecies || []).includes(sp) ||
+         (state.party || []).concat(state.storage || []).some(m=> m.species === sp);
+}
 /* Carried, not fighting. Cuain rides as a passenger until Caladrius gives him
    back enough of himself to fight; after that he fights like anyone — a
    seventh, never one of your six — but he can still never be put away. */
