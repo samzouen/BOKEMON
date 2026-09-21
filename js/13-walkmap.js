@@ -877,9 +877,29 @@ function sceneActor(id, o){
   }
   return el;
 }
+/* The screen shakes: a fresh random nudge every frame, so it is quick, as
+   strong as amp(ms) says in tiles — ms being the time into the shake at normal
+   speed. It uses the separate CSS `translate`, so the stage's own transform is
+   never touched, and it always ends exactly where it started. */
+function sceneShake(ms, amp){
+  const el = $('#walkStage');
+  if(!el) return sceneWait(ms);
+  const dur = Math.max(1, ms * SCENE_SPEED), t0 = performance.now();
+  return new Promise(done=>{
+    const frame = now=>{
+      const e = now - t0;
+      if(e >= dur){ el.style.translate = ''; return done(); }
+      const a = Math.max(0, amp(e / SCENE_SPEED)) * WALK_T;
+      el.style.translate = `${((Math.random() * 2 - 1) * a).toFixed(1)}px ${((Math.random() * 2 - 1) * a).toFixed(1)}px`;
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+}
 function sceneActorGone(id){ const el = document.getElementById('sa-' + id); if(el) el.remove(); }
 function sceneClear(){
   document.querySelectorAll('.scene-actor, .scene-ball, .scene-say').forEach(e=> e.remove());
+  const st = $('#walkStage'); if(st) st.style.translate = '';
 }
 /* Lay the player down (or stand them back up) where they are. */
 function sceneFaintPlayer(dir){

@@ -400,6 +400,15 @@ function tallyBattleForEyeBreak(){
 }
 
 let _eyeTimer = null;
+function endEyeBreak(msg){
+  if(_eyeTimer){ clearInterval(_eyeTimer); _eyeTimer = null; }
+  const o = document.getElementById('eyeBreakOverlay');
+  if(o && o.parentNode) o.parentNode.removeChild(o);
+  document.body.classList.remove('eye-locked');
+  state.eyeBreakUntil = 0;
+  saveProfile();
+  toast(msg || 'Break over — welcome back!');
+}
 function showEyeBreak(){
   if(document.getElementById('eyeBreakOverlay')) return;
   const ov = document.createElement('div');
@@ -412,23 +421,42 @@ function showEyeBreak(){
       <div class="eye-body">Look at something far away — out a window if you can.<br>The game will wake up on its own.</div>
       <div class="eye-clock" id="eyeClock">--:--</div>
       <div class="eye-note">Everything is paused until the timer ends.</div>
-    </div>`;
+      <div id="eyeGate" style="display:none;margin-top:16px;">
+        <input type="password" id="eyePw" placeholder="Password" inputmode="numeric" autocomplete="off"
+          style="width:100%;box-sizing:border-box;">
+        <div id="eyePwMsg" style="font-size:12px;font-weight:700;min-height:16px;margin-top:6px;color:#f3b7a8;"></div>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="btn btn-primary" id="eyePwGo" style="flex:1;">End the break</button>
+          <button class="btn btn-ghost" id="eyePwNo" style="flex:1;">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <button id="eyeOverride" aria-label="Grown-ups: end the break"
+      style="position:absolute;top:calc(env(safe-area-inset-top, 0px) + 12px);right:12px;
+             background:rgba(244,236,216,.12);color:#f4ecd8;border:1px solid rgba(244,236,216,.35);
+             border-radius:12px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer;">
+      🔒 Grown-ups
+    </button>`;
   document.body.appendChild(ov);
   document.body.classList.add('eye-locked');
+  /* The parent's password (or the default, if none has been set) ends it now. */
+  const gate = ov.querySelector('#eyeGate'), pw = ov.querySelector('#eyePw'), msg = ov.querySelector('#eyePwMsg');
+  ov.querySelector('#eyeOverride').addEventListener('click', ()=>{
+    gate.style.display = 'block'; msg.textContent = ''; pw.value = ''; pw.focus();
+  });
+  ov.querySelector('#eyePwNo').addEventListener('click', ()=>{ gate.style.display = 'none'; });
+  const tryPw = ()=>{
+    if(passOk(pw.value.trim())) return endEyeBreak('Break ended by a grown-up.');
+    msg.textContent = 'Incorrect password.';
+    pw.value = '';
+  };
+  ov.querySelector('#eyePwGo').addEventListener('click', tryPw);
+  pw.addEventListener('keydown', e=>{ if(e.key === 'Enter') tryPw(); });
 
   const tick = ()=>{
     const ms = eyeBreakRemaining();
     const el = document.getElementById('eyeClock');
-    if(ms <= 0){
-      clearInterval(_eyeTimer); _eyeTimer = null;
-      const o = document.getElementById('eyeBreakOverlay');
-      if(o && o.parentNode) o.parentNode.removeChild(o);
-      document.body.classList.remove('eye-locked');
-      state.eyeBreakUntil = 0;
-      saveProfile();
-      toast('Break over — welcome back!');
-      return;
-    }
+    if(ms <= 0) return endEyeBreak();
     if(el){
       const total = Math.ceil(ms/1000);
       el.textContent = String(Math.floor(total/60)).padStart(2,'0')+':'+String(total%60).padStart(2,'0');

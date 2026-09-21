@@ -2166,6 +2166,16 @@ async function runJaxEscape(){
 
   /* The core's power, gathering over the middle of the deck. */
   await sceneWait(500);
+  /* The deck trembles while the power gathers: faint and quick at first,
+     harder towards the end of the charge, hardest in the blast and the white,
+     then gone fast as the white lifts. The timings match the ball (3 s) and
+     the flash (0.5 in, 2 held, 0.5 out). */
+  const quake = sceneShake(6000, ms=>{
+    if(ms < 3000) return 0.02 + 0.08 * Math.pow(ms / 3000, 2);
+    if(ms < 3500) return 0.10 + 0.05 * ((ms - 3000) / 500);
+    if(ms < 5500) return 0.15;
+    return 0.15 * Math.pow(Math.max(0, 1 - (ms - 5500) / 500), 2);
+  });
   await sceneBall(13.5, 5.5, 3, 3000);
   await sceneFlash(500, 2000, ()=>{
     const b = document.getElementById('sceneBall'); if(b) b.remove();
@@ -2175,6 +2185,7 @@ async function runJaxEscape(){
     sceneActor('rhona',   { faint:-1 });
     sceneActor('loong',   { flip:true });  // turned east, ready to go
   });
+  await quake;
   await sceneSay([jax], 'Jax', `<b>"Thanks for the ride."</b>`);
 
   /* Up onto its back: 0.6 of a tile above and 0.3 to the right of the point
@@ -2184,7 +2195,10 @@ async function runJaxEscape(){
     const el = document.getElementById('sa-' + id); if(!el) return;
     el._o.bob = true; el.classList.remove('bob'); void el.offsetWidth; el.classList.add('bob');
   });
+  /* a mild rumble as the Loong goes: you feel it more than see it */
+  const rumble = sceneShake(2600, ms=> 0.045 - 0.025 * (ms / 2600));
   await sceneGlide(['jax','loong'], 12, 0, 2600);
+  await rumble;
   sceneActorGone('jax'); sceneActorGone('loong');
 
   await sceneWait(1000);
