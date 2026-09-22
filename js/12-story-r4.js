@@ -2126,24 +2126,26 @@ async function runJaxEscape(){
   await sceneWait(500);
   /* The deck trembles while the power gathers: faint and quick at first,
      harder towards the end of the charge, hardest in the blast and the white,
-     then gone fast as the white lifts. The timings match the ball (3 s) and
-     the flash (0.5 in, 2 held, 0.5 out). */
-  const quake = sceneShake(6000, ms=>{
-    if(ms < 3000) return 0.02 + 0.08 * Math.pow(ms / 3000, 2);
-    if(ms < 3500) return 0.10 + 0.05 * ((ms - 3000) / 500);
-    if(ms < 5500) return 0.15;
-    return 0.15 * Math.pow(Math.max(0, 1 - (ms - 5500) / 500), 2);
+     then gone fast as the white lifts. The timings match core_blast.mp3: a
+     5-second charge, then the white (0.5 s in, 3.5 s held, 0.5 s out). */
+  const CHARGE = 5000, WHITE_IN = 500, WHITE_HOLD = 3500, WHITE_OUT = 500;
+  const peak = CHARGE + WHITE_IN, lift = peak + WHITE_HOLD, total = lift + WHITE_OUT;
+  const quake = sceneShake(total, ms=>{
+    if(ms < CHARGE) return 0.02 + 0.08 * Math.pow(ms / CHARGE, 2);
+    if(ms < peak)   return 0.10 + 0.05 * ((ms - CHARGE) / WHITE_IN);
+    if(ms < lift)   return 0.15;
+    return 0.15 * Math.pow(Math.max(0, 1 - (ms - lift) / WHITE_OUT), 2);
   });
   playSfx('core_blast');                          // assets/sfx/core_blast.mp3
-  await sceneBall(13.5, 5.5, 3, 3000);
-  await sceneFlash(500, 2000, ()=>{
+  await sceneBall(13.5, 5.5, 3, CHARGE);
+  await sceneFlash(WHITE_IN, WHITE_HOLD, ()=>{
     const b = document.getElementById('sceneBall'); if(b) b.remove();
     sceneFaintPlayer(1);
     sceneActor('captain', { faint:-1 });
     sceneActor('keeper',  { faint:1 });
     sceneActor('rhona',   { faint:-1 });
     sceneActor('loong',   { flip:true });  // turned east, ready to go
-  });
+  }, WHITE_OUT);
   await quake;
   await sceneSay([jax], 'Jax', `<b>"Thanks for the ride."</b>`);
 

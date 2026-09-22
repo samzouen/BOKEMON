@@ -1048,7 +1048,7 @@ async function sceneCurtainText(text, ms){
 
 /* White from translucent to solid over inMs, held for holdMs (duringWhite runs
    behind it), then lifted. */
-async function sceneFlash(inMs, holdMs, duringWhite){
+async function sceneFlash(inMs, holdMs, duringWhite, outMs){
   sceneCss();
   const f = document.createElement('div');
   f.id = 'sceneFlash';
@@ -1060,9 +1060,10 @@ async function sceneFlash(inMs, holdMs, duringWhite){
   await sceneWait(inMs);
   if(duringWhite) duringWhite();
   await sceneWait(holdMs);
-  f.style.transition = `opacity ${500 * SCENE_SPEED}ms ease`;
+  const out = outMs || 500;
+  f.style.transition = `opacity ${out * SCENE_SPEED}ms ease`;
   f.style.opacity = '0';
-  await sceneWait(500);
+  await sceneWait(out);
   f.remove();
 }
 
@@ -1080,7 +1081,8 @@ function sceneBall(cx, cy, maxTiles, ms){
     const frame = now=>{
       const t = Math.min(1, (now - t0) / dur);
       const grow = 0.4 + (maxTiles - 0.4) * t;
-      const pulse = t < 1 ? 1 + 0.14 * Math.sin(t * Math.PI * 12) : 1;
+      /* two breaths a second, however long the charge, and exactly maxTiles at the end */
+      const pulse = t < 1 ? 1 + 0.14 * Math.sin(((now - t0) / SCENE_SPEED) / 1000 * Math.PI * 4) : 1;
       const d = grow * pulse * T;
       b.style.width = b.style.height = d + 'px';
       b.style.left = (cx * T - d / 2) + 'px';
