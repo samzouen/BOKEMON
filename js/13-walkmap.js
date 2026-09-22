@@ -854,7 +854,7 @@ function labSupervisor(){
    in a test.
    ============================================================ */
 let SCENE_SPEED = 1;
-const sceneWait = ms => new Promise(r => setTimeout(r, ms * SCENE_SPEED));
+function sceneWait(ms){ return new Promise(r => setTimeout(r, ms * SCENE_SPEED)); }
 
 function sceneCss(){
   if(document.getElementById('sceneCss')) return;

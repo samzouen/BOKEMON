@@ -2099,7 +2099,7 @@ async function runJaxEscape(){
   const name = state.name || 'You';
   const me = facePlayer(), jax = faceNpc('rival','🧑'), whale = faceMon('whalelord');
   await sceneSay([me], name, `<b>"Jax, stop right there!"</b>`);
-  await sceneSay([jax, faceImg('assets/UI/whalelord_core.png','💠')], 'Jax', `<b>"Looking for this?"</b>`);
+  await sceneSay([jax, uiIcon('whalelord_core', 64, '💠')], 'Jax', `<b>"Looking for this?"</b>`);
   await sceneSay([whale], whaleName(), `<b>"My core! Give it back!"</b>`);
   await sceneSay([jax], 'Jax',
     `<b>"Never hide a whale's treasure in the ocean."</b><br><br>` +
@@ -2128,6 +2128,8 @@ async function runJaxEscape(){
      harder towards the end of the charge, hardest in the blast and the white,
      then gone fast as the white lifts. The timings match core_blast.mp3: a
      5-second charge, then the white (0.5 s in, 3.5 s held, 0.5 s out). */
+  playSfx('core_blast');                          // assets/sfx/core_blast.mp3 — starts at once
+  await sceneWait(400);                           // …and the charge follows it by 0.4 s
   const CHARGE = 5000, WHITE_IN = 500, WHITE_HOLD = 3500, WHITE_OUT = 500;
   const peak = CHARGE + WHITE_IN, lift = peak + WHITE_HOLD, total = lift + WHITE_OUT;
   const quake = sceneShake(total, ms=>{
@@ -2136,7 +2138,6 @@ async function runJaxEscape(){
     if(ms < lift)   return 0.15;
     return 0.15 * Math.pow(Math.max(0, 1 - (ms - lift) / WHITE_OUT), 2);
   });
-  playSfx('core_blast');                          // assets/sfx/core_blast.mp3
   await sceneBall(13.5, 5.5, 3, CHARGE);
   await sceneFlash(WHITE_IN, WHITE_HOLD, ()=>{
     const b = document.getElementById('sceneBall'); if(b) b.remove();

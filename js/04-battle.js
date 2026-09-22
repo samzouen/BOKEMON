@@ -112,6 +112,34 @@ function applyFieldStatus(status){
 }
 
 /* One round has passed: age every status and drop the expired ones. */
+/* One muddled turn: this enemy's next swing lands on its own side. */
+function markConfused(e, ffPower){
+  addEStatus(e, { type:'discombobulate', turnsLeft:2, mine:true, ffPower:ffPower || 0.60 });
+}
+/* Each round the old muddle clears, and Discombobulate's field catches whoever
+   it catches — the newly arrived as readily as the rest. A lone Lunacy leaves
+   no field behind, so its muddle simply lapses here. */
+function discombobulatePulse(){
+  const f = getPStatus(0,'confusionField');
+  livingEnemies().forEach(e=> removeEStatus(e,'discombobulate'));
+  if(!f) return;
+  livingEnemies().forEach(e=>{
+    if(Math.random() >= (f.after || 0)) return;
+    if(f.sleep && Math.random() < f.sleep){
+      addEStatus(e, { type:'asleep', turnsLeft:(f.sleepTurns || 1) + 1, mine:true });
+      return;
+    }
+    markConfused(e, f.ffPower);
+  });
+}
+
+/* One layer of Frost Armour on whoever is out front. */
+function frostArmourLayer(mon){
+  mon = mon || activeMon();
+  if(!mon) return;
+  grantBlock(mon, 1, monAtk(mon));
+  setTimeout(()=> battleMsg(`❄️ Frost Armour — a layer of ice closes over ${displayName(mon)}.`), 400);
+}
 function tickStatuses(){
   const b = ui.battle;
   const expired = [];
@@ -136,8 +164,10 @@ function tickStatuses(){
   const dust = getPStatus(0,'diamondDust');
   const ps = partyStatuses();
   Object.keys(ps).forEach(k=>{
-    if(dust && k !== 'diamondDust' && !isEnemyOwned(k, ps[k])){
-      ps[k].turnsLeft = STATUS_TURNS + 1;     // refreshed, never ages
+    /* The dust holds your fields open — back to their own full length if they
+       have one — except the deep freeze, which it cannot touch. */
+    if(dust && k !== 'diamondDust' && !isEnemyOwned(k, ps[k]) && !ps[k].noDust){
+      ps[k].turnsLeft = ps[k].max ? ps[k].max : STATUS_TURNS + 1;   // refreshed, never ages
       return;
     }
     ps[k].turnsLeft--;
@@ -219,6 +249,8 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(defender && defender.takeMult) dmg *= defender.takeMult;
     const ice = getEStatus(defender,'iceTomb');
     if(ice) dmg *= (ice.taken != null ? ice.taken : 0.8);
+    const deep = getPStatus(0,'deepFreeze');           // your field: harder to hurt in the ice
+    if(deep && deep.taken != null) dmg *= deep.taken;
     const cur = getEStatus(defender,'curse');
     if(cur) dmg *= (1 + (cur.extra != null ? cur.extra : 0.25));
   } else { // defender is a player monster
@@ -255,18 +287,26 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       res.msg = d.text;
       break;
 
-    case 'Water': { // Ice Tomb — freezes the current wave for 2 turns
-      livingEnemies().forEach(e=> addEStatus(e, { type:'iceTomb', turnsLeft:d.freeze||2, taken:d.taken||0.8 }));
-      if(d.field){ applyFieldStatus({ type:'iceField', turnsLeft:d.turns||2, taken:d.taken||1, freeze:d.freeze||2, mine:true }); }
+    case 'Water': { // Ice Tomb — a deep-freeze FIELD on your own side
+      /* No enemy acts while it holds — whoever is on the field, whenever they
+         arrived — and at base and + they are harder to hurt inside the ice. It
+         belongs to your side, not to the caster, so swapping out does not end
+         it. It never refreshes: Diamond Dust cannot extend it (noDust), and an
+         opponent's Diamond Dust sweeps it away. */
+      setPStatus(uid, { type:'deepFreeze', turnsLeft:d.freeze || 2, taken:(d.taken == null ? 1 : d.taken),
+                        noDust:true, mine:true });
+      /* Frost Armour (+ and ✦) is a second field: a layer of damage block every
+         turn it lasts, starting now. Diamond Dust holds it at full length.
+         At ✦ it also slows the enemy side. */
+      if(d.frost){
+        setPStatus(uid, { type:'frostArmour', turnsLeft:d.frost, max:d.frost, slow:d.slow || 0, mine:true });
+        frostArmourLayer(casterMon);
+      }
       /* Frost Armour: the cold closes over your own monster too. Block stacks
          do not expire, so they guard a Cataclysm charge all the way through.
          The parameter is casterMon — this used `mon`, which exists nowhere
          here, so + and ✦ threw right after the freeze: no armour, no message.
          tools/undef-check.js now catches any name used but never declared. */
-      if(d.frost){
-        grantBlock(casterMon, d.frost, monAtk(casterMon));
-        setTimeout(()=> battleMsg(`❄️ Frost Armour — ${d.frost} layers of ice close over ${displayName(casterMon)}.`), 500);
-      }
       res.msg = d.text;
       break; }
 
@@ -311,11 +351,14 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       res.msg = d.text;
       break;
 
-    case 'Psychic': // Discombobulate — they swing at their own side
-      applyFieldStatus({ type:'discombobulate', turnsLeft:T, mine:true,
-                         first:d.confuseFirst, after:d.confuseAfter, ffPower:d.ffPower||0.60,
-                         sleep:d.sleep||0, sleepTurns:d.sleepTurns||1 });
-      livingEnemies().forEach(e=>{ e._confusedFirst = false; });
+    case 'Psychic': // Discombobulate — a field on YOUR side
+      /* Kept on your side, so Diamond Dust holds it open and it carries on into
+         the next wave. The turn it lands, everyone on the field is muddled;
+         every turn after, each of them gets a fresh roll. */
+      setPStatus(uid, { type:'confusionField', turnsLeft:T, mine:true,
+                        after:d.confuseAfter || 0.25, ffPower:d.ffPower || 0.60,
+                        sleep:d.sleep || 0, sleepTurns:d.sleepTurns || 1 });
+      livingEnemies().forEach(e=> markConfused(e, d.ffPower || 0.60));
       res.msg = `Their heads are spinning — they cannot tell friend from foe!`;
       break;
 
@@ -526,13 +569,13 @@ const VERY_HIGH = {
     'Deals 1.5×, takes just 1.1×, and scorches every enemy for 0.25× ATK each turn.',
   ]},
   Water: { name:'Ice Tomb', turns:2, tiers:[
-    { freeze:2, taken:0.8 },
-    { freeze:2, taken:1.0, frost:3 },
-    { freeze:2, taken:1.0, field:true, frost:5 },
+    { freeze:2, taken:0.65 },
+    { freeze:2, taken:0.85, frost:3 },
+    { freeze:3, taken:1.0,  frost:5, slow:5 },
   ], text:[
-    'Freezes the current wave for 2 turns. Frozen monsters take 80% damage.',
-    'Freezes the current wave for <b>2 turns</b> at full damage, and <b>Frost Armour</b> closes over your monster: <b>3 layers of damage block</b>.',
-    'A <b>2-turn field of ice</b> — anything that steps onto it is frozen too, wave after wave, at full damage. <b>Frost Armour</b> gives <b>5 layers of damage block</b>.',
+    'A <b>deep-freeze field</b> on your side for <b>2 turns</b>: no enemy can act, and while frozen they take <b>35% less</b> damage. Diamond Dust cannot make it last longer.',
+    'Deep freeze for <b>2 turns</b> (frozen enemies take <b>15% less</b> damage), plus <b>Frost Armour</b> for <b>3 turns</b>: a layer of damage block every turn. Diamond Dust keeps the armour at 3.',
+    'Deep freeze for <b>3 turns</b> at <b>full damage</b>, plus <b>Frost Armour</b> for <b>5 turns</b>: a layer of block every turn, and the enemy side is <b>5 slower</b>. Diamond Dust keeps the armour at 5.',
   ]},
   Grass: { name:'Leech Seed', turns:5, tiers:[
     { heal:0.15, bite:0 },
@@ -602,13 +645,13 @@ const VERY_HIGH = {
      turns — they make each stolen swing land far harder on the enemy's own
      side. Friendly fire is rolled first and wins any tie with sleep. */
   Psychic: { name:'Discombobulate', turns:5, tiers:[
-    { confuseFirst:1.0, confuseAfter:0.20, ffPower:0.60 },
-    { confuseFirst:1.0, confuseAfter:0.15, ffPower:0.90, sleep:0.10, sleepTurns:1 },
-    { confuseFirst:1.0, confuseAfter:0.20, ffPower:1.20, sleep:0.15, sleepTurns:1 },
+    { confuseAfter:0.20, ffPower:0.60 },
+    { confuseAfter:0.20, ffPower:0.90, sleep:0.05, sleepTurns:1 },
+    { confuseAfter:0.20, ffPower:1.20, sleep:0.15, sleepTurns:1 },
   ], text:[
-    'Every enemy is confused for 5 turns. <b>The first swing each one takes lands on its own side</b> — on itself, if it stands alone — for <b>60%</b> of its damage. <b>20%</b> of the swings after that go the same way.',
-    'As base, but a turned swing lands for <b>90%</b> of its damage, and a confused monster has a separate <b>10%</b> chance to fall asleep for a turn instead.',
-    'As base, but a turned swing lands for <b>120%</b> of its damage — harder on its own side than it would have hit you — with a separate <b>15%</b> chance of a nap.',
+    'A <b>5-turn field</b> on your side. <b>The turn it lands, every enemy on the field is muddled</b> and swings at its own side — at itself, if it stands alone — for <b>60%</b> of its damage. Every turn after, each of them (new arrivals included) has a <b>20%</b> chance of the same. Diamond Dust keeps the field going.',
+    'As base, but a turned swing lands for <b>90%</b> of its damage, and a caught monster may sit down and sleep for the turn instead (<b>5%</b>).',
+    'As base, but a turned swing lands for <b>120%</b> of its damage — harder on its own side than it would have hit you — and the nap chance is <b>15%</b>.',
   ]},
   Dragon: { name:'Dragon Dance', turns:5, tiers:[
     { deal:1.25 },
@@ -765,7 +808,7 @@ function applyStonePassives(mon){
 function veryHighStatusKey(type){
   return ({ Fire:'overheat', Water:'iceTomb', Grass:'leechSeed', Electric:'overcharge',
             Ground:'spikeArmour', Flying:'mirage', Physical:'counter', Ghost:'curse',
-            Psychic:'discombobulate', Dragon:'dragonDance', Steel:'steelAegis',
+            Psychic:'confusionField', Dragon:'dragonDance', Steel:'steelAegis',
             Fairy:'diamondDust' })[type] || type;
 }
 function stanceEvasion(holder){
@@ -1244,6 +1287,10 @@ function applyEnemyVeryHigh(e, type, plus){
     case 'Flying':
       e.evadeAlways = Math.max(e.evadeAlways || 0, d.after || 0.15);
       e.airborne = Math.max(e.airborne || 0, 1);      // the opening untouchable turn
+      break;
+    case 'Fairy':
+      /* Diamond Dust in enemy hands sweeps away your deep freeze. */
+      removePStatus(0, 'deepFreeze');
       break;
     case 'Water': {
       /* Ice Tomb in enemy hands freezes YOU rather than them. */
@@ -1859,6 +1906,9 @@ function beginRound(msg){
   b.phase = 'resolving';
   renderBattle();
 
+  /* Frost Armour: another layer each turn it lasts. */
+  if(getPStatus(0,'frostArmour')){ frostArmourLayer(activeMon()); renderStatusBadges(); }
+  discombobulatePulse();                       // and who is muddled this round
   runPreHits(()=> vitaPulse(()=>{
     if(!ui.battle) return;
     if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
@@ -1891,6 +1941,8 @@ function initiativeOf(side, mon){
     if(b && (b.alwaysFirst || b.figlio)) v += 1;
     if(mon.arenaFirst) v += 1;
     if(getEStatus(mon,'disrupt')) v -= 1;                    // your jamming slows it
+    const fa = getPStatus(0,'frostArmour');
+    if(fa && fa.slow) v -= fa.slow;                          // ✦ Frost Armour: the cold slows them
   } else {
     if(getPStatus(0,'disrupt')) v -= 1;                      // their jamming slows you
   }
@@ -2000,16 +2052,6 @@ function endRound(){
   if(ctr && ctr.regain && gm && Math.random() < ctr.regain){
     addCounterStack(gm, ctr.tier||0, 1);
     battleMsg(`🛡 Another read — <b>${counterCountOf(gm)}</b> Counter stack${counterCountOf(gm)>1?'s':''} ready.`);
-  }
-
-  if(b.fieldStatus && b.fieldStatus.discombobulate){
-    const f = b.fieldStatus.discombobulate;
-    if(f.guaranteed && f.openTurn){ f.guaranteed = false; if(f.second) f.softenTurn = true; }
-    else if(f.softenTurn){ f.softenTurn = false; }
-    b.enemies.forEach(x=>{
-      const st = getEStatus(x,'discombobulate');
-      if(st){ st.guaranteed = f.guaranteed; st.softenTurn = f.softenTurn; }
-    });
   }
 
   const ar = getPStatus(0,'aria');
@@ -2940,8 +2982,8 @@ function renderBattle(){
 
 const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
-  counter:'↩️ Counter', combo:'👊 Combo', enrage:'🔥 Enrage', mirageImages:'👥 Afterimages', iceTomb:'🧊 Frozen', curse:'👻 Cursed', stunned:'💫 Stunned', machDragon:'🐉 Mach Dragon', softened:'🌀 Weakened', evadeTurns:'🧘 Still', asleep:'💤 Asleep',
-  discombobulate:'🌀 Confused', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', enraged:'🐋 Enraged', aria:'👻 Haunting Aria', wrath:'🌊 Gathering Wrath', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
+  counter:'↩️ Counter', combo:'👊 Combo', enrage:'🔥 Enrage', mirageImages:'👥 Afterimages', iceTomb:'🧊 Frozen', deepFreeze:'🧊 Deep Freeze', frostArmour:'❄️ Frost Armour', curse:'👻 Cursed', stunned:'💫 Stunned', machDragon:'🐉 Mach Dragon', softened:'🌀 Weakened', evadeTurns:'🧘 Still', asleep:'💤 Asleep',
+  discombobulate:'🌀 Confused', confusionField:'🌀 Heads Spinning', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', enraged:'🐋 Enraged', aria:'👻 Haunting Aria', wrath:'🌊 Gathering Wrath', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
 };
 function renderStatusBadges(){

@@ -1902,6 +1902,11 @@ function runSingleEnemyTurn(e){
   // a skipping arena dummy simply stands there
   if(e.isDummy && !e.arenaActs) return advanceTurn();
 
+  // your deep freeze: nobody on their side moves while it holds
+  if(getPStatus(0,'deepFreeze')){
+    battleMsg(`🧊 ${SPECIES[e.species].name} is frozen solid!`);
+    return setTimeout(advanceTurn, 700);
+  }
   // frozen or stunned: it holds its slot but loses the action
   const ice = getEStatus(e,'iceTomb');
   if(ice){
@@ -1941,10 +1946,13 @@ function enemyTurn(){
   // Ice Tomb: frozen enemies lose their turn; tick the counter and thaw at zero
   const acting = [];
   let frozenCount = 0;
+  const deep = getPStatus(0,'deepFreeze');
   attackers.forEach(e=>{
     const ice = getEStatus(e,'iceTomb');
     const par = getEStatus(e,'paralysed');
-    if(ice){
+    if(deep){
+      frozenCount++;                        // your field holds every one of them
+    } else if(ice){
       frozenCount++;
       ice.turnsLeft--;
       if(ice.turnsLeft<=0) removeEStatus(e,'iceTomb');
@@ -1958,7 +1966,8 @@ function enemyTurn(){
   });
 
   if(acting.length===0){
-    const left = Math.max(0, ...livingEnemies().map(e=>{ const i=getEStatus(e,'iceTomb'); return i?i.turnsLeft:0; }));
+    const left = deep ? Math.max(0, deep.turnsLeft - 1)
+      : Math.max(0, ...livingEnemies().map(e=>{ const i=getEStatus(e,'iceTomb'); return i?i.turnsLeft:0; }));
     // everyone who could act already did, back in the initiative phase
     const allStruck = frozenCount===0 && livingEnemies().length>0
                    && livingEnemies().every(e=>(b.acted||[]).includes(e));
@@ -2023,6 +2032,11 @@ function runEnemyAttack(i){
   b.acted = b.acted || [];
   if(!b.acted.includes(e)) b.acted.push(e);
 
+  /* Your deep freeze: not even a first strike gets through. */
+  if(getPStatus(0,'deepFreeze')){
+    battleMsg(`🧊 ${SPECIES[e.species].name} is frozen solid!`);
+    return setTimeout(()=> runEnemyAttack(i+1), 700);
+  }
   /* Vita's light, on the enemy's side, tends its worst-off each time it acts. */
   if(!e._vitaTicked && enemyVitaTick(e)){ e._vitaTicked = true; return setTimeout(()=> runEnemyAttack(i), 800); }
   e._vitaTicked = false;
@@ -2165,25 +2179,10 @@ function runEnemyAttack(i){
     battleMsg(`💤 ${SPECIES[e.species].name} is fast asleep.`);
     return setTimeout(()=> runEnemyAttack(i+1), 900);
   }
-  /* Discombobulated: certain on its first swing, occasional after. It turns on
-     its own side — on ITSELF if it is the only one left. */
-  const conf = getEStatus(e,'discombobulate');
-  if(conf){
-    const opening = !e._confusedFirst;
-    e._confusedFirst = true;
-    /* Two independent rolls. Friendly fire is checked first, so when both come
-       up the swing happens and the nap is forgotten — the visible thing wins. */
-    const ffChance = opening ? (conf.first || 1.0) : (conf.after || 0.20);
-    if(Math.random() < ffChance) return confusedStrike(e, ()=> runEnemyAttack(i+1));
-    if(conf.sleep && Math.random() < conf.sleep){
-      addEStatus(e, { type:'asleep', turnsLeft:(conf.sleepTurns||1) + 1, mine:true });
-      renderStatusBadges();
-      const el0 = document.getElementById('enemy-'+ui.battle.enemies.indexOf(e));
-      if(el0) el0.classList.add('is-asleep');
-      battleMsg(`💤 ${SPECIES[e.species].name} gets muddled, sits down and falls asleep!`);
-      return setTimeout(()=> runEnemyAttack(i+1), 1000);
-    }
-  }
+  /* Muddled this turn: the badge says so, and the swing turns on its own side —
+     on ITSELF if it is the only one left. Who is muddled was decided at the
+     start of the round, so nothing is hidden from the child. */
+  if(getEStatus(e,'discombobulate')) return confusedStrike(e, ()=> runEnemyAttack(i+1));
   /* Every damaging move an enemy ATTEMPTS is remembered — once per move,
      landed or not. */
   noteWrath();
@@ -2419,9 +2418,7 @@ function runEnemyAttack(i){
     }
     const lun = move[6] && move[6].lunacy;
     if(lun && Math.random() < lun.chance){
-      applyFieldStatus({ type:'discombobulate', turnsLeft:(lun.turns||1) + 1, mine:true,
-                         first:1.0, after:0, ffPower:lun.ffPower||1.0, sleep:0 });
-      livingEnemies().forEach(x=>{ x._confusedFirst = false; });
+      livingEnemies().forEach(x=> markConfused(x, lun.ffPower || 1.0));
       renderStatusBadges();
       msg += ' The moonlight gets into their heads!';
     }
