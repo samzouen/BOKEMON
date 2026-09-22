@@ -333,7 +333,10 @@ function startDive(){
   const roll = ()=>{
     const r = Math.random();
     if(r < 0.05) return R4_ELITE[Math.floor(Math.random()*R4_ELITE.length)];
-    if(r < 0.20) return 'water_starter';
+    /* Once the lane is open the whales are themselves again, and one can come
+       up with the others. */
+    if(g.solved && r < 0.17) return 'whale';
+    if(r < (g.solved ? 0.32 : 0.20)) return 'water_starter';
     return R4_WILD[Math.floor(Math.random()*R4_WILD.length)];
   };
   /* Ordinary wilds come up small, so your sons can raise them. Elites and the
@@ -381,14 +384,17 @@ async function logExpedition(){
 }
 /* A little ship crossing the North Sea. Bow to the right, a bow wave under it,
    and a wake trailing back the way it came. */
-function expeditionBar(){
+/* 80 points to Cosa Nostia: one a win before the whales, two a win after.
+   It shows its number all the way, so the boys can watch it fill. compact
+   leaves out the line underneath, for the deck screens. */
+function expeditionBar(compact){
   const g = r4();
   const pct = expeditionPct();
-  const done = g.solved;
+  const done = g.solved, there = pct >= 100;
   return `<div class="exped">
     <div class="exped-head">
-      <span>${done ? 'Passage east' : 'Expedition'}</span>
-      <span class="exped-pct">${done ? 'clear' : pct + '%'}</span>
+      <span>${there ? 'Cosa Nostia' : done ? 'Passage east' : 'Expedition'}</span>
+      <span class="exped-pct">${pct}%</span>
     </div>
     <div class="exped-track">
       <div class="exped-fill" style="width:${pct}%"></div>
@@ -402,11 +408,12 @@ function expeditionBar(){
         </svg>
       </div>
     </div>
-    <div class="exped-note">${
-      done ? `Running east, and making up the time. <b>Every win counts double.</b>`
+    ${compact ? '' : `<div class="exped-note">${
+      there ? `Docked at Cosa Nostia.`
+      : done ? `Running east, and making up the time. <b>Every win counts double.</b>`
       : g.wallFound ? 'Dead in the water. Nothing moves until this is settled.'
       : 'Days at sea, counted in the fights you win over the side and at the rail.'
-    }</div>
+    }</div>`}
   </div>`;
 }
 
@@ -876,6 +883,20 @@ function chartRoom(){
   const lines = CHART_LINES[stage];
   storyModal(npcPortrait('ship_captain','⚓',130,'transparent'), crewName('ship_captain'),
     lines[Math.floor(Math.random()*lines.length)],
+    ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck',
+      action:{ label:'Check travel progress', fn: ()=> travelProgress() } });
+}
+/* The captain reads the chart for you, rounded down to the fifth. */
+function travelProgress(){
+  const pct = expeditionPct();
+  const band = Math.floor(pct / 20) * 20;
+  const line = pct >= 100
+    ? `"We're there, lad. Docked already. Easy to miss when you're having fun, eh?"`
+    : band >= 20
+      ? `"Hrm, I'd wager we're more than ${band}% of the way to Cosa Nostia."`
+      : `"Hrm. We've barely cleared the harbour — not yet a fifth of the way to Cosa Nostia."`;
+  storyModal(npcPortrait('ship_captain','⚓',130,'transparent'), crewName('ship_captain'),
+    `He squints at the chart and taps it with a thick finger.<br><br><b>${line}</b>`,
     ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck' });
 }
 
@@ -1875,7 +1896,16 @@ function focusScientist(n){
 async function accuse(n){
   const v = inv();
   v.guesses++;
-  if(n === CULPRIT){ await saveProfile(); return accuseCulprit(); }
+  if(n === CULPRIT){
+    /* The right name: Rhona, the captain and the shipkeeper come down and stand
+       by — through the fight and the talk after it, until the bow. */
+    const g = r4();
+    g.culpritNamed = true;
+    const w = walkState(), at = w.at && w.at.laboratory_deck;
+    if(at && UP_FRONT.some(u=> u.x === at.x && u.y === at.y)) w.at.laboratory_deck = { x:13, y:6 };
+    await saveProfile();
+    return accuseCulprit();
+  }
   /* Wrong. Their alibi partner speaks up, the Whalelord tries harder — and the
      nine have to be tested again from the top before anybody else can be named.
      Being wrong costs the work, never the case. */
@@ -1980,6 +2010,20 @@ function startCulpritFight(i){
    straight back into it: 'epilogue' in the laboratory, 'bow' on the weather
    deck with one button, 'room' in the cabin while you come round.
    ------------------------------------------------------------ */
+/* Who stands by in the laboratory once Mireille has been named. */
+const UP_FRONT = [
+  { id:'scientist9',   x:12, y:7, icon:'🧑‍🔬', line:`<b>"Two of our own. I still can't quite believe it."</b>` },
+  { id:'ship_captain', x:14, y:7, icon:'⚓',   line:`<b>"Go on. We're right behind you."</b>` },
+  { id:'shipkeeper',   x:15, y:7, icon:'🧰',   line:`<b>"Nobody leaves this deck until it's done."</b>` },
+];
+function crewUpFront(){
+  const g = r4();
+  return !!(g.culpritNamed && !g.solved && (!g.escapeStage || g.escapeStage === 'epilogue'));
+}
+function upFrontChat(id){
+  const u = UP_FRONT.find(x=> x.id === id);
+  if(u) sceneSay([faceNpc(u.id, u.icon)], crewName(u.id), u.line);
+}
 function escapeLock(){
   const g = r4(), w = walkState();
   if(g.escapeStage === 'epilogue'){
@@ -2090,6 +2134,7 @@ async function runJaxEscape(){
     if(ms < 5500) return 0.15;
     return 0.15 * Math.pow(Math.max(0, 1 - (ms - 5500) / 500), 2);
   });
+  playSfx('core_blast');                          // assets/sfx/core_blast.mp3
   await sceneBall(13.5, 5.5, 3, 3000);
   await sceneFlash(500, 2000, ()=>{
     const b = document.getElementById('sceneBall'); if(b) b.remove();

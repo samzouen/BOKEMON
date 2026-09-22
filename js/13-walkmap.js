@@ -113,6 +113,7 @@ const DECKS = {
       { x:13, y:17, sprite:'sailor2', icon:'⚓', verb:'Talk', act:()=> sailorChat(2), extra:()=> suspectOf('sailor2') },
       { x:4,  y:22, sprite:'sailor3', icon:'⚓', verb:'Talk', act:()=> sailorChat(3), extra:()=> suspectOf('sailor3') },
       { x:13, y:22, sprite:'rival',   icon:'🧑', verb:'Talk', act:()=> rivalCabin(),
+        when:()=> !(r4().solved || r4().escapeStage),     // gone once he has taken the core
         extra:()=> suspectOf('rival') },
       { x:5,  y:26, sprite:'sailor4', icon:'⚓', verb:'Talk', act:()=> sailorChat(4), extra:()=> suspectOf('sailor4') },
       { x:14, y:25, walk:true, verb:'Recover', act:()=> leaveDeck('recover') },
@@ -157,7 +158,12 @@ const DECKS = {
       { x:18, y:26, sprite:'scientist7', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(7) , mark:()=> sciHasHunt(7) },
       { x:9,  y:30, sprite:'scientist8', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(8) , mark:()=> sciHasHunt(8) },
       { x:15, y:32, sprite:'scientist9', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(9),
-        when:()=> labStage() !== 'after' },
+        when:()=> labStage() !== 'after' && !crewUpFront() },
+      /* Once Mireille has been named: Rhona, the captain and the shipkeeper stand
+         by near the supervisor until the scene moves up to the bow. */
+      { x:12, y:7,  sprite:'scientist9',   icon:'🧑‍🔬', verb:'Talk', act:()=> upFrontChat('scientist9'),   when:()=> crewUpFront() },
+      { x:14, y:7,  sprite:'ship_captain', icon:'⚓',   verb:'Talk', act:()=> upFrontChat('ship_captain'), when:()=> crewUpFront() },
+      { x:15, y:7,  sprite:'shipkeeper',   icon:'🧰',   verb:'Talk', act:()=> upFrontChat('shipkeeper'),   when:()=> crewUpFront() },
     ],
   },
 };
@@ -414,6 +420,7 @@ function renderWalkDeck(id){
   WALK_T = Math.max(30, Math.round(avail / WALK_VIEW));
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Explore</button>
+    ${(state.progress.currentRegion === 4 && typeof expeditionBar === 'function') ? expeditionBar(true) : ''}
     <div class="walk-stage walk-still" id="walkStage">
       <button class="walk-path" id="walkPath">Path</button>
       <div class="walk-world" id="walkWorld" style="

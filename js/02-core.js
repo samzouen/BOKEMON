@@ -28,6 +28,7 @@ const BGM_DIR = 'assets/bgm/';
 const SFX_MAP = {
   // combat
   hit_taken:        'hit_taken.mp3',      // the player's monster is struck
+  core_blast:       'core_blast.mp3',     // Jax draws on the core: starts as the ball begins to charge
   hit_dealt:        'hit_dealt.mp3',      // a move connects with an enemy
   move_miss:        'move_miss.mp3',
   // quiz feedback
@@ -60,7 +61,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.51';
+const GAME_VERSION = '2.53';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1029,6 +1030,10 @@ function normalizeProfile(p){
     g4.cuainJoined = true;
     if(!(p.party || []).some(isCuain) || (p.storage || []).some(m=> m.species === 'whalelord')) grantCuain(p);
     if(g4.cuainRevived){ const c = p.party.find(isCuain); if(c) c.revived = true; }
+  } else if((p.party || []).some(isCuain)){
+    /* He joins when Jax has gone, not before. A save that says otherwise was
+       touched by an older build. */
+    p.party = p.party.filter(m=> !isCuain(m));
   }
   return p;
 }
