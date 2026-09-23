@@ -75,7 +75,7 @@ const DECKS = {
          it: two tiles by two, turned. It blocks the bow tip while it lies
          there, which is what a whale on a foredeck would do. */
       { x:12, y:4, w:2, h:2, sprite:'whalelord_corpse', rot:30, icon:'🐋', verb:'The body',
-        when:()=> !!(typeof r4 === 'function' && r4().corpseSeen),
+        when:()=> !!(typeof r4 === 'function' && r4().corpseSeen && !r4().corpseGone),
         act:()=> corpseChat() },
       /* These two are only here while the scene on deck is playing — and that
          is remembered in the save, so leaving and coming back finds them. */
@@ -112,6 +112,20 @@ const DECKS = {
       { x:5,  y:17, sprite:'sailor1', icon:'⚓', verb:'Talk', act:()=> sailorChat(1), extra:()=> suspectOf('sailor1') },
       { x:13, y:17, sprite:'sailor2', icon:'⚓', verb:'Talk', act:()=> sailorChat(2), extra:()=> suspectOf('sailor2') },
       { x:4,  y:22, sprite:'sailor3', icon:'⚓', verb:'Talk', act:()=> sailorChat(3), extra:()=> suspectOf('sailor3') },
+      /* Sailor Cato has the two of them on buckets now: at the bunks on even
+         hours, at the right-hand heads on odd ones. */
+      { x:12, y:22, sprite:'sailor5',              icon:'⚓',   verb:'Talk', act:()=> catoChat(),
+        when:()=> catoPlace() === 'bunk' },
+      { x:13, y:22, sprite:'scientist_supervisor', icon:'🧑‍🔬', verb:'Talk', act:()=> culpritChat('barnaby'),
+        when:()=> catoPlace() === 'bunk' },
+      { x:14, y:22, sprite:'scientist6',           icon:'🧑‍🔬', verb:'Talk', act:()=> culpritChat('mireille'),
+        when:()=> catoPlace() === 'bunk' },
+      { x:13, y:10, sprite:'sailor5',              icon:'⚓',   verb:'Talk', act:()=> catoChat(),
+        when:()=> catoPlace() === 'heads' },
+      { x:13, y:12, sprite:'scientist_supervisor', icon:'🧑‍🔬', verb:'Talk', act:()=> culpritChat('barnaby'),
+        fx:'disgust', when:()=> catoPlace() === 'heads' },
+      { x:14, y:13, sprite:'scientist6',           icon:'🧑‍🔬', verb:'Talk', act:()=> culpritChat('mireille'),
+        fx:'disgust', when:()=> catoPlace() === 'heads' },
       { x:13, y:22, sprite:'rival',   icon:'🧑', verb:'Talk', act:()=> rivalCabin(),
         when:()=> !(r4().solved || r4().escapeStage),     // gone once he has taken the core
         extra:()=> suspectOf('rival') },
@@ -120,7 +134,8 @@ const DECKS = {
       { x:13, y:27, walk:true, verb:'Storage', act:()=> leaveDeck('storage') },
       { x:8,  y:32, sprite:'cook',    icon:'🧑‍🍳', verb:'Talk', act:()=> cookChat(),
         extra:()=> suspectOf('cook') },
-      { x:5,  y:31, sprite:'sailor5', icon:'⚓', verb:'Talk', act:()=> sailorChat(5), extra:()=> suspectOf('sailor5') },
+      { x:5,  y:31, sprite:'sailor5', icon:'⚓', verb:'Talk', act:()=> sailorChat(5), extra:()=> suspectOf('sailor5'),
+        when:()=> !catoOnDuty() },                 // he has moved up to mind the prisoners
     ],
   },
   laboratory_deck: {
@@ -142,8 +157,14 @@ const DECKS = {
     prizes:[[17,30],[10,33],[13,34]],
     aquarium:[{sp:'starfish',x:11,y:35},{sp:'loong',x:13,y:36},{sp:'seahorse',x:16,y:35}],
     things:[
-      { x:13, y:5,  sprite:'scientist_supervisor', icon:'🧑‍🔬', verb:'Report', act:()=> labSupervisor(),
+      { x:13, y:5,  sprite:'scientist_supervisor', icon:'🧑‍🔬', verb:'Report',
+        act:()=> crewUpFront() ? upFrontChat('scientist_supervisor') : labSupervisor(),
+        dx:()=> crewUpFront() ? 0.2 : 0,            // the two of them shoulder to shoulder
+        dizzy:()=> crewUpFront() && !!r4().escapeStage,
         when:()=> labStage() !== 'after' },
+      /* Named, and standing beside him: Mireille, until the story moves on. */
+      { x:14, y:5,  sprite:'scientist6', icon:'🧑‍🔬', verb:'Talk', act:()=> upFrontChat('scientist6'),
+        dx:-0.2, dizzy:()=> !!r4().escapeStage, when:()=> crewUpFront() },
       /* Once it is over, Rhona stands where he stood — and means to earn it. */
       { x:13, y:5,  sprite:'scientist9', icon:'🧑‍🔬', verb:'Talk', act:()=> rhonaTask(),
         when:()=> labStage() === 'after', mark:()=> rhonaHasTask() },
@@ -154,16 +175,16 @@ const DECKS = {
       { x:8,  y:22, sprite:'scientist4', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(4) , mark:()=> sciHasHunt(4) },
       { x:18, y:21, sprite:'scientist5', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(5) , mark:()=> sciHasHunt(5) },
       { x:8,  y:26, sprite:'scientist6', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(6),
-        when:()=> labStage() !== 'after' },
+        when:()=> labStage() !== 'after' && !crewUpFront() },
       { x:18, y:26, sprite:'scientist7', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(7) , mark:()=> sciHasHunt(7) },
       { x:9,  y:30, sprite:'scientist8', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(8) , mark:()=> sciHasHunt(8) },
       { x:15, y:32, sprite:'scientist9', icon:'🧑‍🔬', verb:'Talk', act:()=> labScientist(9),
         when:()=> labStage() !== 'after' && !crewUpFront() },
       /* Once Mireille has been named: Rhona, the captain and the shipkeeper stand
          by near the supervisor until the scene moves up to the bow. */
-      { x:12, y:7,  sprite:'scientist9',   icon:'🧑‍🔬', verb:'Talk', act:()=> upFrontChat('scientist9'),   when:()=> crewUpFront() },
-      { x:14, y:7,  sprite:'ship_captain', icon:'⚓',   verb:'Talk', act:()=> upFrontChat('ship_captain'), when:()=> crewUpFront() },
-      { x:15, y:7,  sprite:'shipkeeper',   icon:'🧰',   verb:'Talk', act:()=> upFrontChat('shipkeeper'),   when:()=> crewUpFront() },
+      { x:14, y:7,  sprite:'scientist9',   icon:'🧑‍🔬', verb:'Talk', act:()=> upFrontChat('scientist9'),   when:()=> crewUpFront() },
+      { x:15, y:6,  sprite:'ship_captain', icon:'⚓',   verb:'Talk', act:()=> upFrontChat('ship_captain'), when:()=> crewUpFront() },
+      { x:12, y:5,  sprite:'shipkeeper',   icon:'🧰',   verb:'Talk', act:()=> upFrontChat('shipkeeper'),   when:()=> crewUpFront() },
     ],
   },
 };
@@ -357,6 +378,35 @@ function cuainAboard(){ const g = r4(); return !!g.ghostAccepted; }
 const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true : d.rows[y][x]==='#';
 
 /* ---------- drawing ---------- */
+/* A slow spiral for a monster (or a scientist) seeing stars. */
+const WALK_SPIRAL_SVG = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M32 32 m0 0 a4 4 0 1 1 -4 4 a9 9 0 1 0 9 -9 a14 14 0 1 0 -14 14 a19 19 0 1 0 19 -19"
+    fill="none" stroke="#2b2118" stroke-width="4" stroke-linecap="round" opacity="0.8"/>
+  <path d="M32 32 m0 0 a4 4 0 1 1 -4 4 a9 9 0 1 0 9 -9 a14 14 0 1 0 -14 14 a19 19 0 1 0 19 -19"
+    fill="none" stroke="#f4ecd8" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/></svg>`;
+let _fxTimers = [];
+function clearWalkFx(){ _fxTimers.forEach(clearTimeout); _fxTimers = []; }
+function startDisgust(el, t){
+  const again = ()=>{
+    if(!el.isConnected) return;
+    el.classList.add('walk-shiver');
+    const cloud = document.createElement('div');
+    cloud.className = 'walk-stink';
+    const world = $('#walkWorld');
+    if(world){
+      cloud.style.left = ((t.x + 0.5) * WALK_T) + 'px';
+      cloud.style.top = ((t.y - 0.55) * WALK_T) + 'px';
+      cloud.style.width = (1.1 * WALK_T) + 'px';
+      cloud.style.height = (0.75 * WALK_T) + 'px';
+      world.appendChild(cloud);
+      _fxTimers.push(setTimeout(()=> cloud.remove(), 3400));
+    }
+    _fxTimers.push(setTimeout(()=>{ el.classList.remove('walk-shiver'); }, 2600));
+    _fxTimers.push(setTimeout(again, 4000 + Math.random() * 5000));
+  };
+  _fxTimers.push(setTimeout(again, 400 + Math.random() * 2500));
+}
+
 const WALK_MARK_SVG = `<svg viewBox="0 0 40 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <rect x="9" y="4" width="22" height="60" rx="11" fill="#ffd21f" stroke="#111" stroke-width="4"/>
   <circle cx="20" cy="82" r="10" fill="#ffd21f" stroke="#111" stroke-width="4"/></svg>`;
@@ -370,11 +420,27 @@ function walkCss(){
       z-index:55;animation:walkMarkBob 1.1s ease-in-out infinite;}
     .walk-mark svg{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.25));}
     @keyframes walkMarkBob{0%,100%{translate:0 0}50%{translate:0 -14%}}
+    @keyframes walkSpin{to{rotate:360deg}}
+    .walk-dizzy{position:absolute;pointer-events:none;z-index:56;transform:translateX(-50%);
+      animation:walkSpin 4.5s linear infinite;opacity:.9;}
+    @keyframes walkShiver{0%,100%{translate:0 0}20%{translate:-6% 2%}40%{translate:5% -2%}
+      60%{translate:-4% -3%}80%{translate:4% 3%}}
+    .walk-ent.walk-shiver{animation:walkShiver .18s linear infinite;}
+    @keyframes walkStink{0%{opacity:0;translate:0 -40%}30%{opacity:.75;translate:0 0}
+      70%{opacity:.65;translate:0 6%}100%{opacity:0;translate:0 12%}}
+    .walk-stink{position:absolute;pointer-events:none;z-index:57;transform:translateX(-50%);
+      border-radius:50%;background:radial-gradient(ellipse at center,rgba(40,32,24,.72) 0%,
+      rgba(60,50,38,.45) 55%,rgba(70,60,45,0) 78%);animation:walkStink 3.4s ease-in-out forwards;}
+    @keyframes ghostAlertJump{0%{translate:0 40%;scale:.4;opacity:0}
+      30%{translate:0 -55%;scale:1.15;opacity:1}55%{translate:0 0;scale:1}
+      70%{translate:0 -25%}100%{translate:0 0;scale:1;opacity:1}}
+    .walk-mark.ghost-alert{animation:ghostAlertJump 1.1s cubic-bezier(.2,.9,.3,1) 1 both;z-index:60;}
   `;
   document.head.appendChild(st);
 }
 function renderWalkDeck(id){
   walkCss();
+  clearWalkFx();
   /* A scene can pin you in place. Whichever deck you pick — and however you
      leave the region and come back — you are put down where the story left
      you, and you stay there until it is finished. The stage is in the save,
@@ -400,7 +466,7 @@ function renderWalkDeck(id){
   /* Arriving from Explore, or down a ladder, puts you on the companionway.
      Coming BACK from a conversation, a shop or a fight puts you exactly where
      you were standing — which is the only thing that feels right. */
-  if(ui.walkFresh || !w.at[id]){
+  if(!lock && (ui.walkFresh || !w.at[id])){
     w.at[id] = { x:d.spawn[0], y:d.spawn[1] };
     w.face = 'd';
     if(cuainAboard()){ w.ghostAt = w.ghostAt || {}; w.ghostAt[id] = { x:d.spawn[0], y:d.spawn[1] }; }
@@ -458,7 +524,11 @@ function renderWalkDeck(id){
   deckThings(d).forEach(t=>{
     const e = document.createElement('div');
     e.className = 'walk-ent' + (t.walk ? ' flat' : '');
-    e.style.transform = `translate3d(${t.x*WALK_T}px,${t.y*WALK_T}px,0)`;
+    /* dx/dy nudge a thing off the middle of its tile (two people shoulder to
+       shoulder, say). They may be numbers or little functions of the story. */
+    const ox = (typeof t.dx === 'function' ? t.dx() : t.dx) || 0;
+    const oy = (typeof t.dy === 'function' ? t.dy() : t.dy) || 0;
+    e.style.transform = `translate3d(${(t.x + ox)*WALK_T}px,${(t.y + oy)*WALK_T}px,0)`;
     e.style.zIndex = 10 + t.y;          // further down the deck = nearer to you
     if(t.w || t.h){                     // a thing that covers more than its own tile
       e.style.width  = (t.w || 1) * WALK_T + 'px';
@@ -471,6 +541,19 @@ function renderWalkDeck(id){
       : `<span style="font-size:${fallPx}px;line-height:1;">${t.icon||''}</span>`;
     world.appendChild(e); t.el = e;
     /* A task: a yellow "!" bobbing over their head, nine tenths of a tile tall. */
+    /* Knocked silly: a slow spiral over the head. */
+    if(t.dizzy && t.dizzy()){
+      const dz = document.createElement('div');
+      dz.className = 'walk-dizzy';
+      dz.style.left = ((t.x + (typeof t.dx === 'function' ? t.dx() : t.dx || 0) + 0.5) * WALK_T) + 'px';
+      dz.style.top = ((t.y - 0.75) * WALK_T) + 'px';
+      dz.style.width = dz.style.height = (0.8 * WALK_T) + 'px';
+      dz.innerHTML = WALK_SPIRAL_SVG;
+      world.appendChild(dz);
+    }
+    /* Disgust: every so often they shudder, and a dark little cloud settles
+       over them and clears again. */
+    if(t.fx === 'disgust') startDisgust(e, t);
     if(t.mark && t.mark()){
       const mk = document.createElement('div');
       mk.className = 'walk-mark';
@@ -871,6 +954,8 @@ function sceneCss(){
       box-shadow:0 10px 32px rgba(0,0,0,.35);z-index:85;display:flex;gap:12px;align-items:flex-start;}
     .scene-say .ss-faces{display:flex;gap:6px;flex:0 0 auto;align-items:flex-end;}
     .scene-say .ss-faces img{width:64px;height:64px;object-fit:contain;visibility:visible !important;}
+    .scene-say .ss-faces img, .scene-say .ss-faces .mon-portrait{
+      box-shadow:none !important;border-radius:0 !important;background:transparent !important;filter:none !important;}
     .scene-say .ss-body{flex:1;text-align:left;font-size:14px;line-height:1.5;}
     .scene-say .ss-name{font-weight:800;margin-bottom:4px;}
     .scene-say .ss-go{display:flex;justify-content:flex-end;margin-top:10px;}
@@ -878,6 +963,11 @@ function sceneCss(){
       display:flex;align-items:center;justify-content:center;}
     #sceneCurtain .sc-text{color:#fff;font-size:20px;line-height:1.5;text-align:center;padding:0 28px;opacity:0;}
     #sceneFlash{position:fixed;inset:0;background:#fff;opacity:0;z-index:96;pointer-events:none;}
+    @keyframes sceneSpark{0%{transform:translateY(0) scale(.6);opacity:0}
+      25%{opacity:1}100%{transform:translateY(-140%) scale(1.1);opacity:0}}
+    .scene-spark{position:absolute;border-radius:50%;pointer-events:none;z-index:58;
+      background:radial-gradient(circle,#ffffff 0%,#dff2ff 45%,rgba(160,215,255,0) 75%);
+      box-shadow:0 0 8px 2px rgba(190,230,255,.85);animation:sceneSpark 1.2s ease-out forwards;}
     .scene-ball{position:absolute;border-radius:50%;pointer-events:none;z-index:40;opacity:.8;
       background:radial-gradient(circle,#ffffff 0%,#e3fffb 28%,#86f4e8 55%,rgba(64,224,208,0) 71%);
       box-shadow:0 0 36px 10px rgba(130,255,240,.5);}
@@ -981,6 +1071,58 @@ function sceneShimmer(ms){
     };
     requestAnimationFrame(frame);
   });
+}
+/* One jump of the quest mark over the Whalelord: he has felt something. */
+function ghostAlert(){
+  walkCss(); sceneCss();
+  const gh = $('#walkGhost'), world = $('#walkWorld');
+  if(!gh || !world) return;
+  const mk = document.createElement('div');
+  mk.className = 'walk-mark ghost-alert';
+  const m = /translate3d\(([-\d.]+)px,\s*([-\d.]+)px/.exec(gh.style.transform || '');
+  mk.style.left = ((m ? parseFloat(m[1]) : 0) + WALK_T / 2) + 'px';
+  mk.style.top = ((m ? parseFloat(m[2]) : 0) - 0.9 * WALK_T) + 'px';
+  mk.style.height = (0.9 * WALK_T) + 'px';
+  mk.innerHTML = WALK_MARK_SVG;
+  world.appendChild(mk);
+  setTimeout(()=> mk.remove(), 1400 * Math.max(SCENE_SPEED, 0.2));
+}
+/* Sparkles rising off something, thicker as they go: the crowned shimmer, in
+   white and blue. */
+function sceneSparkles(x, y, w, h, ms){
+  sceneCss();
+  const world = $('#walkWorld');
+  if(!world) return Promise.resolve();
+  const T = WALK_T, dur = Math.max(1, ms * SCENE_SPEED), t0 = performance.now();
+  return new Promise(done=>{
+    const tick = ()=>{
+      const t = (performance.now() - t0) / dur;
+      if(t >= 1) return done();
+      const many = 1 + Math.round(t * 4);                    // more and more of them
+      for(let i = 0; i < many; i++){
+        const s = document.createElement('i');
+        s.className = 'scene-spark';
+        const px = (x + Math.random() * w) * T, py = (y + (0.3 + Math.random() * 0.7) * h) * T;
+        const size = (0.06 + Math.random() * 0.07) * T;
+        s.style.cssText = `left:${px}px;top:${py}px;width:${size}px;height:${size}px;` +
+                          `animation-duration:${(900 + Math.random() * 700) * SCENE_SPEED}ms;`;
+        world.appendChild(s);
+        setTimeout(()=> s.remove(), 1700 * SCENE_SPEED);
+      }
+      setTimeout(tick, 90 * SCENE_SPEED);
+    };
+    tick();
+  });
+}
+/* Fade a deck thing out where it stands. */
+function sceneFadeThing(sprite, ms){
+  const el = [...document.querySelectorAll('.walk-ent')]
+    .find(x=> (x.querySelector('img') || {}).src && x.querySelector('img').src.includes(sprite));
+  if(!el) return sceneWait(ms);
+  el.style.transition = `opacity ${ms * SCENE_SPEED}ms ease-in`;
+  void el.offsetWidth;
+  el.style.opacity = '0';
+  return sceneWait(ms);
 }
 function sceneActorGone(id){ const el = document.getElementById('sa-' + id); if(el) el.remove(); }
 function sceneClear(){

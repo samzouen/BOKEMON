@@ -373,6 +373,7 @@ function renderRegion(){
     <button class="back-link" id="backBtn">← Regions</button>
     <div class="screen-title">Region ${rid} · ${escapeHtml(meta.name)}</div>
     <div class="screen-sub">${escapeHtml(meta.desc)}</div>
+    ${(rid === 4 && typeof expeditionBar === 'function') ? expeditionBar() : ''}
     ${gated ? `<div class="trial-banner" style="margin-bottom:14px;">
       <b>The Grove bars the way</b>
       <div>Prove your courage in the Sacred Grove before the city will receive you.</div>
@@ -734,7 +735,7 @@ function renderStats(){
   const nextIsFinal = (m.supplements||0) === suppCap-1;
   const moves = MOVES[m.species].map(mv=>{
     const [slot,name,mult,target,words,unlock,extras]=mv;
-    const unlocked = name!=null && m.level>=unlock;
+    const unlocked = name!=null && moveUnlockedFor(m, mv);
     /* Spread the extras — `soul`, `tachy`, `hits`, `spend`, `bonus` and the
        rest live in mv[6], and discarding them left every effect move with
        nothing to describe but "a support move". Same trap as the old
@@ -815,7 +816,10 @@ function renderStats(){
             <div style="font-size:11px;font-weight:800;color:var(--ink-soft);">${mv.slot}</div>
           </div>
           <div style="font-size:12px;color:var(--ink-soft);font-weight:600;margin-top:3px;">
-            ${mv.unlocked ? statsMoveLine(mv, m) : `Unlocks at Lv ${mv.unlock}`}
+            ${mv.unlocked ? statsMoveLine(mv, m)
+              : (mv.slot === 'Max' && (SPECIES[m.species]||{}).nerfedUntilCrowned)
+                ? `Locked until his core is returned and he is crowned`
+                : `Unlocks at Lv ${mv.unlock}`}
           </div>
           ${mv.unlocked ? `<div class="refine-hint">${mv.stone ? 'tap to read or refine' : 'tap to read'}</div>` : ''}
         </div>

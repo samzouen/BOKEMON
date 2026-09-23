@@ -412,6 +412,10 @@ function chargeDef(m){
 function moveUnlockedFor(m, mv){
   const extra = mv[6] || {};
   if(extra.coreOnly) return !!m.hasDragonCore;
+  /* A legendary running on a hole where its core should be gets its Max back
+     with the core itself: the crown unlocks it, whatever its level or its
+     protein. */
+  if(mv[0] === 'Max' && (SPECIES[m.species] || {}).nerfedUntilCrowned) return isCrowned(m);
   return m.level >= mv[5];
 }
 function startCharge(mon, def){
@@ -2721,6 +2725,49 @@ function moveEffectText(mv, mon, atk){
     `<b>Mors mark</b> on this bird — at <b>3 marks</b> it folds its wings and falls, and nothing can bring it back. ` +
     `If nobody has fainted, the light turns outward instead and takes ${ofHp(mv.conversio.direct || 0.33)} ` +
     `from an enemy, straight through any guard. That does not mark it.`);
+  if(mv.vengeance){
+    const n = mv.vengeance.hits || 3;
+    const per = Math.ceil((mv.mult || 0.6) * atk);
+    const fall = mv.vengeance.perFallen || 0;
+    out.push(
+      `<b>${n === 3 ? 'Three' : n} blows</b> of <b>${per}</b> each, one to a different enemy — with fewer than ` +
+      `${n} enemies, the spare blows fall again on the ones already hit. <b>${per * n}</b> in all.`);
+    if(fall){
+      const cap = Math.ceil(((mv.mult || 0.6) + fall * (mv.vengeance.fallenCap || 6)) * atk);
+      out.push(
+        `<b>Heavier for every friend he has lost.</b> Each monster of yours that has fainted adds ` +
+        `<b>+${Math.ceil(fall * atk)}</b> to every blow, up to ${mv.vengeance.fallenCap || 6} of them: ` +
+        `<b>${cap}</b> a blow, <b>${cap * n}</b> in all.`);
+    }
+    out.push(
+      `Then <b>you may swap him straight out</b>, free and without losing your turn — which is the point of him: ` +
+      `he gathers the grudge from the bench.`);
+  }
+  if(mv.wrath) out.push(
+    `<b>Gathering Wrath</b> for <b>${mv.wrath.turns} turns</b>: every move the enemy makes is remembered as a ` +
+    `<b>grudge</b> (counted up to ${mv.wrath.dmgCap}), whether it hits or misses. Each grudge makes all of your ` +
+    `damage <b>+${Math.round(mv.wrath.bonus * 100)}%</b> (up to +${Math.round(mv.wrath.bonusCap * 100)}%). ` +
+    `Bring him back in and every grudge comes due at once: <b>${Math.ceil(mv.wrath.per * atk)} to every enemy, per grudge</b>.`);
+  if(mv.grudge) out.push(
+    `Hits <b>every enemy</b> for <b>${Math.ceil((mv.grudge.flat || 0.25) * atk)}</b> plus ` +
+    `<b>${Math.round((mv.grudge.missing || 0.75) * 100)}% of the health he has lost</b> — so the closer he is to ` +
+    `gone, the harder it lands. At full health it is only the small part; at half health, add half his missing health to it.`);
+  if(mv.aria){
+    out.push(
+      `<b>Haunting Aria.</b> For <b>${mv.aria.turns} turns</b> the water stays cold. The moment it starts, ` +
+      `<b>your whole side cannot be touched for one turn</b> — anyone you swap in is covered too.`);
+    const ch = mv.aria.chance == null ? 0.5 : mv.aria.chance;
+    out.push(ch >= 1
+      ? `<b>Anything that touches your side is paid for.</b> Each turn after, if any of your monsters was struck, ` +
+        `the dead whale surfaces and hits <b>every enemy</b> for <b>${Math.ceil((mv.aria.pulse || 0.5) * atk)}</b>. Every time.`
+      : `Each turn after, if anything of yours was struck, there is a <b>${Math.round(ch * 100)}% chance</b> ` +
+        `the dead whale surfaces and hits <b>every enemy</b> for <b>${Math.ceil((mv.aria.pulse || 0.5) * atk)}</b>.`);
+    out.push(
+      `<b>And it answers by itself:</b> struck while the Aria is not running, he sings anyway — the blow misses, ` +
+      `and it costs no turn and no words.`);
+  }
+  if(mv.passive && mv.passive.noFlee) out.push(
+    `<b>Nothing runs from him.</b> While he is out, no enemy can flee — not even an Elusive thief.`);
   if(mv.statNote) out.push(
     `<b>Pacificus.</b> Not a move at all — it is what this bird is. Half of its attack is given up for ` +
     `health: its health grows half again as fast as other legendaries', and its attack only half as fast. ` +

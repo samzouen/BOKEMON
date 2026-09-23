@@ -1048,26 +1048,28 @@ function startTeamRun(which, i, rematch){
 }
 async function onTeamStageWin(which, i, rematch){
   const roster = teamRoster(which);
-  // a rematch is for the exercise: experience only, nothing else changes hands
-  if(!rematch){
-    state.inventory.protein = (state.inventory.protein||0) + 3;
-    await saveProfile();
-  }
+  // a rematch is for the exercise: experience only, nothing else changes hands.
+  // The three supplements are for beating the TEAM, once — not one lot per
+  // member, which is what this used to hand out.
   if(i < roster.length-1){
     const nxt = roster[i+1];
     return storyModal(npcPortrait(nxt.id, which==='electric'?'⚡':'🥋', 120,'transparent'), 'Next!',
-      (rematch ? '' : `<b>+3 Protein Supplements</b><br><br>`) + `No rest — the next one is already stepping onto the mat.`,
+      `No rest — the next one is already stepping onto the mat.`,
       ()=> startTeamRun(which, i+1, rematch), { bg:'challenge', subtitle:'Electric Dojo' });
   }
   const d = dojoState();
+  const firstTime = !rematch && !(which === 'electric' ? d.electricDone : d.sageDone);
+  if(firstTime) state.inventory.protein = (state.inventory.protein||0) + 3;   // once, for the team
   if(which==='electric') d.electricDone = true; else d.sageDone = true;
   await saveProfile();
   storyModal(npcPortrait(roster[i].id, which==='electric'?'⚡':'🥋', 120,'transparent'), 'All three',
     which==='electric'
       ? `The siblings sit down where they stand, grinning at the ceiling.<br><br>` +
-        `"That's us done. Whatever you decide — that was a good fight."<br><br><b>+3 Protein Supplements</b>`
+        `"That's us done. Whatever you decide — that was a good fight."` +
+        (firstTime ? `<br><br><b>+3 Protein Supplements</b>` : '')
       : `The disciples bow, deeply and without complaint.<br><br>` +
-        `"Thank you. That was instructive."<br><br><b>+3 Protein Supplements</b>`,
+        `"Thank you. That was instructive."` +
+        (firstTime ? `<br><br><b>+3 Protein Supplements</b>` : ''),
     
     ()=>go('dojo'), { bg:'challenge', subtitle:'Electric Dojo' });
 }

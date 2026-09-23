@@ -194,6 +194,37 @@ const BLOCKED_LINES = {
 };
 function blockedLine(id){ return BLOCKED_LINES[id] || null; }
 
+/* Afterwards: what each of them says about what it cost, and what you did. */
+const SOLVED_LINES = {
+  sailor1: `"You found them. Two of the laboratory lot, and we'd all sat and eaten with them."<br><br>` +
+           `He looks at his boots. <b>"I'm sorry about that whale, mate. He didn't deserve any of it."</b>`,
+  sailor2: `<b>"They moved off at dawn. Hundreds of them, quiet as anything."</b><br><br>` +
+           `"Felt like they'd been waiting for somebody to put it right. Turned out it was you."`,
+  sailor3: `<b>"Whatever you did down there, the lane's open and we're moving."</b><br><br>` +
+           `"Wish we'd got his core back for him, though. Doesn't feel finished."`,
+  sailor4: `"Cook made a stew to celebrate. It's still mostly onions." He shrugs. ` +
+           `<b>"But it's the thought, and the thought is thank you."</b>`,
+  sailor5: `<b>"Eleven days we sat there, and a child sorted it."</b><br><br>` +
+           `"I'll be telling that one for years. Thanks, kid. Honestly."`,
+  cook: `<b>"Sit. Eat something, you look like you've been swimming."</b><br><br>` +
+        `"I heard what they took off him. A thing his family left him, and they sold it." ` +
+        `He shakes his head at the pot. "Some people."`,
+  shipkeeper: `<b>"Twenty years I've kept this ship stocked, and I've never seen the like."</b><br><br>` +
+              `"You found them when none of us could, and you kept your head doing it. ` +
+              `Anything on my shelves, you ask me first. That's not an offer I make."`,
+  ship_captain: `<b>"I'll not forget this."</b> He says it plainly, the way he says everything.<br><br>` +
+                `"You gave this ship its passage back, and you gave that creature the truth. ` +
+                `I'm sorry we couldn't get the rest of him back too."`,
+};
+function solvedLine(id){ return SOLVED_LINES[id] || null; }
+/* One line to pick whichever fits: the blockade, afterwards, or the usual. */
+function crewSay(id){
+  const g = r4();
+  if(g.wallFound && !g.solved) return blockedLine(id);
+  if(g.solved) return solvedLine(id);
+  return null;
+}
+
 /* All five are off duty on the cabin deck — the weather deck is for working. */
 const SAILOR_LINES = [
   `"Oi — it's you." He has the decency to look sheepish. "Look, about the competition. ` +
@@ -208,7 +239,7 @@ const SAILOR_LINES = [
 ];
 function sailorChat(n){
   const g = r4();
-  const blocked = (g.wallFound && !g.solved) ? blockedLine('sailor'+n) : null;
+  const blocked = crewSay('sailor' + n);
   storyModal(npcPortrait('sailor'+n,'⚓',120,'transparent'), crewName('sailor'+n),
     blocked || SAILOR_LINES[(n-1) % SAILOR_LINES.length],
     ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck' });
@@ -655,6 +686,12 @@ async function corpseSceneEnd(){
 /* Standing under him afterwards. A core is not a battery. It is everyone he
    came from, and it is gone. */
 function corpseChat(){
+  const g = r4();
+  if(g.cuainJoined) return storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
+    `He hangs above his own body. This time there is no anger in him, only quiet.<br><br>` +
+    `<b>"There is still something in there. Not my core — what is left of me around it."</b><br><br>` +
+    `<b>"If I could take it back, I would be of more use to you. As it is, I can only follow."</b>`,
+    ()=> go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
   storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
     `He hangs above his own body and does not look away from it.<br><br>` +
     `<b>"That is not a wound. That is a theft."</b><br><br>` +
@@ -882,10 +919,99 @@ function chartRoom(){
               : g.wallFound ? 'blocked' : 'early';
   const lines = CHART_LINES[stage];
   storyModal(npcPortrait('ship_captain','⚓',130,'transparent'), crewName('ship_captain'),
-    lines[Math.floor(Math.random()*lines.length)],
+    crewSay('ship_captain') || lines[Math.floor(Math.random()*lines.length)],
     ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck',
       action:{ label:'Check travel progress', fn: ()=> travelProgress() } });
 }
+/* ------------------------------------------------------------
+   BUCKETS
+   Barnaby and Mireille are not put ashore — there is no shore. They are on the
+   heads, under house arrest, with Sailor Cato standing over them. He is at the
+   bunks on even hours and at the right-hand heads on odd ones; the first time
+   you find him he explains the sentence.
+   ------------------------------------------------------------ */
+function catoOnDuty(){ return !!r4().solved; }
+function catoPlace(){
+  if(!catoOnDuty()) return 'none';
+  if(!r4().catoTold) return 'bunk';             // the first telling always happens at the bunks
+  return (new Date().getHours() % 2 === 0) ? 'bunk' : 'heads';
+}
+const CATO_BUNK = [
+  `<b>"Up. Both of you."</b> He raps the frame of the bunk. <b>"Buckets in five minutes, and this time you scrub under the rim."</b>`,
+  `<b>"Shift in five. Gloves on."</b> He does not look up from his list. <b>"You had a whale's core in your pocket. You can manage a mop."</b>`,
+];
+const CATO_HEADS = [
+  `<b>"Oi! No slacking, Barnaby — I can see you leaning on that mop."</b>`,
+  `<b>"Mireille. You've missed a spot. That one. And the one behind it."</b>`,
+];
+const BARNABY_BUNK = [
+  `<b>"I'm so tired."</b> His hands are red to the wrist. <b>"I haven't slept. They wake us at four."</b>`,
+  `<b>"I'm hungry."</b> He says it to the floor. <b>"They feed us last, and there's never any bread left."</b>`,
+];
+const MIREILLE_BUNK = [
+  `<b>"My hair smells of poop."</b> She has not looked at you once. <b>"I have washed it four times."</b>`,
+  `<b>"Look at my nails."</b> She holds them up, chapped and split. <b>"Look what they've done to my hands."</b>`,
+];
+const BARNABY_HEADS = [
+  `<b>"The smell."</b> He gags into his elbow. <b>"You cannot imagine the smell."</b>`,
+  `<b>"I shall never eat again,"</b> he says, mopping. <b>"Not ever. Nothing."</b>`,
+];
+const MIREILLE_HEADS = [
+  `<b>"There is poop on my shirt."</b> She holds the cloth away from herself. <b>"On my shirt."</b>`,
+  `<b>"The stains don't come out."</b> She scrubs harder. <b>"Nothing comes out."</b>`,
+];
+/* His four thoughts on the matter, in turn. */
+const WHALE_SNARK = [
+  `<b>"That is their punishment? Buckets?"</b> The water chills. <b>"They cut out my heart and they are given a mop."</b>`,
+  `<b>"Oh, keep going."</b> He circles them slowly. <b>"I could watch this all day. I intend to."</b>`,
+  `<b>"Tiny human leavings, in a tiny human bowl."</b> He sniffs. <b>"Be glad it is not whale. You would need a boat."</b>`,
+  `<b>"Do something for me."</b> He leans in confidingly. <b>"Next time you use that room — make an <i>effort</i>."</b>`,
+];
+function catoTurn(bump){
+  const g = r4();
+  if(bump) g.catoTurn = ((g.catoTurn || 0) + 1) % 2;
+  return g.catoTurn || 0;
+}
+function whaleSnark(){
+  const g = r4();
+  const i = (g.snarkAt || 0) % WHALE_SNARK.length;
+  g.snarkAt = i + 1;
+  return sceneSay([faceMon('whalelord')], whaleName(), WHALE_SNARK[i]);
+}
+async function catoChat(){
+  const g = r4();
+  const heads = catoPlace() === 'heads';
+  if(!g.catoTold){
+    g.catoTold = true;
+    await saveProfile();
+    await sceneSay([faceNpc('sailor5','⚓')], crewName('sailor5'),
+      `<b>"Morning. You'll have noticed the new lodgers."</b> He jerks his thumb at the two of them.<br><br>` +
+      `<b>"Captain's put them on the heads. Every head on this ship, twice a day, until we make port — ` +
+      `and they don't leave this deck otherwise. House arrest, he calls it. I call it buckets."</b>`);
+    return whaleSnark();
+  }
+  const i = catoTurn(true);
+  await sceneSay([faceNpc('sailor5','⚓')], crewName('sailor5'), (heads ? CATO_HEADS : CATO_BUNK)[i]);
+  await sceneSay([faceNpc('scientist_supervisor','🧑‍🔬')], crewName('scientist_supervisor'),
+    (heads ? BARNABY_HEADS : BARNABY_BUNK)[i]);
+  await sceneSay([faceNpc('scientist6','🧑‍🔬')], crewName('scientist6'),
+    (heads ? MIREILLE_HEADS : MIREILLE_BUNK)[i]);
+  await whaleSnark();
+  await saveProfile();
+}
+async function culpritChat(who){
+  const heads = catoPlace() === 'heads';
+  const i = catoTurn(true);
+  const lines = who === 'barnaby' ? (heads ? BARNABY_HEADS : BARNABY_BUNK) : (heads ? MIREILLE_HEADS : MIREILLE_BUNK);
+  const id = who === 'barnaby' ? 'scientist_supervisor' : 'scientist6';
+  await sceneSay([faceNpc(id,'🧑‍🔬')], crewName(id), lines[i]);
+  await whaleSnark();
+  await saveProfile();
+}
+
+/* Region 5 is not for leaving until the Whalelord has his strength back. */
+function region5Ready(){ const g = r4(); return expeditionPct() >= 100 && !!g.cuainRevived; }
+
 /* The captain reads the chart for you, rounded down to the fifth. */
 function travelProgress(){
   const pct = expeditionPct();
@@ -895,8 +1021,10 @@ function travelProgress(){
     : band >= 20
       ? `"Hrm, I'd wager we're more than ${band}% of the way to Cosa Nostia."`
       : `"Hrm. We've barely cleared the harbour — not yet a fifth of the way to Cosa Nostia."`;
+  const wait = (pct >= 100 && !r4().cuainRevived)
+    ? `<br><br><b>"We'll not put you ashore yet, mind. Not while your friend is only half himself."</b>` : '';
   storyModal(npcPortrait('ship_captain','⚓',130,'transparent'), crewName('ship_captain'),
-    `He squints at the chart and taps it with a thick finger.<br><br><b>${line}</b>`,
+    `He squints at the chart and taps it with a thick finger.<br><br><b>${line}</b>${wait}`,
     ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck' });
 }
 
@@ -916,7 +1044,7 @@ function cookChat(){
     body = `"Six weeks out and I'm down to the tinned stuff." He looks genuinely wounded by this.<br><br>` +
            `"You eat, though. Whatever else you're doing up there, you eat."`;
   }
-  const blocked = (g.wallFound && !g.solved) ? blockedLine('cook') : null;
+  const blocked = crewSay('cook');
   storyModal(npcPortrait('cook','🧑‍🍳',130,'transparent'), crewName('cook'),
     blocked || body, ()=>go('cabin_deck'), { bg:'battle_cabin_deck', subtitle:'Cabin Deck' });
 }
@@ -1586,7 +1714,7 @@ const KEEPER_LINES = [
 ];
 function shipkeeperShop(){
   const g = r4();
-  const blocked = (g.wallFound && !g.solved) ? blockedLine('shipkeeper') : null;
+  const blocked = crewSay('shipkeeper');
   storyModal(npcPortrait('shipkeeper','⚓',130,'transparent'), crewName('shipkeeper'),
     blocked || KEEPER_LINES[Math.floor(Math.random()*KEEPER_LINES.length)],
     ()=>go('cabin_deck'),
@@ -1901,8 +2029,10 @@ async function accuse(n){
        by — through the fight and the talk after it, until the bow. */
     const g = r4();
     g.culpritNamed = true;
-    const w = walkState(), at = w.at && w.at.laboratory_deck;
-    if(at && UP_FRONT.some(u=> u.x === at.x && u.y === at.y)) w.at.laboratory_deck = { x:13, y:6 };
+    const w = walkState();
+    w.at = w.at || {}; w.ghostAt = w.ghostAt || {};
+    w.at.laboratory_deck = { x:UP_FRONT_YOU.x, y:UP_FRONT_YOU.y };
+    w.ghostAt.laboratory_deck = { x:UP_FRONT_GHOST.x, y:UP_FRONT_GHOST.y };
     await saveProfile();
     return accuseCulprit();
   }
@@ -2012,10 +2142,14 @@ function startCulpritFight(i){
    ------------------------------------------------------------ */
 /* Who stands by in the laboratory once Mireille has been named. */
 const UP_FRONT = [
-  { id:'scientist9',   x:12, y:7, icon:'🧑‍🔬', line:`<b>"Two of our own. I still can't quite believe it."</b>` },
-  { id:'ship_captain', x:14, y:7, icon:'⚓',   line:`<b>"Go on. We're right behind you."</b>` },
-  { id:'shipkeeper',   x:15, y:7, icon:'🧰',   line:`<b>"Nobody leaves this deck until it's done."</b>` },
+  { id:'scientist9',          x:14, y:7, icon:'🧑‍🔬', line:`<b>"Two of our own. I still can't quite believe it."</b>` },
+  { id:'ship_captain',        x:15, y:6, icon:'⚓',   line:`<b>"Go on. We're right behind you."</b>` },
+  { id:'shipkeeper',          x:12, y:5, icon:'🧰',   line:`<b>"Nobody leaves this deck until it's done."</b>` },
+  { id:'scientist_supervisor',x:13, y:5, icon:'🧑‍🔬', line:`<b>"You have no idea what you have just started, child."</b>` },
+  { id:'scientist6',          x:14, y:5, icon:'🧑‍🔬', line:`She does not look at you. <b>"It was only an animal."</b>` },
 ];
+/* Where you and he stand for it: you two below him, the Whalelord at your left. */
+const UP_FRONT_YOU = { x:13, y:7 }, UP_FRONT_GHOST = { x:12, y:7 };
 function crewUpFront(){
   const g = r4();
   return !!(g.culpritNamed && !g.solved && (!g.escapeStage || g.escapeStage === 'epilogue'));
@@ -2026,11 +2160,10 @@ function upFrontChat(id){
 }
 function escapeLock(){
   const g = r4(), w = walkState();
-  if(g.escapeStage === 'epilogue'){
-    const p = (w.at && w.at.laboratory_deck) ||
-      { x:DECKS.laboratory_deck.spawn[0], y:DECKS.laboratory_deck.spawn[1] };
-    return { deck:'laboratory_deck', x:p.x, y:p.y, label:null, auto:()=> culpritEpilogue() };
-  }
+  if(g.escapeStage === 'epilogue')
+    return { deck:'laboratory_deck', x:UP_FRONT_YOU.x, y:UP_FRONT_YOU.y,
+             ghost:{ x:UP_FRONT_GHOST.x, y:UP_FRONT_GHOST.y }, face:'u',
+             label:null, auto:()=> culpritEpilogue() };
   if(g.escapeStage === 'bow')
     return { deck:'weather_deck', x:14, y:4, ghost:{ x:14, y:5 }, face:'u',
              label: ui.sceneRunning ? null : 'Stop Jax from leaving',
@@ -2067,6 +2200,8 @@ async function culpritEpilogue(){
     `<b>"You found them when none of us could. Thank you."</b>`);
   await sceneSay([rhona], crewName('scientist9'),
     `<b>"Thank you. Truly."</b> She looks out at the water. <b>"Is that enough? Will they let us go now?"</b>`);
+  ghostAlert();                                  // the mark leaps over him
+  await sceneWait(600);
   await sceneSay([faceMon('whalelord')], whaleName(),
     `<b>"WAIT."</b><br><br>` +
     `<b>"My core! I can feel my core! It is close — it is ABOVE US!"</b><br><br>` +
@@ -2152,7 +2287,7 @@ async function runJaxEscape(){
 
   /* Up onto its back: 0.6 of a tile above and 0.3 to the right of the point
      where its four squares meet, in front of it. */
-  await sceneHop('jax', 15 + 0.3 - 0.5, 3 - 0.6 - 0.5, 1.2, 700);
+  await sceneHop('jax', 15 + 0.1 - 0.5, 3 - 0.8 - 0.5, 1.2, 700);
   ['jax','loong'].forEach(id=>{                // bob as one
     const el = document.getElementById('sa-' + id); if(!el) return;
     el._o.bob = true; el.classList.remove('bob'); void el.offsetWidth; el.classList.add('bob');
@@ -2264,6 +2399,8 @@ async function runRevivalCall(){
   if(ui.sceneRunning) return;
   ui.sceneRunning = true;
   await sceneWait(400);
+  ghostAlert();                                  // and again, for the bird
+  await sceneWait(600);
   const whale = faceMon('whalelord'), wn = whaleName();
   await sceneSay([whale], wn, `<b>"Wait. Do you feel that?"</b>`);
   await sceneSay([whale], wn,
@@ -2279,48 +2416,41 @@ async function runRevivalCall(){
 function stageCaladrius(){
   sceneActor('caladrius', { x:14, y:3, w:2, h:2, src:'assets/mon/caladrius_front.png', icon:'🕊️', bob:true, z:60 });
 }
-/* The stone goes onto him for good — or until he is crowned. */
-async function bindGhostStone(){
-  const c = state.party.find(isCuain) || grantCuain();
-  state.inventory.ghostStone = true;
-  state.inventory[stoneOnKey('ghostStone')] = c.uid;
-  await saveProfile();
-  return c;
-}
 async function runCaladrius(){
   if(ui.sceneRunning) return;
   ui.sceneRunning = true;
   refreshWalk();                                   // the button goes
   const bird = faceMon('caladrius'), whale = faceMon('whalelord'), wn = whaleName();
-  const st = ELEMENTAL_STONES.find(s=> s.id === 'ghostStone') || { icon:'ghost_stone', emoji:'👻' };
-  await sceneSay([bird], 'The white bird',
+  await sceneSay([bird], 'The snow-blue bird',
     `It does not speak. It does not need to — its thoughts arrive in your head as clearly as if ` +
     `they were your own.<br><br>` +
     `<i>It knows what was done to the Whalelord. It felt the great battle from far away — the man ` +
     `with the raven, and power that was not his to use. It flew as fast as it could, and it came ` +
     `too late.</i>`);
-  await sceneSay([bird], 'The white bird',
+  await sceneSay([bird], 'The snow-blue bird',
     `<i>Its gaze moves to the Whalelord, and you feel what it finds there: a great, restless wish ` +
     `to be more than a ghost at your shoulder. To fight beside you.</i>`);
-  await bindGhostStone();
-  await sceneSay([bird, uiIcon(st.icon, 64, st.emoji)], 'The white bird',
-    `<i>Its eyes drop to your bag. Before you quite understand, the Ghost Stone floats out of it, ` +
-    `crosses the air, and settles into the Whalelord like a key finding its lock.</i><br><br>` +
-    `<b>The Ghost Stone is bound to the Whalelord. It cannot be removed until he is crowned.</b>`);
-  await sceneSay([bird], 'The white bird',
+  await sceneSay([bird], 'The snow-blue bird',
+    `<i>Its eyes turn to the Whalelord's body. Even in death, the body of a legendary creature ` +
+    `holds an immense power — power that can be given back to the one it belongs to.</i>`);
+  await sceneSay([bird], 'The snow-blue bird',
     `<i>Then it spreads its pure, icy wings, and summons its healing might.</i>`);
 
-  /* Both of them light up blue-white, and the screen shimmers for three seconds. */
+  /* Seven seconds: what is left in the body rises off it and goes back to him,
+     and the body itself fades away for good. */
   sceneGlow('bird', 15, 4, 3.2, 59);             // the middle of its two-by-two square
   sceneGlow('whale', 14.5, 5.5, 2.2, 1);          // behind him, on his tile
-  await sceneShimmer(3000);
+  sceneSparkles(12, 4, 2, 2, 7000);               // rising off the body, thicker and thicker
+  sceneFadeThing('whalelord_corpse', 7000);
+  await sceneShimmer(7000);
+  r4().corpseGone = true;
   await sceneGlowOut(['bird', 'whale'], 900);
 
-  await sceneSay([whale], wn, `<b>"My power, it's returned! Thank you, Caladrius."</b>`);
+  await sceneSay([whale], wn, `<b>"My power, it's coming back!"</b>`);
   await sceneSay([bird], 'Caladrius',
     `<i>It looks fatigued. One of the three feathers on its crown has turned dark, as if a ` +
     `shadowy mark has fallen over it. But it looks glad for the Whalelord.</i>`);
-  await sceneSay([whale], wn, `<b>"I will repay you for this favour, noble Caladrius."</b>`);
+  await sceneSay([whale], wn, `<b>"Thank you, my friend. I will not forget your kindness."</b>`);
   await sceneSay([bird], 'Caladrius',
     `<i>Caladrius seems to smile. Then it lifts its wings and soars into the sky.</i>`);
 
@@ -2376,11 +2506,26 @@ function rhonaHasTask(){
   const a = r4().after;
   return !(a && a.day === today() && a.beaten);
 }
+const SCI_AFTER = {
+  1: `<b>"Barnaby signed my thesis."</b> He turns the flask in his hands and does not drink from it. ` +
+     `"I keep coming back to that."`,
+  2: `<b>"Mireille lent me her notes every single week."</b><br><br>"I'd have sworn for her. I nearly did."`,
+  3: `<b>"I went back through the ledger."</b> He taps the journal. ` +
+     `"The money came aboard three months before we sailed. We were bought before we left port."`,
+  4: `"I can't say it out loud yet without laughing in the wrong way." He stops smiling. ` +
+     `<b>"Our supervisor. Thank you for not letting it stand."</b>`,
+  5: `<b>"She sat two benches from me."</b><br><br>"I keep looking at the empty stool and expecting her to come back with tea."`,
+  7: `<b>"Forty years in this work, and this is the first time I have been ashamed of it."</b><br><br>` +
+     `"You were quicker than all of us, young one. Thank you."`,
+  8: `<b>"That whale had a family, and they don't get him back."</b><br><br>` +
+     `"Nothing we publish will mend that. But you found who did it, and that is something."`,
+  9: `<b>"We're all still a bit stunned."</b><br><br>"Thank you. Truly. Now let me get strong enough that nobody does that on my watch."`,
+};
 function sciAfterChat(n){
   const key = huntKeyFor(n);
   if(key) return huntRequest(key);
   storyModal(npcPortrait('scientist' + n, '🧑‍🔬', 120, 'transparent'), crewName('scientist' + n),
-    `<b>"Back to proper work at last. Thank you — for all of it."</b>`,
+    SCI_AFTER[n] || `<b>"Back to proper work at last. Thank you — for all of it."</b>`,
     ()=> go('laboratory_deck'), { bg:'battle_laboratory_deck', subtitle:'Laboratory' });
 }
 /* Rhona has the supervisor's place now, and means to earn it. */

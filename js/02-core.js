@@ -61,7 +61,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.57';
+const GAME_VERSION = '2.60';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1206,9 +1206,9 @@ function isPassenger(m){ return isSeed(m) || isEgg(m) || isBaby(m) || (isCuain(m
 function isFixedMember(m){ return isPassenger(m) || isCuain(m); }
 /* The six: fighters that take a slot. Cuain never takes one. */
 function slottedCount(){ return battleParty().filter(m=> !isCuain(m)).length; }
-/* He may carry the Ghost Stone as soon as you own it, and take it off again.
-   Once Caladrius has set it in him, it stays until he is crowned. */
-function stoneBound(id, m){ return id === 'ghostStone' && isCuain(m) && !!m.revived && !m.crowned; }
+/* Nothing is bound to anybody: every elemental stone can come off again,
+   Cuain's included. */
+function stoneBound(){ return false; }
 function battleParty(){ return state.party.filter(m=>!isPassenger(m)); }
 function hasSeed(){ return state.party.some(isSeed); }
 /* Put Cuain in the party as a passenger. An older save may already have him —

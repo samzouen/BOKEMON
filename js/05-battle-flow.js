@@ -872,11 +872,28 @@ function resolveBattleMove(mv, target, results){
     setPStatus(0, { type:'wrath', turnsLeft:w.turns + 1, stacks:wrathStacks(),
                     per:w.per, bonus:w.bonus, bonusCap:w.bonusCap, dmgCap:w.dmgCap });
     renderStatusBadges();
-    const t = target && target.hp > 0 ? target : livingEnemies()[0];
-    if(!t) return setTimeout(()=> afterPlayerAttack(mon, []), 700);
-    const dmg = computeDamage(mv.mult, monAtk(mon), monRef(mon), t, true);
-    const hits = [{ t, idx:ui.battle.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) }];
-    battleMsg(`${mv.name}! Every blow from here will be remembered.`);
+    /* Three blows, each on a different enemy where there are enough of them,
+       and heavier for every monster of yours that has fallen. */
+    const v = mv.vengeance || { hits:1, perFallen:0, fallenCap:0 };
+    const fallen = Math.min(v.fallenCap || 0, battleParty().filter(m=> m.currentHp <= 0).length);
+    const per = mv.mult + (v.perFallen || 0) * fallen;
+    const foes = livingEnemies();
+    if(!foes.length) return setTimeout(()=> afterPlayerAttack(mon, []), 700);
+    const start = Math.max(0, foes.indexOf(target && target.hp > 0 ? target : foes[0]));
+    const left = new Map();                       // running health, so a repeat blow counts
+    const hits = [];
+    for(let i = 0; i < (v.hits || 1); i++){
+      let t = foes[(start + i) % foes.length];
+      const hpOf = x => left.has(x) ? left.get(x) : x.hp;
+      if(hpOf(t) <= 0) t = foes.find(x=> hpOf(x) > 0) || t;
+      const cur = hpOf(t);
+      const dmg = computeDamage(per, monAtk(mon), monRef(mon), t, true);
+      const nu = Math.max(0, cur - dmg);
+      left.set(t, nu);
+      hits.push({ t, idx:ui.battle.enemies.indexOf(t), dmg, oldHp:cur, newHp:nu });
+    }
+    battleMsg(`${mv.name}! ${hits.length} blows${fallen ? `, heavier for every one you have lost` : ''} — ` +
+              `and every blow from here will be remembered.`);
     bob($('#playerBob'), +1);
     return setTimeout(()=>{ applyHits(hits); reportHits(hits);
       setTimeout(()=> offerVengeanceSwap(mon, hits), 800); }, 380);
