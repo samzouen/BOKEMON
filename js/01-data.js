@@ -438,7 +438,7 @@ const MOVES = {
   /* Every move pays more the worse things are going. */
   whalelord:       [['Basic','Malice',0.3,'Single',2,1],
                     ['Power1','Grudge',null,'AOE',5,1,{grudge:{flat:0.25, missing:0.75}, passive:{noFlee:true}}],
-                    ['Power2','Haunting Aria',null,'Self',5,1,{aria:{turns:5, pulse:0.5, chance:1.0}}],
+                    ['Power2','Haunting Aria',null,'Self',5,1,{aria:{turns:5, pulse:0.5, chance:0.5}}],
                     ['Ultimate','Vengeance',0.6,'Single',8,1,{vengeance:{hits:3},
                        wrath:{turns:5, per:0.2, bonus:0.03, bonusCap:0.30, dmgCap:15}}],
                     ['Max','Vengeance Max',0.6,'Single',10,1,{vengeance:{hits:3, perFallen:0.06, fallenCap:6},
