@@ -1420,17 +1420,23 @@ function ariaActive(){ const a = ariaState(); return !!(a && a.turnsLeft > 0); }
 function castAria(mon, def, byReflex){
   const b = ui.battle;
   if(!b || ariaActive()) return false;
+  /* Five turns, and one roll at the end of each — the first right after the
+     untouchable turn. (It used to be turns + 1, which only came to five
+     strikes because nothing could land during the untouchable turn; now that
+     an attack passing through still counts, it would have been six.) */
   setPStatus(0, {
-    type:'aria', turnsLeft:(def.turns||5) + 1,
-    pulse:def.pulse || 0.5, chance:def.chance || 0.5,
+    type:'aria', turnsLeft:(def.turns||5),
+    noGrace:true,                  // no +1 grace turn: the badge shows turnsLeft as it is
+    max:(def.turns||5),            // Diamond Dust tops it back up to this, not to 6
+    pulse:def.pulse || 0.5, chance:(def.chance == null ? 0.5 : def.chance),
     atk: monAtk(mon), owner: mon.uid,
     fieldEvade: 1,                 // one turn of total evasion, for ANYONE on the field
-    struck: false,
+    struck: !!byReflex,            // the attack that woke him counts: vengeance is owed
   });
   renderStatusBadges();
   battleMsg(byReflex
-    ? `👻 ${displayName(mon)} was not there — a Haunting Aria answers instead!`
-    : `👻 ${displayName(mon)} sings, and the water goes cold.`);
+    ? `Attacks pass harmlessly through the ghostly whalelord. Prepare for vengeance.`
+    : `Ominous whalesong fills the air.`);
   return true;
 }
 /* The turn of untouchability belongs to the FIELD, so a monster swapping in
@@ -1447,21 +1453,109 @@ function ariaReflex(mon){
   if(!mv) return false;
   return castAria(mon, mv[6].aria, true);
 }
-/* End of round: if anything of yours was hit, the dead whale may surface. */
+/* The pre-action phase: every turn the Aria lasts, his apparition may strike
+   every enemy — a coin flip, or certain if any enemy attacked your side this
+   turn (an attack that passed straight through still counts). */
 function ariaRetaliate(done){
   const a = ariaState();
-  if(!a || !a.struck){ if(a) a.struck = false; return done(); }
+  if(!a) return done();
+  const provoked = !!a.struck;
   a.struck = false;
-  if(Math.random() >= (a.chance || 0.5)) return done();
+  const chance = provoked ? 1 : (a.chance == null ? 0.5 : a.chance);
+  if(Math.random() >= chance) return done();
   const foes = livingEnemies();
   if(!foes.length) return done();
   const dmg = Math.ceil((a.pulse || 0.5) * a.atk * ownBuffMultiplier());
   const hits = foes.map(t=>({ t, idx:ui.battle.enemies.indexOf(t), dmg,
                               oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }));
-  battleMsg('👻 Something enormous surfaces out of nowhere and is gone again.');
-  applyHits(hits, { noLeech:true });
-  reportHits(hits);
-  setTimeout(done, 850);
+  battleMsg(`The Whalelord's vengeful apparition strikes!`);
+  ariaApparition(a, ()=>{ applyHits(hits, { noLeech:true }); reportHits(hits); })
+    .then(()=> setTimeout(done, 350));
+}
+
+/* ---- The apparition, drawn ----
+   The screen inverts; his ghost — the same art as his own sprite, crowned or
+   not — fades in to 30% while drifting up from below-right of whoever is out
+   front, and settles directly to their right after exactly 1 s. Half a second
+   later it rushes the enemy side (top right), the hits land as it arrives,
+   and the colours come back. ARIA_FX_SPEED scales every step (tests only). */
+let ARIA_FX_SPEED = 1;
+let ariaFxMarks = [];                 // [phase, ms] — what happened when, for the tests
+function ariaFxCss(){
+  if(document.getElementById('ariaFxCss')) return;
+  const st = document.createElement('style');
+  st.id = 'ariaFxCss';
+  st.textContent = `
+    .aria-invert{position:fixed;inset:0;z-index:9990;pointer-events:none;opacity:0;
+      -webkit-backdrop-filter:invert(1);backdrop-filter:invert(1);}
+    .aria-ghost{position:fixed;left:0;top:0;z-index:9991;pointer-events:none;opacity:0;will-change:transform,opacity;}
+    .aria-ghost img,.aria-ghost .mon-portrait{box-shadow:none !important;background:transparent !important;
+      border-radius:0 !important;filter:none !important;visibility:visible !important;}
+    .aria-ghost .crown-fizz{display:none !important;}
+  `;
+  document.head.appendChild(st);
+}
+function ariaApparition(a, onImpact){
+  ariaFxCss();
+  ariaFxMarks = [];
+  const t0 = performance.now();
+  const mark = p => ariaFxMarks.push([p, Math.round(performance.now() - t0)]);
+  const ms = n => n * ARIA_FX_SPEED;
+  const wait = n => new Promise(r=> setTimeout(r, ms(n)));
+  const owner = (state.party || []).find(m=> m.uid === a.owner);
+  const species = owner ? owner.species : 'whalelord';
+  const px = playerSpriteSize();
+
+  const inv = document.createElement('div');
+  inv.className = 'aria-invert';
+  document.body.appendChild(inv);
+  const g = document.createElement('div');
+  g.className = 'aria-ghost';
+  g.innerHTML = monPortrait(species, px, { view:'back', bare:true,
+    crowned: owner ? isCrowned(owner) : false, stage: owner ? monStage(owner) : 0 });
+  g.querySelectorAll('.crowned-aura').forEach(el=> el.classList.remove('crowned-aura'));
+  document.body.appendChild(g);
+
+  /* Where: directly right of whoever is out front, level with them. */
+  const fighter = document.getElementById('playerBob');
+  const r = fighter ? fighter.getBoundingClientRect()
+                    : { left: innerWidth * 0.1, top: innerHeight * 0.55, width: px, height: px };
+  const endX = r.left + r.width, endY = r.top + (r.height - px) / 2;
+  const startX = endX + px * 0.45, startY = endY + px * 0.7;          // below and to the right
+  /* Where to: up to the enemy row, and to the right — onto the rightmost enemy,
+     and always at least half a sprite rightward, so it reads as a rush to the
+     top right on a narrow phone too (where the enemies' middle can sit left
+     of where the ghost waits). */
+  const foes = [...document.querySelectorAll('[id^="enemy-"]')].filter(el=> /^enemy-\d+$/.test(el.id))
+    .map(el=> el.getBoundingClientRect()).filter(q=> q.width > 0);
+  const right = foes.length ? Math.max(...foes.map(q=> q.left + q.width / 2)) - px / 2 : innerWidth - px;
+  const tx = Math.min(innerWidth - px * 0.6, Math.max(right, endX + px * 0.5));
+  const ty = foes.length ? foes.reduce((s, q)=> s + q.top + q.height / 2, 0) / foes.length - px / 2 : 0;
+  const at = (x, y, sc)=> `translate(${Math.round(x)}px,${Math.round(y)}px) scale(${sc || 1})`;
+
+  return (async ()=>{
+    mark('invert');
+    inv.animate([{ opacity:0 }, { opacity:1 }], { duration: ms(150), fill:'forwards' });
+    await wait(150);
+    mark('rise');
+    g.animate([{ transform: at(startX, startY), opacity:0 }, { transform: at(endX, endY), opacity:0.3 }],
+              { duration: ms(1000), easing:'ease-out', fill:'forwards' });
+    await wait(1000);
+    mark('arrived');
+    await wait(500);
+    mark('rush');
+    g.animate([{ transform: at(endX, endY), opacity:0.3 }, { transform: at(tx, ty, 1.25), opacity:0.3 }],
+              { duration: ms(280), easing:'ease-in', fill:'forwards' });
+    await wait(280);
+    mark('impact');
+    if(onImpact) onImpact();
+    g.animate([{ opacity:0.3 }, { opacity:0 }], { duration: ms(180), fill:'forwards' });
+    await wait(450);
+    inv.animate([{ opacity:1 }, { opacity:0 }], { duration: ms(180), fill:'forwards' });
+    await wait(180);
+    inv.remove(); g.remove();
+    mark('restored');
+  })();
 }
 
 /* ---- Gathering Wrath ---- */
@@ -1494,7 +1588,7 @@ function vengefulWrath(mon, done){
   if(!foes.length){ w.stacks = 0; return done(); }
   const hits = foes.map(t=>({ t, idx:ui.battle.enemies.indexOf(t), dmg,
                               oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }));
-  battleMsg(`🌊 <b>VENGEFUL WRATH</b> — ${n} grudge${n>1?'s':''} come due!`);
+  battleMsg(`<b>VENGEFUL WRATH</b> — ${n} grudge${n>1?'s':''} come due!`);
   setTimeout(()=>{
     applyHits(hits, { noLeech:true });
     reportHits(hits);
@@ -2725,49 +2819,51 @@ function moveEffectText(mv, mon, atk){
     `<b>Mors mark</b> on this bird — at <b>3 marks</b> it folds its wings and falls, and nothing can bring it back. ` +
     `If nobody has fainted, the light turns outward instead and takes ${ofHp(mv.conversio.direct || 0.33)} ` +
     `from an enemy, straight through any guard. That does not mark it.`);
+  /* The Whalelord's kit: mechanics first and plainly, with his real numbers.
+     At most one sentence of flavour, and only before the mechanics. */
   if(mv.vengeance){
     const n = mv.vengeance.hits || 3;
     const per = Math.ceil((mv.mult || 0.6) * atk);
     const fall = mv.vengeance.perFallen || 0;
     out.push(
-      `<b>${n === 3 ? 'Three' : n} blows</b> of <b>${per}</b> each, one to a different enemy — with fewer than ` +
-      `${n} enemies, the spare blows fall again on the ones already hit. <b>${per * n}</b> in all.`);
+      `<b>${n} blows</b> of <b>${per}</b> damage, each on a different enemy. With fewer than ${n} enemies, ` +
+      `the extra blows hit the same enemies again. <b>${per * n}</b> in all.`);
     if(fall){
       const cap = Math.ceil(((mv.mult || 0.6) + fall * (mv.vengeance.fallenCap || 6)) * atk);
       out.push(
-        `<b>Heavier for every friend he has lost.</b> Each monster of yours that has fainted adds ` +
-        `<b>+${Math.ceil(fall * atk)}</b> to every blow, up to ${mv.vengeance.fallenCap || 6} of them: ` +
-        `<b>${cap}</b> a blow, <b>${cap * n}</b> in all.`);
+        `Each of your monsters that has fainted adds <b>+${Math.ceil(fall * atk)}</b> to every blow, ` +
+        `up to ${mv.vengeance.fallenCap || 6} of them: at most <b>${cap}</b> a blow, <b>${cap * n}</b> in all.`);
     }
-    out.push(
-      `Then <b>you may swap him straight out</b>, free and without losing your turn — which is the point of him: ` +
-      `he gathers the grudge from the bench.`);
+    out.push(`Afterwards you may <b>swap him out for free</b>, without losing your turn.`);
   }
   if(mv.wrath) out.push(
-    `<b>Gathering Wrath</b> for <b>${mv.wrath.turns} turns</b>: every move the enemy makes is remembered as a ` +
-    `<b>grudge</b> (counted up to ${mv.wrath.dmgCap}), whether it hits or misses. Each grudge makes all of your ` +
-    `damage <b>+${Math.round(mv.wrath.bonus * 100)}%</b> (up to +${Math.round(mv.wrath.bonusCap * 100)}%). ` +
-    `Bring him back in and every grudge comes due at once: <b>${Math.ceil(mv.wrath.per * atk)} to every enemy, per grudge</b>.`);
-  if(mv.grudge) out.push(
-    `Hits <b>every enemy</b> for <b>${Math.ceil((mv.grudge.flat || 0.25) * atk)}</b> plus ` +
-    `<b>${Math.round((mv.grudge.missing || 0.75) * 100)}% of the health he has lost</b> — so the closer he is to ` +
-    `gone, the harder it lands. At full health it is only the small part; at half health, add half his missing health to it.`);
+    `Then, for <b>${mv.wrath.turns} turns</b>, every move an enemy makes, hit or miss, adds a <b>grudge</b> ` +
+    `(up to ${mv.wrath.dmgCap}). Each grudge gives all your damage <b>+${Math.round(mv.wrath.bonus * 100)}%</b> ` +
+    `(up to +${Math.round(mv.wrath.bonusCap * 100)}%). Swap him back in before the ${mv.wrath.turns} turns end ` +
+    `and every grudge strikes at once: <b>${Math.ceil(mv.wrath.per * atk)}</b> to every enemy, per grudge.`);
+  if(mv.grudge){
+    const flat = (mv.grudge.flat || 0.25) * atk, part = mv.grudge.missing || 0.75;
+    const max = mon ? monMaxHp(mon) : 0;
+    const at = missing => Math.ceil(flat + part * missing);
+    out.push(
+      `Hits <b>every enemy</b> for <b>${Math.ceil(flat)}</b> plus <b>${Math.round(part * 100)}% of the health ` +
+      `he has lost</b>.` + (max
+        ? ` At full health: <b>${at(0)}</b>. At half health: <b>${at(Math.floor(max / 2))}</b>. At 1 HP: <b>${at(max - 1)}</b>.`
+        : ''));
+  }
   if(mv.aria){
-    out.push(
-      `<b>Haunting Aria.</b> For <b>${mv.aria.turns} turns</b> the water stays cold. The moment it starts, ` +
-      `<b>your whole side cannot be touched for one turn</b> — anyone you swap in is covered too.`);
     const ch = mv.aria.chance == null ? 0.5 : mv.aria.chance;
-    out.push(ch >= 1
-      ? `<b>Anything that touches your side is paid for.</b> Each turn after, if any of your monsters was struck, ` +
-        `the dead whale surfaces and hits <b>every enemy</b> for <b>${Math.ceil((mv.aria.pulse || 0.5) * atk)}</b>. Every time.`
-      : `Each turn after, if anything of yours was struck, there is a <b>${Math.round(ch * 100)}% chance</b> ` +
-        `the dead whale surfaces and hits <b>every enemy</b> for <b>${Math.ceil((mv.aria.pulse || 0.5) * atk)}</b>.`);
     out.push(
-      `<b>And it answers by itself:</b> struck while the Aria is not running, he sings anyway — the blow misses, ` +
-      `and it costs no turn and no words.`);
+      `Haunting Aria triggers automatically when enemies attack the Whalelord, causing their attacks to pass ` +
+      `through harmlessly for one turn. You can also spell to trigger it <b>without consuming a turn</b>.`);
+    out.push(
+      `Then, for <b>${mv.aria.turns} turns</b>, the Whalelord haunts his enemies, with a <b>${Math.round(ch * 100)}%</b> ` +
+      `chance each turn to strike every enemy for <b>${Math.ceil((mv.aria.pulse || 0.5) * atk)}</b> damage. ` +
+      `Enemy attacks incur his vengeance, raising the chance to <b>100%</b>.`);
+    out.push(`Haunting Aria cannot be triggered again until the previous Aria has ended.`);
   }
   if(mv.passive && mv.passive.noFlee) out.push(
-    `<b>Nothing runs from him.</b> While he is out, no enemy can flee — not even an Elusive thief.`);
+    `While he is out, <b>no enemy can flee</b> — not even an Elusive one.`);
   if(mv.statNote) out.push(
     `<b>Pacificus.</b> Not a move at all — it is what this bird is. Half of its attack is given up for ` +
     `health: its health grows half again as fast as other legendaries', and its attack only half as fast. ` +
@@ -2885,6 +2981,11 @@ function moveDescription(mv, mon, atk){
 function moveMeta(mv, mon){
   /* Revitalise says up front whether there is anyone to bring back. */
   if(mv.revitalise && ui.battle && !revivableFallen(mon).length) return `${mv.words}字 · Nobody fainted`;
+  /* Haunting Aria cannot be sung over itself: the button says why it is shut. */
+  if(mv.aria && ui.battle && ariaActive()){
+    const n = ariaState().turnsLeft;
+    return `${mv.words}字 · Active · ${n} turn${n === 1 ? '' : 's'} left`;
+  }
   const bits = [`${mv.words}字`];
   const dmg = estimateHit(mv, mon);
   if(dmg != null){
@@ -2980,12 +3081,16 @@ function renderBattle(){
     <div id="battleMsg" style="text-align:center;font-weight:700;font-size:14px;min-height:20px;margin-bottom:10px;color:var(--ink-soft);">${canAct ? 'Choose a move.' : ''}</div>
     <div style="display:flex;gap:12px;">
       <div style="flex:2;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        ${moves.map((mv,i)=>`
-          <button class="move-btn ${(mv.available && canAct)?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${(mv.available && canAct)?'':'disabled'}>
+        ${moves.map((mv,i)=>{
+          /* A Haunting Aria already singing shuts its own button, so ten words
+             can never be spent on nothing. */
+          const ok = mv.available && canAct && !(mv.aria && ariaActive());
+          return `
+          <button class="move-btn ${ok?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${ok?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
             <div class="mv-name">${mv.available?escapeHtml(mv.name):'???'}</div>
             <div class="mv-meta">${mv.available ? moveMeta(mv, mon) : 'Locked'}</div>
-          </button>`).join('')}
+          </button>`; }).join('')}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
         <button class="side-btn" id="switchBtn" ${(b.switchedThisTurn || !canAct)?'disabled':''}>🔄 Switch</button>
@@ -3030,7 +3135,7 @@ function renderBattle(){
 const STATUS_LABELS = {
   overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
   counter:'↩️ Counter', combo:'👊 Combo', enrage:'🔥 Enrage', mirageImages:'👥 Afterimages', iceTomb:'🧊 Frozen', deepFreeze:'🧊 Deep Freeze', frostArmour:'❄️ Frost Armour', curse:'👻 Cursed', stunned:'💫 Stunned', machDragon:'🐉 Mach Dragon', softened:'🌀 Weakened', evadeTurns:'🧘 Still', asleep:'💤 Asleep',
-  discombobulate:'🌀 Confused', confusionField:'🌀 Heads Spinning', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', enraged:'🐋 Enraged', aria:'👻 Haunting Aria', wrath:'🌊 Gathering Wrath', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
+  discombobulate:'🌀 Confused', confusionField:'🌀 Heads Spinning', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', enraged:'🐋 Enraged', aria:'👻 Haunting Aria', wrath:'💢 Gathering Wrath', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
 };
 function renderStatusBadges(){
@@ -3043,14 +3148,14 @@ function renderStatusBadges(){
     Object.values(partyStatuses()).forEach(st=>{
       // turnsLeft is stored with a +1 grace so the cast turn counts; show the
       // number of turns the player will actually still have it for.
-      const shown = Math.max(0, st.turnsLeft - 1);
+      const shown = st.noGrace ? st.turnsLeft : Math.max(0, st.turnsLeft - 1);
       out.push(`<span class="status-pill mine">${STATUS_LABELS[st.type]||st.type} ${shown}</span>`);
     });
     const af = aftershockBonusHits();
     if(af) out.push(`<span class="status-pill mine">💥 Aftershock ×${af}</span>`);
     refreshAllBlockBars();
     const wr = getPStatus(0,'wrath');
-    if(wr && wr.stacks) out.push(`<span class="status-pill">🌊 Wrath ×${wr.stacks}</span>`);
+    if(wr && wr.stacks) out.push(`<span class="status-pill">💢 Wrath ×${wr.stacks}</span>`);
     const me1 = activeMon();
     const cl = counterList(me1);
     if(cl.length){
