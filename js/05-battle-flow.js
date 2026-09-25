@@ -419,6 +419,8 @@ function onMoveChosen(moveIdx){
   const mv=unlockedMoves(mon)[moveIdx];
   if(mv && mv.scripted) return resolveScriptedMove(mv, mon);
   if(mv && mv.locked){ ui.battle.phase='player'; toast('Not while the Cataclysm is building.'); return; }
+  /* A second Aria over the first would be words spent on nothing. */
+  if(mv && mv.aria && ariaActive()){ ui.battle.phase='player'; toast('Haunting Aria is still active.'); return; }
   if(mv && mv.chargeSpend) return resolveChargeSpend(mv, mon);
   if(mv && (mv.charge || mv.chargeMore)) return runChargeQuiz(mv, mon);
   /* Revitalise: who comes back is chosen before the writing, not after. */
@@ -846,11 +848,12 @@ function resolveBattleMove(mv, target, results){
   /* Haunting Aria — instant, does not spend the turn. */
   if(mv.aria){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${correct}/${mv.words} words)`); return setTimeout(advanceTurn,900); }
-    if(ariaActive()){ battleMsg('The aria is already singing.'); return setTimeout(advanceTurn,700); }
-    castAria(mon, mv.aria, false);
+    /* Never reached through the button, which is shut while an Aria runs —
+       but if it ever is, hand the turn back rather than spend it. */
+    if(!ariaActive()) castAria(mon, mv.aria, false);
     ui.battle.phase = 'player';
     renderBattle();
-    battleMsg('The aria settles. (instant — you can still attack!)');
+    battleMsg('Ominous whalesong fills the air. It cost no turn — choose your move.');
     return;
   }
   /* Grudge — flat plus three quarters of everything he has lost. */
@@ -1422,6 +1425,7 @@ function enemyConversio(e, def, next){
   const dmg = Math.ceil((def.direct || 0.33) * e.maxHp);
   const before = mon.currentHp;
   mon.currentHp = Math.max(0, mon.currentHp - dmg);
+  { const arv = ariaState(); if(arv) arv.struck = true; }   // an attack all the same
   drainHp('playerHp', before, mon.currentHp, monMaxHp(mon));
   battleMsg(`🕊 ${name} uses <b>Conversio</b> — with nobody to raise, the light turns outward and takes ` +
             `<b>${before - mon.currentHp}</b>.`);
@@ -2201,8 +2205,11 @@ function runEnemyAttack(i){
      start of the round, so nothing is hidden from the child. */
   if(getEStatus(e,'discombobulate')) return confusedStrike(e, ()=> runEnemyAttack(i+1));
   /* Every damaging move an enemy ATTEMPTS is remembered — once per move,
-     landed or not. */
+     landed or not. The Haunting Aria remembers too: any attack on your side,
+     even one that passes straight through, makes the apparition's next strike
+     certain. */
   noteWrath();
+  { const arv = ariaState(); if(arv) arv.struck = true; }
   /* A turn of Haunting Aria covers the whole FIELD, so whoever stands in it is
      untouchable; and if the Whalelord is struck with no Aria running, he sings
      by reflex and the blow finds nothing where he was. */
@@ -2227,7 +2234,7 @@ function runEnemyAttack(i){
                  && (MOVES[d0.species]||[]).some(m=>m[6] && m[6].aria);
   if(ariaCover || (canReflex && ariaReflex(d0))){
     dodgePlayer(); floatMiss('playerBob', 'MISS');
-    if(ariaCover) battleMsg('👻 The aria is still in the water — nothing lands.');
+    if(ariaCover) battleMsg('The attack passes harmlessly through.');
     return setTimeout(()=> runEnemyAttack(i+1), 800);
   }
   /* Same reasoning as the bonus action: if Tachypsychia is about to expire and
