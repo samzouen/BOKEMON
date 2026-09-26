@@ -1420,14 +1420,13 @@ function ariaActive(){ const a = ariaState(); return !!(a && a.turnsLeft > 0); }
 function castAria(mon, def, byReflex){
   const b = ui.battle;
   if(!b || ariaActive()) return false;
-  /* Five turns, and one roll at the end of each — the first right after the
-     untouchable turn. (It used to be turns + 1, which only came to five
-     strikes because nothing could land during the untouchable turn; now that
-     an attack passing through still counts, it would have been six.) */
+  /* Five rolls, one in the pre-action phase of each of the next five rounds —
+     the same phase as Overheat's burn, so it happens whether the last round
+     ended with the enemy's attacks or with a wave you knocked out. Stored with
+     the usual +1 so the cast round is not counted; ariaRetaliate() ends it
+     straight after the fifth roll, and the badge shows the rolls to come. */
   setPStatus(0, {
-    type:'aria', turnsLeft:(def.turns||5),
-    noGrace:true,                  // no +1 grace turn: the badge shows turnsLeft as it is
-    max:(def.turns||5),            // Diamond Dust tops it back up to this, not to 6
+    type:'aria', turnsLeft:(def.turns||5) + 1,
     pulse:def.pulse || 0.5, chance:(def.chance == null ? 0.5 : def.chance),
     atk: monAtk(mon), owner: mon.uid,
     fieldEvade: 1,                 // one turn of total evasion, for ANYONE on the field
@@ -1453,24 +1452,31 @@ function ariaReflex(mon){
   if(!mv) return false;
   return castAria(mon, mv[6].aria, true);
 }
-/* The pre-action phase: every turn the Aria lasts, his apparition may strike
-   every enemy — a coin flip, or certain if any enemy attacked your side this
-   turn (an attack that passed straight through still counts). */
+/* The pre-action phase (called from beginRound, beside Overheat's burn):
+   every round the Aria lasts, his apparition may strike every enemy — a coin
+   flip, or certain if any enemy attacked your side since the last roll (an
+   attack that passed straight through still counts). After the fifth roll the
+   Aria has ended. */
 function ariaRetaliate(done){
   const a = ariaState();
   if(!a) return done();
   const provoked = !!a.struck;
   a.struck = false;
+  const last = a.turnsLeft <= 1;
+  const finish = ()=>{
+    if(last && ariaState() === a){ removePStatus(0, 'aria'); renderStatusBadges(); }
+    done();
+  };
   const chance = provoked ? 1 : (a.chance == null ? 0.5 : a.chance);
-  if(Math.random() >= chance) return done();
+  if(Math.random() >= chance) return finish();
   const foes = livingEnemies();
-  if(!foes.length) return done();
+  if(!foes.length) return finish();
   const dmg = Math.ceil((a.pulse || 0.5) * a.atk * ownBuffMultiplier());
   const hits = foes.map(t=>({ t, idx:ui.battle.enemies.indexOf(t), dmg,
                               oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }));
   battleMsg(`The Whalelord's vengeful apparition strikes!`);
   ariaApparition(a, ()=>{ applyHits(hits, { noLeech:true }); reportHits(hits); })
-    .then(()=> setTimeout(done, 350));
+    .then(()=> setTimeout(finish, 350));
 }
 
 /* ---- The apparition, drawn ----
@@ -1521,7 +1527,7 @@ function ariaApparition(a, onImpact){
   const r = fighter ? fighter.getBoundingClientRect()
                     : { left: innerWidth * 0.1, top: innerHeight * 0.55, width: px, height: px };
   const endX = r.left + r.width, endY = r.top + (r.height - px) / 2;
-  const startX = endX + px * 0.45, startY = endY + px * 0.7;          // below and to the right
+  const startX = endX, startY = endY + px * 0.7;                      // straight below: it floats directly up
   /* Where to: up to the enemy row, and to the right — onto the rightmost enemy,
      and always at least half a sprite rightward, so it reads as a rush to the
      top right on a narrow phone too (where the enemies' middle can sit left
@@ -2007,14 +2013,17 @@ function beginRound(msg){
   /* Frost Armour: another layer each turn it lasts. */
   if(getPStatus(0,'frostArmour')){ frostArmourLayer(activeMon()); renderStatusBadges(); }
   discombobulatePulse();                       // and who is muddled this round
-  runPreHits(()=> vitaPulse(()=>{
+  /* The pre-action phase: Overheat's burn and the other pre-hits, then the
+     Haunting Aria's roll — here, not at the end of the round, so it still
+     comes when the last round ended with a wave knocked out. */
+  runPreHits(()=> ariaRetaliate(()=> vitaPulse(()=>{
     if(!ui.battle) return;
     if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
     if(!battleParty().some(m=>m.currentHp>0)) return onPlayerDefeated();
     b.order = buildInitiativeOrder();
     b.orderStep = 0;
     runTurnStep();
-  }));
+  })));
 }
 
 /* Mach Dragon is a TEAM status however it arrived — laid by hand or laid for
@@ -2155,7 +2164,9 @@ function endRound(){
   const ar = getPStatus(0,'aria');
   if(ar && ar.fieldEvade > 0) ar.fieldEvade--;   // the untouchable turn lapses
 
-  resolveAfterimages(()=> ariaRetaliate(()=>{
+  /* (The Haunting Aria no longer rolls here: it rolls in the next round's
+     pre-action phase, in beginRound.) */
+  resolveAfterimages(()=>{
     if(!ui.battle) return;
     if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
     const gone = tickStatuses();
@@ -2164,7 +2175,7 @@ function endRound(){
       if(!ui.battle) return;
       beginRound(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
     }, gone.length ? 900 : 500);
-  }));
+  });
 }
 
 /* The player's slice of the round. It decides nothing about order — losing the
@@ -2983,7 +2994,7 @@ function moveMeta(mv, mon){
   if(mv.revitalise && ui.battle && !revivableFallen(mon).length) return `${mv.words}字 · Nobody fainted`;
   /* Haunting Aria cannot be sung over itself: the button says why it is shut. */
   if(mv.aria && ui.battle && ariaActive()){
-    const n = ariaState().turnsLeft;
+    const n = Math.max(0, ariaState().turnsLeft - 1);   // rolls still to come — what the badge shows
     return `${mv.words}字 · Active · ${n} turn${n === 1 ? '' : 's'} left`;
   }
   const bits = [`${mv.words}字`];
@@ -3148,7 +3159,7 @@ function renderStatusBadges(){
     Object.values(partyStatuses()).forEach(st=>{
       // turnsLeft is stored with a +1 grace so the cast turn counts; show the
       // number of turns the player will actually still have it for.
-      const shown = st.noGrace ? st.turnsLeft : Math.max(0, st.turnsLeft - 1);
+      const shown = Math.max(0, st.turnsLeft - 1);
       out.push(`<span class="status-pill mine">${STATUS_LABELS[st.type]||st.type} ${shown}</span>`);
     });
     const af = aftershockBonusHits();

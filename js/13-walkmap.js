@@ -379,11 +379,29 @@ const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? tru
 
 /* ---------- drawing ---------- */
 /* A slow spiral for a monster (or a scientist) seeing stars. */
-const WALK_SPIRAL_SVG = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <path d="M32 32 m0 0 a4 4 0 1 1 -4 4 a9 9 0 1 0 9 -9 a14 14 0 1 0 -14 14 a19 19 0 1 0 19 -19"
-    fill="none" stroke="#2b2118" stroke-width="4" stroke-linecap="round" opacity="0.8"/>
-  <path d="M32 32 m0 0 a4 4 0 1 1 -4 4 a9 9 0 1 0 9 -9 a14 14 0 1 0 -14 14 a19 19 0 1 0 19 -19"
-    fill="none" stroke="#f4ecd8" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/></svg>`;
+/* The Discombobulate 🌀, as a drawing: a true (Archimedean) spiral in dark
+   purple, one ribbon that is thin at the centre and fuller as it winds out,
+   with a rounded tail — and nothing behind it, so it reads as a spiral turning
+   rather than an icon rotating. Built once from the maths. (The old one was a
+   chain of arcs that bent back and forth: S-bends, not a spiral.) */
+const WALK_SPIRAL_SVG = (()=>{
+  const C = 32, turns = 2.6, T = turns * Math.PI * 2, steps = 180;
+  const r0 = 1.2, r1 = 26.5;                  // from the centre to the tail, in a 64 box
+  const w0 = 1.6, w1 = 7.0;                   // ribbon width: thin inside, full outside
+  const pt = (r, th)=> `${(C + r * Math.cos(th)).toFixed(2)},${(C + r * Math.sin(th)).toFixed(2)}`;
+  const outer = [], inner = [];
+  for(let i = 0; i <= steps; i++){
+    const f = i / steps, th = f * T, r = r0 + (r1 - r0) * f, w = w0 + (w1 - w0) * f;
+    outer.push(pt(r + w / 2, th));
+    inner.push(pt(Math.max(0, r - w / 2), th));
+  }
+  const d = 'M' + outer.join(' L') + ' L' + inner.reverse().join(' L') + ' Z';
+  const tail = pt(r1, T).split(',');
+  return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="${d}" fill="#4a1a6b" stroke="#5e2587" stroke-width="0.8" stroke-linejoin="round"/>
+    <circle cx="${tail[0]}" cy="${tail[1]}" r="${(w1 / 2).toFixed(2)}" fill="#4a1a6b"/></svg>`;
+})();
+const WALK_SPIRAL_SIZE = 0.6;                 // of a tile: two heads side by side never overlap
 let _fxTimers = [];
 function clearWalkFx(){ _fxTimers.forEach(clearTimeout); _fxTimers = []; }
 function startDisgust(el, t){
@@ -420,9 +438,10 @@ function walkCss(){
       z-index:55;animation:walkMarkBob 1.1s ease-in-out infinite;}
     .walk-mark svg{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.25));}
     @keyframes walkMarkBob{0%,100%{translate:0 0}50%{translate:0 -14%}}
-    @keyframes walkSpin{to{rotate:360deg}}
-    .walk-dizzy{position:absolute;pointer-events:none;z-index:56;transform:translateX(-50%);
-      animation:walkSpin 4.5s linear infinite;opacity:.9;}
+    @keyframes walkSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    .walk-dizzy{position:absolute;pointer-events:none;z-index:56;transform-origin:50% 50%;
+      animation:walkSpin 4.5s linear infinite;background:none;}
+    .walk-dizzy svg{width:100%;height:100%;display:block;}
     @keyframes walkShiver{0%,100%{translate:0 0}20%{translate:-6% 2%}40%{translate:5% -2%}
       60%{translate:-4% -3%}80%{translate:4% 3%}}
     .walk-ent.walk-shiver{animation:walkShiver .18s linear infinite;}
@@ -541,13 +560,16 @@ function renderWalkDeck(id){
       : `<span style="font-size:${fallPx}px;line-height:1;">${t.icon||''}</span>`;
     world.appendChild(e); t.el = e;
     /* A task: a yellow "!" bobbing over their head, nine tenths of a tile tall. */
-    /* Knocked silly: a slow spiral over the head. */
+    /* Knocked silly: a slow spiral just above the head. Placed by its corner,
+       not by a centring shift — a shift underneath the spin made it orbit a
+       point instead of turning on the spot. */
     if(t.dizzy && t.dizzy()){
       const dz = document.createElement('div');
       dz.className = 'walk-dizzy';
-      dz.style.left = ((t.x + (typeof t.dx === 'function' ? t.dx() : t.dx || 0) + 0.5) * WALK_T) + 'px';
-      dz.style.top = ((t.y - 0.75) * WALK_T) + 'px';
-      dz.style.width = dz.style.height = (0.8 * WALK_T) + 'px';
+      const cx = t.x + (typeof t.dx === 'function' ? t.dx() : t.dx || 0) + 0.5;
+      dz.style.left = ((cx - WALK_SPIRAL_SIZE / 2) * WALK_T) + 'px';
+      dz.style.top = ((t.y - WALK_SPIRAL_SIZE - 0.04) * WALK_T) + 'px';
+      dz.style.width = dz.style.height = (WALK_SPIRAL_SIZE * WALK_T) + 'px';
       dz.innerHTML = WALK_SPIRAL_SVG;
       world.appendChild(dz);
     }
