@@ -8,7 +8,7 @@
 /* The cap belongs to the ZONE you're standing in, not the region — Rocky
    Caverns lets you push past the rest of Emerald March. Away from any zone,
    the region's best available cap applies. */
-const REGION_CAPS = { 1:21, 2:41, 3:61, 4:85 };
+const REGION_CAPS = { 1:21, 2:41, 3:61, 4:85, 5:90 };   // Region 5 part one; raise with the later tiers
 function levelCap(){
   /* The Band Competition is a Challenge rather than a zone, so it carries its
      own ceiling; beating the band lifts the whole region. */
@@ -364,6 +364,8 @@ function exploreFurther(){
   if((ui.currentZone||{}).id==='weather_deck')     return go('weather_deck');
   if((ui.currentZone||{}).id==='plant_generator')  return go('generator');
   if((ui.currentZone||{}).id==='geothermal_plant') return go('plant');
+  /* the catacombs: back into the dark, exactly where you were standing */
+  if((ui.currentZone||{}).id==='catacombs')        return r5AfterWild();
   return startWildEncounter({ silentIntro:true });
 }
 
@@ -404,7 +406,8 @@ function showVictory(enemyNames, levelUps, tokens){
     </div>
     <div id="catchArea"></div>
     <button class="btn btn-ghost" id="regionBtn" style="margin-top:10px;">Back to region</button>
-    <button class="btn btn-ghost" id="againBtn" style="margin-top:8px;">🌿 Explore further</button>
+    <button class="btn btn-ghost" id="againBtn" style="margin-top:8px;">${
+      (ui.currentZone||{}).id==='catacombs' ? '🕯️ Back into the dark' : '🌿 Explore further'}</button>
   `;
   const area = $('#catchArea');
   if(catchable.length){
@@ -463,8 +466,14 @@ function resolveCatch(enemy, results){
       </div>
       <button class="btn btn-primary" id="okBtn">Continue</button>
     `;
-    $('#okBtn').addEventListener('click', ()=>go('region'));
+    $('#okBtn').addEventListener('click', ()=> afterCatch());
   }
+}
+/* Where a catch (or a miss) leaves you: the region, or — in the catacombs —
+   the very spot the fight found you. */
+function afterCatch(){
+  if((ui.currentZone||{}).id === 'catacombs' && ui.returnDeck && typeof r5AfterWild === 'function') return r5AfterWild();
+  go('region');
 }
 /* Legendaries are a one-time meeting: once caught, they stop appearing. */
 function legendaryCaught(sp){ return (state.caughtSpecies||[]).includes(sp); }
@@ -514,7 +523,7 @@ function gotcha(enemy){
     const msg = CATCH_MESSAGES[enemy.species];
     if(msg) return storyModal(monPortrait(enemy.species, 150, { view:'front', bare:true, stage:enemy.stage||0 }),
       SPECIES[enemy.species].name, msg, ()=>go('region'), { subtitle:'A bond formed' });
-    go('region');
+    afterCatch();
   });
 }
 
@@ -568,7 +577,8 @@ function renderInner(){
     case 'region':        return renderRegion();
     case 'explore':       return renderExplore();
     case 'battle':        return renderBattle();
-    case 'challenge':     return (state.progress.currentRegion === 4) ? renderChallengeR4() : renderChallenge();
+    case 'challenge':     return (state.progress.currentRegion === 5) ? renderChallengeR5()
+                               : (state.progress.currentRegion === 4) ? renderChallengeR4() : renderChallenge();
     case 'party':         return renderPartyStub();
     case 'stats':         return renderStats();
     case 'storage':       return renderStorage();
@@ -597,7 +607,10 @@ function renderInner(){
     case 'quiz':          return renderQuiz();
     case 'arena':         return renderArenaGate();
     case 'sound':         return renderSound();
-    default:              return renderProfileSelect();
+    /* Every walkable place is a screen of its own: the ship's decks above,
+       and everything in Cosa Nostia (15-region5.js). */
+    default:              return (typeof DECKS !== 'undefined' && DECKS[ui.screen])
+                                   ? renderWalkDeck(ui.screen) : renderProfileSelect();
   }
 }
 

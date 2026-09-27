@@ -31,6 +31,7 @@ const SFX_MAP = {
   core_blast:       'core_blast.mp3',     // Jax draws on the core: starts as the ball begins to charge
   hit_dealt:        'hit_dealt.mp3',      // a move connects with an enemy
   move_miss:        'move_miss.mp3',
+  alert:            'alert.mp3',          // a catacomb guard is sure he has seen you (!)
   // quiz feedback
   answer_correct:   'answer_correct.mp3',
   answer_wrong:     'answer_wrong.mp3',
@@ -61,7 +62,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.65';
+const GAME_VERSION = '2.70';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -461,7 +462,7 @@ function newMoveStone(){
 }
 function stoneTierDef(id){ return STONE_TIERS.find(t=>t.id===id); }
 
-const CEDICT = {"一二三":"one, two, three","一双":"a pair","一座楼房":"a building","一排桌椅":"a row of tables and chairs","一点":"a bit; a little","一起":"in the same place; together","七七八八":"almost; nearing completion","万事如意":"to have all one's wishes; best wishes","上学":"to go to school; to attend school","下午":"afternoon; p.m.","下学":"to finish school; after school","下雨":"to rain","不会":"improbable; unlikely","东西":"thing; object","两元五角":"two yuan fifty cents","两只":"two (of animals/objects)","个子":"height; stature","中午":"noon; midday","中文":"Chinese language","中间":"between; intermediate","也是":"also is; likewise","书包":"schoolbag; satchel","书本":"book","书架":"bookshelf","买卖":"buying and selling; business","云吞面":"wonton noodles","云朵":"a cloud","五六七":"five, six, seven","五颜六色":"multi-colored; every color under the sun","亮光":"light; beam of light","人人喜爱":"loved by everyone","什么":"what?; something","今天":"today; at the present","以后":"after; later","伤心":"to grieve; to be broken-hearted","作业":"school assignment; homework","你们":"you (plural)","你呢":"and you?; what about you?","你好":"hello; hi","保护":"to protect; to defend","保持":"to keep; to maintain","信箱":"mailbox; post office box","健康":"health; healthy","偷吃":"to eat on the sly; to pilfer food","傍晚":"in the evening; when night falls","儿童":"child","兄弟":"brothers; younger brother","八九十":"eight, nine, ten","公公":"grandpa; husband’s father","公园":"park (for public recreation)","公斤":"kilogram (kg)","公民":"citizen","关心":"to be concerned about; to care about","关门":"to close a door; to lock a door","再见":"goodbye; see you again later","写字":"to write characters","农田":"farmland; cultivated land","冰水":"iced water","冰箱":"icebox; freezer cabinet","冲凉":"to take a shower","几个":"a few; several","出去":"to go out","到达":"to reach; to arrive","刷牙":"to brush one's teeth","前天":"the day before yesterday","力气":"strength","功课":"homework; assignment","动物":"animal","午餐":"lunch; luncheon","厕所":"toilet; lavatory","厨房":"kitchen","去哪儿":"where to go","又白又胖":"fair-skinned and chubby","叔叔":"uncle (father’s younger brother)","受伤":"to be hurt; to be injured","古时":"ancient times","只是":"merely; simply","叫喊":"exclamation; outcry","可口":"tasty; to taste good","可爱":"adorable; cute","右边":"right side; right, to the right","吃炸鸡翅":"to eat fried chicken wings","吃草":"to graze; to eat grass","吃饭":"to have a meal; to eat","合作":"to cooperate; to collaborate","合适":"suitable; just right","同学":"to study at the same school; fellow student","名字":"name (of a person or thing)","后天":"the day after tomorrow; acquired (not innate)","后面":"rear; back","吹牛":"to talk big; to shoot off one's mouth","告示牌":"notice; placard","哥哥":"older brother","商店":"store; shop","四十":"forty; 40","回家":"to return home","国王":"king","图书馆":"library","在哪":"where; where at","地铁":"subway; metro","声音":"voice; sound","外公":"grandpa (mother’s father)","外面":"outside; surface","多少":"number; amount","夜市":"night market","大中小":"large, medium, small","大声":"loud voice; in a loud voice","大桥":"large bridge","大笑":"to laugh heartily; a belly laugh","大象":"elephant","天桥":"overhead bridge; footbridge","天气":"weather","太阳":"sun","头脑":"brains; mind","女儿":"daughter","女孩":"girl; lass","奶奶":"grandma (father’s mother)","好冷":"very cold","好办法":"a good method/idea","好热":"very hot","妈妈":"mama; mommy","妹妹":"younger sister; young woman","姐姐":"older sister","娃娃":"baby; small child","婆婆":"grandma; husband’s mother","嫉妒":"to be jealous","子孙":"children and grandchildren; descendants","孙女":"son's daughter; granddaughter","孙子":"grandson; son's son","学习":"to learn; to study","学校":"school","学生":"student; schoolchild","孩子":"child","宝宝":"darling; baby","客厅":"drawing room (room for arriving guests); living room","家庭":"family; household","对面":"opposite side; across from","小时":"hour","小猫":"kitten","小贼":"little thief","尖刻":"sharp; biting","尺子":"rule; ruler (measuring instrument)","尺寸":"size; dimension","岁月":"years; the passing of time","工作":"to work; (of a machine) to operate","左手":"left hand; left-hand side","巴士":"bus (loanword); motor coach","帮助":"assistance; aid","干净":"clean; neat","年级":"grade; year (in school, college etc)","广阔":"wide; vast","庆祝":"to celebrate","开始":"to begin; beginning","开学":"school term begins","开心":"to feel happy; to rejoice","开门":"to open a door; to open for business","弟弟":"younger brother","彩虹":"rainbow","很大":"very big","微笑":"smile; to smile","快乐":"happy; merry","怀疑":"to doubt; to suspect","怎么":"how?; what?","我也喜欢":"I like it too","我的":"my; mine","戴眼镜":"to wear glasses","手机":"cell phone; mobile phone","手脚":"hand and foot; movement of limbs","手表":"wrist watch","打扫":"to clean; to sweep","打篮球":"to play basketball","抱抱":"to hug; to embrace","挥手":"to wave (one's hand)","捉迷藏":"to play hide-and-seek","摇头":"to shake one's head","操心":"to worry about","支持":"to support","收拾":"to put in order; to tidy up","放下":"to lay down; to put down","放好":"to put away properly","放工":"to knock off work for the day","放开":"to let go; to release","放手":"to let go one's hold; to give up","救火车":"fire engine","教堂":"church; chapel","整天":"all day","文件":"document; file","文具":"stationery","文字":"character; script","斑马":"zebra","斑马线":"crosswalk; zebra crossing","新加坡":"Singapore","方便":"convenient; suitable","日期":"date","早晨":"early morning","早餐":"breakfast","时钟":"clock","时间":"time; period","明天":"tomorrow","明白":"clear; obvious","星星":"star in the sky","星期":"week; day of the week","昨天":"yesterday","晚上":"evening; night","晚餐":"evening meal; dinner","月亮":"the moon","朋友":"friend","服务":"to serve; service","本来":"originally; at first","来到":"to come; to arrive","来回":"back and forth; a round trip","果汁":"fruit juice","树木":"tree","树枝":"branch; twig","校园":"campus","桌椅":"tables and chairs; furniture","正反":"front and back; pros and cons","母亲":"mother","毛巾":"towel","毛球":"fuzzy ball; lint ball","气球":"balloon","水壶":"kettle; canteen","水果":"fruit","水池":"pond; pool","汗衫":"vest; undershirt","汽水":"soda; pop","泥土":"earth; soil","洗手":"to wash one's hands; to go to the toilet","洗澡":"to bathe; to take a shower","洗脸":"to wash your face","深夜":"very late at night","游乐场":"playground","游戏":"game; to play","游泳":"swimming; to swim","游泳池":"swimming pool","灵活":"nimble; flexible","炒香肠":"fried sausage","炸鸡":"fried chicken","点头":"to nod","热闹":"bustling with noise and excitement; lively","煮菜":"to cook (dishes)","熊猫":"panda","爪子":"(animal's) claw","爬山":"to climb a mountain; to mountaineer","父亲":"father","爷爷":"father's father; paternal grandfather","爸爸":"father","牙刷":"toothbrush","牙齿":"tooth; dental","牛奶":"cow's milk","狮子":"lion","玩具":"plaything; toy","现在":"now; at present","生日":"birthday","生活":"life; activity","电灯":"electric light","电话":"telephone; phone call","男孩":"boy","画画":"to draw; to paint","白米饭":"plain cooked white rice","皮鞋":"leather shoes","目的":"purpose; goal","看见":"to see; to catch sight of","眼睛":"eye","短裤":"short pants; shorts","礼物":"gift; present","禾苗":"rice seedling","紫色":"purple; violet (color)","纸巾":"paper towel; napkin","羊毛":"fleece; wool","美满":"happy; blissful","羡慕":"to admire; to envy","老师":"teacher","老虎":"tiger","耶稣":"Jesus","肉包子":"steamed meat bun","肚子":"belly; abdomen","肩膀":"shoulder","肮胀":"dirty; filthy","脖子":"neck","自己":"oneself; one's own","舅舅":"uncle (mother’s brother)","节日":"holiday; festival","花朵":"flower","花草":"flowers and plants","菜刀":"vegetable knife; kitchen knife","蓝天":"blue sky","虫子":"insect; bug","行李":"luggage","衣服":"clothes","袜子":"socks; stockings","西瓜":"watermelon","要不要":"do you want (it) or not","观看":"to watch; to view","观赏":"to admire; to enjoy looking at","读书":"to read a book; to study","谢谢":"to thank; thanks","豆腐":"tofu; bean curd","贝壳":"shell; conch","购物产":"shopping","起来":"to stand up; to get up","起码":"at the very least","起立":"to stand; Stand up!","足球":"soccer ball; a football","跌倒":"to trip and fall","跳舞":"to dance","踢足球":"to play football/soccer","身体":"the body; one's health","车俩":"car; vehicle","车站":"rail station; bus stop","还是":"or; still","进来":"to come in","里面":"inside; interior","野狗":"wild dog; feral dog","钓鱼":"to fish (with line and hook); to dupe","长短":"length","长裤":"trousers","长颈鹿":"giraffe","闹钟":"alarm clock","阿姨":"auntie","除了":"besides; apart from (... also...)","难过":"to feel sad; to feel unwell","需要":"to need; to want","静悄悄":"extremely quiet","面包":"bread","鞋子":"shoe","食物":"food","餐具":"tableware; dinner service","餐厅":"dining hall; dining room","饭店":"restaurant; hotel","饼干":"biscuit; cracker","首先":"first (of all); in the first place","香喷喷":"delicious; savory","马上":"at once; right away","马路":"street; road","骑马":"to ride a horse","高兴":"happy; glad","高大":"tall; lofty","鸟儿":"bird","鸡肉":"chicken (meat)","汽车":"car; automobile","烤香肠":"grilled sausage","参观学校":"to visit a school","国家":"country; nation","市区":"city area; downtown","打扫干净":"to sweep clean","跑步":"to jog; to run","发现":"to discover; to find out","东海岸":"east coast","风景优美":"beautiful scenery","到处都是":"to be everywhere","花草树木":"flowers and trees; greenery","经过":"to pass by","过来":"to come over","方块":"a square; a block","冰块":"ice cube","跟着":"to follow along","很多":"very many; a lot","布娃娃":"rag doll","青蛙":"frog","最好":"best","最后":"last; finally","取得":"to obtain; to achieve","图画":"a picture; a drawing","图片":"a picture; an image","冬天":"winter","更加努力":"to try even harder","跳绳":"to skip rope","跳高":"high jump","逃跑":"to run away; to flee","永远年轻":"forever young","运动":"exercise; sport","一百分":"full marks; 100 marks","白色":"the colour white","身体健康":"to be in good health","建造":"to build; to construct","吹泡泡":"to blow bubbles","喜欢":"to like","收到礼物":"to receive a present","补习":"tuition; extra lessons","听写":"spelling dictation","泻药":"laxative medicine","这些":"these","一些":"some; a few","从此":"from then on","宝贝":"treasure; darling","宝石":"gemstone","年岁":"age; years","岁数":"age (in years)","想出办法":"to think up a way","相信":"to believe","总是":"always","总结":"to sum up; a summary","忘记":"to forget","医生":"doctor","医院":"hospital","乱丢垃圾":"to litter","过去":"the past; to go past","夜晚":"night-time","做梦":"to dream","美梦":"a lovely dream","那里":"there","哪里":"where","觉得高兴":"to feel happy","很久以前":"a long time ago","剪刀":"scissors","相亲相爱":"to love one another dearly","解决难题":"to solve a hard problem","准备":"to prepare","轻易":"easily; lightly","容易":"easy","争吵不休":"to quarrel endlessly","应该":"should; ought to","立刻":"immediately","感到伤心":"to feel sad","知错能改":"to admit a mistake and mend it","分工合作":"to divide the work and cooperate","油炸":"to deep-fry","脸红":"to blush","笑脸":"a smiling face","捡拾":"to pick up","扁豆":"flat bean; lentil","扁担":"carrying pole","遍地":"all over the ground","苦瓜":"bitter gourd","南瓜":"pumpkin","比较高低":"to compare which is higher","就要":"about to; going to","吃惊":"to be startled","拔腿就跑":"to take to one's heels","拨打":"to dial (a number)","哇哇大哭":"to cry loudly; to wail","机器":"machine","黑夜":"dark night","思考问题":"to think over a problem","烤肉":"roast meat; barbecue","香甜可口":"sweet and tasty","舌头":"tongue","耳朵":"ear","下棋":"to play chess","搭乘巴士":"to take the bus","乖巧懂事":"well-behaved and sensible","积水":"pooled water","乌云密布":"dark clouds gathering","电器":"electrical appliance","许多":"many; a great deal","捏着鼻子":"to hold one's nose","拼图":"jigsaw puzzle","老鹰":"eagle","你追我跑":"you chase and I run","轻声说话":"to speak softly","救命":"help! save me!","生活幸福":"to live happily","实现愿望":"to make a wish come true","蛋糕":"cake","电影院":"cinema","门票":"entrance ticket","庆祝活动":"a celebration","奇怪":"strange; odd","睡觉":"to sleep","羽毛球":"badminton","聪明":"clever; bright","金色":"gold (colour)","漂亮":"pretty; beautiful","呕吐":"to vomit","宠物":"pet","欺负":"to bully","围观":"to crowd round and watch","认识朋友":"to get to know a friend","迎接":"to welcome; to greet","提醒":"to remind","粗心大意":"careless; not paying attention","仔细":"careful; attentive","争抢":"to scramble for; to grab","推倒":"to push over","讨厌":"to dislike; annoying","弄破书本":"to tear a book","捉弄同学":"to play tricks on a classmate","破坏公物":"to damage public property","横冲直撞":"to barge about recklessly","亮晶晶":"glittering; sparkling","明白道理":"to understand the reason","茄子":"aubergine; eggplant","豆芽":"bean sprout","大伯":"uncle (father's elder brother)","胡萝卜":"carrot","煮饭":"to cook rice; to cook a meal","老鼠":"mouse; rat","或者":"or","猪肉":"pork","牛肉":"beef","采摘瓜果":"to pick fruit","挖地洞":"to dig a hole in the ground","诚实":"honest","一张纸":"a sheet of paper","一张卡片":"a card","一支笔":"a pen","一只鸡":"a chicken","一只猫":"a cat","一只狗":"a dog","一只兔子":"a rabbit","一只小船":"a little boat","一根树枝":"a branch","一根绳子":"a rope","一根黄瓜":"a cucumber","一棵白菜":"a cabbage","一碗汤":"a bowl of soup","一粒玉米":"a kernel of corn","一片草地":"a stretch of grass","一头大象":"an elephant","一首歌":"a song","一座岛":"an island","一道彩虹":"a rainbow","一番话":"a remark; something said","一块石头":"a stone","一架飞机":"an aeroplane","远近":"far ↔ near","轻重":"light ↔ heavy","早晚":"early ↔ late","前后":"front ↔ back","爱恨":"love ↔ hate","粗细":"thick ↔ thin","推拉":"push ↔ pull","哭笑":"cry ↔ laugh","黑白":"black ↔ white","难易":"hard ↔ easy","先苦后甜":"bitter first ↔ sweet after","难过开心":"sad ↔ happy","争吵和好":"to quarrel ↔ to make up","争抢礼让":"to grab ↔ to give way","讨厌喜欢":"to dislike ↔ to like","黄瓜":"cucumber","青菜":"green leafy vegetable","甜美的笑容":"a sweet smile","比一比":"to compare","哭了起来":"burst into tears","小安的书包":"Xiao An's schoolbag","是黑色的。":"is black.","老师说：":"the teacher said:","“我们考你们，":"\"We're going to test you —","这个字怎么写？“":"how do you write this character?\"","是黑色的":"is black.","老师说":"the teacher said:","我们考你们":"\"We're going to test you —","这个字怎么写":"how do you write this character?\""};
+const CEDICT = {"一二三":"one, two, three","一双":"a pair","一座楼房":"a building","一排桌椅":"a row of tables and chairs","一点":"a bit; a little","一起":"in the same place; together","七七八八":"almost; nearing completion","万事如意":"to have all one's wishes; best wishes","上学":"to go to school; to attend school","下午":"afternoon; p.m.","下学":"to finish school; after school","下雨":"to rain","不会":"improbable; unlikely","东西":"thing; object","两元五角":"two yuan fifty cents","两只":"two (of animals/objects)","个子":"height; stature","中午":"noon; midday","中文":"Chinese language","中间":"between; intermediate","也是":"also is; likewise","书包":"schoolbag; satchel","书本":"book","书架":"bookshelf","买卖":"buying and selling; business","云吞面":"wonton noodles","云朵":"a cloud","五六七":"five, six, seven","五颜六色":"multi-colored; every color under the sun","亮光":"light; beam of light","人人喜爱":"loved by everyone","什么":"what?; something","今天":"today; at the present","以后":"after; later","伤心":"to grieve; to be broken-hearted","作业":"school assignment; homework","你们":"you (plural)","你呢":"and you?; what about you?","你好":"hello; hi","保护":"to protect; to defend","保持":"to keep; to maintain","信箱":"mailbox; post office box","健康":"health; healthy","偷吃":"to eat on the sly; to pilfer food","傍晚":"in the evening; when night falls","儿童":"child","兄弟":"brothers; younger brother","八九十":"eight, nine, ten","公公":"grandpa; husband’s father","公园":"park (for public recreation)","公斤":"kilogram (kg)","公民":"citizen","关心":"to be concerned about; to care about","关门":"to close a door; to lock a door","再见":"goodbye; see you again later","写字":"to write characters","农田":"farmland; cultivated land","冰水":"iced water","冰箱":"icebox; freezer cabinet","冲凉":"to take a shower","几个":"a few; several","出去":"to go out","到达":"to reach; to arrive","刷牙":"to brush one's teeth","前天":"the day before yesterday","力气":"strength","功课":"homework; assignment","动物":"animal","午餐":"lunch; luncheon","厕所":"toilet; lavatory","厨房":"kitchen","去哪儿":"where to go","又白又胖":"fair-skinned and chubby","叔叔":"uncle (father’s younger brother)","受伤":"to be hurt; to be injured","古时":"ancient times","只是":"merely; simply","叫喊":"exclamation; outcry","可口":"tasty; to taste good","可爱":"adorable; cute","右边":"right side; right, to the right","吃炸鸡翅":"to eat fried chicken wings","吃草":"to graze; to eat grass","吃饭":"to have a meal; to eat","合作":"to cooperate; to collaborate","合适":"suitable; just right","同学":"to study at the same school; fellow student","名字":"name (of a person or thing)","后天":"the day after tomorrow; acquired (not innate)","后面":"rear; back","吹牛":"to talk big; to shoot off one's mouth","告示牌":"notice; placard","哥哥":"older brother","商店":"store; shop","四十":"forty; 40","回家":"to return home","国王":"king","图书馆":"library","在哪":"where; where at","地铁":"subway; metro","声音":"voice; sound","外公":"grandpa (mother’s father)","外面":"outside; surface","多少":"number; amount","夜市":"night market","大中小":"large, medium, small","大声":"loud voice; in a loud voice","大桥":"large bridge","大笑":"to laugh heartily; a belly laugh","大象":"elephant","天桥":"overhead bridge; footbridge","天气":"weather","太阳":"sun","头脑":"brains; mind","女儿":"daughter","女孩":"girl; lass","奶奶":"grandma (father’s mother)","好冷":"very cold","好办法":"a good method/idea","好热":"very hot","妈妈":"mama; mommy","妹妹":"younger sister; young woman","姐姐":"older sister","娃娃":"baby; small child","婆婆":"grandma; husband’s mother","嫉妒":"to be jealous","子孙":"children and grandchildren; descendants","孙女":"son's daughter; granddaughter","孙子":"grandson; son's son","学习":"to learn; to study","学校":"school","学生":"student; schoolchild","孩子":"child","宝宝":"darling; baby","客厅":"drawing room (room for arriving guests); living room","家庭":"family; household","对面":"opposite side; across from","小时":"hour","小猫":"kitten","小贼":"little thief","尖刻":"sharp; biting","尺子":"rule; ruler (measuring instrument)","尺寸":"size; dimension","岁月":"years; the passing of time","工作":"to work; (of a machine) to operate","左手":"left hand; left-hand side","巴士":"bus (loanword); motor coach","帮助":"assistance; aid","干净":"clean; neat","年级":"grade; year (in school, college etc)","广阔":"wide; vast","庆祝":"to celebrate","开始":"to begin; beginning","开学":"school term begins","开心":"to feel happy; to rejoice","开门":"to open a door; to open for business","弟弟":"younger brother","彩虹":"rainbow","很大":"very big","微笑":"smile; to smile","快乐":"happy; merry","怀疑":"to doubt; to suspect","怎么":"how?; what?","我也喜欢":"I like it too","我的":"my; mine","戴眼镜":"to wear glasses","手机":"cell phone; mobile phone","手脚":"hand and foot; movement of limbs","手表":"wrist watch","打扫":"to clean; to sweep","打篮球":"to play basketball","抱抱":"to hug; to embrace","挥手":"to wave (one's hand)","捉迷藏":"to play hide-and-seek","摇头":"to shake one's head","操心":"to worry about","支持":"to support","收拾":"to put in order; to tidy up","放下":"to lay down; to put down","放好":"to put away properly","放工":"to knock off work for the day","放开":"to let go; to release","放手":"to let go one's hold; to give up","救火车":"fire engine","教堂":"church; chapel","整天":"all day","文件":"document; file","文具":"stationery","文字":"character; script","斑马":"zebra","斑马线":"crosswalk; zebra crossing","新加坡":"Singapore","方便":"convenient; suitable","日期":"date","早晨":"early morning","早餐":"breakfast","时钟":"clock","时间":"time; period","明天":"tomorrow","明白":"clear; obvious","星星":"star in the sky","星期":"week; day of the week","昨天":"yesterday","晚上":"evening; night","晚餐":"evening meal; dinner","月亮":"the moon","朋友":"friend","服务":"to serve; service","本来":"originally; at first","来到":"to come; to arrive","来回":"back and forth; a round trip","果汁":"fruit juice","树木":"tree","树枝":"branch; twig","校园":"campus","桌椅":"tables and chairs; furniture","正反":"front and back; pros and cons","母亲":"mother","毛巾":"towel","毛球":"fuzzy ball; lint ball","气球":"balloon","水壶":"kettle; canteen","水果":"fruit","水池":"pond; pool","汗衫":"vest; undershirt","汽水":"soda; pop","泥土":"earth; soil","洗手":"to wash one's hands; to go to the toilet","洗澡":"to bathe; to take a shower","洗脸":"to wash your face","深夜":"very late at night","游乐场":"playground","游戏":"game; to play","游泳":"swimming; to swim","游泳池":"swimming pool","灵活":"nimble; flexible","炒香肠":"fried sausage","炸鸡":"fried chicken","点头":"to nod","热闹":"bustling with noise and excitement; lively","煮菜":"to cook (dishes)","熊猫":"panda","爪子":"(animal's) claw","爬山":"to climb a mountain; to mountaineer","父亲":"father","爷爷":"father's father; paternal grandfather","爸爸":"father","牙刷":"toothbrush","牙齿":"tooth; dental","牛奶":"cow's milk","狮子":"lion","玩具":"plaything; toy","现在":"now; at present","生日":"birthday","生活":"life; activity","电灯":"electric light","电话":"telephone; phone call","男孩":"boy","画画":"to draw; to paint","白米饭":"plain cooked white rice","皮鞋":"leather shoes","目的":"purpose; goal","看见":"to see; to catch sight of","眼睛":"eye","短裤":"short pants; shorts","礼物":"gift; present","禾苗":"rice seedling","紫色":"purple; violet (color)","纸巾":"paper towel; napkin","羊毛":"fleece; wool","美满":"happy; blissful","羡慕":"to admire; to envy","老师":"teacher","老虎":"tiger","耶稣":"Jesus","肉包子":"steamed meat bun","肚子":"belly; abdomen","肩膀":"shoulder","肮胀":"dirty; filthy","脖子":"neck","自己":"oneself; one's own","舅舅":"uncle (mother’s brother)","节日":"holiday; festival","花朵":"flower","花草":"flowers and plants","菜刀":"vegetable knife; kitchen knife","蓝天":"blue sky","虫子":"insect; bug","行李":"luggage","衣服":"clothes","袜子":"socks; stockings","西瓜":"watermelon","要不要":"do you want (it) or not","观看":"to watch; to view","观赏":"to admire; to enjoy looking at","读书":"to read a book; to study","谢谢":"to thank; thanks","豆腐":"tofu; bean curd","贝壳":"shell; conch","购物产":"shopping","起来":"to stand up; to get up","起码":"at the very least","起立":"to stand; Stand up!","足球":"soccer ball; a football","跌倒":"to trip and fall","跳舞":"to dance","踢足球":"to play football/soccer","身体":"the body; one's health","车俩":"car; vehicle","车站":"rail station; bus stop","还是":"or; still","进来":"to come in","里面":"inside; interior","野狗":"wild dog; feral dog","钓鱼":"to fish (with line and hook); to dupe","长短":"length","长裤":"trousers","长颈鹿":"giraffe","闹钟":"alarm clock","阿姨":"auntie","除了":"besides; apart from (... also...)","难过":"to feel sad; to feel unwell","需要":"to need; to want","静悄悄":"extremely quiet","面包":"bread","鞋子":"shoe","食物":"food","餐具":"tableware; dinner service","餐厅":"dining hall; dining room","饭店":"restaurant; hotel","饼干":"biscuit; cracker","首先":"first (of all); in the first place","香喷喷":"delicious; savory","马上":"at once; right away","马路":"street; road","骑马":"to ride a horse","高兴":"happy; glad","高大":"tall; lofty","鸟儿":"bird","鸡肉":"chicken (meat)","汽车":"car; automobile","烤香肠":"grilled sausage","参观学校":"to visit a school","国家":"country; nation","市区":"city area; downtown","打扫干净":"to sweep clean","跑步":"to jog; to run","发现":"to discover; to find out","东海岸":"east coast","风景优美":"beautiful scenery","到处都是":"to be everywhere","花草树木":"flowers and trees; greenery","经过":"to pass by","过来":"to come over","方块":"a square; a block","冰块":"ice cube","跟着":"to follow along","很多":"very many; a lot","布娃娃":"rag doll","青蛙":"frog","最好":"best","最后":"last; finally","取得":"to obtain; to achieve","图画":"a picture; a drawing","图片":"a picture; an image","冬天":"winter","更加努力":"to try even harder","跳绳":"to skip rope","跳高":"high jump","逃跑":"to run away; to flee","永远年轻":"forever young","运动":"exercise; sport","一百分":"full marks; 100 marks","白色":"the colour white","身体健康":"to be in good health","建造":"to build; to construct","吹泡泡":"to blow bubbles","喜欢":"to like","收到礼物":"to receive a present","补习":"tuition; extra lessons","听写":"spelling dictation","泻药":"laxative medicine","这些":"these","一些":"some; a few","从此":"from then on","宝贝":"treasure; darling","宝石":"gemstone","年岁":"age; years","岁数":"age (in years)","想出办法":"to think up a way","相信":"to believe","总是":"always","总结":"to sum up; a summary","忘记":"to forget","医生":"doctor","医院":"hospital","乱丢垃圾":"to litter","过去":"the past; to go past","夜晚":"night-time","做梦":"to dream","美梦":"a lovely dream","那里":"there","哪里":"where","觉得高兴":"to feel happy","很久以前":"a long time ago","剪刀":"scissors","相亲相爱":"to love one another dearly","解决难题":"to solve a hard problem","准备":"to prepare","轻易":"easily; lightly","容易":"easy","争吵不休":"to quarrel endlessly","应该":"should; ought to","立刻":"immediately","感到伤心":"to feel sad","知错能改":"to admit a mistake and mend it","分工合作":"to divide the work and cooperate","油炸":"to deep-fry","脸红":"to blush","笑脸":"a smiling face","捡拾":"to pick up","扁豆":"flat bean; lentil","扁担":"carrying pole","遍地":"all over the ground","苦瓜":"bitter gourd","南瓜":"pumpkin","比较高低":"to compare which is higher","就要":"about to; going to","吃惊":"to be startled","拔腿就跑":"to take to one's heels","拨打":"to dial (a number)","哇哇大哭":"to cry loudly; to wail","机器":"machine","黑夜":"dark night","思考问题":"to think over a problem","烤肉":"roast meat; barbecue","香甜可口":"sweet and tasty","舌头":"tongue","耳朵":"ear","下棋":"to play chess","搭乘巴士":"to take the bus","乖巧懂事":"well-behaved and sensible","积水":"pooled water","乌云密布":"dark clouds gathering","电器":"electrical appliance","许多":"many; a great deal","捏着鼻子":"to hold one's nose","拼图":"jigsaw puzzle","老鹰":"eagle","你追我跑":"you chase and I run","轻声说话":"to speak softly","救命":"help! save me!","生活幸福":"to live happily","实现愿望":"to make a wish come true","蛋糕":"cake","电影院":"cinema","门票":"entrance ticket","庆祝活动":"a celebration","奇怪":"strange; odd","睡觉":"to sleep","羽毛球":"badminton","聪明":"clever; bright","金色":"gold (colour)","漂亮":"pretty; beautiful","呕吐":"to vomit","宠物":"pet","欺负":"to bully","围观":"to crowd round and watch","认识朋友":"to get to know a friend","迎接":"to welcome; to greet","提醒":"to remind","粗心大意":"careless; not paying attention","仔细":"careful; attentive","争抢":"to scramble for; to grab","推倒":"to push over","讨厌":"to dislike; annoying","弄破书本":"to tear a book","捉弄同学":"to play tricks on a classmate","破坏公物":"to damage public property","横冲直撞":"to barge about recklessly","亮晶晶":"glittering; sparkling","明白道理":"to understand the reason","茄子":"aubergine; eggplant","豆芽":"bean sprout","大伯":"uncle (father's elder brother)","胡萝卜":"carrot","煮饭":"to cook rice; to cook a meal","老鼠":"mouse; rat","或者":"or","猪肉":"pork","牛肉":"beef","采摘瓜果":"to pick fruit","挖地洞":"to dig a hole in the ground","诚实":"honest","一张纸":"a sheet of paper","一张卡片":"a card","一支笔":"a pen","一只鸡":"a chicken","一只猫":"a cat","一只狗":"a dog","一只兔子":"a rabbit","一只小船":"a little boat","一根树枝":"a branch","一根绳子":"a rope","一根黄瓜":"a cucumber","一棵白菜":"a cabbage","一碗汤":"a bowl of soup","一粒玉米":"a kernel of corn","一片草地":"a stretch of grass","一头大象":"an elephant","一首歌":"a song","一座岛":"an island","一道彩虹":"a rainbow","一番话":"a remark; something said","一块石头":"a stone","一架飞机":"an aeroplane","远近":"far ↔ near","轻重":"light ↔ heavy","早晚":"early ↔ late","前后":"front ↔ back","爱恨":"love ↔ hate","粗细":"thick ↔ thin","推拉":"push ↔ pull","哭笑":"cry ↔ laugh","黑白":"black ↔ white","难易":"hard ↔ easy","先苦后甜":"bitter first ↔ sweet after","难过开心":"sad ↔ happy","争吵和好":"to quarrel ↔ to make up","争抢礼让":"to grab ↔ to give way","讨厌喜欢":"to dislike ↔ to like","黄瓜":"cucumber","青菜":"green leafy vegetable","甜美的笑容":"a sweet smile","比一比":"to compare","哭了起来":"burst into tears","小安的书包":"Xiao An's schoolbag","是黑色的":"is black.","老师说":"the teacher said:","我们考你们":"\"We're going to test you —","这个字怎么写":"how do you write this character?","我来考你们":"let me test you all","大声说话":"to speak loudly","借书":"to borrow a book","很多次":"many times","英语":"English (the language)","各种各样":"all kinds of; every kind of","一回到家":"as soon as (he) gets home","就去玩玩具":"(he) goes straight off to play with toys","小文":"Xiao Wen (a name)","坐在地上":"to sit on the floor","听奶奶":"to listen to Grandma","讲故事":"to tell a story","楼下":"downstairs","灯光":"the light of the lamps; lights","一排树":"a row of trees","公园里":"in the park","有很多人":"there are lots of people","在运动":"are exercising","我喜欢":"I like","的花朵":"…flowers (五颜六色的花朵: flowers of every colour)","步行":"to walk; on foot","这里":"here","吃美食":"to eat delicious food","我还喜欢":"I also like","看电影":"to watch a film","洗菜":"to wash vegetables","用手":"with your hands","拿不起来":"cannot pick it up; too heavy to lift","告诉老师":"to tell the teacher","关好水龙头":"to turn the tap off properly","忘了带笔":"forgot to bring a pen","哥哥连忙":"big brother quickly…","向同学借":"to borrow from a classmate","走到学校后":"after walking to school","弟弟热得":"little brother was so hot that…","脸红了起来":"his face turned red","完成作业":"to finish your homework","草地":"grass; a lawn","大家都是":"we are all…; everyone is…","好朋友":"good friends","不应该为了":"should not, just because of…","一点儿小事":"a little thing; a small matter","而争吵":"…and quarrel over it","看扁别人":"to look down on others","互相比较":"to compare with each other","汤面":"noodle soup","味道香甜":"tastes sweet and fragrant","马上就要":"very soon; about to","考试了":"(it will be) exam time","我要认真":"I must work hard; I must take it seriously","温习功课":"to revise your lessons","冲洗马桶":"to flush the toilet","告诉":"to tell","节约用水":"to save water","外婆":"grandma (mother’s mother)","连忙":"hurriedly; at once","猜想":"to guess; to suppose","十分重要":"very important","我觉得口渴":"I feel thirsty","想喝一杯":"would like to drink a glass of…","冰凉的果汁":"ice-cold fruit juice"};
 
 /* ---------- STAT COMPUTATION ----------
    Locked formula: stat(level) = (rate/5) * level  + evolutionBonus + supplementBonus
@@ -903,6 +904,33 @@ async function runProfileMigrations(){
   if(changed) await saveProfile();
 }
 
+/* One record per phrase (see REPEATS). A save from before may hold the same
+   phrase under two spellings ("是黑色的。" and "是黑色的"): they are folded
+   together, keeping the better of the two. The medal ledger gives back the
+   count the extra copy took up, so the next phrase to reach that medal still
+   pays one — medals already awarded are never taken away. Idempotent. */
+function canonicalizePhrases(p){
+  const fold = (obj, pick)=>{
+    const out = {};
+    Object.entries(obj || {}).forEach(([k, v])=>{
+      const c = phraseKey(k); if(!c) return;
+      out[c] = Object.prototype.hasOwnProperty.call(out, c) ? pick(out[c], v) : v;
+    });
+    return out;
+  };
+  const before = p.wordMastery || {};
+  const at = (wm, n)=> Object.values(wm).filter(v=> v >= n).length;
+  p.wordMastery = fold(before, Math.max);
+  ['bronze','silver','gold'].forEach(tier=>{
+    const n = MASTERY_CHECKPOINTS[tier];
+    const gone = at(before, n) - at(p.wordMastery, n);
+    if(gone > 0 && p.masteryAwarded) p.masteryAwarded[tier] = Math.max(0, (p.masteryAwarded[tier] || 0) - gone);
+  });
+  p.wordAttempts = fold(p.wordAttempts, Math.max);
+  p.wordFlags = fold(p.wordFlags, (a, b)=> ({ priority:!!((a && a.priority) || (b && b.priority)),
+                                              regular:!(a && a.regular === false && b && b.regular === false) }));
+  p.recentWrong = uniquePhrases(p.recentWrong);
+}
 function normalizeProfile(p){
   // backfill fields introduced in later phases so older saves keep working
   if(!p.id) p.id = newProfileId();
@@ -932,6 +960,7 @@ function normalizeProfile(p){
   p.overmasteryAwarded = p.overmasteryAwarded || { bronze:0, silver:0, gold:0 };
   p.medals = p.medals || {};
   ['bronze','silver','gold'].forEach(k=>{ if(p.medals[k]===undefined) p.medals[k] = 0; });
+  canonicalizePhrases(p);
   p._needsMasteryReconcile = true;
   if(!Array.isArray(p.settings.wordLists)) p.settings.wordLists = null;   // null = all lists
   if(p.lanternGranted===undefined) p.lanternGranted = false;
@@ -1039,6 +1068,7 @@ function normalizeProfile(p){
 }
 function recordWrong(word){
   if(!state) return;
+  word = phraseKey(word);
   state.recentWrong = (state.recentWrong||[]).filter(w=>w!==word);
   state.recentWrong.unshift(word);
   if(state.recentWrong.length>60) state.recentWrong.length = 60;
@@ -1389,12 +1419,43 @@ const WORDS_DIR      = 'words/';
 const WORDS_MANIFEST = 'words/lists.txt';
 
 let availableLists = [];   // [{key,file,label,level}]
-let listWords      = {};   // key -> [words]
+let listWords      = {};   // key -> [words], repeats and all, in file order
 let remoteWords    = [];   // union of the lists this profile has selected
 let localWords     = [];
 let hiddenWords    = [];
 let masterWords    = [];
 let wordSyncNote   = '';
+
+/* ---------- REPEATS ----------
+   Spelling tests repeat themselves: the same phrase turns up twice in one
+   list, or again in a later list (发现 in two P2 tests, 黄瓜 at school and at
+   tuition). A phrase is ONE phrase however many times it is listed. Its
+   canonical form is the text with every space, invisible character and
+   punctuation mark taken out — none of those can be written in the boxes
+   anyway — so "是黑色的。" and "是黑色的" are the same phrase too.
+   Everything is keyed by that form: the practice pool holds it once, and its
+   mastery, its checkmarks and its medals are one record, shared by every
+   repeat — including a repeat added long after the phrase went gold. */
+function phraseKey(raw){
+  return String(raw == null ? '' : raw)
+    .normalize('NFKC')
+    .replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, '')
+    .replace(/[\p{P}\p{S}]/gu, '');
+}
+function phraseKeys(list){ return (list || []).map(phraseKey).filter(Boolean); }
+function uniquePhrases(list){ return [...new Set(phraseKeys(list))]; }
+/* phrase -> [{ key, label, n }]: every list it appears in, and how often. */
+let phraseWhere = {};
+function rebuildPhraseWhere(){
+  phraseWhere = {};
+  availableLists.forEach(l=>{
+    const counts = {};
+    (listWords[l.key] || []).forEach(w=>{ counts[w] = (counts[w] || 0) + 1; });
+    Object.entries(counts).forEach(([w, n])=>{ (phraseWhere[w] = phraseWhere[w] || []).push({ key:l.key, label:l.label, n }); });
+  });
+}
+/* How many times a phrase is listed, across every list there is. */
+function phraseRepeats(text){ return (phraseWhere[phraseKey(text)] || []).reduce((n, x)=> n + x.n, 0); }
 
 function selectedListKeys(){
   const sel = state?.settings?.wordLists;
@@ -1404,6 +1465,10 @@ function selectedListKeys(){
 function levelOf(key){ const m = String(key).match(/^([A-Za-z]+\d*)/); return m ? m[1].toUpperCase() : 'OTHER'; }
 
 function rebuildRemote(){
+  /* every list's lines in their canonical form, repeats kept (they are how a
+     list shows it shares a phrase) */
+  Object.keys(listWords).forEach(k=>{ listWords[k] = phraseKeys(listWords[k]); });
+  rebuildPhraseWhere();
   const keys = selectedListKeys();
   const seen = new Set();
   remoteWords = [];
@@ -1413,6 +1478,8 @@ function rebuildRemote(){
   rebuildMaster();
 }
 function rebuildMaster(){
+  localWords = uniquePhrases(localWords);
+  hiddenWords = uniquePhrases(hiddenWords);
   const hidden = new Set(hiddenWords);
   const seen = new Set();
   masterWords = [];
@@ -1433,7 +1500,7 @@ async function loadWordlist(){
   if(availableLists.length === 0 && Object.keys(listWords).length === 0){
     // nothing cached yet — fall back to the bundled list so play can start
     availableLists = [{ key:'builtin', file:null, label:'Built-in starter list', level:'BUILT-IN' }];
-    listWords = { builtin: DEFAULT_MASTER_WORDS.slice() };
+    listWords = { builtin: phraseKeys(DEFAULT_MASTER_WORDS) };
   }
   rebuildRemote();
   syncRemoteWords();
@@ -1463,7 +1530,7 @@ async function syncRemoteWords(){
         if(!r.ok) continue;
         const t = await r.text();
         if(notALIst(t)) continue;
-        const words = t.split('\n').map(x=>x.trim()).filter(Boolean);
+        const words = phraseKeys(t.split('\n'));      // repeats kept; see REPEATS
         if(words.length) fetched[e.key] = words;
       }catch(err){}
     }
@@ -1474,8 +1541,10 @@ async function syncRemoteWords(){
     listWords = fetched;
     await store.set(LISTS_CACHE_KEY, JSON.stringify({ lists:availableLists, words:listWords }));
     rebuildRemote();
-    const total = new Set(Object.values(fetched).flat()).size;
-    wordSyncNote = `Synced ${got.length} list${got.length===1?'':'s'} · ${total} words`;
+    const lines = Object.values(fetched).flat();
+    const total = new Set(lines).size, repeats = lines.length - total;
+    wordSyncNote = `Synced ${got.length} list${got.length===1?'':'s'} · ${total} words` +
+      (repeats ? ` (${repeats} repeat${repeats===1?'':'s'} sharing progress)` : '');
   }catch(e){
     // legacy single-file mode
     try{
@@ -1483,7 +1552,7 @@ async function syncRemoteWords(){
       if(r.ok){
         const t = await r.text();
         if(!notALIst(t)){
-          const words = t.split('\n').map(x=>x.trim()).filter(Boolean);
+          const words = phraseKeys(t.split('\n'));
           if(words.length){
             availableLists = [{ key:'words', file:'words.txt', label:'Word list', level:'ALL' }];
             listWords = { words };
@@ -1499,7 +1568,7 @@ async function syncRemoteWords(){
     }catch(err){}
     if(remoteWords.length===0){
       availableLists = [{ key:'builtin', file:null, label:'Built-in starter list', level:'BUILT-IN' }];
-      listWords = { builtin: DEFAULT_MASTER_WORDS.slice() };
+      listWords = { builtin: phraseKeys(DEFAULT_MASTER_WORDS) };
       rebuildRemote();
     }
     wordSyncNote = 'Using the built-in list (words/ not reachable)';
@@ -1516,10 +1585,12 @@ async function saveWordlist(){
   rebuildMaster();
 }
 
+/* A phrase already on the list is not added twice — it is the same phrase,
+   and it keeps the progress it has. */
 function addWords(lines){
   const existing = new Set(masterWords);
   const added = [], skipped = [];
-  lines.forEach(t=>{
+  phraseKeys(lines).forEach(t=>{
     if(existing.has(t) || added.includes(t)) skipped.push(t);
     else added.push(t);
   });
@@ -1532,6 +1603,7 @@ function addWords(lines){
 }
 
 function removeWord(text){
+  text = phraseKey(text);
   localWords = localWords.filter(w=>w!==text);
   if(remoteWords.includes(text) && !hiddenWords.includes(text)) hiddenWords.push(text);
   rebuildMaster();
@@ -1541,11 +1613,13 @@ function removeWord(text){
    No stored entry = default {priority:false, regular:true}, so a word newly
    added to words.txt is automatically active for every son. */
 function wordFlags(text){
+  text = phraseKey(text);
   const f = state && state.wordFlags && state.wordFlags[text];
   return f ? { priority:!!f.priority, regular:f.regular!==false } : { priority:false, regular:true };
 }
 function setWordFlag(text, key, value){
   if(!state) return;
+  text = phraseKey(text);
   state.wordFlags = state.wordFlags || {};
   const cur = state.wordFlags[text] || { priority:false, regular:true };
   cur[key] = value;
@@ -1563,7 +1637,7 @@ function activePool(){
   return rows.filter(w=>w.priority || w.regular);
 }
 function definitionFor(text){
-  return CEDICT[text] || null;
+  return CEDICT[text] || CEDICT[phraseKey(text)] || null;
 }
 
 
@@ -1599,18 +1673,19 @@ const MASTERY_GROUP = 1;
 /* Hanzi Writer treats 0 as "no hint", and an immediate outline would block
    input anyway — so the gentlest setting is after a single miss. */
 const HINT_CURVE = [1, 1, 2, 2, 3];      // attempt 1..5 → misses needed before a hint
-function attemptsOf(text){ return (state && state.wordAttempts && state.wordAttempts[text]) || 0; }
+function attemptsOf(text){ return (state && state.wordAttempts && state.wordAttempts[phraseKey(text)]) || 0; }
 function hintScheduleFor(text){
   const n = attemptsOf(text);
   return n < HINT_CURVE.length ? HINT_CURVE[n] : false;   // false = no hint at all
 }
 function noteAttempt(text){
   if(!state) return;
+  text = phraseKey(text);
   state.wordAttempts = state.wordAttempts || {};
   state.wordAttempts[text] = (state.wordAttempts[text] || 0) + 1;
 }
 
-function masteryOf(text){ return (state.wordMastery && state.wordMastery[text]) || 0; }
+function masteryOf(text){ return (state.wordMastery && state.wordMastery[phraseKey(text)]) || 0; }
 function masteryTier(n){
   if(n >= MASTERY_CHECKPOINTS.gold)   return 'gold';
   if(n >= MASTERY_CHECKPOINTS.silver) return 'silver';
@@ -1626,8 +1701,10 @@ function masteryCounts(){
   };
 }
 
+/* One record per phrase: every repeat of it, in any list, counts here. */
 function recordMastery(text){
   if(!state) return null;
+  text = phraseKey(text);
   state.wordMastery = state.wordMastery || {};
   state.wordMastery[text] = (state.wordMastery[text] || 0) + 1;
   return checkMasteryRewards();

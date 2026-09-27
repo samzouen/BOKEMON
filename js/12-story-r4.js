@@ -440,7 +440,7 @@ function expeditionBar(compact){
       </div>
     </div>
     ${compact ? '' : `<div class="exped-note">${
-      there ? `Docked at Cosa Nostia.`
+      there ? (region5Ready() ? `Docked at Cosa Nostia. <b>Go ashore: Regions → Cosa Nostia.</b>` : `Docked at Cosa Nostia.`)
       : done ? `Running east, and making up the time. <b>Every win counts double.</b>`
       : g.wallFound ? 'Dead in the water. Nothing moves until this is settled.'
       : 'Days at sea, counted in the fights you win over the side and at the rail.'
@@ -1022,10 +1022,13 @@ function travelProgress(){
       ? `"Hrm, I'd wager we're more than ${band}% of the way to Cosa Nostia."`
       : `"Hrm. We've barely cleared the harbour — not yet a fifth of the way to Cosa Nostia."`;
   const wait = (pct >= 100 && !r4().cuainRevived)
-    ? `<br><br><b>"We'll not put you ashore yet, mind. Not while your friend is only half himself."</b>` : '';
+    ? `<br><br><b>"We'll not put you ashore yet, mind. Not while your friend is only half himself."</b>`
+    : region5Ready() ? `<br><br><b>"Go ashore whenever you're ready. Cosa Nostia will keep. More's the pity."</b>` : '';
   storyModal(npcPortrait('ship_captain','⚓',130,'transparent'), crewName('ship_captain'),
     `He squints at the chart and taps it with a thick finger.<br><br><b>${line}</b>${wait}`,
-    ()=>go('cabin_deck'), { bg:'cabin_deck', subtitle:'Cabin Deck' });
+    ()=>go('cabin_deck'), Object.assign({ bg:'cabin_deck', subtitle:'Cabin Deck' },
+      (region5Ready() && typeof r5GoAshore === 'function')
+        ? { action:{ label:'⚓ Go ashore', fn:()=> r5GoAshore() } } : {}));
 }
 
 /* The cook has opinions, and one of them turns out to matter. */

@@ -181,14 +181,14 @@ async function handleProfileImport(e){
       if(Array.isArray(data.hiddenWords)) hiddenWords = data.hiddenWords.slice();
       if(Array.isArray(data.wordlist)){
         // v1 backups stored {text,priority,regular} objects; v2 stores strings.
-        const texts = data.wordlist.map(w => typeof w==='string' ? w : w && w.text).filter(Boolean);
+        const texts = phraseKeys(data.wordlist.map(w => typeof w==='string' ? w : w && w.text));
         // anything not already coming from words.txt is kept as a local word
         texts.forEach(t=>{ if(!remoteWords.includes(t) && !localWords.includes(t)) localWords.push(t); });
         // v1 carried the checkmarks on the list itself — migrate them onto the profile
         data.wordlist.forEach(w=>{
-          if(w && typeof w==='object' && w.text){
+          if(w && typeof w==='object' && w.text && phraseKey(w.text)){
             state.wordFlags = state.wordFlags || {};
-            state.wordFlags[w.text] = { priority:!!w.priority, regular:w.regular!==false };
+            state.wordFlags[phraseKey(w.text)] = { priority:!!w.priority, regular:w.regular!==false };
           }
         });
       }
@@ -357,6 +357,8 @@ function region2Locked(){
 }
 
 function renderRegion(){
+  /* The first time into Cosa Nostia you do not see a menu: you step off the ship. */
+  if(state.progress.currentRegion === 5 && typeof r5ArrivalDue === 'function' && r5ArrivalDue()) return r5Arrive();
   setScreenBg('region'+(state.progress.currentRegion||1));
   playMusicChain(['region'+(state.progress.currentRegion||1), 'region']);
   const rid = state.progress.currentRegion || 1;
@@ -365,7 +367,8 @@ function renderRegion(){
 
   // Sacred Grove bars the way until the Trial of Courage is passed
   const gated = region2Locked();
-  const challengeLabel = rid===4 ? 'Aboard the Vane Shear'
+  const challengeLabel = rid===5 ? 'The Family'
+    : rid===4 ? 'Aboard the Vane Shear'
     : rid===3 ? 'Electric Dojo (closed)'
     : rid===2 ? 'Water Dojo' : 'Dojo, Jax & Thugs';
 

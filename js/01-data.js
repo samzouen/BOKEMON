@@ -130,6 +130,17 @@ const SPECIES = {
   whalelord:       { name:'Whalelord', tier:'legendary', types:['Water','Ghost'], rate:13, nerfedRate:11, base:66, evo:[], evoMult:1.5,
                      color:'#3a5a7a', glyph:'鲲', nerfedUntilCrowned:true, storyCrownOnly:true, preEvolved:true },
 
+  /* --- Region 5: the catacombs under Cosa Nostia. Ghosts are hard to hit
+         because they are not quite there: see LURK and CUNNING in
+         04-battle.js. Psychic is their counter. --- */
+  crow:            { name:'Crow',          tier:'wild',  types:['Ghost','Flying'], rate:7,  nerfedRate:5,  base:75, evo:[18],    evoMult:1.5, color:'#3a3440', glyph:'鸦' },
+  cyclops:         { name:'Cyclops',       tier:'wild',  types:['Ghost','Ground'], rate:7,  nerfedRate:5,  base:76, evo:[11,25], color:'#5a5a48', glyph:'眼' },
+  ghost:           { name:'Ghost',         tier:'wild',  types:['Ghost'],          rate:7,  nerfedRate:5,  base:77, evo:[18],    evoMult:1.5, color:'#b8c0cc', glyph:'魂' },
+  ghost_flame:     { name:'Ghost Flame',   tier:'wild',  types:['Ghost','Fire'],   rate:7,  nerfedRate:5,  base:78, evo:[],      color:'#6a8ad8', glyph:'焰' },
+  goblin_knight:   { name:'Goblin Knight', tier:'elite', types:['Ghost','Steel'],  rate:11, nerfedRate:11, base:80, evo:[21,41], color:'#5a6a6a', glyph:'骑' },
+  puppet:          { name:'Puppet',        tier:'elite', types:['Ghost'],          rate:11, nerfedRate:11, base:82, evo:[25],    evoMult:1.5, color:'#8a5a6a', glyph:'偶' },
+  horned_lynx:     { name:'Horned Lynx',   tier:'elite', types:['Ghost','Fairy'],  rate:11, nerfedRate:11, base:84, evo:[],      color:'#8a8ab8', glyph:'猞' },
+
   /* --- Legendaries & story --- */
   /* --- Region 2: Rocky Caverns starters --- */
   flying_starter:  { name:'Raven',       tier:'starter',   types:['Flying'],        rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#6b7a8f', glyph:'鸦' },
@@ -192,13 +203,21 @@ const MOVES = {
   /* --- Rocky Caverns starters: same shape as the Region 1 starters --- */
   flying_starter:  [['Basic','Peck',0.2,'Single',2,1],['Power1','Wing Slash',0.4,'Single',4,5],['Power2','Gale Force',0.6,'AOE',8,21],['Ultimate','Storm Dive',1.25,'Single',8,41],['Max','Storm Dive Max',1.5,'Single',8,51]],
   physical_starter:[['Basic','Scratch',0.2,'Single',2,1],['Power1','Lunge',0.4,'Single',4,5],['Power2','Rend',0.6,'AOE',8,21],['Ultimate','Savage Strike',1.25,'Single',8,41],['Max','Savage Strike Max',1.5,'Single',8,51]],
-  ghost_starter:   [['Basic','Touch',0.2,'Single',2,1],['Power1','Shadow Sneak',0.4,'Single',4,5],['Power2','Nightfall',0.6,'AOE',8,21],['Ultimate','Umbral Rend',1.25,'Single',8,41],['Max','Umbral Rend Max',1.5,'Single',8,51]],
+  /* Shadow Sneak is a PASSIVE now (Ambush): it lurks when it steps onto the
+     field, and the blow that ends the Lurk deals +50%. Nightfall moved down to
+     Power1, so an AI that asks for Power2 falls back to it. */
+  ghost_starter:   [['Basic','Touch',0.2,'Single',2,1],['Power1','Nightfall',0.5,'AOE',4,5],
+                    ['Power2','Shadow Sneak',null,'Passive',0,21,{passive:{lurk:true, ambush:1.5}}],
+                    ['Ultimate','Umbral Rend',1.25,'Single',8,41],['Max','Umbral Rend Max',1.5,'Single',8,51]],
   psychic_starter: [['Basic','Tackle',0.2,'Single',2,1],['Power1','Mind Jab',0.4,'Single',4,5],['Power2','Psywave',0.6,'AOE',8,21],['Ultimate','Mind Shatter',1.25,'Single',8,41],['Max','Mind Shatter Max',1.5,'Single',8,51]],
 
   /* --- Elites: never evolve, so their kit is their whole identity --- */
   sumo:            [['Basic','Slap',0.2,'Single',2,1],['Power1','Palm Thrust',0.4,'Single',4,5],['Power2','Earth Stomp',0.6,'AOE',8,21],['Ultimate','Grand Charge',1.25,'Single',8,41],['Max','Grand Charge Max',1.5,'Single',8,51]],
-  goblin:          [['Basic','Claw',0.2,'Single',2,1],['Power1','Hex',0.4,'Single',4,5],['Power2','Shadow Cackle',0.6,'AOE',8,21],['Ultimate','Grave Mischief',1.25,'Single',8,41],['Max','Grave Mischief Max',1.5,'Single',8,51]],
-  squid:           [['Basic','Ink Jet',0.2,'Single',2,1],['Power1','Tentacle Slap',0.4,'Single',4,5],['Power2','Mind Fog',0.6,'AOE',8,21],['Ultimate','Abyssal Gaze',1.25,'Single',8,41],['Max','Abyssal Gaze Max',1.5,'Single',8,51]],
+  /* Goblin's Greed: a landed attack steals one of the other side's buffs. */
+  goblin:          [['Basic','Claw',0.2,'Single',2,1],['Power1','Shadow Cackle',0.5,'AOE',4,5],
+                    ['Power2','Goblin\'s Greed',null,'Passive',0,21,{passive:{greed:true}}],
+                    ['Ultimate','Grave Mischief',1.25,'Single',8,41],['Max','Grave Mischief Max',1.5,'Single',8,51]],
+  squid:           [['Basic','Ink Jet',0.2,'Single',2,1],['Power1','Tentacle Slap',0.4,'Single',4,5],['Power2','Mind Fog',0.6,'AOE',8,21],['Ultimate','Abyssal Gaze',1.25,'Single',8,41,{mindRead:true}],['Max','Abyssal Gaze Max',1.5,'Single',8,51,{mindRead:true}]],
 
   snail:           [['Basic','Roll',0.2,'Single',2,1],['Power1','Molten Gout',0.4,'Single',4,1],
                     ['Power2','Lava Shell',null,'Self',8,18,{shell:{reduce:0.6, thorns:0.5, turns:1}}],
@@ -445,6 +464,51 @@ const MOVES = {
                        wrath:{turns:5, per:0.3, bonus:0.05, bonusCap:0.50, dmgCap:15}}]],
 
   sacred_seed:     [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
+
+  /* --- Region 5: the catacomb ghosts --- */
+  /* Ill Omen: a passive 20% evasion, and cast it for a turn of 66% and a
+     next blow 66% harder. Murder of Crows doubles its birds on the weak. */
+  crow:            [['Basic','Peck',0.25,'Single',2,1],
+                    ['Power1','Wing Flurry',0.15,'Single',4,1,{hits:4}],
+                    ['Power2','Ill Omen',null,'Self',4,18,{passive:{evadeAlways:0.20}, grant:{evadeTurns:1, evadeChance:0.66, omen:0.66}, blockedWhile:'evadeTurns'}],
+                    ['Ultimate','Murder of Crows',0.2,'Single',8,25,{hits:5, execute:{below:0.30, hits:10}}]],
+  /* Bog Lurker: it lurks when it steps on, and the other side moves a step
+     slower for the whole battle. Grave Quake winds up (keeping the Lurk),
+     then falls on everyone. */
+  cyclops:         [['Basic','Stomp',0.3,'Single',2,1],
+                    ['Power1','Evil Eye',0.35,'Single',4,1,{stunHit:0.25}],
+                    ['Power2','Bog Lurker',null,'Passive',0,11,{passive:{lurk:true, bog:true}}],
+                    ['Ultimate','Grave Quake',2.0,'AOE',8,25,{windup:{say:'The ground under {name} begins to heave…'}}]],
+  /* Peekaboo: every attack has an even chance of leaving it Cunning. */
+  ghost:           [['Basic','Boo!',0.25,'Single',2,1,{softenHit:{chance:0.20, amount:0.5}}],
+                    ['Power1','Chill',0.45,'Single',4,1],
+                    ['Power2','Peekaboo',null,'Passive',0,18,{passive:{cunning:{first:0.5, after:0.5}}}],
+                    ['Ultimate','Wail',0.9,'AOE',8,25,{softenHit:{chance:1.0, amount:0.5}}]],
+  /* It burns bright for a turn, then puts itself out on you. */
+  ghost_flame:     [['Basic','Flicker',0.25,'Single',2,1],
+                    ['Power1','Will-o\'-Wisp',0.45,'Single',4,1],
+                    ['Power2','Foxfire',0.6,'AOE',8,18],
+                    ['Ultimate','Extinguish',null,'AOE',8,25,{windup:{name:'Burn Bright', say:'{name} burns brighter and brighter…'}, extinguish:{hpMult:1.5}}]],
+  /* Riposte: Cunning once, and any blow that deals him nothing is answered. */
+  goblin_knight:   [['Basic','Rusted Blade',0.3,'Single',2,1],
+                    ['Power1','Shield Bash',0.45,'Single',4,1,{stunHit:0.20}],
+                    ['Power2','Riposte',null,'Passive',0,21,{passive:{riposte:0.4, cunning:{first:1, after:0}}}],
+                    ['Ultimate','Grave Charge',1.25,'Single',8,41,{first:true, playerBonus:0.2}],
+                    ['Max','Grave Charge Max',1.5,'Single',8,51,{first:true, playerBonus:0.2}]],
+  /* Marionette: Cunning on its first blow for certain, a third of the time
+     after that, and a third of all it deals comes back to it as health. */
+  puppet:          [['Basic','String Lash',0.3,'Single',2,1],
+                    ['Power1','Tangle',0.4,'Single',4,1],
+                    ['Power2','Marionette',null,'Passive',0,21,{passive:{cunning:{first:1, after:0.33}, lifesteal:0.33}}],
+                    ['Ultimate','Shadow Rampage',1.0,'AOE',8,41],
+                    ['Max','Shadow Rampage Max',1.25,'AOE',8,51]],
+  /* Stalk: it lurks on stepping in, and can slip back into hiding. Pounce
+     from hiding lands half as hard again. */
+  horned_lynx:     [['Basic','Pale Claw',0.3,'Single',2,1],
+                    ['Power1','Horn Flash',0.45,'Single',4,1],
+                    ['Power2','Stalk',null,'Self',4,21,{passive:{lurk:true}, grant:{lurk:true, again:true}, blockedWhile:'lurk'}],
+                    ['Ultimate','Pounce',1.25,'Single',8,41,{spendLurk:1.5}],
+                    ['Max','Pounce Max',1.5,'Single',8,51,{spendLurk:1.5}]],
 };
 
 const TYPE_COLORS = {

@@ -240,7 +240,7 @@ function suspectOf(id){
 }
 /* Anything that takes you off the deck notes where to come back to. */
 function leaveDeck(where){
-  releaseKeys();
+  walkTeardown();
   ui.walkBack = walkState().deck;
   go(where);
 }
@@ -333,20 +333,28 @@ function swimTick(){
    nobody's reason but curiosity. Each is claimed once, ever.
    ------------------------------------------------------------ */
 const PRIZE_TOKENS = 10;
-function prizeTaken(deck, i){
-  const g = r4();
+/* Each region keeps its own finds: the ship's in r4(), the catacombs' in r5(). */
+function prizeBook(deck){
+  const d = DECKS[deck];
+  const g = (d && d.region === 5 && typeof r5 === 'function') ? r5() : r4();
   g.found = g.found || {};
-  return !!(g.found[deck] || {})[i];
+  return g.found;
+}
+function prizeTaken(deck, i){
+  return !!(prizeBook(deck)[deck] || {})[i];
 }
 async function takePrize(deck, i){
-  const g = r4();
-  g.found = g.found || {};
-  g.found[deck] = g.found[deck] || {};
-  if(g.found[deck][i]) return;
-  g.found[deck][i] = true;
+  const book = prizeBook(deck);
+  book[deck] = book[deck] || {};
+  if(book[deck][i]) return;
+  book[deck][i] = true;
+  walkTeardown();                         // a floor's guards wait while you look
   state.inventory.skillTokens = (state.inventory.skillTokens || 0) + PRIZE_TOKENS;
   await saveProfile();
-  const total = Object.values(g.found).reduce((n,o)=>n + Object.keys(o).length, 0);
+  const d = DECKS[deck], region = d.region || 4;
+  const total = Object.values(book).reduce((n,o)=>n + Object.keys(o).length, 0);
+  const all = Object.values(DECKS).filter(x=> (x.region || 4) === region)
+                .reduce((n, x)=> n + (x.prizes || []).length, 0);
   /* Nothing about where it was or how it got there — a child who finds one in
      a corridor should not be told they were rummaging in a locker. */
   const OPENERS = [
@@ -359,11 +367,12 @@ async function takePrize(deck, i){
     `Somebody was careless.`,
     `Would you look at that.`,
   ];
+  const lines = d.prizeLines || OPENERS;
   storyModal(tokenIcon(130), 'A find',
-    `${OPENERS[Math.floor(Math.random()*OPENERS.length)]}<br><br>` +
+    `${lines[Math.floor(Math.random()*lines.length)]}<br><br>` +
     `You found <b>${PRIZE_TOKENS} Skill Tokens</b>!<br><br>` +
-    `<i>${total} of 10 found.</i>`,
-    ()=> go(deck), { bg:'sea', subtitle:'The Vane Shear' });
+    `<i>${total} of ${all} found.</i>`,
+    ()=> go(deck), d.region ? { bg:d.bg || 'region5', subtitle:d.title } : { bg:'sea', subtitle:'The Vane Shear' });
 }
 function checkPrize(){
   const w = walkState(), d = DECKS[w.deck];
@@ -375,7 +384,15 @@ function checkPrize(){
   return true;
 }
 function cuainAboard(){ const g = r4(); return !!g.ghostAccepted; }
-const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true : d.rows[y][x]==='#';
+/* '#' wall. The catacombs add '~' water, 'o' a pillar, '*' a brazier, 'c' a
+   stack of crates and 'G' a shut gate — all solid underfoot. Everything else
+   is floor ('.', ',' bones, '=' a bridge). */
+const WALK_SOLID = '#~o*cG';
+const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true : WALK_SOLID.includes(d.rows[y][x]);
+/* A catacomb guard stands on his tile like anybody else. */
+function wOccupied(d, x, y){
+  return !!(d.stealth && typeof stealthOccupied === 'function' && stealthOccupied(d, x, y));
+}
 
 /* ---------- drawing ---------- */
 /* A slow spiral for a monster (or a scientist) seeing stars. */
@@ -464,9 +481,11 @@ function renderWalkDeck(id){
      leave the region and come back — you are put down where the story left
      you, and you stay there until it is finished. The stage is in the save,
      not in ui, so closing the app changes nothing. */
-  const lock = (typeof storyLock === 'function') ? storyLock() : null;
-  if(lock && id !== lock.deck) return renderWalkDeck(lock.deck);
+  walkTeardown();                        // whatever the last deck left running
   const d = DECKS[id]; if(!d) return go('explore');
+  /* Region 4's scene locks belong to the ship; a deck elsewhere ignores them. */
+  const lock = (!d.region && typeof storyLock === 'function') ? storyLock() : null;
+  if(lock && id !== lock.deck) return renderWalkDeck(lock.deck);
   const w = walkState();
   w.deck = id;
   /* The action panel is rebuilt only when what you stand beside changes — so a
@@ -493,12 +512,15 @@ function renderWalkDeck(id){
   ui.walkFresh = false;
   const W = d.rows[0].length, H = d.rows.length;
 
-  setScreenBg('sea');
-  playMusicChain([d.music,'region4','region']);
-  $('#brandSub').textContent = { weather_deck:'Weather Deck', cabin_deck:'Cabin Deck',
+  setScreenBg(d.bg || 'sea');
+  playMusicChain([d.music, 'region' + (d.region || 4), 'region']);
+  $('#brandSub').textContent = d.title || { weather_deck:'Weather Deck', cabin_deck:'Cabin Deck',
                                  laboratory_deck:'Laboratory' }[id];
 
-  const nat = { weather_deck:[797,1209], cabin_deck:[832,1262], laboratory_deck:[832,1262] }[id];
+  /* A deck names its own painting's natural size, or (a catacomb floor) has
+     its painting drawn from its grid at runtime. */
+  const nat = d.nat || { weather_deck:[797,1209], cabin_deck:[832,1262], laboratory_deck:[832,1262] }[id];
+  const artUrl = d.paint ? d.paint(d) : `assets/zones/${d.art}.png`;
   /* fit the view across whatever the stage turns out to be */
   WALK_VIEW = walkView();
   const avail = Math.min(window.innerWidth - 24, Math.max(220, window.innerHeight - 330));
@@ -511,7 +533,7 @@ function renderWalkDeck(id){
       <div class="walk-world" id="walkWorld" style="
         --wt:${WALK_T}px;
         width:${W*WALK_T}px;height:${H*WALK_T}px;
-        background-image:url('assets/zones/${d.art}.png');
+        background-image:url('${artUrl}');
         background-size:${nat[0]*d.bs*WALK_T}px ${nat[1]*d.bs*WALK_T}px;
         background-position:${d.bx*WALK_T}px ${d.by*WALK_T}px;"></div>
     </div>
@@ -526,7 +548,7 @@ function renderWalkDeck(id){
         <div class="walk-acts" id="walkActs"></div>
       </div>
     </div>`;
-  $('#backBtn').addEventListener('click', ()=>{ stopRail(); stopAquarium(); go('explore'); });
+  $('#backBtn').addEventListener('click', ()=>{ walkTeardown(); go('explore'); });
   /* remember where to come back to, so Party does not dump you on the region
      screen with your place on the ship lost */
   $('#walkParty').addEventListener('click', ()=> leaveDeck('party'));
@@ -627,7 +649,8 @@ function renderWalkDeck(id){
                       M14 27 h-8 L20 38 L34 27 h-8"
                    fill="#5fd17c" stroke="#8ee89f" stroke-width="1.4" stroke-linejoin="round"/></svg>`,
   };
-  const stairs = d.things.filter(t=>t.where);
+  /* only the stairs that are there right now (the sea cave opens mid-story) */
+  const stairs = deckThings(d).filter(t=>t.where);
   const seen = new Set();
   stairs.forEach(t=>{
     const key = t.x+','+t.y;
@@ -673,6 +696,17 @@ function renderWalkDeck(id){
      that plays by itself starts itself. */
   if(lock && lock.stage) lock.stage();
   if(lock && lock.auto && !ui.sceneRunning) lock.auto();
+  /* A deck with more going on (the catacombs' guards and their light) sets it
+     up once everything else is in place. */
+  if(d.onRender) d.onRender(world, d);
+}
+/* Everything a deck leaves running — the rail, the aquarium, the catacomb
+   guards' clocks — stopped in one place. Every way off a deck calls this. */
+function walkTeardown(){
+  releaseKeys();
+  stopRail();
+  stopAquarium();
+  if(typeof stopStealth === 'function') stopStealth();
 }
 
 /* The camera follows you until the map runs out. At an edge the map stops and
@@ -708,7 +742,7 @@ function refreshWalk(){
 
   /* a mark on each tile you could step onto — the only question you have */
   steps.innerHTML = '';
-  const lock = (typeof storyLock === 'function') ? storyLock() : null;
+  const lock = (!d.region && typeof storyLock === 'function') ? storyLock() : null;
   if(lock){
     /* Pinned by a scene: no steps to offer, and one button. It is the only
        thing you can do, but it is yours to press. */
@@ -731,7 +765,7 @@ function refreshWalk(){
   [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dx,dy])=>{
     const nx=p.x+dx, ny=p.y+dy;
     if(wSolid(d,nx,ny)) return;
-    if(wBlockedBy(d, nx, ny)) return;
+    if(wBlockedBy(d, nx, ny) || wOccupied(d, nx, ny)) return;
     const i=document.createElement('i');
     i.style.left=(nx*WALK_T+WALK_T/2)+'px'; i.style.top=(ny*WALK_T+WALK_T/2)+'px';
     steps.appendChild(i);
@@ -756,7 +790,12 @@ function refreshWalk(){
     b.className = 'wact live ghost';
     b.innerHTML = monPortrait('whalelord', 34, { view:'front', bare:true }) +
                   `<span>Talk to<br>Whalelord’s Ghost</span>`;
-    b.addEventListener('click', ()=>{ if(!walkState().busy) ghostChat(walkState().deck); });
+    /* a deck elsewhere (Cosa Nostia) gives him its own things to say */
+    b.addEventListener('click', ()=>{
+      if(walkState().busy) return;
+      const here = walkState().deck, dk = DECKS[here];
+      if(dk && dk.ghostChat) dk.ghostChat(here); else ghostChat(here);
+    });
     acts.appendChild(b);
   }
   if(!near.length && !cuainAboard()){
@@ -792,7 +831,7 @@ function walkMove(dir){
   w.last = now;
   const v = { l:[-1,0], r:[1,0], u:[0,-1], d:[0,1] }[dir];
   const nx = p.x+v[0], ny = p.y+v[1];
-  const blocked = wBlockedBy(d, nx, ny);
+  const blocked = wBlockedBy(d, nx, ny) || wOccupied(d, nx, ny);
   if(!wSolid(d,nx,ny) && !blocked){
     /* he takes the tile you are leaving — always one behind, never on top */
     if(cuainAboard()){
@@ -805,6 +844,9 @@ function walkMove(dir){
       refreshWalk();                  // draw the step BEFORE the window opens
       return;
     }
+    refreshWalk();
+    if(d.onStep && d.onStep(p, d)) releaseKeys();   // a guard saw you, a ghost found you
+    return;
   }
   else {
     const me = $('#walkYou');
@@ -840,7 +882,7 @@ function wireWalkKeys(){
 /* ---------- moving between decks ---------- */
 function goDeck(id){
   const w = walkState();
-  releaseKeys();
+  walkTeardown();
   w.busy = true;
   tileWipe(()=>{ w.busy = false; go(id); });
 }

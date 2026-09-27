@@ -13,6 +13,8 @@ const REGIONS = [
     unlocked:()=>!!(state.progress.region2||{}).cavernDone },
   { id:4, name:'The North Sea', desc:'A working ship, and something under it.',
     unlocked:()=>!!(state.progress.region3||{}).shipPass },
+  { id:5, name:'Cosa Nostia', desc:'A harbour town the Family runs, and the dead beneath it.',
+    unlocked:()=> typeof region5Ready === 'function' && region5Ready() },
 ];
 
 function renderRegionSelect(){
@@ -58,6 +60,9 @@ function renderZone(){
   if(z.id === 'laboratory_deck')  { ui.walkFresh = true; return renderLaboratoryDeck(); }
   if(z.id === 'plant_generator') return renderGenerator();
   if(z.id === 'vane_shear') return vaneShearClosed();
+  /* Region 5: the harbour is walked; the catacombs pick a floor */
+  if(z.id === 'harbour')   return renderHarbourZone();
+  if(z.id === 'catacombs') return renderCatacombs();
   return renderZonePlain();
 }
 
@@ -128,6 +133,7 @@ function renderExplore(){
   const zones = REGION_ZONES[state.progress.currentRegion] || [];
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Region</button>
+    ${(state.progress.currentRegion === 4 && typeof expeditionBar === 'function') ? expeditionBar(true) : ''}
 
     <div class="explore-avatar">
       ${playerAvatar() ? avatarImg(playerAvatar(), exploreAvatarSize(), { bare:true, cls:'hero-avatar' })
@@ -152,6 +158,7 @@ function renderExplore(){
             (z.locksUntil==='r3MonkeyMet' && !r3.monkeyMet) ||
             (z.locksUntil==='r3PowerStone' && !r3.powerStone) ||
             (z.locksUntil==='r4Blocked' && !(state.progress.region4||{}).wallFound) ||
+            (z.locksUntil==='r5Catacombs' && !(state.progress.region5||{}).gateBeaten) ||
             (z.locksUntil==='never');
           return `
           <div class="zone-item">
@@ -333,8 +340,12 @@ function renderSpellingManage(){
     const res = addWords(lines);
     $('#newWords').value='';
     await saveWordlist();
-    $('#addStatus').textContent = `Added ${res.added}${res.skipped?`, skipped ${res.skipped} duplicate(s)`:''}.`;
+    const msg = `Added ${res.added}` +
+      (res.skipped ? `. ${res.skipped} ${res.skipped===1?'was':'were'} already on the list, and keep${res.skipped===1?'s':''} ${res.skipped===1?'its':'their'} progress.` : '.');
     renderSpellingManage();
+    /* after the redraw — written before it, the message was wiped at once */
+    const as = $('#addStatus'); if(as) as.textContent = msg;
+    const dt = document.querySelector('#addStatus') && document.querySelector('#addStatus').closest('details'); if(dt) dt.open = true;
   });
   $('#exportBtn').addEventListener('click', ()=>{
     const stamp = new Date().toISOString().slice(0,10);
@@ -348,8 +359,11 @@ function renderSpellingManage(){
       const lines = text.split('\n').map(s=>s.trim()).filter(Boolean);
       const res = addWords(lines);
       await saveWordlist();
-      $('#importStatus').textContent = `Imported ${res.added} new word(s), skipped ${res.skipped} duplicate(s).`;
+      const msg = `Imported ${res.added} new word(s)` +
+        (res.skipped ? `; ${res.skipped} already on the list keep their progress.` : '.');
       renderSpellingManage();
+      const is = $('#importStatus'); if(is) is.textContent = msg;
+      const dt = is && is.closest('details'); if(dt) dt.open = true;
     }catch(err){ $('#importStatus').textContent = "Couldn't read that file."; }
     e.target.value='';
   });
@@ -372,6 +386,21 @@ function masteryBadge(text){
     <span class="mst-num">${n}${next?'/'+next:''}</span>`;
 }
 
+/* A list's size in phrases, and how many of them are repeats — listed twice
+   in it, or in another list too. Repeats share one record (see REPEATS). */
+function listCountLabel(key){
+  const words = listWords[key] || [];
+  const uniq = [...new Set(words)];
+  const shared = uniq.filter(w=> phraseRepeats(w) > 1).length;
+  return uniq.length + (shared ? ` · ${shared} repeat${shared===1?'':'s'}` : '');
+}
+/* Where a repeated phrase is listed, e.g. "P2_02 ×2 · P2TH_04". */
+function repeatNote(text){
+  const where = phraseWhere[phraseKey(text)] || [];
+  if(where.reduce((n, x)=> n + x.n, 0) < 2) return '';
+  return where.map(x=> escapeHtml(x.key) + (x.n > 1 ? ' ×' + x.n : '')).join(' · ');
+}
+
 /* Per-profile list selection, grouped by level (K1 / P1 / P2 …). */
 function renderListFilter(){
   const el = $('#listFilter');
@@ -389,7 +418,7 @@ function renderListFilter(){
       ${byLevel[lv].map(l=>`
         <label class="lf-item ${sel.has(l.key)?'on':''}">
           <input type="checkbox" data-list="${escapeHtml(l.key)}" ${sel.has(l.key)?'checked':''}>
-          <span>${escapeHtml(l.label)} <span class="lf-count">${(listWords[l.key]||[]).length}</span></span>
+          <span>${escapeHtml(l.label)} <span class="lf-count">${listCountLabel(l.key)}</span></span>
         </label>`).join('')}
     </div>`).join('');
   el.querySelectorAll('[data-list]').forEach(cb=>cb.addEventListener('change', async ()=>{
@@ -411,7 +440,8 @@ function renderWordRows(){
   container.innerHTML = wordRows().map(w=>`
     <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--paper-2);border:1px solid var(--line);border-radius:10px;margin-bottom:6px;">
       <div style="flex:1;min-width:0;">
-        <div style="font-family:'Noto Sans SC';font-weight:700;font-size:16px;">${escapeHtml(w.text)}${w.isRemote?'':' <span style="font-size:10px;color:var(--ink-soft);font-family:Nunito;">local</span>'}</div>
+        <div style="font-family:'Noto Sans SC';font-weight:700;font-size:16px;">${escapeHtml(w.text)}${w.isRemote?'':' <span style="font-size:10px;color:var(--ink-soft);font-family:Nunito;">local</span>'}${
+          repeatNote(w.text) ? ` <span class="rep-note" title="Listed more than once: one phrase, one progress, one set of medals">↻ ${repeatNote(w.text)}</span>` : ''}</div>
         <div class="mastery-line">${masteryBadge(w.text)}</div>
       </div>
       <button class="tagbtn ${w.priority?'on-p':''}" data-p="${escapeHtml(w.text)}">P</button>
