@@ -1232,6 +1232,9 @@
   .lf-item.on{border-color:var(--cinnabar);background:#fbf3e2;}
   .lf-item input{accent-color:var(--cinnabar);}
   .lf-count{font-size:10px;color:var(--ink-soft);font-weight:700;}
+  /* a phrase listed more than once: where, in small print (one progress for all) */
+  .rep-note{font-family:Nunito,sans-serif;font-size:10px;font-weight:800;color:#6a5a8a;
+    background:rgba(106,90,138,.12);border-radius:8px;padding:1px 6px;white-space:nowrap;vertical-align:middle;}
 
   /* ---- evolution sequence ---- */
   .evo-overlay{
@@ -1555,6 +1558,13 @@
   .status-pill{font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;}
   .status-pill.mine{background:rgba(47,143,111,0.18);color:var(--jade-dark);}
   .status-pill.foe{background:rgba(200,69,58,0.15);color:var(--cinnabar-dark);}
+  /* A lurker is barely there; a cunning one flickers at the edge of sight. */
+  .bob.lurking .mon-portrait{opacity:.22;filter:saturate(.3) brightness(.8);transition:opacity .5s;}
+  .bob.cunning .mon-portrait{animation:cunningFlicker 1.6s ease-in-out infinite;}
+  @keyframes cunningFlicker{0%,100%{opacity:.55}50%{opacity:.25}}
+  .foe-side-row{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;min-height:0;position:relative;z-index:10;}
+  .foe-side-row:empty{display:none;}
+  .foe-side-row .status-pill{font-size:9px;padding:2px 7px;background:rgba(200,69,58,0.22);}
   .move-btn.ultra-btn{background:linear-gradient(135deg,var(--cinnabar),var(--gold));box-shadow:0 4px 0 var(--cinnabar-dark);grid-column:1/-1;}
   .move-btn.ultra-btn.locked{background:var(--paper-3);box-shadow:none;}
   body.ultra-invert{filter:invert(1) hue-rotate(180deg);transition:filter .12s;}
@@ -1610,6 +1620,8 @@
   <script src="js/10-story-r3.js"></script>
   <script src="js/12-story-r4.js"></script>
   <script src="js/13-walkmap.js"></script>
+  <script src="js/14-stealth.js"></script>
+  <script src="js/15-region5.js"></script>
   <script src="js/11-app.js"></script>
 
 </body>
