@@ -18,13 +18,24 @@
    Part one:
      the harbour     walked, like the ship's decks. Townsfolk, services, and
                      a soldato at the sea cave who has to be beaten.
-     the catacombs   four floors, walked in the dark (14-stealth.js)
-       The Landing     fight floor · two soldatos · the dead in the dark
+     the catacombs   four floors, walked in the dark (14-stealth.js), each
+                     with two side rooms off it, one through the other (2.72)
+       The Landing     fight floor · three soldatos and a lookout
+                       → The Counting Room → The Old Ossuary
        The Cistern     fight floor · the Black Capo on the bridge (optional)
+                       → The Pump Room → The Drowned Chapel
        The Bone Halls  evade floor · far too many to fight
+                       → The Charnel House → The Skull Wall (fight rooms)
        The Long Stair  fight floor · the Purple Capo at the bottom, before a
-                       gate barred from the other side. Beating her ends part one.
+                       gate barred from the other side. Beating him ends part one.
+                       → The Barracks → The Armoury
+   Every fight floor and every side room has at least three soldatos and a
+   lookout. Beaten, they stay away for the rest of the day; each new day the
+   Family regroups and every post is manned again. The capos stay beaten.
    Both capos are the ones from Region 2's caverns, sent down here since.
+   Everyone the Family sends is a man.
+   Beyond the Long Stair's gate the Whalelord feels far too many soldiers to
+   fight through: the deeper floors stay sealed until the story opens them.
    ------------------------------------------------------------ */
 
 function r5(){
@@ -111,8 +122,9 @@ const R5_DECKS = {
     ghostChat:(id)=> r5GhostChat(id),
   },
 
-  /* ---- 1. THE LANDING: where the Family unloads. Crates, one soldato
-     walking the middle aisle, and a lookout in the pillared hall below. ---- */
+  /* ---- 1. THE LANDING: where the Family unloads. Crates, soldatos walking
+     the aisles, and a lookout in the pillared hall below. A door in the
+     hall's west wall leads to the Counting Room. ---- */
   cata_landing: {
     key:'cata_landing', region:5, title:'The Landing', bg:'catacombs', music:'zone_catacombs',
     bx:0, by:0, bs:1/32, nat:[21*32, 28*32],
@@ -122,21 +134,24 @@ const R5_DECKS = {
 "###...............###","#.#.cc.cc...cc.cc.###","#.#.cc.cc...cc.cc.###","#.................###",
 "#,#.cc.cc...cc.cc.###","###.cc.cc...cc.cc.###","###...............###","##########.########.#",
 "##########.########,#","###.................#","###.######.######.###","###.######.######.###",
-"###...............###","###.o...o...o...o.###","##*...............*##","###.o...o...o...o.###",
+"#.................###","###.o...o...o...o.###","##*...............*##","###.o...o...o...o.###",
 "###...............###","##########.##########","##########.##########","#####################",
     ],
     spawn:[10,1],
-    arrive:{ top:[10,1], bottom:[10,26] },
+    arrive:{ top:[10,1], bottom:[10,26], r1:[1,20] },
     prizes:[[1,9],[19,15]],
     things:[
       { x:10, y:1,  walk:true, verb:'Up',   where:'The Harbour', act:()=> goFloor('harbour','cave') },
       { x:10, y:26, walk:true, verb:'Down', where:'The Cistern', act:()=> goFloor('cata_cistern','top') },
+      { x:1,  y:20, walk:true, verb:'Through', where:'The Counting Room', arrow:'left', act:()=> goFloor('cata_landing_r1','top') },
     ],
     stealth:{ kind:'fight', sense:2, feel:4,
       intro:()=> r5DarkIntro(),
       guards:[
         { id:'a', kind:'soldato', path:[[3,11],[17,11]], face:'r', clock:600, pause:3, roster:'landing_a', sprite:'soldato1' },
-        { id:'b', kind:'lookout', x:10, y:22, face:'u', clock:640, pause:4, roster:'landing_b', sprite:'soldato2' },
+        { id:'b', kind:'lookout', x:10, y:22, face:'u', spin:'cw', clock:640, pause:4, roster:'landing_b', sprite:'soldato2' },
+        { id:'c', kind:'soldato', path:[[17,14],[3,14]], face:'l', clock:620, pause:3, roster:'landing_c', sprite:'soldato2' },
+        { id:'d', kind:'soldato', path:[[3,17],[19,17]], face:'r', clock:580, pause:3, roster:'landing_d', sprite:'soldato1' },
       ],
       wild:{ rate:0.035, size:2, lv:[76,82],
         table:[{sp:'crow',w:3},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:1}] } },
@@ -147,7 +162,8 @@ const R5_DECKS = {
   },
 
   /* ---- 2. THE CISTERN: black water, plank bridges, and nothing to stop a
-     lantern's light. The Black Capo holds the bridge; the rims go round him. ---- */
+     lantern's light. The Black Capo holds the bridge; the rims go round him.
+     The lower walk runs east to the Pump Room. ---- */
   cata_cistern: {
     key:'cata_cistern', region:5, title:'The Cistern', bg:'catacombs', music:'zone_catacombs',
     bx:0, by:0, bs:1/32, nat:[25*32, 27*32],
@@ -156,16 +172,17 @@ const R5_DECKS = {
 "#.~~o~~~~~~~=~~~~~~~o~~.#","#.~~~~~~~~~~=~~~~~~~~~~.#","#.~~~~~~~~~~=~~~~~~~~~~.#","#.~~o~~~~~~~=~~~~~~~o~~.#",
 "#.~~~~~~~~~~=~~~~~~~~~~.#","#.~~~~~~~~~~=~~~~~~~~~~.#","#.......................#","#####.###########.#######",
 "##,...###########...#####","###.~~~~~~~~~~~~~~~.,####","###.~~o~~~~~~~~~o~~.#####","###.~~~~~~~~~~~~~~~.#####",
-"###.===============.#####","###.~~~~~~~~~~~~~~~.#####","###.~~o~~~~~~~~~o~~.#####","###.................#####",
+"###.===============.#####","###.~~~~~~~~~~~~~~~.#####","###.~~o~~~~~~~~~o~~.#####","###...................###",
 "##########.##############","##########.##############","#########...#############","#########.,.#############",
 "#########...#############","##########.##############","#########################",
     ],
     spawn:[1,1],
-    arrive:{ top:[1,1], bottom:[10,25] },
+    arrive:{ top:[1,1], bottom:[10,25], r1:[21,19] },
     prizes:[[2,12],[20,13]],
     things:[
       { x:1,  y:1,  walk:true, verb:'Up',   where:'The Landing',    act:()=> goFloor('cata_landing','bottom') },
       { x:10, y:25, walk:true, verb:'Down', where:'The Bone Halls', act:()=> goFloor('cata_bones','top') },
+      { x:21, y:19, walk:true, verb:'Through', where:'The Pump Room', arrow:'right', act:()=> goFloor('cata_cistern_r1','top') },
     ],
     stealth:{ kind:'fight', sense:2, feel:4,
       first:`<b>"Their lanterns shine a long way here. There is nothing down here to stop the light."</b><br><br>` +
@@ -174,6 +191,8 @@ const R5_DECKS = {
         { id:'capo', kind:'capo', x:12, y:10, face:'u', clock:700, roster:'capo_black', sprite:'capo_black' },
         { id:'a', kind:'soldato', path:[[23,2],[23,10]], face:'d', clock:560, pause:3, roster:'cistern_a', sprite:'soldato2' },
         { id:'b', kind:'soldato', path:[[4,19],[19,19]], face:'r', clock:620, pause:3, roster:'cistern_b', sprite:'soldato1' },
+        { id:'c', kind:'soldato', path:[[1,4],[1,10]], face:'d', clock:600, pause:3, roster:'cistern_c', sprite:'soldato1' },
+        { id:'l', kind:'lookout', x:19, y:15, face:'d', spin:'cw', clock:660, pause:4, roster:'cistern_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.04, size:3, lv:[78,84],
         table:[{sp:'crow',w:2},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1}] } },
@@ -184,13 +203,14 @@ const R5_DECKS = {
   },
 
   /* ---- 3. THE BONE HALLS: narrow, and full of them. Far too many to fight:
-     caught is caught, and a round of spelling buys another go. Every one of
-     them can be got past (tools/region5-test.js proves it). ---- */
+     caught is caught, and ten phrases buy another go. Every one of them can
+     be got past (tools/floor-bench.js proves it, from every way in to every
+     way out). A burial niche off the top hall opens on the Charnel House. ---- */
   cata_bones: {
     key:'cata_bones', region:5, title:'The Bone Halls', bg:'catacombs', music:'zone_catacombs',
     bx:0, by:0, bs:1/32, nat:[23*32, 24*32],
     rows:[
-"#######################","###########.###########","###########.###########","###.##.###...###.##.###",
+"#######################","###########.###########","###.#######.###########","###.##.###...###.##.###",
 "###.##.###.,.###.##.###","#.....................#","###################.###","###################.###",
 "##############,.....###","###########.##......###","###########.##......###","###########.##......###",
 "###########.##.,....###","#####...............###","#####.#####.###########","#####.#####.###########",
@@ -198,22 +218,26 @@ const R5_DECKS = {
 "#################.#####","#################.#####","#################.#####","#######################",
     ],
     spawn:[11,1],
-    arrive:{ top:[11,1], bottom:[17,22] },
+    arrive:{ top:[11,1], bottom:[17,22], r1:[3,2] },
     prizes:[[14,8]],
     things:[
       { x:11, y:1,  walk:true, verb:'Up',   where:'The Cistern',    act:()=> goFloor('cata_cistern','bottom') },
       { x:17, y:22, walk:true, verb:'Down', where:'The Long Stair', act:()=> goFloor('cata_stair','top') },
+      { x:3,  y:2,  walk:true, verb:'Through', where:'The Charnel House', arrow:'up', act:()=> goFloor('cata_bones_r1','top') },
     ],
-    stealth:{ kind:'evade', sense:2, feel:4, retryWords:8,
-      first:`<b>"So many of them. Far too many to fight."</b><br><br>` +
-            `<b>"If they see us here, we run. Watch their lanterns, wait for your moment, and do not let them see you at all."</b>`,
+    stealth:{ kind:'evade', feel:4, retryPhrases:10,
+      first:`<b>"Wait. Stop here a moment."</b><br><br>` +
+            `<b>"I can feel them all through this floor. So many of them. Far too many to fight."</b>`,
+      warn:`<b>"If they catch you here, they will not come one at a time. Every one of them on this floor will come running, and there will be nowhere left to go."</b><br><br>` +
+           `<b>"Watch their lanterns, wait for your moment, and do not let them see you at all."</b>`,
+      again:`<b>"Careful. I can feel far too many of them on this floor. If one of them sees you, they will all come."</b>`,
       guards:[
         { id:'a',  kind:'soldato', path:[[1,5],[21,5]],   face:'r', clock:600, pause:3, sprite:'soldato1' },
-        { id:'l1', kind:'lookout', x:16, y:10, face:'r', faces:['r','l'], clock:640, pause:5, sprite:'soldato2' },
+        { id:'l1', kind:'lookout', x:16, y:10, face:'r', spin:'cw',  clock:640, pause:5, sprite:'soldato2' },
         { id:'b',  kind:'soldato', path:[[11,9],[11,15]], face:'d', clock:620, pause:3, sprite:'soldato2' },
         { id:'t1', kind:'talker',  x:8,  y:19, face:'r', sprite:'soldato1' },
         { id:'t2', kind:'talker',  x:12, y:19, face:'l', sprite:'soldato2' },
-        { id:'l2', kind:'lookout', x:18, y:17, face:'l', faces:['l','d'], clock:580, pause:5, sprite:'soldato1' },
+        { id:'l2', kind:'lookout', x:18, y:17, face:'l', spin:'ccw', clock:580, pause:5, sprite:'soldato1' },
       ] },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
@@ -221,15 +245,16 @@ const R5_DECKS = {
     ghostChat:(id)=> r5GhostChat(id),
   },
 
-  /* ---- 4. THE LONG STAIR: a great gallery going down, two soldatos
-     crossing it, and the Purple Capo at the bottom before a barred gate. ---- */
+  /* ---- 4. THE LONG STAIR: a great gallery going down, soldatos crossing
+     it, a lookout near the bottom, and the Purple Capo before a barred gate.
+     A passage off the top of the gallery leads to the Barracks. ---- */
   cata_stair: {
     key:'cata_stair', region:5, title:'The Long Stair', bg:'catacombs', music:'zone_catacombs',
     bx:0, by:0, bs:1/32, nat:[17*32, 31*32],
     rows:[
 "#################","########.########","########.########","#####.......#####",
 "####*.......*####","#####.......#####","#####.......#####","########.########",
-"###...........###","###...........###","###..o.....o..###","#,............###",
+"###...........###","###.............#","###..o.....o..###","#,............###",
 "###...........###","###...........###","###..o.....o..###","###............,#",
 "##*...........###","###...........###","###..o.....o..###","###...........###",
 "#,............*##","###...........###","###..o.....o..###","###...........###",
@@ -237,10 +262,11 @@ const R5_DECKS = {
 "########G########","#################","#################",
     ],
     spawn:[8,1],
-    arrive:{ top:[8,1] },
+    arrive:{ top:[8,1], r1:[15,9] },
     prizes:[[1,11],[15,15]],
     things:[
       { x:8, y:1,  walk:true, verb:'Up', where:'The Bone Halls', act:()=> goFloor('cata_bones','bottom') },
+      { x:15, y:9, walk:true, verb:'Through', where:'The Barracks', arrow:'right', act:()=> goFloor('cata_stair_r1','top') },
       { x:8, y:28, verb:'The gate', act:()=> r5SealedGate() },
     ],
     stealth:{ kind:'fight', sense:2, feel:4,
@@ -248,6 +274,8 @@ const R5_DECKS = {
       guards:[
         { id:'a', kind:'soldato', path:[[3,12],[13,12]], face:'r', clock:580, pause:3, roster:'stair_a', sprite:'soldato1' },
         { id:'b', kind:'soldato', path:[[13,20],[3,20]], face:'l', clock:620, pause:3, roster:'stair_b', sprite:'soldato2' },
+        { id:'c', kind:'soldato', path:[[3,17],[13,17]], face:'r', clock:600, pause:3, roster:'stair_c', sprite:'soldato1' },
+        { id:'l', kind:'lookout', x:8, y:23, face:'l', spin:'ccw', clock:640, pause:4, roster:'stair_l', sprite:'soldato2' },
         { id:'capo', kind:'capo', x:8, y:26, face:'u', clock:700, roster:'capo_purple', sprite:'capo_purple' },
       ],
       wild:{ rate:0.04, size:3, lv:[80,86],
@@ -258,14 +286,274 @@ const R5_DECKS = {
     onStep:(p, d)=> stealthStep(p, d),
     ghostChat:(id)=> r5GhostChat(id),
   },
+
+  /* ============================================================
+     THE SIDE ROOMS (2.72): two off every floor, one through the other —
+     floor → room 1 → room 2. Each has three soldatos and a lookout, and
+     its own ghosts in the dark, a little stronger the deeper it is.
+     A room's `top` is the door you come in by; `bottom` the door on.
+     ============================================================ */
+
+  /* ---- The Counting Room: the Family counts its crates here, and counts them again. A fight room off The Landing. ---- */
+  cata_landing_r1: {
+    key:'cata_landing_r1', region:5, title:"The Counting Room", room:true, bg:'catacombs', music:'zone_catacombs',
+    bx:0, by:0, bs:1/32, nat:[19*32, 13*32],
+    rows:[
+"###################","#*.c...........c.*#","#..c..cc...cc..c..#","#.................#",
+"#.cc..cc...cc..cc.#","#.................#","...................","#.................#",
+"#.cc..cc...cc..cc.#","#.................#","#..c..cc...cc..c..#","#*.c...........c.*#",
+"###################",
+    ],
+    spawn:[18,6],
+    arrive:{ top:[18,6], bottom:[0,6] },
+    things:[
+      { x:18, y:6, walk:true, verb:'Through', where:"The Landing", arrow:'right', act:()=> goFloor('cata_landing','r1') },
+      { x:0, y:6, walk:true, verb:'Through', where:"The Old Ossuary", arrow:'left', act:()=> goFloor('cata_landing_r2','top') },
+    ],
+    stealth:{ kind:'fight', feel:4,
+      guards:[
+        { id:'a', kind:'soldato', path:[[1,3],[17,3]], face:'r', clock:600, pause:3, roster:'lr1_a', sprite:'soldato1' },
+        { id:'b', kind:'soldato', path:[[17,9],[1,9]], face:'l', clock:640, pause:3, roster:'lr1_b', sprite:'soldato2' },
+        { id:'c', kind:'soldato', path:[[9,4],[9,8]], face:'d', clock:560, pause:4, roster:'lr1_c', sprite:'soldato1' },
+        { id:'l', kind:'lookout', x:4, y:6, face:'u', spin:'cw', clock:620, pause:4, roster:'lr1_l', sprite:'soldato2' },
+      ],
+      wild:{ rate:0.035, size:2, lv:[80,86],
+        table:[{sp:'crow',w:3},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:1}] } },
+    paint:(d)=> paintCatacomb(d),
+    onRender:(world, d)=> r5FloorRender(world, d),
+    onStep:(p, d)=> stealthStep(p, d),
+    ghostChat:(id)=> r5GhostChat(id),
+  },
+
+  /* ---- The Old Ossuary: the oldest dead in the hill, stacked to the roof. A fight room off The Counting Room. ---- */
+  cata_landing_r2: {
+    key:'cata_landing_r2', region:5, title:"The Old Ossuary", room:true, bg:'catacombs', music:'zone_catacombs',
+    bx:0, by:0, bs:1/32, nat:[17*32, 13*32],
+    rows:[
+"#################","#,..o...,...o..,#","#...............#","#.o..###.###..o.#",
+"#....#.....#....#","#....#..*..#....#","#...............#","#....#.....#.....",
+"#....###.###....#","#.o...........o.#","#...............#","#,..o...,...o..,#",
+"#################",
+    ],
+    spawn:[16,7],
+    arrive:{ top:[16,7] },
+    things:[
+      { x:16, y:7, walk:true, verb:'Through', where:"The Counting Room", arrow:'right', act:()=> goFloor('cata_landing_r1','bottom') },
+    ],
+    stealth:{ kind:'fight', feel:4,
+      guards:[
+        { id:'a', kind:'soldato', path:[[1,2],[15,2]], face:'r', clock:620, pause:3, roster:'lr2_a', sprite:'soldato1' },
+        { id:'b', kind:'soldato', path:[[15,10],[1,10]], face:'l', clock:580, pause:3, roster:'lr2_b', sprite:'soldato2' },
+        { id:'c', kind:'soldato', path:[[3,3],[3,9]], face:'d', clock:660, pause:3, roster:'lr2_c', sprite:'soldato1' },
+        { id:'l', kind:'lookout', x:8, y:7, face:'d', spin:'ccw', clock:600, pause:4, roster:'lr2_l', sprite:'soldato2' },
+      ],
+      wild:{ rate:0.035, size:2, lv:[82,88],
+        table:[{sp:'crow',w:3},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:1}] } },
+    paint:(d)=> paintCatacomb(d),
+    onRender:(world, d)=> r5FloorRender(world, d),
+    onStep:(p, d)=> stealthStep(p, d),
+    ghostChat:(id)=> r5GhostChat(id),
+  },
+
+  /* ---- The Pump Room: the old pumps that kept the cistern from filling. A fight room off The Cistern. ---- */
+  cata_cistern_r1: {
+    key:'cata_cistern_r1', region:5, title:"The Pump Room", room:true, bg:'catacombs', music:'zone_catacombs',
+    bx:0, by:0, bs:1/32, nat:[19*32, 13*32],
+    rows:[
+"###################","#.......~~~.......#","#.cc....~~~....cc.#","#.cc....===....cc.#",
+"#.......~~~.......#","#...o...~~~...o...#","........===........","#...o...~~~...o...#",
+"#.......~~~.......#","#.cc....===....cc.#","#.cc....~~~....cc.#","#.......~~~.......#",
+"###################",
+    ],
+    spawn:[0,6],
+    arrive:{ top:[0,6], bottom:[18,6] },
+    things:[
+      { x:0, y:6, walk:true, verb:'Through', where:"The Cistern", arrow:'left', act:()=> goFloor('cata_cistern','r1') },
+      { x:18, y:6, walk:true, verb:'Through', where:"The Drowned Chapel", arrow:'right', act:()=> goFloor('cata_cistern_r2','top') },
+    ],
+    stealth:{ kind:'fight', feel:4,
+      guards:[
+        { id:'a', kind:'soldato', path:[[5,1],[5,11]], face:'d', clock:600, pause:3, roster:'cr1_a', sprite:'soldato1' },
+        { id:'b', kind:'soldato', path:[[13,11],[13,1]], face:'u', clock:640, pause:3, roster:'cr1_b', sprite:'soldato2' },
+        { id:'c', kind:'soldato', path:[[7,6],[11,6]], face:'r', clock:560, pause:4, roster:'cr1_c', sprite:'soldato1' },
+        { id:'l', kind:'lookout', x:9, y:3, face:'d', spin:'cw', clock:620, pause:4, roster:'cr1_l', sprite:'soldato2' },
+      ],
+      wild:{ rate:0.035, size:2, lv:[82,88],
+        table:[{sp:'crow',w:2},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1}] } },
+    paint:(d)=> paintCatacomb(d),
+    onRender:(world, d)=> r5FloorRender(world, d),
+    onStep:(p, d)=> stealthStep(p, d),
+    ghostChat:(id)=> r5GhostChat(id),
+  },
+
+  /* ---- The Drowned Chapel: a chapel the water took, pews and all. A fight room off The Pump Room. ---- */
+  cata_cistern_r2: {
+    key:'cata_cistern_r2', region:5, title:"The Drowned Chapel", room:true, bg:'catacombs', music:'zone_catacombs',
+    bx:0, by:0, bs:1/32, nat:[17*32, 13*32],
+    rows:[
+"#################","#~~~~~~...~~~~~~#","#~~.....*.....~~#","#~.............~#",
+"#~.cc.cc.cc.cc.~#","#~.............~#","...............~#","#~.cc.cc.cc.cc.~#",
+"#~.............~#","#~.o...o.o...o.~#","#~~...........~~#","#~~~~~~~~~~~~~~~#",
+"#################",
+    ],
+    spawn:[0,6],
+    arrive:{ top:[0,6] },
+    things:[
+      { x:0, y:6, walk:true, verb:'Through', where:"The Pump Room", arrow:'left', act:()=> goFloor('cata_cistern_r1','bottom') },
+    ],
+    stealth:{ kind:'fight', feel:4,
+      guards:[
+        { id:'a', kind:'soldato', path:[[2,3],[14,3]], face:'r', clock:620, pause:3, roster:'cr2_a', sprite:'soldato1' },
+        { id:'b', kind:'soldato', path:[[14,8],[2,8]], face:'l', clock:580, pause:3, roster:'cr2_b', sprite:'soldato2' },
+        { id:'c', kind:'soldato', path:[[3,10],[13,10]], face:'r', clock:660, pause:3, roster:'cr2_c', sprite:'soldato1' },
+        { id:'l', kind:'lookout', x:10, y:6, face:'l', spin:'ccw', clock:600, pause:4, roster:'cr2_l', sprite:'soldato2' },
+      ],
+      wild:{ rate:0.035, size:2, lv:[84,90],
+        table:[{sp:'crow',w:2},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1}] } },
+    paint:(d)=> paintCatacomb(d),
+    onRender:(world, d)=> r5FloorRender(world, d),
+    onStep:(p, d)=> stealthStep(p, d),
+    ghostChat:(id)=> r5GhostChat(id),
+  },
+
+  /* ---- The Charnel House: where the bones were brought to be sorted. A fight room off The Bone Halls. ---- */
+  cata_bones_r1: {
+    key:'cata_bones_r1', region:5, title:"The Charnel House", room:true, bg:'catacombs', music:'zone_catacombs',
+    bx:0, by:0, bs:1/32, nat:[17*32, 13*32],
+    rows:[
+"########.########","#,.....#.#.....,#","#......#.#......#","#..o...#.#...o..#",
+"#...............#","#,.............,#","###..o.....o..###","#...............#",
+"#,.............,#","#..o.........o..#","#......#.#......#","#,.....#.#.....,#",
+"########.########",
+    ],
+    spawn:[8,12],
+    arrive:{ top:[8,12], bottom:[8,0] },
+    things:[
+      { x:8, y:12, walk:true, verb:'Through', where:"The Bone Halls", arrow:'down', act:()=> goFloor('cata_bones','r1') },
+      { x:8, y:0, walk:true, verb:'Through', where:"The Skull Wall", arrow:'up', act:()=> goFloor('cata_bones_r2','top') },
+    ],
+    stealth:{ kind:'fight', feel:4,
+      guards:[
+        { id:'a', kind:'soldato', path:[[1,4],[15,4]], face:'r', clock:600, pause:3, roster:'br1_a', sprite:'soldato1' },
+        { id:'b', kind:'soldato', path:[[15,7],[1,7]], face:'l', clock:640, pause:3, roster:'br1_b', sprite:'soldato2' },
+        { id:'c', kind:'soldato', path:[[4,9],[12,9]], face:'r', clock:560, pause:3, roster:'br1_c', sprite:'soldato1' },
+        { id:'l', kind:'lookout', x:8, y:5, face:'u', spin:'cw', clock:620, pause:4, roster:'br1_l', sprite:'soldato2' },
+      ],
+      wild:{ rate:0.035, size:2, lv:[84,90],
+        table:[{sp:'ghost',w:3},{sp:'crow',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin_knight',w:1,plus:2}] } },
+    paint:(d)=> paintCatacomb(d),
+    onRender:(world, d)=> r5FloorRender(world, d),
+    onStep:(p, d)=> stealthStep(p, d),
+    ghostChat:(id)=> r5GhostChat(id),
+  },
+
+  /* ---- The Skull Wall: a wall of skulls, every one of them watching. A fight room off The Charnel House. ---- */
+  cata_bones_r2: {
+    key:'cata_bones_r2', region:5, title:"The Skull Wall", room:true, bg:'catacombs', music:'zone_catacombs',
+    bx:0, by:0, bs:1/32, nat:[17*32, 12*32],
+    rows:[
+"#################","#,.,.,.,*,.,.,.,#","#...............#","#.o...o...o...o.#",
+"#...............#","#..###.....###..#","#..#,,.....,,#..#","#..###.....###..#",
+"#...............#","#.o...o...o...o.#","#...............#","########.########",
+    ],
+    spawn:[8,11],
+    arrive:{ top:[8,11] },
+    things:[
+      { x:8, y:11, walk:true, verb:'Through', where:"The Charnel House", arrow:'down', act:()=> goFloor('cata_bones_r1','bottom') },
+    ],
+    stealth:{ kind:'fight', feel:4,
+      guards:[
+        { id:'a', kind:'soldato', path:[[1,2],[15,2]], face:'r', clock:620, pause:3, roster:'br2_a', sprite:'soldato1' },
+        { id:'b', kind:'soldato', path:[[15,10],[1,10]], face:'l', clock:580, pause:3, roster:'br2_b', sprite:'soldato2' },
+        { id:'c', kind:'soldato', path:[[8,4],[8,7]], face:'d', clock:660, pause:3, roster:'br2_c', sprite:'soldato1' },
+        { id:'l', kind:'lookout', x:15, y:6, face:'l', spin:'ccw', clock:600, pause:4, roster:'br2_l', sprite:'soldato2' },
+      ],
+      wild:{ rate:0.035, size:2, lv:[86,92],
+        table:[{sp:'ghost',w:3},{sp:'crow',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin_knight',w:1,plus:2}] } },
+    paint:(d)=> paintCatacomb(d),
+    onRender:(world, d)=> r5FloorRender(world, d),
+    onStep:(p, d)=> stealthStep(p, d),
+    ghostChat:(id)=> r5GhostChat(id),
+  },
+
+  /* ---- The Barracks: where the Family's men sleep between their shifts. A fight room off The Long Stair. ---- */
+  cata_stair_r1: {
+    key:'cata_stair_r1', region:5, title:"The Barracks", room:true, bg:'catacombs', music:'zone_catacombs',
+    bx:0, by:0, bs:1/32, nat:[19*32, 13*32],
+    rows:[
+"###################","#.cc.cc.cc.cc.cc..#","#.................#","#.................#",
+"#.cc.cc.cc.cc.cc..#","#.................#",".....ccccccc.......","#.................#",
+"#.cc.cc.cc.cc.cc..#","#.................#","#.................#","#.cc.cc.cc.cc.cc..#",
+"###################",
+    ],
+    spawn:[0,6],
+    arrive:{ top:[0,6], bottom:[18,6] },
+    things:[
+      { x:0, y:6, walk:true, verb:'Through', where:"The Long Stair", arrow:'left', act:()=> goFloor('cata_stair','r1') },
+      { x:18, y:6, walk:true, verb:'Through', where:"The Armoury", arrow:'right', act:()=> goFloor('cata_stair_r2','top') },
+    ],
+    stealth:{ kind:'fight', feel:4,
+      guards:[
+        { id:'a', kind:'soldato', path:[[1,3],[17,3]], face:'r', clock:600, pause:3, roster:'sr1_a', sprite:'soldato1' },
+        { id:'b', kind:'soldato', path:[[17,9],[1,9]], face:'l', clock:640, pause:3, roster:'sr1_b', sprite:'soldato2' },
+        { id:'c', kind:'soldato', path:[[13,4],[13,8]], face:'d', clock:560, pause:3, roster:'sr1_c', sprite:'soldato1' },
+        { id:'l', kind:'lookout', x:3, y:10, face:'r', spin:'cw', clock:620, pause:4, roster:'sr1_l', sprite:'soldato2' },
+      ],
+      wild:{ rate:0.035, size:2, lv:[86,92],
+        table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},{sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1}] } },
+    paint:(d)=> paintCatacomb(d),
+    onRender:(world, d)=> r5FloorRender(world, d),
+    onStep:(p, d)=> stealthStep(p, d),
+    ghostChat:(id)=> r5GhostChat(id),
+  },
+
+  /* ---- The Armoury: racks of the Family's weapons, and the men who guard them. A fight room off The Barracks. ---- */
+  cata_stair_r2: {
+    key:'cata_stair_r2', region:5, title:"The Armoury", room:true, bg:'catacombs', music:'zone_catacombs',
+    bx:0, by:0, bs:1/32, nat:[17*32, 13*32],
+    rows:[
+"#################","#*.............*#","#.ccc.ccc.ccc...#","#...............#",
+"#.ccc.ccc.ccc...#","#...............#","................#","#...............#",
+"#.ccc.ccc.ccc...#","#...............#","#.ccc.ccc.ccc...#","#*.............*#",
+"#################",
+    ],
+    spawn:[0,6],
+    arrive:{ top:[0,6] },
+    things:[
+      { x:0, y:6, walk:true, verb:'Through', where:"The Barracks", arrow:'left', act:()=> goFloor('cata_stair_r1','bottom') },
+    ],
+    stealth:{ kind:'fight', feel:4,
+      guards:[
+        { id:'a', kind:'soldato', path:[[1,3],[15,3]], face:'r', clock:620, pause:3, roster:'sr2_a', sprite:'soldato1' },
+        { id:'b', kind:'soldato', path:[[15,9],[1,9]], face:'l', clock:580, pause:3, roster:'sr2_b', sprite:'soldato2' },
+        { id:'c', kind:'soldato', path:[[14,4],[14,8]], face:'d', clock:660, pause:3, roster:'sr2_c', sprite:'soldato1' },
+        { id:'l', kind:'lookout', x:6, y:6, face:'l', spin:'ccw', clock:600, pause:4, roster:'sr2_l', sprite:'soldato2' },
+      ],
+      wild:{ rate:0.035, size:2, lv:[88,94],
+        table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},{sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1}] } },
+    paint:(d)=> paintCatacomb(d),
+    onRender:(world, d)=> r5FloorRender(world, d),
+    onStep:(p, d)=> stealthStep(p, d),
+    ghostChat:(id)=> r5GhostChat(id),
+  },
 };
 R5_FLOORS.forEach(id=>{ R5_DECKS[id].prizeLines = CATA_PRIZE_LINES; });
+/* The side rooms, floor by floor: [room 1, room 2]. */
+const R5_ROOMS = {
+  cata_landing: ['cata_landing_r1', 'cata_landing_r2'],
+  cata_cistern: ['cata_cistern_r1', 'cata_cistern_r2'],
+  cata_bones:   ['cata_bones_r1',   'cata_bones_r2'],
+  cata_stair:   ['cata_stair_r1',   'cata_stair_r2'],
+};
+const R5_ALL_ROOMS = Object.values(R5_ROOMS).flat();
 Object.assign(DECKS, R5_DECKS);
 
 /* ============================================================
    THE FAMILY, UNDERGROUND
    Soldatos bring two waves, the capos three. Every enemy ghost in a
    catacomb fight arrives lurking. The Goblin Knights swing their Max.
+   Beaten soldatos and lookouts are back at their posts the next calendar
+   day (stealthBeaten, 14-stealth.js): the Family regroups.
    ============================================================ */
 const R5_SOLDATO_SHOUTS = [
   `<b>"Hey! You — in the light!"</b>`,
@@ -274,11 +562,18 @@ const R5_SOLDATO_SHOUTS = [
   `<b>"Got you. The Capo will want a word about this."</b>`,
 ];
 const R5_SOLDATO_BEATEN = [
-  `He drops his lantern and runs for the stairs.<br><br><i>He will not be patrolling this floor again.</i>`,
-  `<b>"This is not worth what they pay me."</b><br><br><i>He will not be patrolling this floor again.</i>`,
-  `He backs away into the dark, holding his lantern out in front of him like a shield.<br><br><i>He will not be patrolling this floor again.</i>`,
+  `He drops his lantern and runs for the stairs.<br><br><i>He will not be back on watch today.</i>`,
+  `<b>"This is not worth what they pay me."</b><br><br><i>He will not be back on watch today.</i>`,
+  `He backs away into the dark, holding his lantern out in front of him like a shield.<br><br><i>He will not be back on watch today.</i>`,
 ];
 function r5Pick(list){ return list[Math.floor(Math.random() * list.length)]; }
+/* A soldato's two waves: `lv` for the first, one higher for the second.
+   Species by name, or { species, ai } for one that fights its own way. */
+function r5Squad(lv, w1, w2, ai){
+  const mk = (list, l)=> list.map(sp=> typeof sp === 'string' ? { species:sp, level:l } : Object.assign({ level:l }, sp));
+  return { label:'Soldato', ai: ai || ['power1','power2'], waves:[ mk(w1, lv), mk(w2, lv + 1) ] };
+}
+const R5_KNIGHT = { species:'goblin_knight', ai:'maxer' };
 const R5_ROSTERS = {
   gate: { label:'Soldato', ai:['power1','power2'], waves:[
     [{species:'goblin',level:80},{species:'squid',level:80}],
@@ -301,6 +596,50 @@ const R5_ROSTERS = {
   stair_b: { label:'Soldato', ai:['power1','best'], waves:[
     [{species:'crow',level:84},{species:'ghost',level:84},{species:'ghost',level:84}],
     [{species:'puppet',level:86}] ] },
+  /* 2.72: the floors' new men, and the side rooms'. A lookout is a soldato
+     standing still; he fights the same way. */
+  landing_c: r5Squad(82, ['ghost','ghost_flame'], ['sumo','crow']),
+  landing_d: r5Squad(82, ['cyclops','bat'], ['goblin','ghost']),
+  cistern_c: r5Squad(83, ['ghost','cyclops'], ['squid','ghost_flame']),
+  cistern_l: r5Squad(83, ['crow','ghost_flame','bat'], ['goblin','sumo']),
+  stair_c:   r5Squad(85, ['ghost','crow','cyclops'], ['goblin','squid']),
+  stair_l:   r5Squad(85, ['ghost_flame','ghost'], [R5_KNIGHT,'ghost'], ['power1','best']),
+  /* the Counting Room and the Old Ossuary, off the Landing */
+  lr1_a: r5Squad(83, ['crow','ghost','cyclops'], ['squid','goblin']),
+  lr1_b: r5Squad(83, ['ghost_flame','bat'], ['sumo','ghost_starter']),
+  lr1_c: r5Squad(83, ['golem','ghost','crow'], ['puppet']),
+  lr1_l: r5Squad(84, ['ghost','cyclops'], [R5_KNIGHT,'ghost']),
+  lr2_a: r5Squad(85, ['ghost','crow','ghost_flame'], ['goblin','squid']),
+  lr2_b: r5Squad(85, ['cyclops','bat','ghost'], ['puppet','crow']),
+  lr2_c: r5Squad(85, ['ghost_flame','ghost'], [R5_KNIGHT,'cyclops']),
+  lr2_l: r5Squad(86, ['crow','crow','ghost'], ['horned_lynx'], ['power2','best']),
+  /* the Pump Room and the Drowned Chapel, off the Cistern */
+  cr1_a: r5Squad(86, ['ghost','ghost','crow'], ['squid','goblin']),
+  cr1_b: r5Squad(86, ['cyclops','ghost_flame'], ['puppet','ghost']),
+  cr1_c: r5Squad(86, ['bat','crow','cyclops'], ['sumo','ghost_starter']),
+  cr1_l: r5Squad(86, ['ghost_flame','ghost'], [R5_KNIGHT], ['power2','best']),
+  cr2_a: r5Squad(88, ['ghost','crow','ghost_flame'], ['goblin','puppet'], ['power2','best']),
+  cr2_b: r5Squad(88, ['cyclops','ghost','ghost'], ['squid','horned_lynx'], ['power2','best']),
+  cr2_c: r5Squad(88, ['crow','bat','ghost_flame'], [R5_KNIGHT,'puppet'], ['power2','best']),
+  cr2_l: r5Squad(88, ['ghost','cyclops','crow'], ['psychic_starter'], ['power2','best']),
+  /* the Charnel House and the Skull Wall, off the Bone Halls */
+  br1_a: r5Squad(88, ['ghost','ghost','cyclops'], ['goblin','squid'], ['power2','best']),
+  br1_b: r5Squad(88, ['crow','ghost_flame','ghost'], ['puppet','sumo'], ['power2','best']),
+  br1_c: r5Squad(88, ['cyclops','crow'], [R5_KNIGHT,'ghost'], ['power2','best']),
+  br1_l: r5Squad(88, ['ghost_flame','ghost_flame','ghost'], ['horned_lynx','puppet'], ['power2','best']),
+  br2_a: r5Squad(90, ['ghost','crow','cyclops'], ['goblin','puppet'], ['power2','best']),
+  br2_b: r5Squad(90, ['ghost_flame','ghost','ghost'], [R5_KNIGHT,'squid'], ['power2','best']),
+  br2_c: r5Squad(90, ['crow','crow','cyclops'], ['horned_lynx','ghost'], ['power2','best']),
+  br2_l: r5Squad(90, ['ghost','ghost_flame','crow'], ['ghost_starter'], ['power2','best']),
+  /* the Barracks and the Armoury, off the Long Stair */
+  sr1_a: r5Squad(90, ['cyclops','ghost_flame','ghost'], ['goblin','sumo'], ['power2','best']),
+  sr1_b: r5Squad(90, ['crow','ghost','ghost'], ['puppet','squid'], ['power2','best']),
+  sr1_c: r5Squad(90, ['ghost_flame','cyclops'], [R5_KNIGHT,'horned_lynx'], ['power2','best']),
+  sr1_l: r5Squad(90, ['crow','crow','ghost'], ['psychic_starter'], ['power2','best']),
+  sr2_a: r5Squad(92, ['ghost','cyclops','ghost_flame'], ['goblin','puppet'], ['best','best']),
+  sr2_b: r5Squad(92, ['crow','ghost_flame','ghost'], [R5_KNIGHT,'squid'], ['best','best']),
+  sr2_c: r5Squad(92, ['cyclops','ghost','crow'], ['horned_lynx','puppet'], ['best','best']),
+  sr2_l: r5Squad(92, ['ghost','ghost','ghost_flame'], ['ghost_starter'], ['best','best']),
   capo_black: { label:'Black Capo', ai:['power2','best','best'],
     shout:`<b>"Well, well. The kid from the caverns."</b><br><br>He does not hurry. He never does.<br><br>` +
           `<b>"I told you my people don't forget a face."</b>`,
@@ -310,7 +649,7 @@ const R5_ROSTERS = {
     [{species:'goblin',level:85},{species:'puppet',level:85},{species:'squid',level:85}],
     [{species:'ghost_starter',level:87}] ] },
   capo_purple: { label:'Purple Capo', ai:['power2','best','best'],
-    shout:`<b>"YOU."</b> She laughs, short and sharp.<br><br>` +
+    shout:`<b>"YOU."</b> He laughs, short and sharp.<br><br>` +
           `<b>"I told you to come and challenge the boss, if you dared. I never thought you'd be daft enough to actually come."</b>`,
     onBeaten:()=> r5CapoPurpleBeaten(),
     waves:[
@@ -361,11 +700,17 @@ function renderCatacombs(){
   setScreenBg('catacombs');
   playMusicChain(['zone_catacombs', 'region5', 'region']);
   $('#brandSub').textContent = 'The Catacombs';
+  /* a floor's watch counts its side rooms too, once you have found them */
+  const onWatch = id=> DECKS[id].stealth.kind === 'evade' ? 0
+    : DECKS[id].stealth.guards.filter(g=> !stealthBeaten(id).includes(g.id)).length;
   const note = id=>{
     const d = DECKS[id];
-    if(d.stealth.kind === 'evade') return 'Too many to fight. Do not be seen.';
-    const left = d.stealth.guards.filter(g=> !stealthBeaten(id).includes(g.id)).length;
-    return left ? `${left} of the Family still on watch` : 'Nobody left on watch';
+    const rooms = (R5_ROOMS[id] || []).filter(x=> r.reached.includes(x));
+    const left = onWatch(id) + rooms.reduce((n, x)=> n + onWatch(x), 0);
+    const where = rooms.length ? ` (and ${rooms.length} side room${rooms.length > 1 ? 's' : ''})` : '';
+    if(d.stealth.kind === 'evade')
+      return 'Too many to fight. Do not be seen.' + (rooms.length ? ` ${left} on watch in the side rooms.` : '');
+    return left ? `${left} of the Family on watch${where}` : `Nobody left on watch today${where}`;
   };
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Explore</button>
@@ -660,13 +1005,28 @@ function refreshWalkAll(){ if(DECKS[ui.screen]) go(ui.screen); }
    IN THE DARK
    ============================================================ */
 function r5FloorRender(world, d){
+  const fresh = !!ui.stealthFresh;                // down a stair or through a door, not back from a fight
+  const recaught = ui.r5Recaught === d.key;       // back from being caught: that was warning enough
+  ui.r5Recaught = null;
   startStealth(world, d);
   const r = r5();
   if(!r.reached.includes(d.key)){ r.reached.push(d.key); saveProfile(); }
+  const say = html=> sceneSay([faceMon('whalelord')], whaleName(), html);
+  const later = f=> setTimeout(f, 500);
   /* The first time on each floor, the Whalelord says something about it. */
   if(d.stealth.intro && !r.intro) return d.stealth.intro();
   if(d.stealth.first && r5Once('first_' + d.key))
-    setTimeout(()=> sceneSay([faceMon('whalelord')], whaleName(), d.stealth.first), 500);
+    return later(async ()=>{ await say(d.stealth.first); if(d.stealth.warn) await say(d.stealth.warn); });
+  /* An evade floor warns you every time you come in (2.72). */
+  if(d.stealth.kind === 'evade' && fresh && !recaught && d.stealth.again) return later(()=> say(d.stealth.again));
+  /* A new day, and the Family has manned its posts again (said as you come
+     in fresh, which is when the men are back at their posts). */
+  if(d.stealth.kind === 'fight' && fresh && r.regrouped){
+    r.regrouped = false;
+    saveProfile();
+    later(()=> say(`<b>"They are back. Every post we emptied has a man on it again."</b><br><br>` +
+                   `<b>"The Family regroups every day. So will we."</b>`));
+  }
 }
 async function r5DarkIntro(){
   const r = r5();
@@ -676,14 +1036,15 @@ async function r5DarkIntro(){
   const whale = faceMon('whalelord'), wn = whaleName();
   await sceneSay([whale], wn, `<b>"Dark, is it not? You cannot see a thing."</b><br><br><b>"I can. The dead do not need eyes."</b>`);
   await sceneSay([whale], wn,
-    `<b>"I will show you what is close to us, even through the walls. Anywhere you have been, you will remember."</b>`);
+    `<b>"I will show you what is right round us, even through the walls. A step or two, no further. Past that, it is black."</b>`);
   await sceneSay([whale], wn,
     `<b>"Those lights are lanterns. The Family's men carry them. Stay out of the light, and they cannot see you."</b>`);
   await sceneSay([whale], wn,
     `<b>"Step into a lantern's light and the man holding it will stop and look. You will see him wonder: ?"</b><br><br>` +
     `<b>"That is your moment. Get back into the dark before he is sure."</b>`);
   await sceneSay([whale], wn,
-    `<b>"If one of them catches you, we fight. Beat him and he will not come back."</b><br><br>` +
+    `<b>"If one of them catches you, we fight. Beat him and he stays away for the rest of the day. ` +
+    `By tomorrow the Family will have sent another man to his post."</b><br><br>` +
     `<b>"And the dead are awake down here. They hide in the dark places. Be ready."</b>`);
 }
 
@@ -714,13 +1075,15 @@ async function r5CapoPurpleBeaten(){
   go('cata_stair');
   const capo = faceNpc('capo_purple','🕴️'), whale = faceMon('whalelord'), wn = whaleName();
   await sceneSay([capo], 'Purple Capo',
-    `She laughs, short and sharp, the same as she did in the caverns.<br><br><b>"Twice. You've beaten me twice now."</b>`);
+    `He laughs, short and sharp, the same as he did in the caverns.<br><br><b>"Twice. You've beaten me twice now."</b>`);
   await sceneSay([capo], 'Purple Capo',
-    `<b>"Go on, then. Try the gate."</b> She jerks her head at the bars behind her.<br><br>` +
+    `<b>"Go on, then. Try the gate."</b> He jerks his head at the bars behind him.<br><br>` +
     `<b>"It's barred from the other side, genius. Nobody goes any deeper until the Padrino says so."</b>`);
-  await sceneSay([capo], 'Purple Capo', `She straightens her coat and walks off up the stairs without looking back.`);
+  await sceneSay([capo], 'Purple Capo', `He tugs his hat straight and walks off up the stairs without looking back.`);
   if(first){
-    await sceneSay([whale], wn, `<b>"She is right about the gate. It will not open from this side."</b>`);
+    await sceneSay([whale], wn,
+      `<b>"He is right about the gate. It will not open from this side."</b><br><br>` +
+      `<b>"And there are soldiers behind it. I can feel them. Far too many to fight our way through."</b>`);
     await sceneSay([whale], wn,
       `<b>"But my core is closer than it was. I can feel it, just above us."</b><br><br>` +
       `<b>"There will be another way. There always is."</b>`);
@@ -734,11 +1097,14 @@ async function r5CapoPurpleBeaten(){
       ()=> go('cata_stair'), { subtitle:'The Long Stair' });
   }
 }
+/* The deeper floors stay sealed (2.72): behind this gate, the Whalelord
+   feels far more of the Family than anyone could fight through. */
 async function r5SealedGate(){
-  const r = r5();
   await sceneSay([], 'The gate',
     `Iron bars from floor to ceiling, and a heavy beam across them — on the far side, where you cannot reach it.`);
-  if(r.tier1) await sceneSay([faceMon('whalelord')], whaleName(), `<b>"Not this way. Not yet."</b>`);
+  await sceneSay([faceMon('whalelord')], whaleName(),
+    `<b>"There are soldiers on the other side of this gate. I can feel them, rows and rows of them, waiting in the dark."</b><br><br>` +
+    `<b>"Far too many to fight our way through. Not this way. Not yet."</b>`);
 }
 
 /* ============================================================
@@ -758,13 +1124,23 @@ const R5_GHOST_DARK = [
   `A question mark means he is not sure yet. Get back into the dark.`,
   `I can feel the men near us, even through the stone. They are the grey shapes.`,
   `The dead down here do not mind you. They mind the lanterns.`,
-  `Anywhere you have been, you will remember. Anywhere you have not, I will show you as we go.`,
+  `I can only show you a step or two around us. Past that, look for the lanterns.`,
+  `The men who stand still turn slowly, always the same way round. Count the turns, and go when his back is to you.`,
 ];
 const R5_GHOST_FLOOR = {
   cata_landing: `This is where the Family unloads. Crates, and more crates. I wonder what is in them.`,
   cata_cistern: `A long way across, and nowhere to hide on the bridges. Go round if you can.`,
   cata_bones:   `Too many of them. If they see us here, we run. Do not let them see us at all.`,
-  cata_stair:   `She is still down there, at the bottom. I can feel how cross she is.`,
+  cata_stair:   `He is still down there, at the bottom. I can feel how cross he is.`,
+  /* the side rooms */
+  cata_landing_r1: `Crates, counted and counted again. The Family trusts nobody, not even its own men.`,
+  cata_landing_r2: `The oldest dead in the hill. They were here long before the Family, and they will be here long after.`,
+  cata_cistern_r1: `Old machines, and nobody left who knows how they work. I know how that feels.`,
+  cata_cistern_r2: `People came here to pray, once. Now the Family keeps its men here instead.`,
+  cata_bones_r1:   `This is where the bones were sorted. Skulls in one place, the rest in another. Tidy, for the dead.`,
+  cata_bones_r2:   `All of them watching us. Do not worry. They are on our side.`,
+  cata_stair_r1:   `This is where the Family's men sleep between watches. None of them are sleeping now.`,
+  cata_stair_r2:   `Everything in here is for hurting someone. Let us not stay long.`,
 };
 function r5GhostChat(id){
   const d = DECKS[id];
@@ -796,6 +1172,7 @@ function renderChallengeR5(){
   setScreenBg('catacombs');
   $('#brandSub').textContent = 'Challenge';
   const floorsReached = R5_FLOORS.filter(f=> r.reached.includes(f)).length;
+  const roomsFound = R5_ALL_ROOMS.filter(f=> r.reached.includes(f)).length;
   const card = (sprite, icon, title, done, desc)=> `
     <div class="challenge-card" style="cursor:default;">
       ${npcPortrait(sprite, icon, 54, 'transparent')}
@@ -814,7 +1191,8 @@ function renderChallengeR5(){
       r.capoBlack ? 'The Padrino knows you are coming.' : (r.reached.includes('cata_cistern') ? 'Holding the bridge in the Cistern.' : 'Somewhere in the catacombs.'))}
     ${card('capo_purple', '🕴️', 'Purple Capo', r.capoPurple,
       r.capoPurple ? 'Beaten twice now.' : (r.reached.includes('cata_stair') ? 'Waiting at the bottom of the Long Stair.' : 'Somewhere deeper down.'))}
-    <div class="screen-sub" style="margin-top:12px;">Catacomb floors reached: <b>${floorsReached} of ${R5_FLOORS.length}</b></div>
+    <div class="screen-sub" style="margin-top:12px;">Catacomb floors reached: <b>${floorsReached} of ${R5_FLOORS.length}</b> · side rooms found: <b>${roomsFound} of ${R5_ALL_ROOMS.length}</b></div>
+    <div class="screen-sub" style="margin-top:4px;">Soldatos you beat are back at their posts the next day. The Family regroups.</div>
     <button class="btn btn-ghost" id="returnBtn" style="margin-top:12px;">Return</button>`;
   $('#backBtn').addEventListener('click', ()=> go('region'));
   $('#returnBtn').addEventListener('click', ()=> go('region'));

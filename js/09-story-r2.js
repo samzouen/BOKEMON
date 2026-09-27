@@ -1111,8 +1111,8 @@ async function onMafiaWin(def, pathId){
   }
   if(def.npcId==='capo_purple'){
     return storyModal('🕴️', 'Purple Capo defeated',
-      `She laughs, short and sharp, and spits into the dust.<br><br>` +
-      `"You're stronger than you look. Fine — go on then." She jerks her head toward the dark.<br><br>` +
+      `He laughs, short and sharp, and spits into the dust.<br><br>` +
+      `"You're stronger than you look. Fine — go on then." He jerks his head toward the dark.<br><br>` +
       `"<b>The disused path.</b> That's where the boss is. Come and challenge him, if you dare."`,
       ()=>renderCaverns(), { bg:'rocky_caverns', subtitle:'Rocky Caverns' });
   }

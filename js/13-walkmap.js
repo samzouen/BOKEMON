@@ -640,6 +640,19 @@ function renderWalkDeck(id){
                    stroke-linejoin="round"/>
              <path d="${SHAFT}" fill="#5fd17c" stroke="#8ee89f" stroke-width="1.4"
                    stroke-linejoin="round"/></svg>`,
+    /* a doorway in a side wall (the catacombs' rooms): the same arrow, turned */
+    left: `<svg viewBox="0 0 40 40" width="${A}" height="${A}"
+                style="transform:rotate(90deg)">
+             <path d="${SHAFT}" fill="#1f3b26" stroke="#1f3b26" stroke-width="5"
+                   stroke-linejoin="round"/>
+             <path d="${SHAFT}" fill="#5fd17c" stroke="#8ee89f" stroke-width="1.4"
+                   stroke-linejoin="round"/></svg>`,
+    right:`<svg viewBox="0 0 40 40" width="${A}" height="${A}"
+                style="transform:rotate(-90deg)">
+             <path d="${SHAFT}" fill="#1f3b26" stroke="#1f3b26" stroke-width="5"
+                   stroke-linejoin="round"/>
+             <path d="${SHAFT}" fill="#5fd17c" stroke="#8ee89f" stroke-width="1.4"
+                   stroke-linejoin="round"/></svg>`,
     /* both ways: one blocky head at each end of a shared shaft */
     both: `<svg viewBox="0 0 40 40" width="${A}" height="${A}">
              <path d="M14 13 h12 v14 h-12 z M14 13 h-8 L20 2 L34 13 h-8
@@ -657,7 +670,7 @@ function renderWalkDeck(id){
     if(seen.has(key)) return;
     seen.add(key);
     const both = stairs.filter(x=>x.x===t.x&&x.y===t.y).length > 1;
-    const kind = both ? 'both' : (t.verb === 'Up' ? 'up' : 'down');
+    const kind = both ? 'both' : (t.arrow || (t.verb === 'Up' ? 'up' : 'down'));
     const e = document.createElement('div');
     e.className = 'walk-stair';
     e.style.left = (t.x*WALK_T + (WALK_T-A)/2) + 'px';
@@ -968,11 +981,23 @@ const RAIL_LINES = [
   `<b>"There — see it? Came right out of the sky."</b><br><br>` +
   `<b>"I'm not losing another net to that thing."</b>`,
 ];
+/* Nobody on the rail wants a hand unless they are shouting for one. */
+const RAIL_QUIET = [
+  `<b>"No help needed at the moment, thanks."</b> A nod at the water. <b>"If anything comes up out of it, you'll hear me shout."</b>`,
+  `<b>"All quiet. I don't need a hand just now."</b> The line hangs slack in the water. <b>"I'll holler if they come back."</b>`,
+  `<b>"No help needed at the moment, thanks."</b><br><br><i>Watch the rail for someone calling 🆘.</i>`,
+];
 function railHelp(n){
   if(whaleHolds()) return whaleImpatient('rail');
   const r = railState();
+  /* Only somebody calling for help (🆘) has anything for you. It used to start
+     a raid whoever you asked, so the calls meant nothing. */
+  if(r.who !== n){
+    return sceneSay([faceNpc('fisherman'+n,'🎣')], crewName('fisherman'+n),
+      RAIL_QUIET[Math.floor(Math.random()*RAIL_QUIET.length)]);
+  }
   /* answering the call clears it; the next one comes along in its own time */
-  if(r.who === n){ r.who = null; r.next = Date.now() + REST_MIN + Math.random()*REST_VAR; }
+  r.who = null; r.next = Date.now() + REST_MIN + Math.random()*REST_VAR;
   storyModal(npcPortrait('fisherman'+n,'🎣',130,'transparent'), crewName('fisherman'+n),
     RAIL_LINES[Math.floor(Math.random()*RAIL_LINES.length)],
     ()=> (typeof startBirdRaid === 'function') ? startBirdRaid() : go('weather_deck'),

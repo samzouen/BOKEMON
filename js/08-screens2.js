@@ -462,6 +462,7 @@ function arenaCfg(){
     acts:false,            // dummies skip their turn by default
     immortal:false,        // both sides die normally by default
     move:'auto',           // which slot the dummy uses
+    plus:0,                // its Very High / Ultra stone's refinement: 0, + (1), ✦ (2)
     buffs:{},              // elusive, first, …
     advanced:false,
   };
@@ -537,6 +538,14 @@ function renderArena(){
             ${sp.types[1] ? `<option value="vh2" ${c.move==='vh2'?'selected':''}>Very High — ${escapeHtml(sp.types[1])}</option>` : ''}
             <option value="ultra" ${c.move==='ultra'?'selected':''}>Ultra stone</option>
           </select>
+          ${['vh1','vh2','ultra'].includes(c.move) ? `
+            <div class="ar-label">Stone refinement</div>
+            <div class="ar-row">
+              ${['Base','+','✦'].map((l, p)=>`<button class="btn btn-ghost pill ar-plus ${(c.plus||0)===p?'sel':''}" data-plus="${p}" style="flex:1;">${l}</button>`).join('')}
+            </div>
+            <div class="ar-hint">${c.move === 'ultra'
+              ? 'It throws an Ultra barrage every turn it acts — set it to Attacks.'
+              : 'It casts the stone on its first action, as a trainer does, then attacks with its strongest move — set it to Attacks.'}</div>` : ''}
 
           <div class="ar-label">Buffs on the opponent</div>
           <div class="ar-buffs">
@@ -559,7 +568,8 @@ function renderArena(){
   screenEl.querySelectorAll('.ar-tog').forEach(b=>b.addEventListener('click', ()=>{ c.acts = b.dataset.acts==='1'; renderArena(); }));
   screenEl.querySelectorAll('.ar-imm').forEach(b=>b.addEventListener('click', ()=>{ c.immortal = b.dataset.imm==='1'; renderArena(); }));
   $('#arAdv').addEventListener('click', ()=>{ c.advanced = !c.advanced; renderArena(); });
-  const mv = $('#arMove'); if(mv) mv.addEventListener('change', e=>{ c.move = e.target.value; });
+  const mv = $('#arMove'); if(mv) mv.addEventListener('change', e=>{ c.move = e.target.value; renderArena(); });
+  screenEl.querySelectorAll('.ar-plus').forEach(b=>b.addEventListener('click', ()=>{ c.plus = +b.dataset.plus; renderArena(); }));
   screenEl.querySelectorAll('.ar-buff').forEach(b=>b.addEventListener('click', ()=>{
     const k=b.dataset.buff; c.buffs[k] = !c.buffs[k]; renderArena();
   }));
@@ -580,6 +590,16 @@ function makeDummy(type){
   e.dummyType = type;
   e.arenaActs = !!c.acts;
   e.arenaMove = c.move;
+  /* Its stone, carried as a trainer carries one: a Very High cast on its first
+     action (enemyActs), or an Ultra thrown every turn. These two options used
+     to do nothing at all — it simply swung its strongest move. */
+  const types = SPECIES[species].types || [];
+  const plus = Math.max(0, Math.min(2, c.plus || 0));
+  if(c.move === 'vh1' || c.move === 'vh2'){
+    const t = types[c.move === 'vh2' ? 1 : 0] || types[0];
+    if(t && VERY_HIGH[t]) e.stone = { type:t, plus, cast:true, used:false };
+  }
+  if(c.move === 'ultra' && types[0]) e.arenaUltra = { type:types[0], plus };
   if(c.buffs.elusive)   e.elusive = true;
   if(c.buffs.guard)     { e.guard = true; grantBlock(e, 1, e.atk); }
   if(c.buffs.block3)    grantBlock(e, 3, e.atk);
@@ -608,7 +628,10 @@ function startArena(){
   ui.battle.activeIndex = ai>=0?ai:0;
   const lead = activeMon();
   if(lead){ lead._entered = true; applyEntryPassives(lead, lead.species, lead.level, monAtk(lead)); }
-  ui.battle.enemies.forEach(e=> applyEntryPassives(e, e.species, e.level, e.atk));
+  ui.battle.enemies.forEach(e=>{
+    applyEntryPassives(e, e.species, e.level, e.atk);
+    if(e.stone) enemyStonePassive(e);        // a refined stone works from the moment it arrives
+  });
   go('battle');
   setTimeout(()=> beginRound('Test arena — choose a move.'), 600);
 }
@@ -681,6 +704,9 @@ function renderArenaMoveSheet(){
 
 /* fire a move in arena mode: auto full-success, no quiz */
 function arenaFire(mv){
+  /* a test move is an action of its own, like a chosen one (their Counter and
+     Mirage read actions) */
+  if(ui.battle){ ui.battle.actionSeq = (ui.battle.actionSeq || 0) + 1; ui.battle.actionMon = activeMon(); ui.battle.actionDodges = []; }
   const full = Array.from({length:Math.ceil(mv.words/2)}, ()=>({ text:'测试', passed:true, words:2 }));
   const needTarget = (mv.target==='Single') || (mv.target==='Status' && STATUS_NEEDS_TARGET.includes(mv.stoneType));
   if(needTarget && livingEnemies().length>1){

@@ -17,29 +17,30 @@
    Step back into the dark between the two and he shrugs and carries on.
    So from the moment the "?" appears you have one whole beat to get out.
 
-   What you can see:
+   What you can see (2.72: a smaller light):
+     near        the tiles right round you (1 out), through walls — the
+                 Whalelord floats about you unseen and shows you what is there
+     dim         2 tiles out, dimly
      lit         a lantern's (or a brazier's) light that you have a line of
                  sight to — walls, pillars and crates cast shadows
-     sensed      anything within the Whalelord's reach, through walls. He
-                 floats about you unseen and tells you what is there.
-     remembered  anywhere you have seen before, drawn dim: the layout, and
-                 never who is standing in it
-     unknown     black
+     dark        everything else: 3 tiles out is black, whether you have been
+                 there or not. Only the guards and their lanterns show in it.
    Guards are drawn where you can see them — and, faintly, wherever the
    Whalelord can feel them (a few tiles, through walls). You know what is
    close; you still have to find your way.
 
    A floor is a deck (13-walkmap.js) with a `stealth` block:
-     kind      'fight'  caught → a battle; beat him and he is gone for good
+     kind      'fight'  caught → a battle; beat him and he is gone for the
+                        rest of the day (a capo, for good)
                'evade'  caught → the run is over; a round of spelling, and
                         you start the floor again
-     sense     how far the Whalelord shows the floor (tiles, through walls)
      feel      how far he feels a guard (tiles, through walls)
-     guards    [{ id, kind, x, y, face, path, clock, pause, reach, faces, roster }]
+     guards    [{ id, kind, x, y, face, path, clock, pause, reach, spin, roster }]
                kind: 'soldato' walks `path` back and forth, pausing at each
                      END before he turns (that pause is your window)
-                     'lookout' stands and turns: a quarter clockwise every
-                     `pause` beats, or through `faces` in order
+                     'lookout' stands and turns a quarter every `pause`
+                     beats, through all four ways — always the same way
+                     round: `spin` 'cw' (the default) or 'ccw'
                      'talker' stands facing his friend: scenery, but his
                      lantern is still lit
                      'capo'   stands still with a wide lantern
@@ -52,7 +53,10 @@
 const STEALTH_OPAQUE = '#ocG';         // what light cannot pass (water and braziers do not stop it)
 const STEALTH_VIEW = 9;                // how far off you can make out a light
 const DIRS = { u:[0,-1], d:[0,1], l:[-1,0], r:[1,0] };
-const TURN = { u:'r', r:'d', d:'l', l:'u' };
+const TURN = { u:'r', r:'d', d:'l', l:'u' };           // a quarter clockwise
+const TURN_CCW = { u:'l', l:'d', d:'r', r:'u' };       // and the other way round
+/* The light you see by (2.72): right round you, and dimly one further. */
+const STEALTH_NEAR = 1, STEALTH_DIM = 2;
 
 /* Per floor, for this visit: where each guard is, which way he faces, how
    long he has stood, whether he has half-seen you. Kept in ui, so a fight or
@@ -78,10 +82,24 @@ function guardStart(def){
   return { id:def.id, x:def.x != null ? def.x : p0[0], y:def.y != null ? def.y : p0[1],
            face:def.face || 'd', leg:def.leg || 1, dir:1, wait:0, sus:0, spotted:false };
 }
-/* Guards beaten on a fight floor stay beaten — that is progress. */
+/* Guards beaten on a fight floor stay beaten for the rest of the day. Each
+   new calendar day the Family regroups: every soldato and lookout is back at
+   his post (2.72). A capo stays beaten — capos are the story. */
+function r5Day(){ const t = new Date(); return t.getFullYear() + '-' + (t.getMonth() + 1) + '-' + t.getDate(); }
 function stealthBeaten(id){
   const r = r5();
   r.beaten = r.beaten || {};
+  const today = r5Day();
+  if(r.beatenDay !== today){
+    r.beatenDay = today;
+    Object.keys(r.beaten).forEach(f=>{
+      const d = (typeof DECKS !== 'undefined') && DECKS[f];
+      const capos = (d && d.stealth ? d.stealth.guards || [] : []).filter(g=> g.kind === 'capo').map(g=> g.id);
+      const kept = (r.beaten[f] || []).filter(g=> capos.includes(g));
+      if(kept.length < (r.beaten[f] || []).length) r.regrouped = true;   // the Whalelord mentions it
+      r.beaten[f] = kept;
+    });
+  }
   return r.beaten[id] = r.beaten[id] || [];
 }
 function guardDef(d, id){ return (d.stealth.guards || []).find(g=> g.id === id); }
@@ -154,14 +172,13 @@ function brazierLight(d){
    what lets tools/region5-test.js prove an evade floor can be crossed. */
 function guardAdvance(d, g, def){
   if(def.kind === 'soldato' && def.path && def.path.length > 1) return patrolStep(d, g, def);
+  /* A lookout turns through all four ways, always the same way round, a
+     quarter every `pause` beats. (Some used to swing between two.) */
   if(def.kind === 'lookout'){
     g.wait = (g.wait || 0) + 1;
     if(g.wait >= (def.pause || 4)){
       g.wait = 0;
-      if(def.faces && def.faces.length){
-        const i = def.faces.indexOf(g.face);
-        g.face = def.faces[(i + 1) % def.faces.length];
-      } else g.face = TURN[g.face] || 'd';
+      g.face = (def.spin === 'ccw' ? TURN_CCW : TURN)[g.face] || 'd';
     }
   }
   /* talkers and capos stand where they are */
@@ -200,16 +217,16 @@ function inGuardLight(id, d, g, def){
 function stealthVision(id, d){
   const st = stealthState(id, d);
   const p = walkState().at[id];
-  const sense = d.stealth.sense || 2;
   const lit = new Map();                                 // tile -> 'guard' | 'fire'
   brazierLight(d).forEach(k=> lit.set(k, 'fire'));
   const lights = st.guards.map(g=> guardLight(d, g, guardDef(d, g.id)));
   lights.forEach(s=> s.forEach(k=> lit.set(k, 'guard')));
-  const vis = new Map();                                 // tile -> 'lit' | 'sensed'
-  for(let dy = -sense; dy <= sense; dy++) for(let dx = -sense; dx <= sense; dx++){
+  const vis = new Map();                                 // tile -> 'lit' | 'sensed' | 'dim'
+  for(let dy = -STEALTH_DIM; dy <= STEALTH_DIM; dy++) for(let dx = -STEALTH_DIM; dx <= STEALTH_DIM; dx++){
     const x = p.x + dx, y = p.y + dy;
     if(y < 0 || y >= d.rows.length || x < 0 || x >= d.rows[0].length) continue;
-    vis.set(x + ',' + y, lit.has(x + ',' + y) ? 'lit' : 'sensed');
+    const k = x + ',' + y, ring = Math.max(Math.abs(dx), Math.abs(dy));
+    vis.set(k, lit.has(k) ? 'lit' : ring <= STEALTH_NEAR ? 'sensed' : 'dim');
   }
   lit.forEach((kind, k)=>{
     if(vis.get(k) === 'lit') return;
@@ -246,13 +263,15 @@ function paintStealth(id, d){
     if(seen[i] !== '1'){ seen[i] = '1'; changed = true; }
   });
   if(changed) r5().seen[id] = seen.join('');
+  /* Where you have been is still noted (r5().seen) but no longer drawn: past
+     2 tiles it is black, bar the lanterns (2.72). */
   const cells = fog.children;
   for(let i = 0; i < cells.length; i++){
     const x = i % W, y = Math.floor(i / W), k = x + ',' + y;
     const v = vis.get(k);
     const cls = v === 'lit' ? (lit.get(k) === 'guard' ? 'fog-lamp' : 'fog-fire')
               : v === 'sensed' ? 'fog-sense'
-              : seen[i] === '1' ? 'fog-seen' : 'fog-dark';
+              : v === 'dim' ? 'fog-seen' : 'fog-dark';
     if(cells[i].className !== cls) cells[i].className = cls;
   }
   const feel = d.stealth.feel != null ? d.stealth.feel : 4;
@@ -395,7 +414,8 @@ function stealthCaught(id, d, g, def){
   }, 900);
 }
 /* A fight floor: he calls it, and it is a fight. Beat him and he is gone for
-   good; lose, and you are back in town with the floor as you left it. */
+   the rest of the day; lose, and you are back in town with the floor as you
+   left it. */
 function caughtFight(id, d, g, def){
   const roster = (typeof R5_ROSTERS !== 'undefined') && R5_ROSTERS[def.roster];
   if(!roster) return renderWalkDeck(id);
@@ -432,47 +452,158 @@ function caughtFight(id, d, g, def){
         saveProfile();
         if(roster.onBeaten) return roster.onBeaten(id, d);
         storyModal(npcPortrait(who, def.kind === 'capo' ? '🕴️' : '💂', 130, 'transparent'), roster.label,
-          roster.beaten || `He will not be patrolling this floor again.`,
+          roster.beaten || `He will not be back on watch today.`,
           ()=> go(id), { subtitle:d.title });
       } });
   });
 }
-/* An evade floor: too many of them to fight. The run is over — a round of
-   spelling slips you away, and you try the floor again from the stair. */
-function caughtEvade(id, d, g, def){
+/* An evade floor: too many of them to fight. Caught, you cannot move: the rest
+   of the floor comes running — soldatos and lookouts, one after another, each
+   to a square of his own round you — and everything goes black. Then ten
+   phrases, like Recover: one written wrong is practised until it is right
+   three times in a row, and counts once. Back where you came in, every guard
+   at his post. (Before 2.72: "Run", and eight words.) */
+async function caughtEvade(id, d, g, def){
+  const w0 = walkState();
+  w0.busy = true;
   const face = faceNpc(guardSprite(def), '💂');
-  const n = d.stealth.retryWords || 8;
-  sceneSay([face], 'Soldato', `<b>"There! Get them!"</b><br><br>Too many of them to fight. Run — and write while you run.`,
-    'Run').then(()=>{
-    stealthHold(false);
-    walkTeardown();
-    const words = pickWords(n);
-    /* back to whichever stair you came in by */
-    const entry = ((ui.floorEntry || {})[id]) || 'top';
-    const back = ()=>{
-      ui.stealthFresh = true;
-      const w = walkState(), a = (d.arrive && d.arrive[entry]) || d.spawn;
-      w.at[id] = { x:a[0], y:a[1] }; w.face = 'd';
-      if(w.ghostAt) w.ghostAt[id] = { x:a[0], y:a[1] };
-    };
-    if(!words.length){ back(); return go(id); }
-    startQuiz({
-      title:'Slip away', subtitle:`Write ${n} words to lose them in the dark.`,
-      words, wordTarget:n, lockExit:true,
-      onComplete:()=>{
-        const r = r5();
-        r.evadeTries = r.evadeTries || {};
-        r.evadeTries[id] = (r.evadeTries[id] || 0) + 1;
-        saveProfile();
-        back();
-        storyModal(monPortrait('whalelord', 150, { view:'front', bare:true }), whaleName(),
-          `<b>"We lost them. They have gone back to their posts."</b><br><br>` +
-          `<i>You are back at the ${entry === 'bottom' ? 'bottom' : 'top'} of ${escapeHtml(d.title)}. Try again.</i>`,
-          ()=> go(id), { subtitle:d.title });
-      },
-      onExit:()=>{ back(); go(id); },
-    });
+  await captureStream(id, d);
+  await sceneSay([face], 'Soldato', `<b>"Got you. There is nowhere to run."</b>`, 'Continue');
+  await sceneCurtain(true, 700);
+  sceneClear();
+  stealthHold(false);
+  walkTeardown();
+  const n = d.stealth.retryPhrases || 10;
+  /* back to whichever way you came in by */
+  const entry = ((ui.floorEntry || {})[id]) || 'top';
+  const back = ()=>{
+    ui.stealthFresh = true;
+    ui.r5Recaught = id;                          // no second warning on the way back in
+    const w = walkState(), a = (d.arrive && d.arrive[entry]) || d.spawn;
+    w.at[id] = { x:a[0], y:a[1] }; w.face = 'd'; w.busy = false;
+    if(w.ghostAt) w.ghostAt[id] = { x:a[0], y:a[1] };
+  };
+  const whereBack = entry === 'bottom' ? `the bottom of ${escapeHtml(d.title)}`
+                  : entry === 'top' ? `the top of ${escapeHtml(d.title)}`
+                  : `the door you came in by, in ${escapeHtml(d.title)}`;
+  if(!activePool().length){ back(); sceneCurtain(false, 400); return go(id); }
+  captureTest(n, ()=>{
+    const r = r5();
+    r.evadeTries = r.evadeTries || {};
+    r.evadeTries[id] = (r.evadeTries[id] || 0) + 1;
+    saveProfile();
+    back();
+    storyModal(monPortrait('whalelord', 150, { view:'front', bare:true }), whaleName(),
+      `<b>"We slipped away from them in the dark. They have gone back to their posts."</b><br><br>` +
+      `<i>You are back at ${whereBack}. Try again.</i>`,
+      ()=> go(id), { subtitle:d.title });
   });
+  sceneCurtain(false, 600);                      // the black lifts off the writing
+}
+/* The rest of the floor comes for you. Actors, not the floor's guards (they
+   stand where they are): each walks in out of the dark, along the floor, to a
+   square of his own within three steps of you, one after another. */
+function captureStream(id, d){
+  const p = walkState().at[id];
+  const world = document.getElementById('walkWorld');
+  if(!p || !world) return Promise.resolve();
+  const H = d.rows.length, W = d.rows[0].length, key = (x, y)=> x + ',' + y;
+  const open = (x, y)=> x >= 0 && y >= 0 && x < W && y < H && !wSolid(d, x, y);
+  const bfs = (sx, sy, limit)=>{
+    const dist = new Map([[key(sx, sy), 0]]), prev = new Map(), q = [[sx, sy]];
+    while(q.length){
+      const [x, y] = q.shift(), k0 = dist.get(key(x, y));
+      if(k0 >= limit) continue;
+      for(const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx = x + dx, ny = y + dy, k = key(nx, ny);
+        if(dist.has(k) || !open(nx, ny)) continue;
+        dist.set(k, k0 + 1); prev.set(k, key(x, y)); q.push([nx, ny]);
+      }
+    }
+    return { dist, prev };
+  };
+  const round = bfs(p.x, p.y, 12);
+  const st = ui.stealth && ui.stealth[id];
+  const taken = new Set((st ? st.guards : []).map(g=> key(g.x, g.y)));
+  /* nor where the Whalelord floats: they cannot see him, but he is there */
+  const gh = (walkState().ghostAt || {})[id];
+  if(gh && typeof cuainAboard === 'function' && cuainAboard()) taken.add(key(gh.x, gh.y));
+  /* the squares round you, nearest first, and spread round you */
+  const spots = [...round.dist.entries()].filter(([k, n])=> n >= 1 && n <= 3 && !taken.has(k))
+    .map(([k, n])=>{ const [x, y] = k.split(',').map(Number); return { x, y, n, a:Math.atan2(y - p.y, x - p.x) }; })
+    .sort((a, b)=> a.n - b.n || a.a - b.a).slice(0, 10);
+  const T = WALK_T;
+  const walks = spots.map((s, i)=>{
+    /* where he comes from: several steps further out than his square */
+    const from = bfs(s.x, s.y, 7);
+    let best = null;
+    from.dist.forEach((n, k)=>{
+      const far = round.dist.get(k) || 0;
+      if(n >= 4 && far > s.n && (!best || n + far > best.n + best.far)) best = { k, n, far };
+    });
+    const path = [];
+    if(best){ let k = best.k; while(k){ path.push(k.split(',').map(Number)); k = from.prev.get(k); } }
+    else path.push([s.x, s.y]);
+    return { id:'cap' + i, path, sprite:i % 2 ? 'soldato2' : 'soldato1', delay:i * 170 };
+  });
+  const stepMs = 110 * SCENE_SPEED;
+  return Promise.all(walks.map(wk=> new Promise(done=>{
+    setTimeout(()=>{
+      const [x0, y0] = wk.path[0];
+      const el = sceneActor(wk.id, { x:x0, y:y0, src:`assets/npc/${wk.sprite}.png`, icon:'💂' });
+      if(!el) return done();
+      el.classList.add('capture-guard');
+      let i = 0;
+      const next = ()=>{
+        i++;
+        if(i >= wk.path.length) return done();
+        const [x, y] = wk.path[i];
+        el.style.transition = `left ${stepMs}ms linear, top ${stepMs}ms linear`;
+        el._o.x = x; el._o.y = y;
+        el.style.left = (x * T) + 'px'; el.style.top = (y * T) + 'px';
+        el.style.zIndex = 10 + y;
+        setTimeout(next, stepMs);
+      };
+      setTimeout(next, stepMs);
+    }, wk.delay * SCENE_SPEED);
+  }))).then(()=> sceneWait(600));
+}
+/* Ten phrases to slip away, one at a time: recently-missed ones first, then
+   the rest of the list. One written wrong is practised the way Recover does
+   it — right three times in a row, a miss starting the three again — and
+   then counts as one phrase. */
+function captureTest(n, done){
+  const pool = activePool().map(w=> w.text);
+  const inPool = new Set(pool);
+  const recent = (state.recentWrong || []).filter(w=> inPool.has(w));
+  const queue = [];
+  [...recent, ...shuffle(pool)].forEach(w=>{ if(queue.length < n && !queue.includes(w)) queue.push(w); });
+  while(queue.length < n && pool.length) queue.push(pool[Math.floor(Math.random() * pool.length)]);   // a short list repeats
+  let k = 0, streak = -1;                        // streak ≥ 0: practising queue[k]
+  const step = ()=>{
+    if(k >= queue.length){ ui.captureTest = null; return done(); }
+    const left = 3 - streak;
+    ui.captureTest = { k, of:queue.length, word:queue[k], practising:streak >= 0, streak:Math.max(0, streak) };
+    startQuiz({
+      title:'Caught',
+      subtitle: streak >= 0
+        ? `Practice: get this right ${left} more time${left === 1 ? '' : 's'} in a row. It counts as one phrase. (${k} of ${queue.length} done)`
+        : `Write ${queue.length} phrases to slip away in the dark. (${k} of ${queue.length} done)`,
+      words:[queue[k]], lockExit:true,
+      onComplete:(res)=>{
+        const passed = !!(res && res[0] && res[0].passed);
+        if(streak >= 0){
+          if(!passed) streak = 0;
+          else if(++streak >= 3){ k++; streak = -1; }
+        }
+        else if(passed) k++;
+        else streak = 0;
+        step();
+      },
+      onExit:()=>{},
+    });
+  };
+  step();
 }
 
 /* ---------- something in the dark ---------- */
@@ -616,7 +747,7 @@ function stealthCss(){
     .walk-fog i.fog-sense{background:rgba(40,20,70,0.34);}
     .walk-fog i.fog-lamp{background:rgba(255,196,90,0.22);box-shadow:inset 0 0 6px rgba(255,190,80,0.35);}
     .walk-fog i.fog-fire{background:rgba(255,150,60,0.10);}
-    .walk-ent.guard img{filter:drop-shadow(0 0 5px rgba(255,200,90,0.8));}
+    .walk-ent.guard img, .scene-actor.capture-guard img{filter:drop-shadow(0 0 5px rgba(255,200,90,0.8));}
     .walk-ent.guard.sensed > :not(.guard-mark){opacity:.45;filter:grayscale(1) drop-shadow(0 0 6px rgba(150,90,220,0.9));}
     .walk-ent.guard .guard-mark{position:absolute;left:50%;top:-58%;transform:translateX(-50%);
       font:900 calc(var(--wt) * 0.6)/1 'Baloo 2',sans-serif;color:#ffd84a;text-shadow:0 2px 0 #2a1c00,0 0 6px #000;}

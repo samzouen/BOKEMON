@@ -884,10 +884,12 @@ async function onFailstarWin(i){
    stay electric, and three fighters sent by the Great Sage dojo. Each team is
    fought straight through with no healing between members.
    ============================================================ */
+/* Every one of them fights with its best (2.72): the opening wave used to
+   throw only its Power1. */
 const FIGHT_WAVE1 = (lv)=>[
-  {species:'boxer',   level:lv, ai:'power1'},
-  {species:'kicker',  level:lv, ai:'power1'},
-  {species:'spinner', level:lv, ai:'power1'},
+  {species:'boxer',   level:lv, ai:'best'},
+  {species:'kicker',  level:lv, ai:'best'},
+  {species:'spinner', level:lv, ai:'best'},
 ];
 const YOGA_WAVE  = (lv)=>[{species:'yoga',level:lv,ai:'best'},{species:'yoga',level:lv,ai:'best'}];
 const JUDO_WAVE  = (lv)=>[
@@ -908,9 +910,9 @@ const GREAT_SAGE_TEAM = [
 ];
 
 const DOJO_E_WAVE1 = (lv)=>[
-  {species:'thunderdog',  level:lv, ai:'power1'},
-  {species:'zebra',       level:lv, ai:'power1'},
-  {species:'thunderlion', level:lv, ai:'power1'},
+  {species:'thunderdog',  level:lv, ai:'best'},
+  {species:'zebra',       level:lv, ai:'best'},
+  {species:'thunderlion', level:lv, ai:'best'},
 ];
 const ELECTRIC_SIBLINGS = [
   { id:'electric_new_master1', label:'Electric Sibling', waves:[ DOJO_E_WAVE1(63),

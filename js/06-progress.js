@@ -8,7 +8,7 @@
 /* The cap belongs to the ZONE you're standing in, not the region — Rocky
    Caverns lets you push past the rest of Emerald March. Away from any zone,
    the region's best available cap applies. */
-const REGION_CAPS = { 1:21, 2:41, 3:61, 4:85, 5:90 };   // Region 5 part one; raise with the later tiers
+const REGION_CAPS = { 1:21, 2:41, 3:61, 4:85, 5:95 };   // Region 5 part one (2.72: 95); raise with the later tiers
 function levelCap(){
   /* The Band Competition is a Challenge rather than a zone, so it carries its
      own ceiling; beating the band lifts the whole region. */

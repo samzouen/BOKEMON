@@ -329,21 +329,23 @@ const MOVES = {
                     ['Ultimate','Ansatsu',1.0,'Single',8,41,{spend:{status:'invisible', clearPrep:true, mult:1.5, perPrep:0.3}}],
                     ['Max','Ansatsu Max',1.2,'Single',8,51,{spend:{status:'invisible', clearPrep:true, mult:1.7, perPrep:0.4}}]],
 
-  /* --- Great Sage dojo. The first three strike before the player, as the
-         Electric trio do; the rest trade their AOE Power2 for a passive stance
-         and take a weak AOE on Power1 instead. --- */
+  /* --- Great Sage dojo. The first three open every round with a free quick
+         attack (their passive, from level 1: 0.25× on one target at random),
+         and their Ultimate is a 1× blow at every enemy — it took the place of
+         their old 0.5× AOE Power2 (2.73). The rest trade their AOE Power2 for a
+         passive stance and take a weak AOE on Power1 instead. --- */
   boxer:           [['Basic','Jab',0.2,'Single',2,1],
                     ['Power1','Lead Hook',0.3,'Single',4,1,{first:true, playerBonus:0.2}],
-                    ['Power2','Body Blow',0.5,'AOE',8,18],
-                    ['Ultimate','Combination',0.5,'Single',8,25,{hits:3}]],
+                    ['Power2','Quick Hands',null,'Passive',0,1,{passive:{quick:0.25}}],
+                    ['Ultimate','Knockout Flurry',1,'AOE',8,25]],
   kicker:          [['Basic','Low Kick',0.2,'Single',2,1],
                     ['Power1','Snap Kick',0.3,'Single',4,1,{first:true, playerBonus:0.2}],
-                    ['Power2','Roundhouse',0.5,'AOE',8,18],
-                    ['Ultimate','Axe Kick',1.5,'Single',8,25]],
+                    ['Power2','Quick Feet',null,'Passive',0,1,{passive:{quick:0.25}}],
+                    ['Ultimate','Tornado Kick',1,'AOE',8,25]],
   spinner:         [['Basic','Palm Strike',0.2,'Single',2,1],
                     ['Power1','Whirl Step',0.3,'Single',4,1,{first:true, playerBonus:0.2}],
-                    ['Power2','Cyclone Sweep',0.5,'AOE',8,18],
-                    ['Ultimate','Drill Spin',0.5,'Single',8,25,{hits:3}]],
+                    ['Power2','Quick Spin',null,'Passive',0,1,{passive:{quick:0.25}}],
+                    ['Ultimate','Cyclone',1,'AOE',8,25]],
 
   judo_blue:       [['Basic','Grip',0.2,'Single',2,1],
                     ['Power1','Osoto Gari',0.3,'AOE',4,1],

@@ -249,14 +249,18 @@ function showDamageNumber(anchorId, amount, opts){
   layer.appendChild(el);
   setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 2100);
 }
-/* Sum a hit list so a 7-strike Ultra reports one number, not seven. */
+/* Sum a hit list so a 7-strike Ultra reports one number, not seven — and what
+   their block soaked, in blue beneath it, so a small number explains itself. */
 function reportHits(hits){
-  const byAnchor = {};
+  const byAnchor = {}, soaked = {};
   (hits||[]).forEach(h=>{
+    if(!h) return;
     const id = (h.idx!=null && h.idx>=0) ? 'enemy-'+h.idx : 'playerBob';
     byAnchor[id] = (byAnchor[id]||0) + (h.dmg||0);
+    if(h.blocked > 0) soaked[id] = (soaked[id]||0) + h.blocked;
   });
   Object.entries(byAnchor).forEach(([id,total])=> showDamageNumber(id, total));
+  Object.entries(soaked).forEach(([id,n])=> floatBlocked(id, n));
 }
 
 function flashHit(el){
@@ -556,7 +560,10 @@ function applySelfDamage(mv, mon){
   const pct = SELF_DAMAGE[mv.name];
   if(!pct) return 0;
   let dmg = pct * monAtk(mon);
-  if(getPStatus(0,'overheat')) dmg *= 1.5;   // overheat raises damage taken, incl. recoil
+  /* Overheat raises damage taken, recoil included — by what YOUR Overheat
+     says it costs (1.5×, 1.3× at +, 1.1× at ✦), not a flat 1.5×. */
+  const oh = getPStatus(0,'overheat');
+  if(oh) dmg *= (oh.take || 1.5);
   dmg = Math.ceil(dmg);
   const before = mon.currentHp;
   mon.currentHp = Math.max(0, mon.currentHp - dmg);
@@ -803,10 +810,11 @@ function resolveScriptedMove(mv, mon){
   // A scripted finisher: fixed damage, always enough, and it shows the number.
   const atk = monAtk(mon);
   const pool = mv.target==='Single' ? livingEnemies().slice(0,1) : livingEnemies();
+  /* The story needs this blow to clear the field, so no block stands in its way. */
   const hits = pool.map(t=>{
     const dmg = mv.fixed != null ? mv.fixed
               : Math.max(t.hp, computeDamage(mv.mult, atk, monRef(mon), t, true));
-    return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp-dmg) };
+    return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp-dmg), pierce:true };
   });
   battleMsg(`${displayName(mon)} used ${mv.name}!`);
   bob($('#playerBob'), +1);
@@ -906,8 +914,10 @@ function resolveBattleMove(mv, target, results, opts){
     breakCover(mon);
     const dmg = grudgeDamage(mon, mv.grudge);
     const foes = livingEnemies();
-    const hits = foes.map(t=>({ t, idx:ui.battle.enemies.indexOf(t), dmg,
-                                oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }));
+    /* It cannot be dodged (your call) — but a Counter guard reads it, as
+       yours reads their Grudge, and their block soaks it. */
+    const hits = foes.map(t=>{ const g = enemyGuard(t, dmg);
+      return { t, idx:ui.battle.enemies.indexOf(t), dmg:g, oldHp:t.hp, newHp:Math.max(0, t.hp - g) }; });
     battleMsg(`${mv.name}! Everything he has lost, given back at once.`);
     bob($('#playerBob'), +1);
     return setTimeout(()=>{ applyHits(hits); reportHits(hits);
@@ -930,16 +940,25 @@ function resolveBattleMove(mv, target, results, opts){
     if(!foes.length) return setTimeout(()=> afterPlayerAttack(mon, []), 700);
     const start = Math.max(0, foes.indexOf(target && target.hp > 0 ? target : foes[0]));
     const left = new Map();                       // running health, so a repeat blow counts
+    const soak = blockPlanner();                  // and what their block will take of each
     const hits = [];
     for(let i = 0; i < (v.hits || 1); i++){
       let t = foes[(start + i) % foes.length];
       const hpOf = x => left.has(x) ? left.get(x) : x.hp;
       if(hpOf(t) <= 0) t = foes.find(x=> hpOf(x) > 0) || t;
       const cur = hpOf(t);
-      const dmg = computeDamage(per, monAtk(mon), monRef(mon), t, true);
-      const nu = Math.max(0, cur - dmg);
+      const idx = ui.battle.enemies.indexOf(t);
+      /* Each blow can be slipped, like any other attack of yours: a lurking
+         enemy is simply not there. (It never rolled evasion, so Vengeance
+         found lurkers in the dark — Grudge still does, by design.) */
+      if(rollDodge(t, idx, 380 + i * 200, ignoresEvasion(mv, mon))){
+        hits.push({ t, idx, dmg:0, oldHp:cur, newHp:cur, dodged:true });
+        continue;
+      }
+      const dmg = enemyGuard(t, computeDamage(per, monAtk(mon), monRef(mon), t, true));
+      const nu = plannedHp(soak, t, cur, dmg);
       left.set(t, nu);
-      hits.push({ t, idx:ui.battle.enemies.indexOf(t), dmg, oldHp:cur, newHp:nu });
+      hits.push({ t, idx, dmg, oldHp:cur, newHp:nu });
     }
     battleMsg(`${mv.name}! ${hits.length} blows${fallen ? `, heavier for every one you have lost` : ''} — ` +
               `and every blow from here will be remembered.`);
@@ -1105,7 +1124,7 @@ function resolveBattleMove(mv, target, results, opts){
         const idx = ui.battle.enemies.indexOf(t);
         if(rollDodge(t, idx, 240, ignoresEvasion(mv, mon))) return { t, idx, dmg:0, oldHp:t.hp, newHp:t.hp, dodged:true };
         const f = (t === main) ? factor : factor * mv.splash;
-        const dmg = computeDamage(f, atk, monRef(mon), t, true);
+        const dmg = enemyGuard(t, computeDamage(f, atk, monRef(mon), t, true));   // their Counter reads it too
         return { t, idx, dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
       });
       battleMsg(`${mv.name}!`);
@@ -1131,7 +1150,7 @@ function resolveBattleMove(mv, target, results, opts){
     const ti = ui.battle.enemies.indexOf(t);
     const h = rollDodge(t, ti, 240, ignoresEvasion(mv, mon))
       ? [{ t, idx:ti, dmg:0, oldHp:t.hp, newHp:t.hp, dodged:true }]
-      : [{ t, idx:ti, dmg:back, oldHp:t.hp, newHp:Math.max(0,t.hp-back) }];
+      : [{ t, idx:ti, dmg:enemyGuard(t, back), oldHp:t.hp, newHp:Math.max(0,t.hp-back) }];
     battleMsg(`${mv.name}! Their own force is turned against them.`);
     bob($('#playerBob'), +1);
     return setTimeout(()=>{ applyHits(h); reportHits(h); setTimeout(()=> afterPlayerAttack(mon, h), 700); }, 380);
@@ -1193,12 +1212,14 @@ function resolveBattleMove(mv, target, results, opts){
   setTimeout(()=>{
     applyHits(hits);
     reportHits(hits);
-    // Paralysis rolls per hit, so a multi-hit move gets several chances
+    // Paralysis rolls per hit, so a multi-hit move gets several chances — but
+    // only on a blow that got through: one that was dodged, or that their block
+    // soaked entirely, stuns nobody (as theirs cannot stun you through yours)
     const stunPct = mv.paralyse || mv.stunHit;
     if(stunPct){
       const zapped = [];
       hits.forEach(h=>{
-        if(h.t && h.t.hp>0 && Math.random() < stunPct && !getEStatus(h.t,'paralysed')){
+        if(h.t && h.t.hp>0 && h.dmg > 0 && !h.dodged && Math.random() < stunPct && !getEStatus(h.t,'paralysed')){
           addEStatus(h.t, { type:'paralysed', turnsLeft:1 });
           zapped.push(SPECIES[h.t.species].name);
         }
@@ -1271,40 +1292,82 @@ function muddledSelfStrike(mv, mon, factor){
   }, 420);
 }
 
-/* apply a batch of {t,idx,oldHp,newHp} hits with flash + drain, mark fainted.
-   Any hit on a Giga-Drain-marked enemy heals the active monster for 0.2x ATK. */
-/* `opts.noLeech` marks damage that did NOT come from an attack the player
+/* ============================================================
+   ONE STRIKE OF YOURS LANDING — the only place it happens
+   ------------------------------------------------------------
+   Every blow you deal an enemy comes through here however it was planned: a
+   single hit, a twin, each strike of a barrage or an Ultra, a repeat, an echo,
+   an afterimage, a riposte, a burn. Their block works exactly as yours does
+   against their blows: one stack per strike, each soaking up to the ATK it was
+   minted at, the rest landing. A strike that was dodged, or that carries
+   nothing, spends nothing. HP comes off what the enemy has NOW, so several
+   strikes on one enemy add up however they were planned (a repeat of a
+   barrage used to land only its last strike).
+     h.dmg     arrives as the planned figure, leaves as what got through
+     h.raw     the planned figure, kept (a repeat re-applies it, block and all)
+     h.blocked what the block soaked
+     h.pierce  goes straight through block (the scripted finale)
+   Returns what Leech Seed drank from it, for the caller to hand out.
+   ============================================================ */
+function landStrike(h, opts){
+  if(!h || !h.t || h.dodged) return 0;
+  const t = h.t;
+  if(h.raw == null) h.raw = h.dmg || 0;
+  const before = t.hp;
+  if(before <= 0){ h.dmg = 0; h.oldHp = h.newHp = 0; return 0; }   // already down: nothing left to strike
+  const raw = h.raw;
+  const through = (raw > 0 && !h.pierce && blockStacksOf(t)) ? applyBlock(t, raw, 'enemyBlk-' + h.idx) : raw;
+  h.blocked = raw - through;
+  h.dmg = through;
+  h.oldHp = before;
+  h.newHp = Math.max(0, before - through);
+  if(raw > 0) t.lastDamageTaken = raw;          // a reflection returns the full figure, as yours does
+  /* Arena immortality: a knock-out becomes a full heal, so a test runs as
+     long as the tester wants without anything respawning. */
+  if(ui.battle && ui.battle.arenaImmortal && h.newHp <= 0) h.newHp = t.maxHp;
+  t.hp = h.newHp;
+  flashHit(document.getElementById('enemy-' + h.idx));
+  drainHp('enemyHp-' + h.idx, before, h.newHp, t.maxHp);
+  if(h.newHp <= 0){ const el = document.getElementById('enemy-' + h.idx); if(el) el.classList.add('fainted'); }
+  /* Leech Seed drinks from what lands. A dodge, or a blow their block soaked
+     entirely, gives it nothing — just as their seeds get nothing from a blow
+     of theirs that your block soaks. */
+  if(through > 0 && !(opts && opts.noLeech)) return resolveLeech(t, activeMon());
+  return 0;
+}
+/* A multi-strike move is planned before any of its strikes land, so the plan
+   has to know what their block will soak — or it would think a shielded enemy
+   down while it still stands, and stop striking it. This spends a copy of each
+   target's stacks, in the order the real ones will go. */
+function blockPlanner(){
+  const left = new Map();
+  return (t, dmg)=>{
+    if(!t || !(dmg > 0)) return dmg || 0;
+    const n = left.has(t) ? left.get(t) : blockStacksOf(t);
+    if(n <= 0) return dmg;
+    left.set(t, n - 1);
+    return Math.max(0, dmg - (t.blockValue || 0));
+  };
+}
+/* What a planned strike leaves the enemy on: through their block — and in the
+   immortal arena a knock-out comes straight back up at full, so the rest of
+   the move keeps striking it (it used to stop, and the test stalled). */
+function plannedHp(soak, t, hp, dmg){
+  const left = Math.max(0, hp - soak(t, dmg));
+  return (left <= 0 && ui.battle && ui.battle.arenaImmortal) ? t.maxHp : left;
+}
+
+/* apply a batch of hits: each one lands through landStrike, in order.
+   `opts.noLeech` marks damage that did NOT come from an attack the player
    chose — pre-hits like Overheat ✦'s burn and Aftershock. Those should not
    feed Leech Seed, or a seeded field would heal the team and gnaw the enemy
    before a single move was made. */
 function applyHits(hits, opts){
-  hits.forEach(h=>{ if(h && h.t) h.t.lastDamageTaken = h.dmg; });
-  /* Arena immortality: a knock-out becomes a full heal, so a test runs as long
-     as the tester wants without anything respawning. */
-  if(ui.battle && ui.battle.arenaImmortal){
-    hits.forEach(h=>{
-      if(h && h.t && h.newHp <= 0){ h.newHp = h.t.maxHp; h.t.hp = h.t.maxHp; }
-    });
-  }
-  // an enemy holding block stacks eats one per strike
-  hits.forEach(h=>{
-    if(!h || !h.t || !blockStacksOf(h.t)) return;
-    const through = applyBlock(h.t, h.dmg, 'enemyBlk-'+h.idx);
-    if(through !== h.dmg){
-      h.blocked = h.dmg - through;
-      h.dmg = through;
-      h.newHp = Math.max(0, h.oldHp - through);
-    }
-  });
+  hits = (hits || []).filter(Boolean);
   const mon = activeMon();
-  if(hits && hits.length) playSfx('hit_dealt');
+  if(hits.length) playSfx('hit_dealt');
   let healed = 0;
-  hits.forEach(h=>{
-    h.t.hp = h.newHp;
-    flashHit(document.getElementById('enemy-'+h.idx));
-    drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
-    if(!(opts && opts.noLeech)) healed += resolveLeech(h.t, mon);
-  });
+  hits.forEach(h=>{ healed += landStrike(h, opts); });
   const ls = ui.battle && ui.battle.pendingLifesteal;
   if(ls){ healed += ls; ui.battle.pendingLifesteal = 0; }
   // Leech Seed feeds the WHOLE team, not only the monster that swung.
@@ -1324,7 +1387,7 @@ function applyHits(hits, opts){
       (others ? ` and every one of your other ${others} monster${others>1?'s':''}.` : '.'));
   }
   saveProfile();
-  hits.forEach(h=>{ if(h.newHp<=0){ const el=document.getElementById('enemy-'+h.idx); if(el) el.classList.add('fainted'); } });
+  hits.forEach(h=>{ if(h.t && h.t.hp<=0){ const el=document.getElementById('enemy-'+h.idx); if(el) el.classList.add('fainted'); } });
 }
 
 /* after any player attack resolves: check overcharge repeat, then move on.
@@ -1416,13 +1479,17 @@ function postPlayerAction(mon, hits){
     if(noteDealtDamage(mon)) lines.push(`🌘 ${displayName(mon)} slips back into the shadows — Cunning!`);
     const g = greedSteal('player', mon, victims);
     if(g) lines.push(g);
-    /* Their Spike Armour (and a Lava Shell they hold) prick back: once for
-       each of them you hit, at that one's own attack. */
+  }
+  /* Their Spike Armour (and a Lava Shell they hold) prick back: once for each
+     of them you hit, at that one's own attack — a blow their block soaked
+     still met the spikes, as a blow of theirs your block soaks meets yours. */
+  const touched = [...new Set(struck.filter(h=> !h.dodged && ((h.raw != null ? h.raw : h.dmg) > 0)).map(h=> h.t))];
+  if(touched.length){
     const spk = getESide('spikeArmour'), shl = getESide('shell');
     const per = (spk ? (spk.thorns || 0.20) : 0) + (shl ? (shl.thorns || 0) : 0);
     if(per > 0 && mon.currentHp > 0){
       let back = 0;
-      victims.forEach(t=>{ back += Math.ceil(per * enemyAtk(t)); });
+      touched.forEach(t=>{ back += Math.ceil(per * enemyAtk(t)); });
       const before = mon.currentHp;
       mon.currentHp = Math.max(0, mon.currentHp - back);
       flashHit($('#playerBob'));
@@ -1451,11 +1518,13 @@ function postPlayerAction(mon, hits){
     }
     const dmg = computeDamage(p.riposte, enemyAtk(k), k, monRef(mon), false);
     const before = mon.currentHp;
-    mon.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, mon.currentHp - applyBlock(mon, dmg, 'playerBlk'));
+    const through = applyBlock(mon, dmg, 'playerBlk');
+    mon.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, mon.currentHp - through);
     counterDrift(document.getElementById('enemyBob-' + b.enemies.indexOf(k)), document.getElementById('playerBob'));
     flashHit($('#playerBob'));
     drainHp('playerHp', before, mon.currentHp, monMaxHp(mon));
     showDamageNumber('playerBob', before - mon.currentHp);
+    floatBlocked('playerBob', dmg - through);
     lines.push(`⚔️ ${who} ripostes — ${before - mon.currentHp}!`);
   });
   if(!lines.length) return 0;
@@ -1501,7 +1570,9 @@ function runCloneEchoes(mon, mv, done){
   const echoes = targets.filter(t=>t && t.hp>0).map((t, k)=>{
     const idx = b.enemies.indexOf(t);
     if(rollDodge(t, idx, 300 + k*350)) return { t, idx, dmg:0, oldHp:t.hp, newHp:t.hp, dodged:true };
-    const dmg = Math.max(1, Math.ceil(computeDamage(mv.mult||0.2, atk, monRef(mon), t, true) * b.clones.mult));
+    /* part of the same action: an enemy that took it on the guard takes the
+       echoes on it too, as your guard takes their echoes */
+    const dmg = enemyGuard(t, Math.max(1, Math.ceil(computeDamage(mv.mult||0.2, atk, monRef(mon), t, true) * b.clones.mult)));
     return { t, idx, dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
   });
   if(echoes.length===0){ b._cloneEchoing=false; return done(); }
@@ -1523,20 +1594,26 @@ function afterPlayerAttackReal(mon, hits){
     /* ocChance honours the ✦ tier's certain first strike; oc.chance alone was
        using the base rate for every repeat. */
     if(canRepeat && Math.random() < ocChance){
-      battleMsg('⚡ Overcharge triggers — the attack repeats!');
       /* A blow that KILLED its target used to leave nothing to repeat — the
          filter dropped the dead and the echo fizzled. It now falls on somebody
-         else who is still standing. */
+         else who is still standing. Every strike is repeated at the figure it
+         was planned at, so their block soaks the repeat strike by strike as it
+         soaked the first time — as your block does their Overcharge. A strike
+         they dodged had nothing planned, so there is nothing of it to repeat. */
       const alive = livingEnemies();
       const again = hits.map(h=>{
+        if(!h || !h.t || h.dodged) return null;
+        const amount = h.raw != null ? h.raw : h.dmg;
+        if(!(amount > 0)) return null;
         if(h.t.hp > 0 && rollDodge(h.t, h.idx, 300)) return { t:h.t, idx:h.idx, oldHp:h.t.hp, newHp:h.t.hp, dmg:0, dodged:true };
-        if(h.t.hp > 0) return { t:h.t, idx:h.idx, oldHp:h.t.hp, newHp:Math.max(0,h.t.hp-h.dmg), dmg:h.dmg };
+        if(h.t.hp > 0) return { t:h.t, idx:h.idx, oldHp:h.t.hp, newHp:Math.max(0,h.t.hp-amount), dmg:amount };
         const t = alive[Math.floor(Math.random()*alive.length)];
         if(!t) return null;
         return { t, idx:ui.battle.enemies.indexOf(t), oldHp:t.hp,
-                 newHp:Math.max(0, t.hp - h.dmg), dmg:h.dmg, redirected:true };
+                 newHp:Math.max(0, t.hp - amount), dmg:amount, redirected:true };
       }).filter(Boolean);
       if(again.length===0){ finishPlayerTurn(); return; }
+      battleMsg('⚡ Overcharge triggers — the attack repeats!');
       if(again.some(h=>h.redirected)) battleMsg('…and finds somebody else.');
       bob($('#playerBob'), +1);
       setTimeout(()=>{
@@ -1749,6 +1826,7 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
   const totalHits = mv.hits;
   const per = mv.split ? factor / mv.hits : factor;
   const sim = new Map(targets.map(t=>[t, t.hp]));
+  const soak = blockPlanner();                 // their block, strike by strike
   const all = [], volleys = [];
   let dodged = 0;
   for(let k=0;k<totalHits;k++){
@@ -1759,7 +1837,7 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
       if(rollDodge(t, idx, 330 + k*350, ignoresEvasion(mv, mon))){ dodged++; return; }
       let dmg = computeDamage(per, atk, monRef(mon), t, true);
       dmg = enemyGuard(t, dmg);
-      const oldHp = sim.get(t), newHp = Math.max(0, oldHp - dmg);
+      const oldHp = sim.get(t), newHp = plannedHp(soak, t, oldHp, dmg);
       sim.set(t, newHp);
       enemyCounter(t, idx, dmg, 520 + k*350);
       const h = { t, idx, dmg, oldHp, newHp };
@@ -1790,22 +1868,38 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
    and Unseen were being ignored entirely by multi-hit moves, so a Loong at 70%
    evasion never dodged a single strike of a six-hit barrage. */
 /* ------------------------------------------------------------
-   COUNTER
-   A defender in a counter stance answers EVERY strike it takes from a move the
-   player chose — single, twin, AOE and every hit of a barrage alike, each at
-   the stance's own ratio.
-
-   It deliberately does NOT answer pre-action-phase damage (Overheat's burn,
-   Aftershock, the Haunting Aria's retaliation). Those hits are small and
-   frequent, and letting them soak the counter would waste a stance the enemy
-   paid for — the player would simply chip it away for free.
+   COUNTER, in their hands
+   A guarded enemy takes a whole attack of yours on one stack (below). It
+   deliberately does NOT read damage outside an action of yours — Overheat's
+   burn, Aftershock, the Haunting Aria's apparition, your afterimages, your
+   riposte — as yours reads none of theirs: those would chip a guard away for
+   free.
    ------------------------------------------------------------ */
 /* An enemy holding Counter stacks guards instead of returning damage — the
-   same 80% as yours, and it comes out of the exchange with a Combo. Called
-   before the damage is committed so the reduction actually applies. */
+   same 80% as yours, and it comes out of the exchange with a Combo.
+
+   Since 2.72 it braces exactly as yours does. Yours is spent at their ATTEMPT
+   — before their blow is dodged or not — and takes the WHOLE attack on the
+   guard, every strike of it, repeats and echoes included. Theirs now does the
+   same against yours: the first time an action of yours comes at a guarded
+   enemy, one stack is spent (dodged or not), and every strike of that action
+   on that enemy lands at a fifth. It used to spend a stack per strike, after
+   the dodge roll, so a barrage took only its first strike on the guard.
+   enemyBrace() is called from rollDodge, which every strike of an attack
+   passes through; Grudge, which cannot be dodged, braces through enemyGuard. */
+function enemyBrace(t){
+  const b = ui.battle;
+  if(!b || !t) return 1;
+  const seq = b.actionSeq || 0;
+  if(!b._brace || b._brace.seq !== seq) b._brace = { seq, map:new Map() };
+  const m = b._brace.map;
+  if(!m.has(t)) m.set(t, counterCountOf(t) ? spendEnemyCounter(t) : 1);
+  return m.get(t);
+}
 function enemyGuard(t, dmg){
-  if(!t || !counterCountOf(t) || dmg <= 0) return dmg;
-  return Math.ceil(dmg * spendEnemyCounter(t));
+  if(!t || !(dmg > 0)) return dmg;
+  const g = enemyBrace(t);
+  return g < 1 ? Math.ceil(dmg * g) : dmg;
 }
 /* Superseded by enemyGuard(); kept inert so older call sites cannot misfire. */
 function enemyCounter(t, idx, dmg, delay){
@@ -1878,12 +1972,19 @@ function confusedStrike(e, done){
 /* Does this one blow of yours slip this enemy? EVERY damage path asks here —
    single, twin, AOE, barrage, repeat, echo, afterimage — so no path can forget
    evasion again (twin moves, repeats and echoes all used to land regardless).
-   `sure` for a blow that cannot be dodged: a mind-read. */
-function rollDodge(t, idx, delay, sure){
+   `sure` for a blow that cannot be dodged: a mind-read.
+   A strike of an ATTACK meets their Counter first (enemyBrace — spent at your
+   attempt, as yours is at theirs). `reflex` marks a blow that is not part of
+   an attack of yours — an afterimage at the end of the round, a riposte in
+   their turn: no guard is read for it and, as their copies and ripostes make
+   none of yours, a Mirage leaves no copies when it slips one. */
+function rollDodge(t, idx, delay, sure, reflex){
+  if(!reflex) enemyBrace(t);
   const ev = sure ? 0 : enemyEvasion(t);
   if(ev <= 0 || Math.random() >= ev) return false;
   const word = dodgeWord(t);
   setTimeout(()=>{ dodgeEnemy(idx); floatMiss('enemy-'+idx, word); }, delay||0);
+  if(reflex) return true;
   noteEnemyMirageDodge(t, idx);
   if(ui.battle) (ui.battle.actionDodges = ui.battle.actionDodges || []).push(t);
   return true;
@@ -1895,13 +1996,14 @@ function resolveSplitHits(mv, mon, factor, atk, target){
   const tIdx = ui.battle.enemies.indexOf(target);
   const hits = [];
   let simHp = target.hp;
+  const soak = blockPlanner();                 // their block, strike by strike
   let dodged = 0;
   for(let i=0;i<n;i++){
     if(simHp<=0) break;
     if(rollDodge(target, tIdx, 330 + i*350, ignoresEvasion(mv, mon))){ dodged++; continue; }   // each strike rolls
     let dmg = computeDamage(per, atk, monRef(mon), target, true);
     dmg = enemyGuard(target, dmg);
-    const oldHp = simHp, newHp = Math.max(0, simHp-dmg);
+    const oldHp = simHp, newHp = plannedHp(soak, target, simHp, dmg);
     simHp = newHp;
     enemyCounter(target, tIdx, dmg, 520 + i*350);   // each strike is answered
     hits.push({ t:target, idx:tIdx, dmg, oldHp, newHp });
@@ -1972,6 +2074,7 @@ function resolveMultiHit(mv, mon, correct, driveTarget){
   // simulate against a working copy of HP so targeting skips already-downed enemies,
   // but leave real HP untouched until the animation plays it back hit by hit
   const sim = new Map(ui.battle.enemies.map(e=>[e, e.hp]));
+  const soak = blockPlanner();                 // their block, strike by strike
   const hits=[];
   let dodged = 0;
   for(let i=0;i<n;i++){
@@ -1987,7 +2090,7 @@ function resolveMultiHit(mv, mon, correct, driveTarget){
     let dmg = computeDamage(mv.mult, atk, monRef(mon), t, true);
     dmg = enemyGuard(t, dmg);
     const oldHp = sim.get(t);
-    const newHp = Math.max(0, oldHp - dmg);
+    const newHp = plannedHp(soak, t, oldHp, dmg);
     sim.set(t, newHp);
     enemyCounter(t, idx, dmg, 520 + i*350);
     hits.push({ t, idx, oldHp, newHp, dmg });
@@ -2077,21 +2180,17 @@ function checkThresholdStuns(){
   });
 }
 
-/* One strike landing: the enemy's HP, the flash, the bar, a fall. */
+/* One strike of a played-back move landing (landStrike does the landing:
+   their block, the HP, the flash, the bar, a fall). */
 function landHit(h){
-  h.t.hp = h.newHp;
-  flashHit(document.getElementById('enemy-'+h.idx));
-  drainHp('enemyHp-'+h.idx, h.oldHp, h.newHp, h.t.maxHp);
   /* Leech Seed on a multi-hit move healed silently — no message, and only the
      active monster's bar moves — so there was no way to tell it had worked.
      Tally it and announce the total when the barrage finishes. */
-  const mon = activeMon();
-  const got = resolveLeech(h.t, mon);
+  const got = landStrike(h);
   if(got > 0){
-    leechHealParty(got, mon);
+    leechHealParty(got, activeMon());
     if(ui.battle) ui.battle._leechTally = (ui.battle._leechTally||0) + got;
   }
-  if(h.newHp<=0){ const el=document.getElementById('enemy-'+h.idx); if(el) el.classList.add('fainted'); }
 }
 /* Strikes one after another, 350 ms apart. */
 function playSuccessiveHits(hits, i, done, fast){
@@ -2286,6 +2385,30 @@ function enemyTurn(){
   runEnemyAttack(0);
 }
 
+/* 'best' picks its strongest blow when it is built (e.move). Some monsters'
+   strongest moves have no damage figure, so that pick never reached them:
+     a throw that returns what it just took (Seoi Nage, Four Ounces) — used
+       when the throw would hit harder than its best blow;
+     Charm or Disrupt — cast when your side has neither, then back to blows.
+   Returns the move to use instead, or null. */
+function bestSpecial(e){
+  const mon = activeMon();
+  if(!mon) return null;
+  const list = (MOVES[e.species] || []).filter(m=> m[1] != null && m[2] == null && m[6] && (e.level || 1) >= m[5]);
+  for(const m of list){
+    const x = m[6];
+    if(x.reflect && e.lastDamageTaken > 0){
+      const back = Math.ceil(e.lastDamageTaken * x.reflect);
+      const mv = e.move || [], ex = mv[6] || {};
+      const hits = (ex.hits > 1 && !ex.split) ? ex.hits : 1;
+      const usual = mv[2] != null ? computeDamage(mv[2], enemyAtk(e), e, monRef(mon), false) * hits : 0;
+      if(back > usual) return m;
+    }
+    if(x.charm && !getPStatus(0,'charmed') && !enemyStatusBlocked('charmed')) return m;
+    if(x.disrupt && !getPStatus(0,'disrupt') && !enemyStatusBlocked('disrupt')) return m;
+  }
+  return null;
+}
 /* An evolved wild monster fights unpredictably: it picks from its whole
    unlocked moveset each turn instead of always using the same attack. */
 function enemyMoveFor(e){
@@ -2303,7 +2426,11 @@ function enemyMoveFor(e){
     const charges = 3;
     return ['Ultimate','Hyperbeam',(charges-1)*0.5 + 1.75,'Single',0,0];
   }
-  if(e.ai !== 'random') return e.move;
+  if(e.ai !== 'random'){
+    /* 'best' also knows when its best move has no damage figure. */
+    if(e.ai === 'best'){ const sp = bestSpecial(e); if(sp) return sp; }
+    return e.move;
+  }
   /* Its pick was rolled when the order was built (a first-strike move has to
      be known then); use that one. */
   if(e._planned){ const m = e._planned; e._planned = null; return m; }
@@ -2496,6 +2623,9 @@ function enemyActs(i, e){
     const list = MOVES[e.species] || [];
     const forced = list.find(m=>m[0] === e.arenaMove && m[1] != null);
     if(forced) move = forced;
+    /* The arena's opponent throwing an Ultra stone, as you would. (Its Very
+       High stone is carried in e.stone and cast above, on its first action.) */
+    if(e.arenaMove === 'ultra' && e.arenaUltra) move = enemyUltraMove(e.arenaUltra.type, e.arenaUltra.plus);
   }
   const ex = move[6] || {};
 
@@ -2526,6 +2656,24 @@ function enemyActs(i, e){
     bob(document.getElementById('enemyBob-'+idx), -1);
     playEffect(ex.windup.name || move[1], { type:e.types[0], duration:700 });
     battleMsg((ex.windup.say || `{name} gathers itself…`).replace('{name}', name));
+    return setTimeout(next, 1100);
+  }
+  /* Charm and Disrupt in their hands: a cast on your side, not a blow — so it
+     is not an attempt, and no block, guard or dodge of yours meets it (it used
+     to go through as a blow of 0, spending a block stack on nothing). */
+  if(ex.charm || ex.disrupt){
+    bob(document.getElementById('enemyBob-'+idx), -1);
+    playEffect(move[1], { type:e.types[0], at:'playerBob' });
+    if(ex.charm){
+      if(enemyStatusBlocked('charmed')) battleMsg(`${name} uses ${move[1]} — the diamond dust scatters the charm.`);
+      else { setPStatus(0, { type:'charmed', turnsLeft:(ex.charm.turns || 5) + 1, chance:ex.charm.chance || 0.20 });
+             battleMsg(`💗 ${name} uses <b>${move[1]}</b> — your team is charmed, and may lose a turn!`); }
+    } else {
+      if(enemyStatusBlocked('disrupt')) battleMsg(`${name} uses ${move[1]} — the diamond dust holds your signal clear.`);
+      else { setPStatus(0, { type:'disrupt', turnsLeft:ex.disrupt.turns || 5, stun:ex.disrupt.stun || 0.15 });
+             battleMsg(`📡 ${name} uses <b>${move[1]}</b> — your signals are jammed: they move first, and you may seize up!`); }
+    }
+    renderStatusBadges();
     return setTimeout(next, 1100);
   }
   /* Stalk: back into hiding. */
@@ -2695,6 +2843,7 @@ function enemyActs(i, e){
       msg = `The crows smell weakness! `;
     }
     let totalTaken = 0;
+    let seedsFed = 0;
     {
       const oldHp = mon.currentHp;
       let totalBlocked = 0;
@@ -2709,7 +2858,11 @@ function enemyActs(i, e){
         const was = mon.currentHp;
         mon.currentHp = Math.max(floor, mon.currentHp - thisHit);
         totalTaken += was - mon.currentHp;
+        /* Their Leech Seed drinks from every strike that gets through, as
+           yours drinks from every strike of yours on a seeded enemy. */
+        if(thisHit > 0) seedsFed += theirSeedsDrink(e);
       }
+      if(totalBlocked > 0) floatBlocked('playerBob', totalBlocked);
       const ar = ariaState();
       if(ar) ar.struck = true;                // the dead whale takes note
       if(ui.battle.arenaImmortal && mon.currentHp <= 0){
@@ -2746,24 +2899,8 @@ function enemyActs(i, e){
       }
     }
 
-    /* Enemy-cast Charm / Disrupt land on the player's side of the field. */
-    if(move[1] === 'Charm'){
-      if(enemyStatusBlocked('charmed')){ msg += ' The diamond dust scatters the charm.'; }
-      else { setPStatus(0, { type:'charmed', turnsLeft:6, chance:0.20 }); msg += ' Your team is charmed!'; }
-      renderStatusBadges();
-    }
-    if(move[1] === 'Disrupt'){
-      /* A DEBUFF on the player's side: their signals are jammed, so every one
-         of your monsters loses an initiative point. Killing the Magnet before
-         it acts is the counter. */
-      if(enemyStatusBlocked('disrupt')){ msg += ' The diamond dust holds your signal clear.'; }
-      else {
-        const dpct = (move[6] && move[6].disrupt && move[6].disrupt.stun) || 0.15;
-        setPStatus(0, { type:'disrupt', turnsLeft:5, stun:dpct });
-        msg += ' Your signals are jammed — they move first, and you may seize up!';
-      }
-      renderStatusBadges();
-    }
+    /* (Charm and Disrupt in their hands are casts now, handled before the
+       attempt point above.) */
     /* Fiery Jaws: it takes hold, and what it has hold of does not leave. */
     if(ex.jaws && !enemyStatusBlocked('jaws')){
       ui.battle.noFlee = true;
@@ -2821,6 +2958,7 @@ function enemyActs(i, e){
     let extra = '';
     if(totalTaken > 0) extra = enemyLanded(e, totalTaken);
     else playerRiposte(e);                  // all of it soaked: a Knight answers
+    if(seedsFed > 0) extra = `🌿 Their seeds drink deep — ${seedsFed} HP to each of them. ` + extra;
     burnOut(e, ex);
 
     // arena convenience
@@ -2859,6 +2997,32 @@ function burnOut(e, ex){
   setTimeout(()=> battleMsg(`${SPECIES[e.species].name} burns itself out.`), 700);
 }
 
+/* Their Leech Seed on you, fed by ONE strike of theirs that got through — the
+   mirror of resolveLeech: it heals their whole side for its share of the
+   striker's ATK and, at + and ✦, gnaws you (✦: and the bite feeds it again).
+   Every strike of a barrage feeds it, and their repeats and echoes do, as
+   yours do; a riposte, an afterimage or a burn does not. Returns what each of
+   them was healed (0 if nobody needed it). */
+function theirSeedsDrink(e){
+  const ls = getPStatus(0,'leechSeed');
+  if(!ls || !isEnemyOwned('leechSeed', ls) || !e) return 0;
+  const atk = enemyAtk(e);
+  let heal = Math.ceil((ls.heal || 0.15) * atk);
+  const me = activeMon();
+  if(ls.bite && me && me.currentHp > 0){
+    const bite = Math.ceil(ls.bite * atk), before = me.currentHp;
+    me.currentHp = Math.max(ui.battle && ui.battle.allyUnkillable ? 1 : 0, me.currentHp - bite);
+    drainHp('playerHp', before, me.currentHp, monMaxHp(me));
+    if(ls.biteHeals) heal += Math.ceil((ls.heal || 0.15) * atk);
+  }
+  let fed = 0;
+  livingEnemies().forEach(x=>{
+    const before = x.hp;
+    x.hp = Math.min(x.maxHp, x.hp + heal);
+    if(x.hp > before){ fed++; drainHp('enemyHp-' + ui.battle.enemies.indexOf(x), before, x.hp, x.maxHp); }
+  });
+  return fed ? heal : 0;
+}
 /* An enemy blow has landed on you for `taken`. Returns words for the message. */
 function enemyLanded(e, taken){
   const bits = [];
@@ -2870,27 +3034,7 @@ function enemyLanded(e, taken){
     e.hp = Math.min(e.maxHp, e.hp + Math.ceil(taken * p.lifesteal));
     if(e.hp > before){ drainHp('enemyHp-' + idx, before, e.hp, e.maxHp); bits.push(`${name} drinks in ${e.hp - before} HP.`); }
   }
-  /* Their Leech Seed on you: every blow they land feeds their whole side, and
-     at + and ✦ gnaws a little more out of you. */
-  const ls = getPStatus(0,'leechSeed');
-  if(ls && isEnemyOwned('leechSeed', ls)){
-    const atk = enemyAtk(e);
-    let heal = Math.ceil((ls.heal || 0.15) * atk);
-    const me = activeMon();
-    if(ls.bite && me && me.currentHp > 0){
-      const bite = Math.ceil(ls.bite * atk), before = me.currentHp;
-      me.currentHp = Math.max(0, me.currentHp - bite);
-      drainHp('playerHp', before, me.currentHp, monMaxHp(me));
-      if(ls.biteHeals) heal += Math.ceil((ls.heal || 0.15) * atk);
-    }
-    let fed = 0;
-    livingEnemies().forEach(x=>{
-      const before = x.hp;
-      x.hp = Math.min(x.maxHp, x.hp + heal);
-      if(x.hp > before){ fed++; drainHp('enemyHp-' + ui.battle.enemies.indexOf(x), before, x.hp, x.maxHp); }
-    });
-    if(fed) bits.push(`🌿 Their seeds drink deep — ${heal} HP to each of them.`);
-  }
+  /* (Their Leech Seed is fed strike by strike now — theirSeedsDrink.) */
   if(noteDealtDamage(e)) bits.push(`🌘 ${name} melts back into the shadows.`);
   const g = greedSteal('enemy', e, [activeMon()]);
   if(g) bits.push(g);
@@ -2919,7 +3063,7 @@ function enemyFollowUps(i, e, move, dmg, hitCount, taken, next){
     }
     next();
   };
-  if(!mon || mon.currentHp <= 0 || e.hp <= 0 || !(taken > 0)) return done();
+  if(!mon || mon.currentHp <= 0 || e.hp <= 0) return done();
   /* A plain blow, landed again, on whatever block is left. */
   const strike = (amount, label, then, times)=>{
     const me = activeMon();
@@ -2930,22 +3074,32 @@ function enemyFollowUps(i, e, move, dmg, hitCount, taken, next){
       return setTimeout(then, 650);
     }
     const before = me.currentHp;
+    let soaked = 0, fed = 0;
     for(let k = 0; k < (times || 1); k++){
-      if(me.currentHp <= 0) break;
-      me.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, me.currentHp - applyBlock(me, amount, 'playerBlk'));
+      if(me.currentHp <= 0 && !ui.battle.allyUnkillable) break;
+      const through = applyBlock(me, amount, 'playerBlk');
+      soaked += amount - through;
+      me.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, me.currentHp - through);
+      if(through > 0) fed += theirSeedsDrink(e);         // their seeds drink from these too
     }
     flashHit($('#playerBob'));
     showDamageNumber('playerBob', before - me.currentHp);
+    floatBlocked('playerBob', soaked);
     drainHp('playerHp', before, me.currentHp, monMaxHp(me));
     const ar = ariaState(); if(ar) ar.struck = true;
-    battleMsg(`${label} — ${before - me.currentHp}!`);
+    battleMsg(`${label} — ${before - me.currentHp}!` + (fed > 0 ? ` 🌿 Their seeds drink deep — ${fed} HP to each of them.` : ''));
     setTimeout(then, 750);
   };
+  /* Their Overcharge repeats a blow that REACHED you, even one your block
+     soaked entirely — as yours repeats every strike that reached them. (It
+     used to need damage to get through.) Their clones echo only a blow that
+     landed, as before. */
   const oc = getESide('overcharge');
   const ocChance = oc ? (oc.fresh && oc.firstChance != null ? oc.firstChance : (oc.chance || 0.25)) : 0;
   const repeat = (then)=> (oc && Math.random() < ocChance) ? strike(dmg, `⚡ Their Overcharge — ${name} strikes again`, then, Math.max(1, hitCount)) : then();
   const cl = getESide('clones');
   const echo = (then)=>{
+    if(!(taken > 0)) return then();
     if(!(cl && cl.owner === e && cl.turnsLeft > 0)) return then();
     const per = Math.max(1, Math.ceil(dmg * (cl.mult || 0.5)));
     strike(per, `👥 A copy of ${name} strikes too`, ()=> strike(per, `👥 And the other`, ()=>{
@@ -2970,8 +3124,10 @@ function playerRiposte(e){
   setTimeout(()=>{
     if(!ui.battle || e.hp <= 0) return;
     counterDrift(document.getElementById('playerBob'), document.getElementById('enemyBob-' + idx));
-    if(rollDodge(e, idx, 0)){ battleMsg(`⚔️ ${displayName(me)} ripostes — and finds nothing.`); return; }
-    const dmg = enemyGuard(e, computeDamage(p.riposte, monAtk(me), monRef(me), e, true));
+    if(rollDodge(e, idx, 0, false, true)){ battleMsg(`⚔️ ${displayName(me)} ripostes — and finds nothing.`); return; }
+    /* A reflex, not an attack: it reads no guard of theirs, as their riposte
+       reads none of yours. */
+    const dmg = computeDamage(p.riposte, monAtk(me), monRef(me), e, true);
     const hits = [{ t:e, idx, dmg, oldHp:e.hp, newHp:Math.max(0, e.hp - dmg) }];
     applyHits(hits, { noLeech:true });
     reportHits(hits);

@@ -354,9 +354,7 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
   switch(type){
     case 'Fire': // Overheat — whole party trades defence for offence
       setPStatus(uid,{type:'overheat', turnsLeft:T+1, deal:d.deal, take:d.take, burn:d.burn||0, atk:casterAtk});
-      if(d.burn && !dustBlocks('player')){
-        addPreHit({ label:`🔥 The air itself scorches them!`, pct:d.burn, atk:casterAtk, turnsLeft:T, aoe:true, src:'overheat' });
-      }
+      layOverheatBurn('player', { burn:d.burn || 0, atk:casterAtk }, T);
       res.msg = d.text;
       break;
 
@@ -1285,8 +1283,22 @@ function rehomeStatus(st, thief, toSide){
   const o = Object.assign({}, st);
   delete o.by; delete o.mine;
   if('owner' in o) o.owner = toSide === 'player' ? thief.uid : thief;
-  if(o.type === 'mirage') o.pending = 0;
+  if(o.type === 'mirage'){
+    o.pending = 0;
+    /* Your afterimages strike with whoever you have out front; theirs with
+       the ATK their Mirage was cast at. A Mirage taken from you had none to
+       carry, so its copies struck for nothing — they strike with the thief's. */
+    if(toSide === 'enemy' && !(o.atk > 0)) o.atk = enemyAtk(thief);
+  }
   return o;
+}
+/* A side status crossing over keeps what hangs off it: an Overheat's burn goes
+   with it, still burning for the rounds it had left. */
+function carryAcross(got, fromSide, toSide, burnLeft){
+  if(got && got.type === 'overheat' && burnLeft > 0){
+    const st = toSide === 'enemy' ? getESide('overheat') : getPStatus(0, 'overheat');
+    if(st) layOverheatBurn(toSide, st, burnLeft);
+  }
 }
 function stealableBuffs(victimSide, victims){
   const b = ui.battle;
@@ -1301,8 +1313,13 @@ function stealableBuffs(victimSide, victims){
       out.push({ label:STATUS_LABELS[k] || k, take:()=>{
         const got = Object.assign({}, ps[k]);
         if(k === 'clones' && b.clones) Object.assign(got, { mult:b.clones.mult, evade:b.clones.evade, turnsLeft:b.clones.turnsLeft });
+        const burnLeft = k === 'overheat' ? overheatBurnTurns('player') : 0;
         delete ps[k]; afterStatusGone(k, 'player');
-        return (toSide, thief)=> !!setESide(rehomeStatus(got, thief, toSide));
+        return (toSide, thief)=>{
+          const ok = !!setESide(rehomeStatus(got, thief, toSide));
+          if(ok) carryAcross(got, 'player', toSide, burnLeft);
+          return ok;
+        };
       }});
     });
   } else {
@@ -1312,10 +1329,12 @@ function stealableBuffs(victimSide, victims){
       if(UNSTEALABLE.has(k) || st.unsweepable) return;
       out.push({ label:STATUS_LABELS[k] || k, take:()=>{
         const got = Object.assign({}, es[k]);
+        const burnLeft = k === 'overheat' ? overheatBurnTurns('enemy') : 0;
         delete es[k]; afterStatusGone(k, 'enemy');
         return (toSide, thief)=>{
           const st2 = setPStatus(0, rehomeStatus(got, thief, toSide));
           if(st2 && k === 'clones') b.clones = { turnsLeft:got.turnsLeft, mult:got.mult || 0.5, evade:got.evade || 0, uid:thief.uid };
+          if(st2) carryAcross(got, 'enemy', toSide, burnLeft);
           return !!st2;
         };
       }});
@@ -1556,6 +1575,8 @@ function spendCounterStack(mon){
 function spendEnemyCounter(e){
   const st = takeBestCounter(e);
   if(!st) return 1;
+  { const i = ui.battle ? ui.battle.enemies.indexOf(e) : -1;           // the same GUARD you see on yours
+    if(i >= 0) floatMiss('enemy-' + i, 'GUARD'); }
   e.comboStacks = (e.comboStacks||0) + 1;
   if(st.enrage) e.enrageStacks = (e.enrageStacks||0) + 1;
   renderStatusBadges();
@@ -1632,7 +1653,7 @@ function resolveAfterimages(done){
     k++;
     const t = foes[Math.floor(Math.random()*foes.length)];
     const idx = ui.battle.enemies.indexOf(t);
-    if(rollDodge(t, idx, 0)){                            // a lurker is not there to be struck
+    if(rollDodge(t, idx, 0, false, true)){               // a lurker is not there to be struck
       battleMsg(`👥 An afterimage strikes — and finds nothing.`);
       return setTimeout(step, 620);
     }
@@ -1795,7 +1816,7 @@ function castEnemyVeryHigh(e, type, plus){
   switch(type){
     case 'Fire':
       setESide({ type:'overheat', turnsLeft:T + 1, deal:d.deal, take:d.take, burn:d.burn || 0, atk });
-      if(d.burn && !dustBlocks('enemy')) addPreHit({ label:`🔥 The air itself scorches you!`, pct:d.burn, atk, turnsLeft:T, by:'enemy', src:'overheat' });
+      layOverheatBurn('enemy', { burn:d.burn || 0, atk }, T);
       return `🔥 ${who} casts <b>Overheat</b>: their side deals ${d.deal}× and takes ${d.take}×${d.burn ? ', and the air will scorch you every turn' : ''}.`;
     case 'Water': {
       /* Freeze counts YOUR turns: if you have already acted this round, one
@@ -1863,6 +1884,16 @@ function castEnemyVeryHigh(e, type, plus){
   }
   return '';
 }
+/* An Ultra stone in enemy hands (the arena's opponent): your barrage, turned
+   round — its refinement's hit count (5–7, 6–8, 7–9, rolled 45/35/20 as yours
+   is) and its power per strike, every strike through your block. */
+function enemyUltraMove(type, plus){
+  const p = Math.max(0, Math.min(2, plus || 0));
+  const t = ULTRA_TIERS[p];
+  const r = Math.random();
+  const n = r < 0.45 ? t.min : (r < 0.80 ? t.min + 1 : t.max);
+  return ['UltraStone', stoneName(type, 'ultra') + UPGRADE_MARKS[p], t.mult, 'MultiHit', 0, 0, { hits:n }];
+}
 /* A carrier's passive on taking the field, the mirror of applyStonePassives:
    refined Diamond Dust sweeps, refined Dragon Dance lays Mach Dragon, refined
    Steel Aegis stands its block. Once per carrier per battle. */
@@ -1905,6 +1936,15 @@ function enemyBuffMultiplier(){
 function noteEnemyMirageDodge(t, idx){
   const m = getESide('mirage');
   if(!m || !m.images) return;
+  /* Once per enemy per action of yours — as yours leaves copies once for each
+     attack of theirs it slips, however many strikes that attack carried. A
+     barrage used to leave copies for every strike dodged. */
+  const b = ui.battle, seq = (b && b.actionSeq) || 0;
+  if(b){
+    if(!b._mirageLeft || b._mirageLeft.seq !== seq) b._mirageLeft = { seq, who:new Set() };
+    if(b._mirageLeft.who.has(t)) return;
+    b._mirageLeft.who.add(t);
+  }
   m.pending = (m.pending || 0) + m.images;
   spawnAfterimages(m.images, document.getElementById('enemyBob-' + idx));
 }
@@ -1931,6 +1971,7 @@ function resolveEnemyAfterimages(done){
     flashHit(document.getElementById('playerBob'));
     drainHp('playerHp', before, me.currentHp, monMaxHp(me));
     showDamageNumber('playerBob', before - me.currentHp);
+    floatBlocked('playerBob', per - through);
     battleMsg(`👥 One of their afterimages steps out of nowhere and strikes!`);
     setTimeout(step, 620);
   };
@@ -2365,6 +2406,25 @@ function addPreHit(p){
   b.preHits = b.preHits || [];
   b.preHits.push(p);          // { label, pct, atk, turnsLeft, aoe }
 }
+/* Overheat ✦'s burn belongs to whichever side holds the Overheat. It is laid
+   when the stone is cast (replacing any burn that side already had — a second
+   Overheat does not light a second fire), and laid again on the thief's side
+   when a Greed takes the Overheat across: the stolen burn keeps its heat and
+   its remaining turns, and now scorches the side it used to warm. Yours
+   scorches every one of them; theirs scorches whoever you have out front. */
+function layOverheatBurn(side, st, turns){
+  const b = ui.battle;
+  if(!b || !st || !(st.burn > 0) || !(turns > 0) || dustBlocks(side)) return;
+  b.preHits = (b.preHits || []).filter(p=> !(p.src === 'overheat' && (p.by || 'player') === side));
+  addPreHit(side === 'enemy'
+    ? { label:`🔥 The air itself scorches you!`,  pct:st.burn, atk:st.atk || 0, turnsLeft:turns, by:'enemy', src:'overheat' }
+    : { label:`🔥 The air itself scorches them!`, pct:st.burn, atk:st.atk || 0, turnsLeft:turns, aoe:true, src:'overheat' });
+}
+/* How many more rounds a side's Overheat burn has to run (0: none). */
+function overheatBurnTurns(side){
+  const p = ((ui.battle && ui.battle.preHits) || []).find(x=> x.src === 'overheat' && (x.by || 'player') === side);
+  return p ? p.turnsLeft : 0;
+}
 /* Resolve everything queued, then hand control back. */
 function runPreHits(done){
   const b = ui.battle;
@@ -2390,10 +2450,12 @@ function runPreHits(done){
       const curP = getPStatus(0,'curse');
       if(curP && isEnemyOwned('curse', curP)) dmg = Math.ceil(dmg * (1 + (curP.extra != null ? curP.extra : 0.25)));
       const before = me.currentHp;
-      me.currentHp = Math.max(0, me.currentHp - applyBlock(me, dmg, 'playerBlk'));
+      const through = applyBlock(me, dmg, 'playerBlk');
+      me.currentHp = Math.max(0, me.currentHp - through);
       flashHit(document.getElementById('playerBob'));
       drainHp('playerHp', before, me.currentHp, monMaxHp(me));
       showDamageNumber('playerBob', before - me.currentHp);
+      floatBlocked('playerBob', dmg - through);
       battleMsg(p.label);
       return setTimeout(step, 850);
     }
@@ -2410,6 +2472,115 @@ function runPreHits(done){
     setTimeout(step, 850);
   };
   step();
+}
+
+/* ============================================================
+   QUICK ATTACKS (2.73)
+   A passive `quick: 0.25` — the Boxer's Quick Hands, the Kicker's Quick Feet,
+   the Spinner's Quick Spin — gives its monster one free hit in the opening
+   phase of EVERY round: after the pre-hits and the Aria's roll, before anyone
+   chooses a move. One target at random, for `quick` × its ATK through the
+   usual damage formula (type, buffs, armour, curse). Either side: yours out
+   front strikes a random enemy; each of theirs strikes whoever you have out
+   front.
+   It is a free strike, like an afterimage: evasion has its say (a lurker is
+   not there; the Aria's field lets it pass through — and hears it, so the
+   apparition's next roll is certain; the Whalelord struck with no Aria
+   running sings by reflex), and one block stack soaks it — but it never meets
+   a Counter guard, leaves no Mirage copies, feeds no Leech Seed, sets off no
+   Greed or Cunning and draws no riposte. A monster that could not act this
+   round (frozen, asleep, stunned, fleeing) does not strike, and a ✦ Curse
+   silences the passive.
+   ============================================================ */
+function quickOf(m){ const p = m ? passiveOf(m) : null; return (p && p.quick) || 0; }
+function canQuickStrike(side, m){
+  if(!m) return false;
+  if(side === 'player'){
+    if(!(m.currentHp > 0)) return false;
+    return !(getESide('deepFreeze') || getPStatus(0,'asleep') || getPStatus(0,'stunned'));
+  }
+  if(!(m.hp > 0) || (m.isDummy && !m.arenaActs)) return false;
+  if(getPStatus(0,'deepFreeze') || getEStatus(m,'iceTomb') || getEStatus(m,'paralysed') || getEStatus(m,'asleep')) return false;
+  return !isElusive(m);
+}
+function runQuickAttacks(done){
+  const b = ui.battle;
+  if(!b) return done();
+  const queue = [];
+  const me = activeMon();
+  if(quickOf(me) > 0) queue.push({ side:'player', m:me });
+  livingEnemies().forEach(e=>{ if(quickOf(e) > 0) queue.push({ side:'enemy', m:e }); });
+  if(!queue.length) return done();
+  let i = 0;
+  const step = ()=>{
+    if(!ui.battle) return;
+    if(i >= queue.length || !livingEnemies().length) return done();
+    const q = queue[i++];
+    if(!canQuickStrike(q.side, q.m)) return step();
+    if(q.side === 'player'){
+      if(q.m !== activeMon()) return step();
+      return quickStrikeTheirs(q.m, ()=> setTimeout(step, 450));
+    }
+    const front = activeMon();
+    if(!front || front.currentHp <= 0) return step();       // down already: the rest wait for the next one
+    quickStrikeYours(q.m, front, ()=> setTimeout(step, 450));
+  };
+  step();
+}
+/* Yours, on one of them at random. */
+function quickStrikeTheirs(mon, done){
+  const b = ui.battle;
+  const foes = livingEnemies();
+  const t = foes[Math.floor(Math.random() * foes.length)];
+  const idx = b.enemies.indexOf(t);
+  const name = displayName(mon);
+  if(mon.lurk || mon.cunning){ breakCover(mon); mon._ambush = 0; renderStatusBadges(); }
+  bob(document.getElementById('playerBob'), +1);
+  if(rollDodge(t, idx, 200, false, true)){
+    battleMsg(`⚡ ${name}'s quick attack finds nothing.`);
+    return setTimeout(done, 650);
+  }
+  const ref = Object.assign(monRef(mon), { _ambush:0, _omen:0 });   // an ambush or omen waits for a real blow
+  const dmg = computeDamage(quickOf(mon), monAtk(mon), ref, t, true);
+  const hits = [{ t, idx, dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }];
+  battleMsg(`⚡ Quick attack! ${name} darts in before anyone moves.`);
+  setTimeout(()=>{ applyHits(hits, { noLeech:true }); reportHits(hits); setTimeout(done, 400); }, 250);
+}
+/* Theirs, on whoever you have out front. */
+function quickStrikeYours(e, mon, done){
+  const b = ui.battle;
+  const idx = b.enemies.indexOf(e), name = SPECIES[e.species].name;
+  if(e.lurk || e.cunning){ breakCover(e); e._ambush = 0; renderStatusBadges(); }
+  { const ar = ariaState(); if(ar) ar.struck = true; }       // an attack on your side, all the same
+  bob(document.getElementById('enemyBob-' + idx), -1);
+  const ariaCover = ariaFieldEvasion() > 0;
+  const canReflex = !ariaCover && !ariaActive() && (MOVES[mon.species] || []).some(m=> m[6] && m[6].aria);
+  if(ariaCover || (canReflex && ariaReflex(mon))){
+    dodgePlayer(); floatMiss('playerBob', 'MISS');
+    if(ariaCover) battleMsg(`⚡ ${name}'s quick attack passes harmlessly through.`);
+    return setTimeout(done, 700);
+  }
+  if(Math.random() < playerEvasionFrom(e)){
+    dodgePlayer(); floatMiss('playerBob', dodgeWord(mon));
+    battleMsg(`⚡ ${name}'s quick attack finds nothing.`);
+    return setTimeout(done, 650);
+  }
+  const omen = e._omen, amb = e._ambush;
+  e._omen = 0; e._ambush = 0;                                 // kept for its real blow
+  const dmg = computeDamage(quickOf(e), enemyAtk(e), e, monRef(mon), false);
+  e._omen = omen; e._ambush = amb;
+  const before = mon.currentHp;
+  const through = applyBlock(mon, dmg, 'playerBlk');
+  mon.lastDamageTaken = dmg;                                  // a reflection returns the full figure
+  mon.currentHp = Math.max(b.allyUnkillable ? 1 : 0, mon.currentHp - through);
+  if(b.arenaImmortal && mon.currentHp <= 0) mon.currentHp = monMaxHp(mon);
+  flashHit(document.getElementById('playerBob'));
+  drainHp('playerHp', before, mon.currentHp, monMaxHp(mon));
+  showDamageNumber('playerBob', before - mon.currentHp);
+  floatBlocked('playerBob', dmg - through);
+  playSfx('hit_taken');
+  battleMsg(`⚡ Quick attack! ${name} darts in before anyone moves.`);
+  setTimeout(done, 650);
 }
 
 /* ============================================================
@@ -2470,18 +2641,22 @@ function counterDrift(el, attackEl){
     setTimeout(()=> attackEl.classList.remove('counter-lunge'), 420);
   }, 320);
 }
-function floatMiss(anchorId, text){
+function floatMiss(anchorId, text, cls, at){
   const host = document.getElementById(anchorId);
   const layer = document.getElementById('fxLayer') || document.getElementById('screen');
   if(!host || !layer) return;
   const hb = host.getBoundingClientRect(), lb = layer.getBoundingClientRect();
   const el = document.createElement('div');
-  el.className = 'miss-pop';
+  el.className = 'miss-pop' + (cls ? ' ' + cls : '');
   el.textContent = text || 'MISS';
   el.style.left = (hb.left - lb.left + hb.width/2) + 'px';
-  el.style.top  = (hb.top  - lb.top  + hb.height*0.3) + 'px';
+  el.style.top  = (hb.top  - lb.top  + hb.height*(at || 0.3)) + 'px';
   layer.appendChild(el);
   setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 1200);
+}
+/* What a block soaked, floating in the block's own blue under the damage. */
+function floatBlocked(anchorId, n){
+  if(n > 0) floatMiss(anchorId, `🛡 ${n}`, 'blk-pop', 0.52);
 }
 
 /* Leech Seed in one place. Heals the whole party, and on + / ✦ also gnaws the
@@ -2681,7 +2856,8 @@ const MOVE_FIRST_NAMES = new Set(['Swift Strike','Lead Hook','Snap Kick','Whirl 
 /* ============================================================
    THE ROUND — per-monster initiative
    ------------------------------------------------------------
-   1. UPKEEP      pre-hits, Diamond Dust; passives are already in place
+   1. UPKEEP      pre-hits, Diamond Dust; passives are already in place;
+                  then every quick attack (a passive: one free hit each)
    2. INITIATIVE  every living monster is scored ONCE, then sorted
    3. ACTIONS     each takes its turn in order; a monster is marked the moment
                   it acts, so nobody can be handed a second turn
@@ -2715,8 +2891,9 @@ function beginRound(msg){
   discombobulatePulse();                       // and who is muddled this round
   /* The pre-action phase: Overheat's burn and the other pre-hits, then the
      Haunting Aria's roll — here, not at the end of the round, so it still
-     comes when the last round ended with a wave knocked out. */
-  runPreHits(()=> ariaRetaliate(()=> vitaPulse(()=>{
+     comes when the last round ended with a wave knocked out — Vita's light,
+     and last the quick attacks (2.73). */
+  runPreHits(()=> ariaRetaliate(()=> vitaPulse(()=> runQuickAttacks(()=>{
     if(!ui.battle) return;
     if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
     if(!battleParty().some(m=>m.currentHp>0)) return onPlayerDefeated();
@@ -2726,7 +2903,7 @@ function beginRound(msg){
     const go = ()=>{ b.order = buildInitiativeOrder(); b.orderStep = 0; runTurnStep(); };
     if(activeMon() && activeMon().currentHp <= 0) return replaceFallenThen(go);
     go();
-  })));
+  }))));
 }
 /* The monster out front fell outside anyone's turn: choose the next one, run
    its entry passives, then carry on. */
@@ -3152,7 +3329,7 @@ const ZONE_LEVELS = {
   rocky_caverns:   { min:20, max:46 },
   volcanic_caldera:{ min:31, max:61 },
   geothermal_plant:{ min:31, max:61 },
-  catacombs:       { min:76, max:90 },   // each floor keeps its own band (15-region5.js)
+  catacombs:       { min:76, max:95 },   // the cap (2.72: 95); each floor and room keeps its own band (15-region5.js)
 };
 
 function makeEnemy(species, level, opts){
@@ -3800,6 +3977,9 @@ function moveEffectText(mv, mon, atk){
     if(p.evadeTurns)   bits.push(`begins in perfect <b>stillness</b> — every attack misses for ${p.evadeTurns} turn${p.evadeTurns>1?'s':''}`);
     if(p.counterTurns || p.counterStack) bits.push(`begins with a <b>Counter stack</b> — one whole attack taken on the guard for <b>80% less</b>, and its next blow lands <b>25%</b> harder`);
     if(p.first)        bits.push(`always takes the <b>first move</b> of the round`);
+    if(p.quick)        bits.push(`gets one free <b>quick attack</b> at the start of every round, before anyone moves: ` +
+      `<b>${p.quick}×</b> ATK (<b>${Math.ceil(p.quick * atk)}</b>, before type and armour) on one enemy at random — ` +
+      `it can be dodged, and a block stack soaks it, but no Counter guard meets it`);
     if(p.playerDouble) bits.push(`has a <b>${Math.round(p.playerDouble*100)}% chance to strike a second time</b>`);
     if(p.thresholdStun) bits.push(
       `punishes each health threshold it is driven below — <b>${p.thresholdStun.map(t=>Math.round(t*100)+'%').join(', ')}</b> — ` +
