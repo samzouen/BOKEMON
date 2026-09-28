@@ -466,12 +466,19 @@ async function onDiveWin(){
 /* A raid or a haul at the rail counts exactly the same. */
 async function onRailWin(){
   const fell = ((ui.battle && ui.battle.enemies) || []).filter(e=>e.hp<=0).map(e=>e.species);
+  /* The fisherman you answered is grateful: one Skill Token for every raid you
+     win, as many as you like (2.74). Only a win: running from the raid, or
+     every bird getting away, pays nothing — neither ever reaches here. */
+  state.inventory.tokens = (state.inventory.tokens || 0) + 1;
+  await saveProfile();
+  const thanks = `🎣 The fisherman you helped gives you a Skill Token! (${state.inventory.tokens} total)`;
   const blocked = await logExpedition();
-  if(blocked) return resumeVictory(true, whaleWallFound);
+  if(blocked){ toast(thanks); return resumeVictory(true, whaleWallFound); }
   const got = await checkHunts(fell);
   await saveProfile();
   if(got && got.length) await huntThanks(got);   // before the victory screen
-  if(revivalDue()) return resumeVictory(true, ()=> startRevivalCall());
+  if(revivalDue()){ toast(thanks); return resumeVictory(true, ()=> startRevivalCall()); }
+  ui.victoryNotes = [thanks];                    // on the victory screen itself
   resumeVictory();
 }
 function whaleWallFound(){

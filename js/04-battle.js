@@ -122,19 +122,31 @@ function markConfused(e, ffPower){
 /* Each round the old muddle clears, and Discombobulate's field catches whoever
    it catches — the newly arrived as readily as the rest. A lone Lunacy leaves
    no field behind, so its muddle simply lapses here. */
+/* A field's certain turn (`sure`) is not spent until somebody has actually
+   swung muddled (`sureUsed`, set by the swing itself). A round in which nobody
+   on that side swung — all knocked out first, asleep, frozen, or the field
+   came after their turns — keeps it, and the next round everyone standing
+   there is muddled again, new arrivals included (2.74). */
 function discombobulatePulse(){
   /* Their field on you first: last round's muddle clears (unless it was cast
      since your last turn), and their field may catch you again. */
   const mine = getPStatus(0,'discombobulate');
   if(mine && mine.fresh) mine.fresh = false; else removePStatus(0,'discombobulate');
   const ef = getESide('confusionField');
-  if(ef && !getPStatus(0,'discombobulate') && activeMon() && Math.random() < (ef.after || 0)){
-    if(ef.sleep && Math.random() < ef.sleep) setPStatus(0, { type:'asleep', turnsLeft:(ef.sleepTurns || 1) + 1, by:'enemy' });
-    else markPlayerConfused(ef.ffPower);
+  if(ef && ef.sure && !ef.sureUsed){
+    if(!getPStatus(0,'discombobulate') && activeMon()) markPlayerConfused(ef.ffPower);
+  } else {
+    if(ef) ef.sure = false;
+    if(ef && !getPStatus(0,'discombobulate') && activeMon() && Math.random() < (ef.after || 0)){
+      if(ef.sleep && Math.random() < ef.sleep) setPStatus(0, { type:'asleep', turnsLeft:(ef.sleepTurns || 1) + 1, by:'enemy' });
+      else markPlayerConfused(ef.ffPower);
+    }
   }
   const f = getPStatus(0,'confusionField');
   livingEnemies().forEach(e=> removeEStatus(e,'discombobulate'));
   if(!f) return;
+  if(f.sure && !f.sureUsed){ livingEnemies().forEach(e=> markConfused(e, f.ffPower)); return; }
+  f.sure = false;
   livingEnemies().forEach(e=>{
     if(Math.random() >= (f.after || 0)) return;
     if(f.sleep && Math.random() < f.sleep){
@@ -428,7 +440,7 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
          every turn after, each of them gets a fresh roll. */
       setPStatus(uid, { type:'confusionField', turnsLeft:T, mine:true,
                         after:d.confuseAfter || 0.25, ffPower:d.ffPower || 0.60,
-                        sleep:d.sleep || 0, sleepTurns:d.sleepTurns || 1 });
+                        sleep:d.sleep || 0, sleepTurns:d.sleepTurns || 1, sure:true, sureUsed:false });
       livingEnemies().forEach(e=> markConfused(e, d.ffPower || 0.60));
       res.msg = `Their heads are spinning — they cannot tell friend from foe!`;
       break;
@@ -489,13 +501,17 @@ function moveUnlockedFor(m, mv){
   if(mv[0] === 'Max' && (SPECIES[m.species] || {}).nerfedUntilCrowned) return isCrowned(m);
   return m.level >= mv[5];
 }
-/* Overcharge's own repeat chance: its first-turn rate on the round it was
-   cast (certain at ✦), its later rate after that; 0 without it. */
+/* Overcharge's own repeat chance: its first rate (certain at ✦) until it has
+   been rolled on something real — a blow that reached them, or a charge — and
+   its later rate after that; 0 without it. A turn with nothing to repeat (the
+   words went wrong, or every strike was dodged) keeps the first rate (2.74; it
+   used to lapse at the end of the round it was cast in). */
 function overchargeChance(){
   const oc = getPStatus(0,'overcharge');
   if(!oc) return 0;
   return (oc.fresh && oc.firstChance != null) ? oc.firstChance : (oc.chance || 0.25);
 }
+function spendOverchargeFirst(oc){ if(oc) oc.fresh = false; }
 /* The usual cap, and the one a lucky Overcharge double can reach (one more). */
 function chargeCaps(def){ return { normal:def.max, lucky:def.max + 1 }; }
 /* double: an Overcharge surge — two charges instead of one, and the only way
@@ -694,8 +710,8 @@ const VERY_HIGH = {
     { first:1.00, after:0.30 },
   ], text:[
     '25% chance to repeat a move. Very High skills never repeat.',
-    '75% to repeat this turn, 25% thereafter. Very High skills never repeat.',
-    'Guaranteed repeat this turn, 30% thereafter. Very High skills never repeat.',
+    '75% to repeat the first move that lands, 25% after that — a turn with nothing to repeat (words gone wrong, every strike dodged) does not use it up. Very High skills never repeat.',
+    'The first move that lands is certain to repeat, 30% after that — a turn with nothing to repeat (words gone wrong, every strike dodged) does not use it up. Very High skills never repeat.',
   ]},
   Ground: { name:'Spike Armour', turns:5, tiers:[
     { reduce:0.20, thorns:0.20 },
@@ -713,9 +729,9 @@ const VERY_HIGH = {
     { window:[1.00], after:0.20, images:1, imageDmg:0.20, init:2 },
     { window:[1.00], after:0.25, images:2, imageDmg:0.30, init:3 },
   ], text:[
-    'One turn of total evasion, then <b>15%</b> each turn after. This monster moves with <b>+1 initiative</b>, and no enemy can sweep that away.',
-    'One turn of total evasion, then <b>20%</b>. Every dodge leaves <b>one afterimage</b>; each strikes a random enemy for <b>0.2× ATK</b> at the end of the turn, then fades. <b>+2 initiative</b>.',
-    'One turn of total evasion, then <b>25%</b>. Every dodge leaves <b>two afterimages</b>, each striking for <b>0.3× ATK</b>. <b>+3 initiative</b>.',
+    'One turn of total evasion — the first turn anyone attacks you (a turn with no attack does not use it up) — then <b>15%</b> each turn after. This monster moves with <b>+1 initiative</b>, and no enemy can sweep that away.',
+    'One turn of total evasion (the first turn anyone attacks you), then <b>20%</b>. Every dodge leaves <b>one afterimage</b>; each strikes a random enemy for <b>0.2× ATK</b> at the end of the turn, then fades. <b>+2 initiative</b>.',
+    'One turn of total evasion (the first turn anyone attacks you), then <b>25%</b>. Every dodge leaves <b>two afterimages</b>, each striking for <b>0.3× ATK</b>. <b>+3 initiative</b>.',
   ]},
   /* Not a returned hit — a READ. A counter stack eats one entire attack,
      however many times it strikes, and the monster that pulled it off comes out
@@ -751,7 +767,7 @@ const VERY_HIGH = {
     { confuseAfter:0.20, ffPower:0.90, sleep:0.05, sleepTurns:1 },
     { confuseAfter:0.20, ffPower:1.20, sleep:0.15, sleepTurns:1 },
   ], text:[
-    'A <b>5-turn field</b> on your side. <b>The turn it lands, every enemy on the field is muddled</b> and swings at its own side — at itself, if it stands alone — for <b>60%</b> of its damage. Every turn after, each of them (new arrivals included) has a <b>20%</b> chance of the same. Diamond Dust keeps the field going.',
+    'A <b>5-turn field</b> on your side. <b>Every enemy on the field is muddled</b> and swings at its own side — at itself, if it stands alone — for <b>60%</b> of its damage, until one of them has actually swung: a turn when none of them swings (knocked out first, asleep, frozen) does not use it up, and the next wave arrives muddled. Every turn after, each of them (new arrivals included) has a <b>20%</b> chance of the same. Diamond Dust keeps the field going.',
     'As base, but a turned swing lands for <b>90%</b> of its damage, and a caught monster may sit down and sleep for the turn instead (<b>5%</b>).',
     'As base, but a turned swing lands for <b>120%</b> of its damage — harder on its own side than it would have hit you — and the nap chance is <b>15%</b>.',
   ]},
@@ -832,13 +848,21 @@ function applyPassiveGrant(holder, grant, atk){
   /* Lurk from a passive (Ambush, Bog Lurker, Stalk) on entry — once per
      battle — or from casting Stalk, which may raise it again. */
   if(grant.lurk) grantLurk(holder, !!grant.again);
-  /* Bog Lurker: the other side is bogged down for the rest of the battle.
-     What the creature IS, so no sweep lifts it; it does not stack. */
+  /* Bog Lurker: the other side is bogged down for as long as it stands (2.74:
+     it used to outlive him). What the creature IS, so no sweep lifts it; it
+     does not stack — a second Bog Lurker only joins the list of who holds it,
+     and the bog lifts when the last of them has fallen (pruneBogs). Theirs are
+     remembered by the monster, yours by uid. */
   if(grant.bog && ui.battle){
-    if(isFoe) setPStatus(0, { type:'bogged', turnsLeft:999, unsweepable:true, permanent:true });
-    else if(!(ui.battle.fieldStatus || {}).bogged){
-      ui.battle.fieldStatus = ui.battle.fieldStatus || {};
-      ui.battle.fieldStatus.bogged = { type:'bogged', turnsLeft:999, unsweepable:true, permanent:true };
+    if(isFoe){
+      const st = getPStatus(0, 'bogged');
+      if(st){ st.by = st.by || []; if(!st.by.includes(holder)) st.by.push(holder); }
+      else setPStatus(0, { type:'bogged', turnsLeft:999, unsweepable:true, permanent:true, by:[holder] });
+    } else {
+      const fs = ui.battle.fieldStatus = ui.battle.fieldStatus || {};
+      const uid = holder && holder.uid;
+      if(fs.bogged){ fs.bogged.by = fs.bogged.by || []; if(uid && !fs.bogged.by.includes(uid)) fs.bogged.by.push(uid); }
+      else fs.bogged = { type:'bogged', turnsLeft:999, unsweepable:true, permanent:true, by:uid ? [uid] : [] };
     }
   }
   /* Ill Omen: its next blow lands harder. */
@@ -858,6 +882,35 @@ function applyPassiveGrant(holder, grant, atk){
     holder.thresholdStun = grant.thresholdStun.slice();
     holder.thresholdsHit = [];
   }
+}
+/* A bog goes with the last Bog Lurker holding it: fallen, or gone with his
+   wave. Called when the order is built and whenever the badges are drawn, so
+   the pill goes the moment he does. Returns true if a bog lifted. */
+function bogHolderStanding(side, h){
+  if(side === 'enemy'){                                   // theirs: the monster itself
+    const b = ui.battle;
+    return !!(b && b.enemies && b.enemies.includes(h) && h.hp > 0);
+  }
+  const m = (state.party || []).find(x=> x.uid === h);    // yours: by uid, benched or not
+  return !!(m && m.currentHp > 0);
+}
+function pruneBogs(){
+  const b = ui.battle;
+  if(!b) return false;
+  let lifted = false;
+  const onYou = getPStatus(0, 'bogged');
+  if(onYou && onYou.by){
+    onYou.by = onYou.by.filter(h=> bogHolderStanding('enemy', h));
+    if(!onYou.by.length){ removePStatus(0, 'bogged'); lifted = true;
+      setTimeout(()=> battleMsg(`🌫 The bog drains away with the Bog Lurker — your side moves freely again.`), 650); }
+  }
+  const onThem = b.fieldStatus && b.fieldStatus.bogged;
+  if(onThem && onThem.by){
+    onThem.by = onThem.by.filter(u=> bogHolderStanding('player', u));
+    if(!onThem.by.length){ delete b.fieldStatus.bogged; lifted = true;
+      setTimeout(()=> battleMsg(`🌫 Your Bog Lurker has fallen, and the bog drains away with him.`), 650); }
+  }
+  return lifted;
 }
 /* Everything a monster starts the battle with, the moment it takes the field. */
 /* The always-on parts of a passive. Arriving under a ✦ Curse, a monster keeps
@@ -1046,14 +1099,17 @@ function dodgeWord(t){ return t && t.lurk ? 'LURKING' : (t && t.cunning ? 'CUNNI
    concealment, and whatever its side has cast — a Mirage, clones, a
    Tachypsychia of its own. Independent sources stack the way yours do. */
 function enemyEvasion(t){
+  noteCertainDodge(t);
   const own = stanceEvasion(t);
   if(own >= 1) return 1;
   const src = [own];
   const mir = getESide('mirage');
+  if(mir && mir.window && mir.step < mir.window.length) mir.tested = true;   // its window met a real blow
   if(mir) src.push((mir.window && mir.step < mir.window.length) ? mir.window[mir.step] : (mir.chance || 0.20));
   const cl = getESide('clones');
   if(cl) src.push(cl.evade || 0);
   const tac = getESide('tachy');
+  if(tac && tac.owner === t && tac.fresh) tac.tested = true;             // its first-turn rate met a real blow
   if(tac && tac.owner === t) src.push(tac.fresh ? (tac.evadeFirst || 0) : (tac.evadeAfter || 0));
   let hit = 1;
   src.forEach(x=>{ if(x > 0) hit *= (1 - x); });
@@ -1852,7 +1908,7 @@ function castEnemyVeryHigh(e, type, plus){
       return `👻 ${who} casts <b>Curse</b>: your side takes ${Math.round(d.extra*100)}% more damage${d.mute ? ', and your passives fall silent' : ''}.`;
     case 'Psychic':
       setESide({ type:'confusionField', turnsLeft:T, after:d.confuseAfter || 0.20, ffPower:d.ffPower || 0.60,
-                 sleep:d.sleep || 0, sleepTurns:d.sleepTurns || 1 });
+                 sleep:d.sleep || 0, sleepTurns:d.sleepTurns || 1, sure:true, sureUsed:false });
       markPlayerConfused(d.ffPower || 0.60, true);
       return `🌀 ${who} casts <b>Discombobulate</b>: your head is spinning!`;
     case 'Dragon':
@@ -1983,11 +2039,14 @@ function resolveEnemyAfterimages(done){
 function playerEvasionFrom(e){
   const mon = activeMon();
   if(!mon) return 0;
+  noteCertainDodge(mon);
   const own = stanceEvasion(mon);
   if(own >= 1) return 1;
   const mir = getPStatus(0,'mirage');
+  if(mir && mir.window && mir.step < mir.window.length) mir.tested = true;   // its window met a real blow
   const cl  = getPStatus(0,'clones');
   const tac = getPStatus(0,'tachy');
+  if(tac && tac.fresh) tac.tested = true;                                  // its first-turn rate met a real blow
   const dotMiss = e ? getEStatus(e,'dot') : null;
   const src = [
     own,
@@ -2137,7 +2196,8 @@ function castAria(mon, def, byReflex){
     type:'aria', turnsLeft:(def.turns||5) + 1,
     pulse:def.pulse || 0.5, chance:(def.chance == null ? 0.5 : def.chance),
     atk: monAtk(mon), owner: mon.uid,
-    fieldEvade: 1,                 // one turn of total evasion, for ANYONE on the field
+    fieldEvade: 1,                 // one turn of total evasion, for ANYONE on the field —
+    coverUsed: !!byReflex,         // spent only in a round an attack actually passed through (2.74)
     struck: !!byReflex,            // the attack that woke him counts: vengeance is owed
   });
   renderStatusBadges();
@@ -2147,11 +2207,15 @@ function castAria(mon, def, byReflex){
   return true;
 }
 /* The turn of untouchability belongs to the FIELD, so a monster swapping in
-   during it inherits the protection. */
+   during it inherits the protection. It is only used up by a round in which an
+   attack actually passed through it: a round when nobody attacked your side
+   (all frozen, asleep, or the song came after their turns) keeps it (2.74).
+   `noteAriaCover()` marks the round; endRound spends it. */
 function ariaFieldEvasion(){
   const a = ariaState();
   return (a && a.fieldEvade > 0) ? 1 : 0;
 }
+function noteAriaCover(){ const a = ariaState(); if(a && a.fieldEvade > 0) a.coverUsed = true; }
 /* The passive: struck while the Aria is not running, it sings by reflex and the
    blow misses. Costs no turn and no words. */
 function ariaReflex(mon){
@@ -2556,6 +2620,7 @@ function quickStrikeYours(e, mon, done){
   const ariaCover = ariaFieldEvasion() > 0;
   const canReflex = !ariaCover && !ariaActive() && (MOVES[mon.species] || []).some(m=> m[6] && m[6].aria);
   if(ariaCover || (canReflex && ariaReflex(mon))){
+    noteAriaCover();
     dodgePlayer(); floatMiss('playerBob', 'MISS');
     if(ariaCover) battleMsg(`⚡ ${name}'s quick attack passes harmlessly through.`);
     return setTimeout(done, 700);
@@ -2873,9 +2938,44 @@ const MOVE_FIRST_NAMES = new Set(['Swift Strike','Lead Hook','Snap Kick','Whirl 
    Ties: the player first. Within a side: field order, left to right.
    Computed ONCE per round — casting Dragon Dance takes effect NEXT round.
    ============================================================ */
+/* Mirage's turn of total evasion (the window) moves on only after a round in
+   which an attack on its side actually rolled against it — a round when nobody
+   attacked them, or every blow was a mind-read or met a Lurk first, keeps it
+   (2.74; it used to lapse at the end of the round it was cast in, whatever
+   happened). Checked as each round begins, so the END phase's afterimages
+   belong to the round they struck in. */
+function advanceMirageWindows(){
+  [getPStatus(0,'mirage'), getESide('mirage')].forEach(m=>{
+    if(!m) return;
+    if(m.tested && m.window && m.step < m.window.length) m.step++;
+    m.tested = false;
+  });
+  /* The same for Tachypsychia's first-turn dodge (80%) and a Stillness (every
+     attack misses): spent by a round in which an attack actually met them, not
+     by the clock (2.75). */
+  [getPStatus(0,'tachy'), getESide('tachy')].forEach(t=>{
+    if(!t) return;
+    if(t.tested) t.fresh = false;
+    t.tested = false;
+  });
+  [activeMon(), ...livingEnemies()].forEach(m=>{
+    if(!m) return;
+    if(m.evadeTurns > 0 && certainDodge(m) && m._stillTested) m.evadeTurns--;
+    m._stillTested = false;
+  });
+}
+/* A turn of evasion that cannot miss (Stillness) waits for an attack; a
+   chancy one (Ill Omen's 66%) still lasts its turn by the clock. */
+function certainDodge(m){ return (m.evadeChance == null ? 1 : m.evadeChance) >= 1; }
+/* An attack is rolling against this monster: a Stillness it holds has met it —
+   unless a Lurk or Cunning means there was nothing there to meet. */
+function noteCertainDodge(m){
+  if(m && m.evadeTurns > 0 && certainDodge(m) && !(m.lurk || m.cunning)) m._stillTested = true;
+}
 function beginRound(msg){
   const b = ui.battle;
   if(!b) return;
+  advanceMirageWindows();
   b.roundMsg = msg || null;
   b.phase = 'resolving';
   renderBattle();
@@ -2980,6 +3080,7 @@ function initiativeOf(side, mon){
 }
 
 function buildInitiativeOrder(){
+  pruneBogs();                                   // a fallen Bog Lurker's bog slows nobody
   const rows = [];
   const me = activeMon();
   if(me && me.currentHp > 0){
@@ -3049,7 +3150,7 @@ function endRound(){
     if(gm.airborne  > 0) gm.airborne--;
     if(gm.invisible > 0) gm.invisible--;
     // Counter stacks never expire — nothing to tick
-    if(gm.evadeTurns   > 0) gm.evadeTurns--;
+    if(gm.evadeTurns   > 0 && !certainDodge(gm)) gm.evadeTurns--;   // a Stillness waits (advanceMirageWindows)
   }
   livingEnemies().forEach(e=>{
     tickRage(e); tickOverpower(e);
@@ -3057,13 +3158,12 @@ function endRound(){
     if(e.airborne  > 0) e.airborne--;
     if(e.invisible > 0) e.invisible--;
     // Counter stacks never expire — nothing to tick
-    if(e.evadeTurns   > 0) e.evadeTurns--;
+    if(e.evadeTurns   > 0 && !certainDodge(e)) e.evadeTurns--;
   });
 
-  const mir0 = getPStatus(0,'mirage');
-  if(mir0 && mir0.window && mir0.step < mir0.window.length) mir0.step++;
-  const ovc = getPStatus(0,'overcharge');
-  if(ovc && ovc.fresh) ovc.fresh = false;
+  /* (Mirage's window and Overcharge's first-turn rate no longer lapse here:
+     they wait until they have done something — advanceMirageWindows at the
+     start of the next round, and the Overcharge roll itself. 2.74) */
   /* Steel Aegis tops itself up: one coin-flip at +, two at ✦ — so ✦ has a 75%
      chance of at least one stack and a 25% chance of two. */
   const aeg = getPStatus(0,'steelAegis');
@@ -3074,7 +3174,7 @@ function endRound(){
     if(won){ grantBlock(gm, won, monAtk(gm)); battleMsg(`🛡 The aegis thickens — +${won} block.`); }
   }
   const tac0 = getPStatus(0,'tachy');
-  if(tac0){ tac0.fresh = false; tac0.extras = 0; }
+  if(tac0){ tac0.extras = 0; }                   // (its first-turn dodge waits for an attack: advanceMirageWindows)
   const dd0 = getPStatus(0,'diamondDust');
   if(dd0) diamondDustCleanse();
   /* Their side's upkeep, the mirror of yours: their dust sweeps you, their
@@ -3092,12 +3192,9 @@ function endRound(){
     const holder = (ctrE.owner && ctrE.owner.hp > 0) ? ctrE.owner : livingEnemies()[0];
     if(holder) addCounterStack(holder, ctrE.tier || 0, 1);
   }
-  const mirE = getESide('mirage');
-  if(mirE && mirE.window && mirE.step < mirE.window.length) mirE.step++;
-  const ovcE = getESide('overcharge');
-  if(ovcE && ovcE.fresh) ovcE.fresh = false;
+  /* (their Mirage window and Overcharge rate: as yours, above) */
   const tacE = getESide('tachy');
-  if(tacE){ tacE.fresh = false; tacE.extras = 0; }
+  if(tacE){ tacE.extras = 0; }
   /* Counter tops itself up slowly — stacks never expire, so they bank. */
   const ctr = getPStatus(0,'counter');
   if(ctr && ctr.regain && gm && Math.random() < ctr.regain){
@@ -3106,7 +3203,8 @@ function endRound(){
   }
 
   const ar = getPStatus(0,'aria');
-  if(ar && ar.fieldEvade > 0) ar.fieldEvade--;   // the untouchable turn lapses
+  if(ar && ar.fieldEvade > 0 && ar.coverUsed) ar.fieldEvade--;   // the untouchable turn is spent — if it was used
+  if(ar) ar.coverUsed = false;
   endDragonLegacy();                             // a Legacy spent this turn is over
 
   /* (The Haunting Aria no longer rolls here: it rolls in the next round's
@@ -3451,6 +3549,7 @@ function startWildEncounter(encOpts){
 
 /* ---------- shared multi-wave battle engine ---------- */
 function beginBattle(config){
+  ui.victoryNotes = null;                        // a note is for the victory it was left for
   /* Counter stacks, Combo, Enrage and the rest live ON the monster so they can
      follow it between switches. That means they also followed it between
      BATTLES — you could walk into a wild fight already holding four guards.
@@ -3856,7 +3955,8 @@ function moveEffectText(mv, mon, atk){
     const ch = mv.aria.chance == null ? 0.5 : mv.aria.chance;
     out.push(
       `Haunting Aria triggers automatically when enemies attack the Whalelord, causing their attacks to pass ` +
-      `through harmlessly for one turn. You can also spell to trigger it <b>without consuming a turn</b>.`);
+      `through harmlessly for one turn — the first turn they actually attack (a turn in which nobody attacks ` +
+      `does not use it up). You can also spell to trigger it <b>without consuming a turn</b>.`);
     out.push(
       `Then, for <b>${mv.aria.turns} turns</b>, the Whalelord haunts his enemies, with a <b>${Math.round(ch * 100)}%</b> ` +
       `chance each turn to strike every enemy for <b>${Math.ceil((mv.aria.pulse || 0.5) * atk)}</b> damage. ` +
@@ -3880,9 +3980,9 @@ function moveEffectText(mv, mon, atk){
   if(mv.tachy) out.push(
     `<b>Tachypsychia.</b> For ${mv.tachy.turns} turns, each time this monster acts there is a ` +
     `<b>${Math.round(mv.tachy.bonusAction*100)}% chance to act again</b> — and that can chain. ` +
-    `It also dodges <b>${Math.round(mv.tachy.evadeFirst*100)}%</b> of attacks on the first turn, then ` +
-    `<b>${Math.round(mv.tachy.evadeAfter*100)}%</b> after. While it runs, <b>this monster's attacks can't be ` +
-    `dodged</b>.`);
+    `It also dodges <b>${Math.round(mv.tachy.evadeFirst*100)}%</b> of attacks on the first turn it is attacked ` +
+    `(a turn nobody attacks does not use it up), then <b>${Math.round(mv.tachy.evadeAfter*100)}%</b> after. ` +
+    `While it runs, <b>this monster's attacks can't be dodged</b>.`);
   if(mv.mindRead) out.push(`<b>Mind-read:</b> this attack ignores evasion — it cannot be dodged.`);
   if(mv.charm) out.push(
     `<b>Charm.</b> For ${mv.charm.turns} turns each enemy has a <b>${Math.round(mv.charm.chance*100)}% chance</b> ` +
@@ -3974,7 +4074,7 @@ function moveEffectText(mv, mon, atk){
     if(p.guard)        bits.push(`starts <b>on guard</b>, gaining a block stack each turn`);
     if(p.airborne)     bits.push(`starts <b>airborne</b>, dodging <b>70%</b> of attacks for a turn`);
     if(p.invisible)    bits.push(`starts <b>unseen</b>, dodging <b>80%</b> of attacks for a turn`);
-    if(p.evadeTurns)   bits.push(`begins in perfect <b>stillness</b> — every attack misses for ${p.evadeTurns} turn${p.evadeTurns>1?'s':''}`);
+    if(p.evadeTurns)   bits.push(`begins in perfect <b>stillness</b> — every attack misses for the first ${p.evadeTurns > 1 ? p.evadeTurns + ' turns' : 'turn'} it is attacked (a turn nobody attacks it does not use it up)`);
     if(p.counterTurns || p.counterStack) bits.push(`begins with a <b>Counter stack</b> — one whole attack taken on the guard for <b>80% less</b>, and its next blow lands <b>25%</b> harder`);
     if(p.first)        bits.push(`always takes the <b>first move</b> of the round`);
     if(p.quick)        bits.push(`gets one free <b>quick attack</b> at the start of every round, before anyone moves: ` +
@@ -3987,7 +4087,7 @@ function moveEffectText(mv, mon, atk){
     if(p.evadeAlways)  bits.push(`dodges <b>${Math.round(p.evadeAlways*100)}%</b> of attacks${p.unsweepable ? ', and no sweep takes that away' : ''}`);
     if(p.lurk)         bits.push(`<b>Lurks</b> the first time it steps onto the field: every attack misses it until it tries to deal damage itself (a miss still counts)`);
     if(p.ambush)       bits.push(`the blow that ends its Lurk deals <b>+${Math.round((p.ambush - 1)*100)}%</b>`);
-    if(p.bog)          bits.push(`bogs the other side down: they move <b>one step slower</b> for the whole battle, and no sweep lifts it`);
+    if(p.bog)          bits.push(`bogs the other side down: they move <b>one step slower</b> for as long as it stands (the bog goes when it falls), and no sweep lifts it`);
     if(p.cunning){
       const c = p.cunning, f = c.first != null ? c.first : 1, a = c.after || 0;
       const how = (f >= 1 && !a) ? `the first time it deals damage, it turns <b>Cunning</b>`
@@ -4209,6 +4309,7 @@ const STATUS_LABELS = {
 };
 function renderStatusBadges(){
   if(!ui.battle) return;
+  pruneBogs();
   // Player-side statuses stay in the shared row under the stage.
   const row = $('#statusRow');
   if(row){

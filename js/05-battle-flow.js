@@ -645,8 +645,10 @@ function runChargeQuiz(mv, mon){
         return setTimeout(advanceTurn, 900);
       }
       if(ui.battle) ui.battle.wordCarry = Math.max(0, correct - mv.words);
-      /* Overcharge up: its own repeat chance makes this charge count double. */
+      /* Overcharge up: its own repeat chance makes this charge count double —
+         and a charge is what spends its first rate (a fizzled one does not). */
       const surge = Math.random() < overchargeChance();
+      spendOverchargeFirst(getPStatus(0,'overcharge'));
       const gained = startCharge(mon, def, surge);
       const c = chargeState();
       playEffect(mv.name, { type:'Water', duration:800 });
@@ -1271,6 +1273,7 @@ function movesToStrike(mv){
    muddled enemy clouting its own side, and alone on the field you are the only
    one there. It was still an attempt, so it ends a Lurk. */
 function muddledSelfStrike(mv, mon, factor){
+  { const ef = getESide('confusionField'); if(ef && ef.sure) ef.sureUsed = true; }   // their field's certain turn has worked
   const st = getPStatus(0,'discombobulate');
   const power = (st && st.ffPower) || 0.60;
   removePStatus(0,'discombobulate');
@@ -1511,7 +1514,9 @@ function postPlayerAction(mon, hits){
     if(!attacked && !landed.length) return;
     const who = SPECIES[k.species].name;
     { const ar = ariaState(); if(ar) ar.struck = true; }
-    if(ariaFieldEvasion() > 0 || Math.random() < playerEvasionFrom(k)){
+    const covered = ariaFieldEvasion() > 0;
+    if(covered) noteAriaCover();
+    if(covered || Math.random() < playerEvasionFrom(k)){
       floatMiss('playerBob', dodgeWord(mon)); dodgePlayer();
       lines.push(`⚔️ ${who} ripostes — and finds nothing.`);
       return;
@@ -1590,10 +1595,17 @@ function afterPlayerAttackReal(mon, hits){
   setTimeout(()=>{
     const oc = getPStatus(0,'overcharge');
     const ocChance = oc ? (oc.fresh && oc.firstChance != null ? oc.firstChance : (oc.chance||0.25)) : 0;
-    const canRepeat = oc && hits && hits.length && livingEnemies().length>0;
+    /* Only a strike that reached them — landed, or soaked by their block — is
+       anything to repeat. With none (the words went wrong, every strike was
+       dodged) Overcharge is not rolled at all, and its first rate — certain at
+       ✦ — waits for a move that does reach them (2.74). */
+    const reached = (hits || []).filter(h=> h && h.t && !h.dodged && ((h.raw != null ? h.raw : h.dmg) > 0));
+    const canRepeat = oc && reached.length && livingEnemies().length>0;
+    const rolled = canRepeat ? Math.random() < ocChance : false;
+    if(canRepeat) spendOverchargeFirst(oc);
     /* ocChance honours the ✦ tier's certain first strike; oc.chance alone was
        using the base rate for every repeat. */
-    if(canRepeat && Math.random() < ocChance){
+    if(canRepeat && rolled){
       /* A blow that KILLED its target used to leave nothing to repeat — the
          filter dropped the dead and the echo fizzled. It now falls on somebody
          else who is still standing. Every strike is repeated at the figure it
@@ -1929,6 +1941,7 @@ function enemyCounter_unused(t, idx, dmg, delay){
    one at random; alone, it hits itself. Either way something visibly happens. */
 function confusedStrike(e, done){
   const b = ui.battle;
+  { const f = getPStatus(0,'confusionField'); if(f && f.sure) f.sureUsed = true; }   // your field's certain turn has worked
   /* A muddled swing is still an attempt: its own cover is gone. */
   if(e.lurk || e.cunning){ breakCover(e); e._ambush = 0; renderStatusBadges(); }
   const mates = livingEnemies().filter(x=>x !== e);
@@ -2714,6 +2727,7 @@ function enemyActs(i, e){
   const canReflex = !ariaCover && d0 && !ariaActive()
                  && (MOVES[d0.species]||[]).some(m=>m[6] && m[6].aria);
   if(ariaCover || (canReflex && ariaReflex(d0))){
+    noteAriaCover();                         // the untouchable turn has done its work this round
     dodgePlayer(); floatMiss('playerBob', 'MISS');
     if(ariaCover) battleMsg('The attack passes harmlessly through.');
     e._ambush = 0;
@@ -3096,7 +3110,13 @@ function enemyFollowUps(i, e, move, dmg, hitCount, taken, next){
      landed, as before. */
   const oc = getESide('overcharge');
   const ocChance = oc ? (oc.fresh && oc.firstChance != null ? oc.firstChance : (oc.chance || 0.25)) : 0;
-  const repeat = (then)=> (oc && Math.random() < ocChance) ? strike(dmg, `⚡ Their Overcharge — ${name} strikes again`, then, Math.max(1, hitCount)) : then();
+  /* A blow that reached you is what spends their first rate, as yours. */
+  const repeat = (then)=>{
+    if(!oc) return then();
+    const go = Math.random() < ocChance;
+    spendOverchargeFirst(oc);
+    return go ? strike(dmg, `⚡ Their Overcharge — ${name} strikes again`, then, Math.max(1, hitCount)) : then();
+  };
   const cl = getESide('clones');
   const echo = (then)=>{
     if(!(taken > 0)) return then();

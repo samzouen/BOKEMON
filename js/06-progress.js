@@ -403,6 +403,7 @@ function showVictory(enemyNames, levelUps, tokens){
       <div style="font-weight:800;font-size:13px;color:var(--ink-soft);margin-bottom:6px;">Your team earned a fight!</div>
       ${levelUps.length ? levelUps.map(e=>`<div style="font-weight:700;font-size:14px;">⬆️ ${escapeHtml(e.name)} grew to Lv ${e.to}!</div>`).join('') : `<div style="font-size:13px;color:var(--ink-soft);font-weight:600;">Everyone gained progress toward their next level.</div>`}
       ${tokens ? `<div style="font-weight:800;font-size:14px;color:var(--gold);margin-top:6px;">🎫 Found a Skill Token! (${state.inventory.tokens} total)</div>` : ''}
+      ${(ui.victoryNotes || []).map(n=> `<div style="font-weight:800;font-size:14px;color:var(--gold);margin-top:6px;">${n}</div>`).join('')}
     </div>
     <div id="catchArea"></div>
     <button class="btn btn-ghost" id="regionBtn" style="margin-top:10px;">Back to region</button>
@@ -420,6 +421,7 @@ function showVictory(enemyNames, levelUps, tokens){
       area.querySelectorAll('.catch-opt').forEach(btn=> btn.addEventListener('click', ()=> startCatch(catchable[+btn.dataset.i])));
     }
   }
+  ui.victoryNotes = null;                       // said once
   $('#regionBtn').addEventListener('click', ()=>go('region'));
   if(breakNow) showEyeBreak();
   $('#againBtn').addEventListener('click', ()=> exploreFurther());

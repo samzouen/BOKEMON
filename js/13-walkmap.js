@@ -349,7 +349,10 @@ async function takePrize(deck, i){
   if(book[deck][i]) return;
   book[deck][i] = true;
   walkTeardown();                         // a floor's guards wait while you look
-  state.inventory.skillTokens = (state.inventory.skillTokens || 0) + PRIZE_TOKENS;
+  /* Skill Tokens are state.inventory.tokens, like every other token in the
+     game. (Until 2.74 finds went into a `skillTokens` nothing read, so they
+     never reached the shop; runProfileMigrations hands those over.) */
+  state.inventory.tokens = (state.inventory.tokens || 0) + PRIZE_TOKENS;
   await saveProfile();
   const d = DECKS[deck], region = d.region || 4;
   const total = Object.values(book).reduce((n,o)=>n + Object.keys(o).length, 0);

@@ -475,8 +475,8 @@ const MOVES = {
                     ['Power2','Ill Omen',null,'Self',4,18,{passive:{evadeAlways:0.20}, grant:{evadeTurns:1, evadeChance:0.66, omen:0.66}, blockedWhile:'evadeTurns'}],
                     ['Ultimate','Murder of Crows',0.2,'Single',8,25,{hits:5, execute:{below:0.30, hits:10}}]],
   /* Bog Lurker: it lurks when it steps on, and the other side moves a step
-     slower for the whole battle. Grave Quake winds up (keeping the Lurk),
-     then falls on everyone. */
+     slower for as long as it stands (2.74: the bog goes when it falls).
+     Grave Quake winds up (keeping the Lurk), then falls on everyone. */
   cyclops:         [['Basic','Stomp',0.3,'Single',2,1],
                     ['Power1','Evil Eye',0.35,'Single',4,1,{stunHit:0.25}],
                     ['Power2','Bog Lurker',null,'Passive',0,11,{passive:{lurk:true, bog:true}}],

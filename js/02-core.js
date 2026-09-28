@@ -62,7 +62,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.73';
+const GAME_VERSION = '2.75';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -899,6 +899,16 @@ async function runProfileMigrations(){
       state.medals.bronze = (state.medals.bronze||0) + refund;
       setTimeout(()=>toast(`🥉 ${refund} Bronze Medals refunded from the old token price.`), 3600);
     }
+    changed = true;
+  }
+  /* Finds on the ship's decks and in the catacombs were counted into a
+     `skillTokens` pocket that nothing reads (until 2.74). They are ordinary
+     Skill Tokens: hand them over once. */
+  if(state.inventory && state.inventory.skillTokens > 0){
+    const n = state.inventory.skillTokens;
+    state.inventory.tokens = (state.inventory.tokens || 0) + n;
+    delete state.inventory.skillTokens;
+    setTimeout(()=>toast(`🎫 ${n} Skill Tokens from your finds have been added to your bag.`), 4600);
     changed = true;
   }
   if(changed) await saveProfile();
