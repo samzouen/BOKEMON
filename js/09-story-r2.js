@@ -197,7 +197,7 @@ function openQtyPurchase(w){
     const before = medalCount(pr.cur);
     if(!await spend(pr.cur, qty*pr.cost)) return;
     if(w.id==='goldMedal') state.medals.gold = (state.medals.gold||0) + qty;
-    else if(w.id==='waterStone') state.inventory.waterStone = true;
+    else if(w.id==='waterStone') addStone('waterStone', 1);
     else state.inventory.tokens = (state.inventory.tokens||0) + qty * (pr.yields||1);
     const sv = showSyncingOverlay('Syncing…');
     const ok = await saveProfile({ awaitCloud:true });
@@ -232,7 +232,7 @@ function openSinglePurchase(w){
   ov.querySelector('#pCancel').addEventListener('click', close);
   ov.querySelector('#pBuy').addEventListener('click', async ()=>{
     if(medalCount(pr.cur) < pr.cost) return;
-    const snapshot = { tokens:state.inventory.tokens, protein:state.inventory.protein, medals:Object.assign({},state.medals), stones:state.moveStones.length };
+    const snapshot = { inv:Object.assign({}, state.inventory), medals:Object.assign({},state.medals), stones:state.moveStones.length };
     await spend(pr.cur, pr.cost);
     let stone = null;
     if(w.id==='randomStone'){ stone = newMoveStone(); state.moveStones.push(stone); }
@@ -240,17 +240,22 @@ function openSinglePurchase(w){
     else if(w.id==='protein'){ state.inventory.protein = (state.inventory.protein||0)+1; }
     else if(w.id==='crown'){ state.inventory.crowns = (state.inventory.crowns||0)+1; }
     else if(w.id==='voidStone'){ state.inventory.voidStones = (state.inventory.voidStones||0)+1; }
+    /* It came through here and nothing handed it over (before 2.76): the
+       tokens went and no stone came. */
+    else if(w.id==='waterStone'){ addStone('waterStone', 1); }
     const sv = showSyncingOverlay('Syncing…');
     const ok = await saveProfile({ awaitCloud:true });
     hideSyncingOverlay(sv);
     if(!ok){
-      state.inventory.tokens = snapshot.tokens; state.inventory.protein = snapshot.protein;
+      state.inventory = snapshot.inv;
       state.medals = snapshot.medals; state.moveStones.length = snapshot.stones;
       showSyncFailure(); return;
     }
     close();
     if(stone) showStoneReveal(stone, 'Purchased!', 'shop');
     else if(w.id==='crown'){ playSfx('evolution'); ui.shopNote='A Crown is yours. Use it from a monster\'s Stats page.'; renderShop(); }
+    else if(w.id==='waterStone'){ playSfx('stone_low'); ui.shopNote='The Water Stone is yours. Attach it from a Water monster\'s Stats page.'; renderShop(); }
+    else if(w.id==='voidStone'){ playSfx('stone_low'); toast('Void Stone purchased!'); renderShop(); }
     else { playSfx('protein_use'); toast('Protein Supplement purchased!'); renderShop(); }
   });
 }
@@ -296,7 +301,7 @@ function openSkillPicker(w){
 }
 
 /* confirmDialog variant that allows rich content. */
-function confirmDialogHtml(html, onYes){
+function confirmDialogHtml(html, onYes, yesLabel){
   const scrim = document.createElement('div');
   scrim.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.6);z-index:95;display:flex;align-items:center;justify-content:center;padding:24px;';
   scrim.innerHTML = `
@@ -304,7 +309,7 @@ function confirmDialogHtml(html, onYes){
       <div style="font-size:14px;font-weight:600;line-height:1.55;margin-bottom:16px;">${html}</div>
       <div style="display:flex;gap:10px;">
         <button class="btn btn-ghost" id="chNo" style="flex:1;">Cancel</button>
-        <button class="btn btn-primary" id="chYes" style="flex:1;">Buy</button>
+        <button class="btn btn-primary" id="chYes" style="flex:1;">${escapeHtml(yesLabel || 'Buy')}</button>
       </div>
     </div>`;
   document.body.appendChild(scrim);

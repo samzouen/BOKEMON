@@ -1188,7 +1188,7 @@ function rivalStones(){
 }
 /* What YOU put up: your first stone by the order, else tokens, else nothing. */
 function playerStake(){
-  for(const id of WAGER_ORDER){ if(state.inventory[id]) return { kind:'stone', id }; }
+  for(const id of WAGER_ORDER){ if(stoneCount(id) > 0) return { kind:'stone', id }; }
   if((state.inventory.tokens||0) >= WAGER_TOKENS) return { kind:'tokens', n:WAGER_TOKENS };
   return { kind:'none' };
 }
@@ -1297,7 +1297,7 @@ async function onR4RivalWin(){
   const g = r4();
   const won = w.his;
   if(won){
-    state.inventory[won] = true;
+    addStone(won, 1);
     rivalStones().splice(rivalStones().indexOf(won), 1);
   }
   if(!g.rivalBeaten){ g.rivalBeaten = true; }
@@ -1314,8 +1314,7 @@ async function onR4RivalLose(){
   const w = ui.r4Wager || {}; ui.r4Wager = null;
   const mine = w.mine || { kind:'none' };
   if(mine.kind === 'stone'){
-    state.inventory[mine.id] = false;
-    state.inventory[stoneOnKey(mine.id)] = null;
+    addStone(mine.id, -1);      // the last one of a kind takes its carrier's with it
     rivalStones().push(mine.id);
   } else if(mine.kind === 'tokens'){
     state.inventory.tokens = Math.max(0, (state.inventory.tokens||0) - mine.n);

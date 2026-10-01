@@ -324,7 +324,7 @@ async function usePowerStone(){
   const before = dragon.level;
   dragon.xpFights = (dragon.xpFights||0) + 15;
   const ups = [];
-  while(dragon.level < levelCap() && (dragon.xpFights||0) >= fightsNeeded(dragon.level)){
+  while(dragon.level < monLevelCap(dragon) && (dragon.xpFights||0) >= fightsNeeded(dragon.level)){
     dragon.xpFights -= fightsNeeded(dragon.level);
     dragon.level++;
   }
@@ -1155,7 +1155,7 @@ async function dojoReward(){
   if(d.stone) return go('challenge');   // the stone is given once, ever
   if(hasNewt()){
     d.stone = true;
-    state.inventory.electricStone = true;
+    addStone('electricStone', 1);
     await saveProfile();
     return storyModal(uiIcon('electric_stone',130,'⚡'), 'The Electric Stone',
       `The youngest sibling has been staring at your party for some time.<br><br>` +
@@ -1241,7 +1241,7 @@ async function onFiglioWin(){
   c.figlioDay = today();
   c.figlioWins = (c.figlioWins||0) + 1;
   state.medals.silver = (state.medals.silver||0) + 3;
-  if(firstTime) state.inventory.dragonStone = true;
+  if(firstTime) addStone('dragonStone', 1);
   await saveProfile();
   if(!firstTime){
     return challengeResult('🎙️', 'A closer thing each time',

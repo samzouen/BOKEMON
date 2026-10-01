@@ -60,9 +60,10 @@ function renderZone(){
   if(z.id === 'laboratory_deck')  { ui.walkFresh = true; return renderLaboratoryDeck(); }
   if(z.id === 'plant_generator') return renderGenerator();
   if(z.id === 'vane_shear') return vaneShearClosed();
-  /* Region 5: the harbour is walked; the catacombs pick a floor */
+  /* Region 5: the harbour is walked; the catacombs carry on or pick a floor */
   if(z.id === 'harbour')   return renderHarbourZone();
   if(z.id === 'catacombs') return renderCatacombs();
+  if(z.id === 'old_town')  return renderOldTownZone();       // the church, for now (2.90)
   return renderZonePlain();
 }
 
@@ -159,6 +160,7 @@ function renderExplore(){
             (z.locksUntil==='r3PowerStone' && !r3.powerStone) ||
             (z.locksUntil==='r4Blocked' && !(state.progress.region4||{}).wallFound) ||
             (z.locksUntil==='r5Catacombs' && !(state.progress.region5||{}).gateBeaten) ||
+            (z.locksUntil==='r5OldTown' && !(state.progress.region5||{}).oldTown && !isDev()) ||
             (z.locksUntil==='never');
           return `
           <div class="zone-item">

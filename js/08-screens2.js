@@ -162,7 +162,10 @@ function onChallengeWon(){
   const levelUps = awardXpToParty(waves * 2);
   const tokens = rollTokenDrop();
   saveProfile();
-  if(tokens) toast('🎫 You found a Skill Token!');
+  if(tokens) toast(tokens > 1 ? `🎫 You found ${tokens} Skill Tokens!` : '🎫 You found a Skill Token!');
+  levelUps.filter(e=> e.breakthrough || e.ready).forEach((e, i)=>
+    setTimeout(()=> toast(e.breakthrough ? `⚡ ${e.name} broke through! It can grow to Lv ${e.breakthrough} now.`
+                                         : `⚡ ${e.name} is ready to break through to Lv ${e.ready} — see your Party.`), 1200 * (i + 1)));
   const finish = ()=>{ if(b.onWin) b.onWin(levelUps); else go('challenge'); };
   const evolvers = levelUps.filter(e=>e.evos.length>0);
   if(evolvers.length) playEvolutions(evolvers, finish); else finish();
@@ -616,7 +619,7 @@ function startArena(){
   ui.battle = {
     waves:[[]], waveIndex:0, isNpc:false, allowCatch:false, name:'Test Arena',
     onWin:null, switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
-    partyStatus:{}, fieldStatus:{}, usedVeryHigh:{}, usedUltra:{},
+    partyStatus:{}, monStatus:{}, focusUid:null, fieldStatus:{}, usedVeryHigh:{}, usedUltra:{},
     acted:[], preHits:[], aftershock:[],
     arena:true, arenaCount:c.count, arenaType:c.type,
     arenaImmortal:!!c.immortal,

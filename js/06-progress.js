@@ -8,7 +8,15 @@
 /* The cap belongs to the ZONE you're standing in, not the region — Rocky
    Caverns lets you push past the rest of Emerald March. Away from any zone,
    the region's best available cap applies. */
-const REGION_CAPS = { 1:21, 2:41, 3:61, 4:85, 5:95 };   // Region 5 part one (2.72: 95); raise with the later tiers
+/* Region 5 opens the road past 100 — to 110, the first ceiling (2.82; it was
+   200 in 2.76–2.81). 200 is for the last two regions. The monster has gates
+   of its own as well — see PAST 100 below. At 110 in Region 5 a crowned
+   monster carrying a stone charges it, as at any ceiling; the breakthrough
+   waits for a region that lets it grow (capAtCeiling). */
+const REGION_CAPS = { 1:21, 2:41, 3:61, 4:85, 5:110 };
+/* A zone's `cap` is how far a monster may grow there, when that differs from
+   the top of its wild band (`max`). */
+function zoneCap(id){ const z = ZONE_LEVELS[id]; return z ? (z.cap || z.max) : 0; }
 function levelCap(){
   /* The Band Competition is a Challenge rather than a zone, so it carries its
      own ceiling; beating the band lifts the whole region. */
@@ -17,10 +25,121 @@ function levelCap(){
      The old 66-in-the-concert override kept snapping it back down. */
   if((state.progress||{}).currentRegion === 3 && r3.powerStone) return 71;
   const z = ui.currentZone && ui.currentZone.id;
-  if(z && ZONE_LEVELS[z]) return ZONE_LEVELS[z].max;
+  if(z && ZONE_LEVELS[z]) return zoneCap(z);
   const rid = (state.progress && state.progress.currentRegion) || 1;
-  const zones = (REGION_ZONES[rid]||[]).map(x=>(ZONE_LEVELS[x.id]||{}).max||0);
+  const zones = (REGION_ZONES[rid]||[]).map(x=> zoneCap(x.id));
   return Math.max(REGION_CAPS[rid]||21, ...zones, 0) || 21;
+}
+
+/* ---------- PAST 100 (2.76, reworked 2.77) ----------
+   The cap is 200, reached in stages — and region by region (Region 5: 110).
+   · 100 is as far as an UNCROWNED monster goes, and only starters, elites and
+     legendaries can wear a Crown — so only they go further. A legendary whose
+     core was stolen can't be crowned by hand; it waits at 100 for its story.
+   · A crowned monster then stops at a CEILING every ten levels: 110 … 190.
+     There, every fight charges the Element Stone it carries instead of its
+     level. When the charge reaches the ceiling's need the monster BREAKS
+     THROUGH: the need comes off the stone (the rest stays on it) and the next
+     ten levels open. The need is 150 at 110 and a quarter more at each ceiling
+     after (190, 235 … 895 at 190). A monster at a ceiling with no stone fills
+     its bar once and waits.
+   · Each level past 100 costs a little more than level 99 did (×1.1), and 20%
+     more again every ten levels, on top of the usual +1 fight per 5 levels:
+     24 fights at 100, 40 at 120, 85 at 150, 176 at 180, 275 at 199.
+     With the breakthroughs that is 14,534 fights from 100 to 200: two years at
+     twenty fights a day — three weeks for the 100s, five months for the 190s.
+   Tune: PAST_100_START / PAST_100_GROWTH, BREAKTHROUGH_FIRST / _GROWTH. */
+const LEVEL_MAX = 200;
+const CROWN_GATE = 100;
+const CEILING_STEP = 10;
+const PAST_100_START = 1.1;
+const PAST_100_GROWTH = 1.2;
+const BREAKTHROUGH_FIRST = 150;
+const BREAKTHROUGH_GROWTH = 1.25;
+/* Only these can be crowned, and so only these can pass 100. */
+const CROWN_TIERS = ['starter', 'special', 'elite', 'legendary'];
+/* 0 for 100-109, 1 for 110-119 … 9 for 190-199; -1 below 100. */
+function limitBand(level){ return level < CROWN_GATE ? -1 : Math.floor((level - CROWN_GATE) / CEILING_STEP); }
+function pastLimitMult(level){
+  return level < CROWN_GATE ? 1 : PAST_100_START * Math.pow(PAST_100_GROWTH, (level - CROWN_GATE) / CEILING_STEP);
+}
+function canPassLimit(m){ return isCrowned(m) && CROWN_TIERS.includes(baseTier(m.species)); }
+
+/* How far this monster may go on its own account. */
+function monCeiling(m){
+  if(!canPassLimit(m)) return CROWN_GATE;
+  const c = Math.floor(Number(m.ceiling) || (CROWN_GATE + CEILING_STEP));
+  return Math.min(LEVEL_MAX, Math.max(CROWN_GATE + CEILING_STEP, c));
+}
+function monLevelCap(m){ return Math.min(levelCap(), monCeiling(m)); }
+/* Why it has stopped: 'max' | 'region' | 'kind' | 'crown' | 'core' | 'ceiling', or null. */
+function monGate(m){
+  if(m.level >= LEVEL_MAX) return 'max';
+  if(m.level >= levelCap()) return 'region';
+  if(m.level >= monCeiling(m)){
+    if(!canPassLimit(m)){
+      if(!CROWN_TIERS.includes(baseTier(m.species))) return 'kind';     // a wild monster's road ends here
+      return (SPECIES[m.species] || {}).storyCrownOnly ? 'core' : 'crown';
+    }
+    return 'ceiling';
+  }
+  return null;
+}
+
+/* At the region's cap AND its own ceiling — Region 5's cap is 110, the first
+   ceiling — a crowned monster's fights charge the stone it carries, as at any
+   ceiling (2.82). Its breakthrough waits for a region that lets it grow: the
+   charge keeps building on the stone, and is spent where the cap lifts
+   (tryBreakthrough asks for the 'ceiling' gate, which the region's comes
+   before). */
+function capAtCeiling(m){
+  return !!m && m.level < LEVEL_MAX && m.level >= levelCap() && canPassLimit(m) && m.level >= monCeiling(m);
+}
+/* Do this monster's fights charge a stone rather than its level? */
+function chargesStone(m){ return monGate(m) === 'ceiling' || capAtCeiling(m); }
+
+/* ---------- BREAKTHROUGHS ---------- */
+/* Fights of charge to break through a ceiling. Rapid and Grind move it with
+   them, in step with the fights a level costs; Dev needs one. */
+function breakthroughNeed(ceiling){
+  if(xpMode() === 'dev') return 1;
+  const steps = Math.max(0, (ceiling - (CROWN_GATE + CEILING_STEP)) / CEILING_STEP);
+  const raw = BREAKTHROUGH_FIRST * Math.pow(BREAKTHROUGH_GROWTH, steps) * baseFights(CROWN_GATE) / 21;
+  return Math.max(5, Math.round(raw / 5) * 5);
+}
+/* A breakthrough is the player's to make (2.82). At its ceiling, in a region
+   that lets it grow, carrying a stone with enough charge, a monster is READY:
+   the Party page pulses it, and Break through (on its card there, or its Stats
+   page) makes it — tryBreakthrough. Until then every fight keeps adding to the
+   charge, so when two monsters wait at the same ceiling the stone can go to
+   whichever the boys choose. Nothing breaks through by itself. */
+function breakthroughReady(m){
+  if(!m || monGate(m) !== 'ceiling') return false;
+  const st = stoneCarriedBy(m);
+  return !!st && stoneCharge(st.id) >= breakthroughNeed(monCeiling(m));
+}
+/* Break through: what it takes comes off the stone; the rest stays. A bar that
+   filled while it waited pays out at once. Returns the event, or null. */
+function tryBreakthrough(m){
+  if(!breakthroughReady(m)) return null;
+  const st = stoneCarriedBy(m);
+  const c = monCeiling(m);
+  const need = breakthroughNeed(c);
+  setStoneCharge(st.id, stoneCharge(st.id) - need);
+  m.ceiling = Math.min(LEVEL_MAX, c + CEILING_STEP);
+  const from = m.level;
+  const grown = growMonster(m);
+  return { uid:m.uid, species:m.species, name:displayName(m), from, to:m.level,
+           evos:grown ? grown.evos : [], newMoves:grown ? grown.newMoves : [],
+           breakthrough:m.ceiling, stone:st.name };
+}
+
+/* A defeat empties the bar, as it always has — but past 100, where one bar
+   can be hundreds of fights, it takes one ordinary level's worth at most
+   (what that level would cost without the multiplier). */
+function xpAfterDefeat(m){
+  if(m.level < CROWN_GATE) return 0;
+  return Math.max(0, (m.xpFights || 0) - baseFights(m.level));
 }
 /* ---------- XP PACING MODES ----------
    Selectable (password-gated) from the Spelling List screen. `tier` counts
@@ -39,47 +158,86 @@ function xpMode(){
   const m = state && state.settings && state.settings.xpMode;
   return XP_MODES[m] ? m : 'default';
 }
-function fightsNeeded(level){
+/* The mode's own count, before anything past 100 multiplies it. */
+function baseFights(level){
   const tier = Math.floor((level-1)/5);
   return Math.max(1, XP_MODES[xpMode()].fn(tier));
+}
+function fightsNeeded(level){
+  const base = baseFights(level);
+  if(xpMode() === 'dev') return base;          // testing stays at one fight a level
+  return Math.ceil(base * pastLimitMult(level));
 }
 function newMoveAtLevel(species, level){
   const mv = MOVES[species].find(m=>m[5]===level && m[1]!=null);
   return mv ? mv[1] : null;
 }
+/* Spend the fights a monster has banked on levels, as far as it may go.
+   Returns the level-up event, or null. */
+function growMonster(m){
+  const from = m.level;
+  const evos = [], newMoves = [];
+  const cap = monLevelCap(m);
+  while(m.level < cap && m.xpFights >= fightsNeeded(m.level)){
+    m.xpFights -= fightsNeeded(m.level);
+    const beforeStage = monStageOf(m);
+    // Grow current HP by the change in MAX HP (which is scaled), not by the
+    // raw ATK delta — using the unscaled figure left every monster a little
+    // short of full after each level, and the gap compounded.
+    const beforeMax = computeMaxHp(m.species, m.level, m.supplements, m);
+    m.level++;
+    const afterMax = computeMaxHp(m.species, m.level, m.supplements, m);
+    m.currentHp = Math.min(afterMax, m.currentHp + (afterMax - beforeMax));
+    const afterStage = monStageOf(m);
+    if(afterStage > beforeStage) evos.push(m.level);
+    // once it has caught up, drop the floor entirely
+    if(m.evoFloor != null && afterStage >= evolutionStage(m.species, m.level)){
+      delete m.evoFloor; delete m.evoFloorLevel;
+    }
+    const nm = newMoveAtLevel(m.species, m.level);
+    if(nm) newMoves.push(nm);
+  }
+  /* Stopped at a gate of its OWN (a Crown, a ceiling) rather than the
+     region's: the bar fills once and waits there, full. A region's cap keeps
+     whatever was left over, as before — it lifts with the story. */
+  if(m.level >= cap && cap < levelCap()) m.xpFights = Math.min(m.xpFights, fightsNeeded(m.level));
+  return m.level !== from ? { uid:m.uid, species:m.species, name:displayName(m), from, to:m.level, evos, newMoves } : null;
+}
+
 function awardXpToParty(fightsWorth){
   const credit = Math.max(1, fightsWorth||1);
   const events = [];
-  state.party.forEach(m=>{
+  /* A bonded companion learns from every fight its leader's party wins, at the
+     party's rate, summoned or not (2.84, handover 07). */
+  const learners = state.party.concat(typeof bondedCompanions === 'function' ? bondedCompanions() : []);
+  learners.forEach(m=>{
     const sp = SPECIES[m.species];
     if(sp.frozenRegion1 && state.progress.currentRegion===1) return; // phoenix frozen
     // Past this zone's cap: freeze progress rather than discarding it, so a
     // monster raised elsewhere doesn't lose a part-finished level on arrival.
-    if(m.level >= levelCap()) return;
+    // At a cap that is also its ceiling, the stone it carries charges (2.82).
+    if(m.level >= levelCap()){
+      const held = capAtCeiling(m) && stoneCarriedBy(m);
+      if(held) setStoneCharge(held.id, stoneCharge(held.id) + credit);
+      return;
+    }
+    const gate = monGate(m);
+    if(gate === 'kind') return;              // a wild monster's road ends at 100
+    /* At a ceiling, the fight charges the stone it carries instead. When the
+       charge is enough it is READY — the breakthrough itself is the player's
+       (2.82), and the charge keeps building until then. */
+    const carried = stoneCarriedBy(m);
+    if(gate === 'ceiling' && carried){
+      const was = breakthroughReady(m);
+      setStoneCharge(carried.id, stoneCharge(carried.id) + credit);
+      if(!was && breakthroughReady(m)) events.push(readyEvent(m));
+      return;
+    }
     // a dragon carrying the Dragon Stone learns half again as fast
     const stoneBoost = stoneXpBonus(m);      // whichever elemental stone it carries
     m.xpFights = (m.xpFights||0) + credit * stoneBoost;
     const from = m.level;
-    const evos = [], newMoves = [];
-    while(m.level < levelCap() && m.xpFights >= fightsNeeded(m.level)){
-      m.xpFights -= fightsNeeded(m.level);
-      const beforeStage = monStageOf(m);
-      // Grow current HP by the change in MAX HP (which is scaled), not by the
-      // raw ATK delta — using the unscaled figure left every monster a little
-      // short of full after each level, and the gap compounded.
-      const beforeMax = computeMaxHp(m.species, m.level, m.supplements, m);
-      m.level++;
-      const afterMax = computeMaxHp(m.species, m.level, m.supplements, m);
-      m.currentHp = Math.min(afterMax, m.currentHp + (afterMax - beforeMax));
-      const afterStage = monStageOf(m);
-      if(afterStage > beforeStage) evos.push(m.level);
-      // once it has caught up, drop the floor entirely
-      if(m.evoFloor != null && afterStage >= evolutionStage(m.species, m.level)){
-        delete m.evoFloor; delete m.evoFloorLevel;
-      }
-      const nm = newMoveAtLevel(m.species, m.level);
-      if(nm) newMoves.push(nm);
-    }
+    const grown = growMonster(m);
     // reaching the cap mid-battle also freezes rather than clears
     // The Dragon Egg hatches on reaching its level, keeping everything it earned.
     if((isEgg(m) || SPECIES[m.species].isBaby) && m.level >= (SPECIES[m.species].hatchesAt||31)){
@@ -93,9 +251,21 @@ function awardXpToParty(fightsWorth){
       events.push({ uid:m.uid, species:into, fromSpecies:wasSpecies, name:hatchedName, from, to:m.level, evos:[m.level], newMoves:[], hatched:true });
       return;
     }
-    if(m.level !== from) events.push({ uid:m.uid, species:m.species, name:displayName(m), from, to:m.level, evos, newMoves });
+    /* It has just reached a ceiling carrying a stone already charged enough
+       (by another monster, perhaps): it is ready — the player breaks through. */
+    const ready = grown && breakthroughReady(m) ? readyEvent(m) : null;
+    if(grown && ready) Object.assign(grown, { ready:ready.ready, stone:ready.stone });
+    if(grown) events.push(grown);
   });
+  /* a companion's growth reads as one (🤝 on the victory page) */
+  events.forEach(ev=>{ if(!state.party.some(p=> p.uid === ev.uid)) ev.companion = true; });
   return events;
+}
+/* "Ready to break through", for the victory screens: no growth, no evolution. */
+function readyEvent(m){
+  const st = stoneCarriedBy(m);
+  return { uid:m.uid, species:m.species, name:displayName(m), from:m.level, to:m.level, evos:[], newMoves:[],
+           ready:Math.min(LEVEL_MAX, monCeiling(m) + CEILING_STEP), stone:st ? st.name : '' };
 }
 
 function catchPhraseCount(species){
@@ -119,7 +289,7 @@ const TOKEN_ENCOUNTER_BONUS = { double:0.05, triple:0.10, starter:0.15, elite:0.
 function tokenDropChance(){
   if(!state.party.length) return 0;
   const topLevel = Math.max(...state.party.map(m=>m.level));
-  let chance = topLevel / 100;               // level 25 -> 25%
+  let chance = topLevel / 100;               // level 25 -> 25%; level 150 -> 150%
   const b = ui.battle;
   if(b && Array.isArray(b.enemies)){
     const n = b.enemies.length;
@@ -139,12 +309,14 @@ function tokenDropChance(){
   return Math.max(0, chance);                // may exceed 100% — see rollTokenDrop
 }
 
-/* A chance above 100% guarantees one token and rolls the surplus for a second. */
+/* Every whole 100% is a token for certain, and the rest is the chance of one
+   more: 150% is one token and a coin-toss for a second, 260% is two and a 60%
+   chance of a third. (Two was the most before 2.77.) */
 function rollTokenCount(){
   const c = tokenDropChance();
   let n = Math.floor(c);
   if(Math.random() < (c - n)) n++;
-  return Math.min(2, n);
+  return n;
 }
 
 function rollTokenDrop(){
@@ -401,8 +573,10 @@ function showVictory(enemyNames, levelUps, tokens){
     </div>
     <div class="hp-card" style="margin-bottom:14px;">
       <div style="font-weight:800;font-size:13px;color:var(--ink-soft);margin-bottom:6px;">Your team earned a fight!</div>
-      ${levelUps.length ? levelUps.map(e=>`<div style="font-weight:700;font-size:14px;">⬆️ ${escapeHtml(e.name)} grew to Lv ${e.to}!</div>`).join('') : `<div style="font-size:13px;color:var(--ink-soft);font-weight:600;">Everyone gained progress toward their next level.</div>`}
-      ${tokens ? `<div style="font-weight:800;font-size:14px;color:var(--gold);margin-top:6px;">🎫 Found a Skill Token! (${state.inventory.tokens} total)</div>` : ''}
+      ${levelUps.some(e=> e.to > e.from) ? levelUps.filter(e=> e.to > e.from).map(e=>`<div style="font-weight:700;font-size:14px;">⬆️ ${e.companion ? '🤝 ' : ''}${escapeHtml(e.name)} grew to Lv ${e.to}!</div>`).join('') : `<div style="font-size:13px;color:var(--ink-soft);font-weight:600;">Everyone gained progress toward their next level.</div>`}
+      ${levelUps.filter(e=> e.breakthrough).map(e=>`<div style="font-weight:800;font-size:14px;color:var(--gold);margin-top:6px;">⚡ ${escapeHtml(e.name)} broke through! It can grow to Lv ${e.breakthrough} now.</div>`).join('')}
+      ${levelUps.filter(e=> e.ready).map(e=>`<div style="font-weight:800;font-size:14px;color:#6a4ab0;margin-top:6px;">⚡ ${escapeHtml(e.name)} is ready to break through to Lv ${e.ready} — see your Party.</div>`).join('')}
+      ${tokens ? `<div style="font-weight:800;font-size:14px;color:var(--gold);margin-top:6px;">🎫 Found ${tokens > 1 ? tokens + ' Skill Tokens' : 'a Skill Token'}! (${state.inventory.tokens} total)</div>` : ''}
       ${(ui.victoryNotes || []).map(n=> `<div style="font-weight:800;font-size:14px;color:var(--gold);margin-top:6px;">${n}</div>`).join('')}
     </div>
     <div id="catchArea"></div>
@@ -545,6 +719,10 @@ function go(screen){
   if(ui.spellingUnlocked && screen !== 'spelling') ui.spellingUnlocked = false;
   if(ui.arenaUnlocked && screen !== 'arena' && screen !== 'battle') ui.arenaUnlocked = false;
   if(ui.xpUnlocked && screen !== 'sound') ui.xpUnlocked = false;
+  /* Out of a fight a companion is whole again: what it lost was the fight's. */
+  if(!['battle','quiz'].includes(screen) && typeof restCompanions === 'function' && state && state.party) restCompanions();
+  /* Training with the Monkey King ends when you walk away from it (2.87). */
+  if(ui.coreSession && !['coreSpar','battle','quiz','spelling'].includes(screen) && typeof endCoreSession === 'function') endCoreSession();
   ui.screen = screen;
   render();
 }
@@ -565,7 +743,7 @@ function render(){
 }
 function renderInner(){
   enforceEyeBreak();
-  if(!['home','region','battle','recover','challenge','explore','shop','storage','party','stats','monsterIndex','indexDetail','spellingIndex','profileSelect'].includes(ui.screen)) setScreenBg(null);
+  if(!['home','region','battle','recover','challenge','explore','shop','storage','party','companions','coreSpar','stats','monsterIndex','indexDetail','spellingIndex','profileSelect'].includes(ui.screen)) setScreenBg(null);
   const hb = $('#hamburgerBtn');
   // hamburger available everywhere except profile setup + (future) fights
   const noMenu = ['boot','profileSelect','starterSelect','battle','quiz'].includes(ui.screen);
@@ -582,6 +760,8 @@ function renderInner(){
     case 'challenge':     return (state.progress.currentRegion === 5) ? renderChallengeR5()
                                : (state.progress.currentRegion === 4) ? renderChallengeR4() : renderChallenge();
     case 'party':         return renderPartyStub();
+    case 'companions':    return renderCompanions();
+    case 'coreSpar':      return renderCoreSpar();
     case 'stats':         return renderStats();
     case 'storage':       return renderStorage();
     case 'shop':          return renderShop();

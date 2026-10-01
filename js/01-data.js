@@ -176,8 +176,14 @@ const MOVES = {
   /* [slot, name, multiplier, target, words, unlockLevel, extras?]
      extras: { scale:{per,max} } — keeps accepting words past the requirement,
               adding `per` to the multiplier each time, up to `max`.
+              { scale:{per,max,words} } — the same, but it asks for exactly
+              `words` in all, and the last of them lifts it straight to `max`
+              (Incinerate Max: +0.15 a word to 2.4× at 14, 2.75× on the 15th).
              { hits:n } — the total damage lands as n separate strikes on the
-              same target, so per-hit effects (Leech Seed) trigger n times. */
+              same target, so per-hit effects (Leech Seed) trigger n times.
+             { charge:{max, unleash, hyper, unleashBy?, hyperBy?} } — Cataclysm:
+              Unleash/Hyperbeam at 1 charge, +0.25×/+0.5× a charge after —
+              or, where given, the per-charge tables (index = charges − 1). */
   water_starter:   [['Basic','Tackle',0.2,'Single',2,1],['Power1','Bubble',0.4,'Single',4,5],['Power2','Surf',0.6,'AOE',8,21],['Ultimate','Waterfall',1.25,'Single',8,41],['Max','Waterfall Max',1.5,'Single',8,51]],
   fire_starter:    [['Basic','Scratch',0.2,'Single',2,1],['Power1','Ember',0.4,'Single',4,5],['Power2','Flamethrower',0.6,'AOE',8,21],['Ultimate','Fire Blast',1.25,'Single',8,41],['Max','Fire Blast Max',1.5,'Single',8,51]],
   grass_starter:   [['Basic','Tackle',0.2,'Single',2,1],['Power1','Vine Whip',0.4,'Single',4,5],['Power2','Razor Leaf',0.6,'AOE',8,21],['Ultimate','Solar Beam',1.25,'Single',8,41],['Max','Solar Beam Max',1.5,'Single',8,51]],
@@ -240,15 +246,15 @@ const MOVES = {
      upgrade is unlocked by the Dragon Core, not by level. */
   water_dragon:    [['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tsunami',0.8,'AOE',10,35],
                     ['Ultimate','Cataclysm',null,'Charge',10,45,{charge:{max:2, unleash:1.0, hyper:1.5}}],
-                    ['Max','Cataclysm Max',null,'Charge',10,999,{charge:{max:3, unleash:1.25, hyper:1.75}, coreOnly:true}]],
+                    ['Max','Cataclysm Max',null,'Charge',10,999,{charge:{max:3, unleash:1.25, hyper:1.75, unleashBy:[1.25,1.5,1.8,2.15], hyperBy:[1.75,2.25,2.85,3.5]}, coreOnly:true}]],
   water_dragon_nerfed:[['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tsunami',0.8,'AOE',10,35],
                     ['Ultimate','Cataclysm',null,'Charge',10,45,{charge:{max:2, unleash:1.0, hyper:1.5}}],
-                    ['Max','Cataclysm Max',null,'Charge',10,999,{charge:{max:3, unleash:1.25, hyper:1.75}, coreOnly:true}]],
+                    ['Max','Cataclysm Max',null,'Charge',10,999,{charge:{max:3, unleash:1.25, hyper:1.75, unleashBy:[1.25,1.5,1.8,2.15], hyperBy:[1.75,2.25,2.85,3.5]}, coreOnly:true}]],
   dragon_egg:      [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 
   phoenix:         [['Basic','Ember',0.3,'Single',4,1],['Power1','Firestorm',0.6,'AOE',8,5],['Power2','Nova',1.0,'AOE',8,35,{purge:{enemyBuffs:1, playerDebuffs:1}}],
                     ['Ultimate','Incinerate',1.25,'Single',8,45,{scale:{per:0.15,max:2.0}}],
-                    ['Max','Incinerate Max',1.5,'Single',8,55,{scale:{per:0.15,max:2.5}}]],
+                    ['Max','Incinerate Max',1.5,'Single',8,55,{scale:{per:0.15,max:2.75,words:15}}]],
   forest_fairy:    [['Basic','Fairy Wind',0.4,'Single',2,1],['Power1','Giga Drain',0.8,'Single',5,5],['Power2','Overgrowth',0.7,'AOE',8,35],
                     ['Ultimate','Verdant Wrath',1.4,'Single',10,45,{hits:2, split:true}],
                     ['Max','Verdant Wrath Max',1.8,'Single',10,55,{hits:3, split:true}]],

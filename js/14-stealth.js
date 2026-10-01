@@ -34,6 +34,10 @@
                         rest of the day (a capo, for good)
                'evade'  caught → the run is over; a round of spelling, and
                         you start the floor again
+               'town'   (2.91) the Old Town's streets: lit (`light:true`, no
+                        fog), and the Family's own — out of disguise there,
+                        the first man to look your way knows you, and you are
+                        surrounded (r5TownCaught, 15-region5.js)
      feel      how far he feels a guard (tiles, through walls)
      guards    [{ id, kind, x, y, face, path, clock, pause, reach, spin, roster }]
                kind: 'soldato' walks `path` back and forth, pausing at each
@@ -46,11 +50,16 @@
                      'capo'   stands still with a wide lantern
                clock: his own beat in ms — every guard keeps his own, so
                       they drift out of step and a corridor never repeats
-     wild      (fight floors) the ghosts that find you in the dark
+     wild      what finds you in the dark: the ghosts on the first tier, the
+               physical monsters on the second (fight floors, and since 2.90
+               an evade floor that has one)
    Guards stand where they stand: you cannot walk through one.
+   In disguise (2.91, r5().disguised) nobody on watch looks twice at you: the
+   men walk their rounds, a man who would step into you waits instead, and
+   whoever comes alongside you can be talked to (15-region5.js).
    ============================================================ */
 
-const STEALTH_OPAQUE = '#ocG';         // what light cannot pass (water and braziers do not stop it)
+const STEALTH_OPAQUE = '#ocGbrk';      // what light cannot pass (water, braziers, rails and tables do not stop it)
 const STEALTH_VIEW = 9;                // how far off you can make out a light
 const DIRS = { u:[0,-1], d:[0,1], l:[-1,0], r:[1,0] };
 const TURN = { u:'r', r:'d', d:'l', l:'u' };           // a quarter clockwise
@@ -61,7 +70,7 @@ const STEALTH_NEAR = 1, STEALTH_DIM = 2;
 /* Per floor, for this visit: where each guard is, which way he faces, how
    long he has stood, whether he has half-seen you. Kept in ui, so a fight or
    a conversation resumes the floor exactly as it was; entering the floor
-   afresh (down a stair) starts it over. */
+   afresh (by a stair or a door) starts it over. */
 function stealthState(id, d){
   ui.stealth = ui.stealth || {};
   if(!ui.stealth[id]) resetStealth(id, d);
@@ -71,11 +80,15 @@ function resetStealth(id, d){
   ui.stealth = ui.stealth || {};
   const beaten = stealthBeaten(id);
   ui.stealth[id] = {
-    guards: (d.stealth.guards || []).filter(g=> !beaten.includes(g.id)).map(g=> guardStart(g)),
+    guards: stealthOnWatch(d).filter(g=> !beaten.includes(g.id)).map(g=> guardStart(g)),
     timers: [], caught: false, calm: 6,
   };
   return ui.stealth[id];
 }
+/* The men a floor has on watch: all of them, bar any whose `when` says he is
+   not there at this point in the story (2.91: nobody stands watch in the
+   Armoury while the ghost phoenix waits in it). */
+function stealthOnWatch(d){ return (d.stealth.guards || []).filter(g=> !g.when || g.when()); }
 /* Where a guard starts the floor: on his own tile, or the first of his path. */
 function guardStart(def){
   const p0 = (def.path && def.path[0]) || [def.x, def.y];
@@ -103,6 +116,16 @@ function stealthBeaten(id){
   return r.beaten[id] = r.beaten[id] || [];
 }
 function guardDef(d, id){ return (d.stealth.guards || []).find(g=> g.id === id); }
+/* The night the dead rose (2.90): while r5().rush holds, every man on the
+   Old Town's tier is fighting ghosts — rooted to the spot, his lantern
+   swinging every way but yours. Nobody there can catch you, and nothing wild
+   comes out of the dark while the dead are up. It ends when you come up into
+   the church (15-region5.js). */
+function stealthRush(d){ return !!(d && d.tier === 2 && typeof r5 === 'function' && r5().rush); }
+/* In the Family's own colours (2.91): a junior soldato, and nobody on watch
+   looks twice at one of those — in the catacombs or in the Old Town. They walk
+   their rounds; you walk yours. Wild monsters do not care what you wear. */
+function stealthDisguised(d){ return !!(d && d.region === 5 && typeof r5 === 'function' && r5().disguised); }
 /* A guard stands on his tile: nobody walks through him. */
 function stealthOccupied(d, x, y){
   const st = ui.stealth && ui.stealth[d.key];
@@ -140,6 +163,7 @@ function guardLight(d, g, def){
     out.add(x + ',' + y);
   };
   for(let dy = -1; dy <= 1; dy++) for(let dx = -1; dx <= 1; dx++) add(g.x + dx, g.y + dy);
+  if(stealthRush(d)) return out;           // the night the dead rose: no beam, just the glow
   const [fx, fy] = DIRS[g.face] || DIRS.d;
   const reach = def.reach || (def.kind === 'capo' ? 4 : 3);
   const wide = def.kind === 'capo' || def.wide;
@@ -202,9 +226,10 @@ function patrolStep(d, g, def){
   const dx = Math.sign(t[0] - g.x), dy = Math.sign(t[1] - g.y);
   if(dx) g.face = dx > 0 ? 'r' : 'l'; else if(dy) g.face = dy > 0 ? 'd' : 'u';
   const nx = g.x + (dx || 0), ny = g.y + (dx ? 0 : dy);
-  /* He does not walk through you: stepping into you is seeing you. */
+  /* He does not walk through you: stepping into you is seeing you — unless
+     you are wearing his colours (2.91), when he just waits for you to move. */
   const p = (typeof walkState === 'function') ? walkState().at[d.key] : null;
-  if(p && p.x === nx && p.y === ny){ g.sus = 1; return; }
+  if(p && p.x === nx && p.y === ny){ if(!stealthDisguised(d)) g.sus = 1; return; }
   g.x = nx; g.y = ny;
 }
 function inGuardLight(id, d, g, def){
@@ -249,6 +274,7 @@ function stealthSeen(id, d){
   return r.seen[id];
 }
 function paintStealth(id, d){
+  if(d.stealth.light) return paintLitGuards(id, d);
   const fog = document.getElementById('walkFog');
   if(!fog || !ui.stealth || !ui.stealth[id]) return;
   const st = ui.stealth[id];
@@ -290,13 +316,30 @@ function paintStealth(id, d){
   });
 }
 
+/* A lit place (2.91: the Old Town's streets, `light:true`): no dark to see
+   through, so every man on watch is simply there, where he stands. */
+function paintLitGuards(id, d){
+  const st = ui.stealth && ui.stealth[id];
+  if(!st) return;
+  st.guards.forEach(g=>{
+    const el = document.getElementById('guard-' + g.id);
+    if(!el) return;
+    el.style.transform = `translate3d(${g.x * WALK_T}px,${g.y * WALK_T}px,0)`;
+    el.style.zIndex = 10 + g.y;
+    el.style.display = '';
+    el.dataset.face = g.face;
+    const mk = el.querySelector('.guard-mark');
+    if(mk) mk.textContent = g.spotted ? '!' : '';
+  });
+}
+
 /* ---------- the floor comes alive ---------- */
 function startStealth(world, d){
   const id = d.key;
   const w = walkState();
   stealthCss();
   stealthHold(false);
-  /* Down a stair, or back from the harbour: the floor starts over. Back from a
+  /* Up or down a stair, or back from the harbour: the floor starts over. Back from a
      fight or a conversation: exactly where it was. */
   if(ui.stealthFresh){ resetStealth(id, d); ui.stealthFresh = false; }
   const st = stealthState(id, d);
@@ -304,12 +347,15 @@ function startStealth(world, d){
   st.guards.forEach(g=>{ g.sus = 0; g.spotted = false; });
   stopStealth();
   const W = d.rows[0].length, H = d.rows.length;
-  const fog = document.createElement('div');
-  fog.className = 'walk-fog'; fog.id = 'walkFog';
-  fog.style.cssText = `width:${W * WALK_T}px;height:${H * WALK_T}px;` +
-    `grid-template-columns:repeat(${W},${WALK_T}px);grid-auto-rows:${WALK_T}px;`;
-  for(let i = 0; i < W * H; i++) fog.appendChild(document.createElement('i'));
-  world.appendChild(fog);
+  /* the dark — except in a lit place (2.91: the Old Town) */
+  if(!d.stealth.light){
+    const fog = document.createElement('div');
+    fog.className = 'walk-fog'; fog.id = 'walkFog';
+    fog.style.cssText = `width:${W * WALK_T}px;height:${H * WALK_T}px;` +
+      `grid-template-columns:repeat(${W},${WALK_T}px);grid-auto-rows:${WALK_T}px;`;
+    for(let i = 0; i < W * H; i++) fog.appendChild(document.createElement('i'));
+    world.appendChild(fog);
+  }
   st.guards.forEach(g=>{
     const def = guardDef(d, g.id);
     const e = document.createElement('div');
@@ -319,6 +365,15 @@ function startStealth(world, d){
     const icon = def.kind === 'capo' ? '🕴️' : '💂';
     e.innerHTML = `<img src="assets/npc/${guardSprite(def)}.png" alt="" ` +
       `onerror="walkArtMissing(this,'${icon}',${px},0)"><b class="guard-mark"></b>`;
+    /* the night the dead rose: a ghost round every one of them */
+    if(stealthRush(d)){
+      e.classList.add('haunted');
+      const orbit = document.createElement('span');
+      orbit.className = 'guard-haunt';
+      orbit.style.animationDelay = (-(def.clock || 600) % 1400) + 'ms';
+      orbit.innerHTML = `<span class="gh-ghost">${monPortrait('ghost', Math.round(WALK_T * 0.55), { view:'front', bare:true })}</span>`;
+      e.appendChild(orbit);
+    }
     world.appendChild(e);
   });
   paintStealth(id, d);
@@ -345,8 +400,21 @@ function stealthPaused(){
 /* One beat of one guard: look, then move or turn, then look again. */
 function guardBeat(id, d, g, def){
   const st = ui.stealth && ui.stealth[id];
-  if(!st || st.caught || ui.screen !== id || !document.getElementById('walkFog')) return;
+  if(!st || st.caught || ui.screen !== id || !document.getElementById(d.stealth.light ? 'walkWorld' : 'walkFog')) return;
   if(stealthPaused()) return;
+  if(stealthRush(d)){ g.sus = 0; return; }          // fighting ghosts: he has no eyes for you
+  /* You are one of them (2.91): he walks his round and never looks at you
+     twice. Whoever comes alongside, you can talk to (15-region5.js). */
+  if(stealthDisguised(d)){
+    g.sus = 0; g.spotted = false;
+    guardAdvance(d, g, def);
+    paintStealth(id, d);
+    if(typeof r5GuardsMoved === 'function') r5GuardsMoved(d);
+    return;
+  }
+  /* The Old Town's streets (2.91) are the Family's own: out of disguise in
+     them, the first man who looks your way knows you. */
+  if(d.stealth.kind === 'town'){ g.spotted = true; paintStealth(id, d); return stealthCaught(id, d, g, def); }
   /* Half-saw you on his last beat and has stood looking since. Still there:
      caught. Gone: he shrugs, and this beat was spent looking. */
   if(g.sus){
@@ -368,11 +436,13 @@ function stealthStep(p, d){
   const id = d.key;
   const st = ui.stealth && ui.stealth[id];
   if(!st || st.caught) return false;
+  if(typeof r5NoteStep === 'function') r5NoteStep(d, p);      // where you left off (2.90)
   paintStealth(id, d);
-  /* The ghosts in the dark (fight floors, away from any lantern). */
+  /* Something in the dark, away from any lantern: on a fight floor, and on
+     an evade floor that has a wild table (2.90: the Garrison's). */
   const wild = d.stealth.wild;
   if(st.calm > 0){ st.calm--; return false; }
-  if(wild && d.stealth.kind === 'fight' && !st.guards.some(g=> g.sus)){
+  if(wild && !stealthRush(d) && !st.guards.some(g=> g.sus)){
     const near = st.guards.some(g=> Math.abs(g.x - p.x) + Math.abs(g.y - p.y) <= 3);
     const { lit } = stealthVision(id, d);
     if(!near && !lit.has(p.x + ',' + p.y) && Math.random() < (wild.rate || 0.04)){
@@ -409,16 +479,18 @@ function stealthCaught(id, d, g, def){
   playSfx('alert');
   setTimeout(()=>{
     walkState().busy = false;
+    if(d.stealth.kind === 'town' && typeof r5TownCaught === 'function') return r5TownCaught(id, d, g, def);
     if(d.stealth.kind === 'evade') return caughtEvade(id, d, g, def);
     return caughtFight(id, d, g, def);
   }, 900);
 }
 /* A fight floor: he calls it, and it is a fight. Beat him and he is gone for
    the rest of the day; lose, and you are back in town with the floor as you
-   left it. */
-function caughtFight(id, d, g, def){
+   left it. `shout`, if given, is what he says instead of his own (2.91: when
+   you show him your face). */
+function caughtFight(id, d, g, def, shout){
   const roster = (typeof R5_ROSTERS !== 'undefined') && R5_ROSTERS[def.roster];
-  if(!roster) return renderWalkDeck(id);
+  if(!roster){ stealthHold(false); return renderWalkDeck(id); }
   const who = guardSprite(def);
   const face = faceNpc(who, def.kind === 'capo' ? '🕴️' : '💂');
   /* Nothing left standing to fight with: he marches you out, and that is all. */
@@ -429,6 +501,7 @@ function caughtFight(id, d, g, def){
         stealthHold(false);
         walkTeardown();
         ui.stealthFresh = true;
+        if(typeof r5BackToEntry === 'function') r5BackToEntry(id);   // next time: the stair you came in by
         if(typeof r5ToHarbour === 'function') r5ToHarbour(); else go('explore');
       });
   }
@@ -438,7 +511,7 @@ function caughtFight(id, d, g, def){
     ui.prevScreen = id; toast('No words selected, please select to proceed.');
     return go('spelling');
   }
-  sceneSay([face], roster.label, roster.shout || `<b>"Hey! You — in the light!"</b>`, 'Fight').then(()=>{
+  sceneSay([face], roster.label, shout || roster.shout || `<b>"Hey! You — in the light!"</b>`, 'Fight').then(()=>{
     stealthHold(false);
     walkTeardown();
     beginBattle({ isNpc:true, name:roster.label, npcId:who,
@@ -475,25 +548,32 @@ async function caughtEvade(id, d, g, def){
   walkTeardown();
   const n = d.stealth.retryPhrases || 10;
   /* back to whichever way you came in by */
-  const entry = ((ui.floorEntry || {})[id]) || 'top';
+  const entry = ((ui.floorEntry || {})[id]) || d.entry || 'top';
   const back = ()=>{
     ui.stealthFresh = true;
     ui.r5Recaught = id;                          // no second warning on the way back in
     const w = walkState(), a = (d.arrive && d.arrive[entry]) || d.spawn;
     w.at[id] = { x:a[0], y:a[1] }; w.face = 'd'; w.busy = false;
     if(w.ghostAt) w.ghostAt[id] = { x:a[0], y:a[1] };
+    if(typeof r5NoteSpot === 'function') r5NoteSpot(id, a[0], a[1], entry);
   };
-  const whereBack = entry === 'bottom' ? `the bottom of ${escapeHtml(d.title)}`
+  /* (a floor may say its own ways in: the Garrison's are a gate and a stair) */
+  const whereBack = (d.arriveSay || {})[entry] ? escapeHtml(d.arriveSay[entry])
+                  : entry === 'bottom' ? `the bottom of ${escapeHtml(d.title)}`
                   : entry === 'top' ? `the top of ${escapeHtml(d.title)}`
                   : `the door you came in by, in ${escapeHtml(d.title)}`;
+  /* (2.91) caught because you showed one of them your face, in disguise */
+  const revealed = ui.r5Revealed === id;
+  ui.r5Revealed = null;
   if(!activePool().length){ back(); sceneCurtain(false, 400); return go(id); }
   captureTest(n, ()=>{
     const r = r5();
     r.evadeTries = r.evadeTries || {};
     r.evadeTries[id] = (r.evadeTries[id] || 0) + 1;
-    saveProfile();
     back();
+    saveProfile();
     storyModal(monPortrait('whalelord', 150, { view:'front', bare:true }), whaleName(),
+      (revealed ? `<b>"Too many of them on this floor. Show your face to one, and they all come."</b><br><br>` : '') +
       `<b>"We slipped away from them in the dark. They have gone back to their posts."</b><br><br>` +
       `<i>You are back at ${whereBack}. Try again.</i>`,
       ()=> go(id), { subtitle:d.title });
@@ -502,8 +582,9 @@ async function caughtEvade(id, d, g, def){
 }
 /* The rest of the floor comes for you. Actors, not the floor's guards (they
    stand where they are): each walks in out of the dark, along the floor, to a
-   square of his own within three steps of you, one after another. */
-function captureStream(id, d){
+   square of his own within three steps of you, one after another. `sprites`
+   (2.91), if given, says who — in turn (the Old Town sends its capos too). */
+function captureStream(id, d, sprites){
   const p = walkState().at[id];
   const world = document.getElementById('walkWorld');
   if(!p || !world) return Promise.resolve();
@@ -525,6 +606,10 @@ function captureStream(id, d){
   const round = bfs(p.x, p.y, 12);
   const st = ui.stealth && ui.stealth[id];
   const taken = new Set((st ? st.guards : []).map(g=> key(g.x, g.y)));
+  /* …and nobody stands where somebody already is (a capo at his table) */
+  deckThings(d).filter(t=> !t.walk).forEach(t=>{
+    for(let dx = 0; dx < (t.w || 1); dx++) for(let dy = 0; dy < (t.h || 1); dy++) taken.add(key(t.x + dx, t.y + dy));
+  });
   /* nor where the Whalelord floats: they cannot see him, but he is there */
   const gh = (walkState().ghostAt || {})[id];
   if(gh && typeof cuainAboard === 'function' && cuainAboard()) taken.add(key(gh.x, gh.y));
@@ -544,13 +629,13 @@ function captureStream(id, d){
     const path = [];
     if(best){ let k = best.k; while(k){ path.push(k.split(',').map(Number)); k = from.prev.get(k); } }
     else path.push([s.x, s.y]);
-    return { id:'cap' + i, path, sprite:i % 2 ? 'soldato2' : 'soldato1', delay:i * 170 };
+    return { id:'cap' + i, path, sprite:sprites ? sprites[i % sprites.length] : (i % 2 ? 'soldato2' : 'soldato1'), delay:i * 170 };
   });
   const stepMs = 110 * SCENE_SPEED;
   return Promise.all(walks.map(wk=> new Promise(done=>{
     setTimeout(()=>{
       const [x0, y0] = wk.path[0];
-      const el = sceneActor(wk.id, { x:x0, y:y0, src:`assets/npc/${wk.sprite}.png`, icon:'💂' });
+      const el = sceneActor(wk.id, { x:x0, y:y0, src:`assets/npc/${wk.sprite}.png`, icon:/^capo/.test(wk.sprite) ? '🕴️' : '💂' });
       if(!el) return done();
       el.classList.add('capture-guard');
       let i = 0;
@@ -644,7 +729,27 @@ function catacombEncounter(d){
    position, so it never shimmers. */
 const CATA_PX = 32;
 const _cataArt = {};
+/* A floor's own painting (2.88): a deck may name `art` — assets/zones/<art>.png,
+   painted over the floor's reference at 32 px a tile (any size of the same
+   shape will do). It is looked for once; until it has loaded, or if it is
+   not there, the floor is drawn from its grid as before. */
+const _cataPainting = {};
+function cataPainting(d){
+  if(!d || !d.art || typeof Image === 'undefined') return null;
+  const st = _cataPainting[d.art];
+  if(st === 'ok') return `assets/zones/${d.art}.png`;
+  if(st === undefined){
+    _cataPainting[d.art] = 'looking';
+    const im = new Image();
+    im.onload = ()=>{ _cataPainting[d.art] = 'ok'; };
+    im.onerror = ()=>{ _cataPainting[d.art] = 'none'; };
+    im.src = `assets/zones/${d.art}.png`;
+  }
+  return null;
+}
 function paintCatacomb(d){
+  const own = cataPainting(d);
+  if(own) return own;
   if(_cataArt[d.key]) return _cataArt[d.key];
   const W = d.rows[0].length, H = d.rows.length, P = CATA_PX;
   const c = document.createElement('canvas');
@@ -681,6 +786,13 @@ function paintCatacomb(d){
         const yy = Y + 8 + k * 12 + rnd(x, y, k) * 4;
         g.beginPath(); g.moveTo(X + 4, yy); g.quadraticCurveTo(X + P / 2, yy - 3, X + P - 4, yy); g.stroke();
       }
+      continue;
+    }
+    if(ch === 's'){                                  // the pit's sand (2.88)
+      g.fillStyle = `rgb(${176 + Math.floor(rnd(x, y) * 14)},${150 + Math.floor(rnd(x, y, 1) * 12)},${104 + Math.floor(rnd(x, y, 2) * 10)})`;
+      g.fillRect(X, Y, P, P);
+      g.fillStyle = 'rgba(90,70,40,0.25)';
+      for(let k = 0; k < 5; k++) g.fillRect(X + rnd(x, y, k + 3) * (P - 3), Y + rnd(x, y, k + 13) * (P - 3), 2, 2);
       continue;
     }
     /* flagstones */
@@ -729,6 +841,48 @@ function paintCatacomb(d){
       gr.addColorStop(0, 'rgba(255,220,120,0.95)'); gr.addColorStop(0.5, 'rgba(240,120,40,0.7)'); gr.addColorStop(1, 'rgba(240,120,40,0)');
       g.fillStyle = gr; g.beginPath(); g.arc(X + P / 2, Y + P / 2, P * 0.5, 0, Math.PI * 2); g.fill();
     }
+    /* ---- the Old Town's tier (2.88) ---- */
+    if(ch === 'b'){                                  // a barrel, seen from above
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.arc(X + P / 2 + 2, Y + P / 2 + 3, P * 0.44, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#6a4326'; g.beginPath(); g.arc(X + P / 2, Y + P / 2, P * 0.44, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#2e1d10'; g.lineWidth = 2;
+      g.beginPath(); g.arc(X + P / 2, Y + P / 2, P * 0.44, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.arc(X + P / 2, Y + P / 2, P * 0.30, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#8a5a34'; g.beginPath(); g.arc(X + P / 2, Y + P / 2, P * 0.18, 0, Math.PI * 2); g.fill();
+    }
+    if(ch === 'r'){                                  // a block of cut stone
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(X + 4, Y + 6, P - 5, P - 5);
+      g.fillStyle = '#a79f92'; g.fillRect(X + 2, Y + 2, P - 5, P - 5);
+      g.fillStyle = '#c4bcae'; g.fillRect(X + 2, Y + 2, P - 5, 5);
+      g.strokeStyle = 'rgba(60,55,48,0.6)'; g.lineWidth = 1.5; g.strokeRect(X + 2.5, Y + 2.5, P - 6, P - 6);
+      if(rnd(x, y, 8) < 0.5){ g.beginPath(); g.moveTo(X + 6 + rnd(x, y, 9) * 10, Y + 8); g.lineTo(X + 12 + rnd(x, y, 10) * 10, Y + P - 6); g.stroke(); }
+    }
+    if(ch === 'k'){                                  // a bunk: its pillow at the wall end
+      const headLeft = at(x - 1, y) === '#', headRight = at(x + 1, y) === '#';
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(X + 1, Y + 6, P - 1, P - 6);
+      g.fillStyle = '#5a4430'; g.fillRect(X, Y + 3, P, P - 6);
+      g.fillStyle = '#7d6a55'; g.fillRect(X + (headLeft ? 3 : 0), Y + 6, P - (headLeft || headRight ? 3 : 0), P - 12);
+      if(headLeft || headRight){
+        g.fillStyle = '#d8cfbd'; g.fillRect(headLeft ? X + 4 : X + P - 13, Y + 8, 9, P - 16);
+      }
+    }
+    if(ch === 't'){                                  // a table, or a bench
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(X, Y + 8, P, P - 10);
+      g.fillStyle = '#7b5634'; g.fillRect(X, Y + 5, P, P - 12);
+      g.fillStyle = 'rgba(0,0,0,0.25)';
+      for(let k = 1; k < 3; k++) g.fillRect(X, Y + 5 + k * (P - 12) / 3, P, 1);
+      if(at(x - 1, y) !== 't'){ g.fillStyle = '#4a321d'; g.fillRect(X, Y + 5, 2, P - 12); }
+      if(at(x + 1, y) !== 't'){ g.fillStyle = '#4a321d'; g.fillRect(X + P - 2, Y + 5, 2, P - 12); }
+    }
+    if(ch === 'x'){                                  // the ring's rail: posts, and a bar to the next
+      const n = (dx, dy)=> at(x + dx, y + dy) === 'x';
+      g.fillStyle = '#5b3b20';
+      if(n(-1, 0)) g.fillRect(X, Y + P / 2 - 2, P / 2, 4);
+      if(n(1, 0))  g.fillRect(X + P / 2, Y + P / 2 - 2, P / 2, 4);
+      if(n(0, -1)) g.fillRect(X + P / 2 - 2, Y, 4, P / 2);
+      if(n(0, 1))  g.fillRect(X + P / 2 - 2, Y + P / 2, 4, P / 2);
+      g.fillStyle = '#3a2513'; g.fillRect(X + P / 2 - 4, Y + P / 2 - 4, 8, 8);
+    }
   }
   try { _cataArt[d.key] = c.toDataURL('image/png'); } catch(e){ _cataArt[d.key] = ''; }
   return _cataArt[d.key];
@@ -751,6 +905,15 @@ function stealthCss(){
     .walk-ent.guard.sensed > :not(.guard-mark){opacity:.45;filter:grayscale(1) drop-shadow(0 0 6px rgba(150,90,220,0.9));}
     .walk-ent.guard .guard-mark{position:absolute;left:50%;top:-58%;transform:translateX(-50%);
       font:900 calc(var(--wt) * 0.6)/1 'Baloo 2',sans-serif;color:#ffd84a;text-shadow:0 2px 0 #2a1c00,0 0 6px #000;}
+    /* the night the dead rose (2.90): every man fighting a ghost */
+    @keyframes guardShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6%)}75%{transform:translateX(6%)}}
+    @keyframes guardHaunt{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    .walk-ent.guard.haunted > img{animation:guardShake .45s ease-in-out infinite;}
+    .walk-ent.guard.haunted .guard-haunt{position:absolute;left:50%;top:45%;width:0;height:0;
+      animation:guardHaunt 1.4s linear infinite;pointer-events:none;}
+    .walk-ent.guard.haunted .gh-ghost{position:absolute;left:calc(var(--wt) * 0.30);top:calc(var(--wt) * -0.62);
+      opacity:.85;filter:drop-shadow(0 0 6px rgba(170,120,255,.95));}
+    .walk-ent.guard.haunted .gh-ghost img{display:block;filter:none;}
   `;
   document.head.appendChild(s);
 }

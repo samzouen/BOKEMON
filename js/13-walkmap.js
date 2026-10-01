@@ -356,7 +356,9 @@ async function takePrize(deck, i){
   await saveProfile();
   const d = DECKS[deck], region = d.region || 4;
   const total = Object.values(book).reduce((n,o)=>n + Object.keys(o).length, 0);
-  const all = Object.values(DECKS).filter(x=> (x.region || 4) === region)
+  /* (the Old Town's tier counts once its gate is open — 2.88) */
+  const sealed = x=> x.tier === 2 && typeof r5Tier2Open === 'function' && !r5Tier2Open();
+  const all = Object.values(DECKS).filter(x=> (x.region || 4) === region && !sealed(x))
                 .reduce((n, x)=> n + (x.prizes || []).length, 0);
   /* Nothing about where it was or how it got there — a child who finds one in
      a corridor should not be told they were rummaging in a locker. */
@@ -388,9 +390,12 @@ function checkPrize(){
 }
 function cuainAboard(){ const g = r4(); return !!g.ghostAccepted; }
 /* '#' wall. The catacombs add '~' water, 'o' a pillar, '*' a brazier, 'c' a
-   stack of crates and 'G' a shut gate — all solid underfoot. Everything else
-   is floor ('.', ',' bones, '=' a bridge). */
-const WALK_SOLID = '#~o*cG';
+   stack of crates and 'G' a shut gate — all solid underfoot. The Old Town's
+   tier (2.88) adds 'b' barrels, 'r' cut stone, 'k' a bunk, 'x' a rail and
+   't' a table. The Old Town's streets (2.91) add 'B' a building, 'g' a
+   garden and 'w' a wall. Everything else is floor ('.', ',' bones or
+   paving, '=' a bridge or steps, 's' sand). */
+const WALK_SOLID = '#~o*cGbrkxtBgw';
 const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true : WALK_SOLID.includes(d.rows[y][x]);
 /* A catacomb guard stands on his tile like anybody else. */
 function wOccupied(d, x, y){
@@ -474,6 +479,12 @@ function walkCss(){
       30%{translate:0 -55%;scale:1.15;opacity:1}55%{translate:0 0;scale:1}
       70%{translate:0 -25%}100%{translate:0 0;scale:1;opacity:1}}
     .walk-mark.ghost-alert{animation:ghostAlertJump 1.1s cubic-bezier(.2,.9,.3,1) 1 both;z-index:60;}
+    /* a deck's own button beside Party (2.91: the disguise) */
+    .walk-side-top{display:flex;gap:7px;}
+    .walk-side-top .wact{flex:1;min-width:0;}
+    .wact.party.side{flex-direction:column;gap:1px;font-size:11px;line-height:1.1;padding:3px 6px;}
+    .wact.party.side b{font-size:17px;line-height:1;}
+    .wact.party.side.on{background:#2f3346;color:#f1e9d6;border-color:#1d2130;}
   `;
   document.head.appendChild(st);
 }
@@ -547,10 +558,11 @@ function renderWalkDeck(id){
         <i></i><button class="wkey" data-d="d">${TRI('d')}</button><i></i>
       </div>
       <div class="walk-side">
-        <button class="wact party" id="walkParty">Party</button>
+        <div class="walk-side-top" id="walkSideTop"><button class="wact party" id="walkParty">Party</button></div>
         <div class="walk-acts" id="walkActs"></div>
       </div>
     </div>`;
+  walkSideRefresh();
   $('#backBtn').addEventListener('click', ()=>{ walkTeardown(); go('explore'); });
   /* remember where to come back to, so Party does not dump you on the region
      screen with your place on the ship lost */
@@ -696,7 +708,7 @@ function renderWalkDeck(id){
     if(!w.ghostAt[id]) w.ghostAt[id] = { x:d.spawn[0], y:d.spawn[1] };
   }
   const me = document.createElement('div'); me.className='walk-ent walk-you'; me.id='walkYou';
-  me.innerHTML = avatarImg(state.avatar || 'm1', WALK_T, { bare:true });
+  me.innerHTML = walkYouArt(d);
   world.appendChild(me);
 
   buildAquarium(world, d);
@@ -715,6 +727,35 @@ function renderWalkDeck(id){
   /* A deck with more going on (the catacombs' guards and their light) sets it
      up once everything else is in place. */
   if(d.onRender) d.onRender(world, d);
+}
+/* What you look like on a deck: yourself — or, where a deck says so, someone
+   else (Cosa Nostia's disguise, 2.91: d.youArt(d) → picture HTML, or null). */
+function walkYouArt(d){
+  return (d && d.youArt && d.youArt(d)) || avatarImg(state.avatar || 'm1', WALK_T, { bare:true });
+}
+function walkYouRefresh(){
+  const me = $('#walkYou'), d = DECKS[walkState().deck];
+  if(me && d) me.innerHTML = walkYouArt(d);
+}
+/* A deck's own button beside Party (2.91: the disguise in Cosa Nostia):
+   d.sideAct(d) → { html, act, cls } or null. Redrawn whenever what it says
+   changes; Party itself is left alone. */
+function walkSideRefresh(){
+  const top = $('#walkSideTop'), d = DECKS[walkState().deck];
+  if(!top) return;
+  const old = $('#walkSide'); if(old) old.remove();
+  const side = d && d.sideAct ? d.sideAct(d) : null;
+  top.classList.toggle('two', !!side);
+  if(!side) return;
+  const b = document.createElement('button');
+  b.className = 'wact party side' + (side.cls ? ' ' + side.cls : '');
+  b.id = 'walkSide';
+  b.innerHTML = side.html;
+  b.addEventListener('click', ()=>{
+    if(walkState().busy || ui.sceneRunning || document.querySelector('.scene-say')) return;
+    side.act();
+  });
+  top.appendChild(b);
 }
 /* Everything a deck leaves running — the rail, the aquarium, the catacomb
    guards' clocks — stopped in one place. Every way off a deck calls this. */
@@ -790,16 +831,20 @@ function refreshWalk(){
   /* one button per thing you are beside, or standing on */
   const near = deckThings(d).filter(t=> thingNear(t, p));
   d.things.forEach(t=> t.el && t.el.classList.toggle('near', near.includes(t)));
+  /* …and whatever else the deck says is beside you (2.91: in Cosa Nostia, in
+     disguise, the Family's men walking past): d.nearActs(d, p) → [{ key,
+     html, act }]. */
+  const extra = d.nearActs ? d.nearActs(d, p) : [];
   /* Rebuilding this on every single step was the choppiness: four dots and a
      stack of buttons torn down and recreated several times a second. It now
      only redraws when what you are standing beside actually changes. */
-  const sig = near.map(t=>t.x+','+t.y+t.verb).join('|') + '#' + (cuainAboard()?'g':'');
+  const sig = near.map(t=>t.x+','+t.y+t.verb).join('|') + '#' + (cuainAboard()?'g':'') + '#' + extra.map(a=> a.key).join('|');
   if(sig === w.actSig) return;
   w.actSig = sig;
   const acts = $('#walkActs');
   acts.innerHTML = '';
   /* Cuain can be spoken to from anywhere — he is behind you, not beside you. */
-  const withGhost = cuainAboard() ? near.length + 1 : near.length;
+  const withGhost = near.length + extra.length + (cuainAboard() ? 1 : 0);
   acts.classList.toggle('single', withGhost <= 1);
   if(cuainAboard()){
     const b = document.createElement('button');
@@ -814,7 +859,14 @@ function refreshWalk(){
     });
     acts.appendChild(b);
   }
-  if(!near.length && !cuainAboard()){
+  extra.forEach(a=>{
+    const b = document.createElement('button');
+    b.className = 'wact live' + (a.cls ? ' ' + a.cls : '');
+    b.innerHTML = a.html;
+    b.addEventListener('click', ()=>{ if(!walkState().busy) a.act(); });
+    acts.appendChild(b);
+  });
+  if(!near.length && !extra.length && !cuainAboard()){
     acts.innerHTML = '<div class="wact">—</div>';
   } else near.forEach(t=>{
     const b=document.createElement('button');

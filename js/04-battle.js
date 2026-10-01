@@ -86,9 +86,50 @@ function partyStatuses(){
   if(!ui.battle) return {};
   return (ui.battle.partyStatus = ui.battle.partyStatus || {});
 }
-/* uid is accepted but ignored — kept so existing call sites read naturally. */
-function getPStatus(uid, type){ return partyStatuses()[type]; }
-function removePStatus(uid, type){ delete partyStatuses()[type]; }
+
+/* ---------- A MONSTER'S OWN DEBUFFS (2.83) ----------
+   A stun, a nap, a weakened next blow, a muddle: what an enemy puts on ONE of
+   your monsters stays on that one, as a mark on an enemy stays on that enemy.
+   A monster sent out after it isn't stunned by it — and a companion beside it
+   won't be either (handover/07-COMPANIONS). Kept for the battle by uid in
+   ui.battle.monStatus. Everything else on your side — your buffs, and their
+   fields on you (Charm, Disrupt, a Curse, their seeds, their bog, Held Fast) —
+   still covers the whole side in partyStatus.
+   getPStatus / setPStatus / removePStatus route these four to the monster in
+   focus (activeMon), so the call sites read as they always did. */
+const MON_DEBUFFS = new Set(['stunned', 'asleep', 'softened', 'discombobulate']);
+function monStatuses(m){
+  const b = ui.battle;
+  if(!b || !m || !m.uid) return [];
+  b.monStatus = b.monStatus || {};
+  return (b.monStatus[m.uid] = b.monStatus[m.uid] || []);
+}
+function getMStatus(m, type){ return monStatuses(m).find(s=> s.type === type) || null; }
+function setMStatus(m, status){
+  if(!ui.battle || !m || !status) return null;
+  if(!status.unsweepable && dustBlocks(statusOwner(status.type, status, 'player'))) return null;
+  const st = Object.assign({ turnsLeft: STATUS_TURNS }, status);
+  const list = monStatuses(m);
+  const i = list.findIndex(s=> s.type === st.type);
+  if(i >= 0) list[i] = st; else list.push(st);
+  return st;
+}
+function removeMStatus(m, type){
+  const list = monStatuses(m);
+  const i = list.findIndex(s=> s.type === type);
+  if(i >= 0) list.splice(i, 1);
+}
+
+/* uid is accepted but ignored — kept so existing call sites read naturally.
+   (A monster's own debuffs go to the monster in focus — above.) */
+function getPStatus(uid, type){
+  if(MON_DEBUFFS.has(type)) return getMStatus(activeMon(), type);
+  return partyStatuses()[type];
+}
+function removePStatus(uid, type){
+  if(MON_DEBUFFS.has(type)) return removeMStatus(activeMon(), type);
+  delete partyStatuses()[type];
+}
 /* Diamond Dust is enforced HERE rather than at each call site. Every status in
    the game passes through setPStatus / addEStatus / setESide, so the other
    side's effect cannot land while a dust holds — including any effect added in
@@ -96,6 +137,7 @@ function removePStatus(uid, type){ delete partyStatuses()[type]; }
    forgotten line away from a hole. */
 function setPStatus(uid, status){
   if(!ui.battle || !status) return null;
+  if(MON_DEBUFFS.has(status.type)) return setMStatus(activeMon(), status);
   /* Either side's dust stops the OTHER side's effects forming on this side —
      but not what a creature simply IS (a bog), which no dust would sweep. */
   if(!status.unsweepable && dustBlocks(statusOwner(status.type, status, 'player'))) return null;
@@ -103,7 +145,7 @@ function setPStatus(uid, status){
   partyStatuses()[status.type] = st;
   return st;
 }
-function clearPStatus(uid, type){ delete partyStatuses()[type]; }
+function clearPStatus(uid, type){ removePStatus(uid, type); }
 
 /* Stamp a field status on every enemy, and remember it so later waves inherit it. */
 function applyFieldStatus(status){
@@ -116,8 +158,11 @@ function applyFieldStatus(status){
 
 /* One round has passed: age every status and drop the expired ones. */
 /* One muddled turn: this enemy's next swing lands on its own side. */
-function markConfused(e, ffPower){
-  addEStatus(e, { type:'discombobulate', turnsLeft:2, mine:true, ffPower:ffPower || 0.60 });
+function markConfused(e, ffPower, once){
+  /* `once` (Lunacy, 2.88): muddled for its next swing, this round or the
+     next, as a muddle cast on you mid-round is (markPlayerConfused's `fresh`). */
+  addEStatus(e, Object.assign({ type:'discombobulate', turnsLeft:2, mine:true, ffPower:ffPower || 0.60 },
+                              once ? { once:true, fresh:true } : {}));
 }
 /* Each round the old muddle clears, and Discombobulate's field catches whoever
    it catches — the newly arrived as readily as the rest. A lone Lunacy leaves
@@ -129,21 +174,27 @@ function markConfused(e, ffPower){
    there is muddled again, new arrivals included (2.74). */
 function discombobulatePulse(){
   /* Their field on you first: last round's muddle clears (unless it was cast
-     since your last turn), and their field may catch you again. */
-  const mine = getPStatus(0,'discombobulate');
-  if(mine && mine.fresh) mine.fresh = false; else removePStatus(0,'discombobulate');
+     since your last turn), and their field may catch you again — each monster
+     of yours on the field on its own (2.84). */
   const ef = getESide('confusionField');
-  if(ef && ef.sure && !ef.sureUsed){
-    if(!getPStatus(0,'discombobulate') && activeMon()) markPlayerConfused(ef.ffPower);
-  } else {
-    if(ef) ef.sure = false;
-    if(ef && !getPStatus(0,'discombobulate') && activeMon() && Math.random() < (ef.after || 0)){
+  const sureNow = !!(ef && ef.sure && !ef.sureUsed);
+  livingField().forEach(pm=> withFocus(pm, ()=>{
+    const mine = getPStatus(0,'discombobulate');
+    if(mine && mine.fresh) mine.fresh = false; else removePStatus(0,'discombobulate');
+    if(sureNow){
+      if(!getPStatus(0,'discombobulate')) markPlayerConfused(ef.ffPower);
+    } else if(ef && !getPStatus(0,'discombobulate') && Math.random() < (ef.after || 0)){
       if(ef.sleep && Math.random() < ef.sleep) setPStatus(0, { type:'asleep', turnsLeft:(ef.sleepTurns || 1) + 1, by:'enemy' });
       else markPlayerConfused(ef.ffPower);
     }
-  }
+  }));
+  if(ef && !sureNow) ef.sure = false;
   const f = getPStatus(0,'confusionField');
-  livingEnemies().forEach(e=> removeEStatus(e,'discombobulate'));
+  livingEnemies().forEach(e=>{
+    const st = getEStatus(e,'discombobulate');
+    if(st && st.once && st.fresh){ st.fresh = false; return; }   // a Lunacy it has not swung under yet
+    removeEStatus(e,'discombobulate');
+  });
   if(!f) return;
   if(f.sure && !f.sureUsed){ livingEnemies().forEach(e=> markConfused(e, f.ffPower)); return; }
   f.sure = false;
@@ -207,6 +258,18 @@ function tickStatuses(){
     st.turnsLeft--;
     if(st.turnsLeft <= 0){ delete ps[k]; afterStatusGone(k, 'player'); expired.push(STATUS_LABELS[k]||k); }
   });
+  /* Each of your monsters' own debuffs ages the same way (2.83). */
+  Object.values(b.monStatus || {}).forEach(list=>{
+    list.slice().forEach(st=>{
+      if(st.permanent) return;
+      if(held(statusOwner(st.type, st, 'player'), st.type, st, 'player')){
+        st.turnsLeft = st.max ? st.max : STATUS_TURNS + 1;
+        return;
+      }
+      st.turnsLeft--;
+      if(st.turnsLeft <= 0){ list.splice(list.indexOf(st), 1); afterStatusGone(st.type, 'player'); expired.push(STATUS_LABELS[st.type]||st.type); }
+    });
+  });
   /* Their side's own buffs age exactly as yours do. */
   const es = enemySideStatuses();
   Object.keys(es).forEach(k=>{
@@ -260,6 +323,59 @@ function removeEStatus(e, type){
    fails because monsters store species, not types. */
 function monRef(m){ return { uid:m.uid, types:SPECIES[m.species].types, species:m.species, _ambush:m._ambush || 0, _omen:m._omen || 0 }; }
 
+/* Steel Soul's flat bonus for one hit: bonus × ATK if the attacker is the
+   monster that cast it (`attacker` is a monRef on your side, the enemy object
+   on theirs), else 0. */
+function steelSoulBonus(attacker, atk, isPlayerAttacking){
+  if(!ui.battle || !attacker) return 0;
+  const st = isPlayerAttacking ? getPStatus(0,'steelSoul') : getESide('steelSoul');
+  if(!st) return 0;
+  const mine = isPlayerAttacking ? (attacker.uid != null && st.owner === attacker.uid) : st.owner === attacker;
+  return mine ? (st.bonus || 0) * atk : 0;
+}
+/* Steel Soul's other half (2.90): its caster also hits harder, either side's.
+   Every damage reduction that is up on its side when it strikes turns round
+   into more damage (2.91): ×(1 + that reduction), each one multiplying the
+   rest — Steel Soul's own 20%, and Spike Armour (20–30%), Steel Aegis
+   (30–40%), a Curse ward (10–15%), a Lava Shell (60%) if they are up too; in
+   their hands also the toughness the monster itself carries (a Steel it
+   walked in with). Each counted exactly as computeDamage takes it off. 1 for
+   anyone else. */
+function soulShields(isPlayer, attacker){
+  const out = [];
+  const add = r=>{ if(r > 0) out.push(r); };
+  const side = type=> isPlayer ? getPStatus(0, type) : getESide(type);
+  const soul = side('steelSoul'), sa = side('spikeArmour'), aeg = side('steelAegis'), cw = side('curseWard'), sh = side('shell');
+  if(soul) add(soul.reduce || 0);
+  if(sa) add(sa.reduce || 0.20);
+  if(aeg) add(aeg.reduce || 0.30);
+  if(cw) add(cw.reduce || 0);
+  if(sh && sh.reduce) add(sh.reduce);
+  if(!isPlayer && attacker && attacker.takeMult && attacker.takeMult < 1) add(1 - attacker.takeMult);
+  return out;
+}
+function steelSoulAmp(attacker, isPlayerAttacking){
+  if(!ui.battle || !attacker) return 1;
+  const st = isPlayerAttacking ? getPStatus(0,'steelSoul') : getESide('steelSoul');
+  if(!st) return 1;
+  const mine = isPlayerAttacking ? (attacker.uid != null && st.owner === attacker.uid) : st.owner === attacker;
+  return mine ? soulShields(isPlayerAttacking, attacker).reduce((m, r)=> m * (1 + r), 1) : 1;
+}
+/* Steel Soul's guard (2.90): while it is up, every blow aimed at ONE monster
+   of its side — a single blow, each strike of a barrage or an Ultra, the main
+   blow of a splash — goes to the monster that cast it, whether it leads or
+   stands beside its leader as a companion. Area moves and twin blows still
+   reach everyone. In their hands the same: your single blows must go through
+   it. Returns that monster, standing, or null. */
+function soulGuardian(side){
+  if(!ui.battle) return null;
+  if(side === 'player'){
+    const st = getPStatus(0, 'steelSoul');
+    return st ? (livingField().find(m=> m.uid === st.owner) || null) : null;
+  }
+  const st = getESide('steelSoul');
+  return (st && st.owner && st.owner.hp > 0 && livingEnemies().includes(st.owner)) ? st.owner : null;
+}
 /* Unified damage calc: applies type effectiveness + all status modifiers, in a
    fixed order, then rounds up. `attacker`/`defender` are refs — use monRef() for
    player monsters; enemy objects already carry .types. */
@@ -270,6 +386,11 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
      makes the next blow land harder. */
   if(attacker && attacker._ambush > 1) dmg *= attacker._ambush;
   if(attacker && attacker._omen > 0) dmg *= 1 + attacker._omen;
+  /* Steel Soul's flat +0.1× ATK, its caster's alone on either side. Added
+     after type effectiveness (the same against anything) but BEFORE the damage
+     buffs, so Overheat, Dragon Dance and Dragon Legacy multiply it — and a
+     Curse on the target, below. Until 2.81 it went on after them, unbuffed. */
+  dmg += steelSoulBonus(attacker, attackerAtk, isPlayerAttacking);
 
   // attacker-side buffs/debuffs
   if(isPlayerAttacking){
@@ -279,18 +400,20 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(dd) dmg *= (dd.deal || 1.25);               // multiplies WITH overheat
     // Dragon Legacy stacks multiplicatively with the above
     if(ui.battle && ui.battle.legacyBonus) dmg *= (1 + ui.battle.legacyBonus);
-    /* `atk` does not exist in this scope — the parameter is `attackerAtk`. The
-       ReferenceError aborted every attack while Steel Soul was up, which is why
-       the turn bounced straight back with no damage.
-       It also only empowers the monster that cast it, not whoever is on field. */
-    const soulAtk = getPStatus(0,'steelSoul');
-    if(soulAtk && soulAtk.owner === attacker.uid) dmg += soulAtk.bonus * attackerAtk;
+    /* (Steel Soul's bonus is added above, before these buffs.) Steel Soul's
+       reduction works both ways (2.90): its caster also hits that much harder
+       — and harder again for every other shield its side has up (2.91) —
+       multiplying with Overheat, Dragon Dance and the rest. */
+    dmg *= steelSoulAmp(attacker, true);
     /* Weakened (an enemy's Sky Splitter Max): your next attack lands softer.
        This used to sit with the damage you TAKE, so it halved the enemy's
        hits on you instead — the opposite of what it says. afterPlayerAttack()
        uses it up once that attack is made. */
     const soft = getPStatus(0,'softened');
     if(soft) dmg *= (1 - (soft.amount || 0.5));
+    /* Their Firehound's Terrorize (2.87: it only ever reached the button's
+       estimate and a few side-hits, never the blow itself). */
+    dmg *= terrorizeFactor();
   } else {
     /* Discombobulate used to ALSO shave 20% off everything a confused enemy
        threw. The rework replaced that with visible friendly fire, but this line
@@ -305,10 +428,10 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(ohE) dmg *= (ohE.deal || 1.5);
     const ddE = getESide('dragonDance');
     if(ddE) dmg *= (ddE.deal || 1.25);
-    const soulE = getESide('steelSoul');
-    if(soulE && soulE.owner === attacker) dmg += (soulE.bonus || 0) * attackerAtk;
+    dmg *= steelSoulAmp(attacker, false);                    // theirs hits harder too (2.90; every shield, 2.91)
     const softE = getEStatus(attacker,'softened');          // your weaken on it
     if(softE) dmg *= (1 - (softE.amount || 0.5));
+    dmg *= playerTerrorizeFactor();                          // yours frightens them (2.87)
   }
 
   // defender-side modifiers
@@ -551,6 +674,24 @@ function endDragonLegacy(){
   if(b && b.legacyBonus && b.legacyUsed){ b.legacyBonus = 0; b.legacyUsed = false; }
 }
 
+/* In battle a Max move takes over the Ultimate's slot, so its slot reads
+   'Ultimate' there — ask by name. (Rampage Max's Aftershock read the slot and
+   came out at the Ultimate's 0.2× in battle until 2.79.) */
+function isMaxAbility(m, mv){
+  const row = m && (MOVES[m.species] || []).find(r=> r[0] === 'Max');
+  return !!(row && mv && (mv.slot === 'Max' || mv.name === row[1]));
+}
+
+/* What Unleash / Hyperbeam deal at a number of charges: the charge's own
+   table where it has one (Cataclysm Max, 2.80: Hyperbeam 1.75 / 2.25 / 2.85 /
+   3.5, Unleash 1.25 / 1.5 / 1.8 / 2.15), else +0.25× / +0.5× a charge. */
+function chargeMult(def, kind, charges){
+  const n = Math.max(1, charges || 1);
+  const table = kind === 'hyper' ? def.hyperBy : def.unleashBy;
+  if(table && table[n - 1] != null) return table[n - 1];
+  return kind === 'hyper' ? (n - 1) * 0.5 + def.hyper : (n - 1) * 0.25 + def.unleash;
+}
+
 /* The move list while a charge is held. */
 function chargeMoves(m){
   const c = chargeState();
@@ -562,9 +703,9 @@ function chargeMoves(m){
     { slot:'Basic', name:'—', mult:null, target:'Single', words:0, unlock:0, available:false, isStone:false, locked:true },
     { slot:'Power1', name:'Charge', mult:null, target:'Charge', words:10, unlock:0,
       available:!atCap, isStone:false, chargeMore:true },
-    { slot:'Power2', name:'Unleash', mult:(c.charges-1)*0.25 + def.unleash, target:'AOE', words:0, unlock:0,
+    { slot:'Power2', name:'Unleash', mult:chargeMult(def, 'unleash', c.charges), target:'AOE', words:0, unlock:0,
       available:true, isStone:false, chargeSpend:'unleash' },
-    { slot:'Ultimate', name:'Hyperbeam', mult:(c.charges-1)*0.5 + def.hyper, target:'Single', words:0, unlock:0,
+    { slot:'Ultimate', name:'Hyperbeam', mult:chargeMult(def, 'hyper', c.charges), target:'Single', words:0, unlock:0,
       available:true, isStone:false, chargeSpend:'hyper' },
   ];
 }
@@ -891,7 +1032,11 @@ function bogHolderStanding(side, h){
     const b = ui.battle;
     return !!(b && b.enemies && b.enemies.includes(h) && h.hp > 0);
   }
-  const m = (state.party || []).find(x=> x.uid === h);    // yours: by uid, benched or not
+  /* yours: by uid, benched or not — or a companion out on the field (2.87:
+     a companion's bog lifted the moment it was laid, as it is not one of
+     the party; back in its core, it holds no bog). */
+  const c = (typeof companionOnField === 'function') ? companionOnField() : null;
+  const m = (state.party || []).find(x=> x.uid === h) || (c && c.uid === h ? c : null);
   return !!(m && m.currentHp > 0);
 }
 function pruneBogs(){
@@ -1086,11 +1231,12 @@ function paintConcealment(){
     el.classList.toggle('lurking', !!e.lurk && e.hp > 0);
     el.classList.toggle('cunning', !!e.cunning && !e.lurk && e.hp > 0);
   });
-  const me = activeMon(), pb = document.getElementById('playerBob');
-  if(pb){
-    pb.classList.toggle('lurking', !!(me && me.lurk));
-    pb.classList.toggle('cunning', !!(me && me.cunning && !me.lurk));
-  }
+  playerField().forEach(me=>{
+    const pb = document.getElementById(pid('playerBob', me));
+    if(!pb) return;
+    pb.classList.toggle('lurking', !!me.lurk);
+    pb.classList.toggle('cunning', !!(me.cunning && !me.lurk));
+  });
 }
 /* What an enemy slipping your blow looks like: the reason, not just "MISS". */
 function dodgeWord(t){ return t && t.lurk ? 'LURKING' : (t && t.cunning ? 'CUNNING' : 'MISS'); }
@@ -1247,6 +1393,13 @@ function diamondDustCleanse(caster){
     if(st.unsweepable || statusOwner(k, st, 'player') !== victim) return;
     delete ps[k]; afterStatusGone(k, 'player'); cleared++;
   });
+  /* …and what they have put on each of your monsters (2.83). */
+  Object.values(b.monStatus || {}).forEach(list=>{
+    list.slice().forEach(st=>{
+      if(st.unsweepable || statusOwner(st.type, st, 'player') !== victim) return;
+      list.splice(list.indexOf(st), 1); afterStatusGone(st.type, 'player'); cleared++;
+    });
+  });
   /* 2. Their side bag — only ever their own buffs. */
   if(victim === 'enemy'){
     const es = enemySideStatuses();
@@ -1258,7 +1411,12 @@ function diamondDustCleanse(caster){
   /* 3. What you have put on them: the fields, and each enemy's own list —
         where a buff it holds is theirs and a mark on it is yours. */
   if(victim === 'player' && b.fieldStatus){
-    Object.keys(b.fieldStatus).forEach(k=>{ delete b.fieldStatus[k]; cleared++; });
+    /* …but not what a creature IS: your Bog Lurker's bog stays, as theirs on
+       you does under your dust (2.88 — theirs swept yours away). */
+    Object.keys(b.fieldStatus).forEach(k=>{
+      if(b.fieldStatus[k] && b.fieldStatus[k].unsweepable) return;
+      delete b.fieldStatus[k]; cleared++;
+    });
   }
   (b.enemies || []).forEach(e=>{
     eStatuses(e).slice().forEach(st=>{
@@ -1318,6 +1476,152 @@ function afterStatusGone(type, side){
   if(type === 'mirage') clearAfterimages();
   /* An Overheat's burn goes out with the Overheat, whoever holds it now. */
   if(type === 'overheat' && b.preHits) b.preHits = b.preHits.filter(p=> !(p.src === 'overheat' && (p.by || 'player') === side));
+}
+
+/* ============================================================
+   NOVA'S PURGE (2.90) — the Phoenix's small Diamond Dust, either side's
+   ------------------------------------------------------------
+   A move's `purge:{ enemyBuffs:n, playerDebuffs:m }`: when it reaches them,
+   n of the other side's buffs are swept away and m of the other side's
+   marks on the caster's own side are burnt off. In their hands "enemy" and
+   "player" swap round: one of YOUR buffs goes, and one of your marks on THEM.
+   Each is picked at random from all there are, as Greed picks. What a
+   creature simply IS (unsweepable — a bog, a manta's evasion) stays, as it
+   does under Diamond Dust, and so do a Cataclysm's charges and the Dragon
+   Legacy. No dust stops it: it is a sweep, as the dust's own is, not
+   something taking hold. Returns a line for the battle message, or ''.
+   ============================================================ */
+function novaPurge(casterSide, purge){
+  if(!ui.battle || !purge) return '';
+  const victim = otherSide(casterSide || 'player');
+  const pickOut = pool=>{ const x = pool[Math.floor(Math.random() * pool.length)]; x.take(); return x.label; };
+  const swept = [], burnt = [];
+  for(let k = 0; k < (purge.enemyBuffs || 0); k++){
+    const pool = sweepableBuffs(victim);
+    if(!pool.length) break;
+    swept.push(pickOut(pool));
+  }
+  for(let k = 0; k < (purge.playerDebuffs || 0); k++){
+    const pool = marksOnSide(casterSide || 'player');
+    if(!pool.length) break;
+    burnt.push(pickOut(pool));
+  }
+  if(!swept.length && !burnt.length) return '';
+  setTimeout(refreshAllBlockBars, 0);
+  const yours = (casterSide || 'player') === 'player';
+  const a = swept.length ? `sweeps away ${yours ? 'their' : 'your'} ${swept.join(' and ')}` : '';
+  const c = burnt.length ? `burns ${burnt.join(' and ')} off ${yours ? 'your side' : 'theirs'}` : '';
+  return `🔥 The nova ${[a, c].filter(Boolean).join(', and ')}!`;
+}
+/* Everything `side` holds that a sweep could take, one entry each:
+   [{ label, take() }]. Its side-wide buffs, its standing monsters' gains,
+   its queued upkeep strikes — and, for yours, your Counter and combo. */
+function sweepableBuffs(side){
+  const b = ui.battle;
+  if(!b) return [];
+  const out = [];
+  const label = k=> STATUS_LABELS[k] || k;
+  if(side === 'player'){
+    const ps = partyStatuses();
+    Object.keys(ps).forEach(k=>{
+      const st = ps[k];
+      if(st.unsweepable || statusOwner(k, st, 'player') !== 'player') return;
+      out.push({ label:label(k), take:()=>{ delete ps[k]; afterStatusGone(k, 'player'); } });
+    });
+    if(partyCounters().length) out.push({ label:'↩️ Counter', take:()=>{ b.pCounter = []; } });
+    if(b.pCombo > 0) out.push({ label:`👊 Combo ×${b.pCombo}`, take:()=>{ b.pCombo = 0; } });
+    livingField().forEach(m=> monGains(m, 'player').forEach(x=> out.push(x)));
+  } else {
+    const es = enemySideStatuses();
+    Object.keys(es).forEach(k=>{
+      if(es[k].unsweepable) return;
+      out.push({ label:label(k), take:()=>{ delete es[k]; afterStatusGone(k, 'enemy'); } });
+    });
+    livingEnemies().forEach(e=>{
+      eStatuses(e).slice().forEach(st=>{
+        if(st.unsweepable || statusOwner(st.type, st, 'enemy') !== 'enemy') return;
+        out.push({ label:label(st.type), take:()=> removeEStatus(e, st.type) });
+      });
+      monGains(e, 'enemy').forEach(x=> out.push(x));
+    });
+  }
+  /* an Overheat's burn goes with its Overheat; the rest are buffs of their own */
+  (b.preHits || []).forEach(p=>{
+    if((p.by || 'player') !== side || p.src === 'overheat') return;
+    const name = p.sacredFlame ? '🔥 Sacred Flame' : p.aftershock ? '💥 Aftershock' : (p.label || 'upkeep strike');
+    out.push({ label:name, take:()=>{ b.preHits = (b.preHits || []).filter(x=> x !== p); } });
+  });
+  return out;
+}
+/* One monster's gains, one entry each — what sweepMonsterBuffs takes all at
+   once (tools/v290-test.js holds the two lists together). */
+function monGains(m, side){
+  const out = [];
+  if(!m) return out;
+  const add = (label, take)=> out.push({ label, take });
+  if(m.guard) add('🛡 Guard', ()=>{ m.guard = false; });
+  if(m.airborne > 0) add('🕊 Airborne', ()=>{ m.airborne = 0; });
+  if(m.invisible > 0) add('👤 Unseen', ()=>{ m.invisible = 0; });
+  if(m.prep > 0) add(`🎯 Prep ×${m.prep}`, ()=>{ m.prep = 0; });
+  if(m.evadeTurns > 0) add('🧘 Still', ()=>{ m.evadeTurns = 0; });
+  if(m.blockStacks > 0) add(`🛡 Block ×${m.blockStacks}`, ()=>{ m.blockStacks = 0; });
+  if(Array.isArray(m.counterStack) ? m.counterStack.length : m.counterStack)
+    add('↩️ Counter', ()=>{ m.counterStack = Array.isArray(m.counterStack) ? [] : 0; });
+  if(m.comboStacks > 0) add(`👊 Combo ×${m.comboStacks}`, ()=>{ m.comboStacks = 0; });
+  if(m.enrageStacks > 0) add(`🔥 Enrage ×${m.enrageStacks}`, ()=>{ m.enrageStacks = 0; });
+  if(m.lurk) add('🌑 Lurk', ()=>{ m.lurk = false; });
+  if(m.cunning) add('🌘 Cunning', ()=>{ m.cunning = false; });
+  if(m.evadeAlways && !m.evadeUnsweepable) add('💨 Evasion', ()=>{ m.evadeAlways = 0; });
+  if(m._stoop && m._stoop.charges) add('🦅 Climb', ()=>{ m._stoop.charges = 0; });
+  if(m._rage && m._rage.forced) add('😤 Rage', ()=>{ m._rage.forced = false; });
+  if(m._overpower && m._overpower.turnsLeft > 0) add('💪 Overpower', ()=>{ m._overpower = null; });
+  if(m._windup) add('⏳ Wind-up', ()=>{ m._windup = null; });
+  if(m._omen) add('🌒 Ill Omen', ()=>{ m._omen = 0; });
+  if(side === 'enemy'){
+    if(!m.enraged){
+      if(m.dealMult && m.dealMult !== 1) add('💢 Power', ()=>{ m.dealMult = 1; });
+      if(m.takeMult && m.takeMult !== 1) add('🛡 Toughness', ()=>{ m.takeMult = 1; });
+    }
+    if(m.elusive) add('💨 Elusive', ()=>{ m.elusive = false; m.gooed = true; });
+    if(m._vita && m._vita.turnsLeft > 0) add('🕊 Vita', ()=>{ m._vita = null; });
+  }
+  return out;
+}
+/* What the other side has put on `side`: its marks, one entry each. On yours,
+   their fields on your side and each of your standing monsters' own marks;
+   on theirs, your fields on them (one entry a field) and your marks on each. */
+function marksOnSide(side){
+  const b = ui.battle;
+  if(!b) return [];
+  const out = [];
+  const label = k=> STATUS_LABELS[k] || k;
+  if(side === 'player'){
+    const ps = partyStatuses();
+    Object.keys(ps).forEach(k=>{
+      const st = ps[k];
+      if(st.unsweepable || statusOwner(k, st, 'player') !== 'enemy') return;
+      out.push({ label:label(k), take:()=>{ delete ps[k]; afterStatusGone(k, 'player'); } });
+    });
+    livingField().forEach(m=> monStatuses(m).slice().forEach(st=>{
+      if(st.unsweepable || statusOwner(st.type, st, 'player') !== 'enemy') return;
+      out.push({ label:label(st.type), take:()=>{
+        const list = monStatuses(m), i = list.indexOf(st);
+        if(i >= 0) list.splice(i, 1);
+        afterStatusGone(st.type, 'player');
+      } });
+    }));
+  } else {
+    const fs = b.fieldStatus || {};
+    Object.keys(fs).forEach(k=>{
+      if(fs[k].unsweepable) return;
+      out.push({ label:label(k), take:()=>{ delete fs[k]; (b.enemies || []).forEach(e=> removeEStatus(e, k)); } });
+    });
+    livingEnemies().forEach(e=> eStatuses(e).slice().forEach(st=>{
+      if(st.unsweepable || fs[st.type] || statusOwner(st.type, st, 'enemy') !== 'player') return;
+      out.push({ label:label(st.type), take:()=> removeEStatus(e, st.type) });
+    }));
+  }
+  return out;
 }
 
 /* ============================================================
@@ -1581,6 +1885,8 @@ const COUNTER_TIERS = [
    ------------------------------------------------------------ */
 function isOurs(holder){
   if(!holder || !holder.uid) return false;
+  const sp = ui.battle && ui.battle.coreSpar;               // a spar's borrowed companion (2.87)
+  if(sp && sp.companion && sp.companion.uid === holder.uid) return true;
   return (state.party || []).some(m => m.uid === holder.uid)
       || (state.storage || []).some(m => m.uid === holder.uid);
 }
@@ -1660,7 +1966,7 @@ function enrageBonus(mon){
   return Math.round(n * ((c && c.enrage) || 0.20) * rawMonAtk(mon));
 }
 function paintEnrage(mon){
-  const el = document.getElementById('playerBob');
+  const el = document.getElementById(pid('playerBob', mon));
   if(!el) return;
   const n = Math.min((mon && mon.enrageStacks) || 0, 5);
   el.classList.toggle('enraged', n > 0);
@@ -1678,7 +1984,7 @@ function noteMirageDodge(){
   spawnAfterimages(m.images);
 }
 function spawnAfterimages(n, hostEl){
-  const host = hostEl || document.getElementById('playerBob');
+  const host = hostEl || document.getElementById(pid('playerBob'));
   const layer = document.getElementById('fxLayer') || document.getElementById('screen');
   if(!host || !layer) return;
   const hb = host.getBoundingClientRect(), lb = layer.getBoundingClientRect();
@@ -1707,7 +2013,7 @@ function resolveAfterimages(done){
     const foes = livingEnemies();
     if(k >= n || !foes.length){ clearAfterimages(); return setTimeout(done, 300); }
     k++;
-    const t = foes[Math.floor(Math.random()*foes.length)];
+    const t = soulGuardian('enemy') || foes[Math.floor(Math.random()*foes.length)];   // their Steel Soul draws it (2.90)
     const idx = ui.battle.enemies.indexOf(t);
     if(rollDodge(t, idx, 0, false, true)){               // a lurker is not there to be struck
       battleMsg(`👥 An afterimage strikes — and finds nothing.`);
@@ -1786,7 +2092,19 @@ function tickOverpower(holder){
 
 /* ---- TERRORIZE -----------------------------------------------------------
    Simply being looked at by this thing makes you hit softer. It is what the
-   creature IS, so no sweep removes it.                                     */
+   creature IS, so no sweep removes it. Theirs softens your blows; yours, on
+   your field (leader or companion), softens theirs (2.87). The strongest one
+   standing counts; they do not stack.                                      */
+function playerTerrorizeFactor(){
+  if(!ui.battle) return 1;
+  let worst = 1;
+  livingField().forEach(m=>{
+    const p = passiveOf(m);
+    const t = passivesMuted(m) ? 0 : ((p && p.terrorize) || (m._terrorize || 0));
+    if(t) worst = Math.min(worst, 1 - t);
+  });
+  return worst;
+}
 function terrorizeFactor(defenderSideMon){
   const b = ui.battle;
   if(!b) return 1;
@@ -1839,9 +2157,9 @@ function applyEnemyVeryHigh(e, type, plus){
       if(n) setTimeout(()=> battleMsg(`💎 Their diamond dust sweeps ${n} of your effects away.`), 900);
       break; }
     case 'Water': {
-      /* Ice Tomb in enemy hands freezes YOU rather than them. */
-      const mon = activeMon();
-      if(mon) setPStatus(0, { type:'asleep', turnsLeft:(d.freeze || 2) + 1 });
+      /* Ice Tomb in enemy hands freezes YOU rather than them — every one of
+         yours on the field. */
+      livingField().forEach(pm=> withFocus(pm, ()=> setPStatus(0, { type:'asleep', turnsLeft:(d.freeze || 2) + 1 })));
       break;
     }
     default: return;
@@ -1877,7 +2195,8 @@ function castEnemyVeryHigh(e, type, plus){
     case 'Water': {
       /* Freeze counts YOUR turns: if you have already acted this round, one
          more round, so you always lose as many as the stone says. */
-      const acted = ((ui.battle && ui.battle.order) || []).some(r=> r.side === 'player' && r.acted);
+      const lr = ui.battle ? leaderRow() : null;
+      const acted = !!(lr && lr.acted);
       const n = d.freeze || 2;
       setESide({ type:'deepFreeze', turnsLeft:n + (acted ? 1 : 0), taken:(d.taken == null ? 1 : d.taken), noDust:true });
       if(d.frost){ setESide({ type:'frostArmour', turnsLeft:d.frost, max:d.frost, slow:d.slow || 0, owner:e }); grantBlock(e, 1, atk); }
@@ -1909,7 +2228,7 @@ function castEnemyVeryHigh(e, type, plus){
     case 'Psychic':
       setESide({ type:'confusionField', turnsLeft:T, after:d.confuseAfter || 0.20, ffPower:d.ffPower || 0.60,
                  sleep:d.sleep || 0, sleepTurns:d.sleepTurns || 1, sure:true, sureUsed:false });
-      markPlayerConfused(d.ffPower || 0.60, true);
+      livingField().forEach(pm=> withFocus(pm, ()=> markPlayerConfused(d.ffPower || 0.60, true)));
       return `🌀 ${who} casts <b>Discombobulate</b>: your head is spinning!`;
     case 'Dragon':
       setESide({ type:'dragonDance', turnsLeft:T + 1, deal:d.deal });
@@ -2008,26 +2327,29 @@ function resolveEnemyAfterimages(done){
   const m = getESide('mirage');
   if(!m || !(m.pending > 0)) return done();
   const n = m.pending; m.pending = 0;
-  const mon = activeMon();
-  if(!mon || mon.currentHp <= 0 || !livingEnemies().length){ clearAfterimages(); return done(); }
+  if(!livingField().length || !livingEnemies().length){ clearAfterimages(); return done(); }
   const per = Math.ceil((m.imageDmg || 0.2) * (m.atk || 0) * enemyBuffMultiplier());
   let k = 0;
   const step = ()=>{
-    const me = activeMon();
-    if(k >= n || !me || me.currentHp <= 0){ clearAfterimages(); return setTimeout(done, 300); }
+    /* each copy goes for one of yours at random, as yours go for one of them
+       — or, your Steel Soul up, for the one that cast it (2.90) */
+    const mine = livingField();
+    const me = soulGuardian('player') || (mine.length > 1 ? mine[Math.floor(Math.random() * mine.length)] : mine[0]);
+    if(k >= n || !me){ setFocus(null); clearAfterimages(); return setTimeout(done, 300); }
+    setFocus(me);
     k++;
     if(Math.random() < playerEvasionFrom(null)){
-      floatMiss('playerBob', dodgeWord(me)); dodgePlayer();
+      floatMiss(pid('playerBob'), dodgeWord(me)); dodgePlayer();
       battleMsg(`👥 One of their afterimages strikes — and finds nothing.`);
       return setTimeout(step, 620);
     }
     const before = me.currentHp;
-    const through = applyBlock(me, per, 'playerBlk');
+    const through = applyBlock(me, per, pid('playerBlk'));
     me.currentHp = Math.max(0, me.currentHp - through);
-    flashHit(document.getElementById('playerBob'));
-    drainHp('playerHp', before, me.currentHp, monMaxHp(me));
-    showDamageNumber('playerBob', before - me.currentHp);
-    floatBlocked('playerBob', per - through);
+    flashHit(document.getElementById(pid('playerBob')));
+    drainHp(pid('playerHp'), before, me.currentHp, monMaxHp(me));
+    showDamageNumber(pid('playerBob'), before - me.currentHp);
+    floatBlocked(pid('playerBob'), per - through);
     battleMsg(`👥 One of their afterimages steps out of nowhere and strikes!`);
     setTimeout(step, 620);
   };
@@ -2036,17 +2358,24 @@ function resolveEnemyAfterimages(done){
 /* How likely your monster out front is to slip a blow of theirs: its own
    stance or concealment, your Mirage, your clones, Tachypsychia, a Scorching
    Ash on the attacker. `e` may be null for a blow with no attacker. */
-function playerEvasionFrom(e){
-  const mon = activeMon();
+/* Tachypsychia's extra actions: at most this many a round, on either side
+   (theirs always had the cap; yours has it from 2.80). */
+const TACHY_MAX_EXTRAS = 3;
+/* `peek` (a monster of yours): only asking — an enemy weighing up which of
+   your pair to go for — so nothing is marked as having met a blow. */
+function playerEvasionFrom(e, peek){
+  const mon = peek || activeMon();
   if(!mon) return 0;
-  noteCertainDodge(mon);
+  if(!peek) noteCertainDodge(mon);
   const own = stanceEvasion(mon);
   if(own >= 1) return 1;
   const mir = getPStatus(0,'mirage');
-  if(mir && mir.window && mir.step < mir.window.length) mir.tested = true;   // its window met a real blow
+  if(!peek && mir && mir.window && mir.step < mir.window.length) mir.tested = true;   // its window met a real blow
   const cl  = getPStatus(0,'clones');
-  const tac = getPStatus(0,'tachy');
-  if(tac && tac.fresh) tac.tested = true;                                  // its first-turn rate met a real blow
+  /* Tachypsychia hides its caster only — as theirs does (2.80). */
+  const tacAny = getPStatus(0,'tachy');
+  const tac = (tacAny && tacAny.owner === mon.uid) ? tacAny : null;
+  if(!peek && tac && tac.fresh) tac.tested = true;                         // its first-turn rate met a real blow
   const dotMiss = e ? getEStatus(e,'dot') : null;
   const src = [
     own,
@@ -2124,15 +2453,21 @@ function revivableFallen(caster){
 }
 
 /* Vita: an immediate pulse, then a field that tends whoever is worst off. */
+/* Everyone of yours a heal can reach: the party, and a companion out on the
+   field (2.84 — it is outside the revivals, not the healing). */
+function healableAllies(){
+  const c = companionOnField();
+  return c ? battleParty().concat([c]) : battleParty();
+}
 function castVita(mon, def){
   const heal = Math.ceil((def.pulse || 0.2) * monMaxHp(mon));
   let touched = 0;
-  battleParty().forEach(m=>{
+  healableAllies().forEach(m=>{
     if(m.currentHp <= 0) return;
     const before = m.currentHp;
     m.currentHp = Math.min(monMaxHp(m), m.currentHp + heal);
     if(m.currentHp > before) touched++;
-    if(m === activeMon()) drainHp('playerHp', before, m.currentHp, monMaxHp(m));
+    if(playerField().includes(m)) drainHp(pid('playerHp', m), before, m.currentHp, monMaxHp(m));
   });
   /* The field never stacks — casting again simply sets the clock back to five. */
   const stays = !!setPStatus(0, { type:'vita', turnsLeft:(def.turns||5) + 1, pulse:def.pulse||0.2, owner:mon.uid });
@@ -2145,7 +2480,7 @@ function castVita(mon, def){
 function vitaPulse(done){
   const v = getPStatus(0,'vita');
   if(!v) return enemyVitaPulse(done);
-  const party = battleParty().filter(m=>m.currentHp > 0 && m.currentHp < monMaxHp(m));
+  const party = healableAllies().filter(m=>m.currentHp > 0 && m.currentHp < monMaxHp(m));
   if(!party.length) return done();
   party.sort((a,b)=> (a.currentHp/monMaxHp(a)) - (b.currentHp/monMaxHp(b)));
   const t = party[0];
@@ -2153,7 +2488,7 @@ function vitaPulse(done){
   const heal = Math.ceil((v.pulse||0.2) * (owner ? monMaxHp(owner) : monMaxHp(t)));
   const before = t.currentHp;
   t.currentHp = Math.min(monMaxHp(t), t.currentHp + heal);
-  if(t === activeMon()) drainHp('playerHp', before, t.currentHp, monMaxHp(t));
+  if(playerField().includes(t)) drainHp(pid('playerHp', t), before, t.currentHp, monMaxHp(t));
   battleMsg(`🕊 The light finds ${displayName(t)} — <b>+${t.currentHp - before} HP</b>.`);
   setTimeout(()=> enemyVitaPulse(done), 700);
 }
@@ -2295,7 +2630,7 @@ function ariaApparition(a, onImpact){
   document.body.appendChild(g);
 
   /* Where: directly right of whoever is out front, level with them. */
-  const fighter = document.getElementById('playerBob');
+  const fighter = document.getElementById(pid('playerBob'));
   const r = fighter ? fighter.getBoundingClientRect()
                     : { left: innerWidth * 0.1, top: innerHeight * 0.55, width: px, height: px };
   const endX = r.left + r.width, endY = r.top + (r.height - px) / 2;
@@ -2420,8 +2755,14 @@ function elusiveFlee(e){
 
 /* ============================================================
    ELEMENTAL STONES
-   Held in the inventory, attached to one monster at a time, and freely moved.
-   Adding a new element means one row here and nothing else.
+   One of each, ever (2.77): twelve for the twelve types, and four TRIANGLE
+   stones that fit any monster of their triangle's three types — sixteen in
+   all. Most are found in the story or won in its hardest fights.
+   A stone is carried by one monster at a time, and a monster carries one
+   stone. Carried, it gives 1.5× experience; past 100 it is also what a
+   monster charges at a ceiling to break through (06-progress.js). The charge
+   lives ON THE STONE: move the stone and the charge goes with it.
+   Adding a stone means one row here and nothing else.
    ============================================================ */
 const ELEMENTAL_STONES = [
   { id:'waterStone',    name:'Water Stone',    icon:'water_stone',    emoji:'💧', type:'Water' },
@@ -2436,24 +2777,62 @@ const ELEMENTAL_STONES = [
   { id:'dragonStone',   name:'Dragon Stone',   icon:'dragon_stone',   emoji:'🐉', type:'Dragon' },
   { id:'steelStone',    name:'Steel Stone',    icon:'steel_stone',    emoji:'🛡', type:'Steel' },
   { id:'fairyStone',    name:'Fairy Stone',    icon:'fairy_stone',    emoji:'✨', type:'Fairy' },
-].map(s=>Object.assign(s, { xp:1.5, blurb:`A ${s.type} monster carrying it learns half again as fast.` }));
-function heldStones(){ return ELEMENTAL_STONES.filter(s=>state.inventory[s.id]); }
+  /* the four very rare ones: one per triangle (names are placeholders) */
+  { id:'starterStone',  name:'Starter Stone',  icon:'starter_stone',  emoji:'🔺', triangle:'starter', types:TRIANGLES.starter },
+  { id:'skyStone',      name:'Sky Stone',      icon:'sky_stone',      emoji:'🌩', triangle:'sky',     types:TRIANGLES.sky },
+  { id:'mindStone',     name:'Mind Stone',     icon:'mind_stone',     emoji:'🌀', triangle:'mind',    types:TRIANGLES.mind },
+  { id:'fantasyStone',  name:'Fantasy Stone',  icon:'fantasy_stone',  emoji:'💫', triangle:'fantasy', types:TRIANGLES.fantasy },
+].map(s=>{
+  s.types = (s.types || [s.type]).slice();
+  s.typeText = s.types.length > 1 ? s.types.slice(0, -1).join(', ') + ' or ' + s.types[s.types.length - 1] : s.types[0];
+  return Object.assign(s, { xp:1.5, blurb:`A ${s.typeText} monster carrying it learns half again as fast.` });
+});
+/* Held or not. (2.76 counted them and sold more; runProfileMigrations
+   settles any save from then, so a stray count reads as "held".) */
+function stoneCount(id){
+  const v = state && state.inventory ? state.inventory[id] : 0;
+  return (v === true || Number(v) > 0) ? 1 : 0;
+}
+function ownsStone(id){ return stoneCount(id) > 0; }
+function totalStones(){ return ELEMENTAL_STONES.reduce((n, st)=> n + stoneCount(st.id), 0); }
+/* Give (n > 0) or take (n < 0) a stone. Taken, it comes off whoever carried it
+   — and keeps its charge, should it ever come back. */
+function addStone(id, n){
+  if((n == null ? 1 : n) > 0) state.inventory[id] = 1;
+  else { state.inventory[id] = 0; state.inventory[stoneOnKey(id)] = null; }
+  return stoneCount(id);
+}
+function heldStones(){ return ELEMENTAL_STONES.filter(s=> ownsStone(s.id)); }
 function stoneOnKey(id){ return id + 'On'; }
-function stoneHolder(id){ return state.inventory[stoneOnKey(id)] || null; }
-/* The multiplier for one monster, from whichever stone it carries. */
+function stoneHolder(id){ return ownsStone(id) ? (state.inventory[stoneOnKey(id)] || null) : null; }
+function stoneDef(id){ return ELEMENTAL_STONES.find(st=> st.id === id) || null; }
+function stoneFits(st, m){
+  const t = (m && SPECIES[m.species] && SPECIES[m.species].types) || [];
+  return st.types.some(x=> t.includes(x));
+}
+function stoneCarriedBy(m){ return m ? (ELEMENTAL_STONES.find(st=> stoneHolder(st.id) === m.uid) || null) : null; }
+/* One stone, one monster: whoever had this stone lets go of it, and whatever
+   the monster carried comes off. */
+function attachStone(id, m){
+  ELEMENTAL_STONES.forEach(st=>{ if(stoneHolder(st.id) === m.uid) state.inventory[stoneOnKey(st.id)] = null; });
+  state.inventory[stoneOnKey(id)] = m.uid;
+}
+function detachStone(id){ state.inventory[stoneOnKey(id)] = null; }
+/* The breakthrough charge a stone holds, in fights. It stays with the stone. */
+function stoneCharge(id){ return Math.max(0, Number(state.inventory[id + 'Charge']) || 0); }
+function setStoneCharge(id, n){ state.inventory[id + 'Charge'] = Math.max(0, n); }
+/* The multiplier for one monster, from the stone it carries. */
 function stoneXpBonus(m){
-  const s = ELEMENTAL_STONES.find(st=>stoneHolder(st.id) === m.uid);
+  const s = stoneCarriedBy(m);
   return s ? s.xp : 1;
 }
-/* A dual-type monster matches more than one stone. Prefer the one it already
-   carries, then any you own, and only then the first by type — otherwise a
-   Water Dragon matched the Water Stone you don't have and showed no panel at
-   all, hiding the Dragon Stone you do. */
+/* Every stone that fits a monster, and the one to show first: the stone it
+   carries, then one you hold, then simply the first that fits. */
+function stonesFor(m){ return ELEMENTAL_STONES.filter(st=> stoneFits(st, m)); }
 function stoneFor(m){
-  const types = SPECIES[m.species].types || [];
-  const matches = ELEMENTAL_STONES.filter(st=>types.includes(st.type));
-  return matches.find(st=>stoneHolder(st.id) === m.uid)
-      || matches.find(st=>state.inventory[st.id])
+  const matches = stonesFor(m);
+  return matches.find(st=> stoneHolder(st.id) === m.uid)
+      || matches.find(st=> ownsStone(st.id))
       || matches[0];
 }
 
@@ -2505,21 +2884,24 @@ function runPreHits(done){
     const p = queue[i++];
     const foes = livingEnemies();
     if(!foes.length) return step();
-    /* Theirs strike whoever you have out front: no evasion, as yours take none,
-       but a block layer eats it as one of theirs would eat yours. */
+    /* Theirs strike every one of yours on the field, as yours strike every one
+       of them: no evasion, as yours take none, but a block layer eats it as one
+       of theirs would eat yours. */
     if(p.by === 'enemy'){
-      const me = activeMon();
-      if(!me || me.currentHp <= 0) return step();
+      const mine = livingField();
+      if(!mine.length) return step();
       let dmg = Math.ceil(p.pct * p.atk * enemyBuffMultiplier());
       const curP = getPStatus(0,'curse');
       if(curP && isEnemyOwned('curse', curP)) dmg = Math.ceil(dmg * (1 + (curP.extra != null ? curP.extra : 0.25)));
-      const before = me.currentHp;
-      const through = applyBlock(me, dmg, 'playerBlk');
-      me.currentHp = Math.max(0, me.currentHp - through);
-      flashHit(document.getElementById('playerBob'));
-      drainHp('playerHp', before, me.currentHp, monMaxHp(me));
-      showDamageNumber('playerBob', before - me.currentHp);
-      floatBlocked('playerBob', dmg - through);
+      mine.forEach(me=>{
+        const before = me.currentHp;
+        const through = applyBlock(me, dmg, pid('playerBlk', me));
+        me.currentHp = Math.max(0, me.currentHp - through);
+        flashHit(document.getElementById(pid('playerBob', me)));
+        drainHp(pid('playerHp', me), before, me.currentHp, monMaxHp(me));
+        showDamageNumber(pid('playerBob', me), before - me.currentHp);
+        floatBlocked(pid('playerBob', me), dmg - through);
+      });
       battleMsg(p.label);
       return setTimeout(step, 850);
     }
@@ -2561,7 +2943,7 @@ function canQuickStrike(side, m){
   if(!m) return false;
   if(side === 'player'){
     if(!(m.currentHp > 0)) return false;
-    return !(getESide('deepFreeze') || getPStatus(0,'asleep') || getPStatus(0,'stunned'));
+    return !(getESide('deepFreeze') || getMStatus(m,'asleep') || getMStatus(m,'stunned'));
   }
   if(!(m.hp > 0) || (m.isDummy && !m.arenaActs)) return false;
   if(getPStatus(0,'deepFreeze') || getEStatus(m,'iceTomb') || getEStatus(m,'paralysed') || getEStatus(m,'asleep')) return false;
@@ -2571,23 +2953,26 @@ function runQuickAttacks(done){
   const b = ui.battle;
   if(!b) return done();
   const queue = [];
-  const me = activeMon();
-  if(quickOf(me) > 0) queue.push({ side:'player', m:me });
+  livingField().forEach(me=>{ if(quickOf(me) > 0) queue.push({ side:'player', m:me }); });
   livingEnemies().forEach(e=>{ if(quickOf(e) > 0) queue.push({ side:'enemy', m:e }); });
   if(!queue.length) return done();
   let i = 0;
   const step = ()=>{
     if(!ui.battle) return;
-    if(i >= queue.length || !livingEnemies().length) return done();
+    if(i >= queue.length || !livingEnemies().length){ setFocus(null); return done(); }
     const q = queue[i++];
     if(!canQuickStrike(q.side, q.m)) return step();
     if(q.side === 'player'){
-      if(q.m !== activeMon()) return step();
+      if(!livingField().includes(q.m)) return step();          // gone from the field since
+      setFocus(q.m);
       return quickStrikeTheirs(q.m, ()=> setTimeout(step, 450));
     }
-    const front = activeMon();
-    if(!front || front.currentHp <= 0) return step();       // down already: the rest wait for the next one
-    quickStrikeYours(q.m, front, ()=> setTimeout(step, 450));
+    /* theirs: at whichever of yours it would go for (a wild one at random) —
+       nobody standing, and the rest wait for the next one */
+    const target = enemyPickTarget(q.m, null);
+    if(!target) return step();
+    setFocus(target);
+    quickStrikeYours(q.m, target, ()=> setTimeout(step, 450));
   };
   step();
 }
@@ -2595,11 +2980,11 @@ function runQuickAttacks(done){
 function quickStrikeTheirs(mon, done){
   const b = ui.battle;
   const foes = livingEnemies();
-  const t = foes[Math.floor(Math.random() * foes.length)];
+  const t = soulGuardian('enemy') || foes[Math.floor(Math.random() * foes.length)];   // their Steel Soul draws it (2.90)
   const idx = b.enemies.indexOf(t);
   const name = displayName(mon);
   if(mon.lurk || mon.cunning){ breakCover(mon); mon._ambush = 0; renderStatusBadges(); }
-  bob(document.getElementById('playerBob'), +1);
+  bob(document.getElementById(pid('playerBob')), +1);
   if(rollDodge(t, idx, 200, false, true)){
     battleMsg(`⚡ ${name}'s quick attack finds nothing.`);
     return setTimeout(done, 650);
@@ -2621,12 +3006,12 @@ function quickStrikeYours(e, mon, done){
   const canReflex = !ariaCover && !ariaActive() && (MOVES[mon.species] || []).some(m=> m[6] && m[6].aria);
   if(ariaCover || (canReflex && ariaReflex(mon))){
     noteAriaCover();
-    dodgePlayer(); floatMiss('playerBob', 'MISS');
+    dodgePlayer(); floatMiss(pid('playerBob'), 'MISS');
     if(ariaCover) battleMsg(`⚡ ${name}'s quick attack passes harmlessly through.`);
     return setTimeout(done, 700);
   }
   if(Math.random() < playerEvasionFrom(e)){
-    dodgePlayer(); floatMiss('playerBob', dodgeWord(mon));
+    dodgePlayer(); floatMiss(pid('playerBob'), dodgeWord(mon));
     battleMsg(`⚡ ${name}'s quick attack finds nothing.`);
     return setTimeout(done, 650);
   }
@@ -2635,14 +3020,14 @@ function quickStrikeYours(e, mon, done){
   const dmg = computeDamage(quickOf(e), enemyAtk(e), e, monRef(mon), false);
   e._omen = omen; e._ambush = amb;
   const before = mon.currentHp;
-  const through = applyBlock(mon, dmg, 'playerBlk');
+  const through = applyBlock(mon, dmg, pid('playerBlk'));
   mon.lastDamageTaken = dmg;                                  // a reflection returns the full figure
   mon.currentHp = Math.max(b.allyUnkillable ? 1 : 0, mon.currentHp - through);
   if(b.arenaImmortal && mon.currentHp <= 0) mon.currentHp = monMaxHp(mon);
-  flashHit(document.getElementById('playerBob'));
-  drainHp('playerHp', before, mon.currentHp, monMaxHp(mon));
-  showDamageNumber('playerBob', before - mon.currentHp);
-  floatBlocked('playerBob', dmg - through);
+  flashHit(document.getElementById(pid('playerBob')));
+  drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon));
+  showDamageNumber(pid('playerBob'), before - mon.currentHp);
+  floatBlocked(pid('playerBob'), dmg - through);
   playSfx('hit_taken');
   battleMsg(`⚡ Quick attack! ${name} darts in before anyone moves.`);
   setTimeout(done, 650);
@@ -2696,7 +3081,7 @@ function dodgeDrift(el){
   setTimeout(()=> el.classList.remove('dodge-drift'), 480);
 }
 function dodgeEnemy(idx){ dodgeDrift(document.getElementById('enemyBob-'+idx)); }
-function dodgePlayer(){   dodgeDrift(document.getElementById('playerBob')); }
+function dodgePlayer(){   dodgeDrift(document.getElementById(pid('playerBob'))); }
 /* A counter is a dodge followed by a strike back. */
 function counterDrift(el, attackEl){
   dodgeDrift(el);
@@ -2751,11 +3136,11 @@ function resolveLeech(target, mon){
    HP figure as a PERCENTAGE. Distinct names, permanently. */
 function leechHealParty(amount, mon){
   if(amount <= 0) return;
-  battleParty().forEach(m=>{
+  healableAllies().forEach(m=>{                    // a companion out on the field too (2.84)
     if(m.currentHp<=0) return;
     const before = m.currentHp, max = monMaxHp(m);
     m.currentHp = Math.min(max, m.currentHp + amount);
-    if(m===mon) drainHp('playerHp', before, m.currentHp, max);
+    if(playerField().includes(m)) drainHp(pid('playerHp', m), before, m.currentHp, max);
   });
 }
 
@@ -2789,8 +3174,7 @@ function refreshBlockBar(id, holder){
 function refreshAllBlockBars(){
   const b = ui.battle;
   if(!b) return;
-  const mon = activeMon();
-  if(mon) refreshBlockBar('playerBlk', mon);
+  playerField().forEach(m=> refreshBlockBar(pid('playerBlk', m), m));
   (b.enemies||[]).forEach((e,i)=> refreshBlockBar('enemyBlk-'+i, e));
 }
 
@@ -2958,7 +3342,7 @@ function advanceMirageWindows(){
     if(t.tested) t.fresh = false;
     t.tested = false;
   });
-  [activeMon(), ...livingEnemies()].forEach(m=>{
+  [...playerField(), ...livingEnemies()].forEach(m=>{
     if(!m) return;
     if(m.evadeTurns > 0 && certainDodge(m) && m._stillTested) m.evadeTurns--;
     m._stillTested = false;
@@ -2980,8 +3364,10 @@ function beginRound(msg){
   b.phase = 'resolving';
   renderBattle();
 
-  /* Frost Armour: another layer each turn it lasts — on theirs as on yours. */
-  if(getPStatus(0,'frostArmour')){ frostArmourLayer(activeMon()); renderStatusBadges(); }
+  setFocus(null);
+  /* Frost Armour: another layer each turn it lasts — on theirs as on yours, and
+     on every monster of yours on the field. */
+  if(getPStatus(0,'frostArmour')){ livingField().forEach(m=> frostArmourLayer(m)); renderStatusBadges(); }
   const faE = getESide('frostArmour');
   if(faE){
     const holder = (faE.owner && faE.owner.hp > 0) ? faE.owner : livingEnemies()[0];
@@ -2996,27 +3382,61 @@ function beginRound(msg){
   runPreHits(()=> ariaRetaliate(()=> vitaPulse(()=> runQuickAttacks(()=>{
     if(!ui.battle) return;
     if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
-    if(!battleParty().some(m=>m.currentHp>0)) return onPlayerDefeated();
     /* Their burn (or their afterimages last round) can fell whoever you have
        out front before anyone acts: send the next one out, THEN build the
        order, so the newcomer takes this round's turn and nothing is skipped. */
-    const go = ()=>{ b.order = buildInitiativeOrder(); b.orderStep = 0; runTurnStep(); };
-    if(activeMon() && activeMon().currentHp <= 0) return replaceFallenThen(go);
-    go();
+    const order = ()=>{ b.order = buildInitiativeOrder(); b.orderStep = 0; runTurnStep(); };
+    /* Their companion's first call (2.87) comes as the first round opens, so
+       it is on the field before anyone moves — his first turn, whoever is
+       quicker. Later calls come on his own actions (enemyActs). */
+    const go = ()=>{
+      const fp = foePair();
+      if(fp && !fp.summons && foeCanSummon(fp.leader)){
+        const said = foeSummon();
+        renderBattle();
+        if(said) battleMsg(said);
+        return setTimeout(order, 1300);
+      }
+      order();
+    };
+    const fallen = ()=>{
+      /* A companion that fell in the upkeep leaves the field — the phoenix
+         may rise first — and then the leader is looked at. */
+      const c = companionOnField();
+      if(c && c.currentHp <= 0){
+        if(rebirthDue(c)) return offerRebirth(fallen, ()=>{ companionFalls(c); fallen(); }, c);
+        companionFalls(c);
+      }
+      if(sideDefeated()) return onPlayerDefeated();
+      const l = leaderMon();
+      if(l && l.currentHp <= 0 && !standingIn()) return replaceFallenThen(go);
+      if(l && l.currentHp <= 0) noteStandIn();
+      go();
+    };
+    /* the phoenix may rise again first (Rebirth) */
+    const lead = leaderMon();
+    if(lead && lead.currentHp <= 0 && rebirthDue(lead)) return offerRebirth(fallen, fallen, lead);
+    fallen();
   }))));
 }
+/* Nobody of yours is left standing: no party member, and no companion
+   standing in for one. */
+function sideDefeated(){ return !battleParty().some(m=> m.currentHp > 0) && !standingIn(); }
 /* The monster out front fell outside anyone's turn: choose the next one, run
    its entry passives, then carry on. */
 function replaceFallenThen(next){
+  const fallen = leaderMon();
   const c = chargeState();
-  if(c && activeMon() && c.uid === activeMon().uid) triggerDragonLegacy();
-  battleMsg(`${displayName(activeMon())} fainted!`);
+  if(c && fallen && c.uid === fallen.uid) triggerDragonLegacy();
+  battleMsg(`${displayName(fallen)} fainted!`);
   const options = state.party.map((m,i)=>({m,i})).filter(o=>o.m.currentHp>0 && !isPassenger(o.m));
   if(!options.length) return onPlayerDefeated();
   monsterChooser('Send out…', options, (i)=>{
     ui.battle.activeIndex = i; ui.battle.switchedThisTurn = false;
+    setFocus(null);
     const nm = state.party[i];
     if(nm && !nm._entered){ nm._entered = true; applyEntryPassives(nm, nm.species, nm.level, monAtk(nm)); }
+    pairSwitched(fallen);               // its companion comes back out, if it was out
     renderBattle();
     next();
   }, false);
@@ -3079,42 +3499,63 @@ function initiativeOf(side, mon){
   return v;
 }
 
+/* Each monster of yours on the field has its own place in the order (2.84):
+   the leader, and a companion that is out. Ties go to the leader — it is on
+   the left — so the companion leads only on an initiative of its own. */
+function playerRow(m){
+  const lead = m === leaderMon();
+  return { side:'player', mon:m, idx: lead ? -2 : -1, role: lead ? 'leader' : 'companion',
+           tier:machTier('player'), value:initiativeOf('player', m) };
+}
+function orderCompare(a, c){
+  if(c.tier !== a.tier) return c.tier - a.tier;
+  if(c.value !== a.value) return c.value - a.value;
+  if(a.side !== c.side) return a.side === 'player' ? -1 : 1;
+  return a.idx - c.idx;
+}
 function buildInitiativeOrder(){
   pruneBogs();                                   // a fallen Bog Lurker's bog slows nobody
+  const b = ui.battle;
+  /* A fresh round: nobody of yours has acted yet. */
+  b.roundActed = []; b.control = null;
   const rows = [];
-  const me = activeMon();
-  if(me && me.currentHp > 0){
-    rows.push({ side:'player', mon:me, idx:-1,
-                tier:machTier('player'), value:initiativeOf('player', me) });
-  }
+  livingField().forEach(m=> rows.push(playerRow(m)));
   livingEnemies().forEach(e=>{
     rows.push({ side:'enemy', mon:e, idx:ui.battle.enemies.indexOf(e),
                 tier:machTier('enemy'), value:initiativeOf('enemy', e) });
   });
-  rows.sort((a,c)=>{
-    if(c.tier !== a.tier) return c.tier - a.tier;
-    if(c.value !== a.value) return c.value - a.value;
-    if(a.side !== c.side) return a.side === 'player' ? -1 : 1;
-    return a.idx - c.idx;
-  });
+  rows.sort(orderCompare);
   return rows;
+}
+/* The leader's own row this round (a companion's may come first). */
+function leaderRow(){
+  const b = ui.battle;
+  return ((b && b.order) || []).find(r=> r.side === 'player' && r.role !== 'companion') || null;
 }
 
 function runTurnStep(){
   const b = ui.battle;
   if(!b || !b.order) return;
   if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
-  if(!battleParty().some(m=>m.currentHp>0)) return onPlayerDefeated();
+  noteFoeStandIn();
+  if(sideDefeated()){
+    const f = leaderMon();
+    if(rebirthDue(f)) return offerRebirth(()=> runTurnStep(), ()=> onPlayerDefeated(), f);
+    return onPlayerDefeated();
+  }
 
   while(b.orderStep < b.order.length){
     const row = b.order[b.orderStep];
+    /* one of yours must still be standing ON the field: a companion that fell
+       or went back into its core, or a pair switched off, has lost its place */
     const alive = row.side === 'player'
-      ? (row.mon && row.mon.currentHp > 0)
-      : (row.mon && row.mon.hp > 0);
+      ? (row.mon && row.mon.currentHp > 0 && playerField().includes(row.mon))
+      : (row.mon && row.mon.hp > 0 && b.enemies.includes(row.mon));   // (theirs: not gone back into a core)
     if(!alive || row.acted){ b.orderStep++; continue; }
     row.acted = true;
-    if(row.side === 'player') return beginPlayerPhase(b.roundMsg || 'Choose a move.');
+    if(row.side === 'player') return beginPlayerRow(row);
     b.phase = 'resolving';
+    setFocus(null);
     renderBattle();
     return setTimeout(()=> runSingleEnemyTurn(row.mon), 600);
   }
@@ -3123,9 +3564,44 @@ function runTurnStep(){
 function advanceTurn(){
   const b = ui.battle;
   if(!b) return;
+  settleControl();
   b.orderStep = (b.orderStep || 0) + 1;
   b.roundMsg = null;
   runTurnStep();
+}
+/* One of your monsters' places in the order has come: the leader's, or a
+   companion's (2.85: each chooses its own move at its own place). One that
+   has already had its action this round passes. */
+function beginPlayerRow(row){
+  const b = ui.battle;
+  const mon = row.mon;
+  setFocus(mon === leaderMon() ? null : mon);
+  b.control = null;
+  b.roundActed = b.roundActed || [];
+  if(b.roundActed.includes(mon.uid)) return advanceTurn();
+  return beginPlayerPhase(b.roundMsg || 'Choose a move.', mon);
+}
+/* Someone of yours has taken its action this round. */
+function markActed(m){
+  const b = ui.battle;
+  if(!b || !m) return;
+  b.roundActed = b.roundActed || [];
+  if(!b.roundActed.includes(m.uid)) b.roundActed.push(m.uid);
+}
+/* A place in the order is over: whoever held it has had its action. */
+function settleControl(){
+  const b = ui.battle;
+  const ctl = b && b.control;
+  if(!b) return;
+  b.control = null;
+  if(!ctl) return;
+  const owner = playerField().find(m=> m.uid === ctl.uid);
+  if(owner) markActed(owner);
+}
+/* The Skip button: the one whose turn it is passes. */
+function noteSkip(){
+  const b = ui.battle, ctl = b && b.control;
+  if(ctl) ctl.skipped = true;
 }
 
 /* ---- END: reached only when every monster has acted or fallen ---- */
@@ -3143,15 +3619,20 @@ function endRound(){
     }
   }
 
-  const gm = activeMon();
-  if(gm){
-    tickRage(gm); tickOverpower(gm);
-    if(gm.guard) grantBlock(gm, 1, monAtk(gm));
-    if(gm.airborne  > 0) gm.airborne--;
-    if(gm.invisible > 0) gm.invisible--;
+  /* The round is over for your side too: nobody of it is still in focus or
+     choosing. */
+  setFocus(null);
+  b.control = null;
+  const gm = frontMon();
+  /* Every monster of yours on the field keeps its own stances. */
+  playerField().forEach(pm=>{
+    tickRage(pm); tickOverpower(pm);
+    if(pm.guard) grantBlock(pm, 1, monAtk(pm));
+    if(pm.airborne  > 0) pm.airborne--;
+    if(pm.invisible > 0) pm.invisible--;
     // Counter stacks never expire — nothing to tick
-    if(gm.evadeTurns   > 0 && !certainDodge(gm)) gm.evadeTurns--;   // a Stillness waits (advanceMirageWindows)
-  }
+    if(pm.evadeTurns   > 0 && !certainDodge(pm)) pm.evadeTurns--;   // a Stillness waits (advanceMirageWindows)
+  });
   livingEnemies().forEach(e=>{
     tickRage(e); tickOverpower(e);
     if(e.guard) grantBlock(e, 1, e.atk);
@@ -3169,9 +3650,12 @@ function endRound(){
   const aeg = getPStatus(0,'steelAegis');
   if(aeg && gm){
     const rolls = aeg.regenRolls || (aeg.regen ? 1 : 0);
-    let won = 0;
-    for(let r = 0; r < rolls; r++) if(Math.random() < 0.5) won++;
-    if(won){ grantBlock(gm, won, monAtk(gm)); battleMsg(`🛡 The aegis thickens — +${won} block.`); }
+    const both = livingField().length > 1;
+    livingField().forEach(pm=>{                    // a side-wide buff: each of yours on the field
+      let won = 0;
+      for(let r = 0; r < rolls; r++) if(Math.random() < 0.5) won++;
+      if(won){ grantBlock(pm, won, monAtk(pm)); battleMsg(`🛡 The aegis thickens — +${won} block${both ? ` on ${displayName(pm)}` : ''}.`); }
+    });
   }
   const tac0 = getPStatus(0,'tachy');
   if(tac0){ tac0.extras = 0; }                   // (its first-turn dodge waits for an attack: advanceMirageWindows)
@@ -3206,73 +3690,99 @@ function endRound(){
   if(ar && ar.fieldEvade > 0 && ar.coverUsed) ar.fieldEvade--;   // the untouchable turn is spent — if it was used
   if(ar) ar.coverUsed = false;
   endDragonLegacy();                             // a Legacy spent this turn is over
+  tickCompanionTurns();                          // a companion out spends one of its turns
+  tickFoePairTurns();                            // and theirs (2.87)
 
   /* (The Haunting Aria no longer rolls here: it rolls in the next round's
      pre-action phase, in beginRound.) */
   resolveAfterimages(()=> resolveEnemyAfterimages(()=>{
     if(!ui.battle) return;
     if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
-    if(!battleParty().some(m=>m.currentHp>0)) return onPlayerDefeated();
-    const gone = tickStatuses();
-    renderStatusBadges();
-    setTimeout(()=>{
-      if(!ui.battle) return;
-      beginRound(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
-    }, gone.length ? 900 : 500);
+    const onward = ()=>{
+      const gone = tickStatuses();
+      renderStatusBadges();
+      setTimeout(()=>{
+        if(!ui.battle) return;
+        beginRound(gone.length ? `${gone.join(' and ')} wore off.` : 'Choose a move.');
+      }, gone.length ? 900 : 500);
+    };
+    /* their afterimages can fell the last of your team: the phoenix may rise */
+    if(sideDefeated()){
+      const f = [companionOnField(), leaderMon()].find(m=> m && m.currentHp <= 0 && rebirthDue(m));
+      if(f) return offerRebirth(onward, ()=> onPlayerDefeated(), f);
+      return onPlayerDefeated();
+    }
+    onward();
   }));
 }
+/* A companion out on the field spends one of its turns each round; with none
+   left it goes back into its leader's core (handover 07). */
+function tickCompanionTurns(){
+  const b = ui.battle, l = leaderMon();
+  const c = companionOnField();
+  if(!b || !l || !c) return;
+  const p = b.pairs[l.uid];
+  p.turnsLeft = Math.max(0, p.turnsLeft - 1);
+  if(p.turnsLeft <= 0 && c.currentHp > 0) companionReturns(c, p);
+}
+function companionReturns(c, p){
+  const l = leaderMon();
+  const cs = chargeState();
+  if(cs && cs.uid === c.uid) triggerDragonLegacy();     // its stored power passes on
+  p.out = false;
+  if(ui.battle.focusUid === c.uid) setFocus(null);
+  battleMsg(`🤝 ${displayName(c)} goes back into ${displayName(l)}'s core.` +
+            (l.currentHp <= 0 ? ` ${displayName(l)} cannot fight on.` : ''));
+  renderBattle();
+}
 
-/* The player's slice of the round. It decides nothing about order — losing the
-   turn to a stun or a charm simply hands straight on to the next step. */
-function beginPlayerPhase(msg){
+/* Anything that costs one of yours its place this round: their Ice Tomb, a
+   jam, a nap, a stun, a charm. Says so and returns true — the caller passes
+   the turn on. The monster is the one in focus. */
+function playerHeldDown(){
   const b = ui.battle;
-  if(!b) return;
+  const me = activeMon();
+  const say = (t)=>{ b.phase = 'resolving'; renderBattle(); battleMsg(t); return true; };
   /* Their Ice Tomb: nobody on your side moves while it holds. */
-  if(getESide('deepFreeze')){
-    b.phase = 'resolving';
-    renderBattle();
-    battleMsg(`🧊 ${displayName(activeMon())} is frozen solid!`);
-    return setTimeout(advanceTurn, 900);
-  }
-
-  // a jammed player may seize up before acting
+  if(getESide('deepFreeze')) return say(`🧊 ${displayName(me)} is frozen solid!`);
+  // a jammed monster may seize up before acting — never two turns running
   const jam = getPStatus(0,'disrupt');
-  if(jam && !b._playerSeized && Math.random() < (jam.stun || 0.15)){
-    b._playerSeized = true;            // never two turns running
-    b.phase = 'resolving';
-    renderBattle();
-    battleMsg(`📡 ${displayName(activeMon())} seizes up — your signals are scrambled!`);
-    return setTimeout(advanceTurn, 900);
+  if(jam && !me._seizedLast && Math.random() < (jam.stun || 0.15)){
+    me._seizedLast = true;
+    return say(`📡 ${displayName(me)} seizes up — your signals are scrambled!`);
   }
-  b._playerSeized = false;
+  me._seizedLast = false;
   const nap0 = getPStatus(0,'asleep');
   if(nap0){
     nap0.turnsLeft--;
     if(nap0.turnsLeft <= 0) removePStatus(0,'asleep');
-    b.phase = 'resolving';
-    renderBattle();
-    battleMsg(`💤 ${displayName(activeMon())} is fast asleep.`);
-    return setTimeout(advanceTurn, 900);
+    return say(`💤 ${displayName(me)} is fast asleep.`);
   }
   const stun = getPStatus(0,'stunned');
   if(stun){
     removePStatus(0,'stunned');
-    b.phase = 'resolving';
-    renderBattle();
-    battleMsg(`💫 ${displayName(activeMon())} is stunned and can't move!`);
-    return setTimeout(advanceTurn, 900);
+    return say(`💫 ${displayName(me)} is stunned and can't move!`);
   }
   const ch = getPStatus(0,'charmed');
-  if(ch && Math.random() < (ch.chance||0.20)){
-    b.phase = 'resolving';
-    renderBattle();
-    battleMsg(`💗 ${displayName(activeMon())} is charmed and loses its turn!`);
-    return setTimeout(advanceTurn, 900);
-  }
-
+  if(ch && Math.random() < (ch.chance||0.20)) return say(`💗 ${displayName(me)} is charmed and loses its turn!`);
+  return false;
+}
+/* The player's slice of the round, for one monster of yours (the one in
+   focus). It decides nothing about order — losing the turn to a stun or a
+   charm simply hands straight on to the next step. The choice is this
+   monster's own: its buttons, its move (a companion's costs its 8 words for
+   the turn — handover 07). */
+function beginPlayerPhase(msg, mon){
+  const b = ui.battle;
+  if(!b) return;
+  mon = mon || activeMon();
+  if(playerHeldDown()) return setTimeout(advanceTurn, 900);
+  b.control = { mode:'solo', uid:mon.uid };
   b.phase = 'player';
   renderBattle();
-  if(msg) battleMsg(msg);
+  /* (the line over the buttons already says whose turn it is) */
+  if(isCompanionMon(mon)) battleMsg(`Pick any of ${escapeHtml(displayName(mon))}'s moves — write all ${COMPANION.turnWords} words, or its turn fails.`);
+  else if(msg) battleMsg(msg);
 }
 
 /* ---------- BATTLE MODULE (Phase 3: wild encounters) ---------- */
@@ -3311,10 +3821,12 @@ const REGION_ZONES = {
   4: [ { id:'weather_deck',    name:'Weather Deck',   tint:'#5a8aaa' },
        { id:'cabin_deck',      name:'Cabin Deck',     tint:'#6a7a8a' },
        { id:'laboratory_deck', name:'Laboratory Deck', tint:'#4a7a8a', locksUntil:'r4Blocked' } ],
-  /* Region 5, part one: the harbour, and the catacombs under the town
-     (15-region5.js). The catacombs open once the soldato at the sea cave is beaten. */
+  /* Region 5: the harbour, and the catacombs under the town (15-region5.js).
+     The catacombs open once the soldato at the sea cave is beaten; the Old
+     Town once you have come up through them into its church (2.90). */
   5: [ { id:'harbour',   name:'The Harbour',   tint:'#6a8aa0' },
-       { id:'catacombs', name:'The Catacombs', tint:'#4a3a5a', locksUntil:'r5Catacombs' } ],
+       { id:'catacombs', name:'The Catacombs', tint:'#4a3a5a', locksUntil:'r5Catacombs' },
+       { id:'old_town',  name:'The Old Town',  tint:'#9a7a5a', locksUntil:'r5OldTown' } ],
 };
 
 /* --- Region 2, first scripted sequence: the Trial of Courage ---
@@ -3427,7 +3939,9 @@ const ZONE_LEVELS = {
   rocky_caverns:   { min:20, max:46 },
   volcanic_caldera:{ min:31, max:61 },
   geothermal_plant:{ min:31, max:61 },
-  catacombs:       { min:76, max:95 },   // the cap (2.72: 95); each floor and room keeps its own band (15-region5.js)
+  /* Each floor and room keeps its own wild band (15-region5.js); `cap` is how
+     far a monster may grow down here — the region's 110 (2.82; 200 before). */
+  catacombs:       { min:76, max:95, cap:110 },
 };
 
 function makeEnemy(species, level, opts){
@@ -3465,7 +3979,8 @@ function makeEnemy(species, level, opts){
   else if(ai==='power1') move = bySlot('Power1') || bySlot('Basic');
   else move = bySlot('Basic');
   if(!move) move = avail[0] || MOVES[species][0];
-  const e = { species, level, maxHp:hp, hp:hp, atk:stat, move, types:sp.types, stage, tier:sp.tier, ai, nerfed, boss:!!opts.boss, crowned:!!opts.crowned };
+  const atk = Math.ceil(stat * atkScale(level));                // ATK past 100 grows too (2.89)
+  const e = { species, level, maxHp:hp, hp:hp, atk, move, types:sp.types, stage, tier:sp.tier, ai, nerfed, boss:!!opts.boss, crowned:!!opts.crowned };
   if(opts.elusive) e.elusive = true;      // see ELUSIVE below
   /* Enraged: while the Whalelord is unavenged his people fight like this —
      one move, nothing else, harder and tougher. */
@@ -3563,8 +4078,9 @@ function beginBattle(config){
     m.morsMarks = 0;     m._entered = false;   m._aegisPassiveDone = false;
     /* Lurk, Cunning, an ambush, a wind-up, an omen: all this battle's alone. */
     m.lurk = false; m.lurkUsed = 0; m.cunning = false; m.hitsDealt = 0;
-    m._ambush = 0;  m._windup = null; m._omen = 0;
+    m._ambush = 0;  m._windup = null; m._omen = 0; m._seizedLast = false;
   });
+  restCompanions();                              // every fight starts them whole (2.84)
   ui.battle = {
     waves: config.waves, waveIndex:0,
     isNpc: !!config.isNpc, allowCatch: !!config.allowCatch,
@@ -3575,11 +4091,12 @@ function beginBattle(config){
     scriptedOneTurn: !!config.scriptedOneTurn,
     /* From Emerald March onward a trainer fight is a commitment: no fleeing.
        Region 1 keeps its gentler rules so the early game stays forgiving. */
-    noFlee: !!config.noFlee || (!!config.isNpc && (state.progress.currentRegion||1) >= 2),
+    noFlee: !config.coreSpar && (!!config.noFlee || (!!config.isNpc && (state.progress.currentRegion||1) >= 2)),   // a spar can be given up
     concertFight: !!config.concertFight,
     figlio: !!config.figlio,          // he leads every round
     catacomb: !!config.catacomb,      // their ghosts arrive lurking
     scriptedLoss: config.scriptedLoss||null,
+    coreSpar: config.coreSpar || null,   // a training spar with the Monkey King (2.86): { uid, tier, hp }
     scriptedAlly: config.scriptedAlly||null, allyMove: config.allyMove||null,
     allyUnkillable: !!config.allyUnkillable, enemiesFirst: !!config.enemiesFirst,
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
@@ -3590,6 +4107,8 @@ function beginBattle(config){
     rechargeWords:0,         // every word written this battle feeds the meter
 
     partyStatus:{},          // party-wide buffs, each with a turn counter
+    monStatus:{},            // each of your monsters' own debuffs, by uid (2.83)
+    focusUid:null,           // the monster of yours in focus, if not the leader (2.83)
     enemyStatus:{},          // the enemy side's own side-wide buffs (their Overheat, their dust…)
     fieldStatus:{},          // debuffs stamped on every enemy, inherited by later waves
     /* COOLDOWN RULE — only these two ever go on cooldown.
@@ -3614,7 +4133,7 @@ function beginBattle(config){
   // clear last battle's stances, then arm this battle's opening passives
   state.party.forEach(m=>{ m.guard=false; m.airborne=0; m.invisible=0; m.prep=0; m.blockStacks=0; m._entered=false; });
   loadWave(0);
-  const lead = activeMon();
+  const lead = leaderMon();
   if(lead){ lead._entered = true; applyEntryPassives(lead, lead.species, lead.level, monAtk(lead)); }
   playBattleMusic(!!config.isNpc, { silentIntro: !!config.silentIntro });
   go('battle');
@@ -3658,7 +4177,7 @@ function loadWave(i){
   const withPassive = b.enemies.find(e=>passiveDefOf(e));
   if(withPassive){
     const p = passiveDefOf(withPassive);
-    const who = `${SPECIES[withPassive.species].name}'s ${p.name}`;
+    const who = passiveTitle(withPassive, p);
     setTimeout(()=> battleMsg(passivesMuted(withPassive) ? `🔇 ${who} is silenced by the curse!` : `⚡ ${who} is active!`), 600);
   }
   /* A borrowed story monster is the only thing in the party, so it simply
@@ -3693,6 +4212,11 @@ function onWaveCleared(){
        turn-one Overheat was still running six waves later. */
     const gone = tickStatuses();
     endDragonLegacy();                 // the turn that used it is over
+    setFocus(null);
+    tickCompanionTurns();              // and a companion out spent one of its turns
+    /* A new round for Tachypsychia's three extra actions, as endRound gives —
+       the ones that cleared the wave used to count against the next. */
+    [getPStatus(0,'tachy'), getESide('tachy')].forEach(t=>{ if(t) t.extras = 0; });
     b.waveIndex++;
     loadWave(b.waveIndex);
     renderBattle();
@@ -3701,6 +4225,7 @@ function onWaveCleared(){
     // the new arrivals face upkeep (Overheat, Aftershock) and may seize the initiative
     setTimeout(()=> beginRound('Choose a move.'), 900);
   } else {
+    if(b.coreSpar) return coreSparWon();       // a spar with the Monkey King (2.87)
     if(b.isNpc) onChallengeWon();
     else onBattleWon();
   }
@@ -3716,14 +4241,455 @@ function enemyAtk(e){
   return e.atk + Math.round(n * ((c && c.enrage) || 0.20) * e.atk);
 }
 
-/* Out of a battle there is no active monster. This used to throw, which took
+/* ============================================================
+   YOUR SIDE OF THE FIELD (2.83; the companion joins it in 2.84)
+   Your side is a pair now (handover/07-COMPANIONS), so "your monster" is
+   several questions:
+     leaderMon()    the monster out front, the party's active one: switching,
+                    the plate on the left, whose companion it is;
+     playerField()  every monster of yours on the field — the leader (even
+                    fallen, until it is replaced) and its companion while it
+                    is out (even fallen, until its fall is dealt with);
+     livingField()  the ones of those still standing;
+     frontMon()     the one that stands for your side when nothing else is in
+                    focus: the leader, or the companion standing in for it;
+     activeMon()    the monster in FOCUS: whose action is running, or whom an
+                    enemy's blow is aimed at. It is what single-monster code
+                    means by "yours" — the front monster unless something has
+                    put another of yours in focus (setFocus);
+     controlMon()   whose own moves the buttons show — the one whose turn it
+                    is (a companion chooses its own, 2.85).
+   pid('playerBob') and its kin name the page elements that show the monster
+   in focus (the leader's are playerBob / playerHp / playerBlk, the
+   companion's companionBob / companionHp / companionBlk).
+   Out of a battle there is no active monster. This used to throw, which took
    down the stats screen whenever it was opened before the first fight of a
-   session — every move line estimates its damage through here. */
-function activeMon(){ return (ui.battle && state.party[ui.battle.activeIndex]) || null; }
+   session — every move line estimates its damage through here.
+   ============================================================ */
+function leaderMon(){ return (ui.battle && state.party[ui.battle.activeIndex]) || null; }
+function playerField(){
+  const l = leaderMon();
+  if(!l) return [];
+  const c = companionOnField();
+  return c ? [l, c] : [l];
+}
+function livingField(){ return playerField().filter(m=> m.currentHp > 0); }
+function frontMon(){
+  const l = leaderMon();
+  if(l && l.currentHp <= 0){
+    const c = companionOnField();
+    if(c && c.currentHp > 0) return c;
+  }
+  return l;
+}
+/* The leader lies fallen and its companion fights on alone. */
+function standingIn(){ const l = leaderMon(); return !!(l && l.currentHp <= 0 && frontMon() !== l); }
+function activeMon(){
+  const b = ui.battle;
+  if(!b) return null;
+  if(b.focusUid){
+    const f = playerField().find(m=> m.uid === b.focusUid);
+    if(f) return f;
+  }
+  return frontMon();
+}
+/* Put one of your monsters in focus for an action or a blow, or (null) hand
+   it back to the front monster. */
+function setFocus(mon){ if(ui.battle) ui.battle.focusUid = mon ? mon.uid : null; }
+/* Run `fn` with `mon` in focus, then put the focus back as it was — for work
+   that finishes at once (a sweep, a pulse, a cast of theirs on each of you). */
+function withFocus(mon, fn){
+  const b = ui.battle;
+  if(!b) return fn();
+  const was = b.focusUid;
+  setFocus(mon);
+  try { return fn(); } finally { b.focusUid = was; }
+}
+function controlMon(){
+  const b = ui.battle;
+  if(!b) return null;
+  const ctl = b.control;
+  if(ctl && ctl.mode === 'solo'){
+    const f = livingField().find(m=> m.uid === ctl.uid);
+    if(f) return f;
+  }
+  return frontMon();
+}
+/* The element id for a monster of yours (the one in focus, if not given):
+   'playerBob' for the leader, 'companionBob' for its companion. */
+function pid(base, mon){
+  const m = mon || activeMon(), l = leaderMon();
+  return (m && l && m.uid !== l.uid) ? base.replace('player', 'companion') : base;
+}
+
+/* ============================================================
+   COMPANIONS (2.84, reworked 2.85 — handover/07-COMPANIONS.md, phase 2)
+   A party monster — the LEADER — holds the shared core of a monster from your
+   collection, its COMPANION (leader.companionUid: a monster in storage, never
+   one of the party). In battle a summon (4 words, and the turn stays yours)
+   brings it out beside the leader for up to five turns; the recharge meter
+   gives them back. Up to six summons a battle.
+   A companion has its own place in the order and chooses its own move there.
+   Its TURN costs 8 words, whatever the move (COMPANION.turnWords): all 8 or
+   the whole turn fails. Only a move's extras still cost words — the tail of
+   a move that grows with extra words (Incinerate Max: 7 more for its 2.75×),
+   and bonus rounds. A quick move (a Very High stone) leaves its turn open, and
+   what it does next that turn is already paid for (control.paid).
+   Battle state, per leader: ui.battle.pairs[leaderUid] =
+     { uid, turnsLeft, out, fallen }
+   `out` stays true while the pair is switched off, so it comes back out with
+   its leader; its turns only run while it is on the field (they FREEZE).
+   A companion is not a party member: its own battle HP, full at the start of
+   every fight (readyCompanion; restCompanions puts it back after), and it is
+   outside Revitalise, Conversio and the party's defeat check — though while
+   it stands in for a fallen leader the fight goes on.
+   Bonding for real — the Crown, the core slot and its training, the
+   Companions page — is phase 3 (2.86, 07-screens.js). All of it is behind
+   the developer profile (companionsUnlocked) until the end of Region 5 sets
+   state.companionsUnlocked.
+   ============================================================ */
+const COMPANION = { summonWords:4, turns:5, maxSummons:6, turnWords:8 };
+function companionsUnlocked(){
+  return !!(state && (state.companionsUnlocked || (typeof isDev === 'function' && isDev())));
+}
+/* Not in the story's set pieces: a borrowed monster, a one-blow scene, a
+   fight you are meant to lose. */
+function companionsAllowed(){
+  const b = ui.battle;
+  return !!(b && companionsUnlocked() && !b.scriptedAlly && !b.scriptedOneTurn && !b.scriptedLoss);
+}
+function companionOf(leader){
+  if(!leader) return null;
+  /* In a spar with the Monkey King (2.87) the monster being trained holds the
+     core it chose for that spar — borrowed, never one of yours. */
+  const sp = ui.battle && ui.battle.coreSpar;
+  if(sp && sp.uid === leader.uid && sp.companion) return sp.companion;
+  if(!leader.companionUid) return null;
+  return (state.storage || []).find(m=> m.uid === leader.companionUid) || null;
+}
+function bondedCompanions(){
+  const seen = new Set(), out = [];
+  (state.party || []).forEach(l=>{
+    const c = companionOf(l);
+    if(c && !seen.has(c.uid)){ seen.add(c.uid); out.push(c); }
+  });
+  return out;
+}
+/* This battle's record of a leader's pair — made the first time it is asked
+   for, which is when the companion is readied for the fight. */
+function pairOf(leader){
+  const b = ui.battle;
+  if(!b || !leader) return null;
+  const c = companionOf(leader);
+  if(!c) return null;
+  b.pairs = b.pairs || {};
+  let p = b.pairs[leader.uid];
+  if(!p || p.uid !== c.uid){
+    p = b.pairs[leader.uid] = { uid:c.uid, turnsLeft:COMPANION.turns, out:false, fallen:false };
+    readyCompanion(c);
+  }
+  return p;
+}
+/* Full health and a clean slate, as every fight starts for the party. */
+function readyCompanion(c){
+  c.currentHp = monMaxHp(c);
+  c.counterStack = []; c.comboStacks = 0; c.enrageStacks = 0;
+  c.blockStacks = 0;   c.blockValue = 0;
+  c._rage = null;      c._overpower = null; c._stoop = null;
+  c.morsMarks = 0;     c._entered = false;  c._aegisPassiveDone = false;
+  c.lurk = false; c.lurkUsed = 0; c.cunning = false; c.hitsDealt = 0;
+  c._ambush = 0;  c._windup = null; c._omen = 0; c._seizedLast = false;
+  c.guard = false; c.airborne = 0; c.invisible = 0; c.prep = 0; c.evadeTurns = 0;
+}
+/* Out of battle a companion is always whole: what it lost was the fight's. */
+function restCompanions(){ bondedCompanions().forEach(c=>{ c.currentHp = monMaxHp(c); }); }
+/* The current leader's companion, while it is out on the field. */
+function companionOnField(){
+  const b = ui.battle, l = leaderMon();
+  if(!b || !l || !b.pairs) return null;
+  const p = b.pairs[l.uid];
+  if(!p || !p.out || p.fallen) return null;
+  const c = companionOf(l);
+  return (c && c.uid === p.uid) ? c : null;
+}
+function isCompanionMon(m){ const l = leaderMon(); return !!(m && l && m.uid !== l.uid && companionOnField() === m); }
+/* A move that never spends the turn: a Very High stone's cast, or the Aria. */
+function isQuickMove(mv){ return !!(mv && ((mv.isStone && mv.stoneTier === 'veryhigh') || mv.aria)); }
+/* The words a companion's move still asks for beyond its turn's 8: the tail
+   of a move that grows with extra words (Incinerate Max: 7 more, to 15, for
+   its 2.75×). Bonus rounds are their own quizzes, as always. */
+function companionTail(mv){
+  return (mv && mv.scale && !mv.windupReady) ? Math.max(0, scaleCeilWords(mv) - mv.words) : 0;
+}
+/* The companion takes its place in this round's order — after whoever is
+   acting now, where its initiative puts it among the rest. */
+function insertCompanionRow(c){
+  const b = ui.battle;
+  if(!b || !b.order || !c) return;
+  if(b.order.some(r=> r.side === 'player' && r.mon === c && !r.acted)) return;
+  if((b.roundActed || []).includes(c.uid)) return;
+  const row = playerRow(c);
+  let at = b.order.length;
+  for(let j = (b.orderStep || 0) + 1; j < b.order.length; j++){
+    if(orderCompare(row, b.order[j]) < 0){ at = j; break; }
+  }
+  b.order.splice(at, 0, row);
+}
+/* The leader out front has changed (a switch, a send-out, Vengeance's swap):
+   the companion that was out goes back with its leader — its turns frozen —
+   and the newcomer's comes back out if it was out,
+   arriving as any monster of yours does. The leader's place in the order
+   passes to the newcomer. */
+function pairSwitched(oldLeader){
+  const b = ui.battle;
+  if(!b) return;
+  const nl = leaderMon();
+  b.standInFor = null;
+  const old = oldLeader && oldLeader !== nl ? companionOf(oldLeader) : null;
+  if(old && b.focusUid === old.uid) b.focusUid = null;
+  const lr = leaderRow();
+  if(lr && oldLeader && lr.mon === oldLeader) lr.mon = nl;
+  if(b.foeFocus && !livingField().some(m=> m.uid === b.foeFocus)) b.foeFocus = null;
+  const c = companionOnField();
+  if(c && c.currentHp > 0){
+    if(!c._entered){ c._entered = true; applyEntryPassives(c, c.species, c.level, monAtk(c)); }
+    else applyStonePassives(c);
+    insertCompanionRow(c);
+  }
+}
+/* A companion has fallen: out for the rest of this fight (handover 07). */
+function companionFalls(c){
+  const b = ui.battle, l = leaderMon();
+  const p = l && b && b.pairs && b.pairs[l.uid];
+  if(!p || p.uid !== c.uid) return;
+  const cs = chargeState();
+  if(cs && cs.uid === c.uid) triggerDragonLegacy();     // its stored power passes on
+  p.fallen = true; p.out = false;
+  if(b.focusUid === c.uid) b.focusUid = null;
+  if(b.foeFocus === c.uid) b.foeFocus = null;
+  battleMsg(`🤝 ${displayName(c)} has fallen — it is out for the rest of this fight.`);
+  renderBattle();
+}
+/* The leader has fallen with its companion out: the companion fights on alone
+   — its own moves, 8 words a turn — until its turns run out. */
+function noteStandIn(){
+  const b = ui.battle, l = leaderMon(), c = companionOnField();
+  if(!b || !l || !c || b.standInFor === l.uid) return;
+  b.standInFor = l.uid;
+  if(b.foeFocus === l.uid) b.foeFocus = null;
+  const p = b.pairs[l.uid];
+  battleMsg(`🤝 ${displayName(l)} has fallen — ${displayName(c)} stands in for it` +
+            ` while its turns last (${p ? p.turnsLeft : 0} left).`);
+  renderBattle();
+}
+/* Something of yours on the field has fallen and not been dealt with yet. */
+function fieldNeedsFaint(){
+  const b = ui.battle;
+  if(!b) return false;
+  const c = companionOnField();
+  if(c && c.currentHp <= 0) return true;
+  const l = leaderMon();
+  return !!(l && l.currentHp <= 0 && !(standingIn() && b.standInFor === l.uid));
+}
+
+/* ------------------------------------------------------------
+   WHO THEIR BLOWS GO FOR (2.84)
+   With one of yours on the field there is no question. With a pair:
+     wild enemies  one of the two at random, blow by blow;
+     bosses, a trainer's monsters and the clever ones  focus one down — the
+       one they can finish soonest, reading its EFFECTIVE health: what it has
+       and the block in front of it, against what this blow would do to it,
+       stretched by how often it slips a blow (Tachypsychia, a Mirage, a
+       stance) — and they stay on it until it falls or nothing can touch it
+       (a Lurk, a Stillness);
+     an area move  both (enemyTargetPlan).
+   ------------------------------------------------------------ */
+const CLEVER_AI = new Set(['best','maxer','ankylo','cataclysm','dragon','tricer','firehound','stoop']);
+function enemyFocuses(e){
+  const b = ui.battle;
+  return !!(b && (b.isNpc || (e && (e.boss || CLEVER_AI.has(e.ai)))));
+}
+function untouchable(m){ return stanceEvasion(m) >= 1; }
+/* How many of this enemy's blows (of this move) it would take to finish `m`,
+   dodges counted in. */
+function blowsToFinish(e, m, move){
+  const mv = move || (e && e.move) || [];
+  const ex = mv[6] || {};
+  const hits = (ex.hits > 1 && !ex.reflect && !ex.grudge) ? ex.hits : 1;
+  const mult = mv[2] != null ? mv[2] : 0.5;
+  const per = (ex.hits > 1 && ex.split) ? mult / ex.hits : mult;
+  const one = Math.max(1, computeDamage(per, enemyAtk(e), e, monRef(m), false));
+  const soak = blockStacksOf(m) * (m.blockValue || 0);
+  const need = Math.ceil((m.currentHp + soak) / Math.max(1, one * hits));
+  const dodge = Math.min(0.95, playerEvasionFrom(e, m));
+  return need / (1 - dodge);
+}
+function enemyPickTarget(e, move, ownChoice){
+  const b = ui.battle;
+  const mine = livingField();
+  if(mine.length <= 1) return mine[0] || null;
+  /* Your Steel Soul (2.90): a quick strike, their Conversio's light — any one
+     blow of theirs — comes to it. (enemyTargetPlan asks for the AI's own
+     choice, to say whom it shielded.) */
+  if(!ownChoice){ const g = soulGuardian('player'); if(g) return g; }
+  if(!enemyFocuses(e)) return mine[Math.floor(Math.random() * mine.length)];
+  const cur = mine.find(m=> m.uid === b.foeFocus);
+  const open = mine.filter(m=> !untouchable(m));
+  if(cur && (!untouchable(cur) || !open.length)) return cur;
+  const pool = open.length ? open : mine;
+  let best = pool[0], bestN = Infinity;
+  pool.forEach(m=>{
+    const n = blowsToFinish(e, m, move);
+    if(n < bestN - 1e-9 || (Math.abs(n - bestN) < 1e-9 && m.currentHp < best.currentHp)){ best = m; bestN = n; }
+  });
+  b.foeFocus = best.uid;
+  return best;
+}
+/* Everyone of yours this move of theirs reaches, and how:
+     [{ mon, scale?, hits? }] — an area move each of yours standing; a twin
+     one blow each; a splash the other at its splash; an Ultra its strikes
+     scattered between them; anything else the one it goes for. */
+function enemyTargetPlan(e, move){
+  const mine = livingField();
+  if(!mine.length) return [];
+  const kind = move && move[3];
+  const ex = (move && move[6]) || {};
+  if(mine.length > 1 && kind === 'AOE') return mine.map(m=> ({ mon:m }));
+  const main = enemyPickTarget(e, move, true);
+  if(!main) return [];
+  const other = mine.find(m=> m !== main);
+  /* Your Steel Soul (2.90): every single blow comes to it — `shielded` is who
+     it would have gone to. A twin blow still takes one each. */
+  const guard = (mine.length > 1 && kind !== 'Multi2') ? soulGuardian('player') : null;
+  if(guard){
+    const rest = mine.find(m=> m !== guard);
+    if(kind === 'SingleAOE' && ex.splash && !ex.stoop)
+      return [{ mon:guard, shielded:main !== guard ? main : null }, { mon:rest, scale:ex.splash }];
+    if(kind === 'MultiHit' && ex.hits > 1 && !ex.stoop) return [{ mon:guard, hits:ex.hits, shielded:rest }];
+    return [{ mon:guard, shielded:main !== guard ? main : null }];
+  }
+  if(other && !ex.stoop){
+    if(kind === 'Multi2') return [{ mon:main }, { mon:other }];
+    if(kind === 'SingleAOE' && ex.splash) return [{ mon:main }, { mon:other, scale:ex.splash }];
+    if(kind === 'MultiHit' && ex.hits > 1){
+      let a = 0;
+      for(let k = 0; k < ex.hits; k++) if(Math.random() < 0.5) a++;
+      return [{ mon:main, hits:ex.hits - a }, { mon:other, hits:a }].filter(x=> x.hits > 0);
+    }
+  }
+  return [{ mon:main }];
+}
+/* The summon, and why not: '' when it can be done now, else the reason. */
+function summonBlock(){
+  const b = ui.battle, l = leaderMon();
+  if(!companionsAllowed() || !l) return 'none';
+  const c = companionOf(l);
+  if(!c) return 'none';
+  const p = pairOf(l);
+  if(l.currentHp <= 0) return 'down';
+  if(p.fallen) return 'fallen';
+  if(p.out) return 'out';
+  if(p.turnsLeft <= 0) return 'tired';
+  if((b.summons || 0) >= COMPANION.maxSummons) return 'spent';
+  const ctl = b.control;
+  if(ctl && ctl.mode === 'solo' && ctl.uid !== l.uid) return 'busy';   // the companion's own action
+  return '';
+}
+/* ============================================================
+   THEIR COMPANION (2.87 — the Monkey King's spars; handover/07)
+   A leader on their side can hold a companion's core as yours does:
+   b.foePair = { leader, mon, turnsLeft, out, fallen, summons, entered }.
+   On its leader's own action it is called out — free, as your summon keeps
+   your turn (enemyActs) — and takes its place in this round's order. Five
+   turns out, counted by the round (the round it came out counts); at 0 it
+   goes back into the core, off the field (out of b.enemies), and YOUR
+   recharge meter gives it its five back, as it gives yours (feedRecharge).
+   Six calls a battle at most. It falls: out for the fight. Its leader falls
+   while it is out: it stands in until its turns run out, and the fight is
+   over when nobody of theirs is left standing on the field.
+   ============================================================ */
+function foePair(){ return (ui.battle && ui.battle.foePair) || null; }
+/* "Cyclops's Bog Lurker" — but "Goblin's Greed", not "Goblin's Goblin's Greed". */
+function passiveTitle(e, pd){
+  const name = SPECIES[e.species].name;
+  return pd.name.startsWith(name) ? pd.name : `${name}'s ${pd.name}`;
+}
+function foeCanSummon(e){
+  const p = foePair();
+  if(!p || p.leader !== e || !e || e.hp <= 0) return false;
+  if(p.mon.hp <= 0) p.fallen = true;
+  return !p.out && !p.fallen && p.turnsLeft > 0 && (p.summons || 0) < COMPANION.maxSummons;
+}
+/* Called out: onto the field, into this round's order. Returns its line. */
+function foeSummon(){
+  const b = ui.battle, p = foePair();
+  if(!b || !p) return '';
+  p.out = true;
+  p.summons = (p.summons || 0) + 1;
+  if(!b.enemies.includes(p.mon)) b.enemies.push(p.mon);
+  if(!p.entered){ p.entered = true; foeArrives(p.mon); }
+  insertEnemyRow(p.mon);
+  playSfx('stone_veryhigh');
+  const n = p.turnsLeft;
+  return `🤝 ${SPECIES[p.leader.species].name} calls ${SPECIES[p.mon.species].name} out of his core — ${n} turn${n === 1 ? '' : 's'}!`;
+}
+/* Arriving as any of theirs does on a new wave: your fields on their side
+   reach it, and its passive takes hold (once a battle, as yours). */
+function foeArrives(e){
+  const fs = (ui.battle && ui.battle.fieldStatus) || {};
+  if(fs.leechSeed) addEStatus(e, Object.assign({}, fs.leechSeed));
+  if(fs.iceField)  addEStatus(e, { type:'iceTomb', turnsLeft:fs.iceField.freeze||2, taken:fs.iceField.taken });
+  if(fs.curse)     addEStatus(e, Object.assign({}, fs.curse));
+  if(fs.disruptField) addEStatus(e, { type:'disrupt', turnsLeft:fs.disruptField.turnsLeft, stun:fs.disruptField.stun, mine:!!fs.disruptField.mine });
+  applyEntryPassives(e, e.species, e.level, e.atk);
+  const pd = passiveDefOf(e);
+  if(pd){
+    const who = passiveTitle(e, pd);
+    setTimeout(()=> battleMsg(passivesMuted(e) ? `🔇 ${who} is silenced by the curse!` : `⚡ ${who} is active!`), 1400);
+  }
+}
+/* One of theirs arriving mid-round takes its place after whoever is acting. */
+function insertEnemyRow(e){
+  const b = ui.battle;
+  if(!b || !b.order || !e) return;
+  if(b.order.some(r=> r.side === 'enemy' && r.mon === e && !r.acted)) return;
+  const row = { side:'enemy', mon:e, idx:b.enemies.indexOf(e), tier:machTier('enemy'), value:initiativeOf('enemy', e) };
+  let at = b.order.length;
+  for(let j = (b.orderStep || 0) + 1; j < b.order.length; j++){
+    if(orderCompare(row, b.order[j]) < 0){ at = j; break; }
+  }
+  b.order.splice(at, 0, row);
+}
+/* The round is over: one of its turns spent; with none left it goes home. */
+function tickFoePairTurns(){
+  const b = ui.battle, p = foePair();
+  if(!b || !p || !p.out) return;
+  if(p.mon.hp <= 0){ p.fallen = true; p.out = false; return; }   // fell: it stays where it fell
+  p.turnsLeft = Math.max(0, p.turnsLeft - 1);
+  if(p.turnsLeft > 0) return;
+  p.out = false;
+  const i = b.enemies.indexOf(p.mon);
+  if(i >= 0) b.enemies.splice(i, 1);                               // off the field, back into the core
+  const lead = SPECIES[p.leader.species].name, name = SPECIES[p.mon.species].name;
+  battleMsg(`🤝 ${name} goes back into ${lead}'s core.` + (p.leader.hp <= 0 ? ` ${lead} cannot fight on.` : ''));
+  renderBattle();
+}
+/* Their leader has fallen with its companion out: it stands in. Said once. */
+function noteFoeStandIn(){
+  const p = foePair();
+  if(!p || p.standSaid || !p.out || p.leader.hp > 0 || p.mon.hp <= 0) return;
+  p.standSaid = true;
+  battleMsg(`🤝 ${SPECIES[p.leader.species].name} is down — ${SPECIES[p.mon.species].name} fights on while its turns last (${p.turnsLeft} left).`);
+}
+/* The tag on their companion's plate: its turns, as yours shows. */
+function foeCompanionTag(e){
+  const p = foePair();
+  return (p && p.mon === e && p.out) ? ` <span class="foe-comp-tag">🤝 ⏳${p.turnsLeft}</span>` : '';
+}
 function monMaxHp(m){ return computeMaxHp(m.species, m.level, m.supplements, m); }
 /* Enrage is bolted on top of the natural figure, from the undressed base, so
    stacks stay additive and never compound with one another. */
-function rawMonAtk(m){ return computeMaxStat(m.species, m.level, m.supplements, m); }
+function rawMonAtk(m){ return computeAtk(m.species, m.level, m.supplements, m); }     // scaled past 100 (2.89)
 function monAtk(m){
   const base = rawMonAtk(m);
   const n = (m && m.enrageStacks) || 0;
@@ -3774,6 +4740,8 @@ function unlockedMoves(m){
       target: t.kind==='multi2'?'Multi2':(t.kind==='status'?'Status':'Single'),
       words:t.words, unlock:0, available:!used, isStone:true, stoneTier:t.id, stoneType:st.type };
   });
+  /* The ghost phoenix's gift: Nova and Incinerate may leave a Sacred Flame. */
+  base.forEach(mv=>{ const sf = sacredFlameBonus(m, mv); if(sf) mv.bonus = sf; });
   /* Something wound up last turn comes down this turn, already paid for. */
   if(m._windup){
     const w = base.find(mv=> mv.name === m._windup);
@@ -3811,6 +4779,92 @@ function playerSpriteSize(){
   const byH = window.innerHeight * 0.22;
   return Math.round(Math.max(120, Math.min(byW, byH, 230)));
 }
+/* A pair shares the space one monster had: the leader a little smaller, the
+   companion smaller again, so the plate keeps its room. */
+function pairSpriteSize(lead){ return Math.round(playerSpriteSize() * (lead ? 0.78 : 0.64)); }
+/* The companion's plate, under the leader's: its name, its turns left, its
+   block and its health. */
+function companionPlateHtml(c){
+  const p = pairOf(leaderMon());
+  const turns = p ? p.turnsLeft : 0;
+  return `<div class="comp-plate">
+    <div class="mon-title comp-title">🤝 ${escapeHtml(displayName(c))}${crownMark(c)} <span>Lv ${c.level}</span>
+      <b class="comp-turns" title="Turns left on the field">⏳${turns}</b></div>
+    ${blockBar('companionBlk', c)}
+    ${hpBar2('companionHp', c.currentHp, monMaxHp(c), false)}
+  </div>`;
+}
+/* The summon: a small button with the companion's face — or, when it cannot
+   come out now, the reason. Nothing at all without a bonded companion. */
+function summonButtonHtml(canAct){
+  const why = summonBlock();
+  if(why === 'none' || why === 'out') return '';
+  const l = leaderMon(), c = companionOf(l), p = pairOf(l);
+  const face = monPortrait(c.species, 34, { view:'front', bare:true, stage:monStage(c), crowned:isCrowned(c) });
+  const note = why === 'fallen' ? 'has fallen this fight'
+             : why === 'tired'  ? 'resting — the recharge meter wakes it'
+             : why === 'spent'  ? `no summons left (${COMPANION.maxSummons} a battle)`
+             : why === 'down'   ? `${escapeHtml(displayName(l))} cannot share its core now`
+             : `${COMPANION.summonWords} words · ${p.turnsLeft} turn${p.turnsLeft === 1 ? '' : 's'}`;
+  const ok = !why && canAct;
+  return `<button class="summon-btn" id="summonBtn" ${ok ? '' : 'disabled'}>${face}
+    <span><b>Summon ${escapeHtml(displayName(c))}</b><small>${note}</small></span></button>`;
+}
+/* The line over the buttons while a companion is out: whose turn it is, and
+   on the companion's, what it costs. */
+function pairLineHtml(lead, comp, ctlMon, canAct){
+  if(!comp && ctlMon === lead) return '';
+  const n = m=> escapeHtml(displayName(m));
+  const ctl = ui.battle && ui.battle.control;
+  let t;
+  if(canAct && ctlMon !== lead){
+    const price = (ctl && ctl.paid) ? 'paid — its next move is free'
+                : `any move for ${COMPANION.turnWords} words`;
+    t = standingIn() ? `🤝 ${n(ctlMon)} stands in for ${n(lead)} · ${price}`
+      : (ctl && ctl.extra) ? `⚡ ${n(ctlMon)} acts again · ${price}`
+      : `🤝 ${n(ctlMon)}'s turn · ${price}`;
+  }
+  else if(canAct) t = `${n(lead)}'s turn`;
+  else t = comp ? (standingIn() ? `🤝 ${n(comp)} stands in for ${n(lead)}` : `🤝 ${n(lead)} & ${n(comp)}`) : '';
+  return t ? `<div class="pair-line">${t}</div>` : '';
+}
+/* A companion's button: its turn's 8 words (or "free" once they are paid)
+   instead of the move's own, and a tail its move still asks for. */
+function companionMeta(mv, comp){
+  const ctl = ui.battle && ui.battle.control;
+  const tail = companionTail(mv);
+  const cost = ((ctl && ctl.paid) ? 'free' : `${COMPANION.turnWords}字`) + (tail ? ` +${tail}` : '');
+  if(mv.windupReady) return `Ready · ${cost}`;
+  const base = moveMeta(mv, comp);
+  return /^\d+字/.test(base) ? base.replace(/^\d+字/, cost) : `${cost} · ${base}`;
+}
+let _companionCssDone = false;
+function companionCss(){
+  if(_companionCssDone || typeof document === 'undefined') return;
+  _companionCssDone = true;
+  const st = document.createElement('style');
+  st.id = 'companionCss';
+  st.textContent = `
+  .player-card.pair{ gap:6px; }
+  .player-card.pair .companion-avatar{ margin-left:-18px; align-self:flex-end; }
+  .player-avatar.down .mon-sprite, .player-avatar.down img{ filter:grayscale(1) brightness(.8); opacity:.55; }
+  .comp-plate{ margin-top:6px; padding-top:5px; border-top:1.5px dashed rgba(35,32,25,0.25); }
+  .comp-title{ font-size:14px; }
+  .comp-title span{ font-size:14px; }
+  .comp-turns{ font-size:12px; font-weight:800; color:var(--ink); margin-left:4px; white-space:nowrap; }
+  .summon-btn{ display:flex; align-items:center; gap:8px; margin-top:7px; width:100%; text-align:left;
+    background:var(--paper-2); border:2px solid var(--jade); border-radius:12px; padding:4px 8px 4px 4px;
+    cursor:pointer; box-shadow:0 2px 0 var(--jade-dark); font:inherit; color:var(--ink); }
+  .summon-btn b{ display:block; font-family:'Baloo 2',cursive; font-size:13px; line-height:1.1; }
+  .summon-btn small{ display:block; font-size:10px; font-weight:700; color:var(--ink-soft); }
+  .summon-btn:disabled{ opacity:.55; cursor:default; box-shadow:none; border-color:var(--line); }
+  .summon-btn .mon-portrait, .summon-btn .mon-sprite{ flex-shrink:0; }
+  .pair-line{ text-align:center; font-size:12px; font-weight:800; color:var(--jade-dark); margin:-4px 0 8px; }
+  .mon-title .foe-comp-tag{ color:#8a5a1a; font-weight:800; }
+  `;
+  document.head.appendChild(st);
+}
+
 function enemySpriteSize(count){
   const n = Math.max(1, count||1);
   const per = (battleWidth() - (n-1)*10) / n;      // share of the row per enemy
@@ -3862,9 +4916,10 @@ function estimateHit(mv, mon){
   let per = mv.mult;
   // `split` divides the total across strikes; otherwise each strike lands full
   if(mv.split && mv.hits > 1) per = mv.mult / mv.hits;
-  let dmg = per * atk * ownBuffMultiplier();
+  /* Steel Soul's bonus rides the same buffs as the strike (2.81) */
   const soul = getPStatus(0,'steelSoul');
-  if(soul && soul.owner === mon.uid) dmg += soul.bonus * atk;
+  const bonus = (soul && soul.owner === mon.uid) ? (soul.bonus || 0) : 0;
+  const dmg = (per + bonus) * atk * ownBuffMultiplier() * steelSoulAmp({ uid:mon.uid }, true);
   return Math.ceil(dmg);
 }
 function moveShape(mv){
@@ -3919,6 +4974,10 @@ function moveEffectText(mv, mon, atk){
     `<b>Mors mark</b> on this bird — at <b>3 marks</b> it folds its wings and falls, and nothing can bring it back. ` +
     `If nobody has fainted, the light turns outward instead and takes ${ofHp(mv.conversio.direct || 0.33)} ` +
     `from an enemy, straight through any guard. That does not mark it.`);
+  if(mv.lunacy) out.push(
+    `<b>Lunacy.</b> If it lands, a <b>${Math.round((mv.lunacy.chance || 0.25) * 100)}%</b> chance that every enemy ` +
+    `is muddled for its next swing: the blow lands on its own side (on itself, if it stands alone) at ` +
+    `<b>${Math.round((mv.lunacy.ffPower || 1) * 100)}%</b> of its power. Diamond Dust keeps it out.`);
   /* The Whalelord's kit: mechanics first and plainly, with his real numbers.
      At most one sentence of flavour, and only before the mechanics. */
   if(mv.vengeance){
@@ -3974,15 +5033,36 @@ function moveEffectText(mv, mon, atk){
     `<b>${Math.round((mv.revitalise.pct||0.1)*100)}%</b> of its health. You choose who, then write the words. ` +
     `If nobody has fainted, it costs nothing to try.`);
   if(mv.soul) out.push(
-    `<b>Steel Soul.</b> For ${mv.soul.turns} turns this monster takes <b>half damage</b> and adds ` +
-    `<b>+${Math.ceil(mv.soul.bonus*atk)}</b> to every hit it lands — including skill-stone moves. ` +
-    `Only this monster benefits; swapping out leaves the buff behind.`);
+    `<b>Steel Soul.</b> For ${mv.soul.turns} turns this monster takes <b>${Math.round(mv.soul.reduce*100)}% less damage</b> ` +
+    `and deals <b>${Math.round(mv.soul.reduce*100)}% more</b> (×${1 + mv.soul.reduce}, multiplying with Overheat, Dragon Dance ` +
+    `and the rest). <b>Every other shield</b> your side has up when it strikes turns into damage the same way, each ` +
+    `multiplying the rest: Spike Armour <b>×1.2–1.3</b>, Steel Aegis <b>×1.3–1.4</b>, a Curse ward <b>×1.1–1.15</b>, ` +
+    `a Lava Shell <b>×1.6</b> — Steel Soul with a Steel Aegis hits <b>×${+((1 + mv.soul.reduce) * 1.3).toFixed(2)}</b>. ` +
+    `It also adds <b>+${Math.ceil(mv.soul.bonus*atk)}</b> (${mv.soul.bonus}× ATK) to every hit it lands — each strike of ` +
+    `a multi-strike move, skill-stone and Ultra moves too, and an Aftershock laid while it is up. ` +
+    `Overheat, Dragon Dance and a Curse on the target multiply the bonus as they do the hit. ` +
+    `<b>It draws every single blow</b> aimed at your side: a single-target attack, each strike of a barrage or an Ultra, ` +
+    `the main blow of a splash, a quick strike, an afterimage — all go to it instead of its partner, whether it leads or ` +
+    `fights as a companion. Area moves and twin blows still reach both; a riposte still answers whoever struck. ` +
+    `Your Diamond Dust keeps it at ${mv.soul.turns} turns for as long as the dust lasts. ` +
+    `Only this monster benefits; swapping out leaves the buff behind. In an enemy's hands it is the same: ` +
+    `their shields — and a Steel it walked in with — make it hit harder, and your single blows must go through it.`);
+  if(mv.purge) out.push(
+    `<b>Purge.</b> When it reaches them it is a small Diamond Dust: it sweeps away ` +
+    `<b>${mv.purge.enemyBuffs || 0} of their buff${(mv.purge.enemyBuffs || 0) === 1 ? '' : 's'}</b> (an Overheat, a Diamond Dust, ` +
+    `a block, a stance, an Aftershock — one at random) and burns <b>${mv.purge.playerDebuffs || 0} of their ` +
+    `mark${(mv.purge.playerDebuffs || 0) === 1 ? '' : 's'}</b> off your side (a stun, a Curse, a Charm, their seeds — one at random). ` +
+    `What a creature simply is stays, and no dust stops it. In an enemy's hands it does the same to yours.`);
   if(mv.tachy) out.push(
     `<b>Tachypsychia.</b> For ${mv.tachy.turns} turns, each time this monster acts there is a ` +
-    `<b>${Math.round(mv.tachy.bonusAction*100)}% chance to act again</b> — and that can chain. ` +
+    `<b>${Math.round(mv.tachy.bonusAction*100)}% chance to act again</b> — and that can chain, up to ` +
+    `<b>${TACHY_MAX_EXTRAS} extra actions a round</b>. ` +
     `It also dodges <b>${Math.round(mv.tachy.evadeFirst*100)}%</b> of attacks on the first turn it is attacked ` +
     `(a turn nobody attacks does not use it up), then <b>${Math.round(mv.tachy.evadeAfter*100)}%</b> after. ` +
-    `While it runs, <b>this monster's attacks can't be dodged</b>.`);
+    `While it runs, <b>this monster's attacks can't be dodged</b>. If an extra action comes up with nobody ` +
+    `left standing, it is <b>saved for this monster's next turn</b> — saved ones pile up until Tachypsychia or the ` +
+    `battle ends. Your Diamond Dust keeps it at ${mv.tachy.turns} turns for as long as the dust lasts. ` +
+    `All of it is this monster's alone: whoever takes its place gets none of it.`);
   if(mv.mindRead) out.push(`<b>Mind-read:</b> this attack ignores evasion — it cannot be dodged.`);
   if(mv.charm) out.push(
     `<b>Charm.</b> For ${mv.charm.turns} turns each enemy has a <b>${Math.round(mv.charm.chance*100)}% chance</b> ` +
@@ -4032,14 +5112,27 @@ function moveEffectText(mv, mon, atk){
     `Has a <b>${Math.round(mv.repeat*100)}% chance to fire again</b> — and each repeat can spark another, with no limit.`);
   if(mv.first) out.push(
     `In an enemy's hands this always strikes first. In yours it deals <b>+${Math.ceil((mv.playerBonus||0)*atk)}</b> extra damage instead.`);
-  if(mv.scale) out.push(
-    `Keep writing past the required words to raise the damage, up to <b>${Math.ceil(mv.scale.max*atk*ownBuffMultiplier())}</b>.`);
+  if(mv.scale) out.push(mv.scale.words
+    ? `Keep writing past the required words: each adds <b>+${mv.scale.per}×</b> ATK, and the ${mv.scale.words}th word ` +
+      `lifts it to <b>${mv.scale.max}×</b> — up to <b>${Math.ceil(mv.scale.max*atk*ownBuffMultiplier())}</b>.`
+    : `Keep writing past the required words: each adds <b>+${mv.scale.per}×</b> ATK, ` +
+      `up to <b>${mv.scale.max}×</b> (<b>${Math.ceil(mv.scale.max*atk*ownBuffMultiplier())}</b>).`);
+  if(mv.bonus && mv.bonus.sacredFlame) out.push(
+    `Afterwards you may write <b>${mv.bonus.words} bonus words</b> from your whole list. Succeed and a <b>Sacred Flame</b> ` +
+    `is laid on the field: it burns <b>all enemies at the start of each of your next ${SACRED_FLAME.turns} turns</b> for ` +
+    `<b>${Math.ceil(SACRED_FLAME.pct*atk)}</b> damage (${SACRED_FLAME.pct}× ATK). Flames stack without limit, and an ` +
+    `Overcharge repeat lays another on top.`);
+  /* the Max ability carries the Rebirth passive */
+  if(mon && hasRebirth(mon) && isMaxAbility(mon, mv)) out.push(
+    `<b>Rebirth</b> (passive): if the Phoenix faints while a Sacred Flame burns, write <b>${REBIRTH.words} words</b> ` +
+    `to rise again with <b>${Math.round(REBIRTH.hp*100)}% HP</b> (${Math.ceil(REBIRTH.hp*monMaxHp(mon))}). Once per battle.`);
   if(mv.bonus && mv.bonus.aftershock){
-    const pct = (mv.slot === 'Max' ? 0.3 : 0.2);
+    const pct = aftershockPct(false), soulPct = aftershockPct(true);
     out.push(`Afterwards you may write <b>${mv.bonus.words} bonus words</b> from your whole list. Succeed and an ` +
-      `<b>Aftershock</b> begins: it strikes <b>all enemies at the start of each of your next 3 turns</b> for ` +
-      `<b>${Math.ceil(pct*atk)}</b> damage (more if Steel Soul was active when it formed).`);
-  } else if(mv.bonus){
+      `<b>Aftershock</b> begins: it strikes <b>all enemies at the start of each of your next ${AFTERSHOCK.turns} turns</b> for ` +
+      `<b>${Math.ceil(pct*atk)}</b> damage (${pct}× ATK) — <b>${Math.ceil(soulPct*atk)}</b> ` +
+      `(${soulPct}×) if Steel Soul is up when it forms, which it keeps after Steel Soul ends. Aftershocks stack.`);
+  } else if(mv.bonus && mv.bonus.mult){
     out.push(`Afterwards you may write <b>${mv.bonus.words} bonus words</b> from your whole list to <b>double</b> the damage.`);
   }
   if(mv.dot) out.push(
@@ -4053,11 +5146,13 @@ function moveEffectText(mv, mon, atk){
     `<b>${Math.round(mv.clones.evade*100)}%</b> of attacks.`);
   if(mv.charge){
     const d = mv.charge;
+    const ns = Array.from({ length:chargeCaps(d).lucky }, (_, i)=> i + 1);
+    const row = kind=> ns.map(n=> `<b>${chargeMult(d, kind, n)}×</b>`).join(' / ');
     out.push(
       `Costs the turn: gathers <b>1 charge</b> (up to <b>${d.max}</b>). While charged, <b>Charge</b> adds another, ` +
-      `and <b>Unleash</b> (every enemy) or <b>Hyperbeam</b> (one enemy) cost no words: Unleash <b>${d.unleash}×</b> ` +
-      `and Hyperbeam <b>${d.hyper}×</b> at 1 charge, +0.25× and +0.5× for each charge after. The charge lasts one ` +
-      `turn longer than its number of charges.`);
+      `and <b>Unleash</b> (every enemy) or <b>Hyperbeam</b> (one enemy) cost no words. At ${ns.join(' / ')} ` +
+      `charges: Unleash ${row('unleash')}, Hyperbeam ${row('hyper')} (${d.max + 1} only with an Overcharge double). ` +
+      `The charge lasts one turn longer than its number of charges.`);
     out.push(
       `With <b>Overcharge</b> up, each charge has Overcharge's own chance to count <b>double</b> (certain on ✦'s ` +
       `first turn). Charging from <b>${d.max - 1}</b>, a double reaches <b>${d.max + 1}</b>, the only way past ${d.max}. ` +
@@ -4175,7 +5270,7 @@ function unstickBattle(){
      unsticking in one of those handed the child the buttons mid-sequence. */
   if(Date.now() - (ui._battleActivity || 0) < 6000) return;
   if(b._cloneEchoing || b.attackQueue) return;       // a sequence is genuinely running
-  const mon = activeMon();
+  const mon = frontMon();                            // (a companion standing in counts)
   if(!mon || mon.currentHp <= 0) return;             // waiting on a replacement
   if(livingEnemies().length === 0) return;           // wave is resolving
   b.phase = 'player';
@@ -4200,13 +5295,19 @@ function renderBattle(){
   setScreenBg(zoneBg || 'battle');
   const b = ui.battle;
   $('#brandSub').textContent = 'Battle';
-  const mon = activeMon();
-  const moves = unlockedMoves(mon);
+  const mon = leaderMon();                       // the monster out front, whatever is in focus
+  /* The buttons: the leader's moves, or — when one of yours acts alone — its
+     own (a companion standing in, or taking an extra action it earned). */
+  const ctlMon = controlMon() || mon;
+  const moves = unlockedMoves(ctlMon);
+  const comp = companionOnField();
+  const compTurn = !!(comp && ctlMon === comp);        // the companion's own choice: its price
   // Turn-lock: buttons are only truly interactive once it's genuinely the
   // player's turn again — not just while their own move's animation plays,
   // and not during the enemy's turn. Fixes a bug where a second move could be
   // clicked mid-animation and its quiz silently got wiped on the next redraw.
   const canAct = (b.phase || 'player') === 'player';
+  companionCss();
   screenEl.innerHTML = `
     <div class="battle-stage" id="battleStage">
       <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
@@ -4219,7 +5320,7 @@ function renderBattle(){
             <div class="enemy-status" id="enemyStatus-${i}"></div>
             <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,enemySpriteSize(b.enemies.length),{view:'front',bare:true,crowned:!!e.crowned,stage:e.stage||0,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
             <div class="info-layer name-plate">
-              <div class="mon-title">${SPECIES[e.species].name} <span>Lv ${e.level}</span></div>
+              <div class="mon-title">${SPECIES[e.species].name} <span>Lv ${e.level}</span>${foeCompanionTag(e)}</div>
               ${blockBar('enemyBlk-'+i, e)}
               ${hpBar2('enemyHp-'+i, e.hp, e.maxHp, false)}
             </div>
@@ -4228,8 +5329,9 @@ function renderBattle(){
 
       <div class="battlefield" aria-hidden="true"></div>
 
-      <div class="player-card">
-        <div class="bob player-avatar" id="playerBob">${monPortrait(mon.species,playerSpriteSize(),{view:'back',bare:true,crowned:isCrowned(mon),stage:monStage(mon),breathe: mon.currentHp>0 ? ((mon.currentHp/monMaxHp(mon))<0.3 ? 'weak':'normal') : null})}</div>
+      <div class="player-card${comp ? ' pair' : ''}">
+        <div class="bob player-avatar${mon.currentHp <= 0 ? ' down' : ''}" id="playerBob">${monPortrait(mon.species, comp ? pairSpriteSize(true) : playerSpriteSize(),{view:'back',bare:true,crowned:isCrowned(mon),stage:monStage(mon),breathe: mon.currentHp>0 ? ((mon.currentHp/monMaxHp(mon))<0.3 ? 'weak':'normal') : null})}</div>
+        ${comp ? `<div class="bob player-avatar companion-avatar" id="companionBob">${monPortrait(comp.species, pairSpriteSize(false),{view:'back',bare:true,crowned:isCrowned(comp),stage:monStage(comp),breathe: comp.currentHp>0 ? ((comp.currentHp/monMaxHp(comp))<0.3 ? 'weak':'normal') : null})}</div>` : ''}
         <div class="info-layer name-plate player-plate">
           <div class="mon-title big">${escapeHtml(displayName(mon))}${crownMark(mon)} <span>Lv ${mon.level}</span></div>
           ${blockBar('playerBlk', mon)}
@@ -4239,11 +5341,13 @@ function renderBattle(){
             <span style="width:${Math.min(100,(b.rechargeWords||0)/RECHARGE_TARGET*100)}%"></span>
             <b>${b.rechargeWords||0}/${RECHARGE_TARGET}</b>
           </div>
+          ${comp ? companionPlateHtml(comp) : summonButtonHtml(canAct)}
         </div>
       </div>
     </div>
     <div id="statusRow" class="status-row"></div>
     <div id="battleMsg" style="text-align:center;font-weight:700;font-size:14px;min-height:20px;margin-bottom:10px;color:var(--ink-soft);">${canAct ? 'Choose a move.' : ''}</div>
+    ${pairLineHtml(mon, comp, ctlMon, canAct)}
     <div style="display:flex;gap:12px;">
       <div style="flex:2;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         ${moves.map((mv,i)=>{
@@ -4254,12 +5358,12 @@ function renderBattle(){
           <button class="move-btn ${ok?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${ok?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
             <div class="mv-name">${mv.available || mv.chargeMore ? escapeHtml(mv.name) : '???'}</div>
-            <div class="mv-meta">${mv.available ? moveMeta(mv, mon) : (mv.chargeMore ? 'Full' : 'Locked')}</div>
+            <div class="mv-meta">${mv.available ? (compTurn ? companionMeta(mv, ctlMon) : moveMeta(mv, ctlMon)) : (mv.chargeMore ? 'Full' : 'Locked')}</div>
           </button>`; }).join('')}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
         <button class="side-btn" id="switchBtn" ${(b.switchedThisTurn || !canAct)?'disabled':''}>🔄 Switch</button>
-        <button class="side-btn" id="fleeBtn" ${(b.noFlee || !canAct)?'disabled':''}>${b.arena?'🚪 Exit':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
+        <button class="side-btn" id="fleeBtn" ${(b.noFlee || !canAct)?'disabled':''}>${b.arena?'🚪 Exit':b.coreSpar?'🏳️ Give up':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
         <button class="side-btn" id="skipBtn" ${canAct?'':'disabled'}>⏭️ Skip turn</button>
         ${b.arena?'<button class="side-btn" id="arenaMoveBtn" style="background:var(--gold);color:#fff;" '+(canAct?'':'disabled')+'>🧪 Test move</button>':''}
       </div>
@@ -4277,13 +5381,17 @@ function renderBattle(){
   `;
   screenEl.querySelectorAll('.move-btn:not(.locked)').forEach(btn=> btn.addEventListener('click', ()=>onMoveChosen(+btn.dataset.move)));
   $('#switchBtn').addEventListener('click', onSwitchPressed);
+  const smb = $('#summonBtn');
+  if(smb) smb.addEventListener('click', onSummonPressed);
   const sk = $('#skipBtn');
   if(sk) sk.addEventListener('click', ()=>{
     /* Pass the turn without acting — exactly what a misspelled move does, so
        nobody has to misspell on purpose. No bonus action, no repeat; a Dragon
-       Legacy waiting for its turn keeps waiting. */
+       Legacy waiting for its turn keeps waiting. With a companion out, each
+       passes only its own turn (2.85). */
     if((ui.battle.phase || 'player') !== 'player') return;
     ui.battle.phase = 'resolving';
+    noteSkip();
     renderBattle();
     battleMsg('⏭️ Turn skipped.');
     setTimeout(advanceTurn, 500);
@@ -4314,29 +5422,33 @@ function renderStatusBadges(){
   const row = $('#statusRow');
   if(row){
     const out = [];
-    const mon = activeMon();
-    Object.values(partyStatuses()).forEach(st=>{
+    const mon = leaderMon();
+    Object.values(partyStatuses()).concat(monStatuses(mon)).forEach(st=>{
       // turnsLeft is stored with a +1 grace so the cast turn counts; show the
       // number of turns the player will actually still have it for.
       const shown = Math.max(0, st.turnsLeft - 1);
       /* What the enemy has put on you is theirs, and reads in their colour. */
       const cls = isEnemyOwned(st.type, st) ? 'foe' : 'mine';
       const n = st.unsweepable ? '' : ` ${shown}`;
-      out.push(`<span class="status-pill ${cls}">${STATUS_LABELS[st.type]||st.type}${n}</span>`);
+      const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved` : '';
+      out.push(`<span class="status-pill ${cls}">${STATUS_LABELS[st.type]||st.type}${n}${saved}</span>`);
     });
     const af = aftershockBonusHits();
     if(af) out.push(`<span class="status-pill mine">💥 Aftershock ×${af}</span>`);
+    const sfl = sacredFlameCount();
+    const phx = [mon, companionOnField()].find(m=> m && hasRebirth(m));    // (a companion phoenix rises too)
+    if(sfl) out.push(`<span class="status-pill mine">🔥 Sacred Flame ×${sfl}${(phx && !ui.battle.rebirthUsed) ? ' · Rebirth ready' : ''}</span>`);
     refreshAllBlockBars();
     const wr = getPStatus(0,'wrath');
     if(wr && wr.stacks) out.push(`<span class="status-pill">💢 Wrath ×${wr.stacks}</span>`);
-    const me1 = activeMon();
+    const me1 = mon;
     const cl = counterList(me1);
     if(cl.length){
       const best = Math.max(...cl.map(s=>s.tier));
       const mark = ['','+','✦'][best] || '';
       out.push(`<span class="status-pill">🛡 Counter ×${cl.length}${mark?' '+mark:''}</span>`);
     }
-    const me0 = activeMon();
+    const me0 = mon;
     const pc = (ui.battle && ui.battle.pCombo) || 0;
     const ps = partyCounters().length;
     if(ps) out.push(`<span class="status-pill">🛡 Counter ×${ps}</span>`);
@@ -4345,8 +5457,22 @@ function renderStatusBadges(){
     if(me0) paintEnrage(me0);
     const mir1 = getPStatus(0,'mirage');
     if(mir1 && mir1.pending) out.push(`<span class="status-pill">👥 Afterimages ×${mir1.pending}</span>`);
-    const sp2 = stancePills(activeMon());
+    const sp2 = stancePills(mon);
     if(sp2) out.push(sp2);
+    /* The companion's own: its debuffs, its stances, its Enrage — marked 🤝 so
+       nobody reads them as the leader's. */
+    const cm = companionOnField();
+    if(cm){
+      const own = monStatuses(cm).map(st=>{
+        const cls = isEnemyOwned(st.type, st) ? 'foe' : 'mine';
+        return `<span class="status-pill ${cls}">🤝 ${STATUS_LABELS[st.type]||st.type} ${Math.max(0, st.turnsLeft - 1)}</span>`;
+      });
+      const sp3 = stancePills(cm);
+      if(sp3) own.push(sp3.replace(/<span class="status-pill mine">/g, '<span class="status-pill mine">🤝 '));
+      if(cm.enrageStacks) own.push(`<span class="status-pill">🤝 🔥 Enrage ×${cm.enrageStacks}</span>`);
+      paintEnrage(cm);
+      out.push(...own);
+    }
     row.innerHTML = out.join('');
   }
   /* The enemy side's own side-wide buffs: one row above their cards, since they
@@ -4355,7 +5481,8 @@ function renderStatusBadges(){
   if(fr){
     fr.innerHTML = Object.values(enemySideStatuses()).map(st=>{
       const shown = Math.max(0, st.turnsLeft - 1);
-      return `<span class="status-pill foe">${STATUS_LABELS[st.type]||st.type}${st.unsweepable ? '' : ' ' + shown}</span>`;
+      const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved` : '';
+      return `<span class="status-pill foe">${STATUS_LABELS[st.type]||st.type}${st.unsweepable ? '' : ' ' + shown}${saved}</span>`;
     }).join('');
   }
   // Enemy statuses render on their OWN card, above that enemy's HP bar, so it's
