@@ -25,6 +25,7 @@ let WALK_T = 44;                         // recomputed to fit the stage
    that blocks four tiles is the worst of both worlds. */
 function walkArtMissing(img, icon, px, rot){
   const s = document.createElement('span');
+  s.className = 'walk-emoji';                    // (2.95) it turns, as the picture would have
   s.textContent = icon || '❓';
   s.style.cssText = `font-size:${px}px;line-height:1;` + (rot ? `transform:rotate(${rot}deg);` : '');
   img.replaceWith(s);
@@ -40,6 +41,61 @@ function thingNear(t, p){
   const dy = Math.max(t.y - p.y, 0, p.y - (t.y + (t.h || 1) - 1));
   return dx + dy <= 1;
 }
+
+/* ------------------------------------------------------------
+   WHICH WAY A PICTURE FACES (2.95)
+   Every sprite is drawn facing LEFT — the monsters' _front pictures and the
+   NPCs alike. So whoever is moving right, or is turned to something on their
+   right, is flipped. One class does it everywhere: `face-r` on the box (you,
+   the Whalelord, a person on the deck, a guard, a scene's actor), which is
+   `scale:-1 1` on the picture inside — added to whatever else the picture is
+   doing (a guard's shake, a faint, a bob), never in place of it.
+   Moving up or down keeps the way you last faced.
+   ------------------------------------------------------------ */
+function faceRight(el, right){ if(el) el.classList.toggle('face-r', !!right); return el; }
+/* Turned toward tx (tiles) from cx — unless it is straight above or below,
+   when it keeps the way it faces. */
+function faceToward(el, cx, tx){
+  if(el && cx != null && tx != null && Math.abs(tx - cx) > 0.05) faceRight(el, tx > cx);
+  return el;
+}
+/* A scene's actor (sceneActor's, or a monster on the deck): by id or box. */
+function actorFace(a, right){
+  const el = typeof a === 'string' ? document.getElementById('sa-' + a) : a;
+  if(!el) return null;
+  if(el._o) el._o.flip = !!right;
+  return faceRight(el, right);
+}
+function actorFaceToward(a, tx){
+  const el = typeof a === 'string' ? document.getElementById('sa-' + a) : a;
+  const o = el && el._o;
+  if(!o || tx == null) return el;
+  const cx = o.x + (o.w || 1) / 2;
+  if(Math.abs(tx - cx) > 0.05) actorFace(el, tx > cx);
+  return el;
+}
+/* You turn to face something at tile column tx (its middle). */
+function walkFaceToward(tx){
+  const w = walkState(), p = w.at && w.at[w.deck];
+  if(!p || tx == null || Math.abs(tx - (p.x + 0.5)) <= 0.05) return;
+  w.faceX = tx > p.x + 0.5 ? 'r' : 'l';
+  faceRight(document.getElementById('walkYou'), w.faceX === 'r');
+}
+/* …and the Whalelord, likewise. */
+function walkGhostFaceToward(tx){
+  const w = walkState(), q = w.ghostAt && w.ghostAt[w.deck];
+  if(!q || tx == null || Math.abs(tx - (q.x + 0.5)) <= 0.05) return;
+  w.ghostFaceX = tx > q.x + 0.5 ? 'r' : 'l';
+  faceRight(document.getElementById('walkGhost'), w.ghostFaceX === 'r');
+}
+/* The middle of a deck thing, across. */
+function thingMidX(t){
+  const ox = (typeof t.dx === 'function' ? t.dx() : t.dx) || 0;
+  return t.x + ox + (t.w || 1) / 2;
+}
+/* A person on the deck (not a door, a sign or a body on the floor): turns to
+   look at you while you are beside them. */
+function thingTurns(t){ return !!(t.sprite && !t.walk && !t.rot && !t.still); }
 
 /* Each deck: its grid, who stands where, and where its painting sits — all in
    TILE units, so the numbers mean the same at any zoom. */
@@ -257,7 +313,8 @@ function TRI(dir){
    Three specimens drifting in the aquarium at the stern of the laboratory.
    Each wanders its own little box at its own pace: the starfish barely moves,
    the seahorse ambles, the loong is comparatively busy. Facing follows the
-   direction of travel — front sprite going left, back sprite going right.
+   direction of travel — (2.95) its front picture, which faces left, going
+   left, and the same picture flipped (face-r) going right.
 
    It runs on one 50ms tick rather than a 60fps loop: the motion is slow
    enough that nothing is gained by drawing it sixty times a second, and the
@@ -294,7 +351,7 @@ function buildAquarium(world, d){
     const k = SWIM[f.sp] || SWIM.seahorse;
     return { el, k, sp:f.sp, dx:1, dy:1, x:rnd(-SWIM_X,SWIM_X), y:rnd(-SWIM_Y,SWIM_Y),
              vx:rnd(k.sx[0],k.sx[1]), vy:rnd(k.sy[0],k.sy[1]),
-             next:performance.now()+rnd(k.flip[0],k.flip[1]), face:'front' };
+             next:performance.now()+rnd(k.flip[0],k.flip[1]), face:'left' };
   });
   clearInterval(_tankTimer);
   _tankTimer = setInterval(swimTick, 50);
@@ -308,10 +365,10 @@ function swimTick(){
     if(f.x >  SWIM_X){ f.x =  SWIM_X; f.dx = -1; f.vx = rnd(f.k.sx[0], f.k.sx[1]); }
     if(f.x < -SWIM_X){ f.x = -SWIM_X; f.dx =  1; f.vx = rnd(f.k.sx[0], f.k.sx[1]); }
     /* it turns round to face the way it is going */
-    const want = f.dx < 0 ? 'front' : 'back';
+    const want = f.dx < 0 ? 'left' : 'right';
     if(want !== f.face){
       f.face = want;
-      f.el.innerHTML = fishArt(f.sp, want);
+      faceRight(f.el, want === 'right');
     }
     f.y += f.dy * f.vy * 0.05;
     if(Math.abs(f.y) > SWIM_Y){ f.y = Math.sign(f.y)*SWIM_Y; f.dy *= -1; }
@@ -485,6 +542,10 @@ function walkCss(){
     .wact.party.side{flex-direction:column;gap:1px;font-size:11px;line-height:1.1;padding:3px 6px;}
     .wact.party.side b{font-size:17px;line-height:1;}
     .wact.party.side.on{background:#2f3346;color:#f1e9d6;border-color:#1d2130;}
+    /* (2.95) every picture is drawn facing left: face-r turns it round, on
+       top of whatever else it is doing */
+    .walk-ent.face-r > img, .walk-ent.face-r > .walk-emoji, .walk-ent.face-r > .crowned-wrap,
+    .scene-actor.face-r .sa-in > *, .walk-fish.face-r > *{scale:-1 1;}
   `;
   document.head.appendChild(st);
 }
@@ -790,11 +851,13 @@ function refreshWalk(){
     `${walkCam(p.y*WALK_T + WALK_T/2, rows*WALK_T, SH)}px, 0)`;
   me.style.transform = `translate3d(${p.x*WALK_T}px,${p.y*WALK_T}px,0)`;
   me.style.zIndex = 10 + p.y;
+  faceRight(me, w.faceX === 'r');                  // (2.95) the way you last walked, or turned
   const gh = $('#walkGhost');
   if(gh && w.ghostAt && w.ghostAt[w.deck]){
     const q = w.ghostAt[w.deck];
     gh.style.transform = `translate3d(${q.x*WALK_T}px,${q.y*WALK_T}px,0)`;
     gh.style.zIndex = 10 + q.y;
+    faceRight(gh, w.ghostFaceX === 'r');
   }
 
   /* a mark on each tile you could step onto — the only question you have */
@@ -830,7 +893,13 @@ function refreshWalk(){
 
   /* one button per thing you are beside, or standing on */
   const near = deckThings(d).filter(t=> thingNear(t, p));
-  d.things.forEach(t=> t.el && t.el.classList.toggle('near', near.includes(t)));
+  /* (2.95) and a person beside you turns to look at you: flipped if you are
+     on their right, back to facing left when you walk on */
+  d.things.forEach(t=>{
+    if(!t.el) return;
+    t.el.classList.toggle('near', near.includes(t));
+    if(thingTurns(t)) faceRight(t.el, near.includes(t) && p.x + 0.5 > thingMidX(t) + 0.05);
+  });
   /* …and whatever else the deck says is beside you (2.91: in Cosa Nostia, in
      disguise, the Family's men walking past): d.nearActs(d, p) → [{ key,
      html, act }]. */
@@ -854,6 +923,7 @@ function refreshWalk(){
     /* a deck elsewhere (Cosa Nostia) gives him its own things to say */
     b.addEventListener('click', ()=>{
       if(walkState().busy) return;
+      walkFaceEachOther();                         // (2.95) you turn to each other to talk
       const here = walkState().deck, dk = DECKS[here];
       if(dk && dk.ghostChat) dk.ghostChat(here); else ghostChat(here);
     });
@@ -863,7 +933,8 @@ function refreshWalk(){
     const b = document.createElement('button');
     b.className = 'wact live' + (a.cls ? ' ' + a.cls : '');
     b.innerHTML = a.html;
-    b.addEventListener('click', ()=>{ if(!walkState().busy) a.act(); });
+    /* (2.95) `at` (tiles), if it says: you turn to whoever it is */
+    b.addEventListener('click', ()=>{ if(walkState().busy) return; if(a.at) walkFaceToward(a.at.x + 0.5); a.act(); });
     acts.appendChild(b);
   });
   if(!near.length && !extra.length && !cuainAboard()){
@@ -872,7 +943,13 @@ function refreshWalk(){
     const b=document.createElement('button');
     b.className='wact live';
     b.innerHTML = escapeHtml(t.verb) + (t.where ? `<small>${escapeHtml(t.where)}</small>` : '');
-    b.addEventListener('click', ()=>{ if(!walkState().busy) t.act(); });
+    /* (2.95) you turn to it first — unless you are standing on it */
+    b.addEventListener('click', ()=>{
+      const ws = walkState(); if(ws.busy) return;
+      const pp = ws.at && ws.at[ws.deck];
+      if(pp && !thingCovers(t, pp.x, pp.y)) walkFaceToward(thingMidX(t));
+      t.act();
+    });
     acts.appendChild(b);
     /* Some people are worth a second look. Talking stays what it was; the
        investigation is a separate, deliberate choice. */
@@ -887,6 +964,13 @@ function refreshWalk(){
   });
 }
 
+/* You and the Whalelord turn to each other (2.95): to talk. */
+function walkFaceEachOther(){
+  const w = walkState(), p = w.at && w.at[w.deck], q = w.ghostAt && w.ghostAt[w.deck];
+  if(!p || !q) return;
+  walkFaceToward(q.x + 0.5);
+  walkGhostFaceToward(p.x + 0.5);
+}
 const WALK_MIN = 150, WALK_HOLD = 110, WALK_REP = 230;
 function walkMove(dir){
   const w = walkState(); if(w.busy) return;
@@ -895,15 +979,19 @@ function walkMove(dir){
   const now = performance.now();
   const turning = dir !== w.face;
   w.face = dir;
+  if(dir === 'l' || dir === 'r') w.faceX = dir;     // (2.95) up and down keep the way you faced
   if(!turning && now - w.last < WALK_MIN) return;
   w.last = now;
   const v = { l:[-1,0], r:[1,0], u:[0,-1], d:[0,1] }[dir];
   const nx = p.x+v[0], ny = p.y+v[1];
   const blocked = wBlockedBy(d, nx, ny) || wOccupied(d, nx, ny);
   if(!wSolid(d,nx,ny) && !blocked){
-    /* he takes the tile you are leaving — always one behind, never on top */
+    /* he takes the tile you are leaving — always one behind, never on top —
+       and (2.95) faces the way he goes */
     if(cuainAboard()){
       w.ghostAt = w.ghostAt || {};
+      const q0 = w.ghostAt[w.deck];
+      if(q0 && q0.x !== p.x) w.ghostFaceX = p.x > q0.x ? 'r' : 'l';
       w.ghostAt[w.deck] = { x:p.x, y:p.y };
     }
     p.x=nx; p.y=ny;
@@ -1142,6 +1230,7 @@ function sceneActor(id, o){
   el.style.height = (h * T) + 'px';
   el.style.zIndex = (a.z != null) ? a.z : (10 + Math.floor(a.y));
   el.classList.toggle('bob', !!a.bob);
+  faceRight(el, a.flip);                         // (2.95) the one face-r class, as everywhere
   const inner = el.firstChild;
   if(o && (o.src || o.icon) || !inner.firstChild){
     inner.innerHTML = `<img src="${a.src}" alt="" ` +
@@ -1151,7 +1240,6 @@ function sceneActor(id, o){
   if(art && art.style){
     const t = [];
     if(a.faint) t.push(`translateY(20%) rotate(${a.faint > 0 ? 90 : -90}deg)`);
-    if(a.flip)  t.push('scaleX(-1)');
     art.style.transform = t.join(' ');
   }
   return el;
@@ -1379,11 +1467,13 @@ function sceneBall(cx, cy, maxTiles, ms){
   });
 }
 
-/* Move an actor along a jump: straight across, up and over by `lift` tiles. */
+/* Move an actor along a jump: straight across, up and over by `lift` tiles —
+   (2.95) facing the way it jumps. */
 function sceneHop(id, x1, y1, lift, ms){
   const el = document.getElementById('sa-' + id);
   if(!el) return Promise.resolve();
   const a = el._o, x0 = a.x, y0 = a.y, dur = Math.max(1, ms * SCENE_SPEED), t0 = performance.now();
+  if(Math.abs(x1 - x0) > 0.05) actorFace(el, x1 > x0);
   return new Promise(done=>{
     const frame = now=>{
       const t = Math.min(1, (now - t0) / dur);
@@ -1397,11 +1487,13 @@ function sceneHop(id, x1, y1, lift, ms){
     requestAnimationFrame(frame);
   });
 }
-/* Slide several actors by the same amount, together. */
+/* Slide several actors by the same amount, together — (2.95) facing the way
+   they go. */
 function sceneGlide(ids, dx, dy, ms){
   const els = ids.map(id=> document.getElementById('sa-' + id)).filter(Boolean);
   const dur = ms * SCENE_SPEED;
   els.forEach(el=>{
+    if(Math.abs(dx) > 0.05) actorFace(el, dx > 0);
     el.style.transition = `left ${dur}ms ease-in, top ${dur}ms ease-in`;
     void el.offsetWidth;
     el._o.x += dx; el._o.y += dy;

@@ -49,7 +49,8 @@
        The Garrison    evade floor · the Family's soldiers, rows of them
        The Quarry      fight floor · the terraces the Old Town was cut from
        The Wine Cellars fight floor · barrel vaults, a drain, the bottling room
-       The Fight Pit   fight floor · the Grey Capo in the ring; above him the
+       The Fight Pit   fight floor · the Consigliere in the ring (2.95: once
+                       the Grey Capo); above him the
                        crypt stair, up into the church
    THE GATE (2.90): with the Purple Capo beaten the Whalelord feels something
    in the Armoury, the furthest room off the Long Stair — the ghost of the
@@ -89,7 +90,7 @@ function r5(){
     capoBlack:false, capoPurple:false,
     tier1:false,            // the Purple Capo beaten: part one done
     tier2Open:false,        // the Long Stair's gate is open (the ghost phoenix opens it, 2.90)
-    capoGrey:false,         // the Grey Capo beaten in his pit
+    capoGrey:false,         // the Consigliere beaten in his pit (2.95: the Grey Capo once — the name kept for old saves)
     tier2:false,            // …and with him the second tier
     phoenixMet:false,       // the ghost phoenix met, in the Armoury, and the gate forced (2.90)
     phoenixKin:false,       // …with your phoenix there to know it
@@ -791,10 +792,10 @@ const R5_DECKS = {
   },
 
   /* ---- 4. THE FIGHT PIT: the Family's betting ring, under the church. A
-     ring of sand behind a rail, benches round it, the Grey Capo in the
-     middle. Above him the crypt stair climbs to a door barred from the
-     church's side. More of the fighters here: boxers, kickers, judoka, a
-     Sumo — and, once in a long while, a Jackal. ---- */
+     ring of sand behind a rail, benches round it, the Consigliere in the
+     middle (2.95; he was the Grey Capo). Above him the crypt stair climbs
+     to a door barred from the church's side. More of the fighters here:
+     boxers, kickers, judoka, a Sumo — and, once in a long while, a Jackal. ---- */
   cata_pit: {
     key:'cata_pit', region:5, title:'The Fight Pit', bg:'catacombs', music:'zone_catacombs', tier:2,
     bx:0, by:0, bs:1/32, nat:[26*32, 39*32], art:'catacombs2_pit', entry:'down',
@@ -823,7 +824,7 @@ const R5_DECKS = {
       first:`<b>"Listen. Cheering, and money changing hands."</b><br><br>` +
             `<b>"The Family makes monsters fight down here, for bets. And someone is standing in the middle of the ring. He wants an audience."</b>`,
       guards:[
-        { id:'capo', kind:'capo', x:12, y:19, face:'d', clock:700, roster:'capo_grey', sprite:'capo_grey' },
+        { id:'capo', kind:'capo', x:12, y:19, face:'d', clock:700, roster:'consigliere', sprite:'consigliere' },
         { id:'a', kind:'soldato', path:[[4,10],[4,28]], face:'d', clock:600, pause:3, roster:'pit_a', sprite:'soldato1' },
         { id:'b', kind:'soldato', path:[[21,28],[21,10]], face:'u', clock:620, pause:3, roster:'pit_b', sprite:'soldato2' },
         { id:'c', kind:'soldato', path:[[20,27],[5,27]], face:'l', clock:640, pause:3, roster:'pit_c', sprite:'soldato1' },
@@ -947,10 +948,12 @@ const R5_DECKS = {
       { x:12, y:25, w:2, h:2, verb:'Fountain', act:()=> r5Fountain() },
       { x:5,  y:35, walk:true, verb:'Look', act:()=> r5Belvedere() },
       { x:20, y:32, walk:true, verb:'Funicular', act:()=> r5TownFunicular() },
-      /* the capos, at the café's tables: whichever you have beaten below */
-      { x:10, y:22, sprite:'capo_purple', icon:'🕴️', verb:'Capo', act:()=> r5CapoLook('purple') },
+      /* the capos, at the café's tables: whichever you have beaten below —
+         (2.95) and the Consigliere, once he has walked out of his ring. Each
+         of them is one man, in one place: down there, or up here. */
+      { x:10, y:22, sprite:'capo_purple', icon:'🕴️', verb:'Capo', act:()=> r5CapoLook('purple'), when:()=> !!r5().capoPurple },
       { x:10, y:25, sprite:'capo_black',  icon:'🕴️', verb:'Capo', act:()=> r5CapoLook('black'), when:()=> !!r5().capoBlack },
-      { x:8,  y:25, sprite:'capo_grey',   icon:'🕴️', verb:'Capo', act:()=> r5CapoLook('grey'),  when:()=> !!r5().capoGrey },
+      { x:8,  y:25, sprite:'consigliere', icon:'🕴️', verb:'Consigliere', act:()=> r5CapoLook('consigliere'), when:()=> !!r5().capoGrey },
     ],
     stealth:{ kind:'town', light:true, feel:0,
       guards:[
@@ -1004,7 +1007,9 @@ const R5_DECKS = {
     things:[
       { x:12, y:38, w:2, walk:true, verb:'Down', where:'The Old Town', act:()=> r5HillDown() },
       { x:21, y:7,  walk:true, verb:'In', where:'The Tower', arrow:'up', act:()=> r5TowerIn() },
-      { x:12, y:9,  w:2, walk:true, verb:'Villa', act:()=> r5VillaDoor() },
+      /* (2.95) the Sottocapo, the Padrino's right hand, filling the villa's
+         great doorway: nobody goes in past him */
+      { x:12, y:9,  w:2, sprite:'sottocapo', icon:'🕴️', verb:'Talk', act:()=> r5VillaDoor() },
       { x:18, y:9,  w:2, h:2, verb:'Fountain', act:()=> r5VillaFountain() },
       { x:8,  y:15, walk:true, verb:'Lemon farm', act:()=> r5LemonFarm() },
       { x:19, y:15, walk:true, verb:'Guard house', act:()=> r5GuardHouse() },
@@ -1190,6 +1195,13 @@ const R5_ROOMS = {
   cata_stair:   ['cata_stair_r1',   'cata_stair_r2'],
 };
 const R5_ALL_ROOMS = Object.values(R5_ROOMS).flat();
+/* The hill's own dead (2.95): every kind in the first tier's wild tables, its
+   floors and side rooms. The ghosts that pour up the Garrison the night the
+   dead rise, and haunt the Family's men (14-stealth.js), are these. */
+const R5_HILL_GHOSTS = [...new Set([...R5_FLOORS, ...R5_ALL_ROOMS].flatMap(id=>{
+  const w = R5_DECKS[id] && R5_DECKS[id].stealth && R5_DECKS[id].stealth.wild;
+  return ((w && w.table) || []).map(t=> t.sp);
+}))];
 /* The disguise (2.91), wherever it works — every catacomb floor and side
    room, the church, Ugo's and the Old Town's streets: put on or taken off
    from the button beside Party (13-walkmap.js), it makes you a junior
@@ -1328,7 +1340,8 @@ const R5_ROSTERS = {
   pit_b:     r5Squad(98, ['judo_blue','judo_red'], ['tricerarmor','goblin'], ['best','best']),
   pit_c:     r5Squad(99, ['fighting_ape','strongman','weasel'], ['lizardape','sumo'], ['best','best']),
   pit_l:     r5Squad(99, ['yoga','boxer'], ['tricerarmor','psychic_starter'], ['best','best']),
-  capo_grey: { label:'Grey Capo', ai:['power2','best','best'],
+  /* (2.95) the Consigliere — the pit's master (he was the Grey Capo) */
+  consigliere: { label:'Consigliere', ai:['power2','best','best'],
     /* (2.90) by the time you can fight him, you have run through his pit once */
     get shout(){
       return (typeof r5 === 'function' && (r5().oldTown || r5().rush))
@@ -1337,7 +1350,7 @@ const R5_ROSTERS = {
         : `<b>"Well now. A new face in my pit."</b><br><br>He spreads his arms to the empty benches.<br><br>` +
           `<b>"Nobody walks through here for free, kid. You want to leave? Beat my champions — in front of everybody."</b>`;
     },
-    onBeaten:()=> r5CapoGreyBeaten(),
+    onBeaten:()=> r5ConsigliereBeaten(),
     waves:[
     [{species:'sumo',level:100},{species:'judo_red',level:100},{species:'strongman',level:100}],
     [{species:'physical_starter',level:101},{species:'lizardape',level:101},{species:'squid',level:101}],
@@ -1860,6 +1873,9 @@ function r5FloorRender(world, d){
      own first words kept for later. */
   if(stealthRush(d)){
     r5RushStart(d);
+    /* (2.95) the dead are about to pour up through the gate: until they reach
+       them, the Garrison's men have no ghosts on them yet */
+    if(ui.r5PourDue || ui.r5RushAgain){ r5HauntHold(true); ui.r5PourDue = false; }
     if(ui.r5RushAgain){                           // caught, and sent back to the gate to run again
       ui.r5RushAgain = false;
       later(async ()=>{ await r5GhostsPour(); await say(`<b>"They are holding them again. Run — all the way up, and do not stop!"</b>`); });
@@ -2066,21 +2082,31 @@ function r5Css(){
       background:radial-gradient(circle,rgba(200,140,255,.55) 0%,rgba(120,40,200,.5) 30%,rgba(60,10,110,.32) 52%,rgba(20,0,40,0) 72%);
       animation:r5Flicker .9s ease-in-out infinite;}
     .r5-darkglow.gold{background:radial-gradient(circle,rgba(255,240,180,.85) 0%,rgba(255,190,80,.6) 32%,rgba(240,120,40,.3) 55%,rgba(240,120,40,0) 72%);}
-    /* the ghost phoenix's orb (2.92): black, pulsing slowly like a heartbeat */
+    /* the ghost phoenix's orb (2.92; 2.95: not a ball — a glow, black at its
+       heart and purple round it, like the dark fire that burns behind the
+       ghost phoenix itself), pulsing slowly like a heartbeat. It stays while
+       the ghost phoenix rises out of it, and floats over it. */
     .r5-orb{position:absolute;pointer-events:none;border-radius:50%;
-      background:radial-gradient(circle at 40% 36%,#3b2652 0%,#140a20 30%,#000 64%);
+      background:radial-gradient(circle,rgba(8,0,18,.94) 0%,rgba(30,6,56,.88) 17%,rgba(88,28,160,.6) 36%,
+        rgba(140,70,235,.38) 50%,rgba(80,20,140,.18) 62%,rgba(20,0,40,0) 72%);
       animation:r5OrbPulse 2.4s ease-in-out infinite;}
-    @keyframes r5OrbPulse{
-      0%,100%{transform:scale(.9);box-shadow:0 0 10px 3px rgba(110,50,190,.45),inset 0 0 12px rgba(150,90,255,.22);}
-      50%{transform:scale(1.02);box-shadow:0 0 26px 9px rgba(140,70,235,.7),inset 0 0 20px rgba(170,110,255,.4);}}
+    @keyframes r5OrbPulse{0%,100%{transform:scale(.86);filter:brightness(.85)}
+      45%{transform:scale(1.04);filter:brightness(1.25)}60%{transform:scale(1.01);filter:brightness(1.1)}}
     /* …and the ghost phoenix, risen out of it, floating slowly up and down */
     @keyframes r5GPFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7%)}}
     .scene-actor.r5-gpfloat .sa-in{animation:r5GPFloat 3.2s ease-in-out infinite;}
-    /* turned to face the ghost phoenix (2.92): the pictures face left; to face
-       right — towards it — they are flipped */
-    .walk-you.r5-face-r img{transform:scale(-1.275, 1.275);}
-    .walk-ghost.r5-face-r img, .walk-ghost.r5-face-r .mon-portrait img{transform:scale(-1.365, 1.365);}
-    .scene-actor.r5-face-r .sa-in > *{transform:scaleX(-1);}
+    /* its fire, handed to your phoenix (2.95): a white-gold flash as it goes
+       in, and your phoenix warm with it for a while after */
+    .r5-giftflash{position:absolute;border-radius:50%;pointer-events:none;z-index:59;opacity:0;
+      background:radial-gradient(circle,rgba(255,255,245,1) 0%,rgba(255,236,170,.95) 22%,rgba(255,186,80,.6) 46%,rgba(255,140,40,0) 72%);}
+    .scene-actor.r5-warm .sa-in{filter:drop-shadow(0 0 9px rgba(255,190,80,.95)) brightness(1.18);transition:filter 1.6s ease;}
+    .scene-actor.r5-warm.cool .sa-in{filter:none;}
+    /* the dead, pouring up the Garrison (2.95) */
+    .r5-pour{position:absolute;left:0;top:0;width:0;height:0;z-index:60;pointer-events:none;}
+    .r5-pour .r5-pg{position:absolute;opacity:0;will-change:transform,opacity;
+      filter:drop-shadow(0 0 7px rgba(170,110,255,.95));}
+    .r5-pour .r5-pg img{display:block;width:100% !important;height:100% !important;}
+    .r5-pour .r5-pg.face-r > *{scale:-1 1;}
     /* the run's clock (2.91) */
     .r5-rush{position:absolute;left:8px;top:8px;z-index:8;padding:4px 11px;border-radius:12px;
       background:rgba(52,22,86,.88);color:#f3e9ff;border:1px solid rgba(190,140,255,.7);
@@ -2114,6 +2140,10 @@ function r5MoveActor(id, x, y, ms, fade){
   const el = document.getElementById('sa-' + id);
   if(!el) return sceneWait(ms);
   const T = WALK_T;
+  /* (2.95) facing the way it goes: the pictures face left, so going right
+     it is flipped */
+  if(el._o && Math.abs(x - el._o.x) > 0.05) actorFace(el, x > el._o.x);
+  if(el._o){ el._o.x = x; el._o.y = y; }
   el.style.transition = `left ${ms * SCENE_SPEED}ms ease-in-out, top ${ms * SCENE_SPEED}ms ease-in-out, opacity ${ms * SCENE_SPEED}ms ease`;
   void el.offsetWidth;
   el.style.left = (x * T) + 'px'; el.style.top = (y * T) + 'px';
@@ -2137,19 +2167,22 @@ function r5DarkGlow(id, cx, cy, tiles, gold){
   g.style.opacity = '1';
   return g;
 }
-/* The ghost phoenix's orb (2.92): a ball of darkness over 2×2 tiles, its
-   top-left at (x, y), pulsing. A scene glow, so sceneClear clears it. */
+/* The ghost phoenix's orb (2.92): over the 2×2 tiles whose top-left is
+   (x, y). (2.95) Not a ball: a pulsing black-and-purple glow, R5_ORB_GLOW
+   tiles across, centred on the middle of those tiles — behind the ghost
+   phoenix when it rises out of it. A scene glow, so sceneClear clears it. */
 const R5_ORB = { x:5, y:5 };                     // its tiles in the Armoury: (5,5)–(6,6)
+const R5_ORB_GLOW = 3.4;
 function r5PaintOrb(id, x, y, fadeIn){
   r5Css();
   const world = $('#walkWorld'); if(!world) return null;
-  const T = WALK_T;
+  const T = WALK_T, D = R5_ORB_GLOW;
   let o = document.getElementById('sg-' + id);
   if(!o){ o = document.createElement('div'); o.id = 'sg-' + id; world.appendChild(o); }
   o.className = 'scene-glow r5-orb';
-  o.style.left = (x * T) + 'px'; o.style.top = (y * T) + 'px';
-  o.style.width = o.style.height = (2 * T) + 'px';
-  o.style.zIndex = 12 + Math.floor(y);
+  o.style.left = ((x + 1 - D / 2) * T) + 'px'; o.style.top = ((y + 1 - D / 2) * T) + 'px';
+  o.style.width = o.style.height = (D * T) + 'px';
+  o.style.zIndex = 10 + Math.floor(y);           // under the ghost phoenix (10 + its feet)
   if(fadeIn){
     o.style.transition = 'none'; o.style.opacity = '0';
     void o.offsetWidth;
@@ -2158,9 +2191,10 @@ function r5PaintOrb(id, x, y, fadeIn){
   }
   return o;
 }
-/* Out of the orb: it fades slowly away while the ghost phoenix (2 tiles)
-   fades in, rising from the orb's centre to a little above it; then it
-   floats, slowly up and down. Its box's top-left ends at (x, y - 0.6). */
+/* Out of the orb: the ghost phoenix (2 tiles) fades in, rising from the
+   glow's centre to a little above it; then it floats, slowly up and down,
+   (2.95) the dark glow still pulsing under it — and turned to face you. Its
+   box's top-left ends at (x, y - 0.6). */
 const R5_GP_RISE = 0.6, R5_GP_EMERGE_MS = 2600;
 async function r5OrbEmerge(orbId, actorId, x, y, opacity){
   const T = WALK_T, MS = R5_GP_EMERGE_MS;
@@ -2173,13 +2207,11 @@ async function r5OrbEmerge(orbId, actorId, x, y, opacity){
     a.style.top = ((y - R5_GP_RISE) * T) + 'px';
     a.style.opacity = String(opacity != null ? opacity : 1);
     a._o.y = y - R5_GP_RISE;
+    r5FaceGP(x + 1);                              // everyone to it, and it to you
   }
-  const orb = document.getElementById('sg-' + orbId);
-  if(orb){ orb.style.transition = `opacity ${MS * SCENE_SPEED}ms ease`; orb.style.opacity = '0'; }
-  /* the orb's "!" goes with it */
+  /* the orb's "!" goes as it rises */
   document.querySelectorAll('.walk-mark').forEach(m=>{ if(Math.abs(parseFloat(m.style.left) - (x + 1) * T) < 1) m.remove(); });
   await sceneWait(MS);
-  if(orb) orb.remove();
   if(a) a.classList.add('r5-gpfloat');
   return a;
 }
@@ -2238,24 +2270,27 @@ function r5TouchOrb(){
    ghost (whose middle is at tile column cx). */
 function r5BesideYou(p, cx){ const left = p.x < cx; return { x:p.x + (left ? -0.9 : 0.6), y:p.y - 0.9, left }; }
 /* Everyone turns to face the ghost phoenix (2.92): you, the Whalelord and
-   your phoenix. Their pictures face left, so whoever has it on their right is
-   flipped. gx is its middle, in tiles; null turns everyone back. */
+   your phoenix — and (2.95) the ghost phoenix turns to face YOU, as it talks
+   to you. Every picture faces left, so whoever has the other on their right
+   is flipped (face-r, 13-walkmap.js); straight above or below, they keep the
+   way they face. gx is its middle, in tiles; null leaves everyone as they
+   are (to walk on facing the way they go). */
 function r5FaceGP(gx){
-  r5Css();
-  const w = walkState(), p = w.at && w.at[w.deck], q = w.ghostAt && w.ghostAt[w.deck];
-  const turn = (el, cx)=>{ if(el) el.classList.toggle('r5-face-r', gx != null && cx != null && cx < gx - 0.05); };
-  turn($('#walkYou'), p ? p.x + 0.5 : null);
-  turn($('#walkGhost'), q ? q.x + 0.5 : null);
+  if(gx == null) return;
+  const w = walkState(), p = w.at && w.at[w.deck];
+  if(p) walkFaceToward(gx);
+  walkGhostFaceToward(gx);
   const m = document.getElementById('sa-myphoenix');
-  turn(m, m && m._o ? m._o.x + m._o.w / 2 : null);
+  if(m) actorFaceToward(m, gx);
+  if(p) ['gphoenix', 'gpwait', 'gpfare'].forEach(id=> actorFaceToward(id, p.x + 0.5));
 }
-/* In the Armoury, wherever the ghost phoenix (or its orb) is, face it. */
+/* In the Armoury, wherever the ghost phoenix (or its orb) is, face it — and
+   it faces you. With nothing there, you face the way you walk. */
 function r5FaceGPHere(){
   if(walkState().deck !== 'cata_stair_r2') return;
   const a = document.getElementById('sa-gphoenix') || document.getElementById('sa-gpwait');
   if(a && a._o) return r5FaceGP(a._o.x + a._o.w / 2);
   if(document.getElementById('sg-gporb')) return r5FaceGP(R5_ORB.x + 1);
-  r5FaceGP(null);
 }
 /* Your phoenix, if you have one — out with you, or in storage. */
 function r5MyPhoenix(){
@@ -2408,9 +2443,11 @@ async function r5PhoenixScene(world, d){
     await sceneSay([faceMon('phoenix', { crowned:isCrowned(mine.mon) })], displayName(mine.mon), `<b>"Will I see you again?"</b>`);
     await sceneSay([gp()], R5_GP, `<b>"Before I rest, little one. I promise."</b>`);
   }
-  /* It rises, screaming, and the whole hill answers. */
+  /* It rises, screaming, and the whole hill answers — (2.95) its dark glow
+     going with it. */
   r5DarkGlow('gp4', gpX + 1, GY, 7);
   sceneShake(1400, t=> 0.18 * Math.max(0, 1 - t / 1400));
+  sceneGlowOut(['gporb'], 1100);
   await r5MoveActor('gphoenix', gpX, GY - 6, 1100, true);
   await sceneCurtain(true, 700);
   sceneClear();
@@ -2431,6 +2468,7 @@ async function r5PhoenixScene(world, d){
   r.said['rush_cata_garrison'] = true;            // said below, as the curtain lifts
   await saveProfile();
   w.busy = false;
+  ui.r5PourDue = true;                           // (2.95) the soldatos' ghosts wait for the pour
   goFloor('cata_garrison', 'gate');
   await sceneWait(1200);
   await sceneCurtain(false, 800);
@@ -2450,20 +2488,16 @@ async function r5PhoenixGift(mine, at){
     `<b>"But listen. When they came for me, I sent you away in such a hurry. Your core got there safely — but there was no time to send all my power with it."</b><br><br>` +
     `<b>"Some of my fire stayed behind, here, with me. It has been waiting for you all this time."</b>`);
   await sceneSay([gp()], R5_GP, `<b>"It is yours. It always was. Take it now."</b>`);
-  r5DarkGlow('gpgift', at.GX, at.GY, 3.6, true);
   const el = document.getElementById('sa-myphoenix');
-  const o = el && el._o;
-  if(o) sceneSparkles(o.x, o.y, o.w, o.h, 1400);
-  sceneShake(500, t=> 0.05 * (1 - t / 500));
-  await sceneWait(1300);
+  await r5GiftFlow({ x:at.GX, y:at.GY }, el);     // (2.95) its glow, across to yours
   const had = ownsStone('fireStone');
   state.sacredFlameGranted = true;
   if(!had) addStone('fireStone', 1);
   r.phoenixGift = true;
   await saveProfile();
-  await sceneGlowOut(['gpgift'], 600);
   await sceneSay([face()], me,
     `It glows gold from the inside, like a coal when you blow on it.<br><br><b>"It's warm... I feel bigger. Brighter."</b>`);
+  if(el) el.classList.add('cool');               // …and the glow sinks in, slowly
   if(!had) await sceneSay([], '',
     `Something drops at your feet with a soft clink: a stone, warm as a coal. The ghost phoenix's fire, burnt into stone.`);
   const sf = SACRED_FLAME, rb = REBIRTH;
@@ -2476,6 +2510,64 @@ async function r5PhoenixGift(mine, at){
                 `and at a level ceiling past 100 it is the stone it charges to break through.`));
   r.phoenixKin = true;
   await saveProfile();
+}
+/* (2.95) Its fire, handed over. The ghost phoenix's gold glow drifts slowly
+   from it (`from`, tiles) across to your phoenix (`el`) and settles round its
+   middle; a warm, bright pulse as the power goes in; then what is left of the
+   glow shrinks, pulsing, into your phoenix and is gone — the power settling
+   in. Your phoenix keeps a warm glow of its own (r5-warm) until it is told
+   to cool. */
+const R5_GIFT_MS = { show:600, drift:3200, pulse:900, settle:2600 };
+async function r5GiftFlow(from, el){
+  const world = $('#walkWorld');
+  if(!world) return;
+  const T = WALK_T, M = R5_GIFT_MS, o = el && el._o;
+  const to = o ? { x:o.x + o.w / 2, y:o.y + o.h / 2 } : { x:from.x, y:from.y };
+  const D0 = 3.6, D1 = 2.5;                       // across: round the ghost phoenix, then round yours
+  const g = r5DarkGlow('gpgift', from.x, from.y, D0, true);
+  if(!g) return;
+  const put = (el2, cx, cy, dTiles)=>{
+    const dd = dTiles * T;
+    el2.style.left = (cx * T - dd / 2) + 'px'; el2.style.top = (cy * T - dd / 2) + 'px';
+    el2.style.width = el2.style.height = dd + 'px';
+  };
+  await sceneWait(M.show);
+  /* across, slowly, in a gentle arc */
+  await r5Tween(M.drift, t=>{
+    const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    put(g, from.x + (to.x - from.x) * e, from.y + (to.y - from.y) * e - Math.sin(Math.PI * e) * 0.5, D0 + (D1 - D0) * e);
+  });
+  /* the warm, bright pulse: in it goes */
+  if(el){ el.classList.remove('cool'); el.classList.add('r5-warm'); }
+  const flash = document.createElement('div');
+  flash.className = 'r5-giftflash';
+  world.appendChild(flash);
+  sceneShake(500, t=> 0.06 * (1 - t / 500));
+  if(o) sceneSparkles(o.x, o.y, o.w, o.h, 1400);
+  await r5Tween(M.pulse, t=>{
+    put(flash, to.x, to.y, D1 * (0.6 + 1.0 * t));
+    flash.style.opacity = String(t < 0.3 ? t / 0.3 : Math.max(0, 1 - (t - 0.3) / 0.7));
+  });
+  flash.remove();
+  /* what is left of it, shrinking and pulsing into your phoenix */
+  g.style.transition = 'none';
+  await r5Tween(M.settle, t=>{
+    put(g, to.x, to.y, D1 * (1 - 0.85 * t) * (1 + 0.16 * Math.sin(t * Math.PI * 8)));
+    g.style.opacity = String(Math.max(0, 1 - Math.pow(t, 1.6)));
+  });
+  g.remove();
+}
+/* f(t), t from 0 to 1, over ms at the scene's speed. */
+function r5Tween(ms, f){
+  const dur = Math.max(1, ms * SCENE_SPEED), t0 = performance.now();
+  return new Promise(done=>{
+    const frame = now=>{
+      const t = Math.min(1, (now - t0) / dur);
+      f(t);
+      if(t < 1) requestAnimationFrame(frame); else done();
+    };
+    requestAnimationFrame(frame);
+  });
 }
 /* Gone to rest (2.91), once its fire is given and you are safe in disguise:
    at Ugo's, the moment you are; or in the Armoury, if you bring it your
@@ -2519,6 +2611,7 @@ async function r5PhoenixFarewell(where){
   const id = where === 'tailor' ? 'gpfare' : 'gpwait';
   const el = document.getElementById('sa-' + id);
   const x0 = el && el._o ? el._o.x : G.x - 0.4;
+  sceneGlowOut(['gporb', 'gpforb'], 1600);       // (2.95) its dark glow goes with it
   await r5MoveActor(id, x0, G.y - 5, 1600, true);
   await sceneGlowOut([id, 'gpfare', 'gpwait'], 700);
   sceneActorGone(id);
@@ -2534,10 +2627,10 @@ async function r5PhoenixFarewell(where){
    power given before you were safe up the hill) for you to be. */
 function r5GPWaiting(){ const r = r5(); return !!(r.phoenixMet && !r.rush && !r.phoenixGone); }
 function r5PaintGPWaiting(){
-  if(!ui.gpOut){                                  // (2.92) its orb, until it is touched
-    if(!document.getElementById('sg-gporb')) r5PaintOrb('gporb', R5_ORB.x, R5_ORB.y);
-    return r5FaceGPHere();
-  }
+  /* (2.92) its orb, until it is touched — (2.95) and its dark glow stays
+     under it once it has risen out */
+  if(!document.getElementById('sg-gporb')) r5PaintOrb('gporb', R5_ORB.x, R5_ORB.y);
+  if(!ui.gpOut) return r5FaceGPHere();
   if(!document.getElementById('sa-gpwait')){
     const a = r5MonActor('gpwait', 'phoenix', R5_ORB.x, R5_ORB.y - R5_GP_RISE, 2, { html:r5GhostPhoenixHtml(Math.round(WALK_T * 2)) });
     if(a) a.classList.add('r5-gpfloat');
@@ -2703,7 +2796,7 @@ async function r5RushOut(d){
   playSfx('alert');
   st.guards.forEach(g=>{ g.spotted = true; });
   paintStealth(id, d);
-  await captureStream(id, d, (id === 'cata_pit' && !r.capoGrey) ? ['soldato1', 'capo_grey', 'soldato2'] : null);
+  await captureStream(id, d);                    // (2.95) soldatos: the Consigliere stays in his ring
   await sceneSay([faceNpc('soldato2', '💂')], 'Soldato', `<b>"Got you! Thought the ghosts would save you, did you?"</b>`, 'Continue');
   await sceneCurtain(true, 700);
   sceneClear();
@@ -2728,30 +2821,115 @@ async function r5RushOut(d){
   });
   sceneCurtain(false, 600);                      // the black lifts off the writing
 }
-/* Up the Garrison from the gate: the dead going ahead of you. */
+/* Up the Garrison from the gate (2.95): every ghost in the hill at once — a
+   hundred of the hill's own dead (R5_HILL_GHOSTS, as you meet them down
+   there), rushing up out of the gate behind you in a spray that goes on for
+   five seconds, the whole floor shaking as they go. The first of them peel
+   off to the soldatos in sight, three to a man, and stay on him — three
+   different ghosts, at his left, his right and over his head (14-stealth.js);
+   every other man on the floor has his three already. The rest pour on up the
+   floor and away. Nobody moves while they go by, and the clock waits. */
+const R5_POUR = { n:100, shake:5000, spray:4400 };
+function r5HauntHold(on){
+  document.querySelectorAll('.walk-ent.guard.haunted').forEach(el=> el.classList.toggle('haunt-hold', !!on));
+}
 async function r5GhostsPour(){
-  const w = walkState(), d = DECKS[w.deck];
-  if(!d || !$('#walkWorld')) return;
+  /* (the floor itself first: never into the last one's picture, mid-wipe) */
+  for(let i = 0; i < 40 && document.querySelector('.tile-wipe'); i++) await new Promise(res=> setTimeout(res, 50));
+  const w = walkState(), d = DECKS[w.deck], world = $('#walkWorld');
+  ui.r5PourDue = false;
+  if(!d || !world || typeof Element === 'undefined' || typeof Element.prototype.animate !== 'function') return r5HauntHold(false);
   const p = w.at[d.key] || { x:12, y:37 };
-  const kinds = ['ghost', 'ghost_flame', 'ghost', 'ghost', 'ghost_flame', 'ghost'];
-  kinds.forEach((sp, i)=> r5MonActor('pour' + i, sp, p.x - 1 + (i % 3), p.y - 0.5, 0.9, { z:60 }));
-  await sceneWait(200);
-  await Promise.all(kinds.map((sp, i)=> r5MoveActor('pour' + i, 3 + ((i * 7) % 20), p.y - 12 - (i * 4) % 14, 1500 + i * 120, true)));
-  kinds.forEach((sp, i)=> sceneActorGone('pour' + i));
+  const T = WALK_T, N = R5_POUR.n, SP = R5_POUR.spray, S = SCENE_SPEED;
+  const wasScene = ui.sceneRunning;
+  w.busy = true; ui.sceneRunning = true;
+  releaseKeys();
+  r5HauntHold(true);
+  const box = document.createElement('div');
+  box.className = 'r5-pour'; box.id = 'r5Pour';
+  world.appendChild(box);
+  const ox = p.x + 0.5, oy = p.y + 0.7;            // out of the gate, at your feet
+  const rnd = (a, b)=> a + Math.random() * (b - a);
+  const kinds = R5_HILL_GHOSTS.length ? R5_HILL_GHOSTS : ['ghost'];
+  /* three of them to every man in sight, to the very spots they haunt him from */
+  const toMen = [];
+  const st = ui.stealth && ui.stealth[d.key];
+  (st ? st.guards : []).forEach(g=>{
+    const el = document.getElementById('guard-' + g.id);
+    if(!el || el.style.display === 'none' || !el.classList.contains('haunted')) return;
+    const man = { el, left:0 };
+    [...el.querySelectorAll('.gh-ghost')].forEach((gh, i)=>{
+      const h = HAUNT_SPOTS[i]; if(!h) return;
+      man.left++;
+      toMen.push({ man, sp:gh.dataset.sp || kinds[0], x:g.x + h.x, y:g.y + h.y, size:HAUNT_SIZE });
+    });
+  });
+  /* the spray: a hundred in all, the men's among the first half of them */
+  const flights = [];
+  const menSlots = new Set();
+  toMen.forEach((f, i)=> menSlots.add(Math.min(N - 1, Math.round((i + 1) * (N * 0.5) / (toMen.length + 1)))));
+  let mi = 0;
+  for(let i = 0; i < N; i++){
+    const delay = SP * (i / N) + rnd(0, 90);
+    if(menSlots.has(i) && mi < toMen.length){ flights.push(Object.assign({ delay, man:true }, toMen[mi++])); continue; }
+    const th = (Math.random() + Math.random() - 1) * 58 * Math.PI / 180, L = rnd(9, 17);
+    const sp = kinds[Math.floor(Math.random() * kinds.length)];
+    flights.push({ delay, sp, x:ox + L * Math.sin(th), y:oy - L * Math.cos(th), size:rnd(0.62, 1.1) });
+  }
+  while(mi < toMen.length) flights.push(Object.assign({ delay:rnd(0, SP / 2), man:true }, toMen[mi++]));
+  const shake = sceneShake(R5_POUR.shake, ms=> 0.11 * Math.min(1, ms / 350) * (ms > 4000 ? Math.max(0, 1 - (ms - 4000) / 1000) : 1));
+  const ease = 'cubic-bezier(.22,.7,.36,1)';
+  let longest = 0;
+  const runs = flights.map(f=>{
+    const el = document.createElement('div');
+    el.className = 'r5-pg' + (f.x > ox + 0.05 ? ' face-r' : '');            // faces the way it flies
+    el.dataset.sp = f.sp;
+    const s = f.size, px = Math.round(s * T);
+    el.style.left = ((ox - s / 2) * T) + 'px'; el.style.top = ((oy - s / 2) * T) + 'px';
+    el.style.width = el.style.height = px + 'px';
+    el.innerHTML = monPortrait(f.sp, px, { view:'front', bare:true, stage:hauntStage(f.sp) });
+    box.appendChild(el);
+    const dx = (f.x - ox) * T, dy = (f.y - oy) * T, len = Math.hypot(dx, dy) || 1;
+    const bend = rnd(0.8, 2.4) * T * (Math.random() < 0.5 ? -1 : 1);
+    const mx = dx * 0.55 - dy / len * bend, my = dy * 0.55 + dx / len * bend;
+    const dur = f.man ? Math.min(2400, 900 + 70 * len / T) : rnd(1200, 1900);
+    longest = Math.max(longest, f.delay + dur);
+    const at = (x, y, k)=> `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${k})`;
+    const frames = f.man
+      ? [{ transform:at(0, 0, 0.5), opacity:0 }, { offset:0.15, transform:at(dx * 0.1, dy * 0.1, 1.5), opacity:0.95 },
+         { offset:0.6, transform:at(mx, my, 1.3), opacity:0.92 }, { transform:at(dx, dy, 1), opacity:0.88 }]
+      : [{ transform:at(0, 0, 0.3), opacity:0 }, { offset:0.12, transform:at(dx * 0.08, dy * 0.08, 0.95), opacity:0.95 },
+         { offset:0.55, transform:at(mx, my, 1.05), opacity:0.9 }, { transform:at(dx, dy, 1.15), opacity:0 }];
+    const anim = el.animate(frames, { duration:dur * S, delay:f.delay * S, easing:ease, fill:'forwards' });
+    return anim.finished.catch(()=>{}).then(()=>{
+      if(!f.man) return el.remove();
+      /* there: it becomes one of his three, and the man starts to shake */
+      if(--f.man.left <= 0) f.man.el.classList.remove('haunt-hold');
+      el.animate([{ opacity:0.88 }, { opacity:0 }], { duration:250 * S, fill:'forwards' });
+      setTimeout(()=> el.remove(), 300 * S);
+    });
+  });
+  await Promise.race([Promise.all(runs), sceneWait(longest + 800)]);
+  await shake;
+  box.remove();
+  r5HauntHold(false);                              // and every man out of sight has his three
+  w.busy = false; ui.sceneRunning = wasScene;     // off you go
 }
 /* What he says on each floor of the second tier as you run through it. */
 const R5_RUSH_LINES = {
-  cata_garrison: `<b>"Run! Every soldier in here has a ghost on him. They cannot see us now."</b><br><br>` +
+  cata_garrison: `<b>"Run! Every soldier in here has three ghosts on him. They cannot see us now."</b><br><br>` +
                  `<b>"Up — all the way up, to the stair at the far end. Three minutes. Do not stop!"</b>`,
   cata_quarry:   `<b>"The quarry. Keep climbing — terrace by terrace, the dead are holding every man on it."</b>`,
   cata_cellars:  `<b>"Wine cellars. We must be right under the Old Town now. Keep going!"</b>`,
-  cata_pit:      `<b>"The fight pit — and its capo, with a ghost on each arm."</b><br><br>` +
+  cata_pit:      `<b>"The fight pit — and the Consigliere in his ring, with three ghosts round him."</b><br><br>` +
                  `<b>"The stair at the top goes up to the church. Go!"</b>`,
 };
 
 /* ---------- tier 2 (2.88) ---------- */
-/* The Grey Capo, in the middle of his ring: the end of the second tier. */
-async function r5CapoGreyBeaten(){
+/* The Consigliere (2.95; he was the Grey Capo), in the middle of his ring:
+   the end of the second tier. (r5().capoGrey keeps its old name, for the
+   saves that have it.) */
+async function r5ConsigliereBeaten(){
   const r = r5();
   const first = !r.capoGrey;
   r.capoGrey = true;
@@ -2761,10 +2939,12 @@ async function r5CapoGreyBeaten(){
   w.at = w.at || {}; w.at.cata_pit = { x:12, y:21 }; w.face = 'u';
   ui.walkFresh = false;
   go('cata_pit');
-  const capo = faceNpc('capo_grey','🕴️'), whale = faceMon('whalelord'), wn = whaleName();
-  await sceneSay([capo], 'Grey Capo',
+  const con = faceNpc('consigliere','🕴️'), whale = faceMon('whalelord'), wn = whaleName();
+  await sceneSay([con], 'Consigliere',
     `He looks round at the empty benches, as if somebody might have been watching.<br><br><b>"Nobody saw that. Understand? Nobody."</b>`);
-  await sceneSay([capo], 'Grey Capo',
+  await sceneSay([con], 'Consigliere',
+    `<b>"I advise the Padrino on a great many things, kid. Tonight I shall advise him that nothing happened down here."</b>`);
+  await sceneSay([con], 'Consigliere',
     `<b>"Go on, then. Up to your church."</b><br><br>` +
     `<b>"But the Padrino has friends up there, kid. Friends even the dead are scared of."</b> He straightens his hat and walks out of the ring.`);
   if(first){
@@ -2871,6 +3051,8 @@ async function r5TailorFetch(tonight){
   sceneActor('ugo', { x:8, y:14, src:'assets/npc/tailor.png', icon:'🧵' });
   await r5MoveActor('ugo', 8, 11, 900);
   await r5MoveActor('ugo', Math.max(1, p.x - 2), p.y, 900);
+  actorFaceToward('ugo', p.x + 0.5);              // (2.95) there, he faces you — and you him
+  walkFaceToward(Math.max(1, p.x - 2) + 0.5);
   if(tonight){
     await sceneSay([ugo()], U,
       `An old man hurries in through the great door with a candle in his hand, and stops dead when he sees you.<br><br>` +
@@ -3200,7 +3382,7 @@ function r5NearActs(d, p){
   return st.guards.filter(g=> Math.abs(g.x - p.x) + Math.abs(g.y - p.y) <= 1)
     .filter(g=>{ const def = guardDef(d, g.id); return def && def.kind !== 'capo'; })
     .slice(0, 2)
-    .map(g=> ({ key:'talk-' + g.id, html:'🗨️ Talk<small>Soldato</small>', act:()=> r5SoldatoTalk(d, g) }));
+    .map(g=> ({ key:'talk-' + g.id, html:'🗨️ Talk<small>Soldato</small>', at:{ x:g.x, y:g.y }, act:()=> r5SoldatoTalk(d, g) }));
 }
 /* What the soldatos say to one of their own (2.91): the Padrino's great work
    up at the villa — a monster nothing can beat, nearly ready. They know only
@@ -3216,7 +3398,7 @@ const R5_SOLDATO_TALK = [
   `<b>"When it's finished, nobody will ever stand up to the Family again. Not the town, not the sea, not even the dead. That's what the Padrino says."</b>`,
   `<b>"I asked a capo what the Padrino's building. He said, 'The end of all our problems.' Then he told me to mind my own business."</b>`,
   `<b>"Soon, they say. Any day now. And when it's ready, we'll all get a pay rise. Probably."</b>`,
-  `<b>"There's a kid loose in the catacombs, they say. Beat three capos! Don't tell the Grey Capo I told you."</b>`,
+  `<b>"There's a kid loose in the catacombs, they say. Beat two capos — and the Consigliere himself! Don't tell him I told you."</b>`,
 ];
 const R5_REVEAL_SHOUTS = [
   `You push back the cap and look him in the eye. His lantern starts to shake.<br><br><b>"YOU! You're the kid from the catacombs!"</b>`,
@@ -3227,6 +3409,9 @@ async function r5SoldatoTalk(d, g){
   const id = d.key, st = ui.stealth && ui.stealth[id];
   if(!st || st.caught || ui.sceneRunning || walkState().busy) return;
   const def = guardDef(d, g.id);
+  /* (2.95) he turns to you, to talk (his next step turns him back to his round) */
+  const p = walkState().at[id];
+  if(p) faceToward(document.getElementById('guard-' + g.id), g.x + 0.5, p.x + 0.5);
   const yes = await r5Ask([faceNpc(guardSprite(def), '💂')], 'Soldato',
     r5Turn('soldatoTalk', R5_SOLDATO_TALK), '⚔️ Challenge him', 'Leave');
   if(!yes) return;
@@ -3283,16 +3468,26 @@ async function r5TownCaught(id, d, g, def){
   const revealed = ui.r5Revealed === id;
   ui.r5Revealed = null;
   const hill = id === 'hilltop';
-  const capos = ['capo_purple'].concat(r.capoBlack ? ['capo_black'] : [], r.capoGrey ? ['capo_grey'] : []);
-  const crowd = hill ? ['soldato1', 'soldato2']
-    : ['soldato1', capos[0], 'soldato2', 'soldato1', capos[1] || 'soldato2', 'soldato2', capos[2] || 'soldato1', 'soldato1', 'soldato2', 'soldato1'];
-  await captureStream(id, d, crowd);
-  if(hill){
+  /* (2.95) the soldatos come running — and in the Old Town the Purple Capo
+     puts down his newspaper, gets up from his table outside the café and
+     strolls over himself. He is one man, in one place: nobody else wears his
+     face in the crowd. */
+  const table = hill ? null : deckThings(d).find(t=> t.sprite === 'capo_purple');
+  const lead = table ? { sprite:'capo_purple', icon:'🕴️', from:[table.x, table.y], el:table.el } : null;
+  await captureStream(id, d, ['soldato1', 'soldato2'], lead);
+  if(hill || !table){
     const sol = faceNpc('soldato2', '💂');
-    await sceneSay([sol], 'Soldato', revealed
-      ? `<b>"Signor Figlio's porter, eh? Signor Figlio's porter is the kid from the catacombs!"</b>`
-      : `<b>"That's no porter. That's the kid from the catacombs — on the Padrino's own hill!"</b>`, 'Continue');
-    await sceneSay([sol], 'Soldato', `<b>"Got you. Nowhere to run up here."</b>`, 'Continue');
+    if(!hill){                                    // (nobody at the café yet: one of his men says it)
+      await sceneSay([sol], 'Soldato', revealed
+        ? `<b>"Showing your face to us, in the middle of the Old Town? Brave. Stupid, but brave."</b>`
+        : `<b>"Well, well. The kid from the catacombs — in one of OUR uniforms."</b>`, 'Continue');
+      await sceneSay([sol], 'Soldato', `<b>"Got you. There is nowhere to run up here."</b>`, 'Continue');
+    } else {
+      await sceneSay([sol], 'Soldato', revealed
+        ? `<b>"Signor Figlio's porter, eh? Signor Figlio's porter is the kid from the catacombs!"</b>`
+        : `<b>"That's no porter. That's the kid from the catacombs — on the Padrino's own hill!"</b>`, 'Continue');
+      await sceneSay([sol], 'Soldato', `<b>"Got you. Nowhere to run up here."</b>`, 'Continue');
+    }
   } else {
     const capo = faceNpc('capo_purple', '🕴️');
     await sceneSay([capo], 'Purple Capo', revealed
@@ -3510,6 +3705,7 @@ async function r5HillEscort(){
   await sceneCurtain(false, 800);
   w.busy = true;
   sceneActor('figlio', { x:13, y:11, src:'assets/npc/figlio.png', icon:'🎙️' });
+  walkFaceToward(13.5);                           // (2.95) you turn to him; he is on your right
   await sceneWait(300);
   await sceneSay([fig()], F, `<b>"My father's house. I grew up in there."</b> He does not sound as if he misses it.`);
   await sceneSay([fig()], F,
@@ -3571,14 +3767,36 @@ function renderHilltopZone(){
   ui.currentZone = r5Zone('hilltop') || ui.currentZone;
   return go('hilltop');
 }
-function r5VillaDoor(){
-  if(r5().holdBroken)
-    return sceneSay([faceMon('whalelord')], whaleName(),
+/* The villa's great door (2.95): the Sottocapo stands in it — the Padrino's
+   right hand, whose team scattered in front of the Water Dragon the night you
+   rode it through Region 2's caverns. He looks at Figlio's porter a moment
+   too long. He is the one man in that doorway, and nowhere else. */
+const R5_SOTTOCAPO_LINES = [
+  `<b>"Still here, porter? The Padrino sees nobody. Not porters, not capos — most nights, not even his own son."</b>`,
+  `<b>"The kitchens are round the side, junior. Not this door. Never this door."</b>`,
+  `He looks you up and down, slowly.<br><br><b>"You've got a face I can't place, junior. I don't like faces I can't place."</b>`,
+];
+async function r5VillaDoor(){
+  const r = r5(), S = 'Sottocapo';
+  const sotto = ()=> faceNpc('sottocapo', '🕴️'), whale = ()=> faceMon('whalelord'), wn = whaleName();
+  if(r.holdBroken){
+    await sceneSay([sotto()], S,
+      `He is staring down the hill toward the Old Town, listening.<br><br>` +
+      `<b>"Hear that? Singing, under the hill. The dead are loose, and the Padrino wants nobody in or out tonight. Back to your post, junior."</b>`);
+    return sceneSay([whale()], wn,
       `<b>"My core is behind that door. I can feel it beating, like a second heart."</b><br><br><i>The villa is coming soon.</i>`);
-  return sceneSay([faceNpc('soldato1', '💂')], 'Soldato', r5Turn('villaDoor', [
-    `<b>"Signor Figlio's porter? Wait out here. The Padrino sees nobody."</b>`,
-    `<b>"The kitchens are round the side, junior. Not this door. Never this door."</b>`,
-  ]));
+  }
+  if(r5Once('sottocapo')){
+    await sceneSay([], '',
+      `A big man in a black suit fills the villa's doorway, his arms folded.<br><br>` +
+      `You know that face. The last time you saw it, you were riding the Water Dragon through the caverns — and his monsters were scattering in front of it.`);
+    await sceneSay([sotto()], S, `<b>"Signor Figlio's porter."</b> He looks at you for a long moment.<br><br><b>"Have we met, junior?"</b>`);
+    await sceneSay([], '', `You keep your cap down, and say nothing.`);
+    await sceneSay([sotto()], S, `<b>"...No. I'd remember."</b><br><br><b>"The Padrino sees nobody. Wait out here with the others."</b>`);
+    return sceneSay([whale()], wn,
+      `<b>"The Padrino's right hand, by the look of him. And he very nearly knew you."</b><br><br><b>"Keep that cap low whenever he is about."</b>`);
+  }
+  return sceneSay([sotto()], S, r5Turn('villaDoor', R5_SOTTOCAPO_LINES));
 }
 function r5VillaFountain(){
   return sceneSay([], 'The fountain', `A stone lion spits water into a round basin. Somebody has scrubbed it very, very clean.`);
@@ -4089,15 +4307,18 @@ function r5TownFunicular(){
   return sceneSay([], 'The funicular station',
     `A sign on the door says FAMILY ONLY. Far down at the bottom of the rails the little car is waiting, and its driver is still asleep in it.`);
 }
-/* The capos at the café's tables: a junior does not speak to one. */
+/* The capos at the café's tables (and, 2.95, the Consigliere): a junior does
+   not speak to one. */
 function r5CapoLook(which){
-  const name = { purple:'Purple Capo', black:'Black Capo', grey:'Grey Capo' }[which];
+  const name = { purple:'Purple Capo', black:'Black Capo', consigliere:'Consigliere' }[which];
   const what = {
     purple:`He is reading the newspaper, and does not look up.`,
     black:`He stirs his coffee very slowly, watching the piazza. His eyes slide over you, and away.`,
-    grey:`He is counting the night's takings from his pit, and muttering.`,
+    consigliere:`He is counting the night's takings from his pit into a little black ledger, line by line, and muttering.`,
   }[which];
-  return sceneSay([faceNpc('capo_' + which, '🕴️')], name, `${what}<br><br><i>A junior does not speak to a capo unless he is spoken to.</i>`);
+  const sprite = which === 'consigliere' ? 'consigliere' : 'capo_' + which;
+  const who = which === 'consigliere' ? 'the Consigliere' : 'a capo';
+  return sceneSay([faceNpc(sprite, '🕴️')], name, `${what}<br><br><i>A junior does not speak to ${who} unless he is spoken to.</i>`);
 }
 
 /* The Old Town, drawn from its grid (2.91) until it has a painting of its
@@ -4617,7 +4838,7 @@ function renderChallengeR5(){
       : r.phoenixMet && !r.rush ? 'It opened the gate, and the dead of the hill rose with it. Now it waits in the Armoury, with the last of its fire, for a phoenix.'
       : r.phoenixMet ? 'It opened the gate, and the dead of the hill rose with it.'
                      : 'Something dead is waiting in the Armoury, the furthest room off the Long Stair.') : ''}
-    ${upper ? card('capo_grey', '🕴️', 'Grey Capo', r.capoGrey,
+    ${upper ? card('consigliere', '🕴️', 'Consigliere', r.capoGrey,
       r.capoGrey ? 'Nobody saw a thing.' : (r.reached.includes('cata_pit') ? 'Waiting in the middle of his ring.' : 'Somewhere under the Old Town.')) : ''}
     ${r.figlioMet ? card('figlio', '🎙️', 'Figlio', concertState().figlioDay === today(),
       (concertState().figlioDay === today() ? 'Beaten today. Back at the opera house tomorrow. ' : 'At the opera house in the Old Town. ') +
@@ -4626,12 +4847,15 @@ function renderChallengeR5(){
       r5TowerBeaten(12) ? 'The leader of the exorcists. She gave you the Psychic Stone.' : 'The leader of the exorcists, on floor 12 of the tower in the estate\'s east garden.') : ''}
     ${r.hill ? card('ghost_master', '👻', 'Ghost Master', r5TowerBeaten(13),
       r5TowerBeaten(13) ? 'The Padrino\'s grandniece. The hold on the dead is broken.' : 'The Padrino\'s grandniece, on floor 13 at the very top of the tower. The dead of the hill do what she tells them.') : ''}
+    ${tearOpen() ? tearChallengeCard() : ''}
     <div class="screen-sub" style="margin-top:12px;">Catacomb floors reached: <b>${floorsReached} of ${allFloors.length}</b> · side rooms found: <b>${roomsFound} of ${R5_ALL_ROOMS.length}</b></div>
     ${r.hill ? `<div class="screen-sub" style="margin-top:4px;">Tower floors won: <b>${r.tower.beaten.length} of 13</b> — the disciples and masters stay beaten.</div>` : ''}
     <div class="screen-sub" style="margin-top:4px;">Soldatos you beat are back at their posts the next day. The Family regroups.</div>
     <button class="btn btn-ghost" id="returnBtn" style="margin-top:12px;">Return</button>`;
   $('#backBtn').addEventListener('click', ()=> go('region'));
   $('#returnBtn').addEventListener('click', ()=> go('region'));
+  const tc = $('#cTear');
+  if(tc) tc.addEventListener('click', ()=> go('tear'));          // straight there (2.94)
 }
 
 /* After a fight in the dark: back to the spot, not the region screen. */

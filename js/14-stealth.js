@@ -311,9 +311,16 @@ function paintStealth(id, d){
     el.style.display = (seenNow || felt) ? '' : 'none';
     el.classList.toggle('sensed', !!felt);
     el.dataset.face = g.face;
+    guardFacing(el, g.face);
     const mk = el.querySelector('.guard-mark');
     if(mk) mk.textContent = g.spotted ? '!' : (g.sus ? '?' : '');
   });
+}
+/* (2.95) A guard's picture faces left; looking or walking right, it is
+   flipped. Looking up or down, he keeps the way he last faced. */
+function guardFacing(el, face){
+  if(face === 'r') faceRight(el, true);
+  else if(face === 'l') faceRight(el, false);
 }
 
 /* A lit place (2.91: the Old Town's streets, `light:true`): no dark to see
@@ -328,6 +335,7 @@ function paintLitGuards(id, d){
     el.style.zIndex = 10 + g.y;
     el.style.display = '';
     el.dataset.face = g.face;
+    guardFacing(el, g.face);
     const mk = el.querySelector('.guard-mark');
     if(mk) mk.textContent = g.spotted ? '!' : '';
   });
@@ -365,14 +373,11 @@ function startStealth(world, d){
     const icon = def.kind === 'capo' ? '🕴️' : '💂';
     e.innerHTML = `<img src="assets/npc/${guardSprite(def)}.png" alt="" ` +
       `onerror="walkArtMissing(this,'${icon}',${px},0)"><b class="guard-mark"></b>`;
-    /* the night the dead rose: a ghost round every one of them */
+    guardFacing(e, g.face);                       // (2.95) looking right: flipped
+    /* the night the dead rose: (2.95) three ghosts round every one of them */
     if(stealthRush(d)){
       e.classList.add('haunted');
-      const orbit = document.createElement('span');
-      orbit.className = 'guard-haunt';
-      orbit.style.animationDelay = (-(def.clock || 600) % 1400) + 'ms';
-      orbit.innerHTML = `<span class="gh-ghost">${monPortrait('ghost', Math.round(WALK_T * 0.55), { view:'front', bare:true })}</span>`;
-      e.appendChild(orbit);
+      e.appendChild(guardHaunt(def, d));
     }
     world.appendChild(e);
   });
@@ -389,7 +394,44 @@ function stopStealth(){
   if(!ui.stealth) return;
   Object.values(ui.stealth).forEach(st=>{ (st.timers || []).forEach(clearInterval); st.timers = []; });
 }
-function guardSprite(def){ return def.sprite || (def.kind === 'capo' ? 'capo_black' : 'soldato1'); }
+/* (2.95) Every man on watch names his own picture. The Family's capos, the
+   Consigliere and the Sottocapo are people, each in one place at a time, so a
+   guard who names nobody is a plain soldato — never somebody's capo. */
+function guardSprite(def){ return def.sprite || (def.kind === 'capo' ? 'soldato2' : 'soldato1'); }
+
+/* The night the dead rose (2.90). (2.95) Three ghosts round every man, each a
+   different kind of the hill's own dead (its first tier's wild list): one at
+   his left and one at his right, turned to him, and one darting back and
+   forth over his head — all of them wobbling about him, every man's out of
+   step with the next. In one box (.guard-haunt), so the psychics pressing
+   them down (r5RushOut) take them all at once. Spots are the ghosts'
+   middles, in tiles from the man's top-left. */
+const HAUNT_SPOTS = [
+  { cls:'gh-l', x:-0.30, y:0.22, right:true  },
+  { cls:'gh-r', x:1.30,  y:0.28, right:false },
+  { cls:'gh-t', x:0.50,  y:-0.46, right:false },
+];
+const HAUNT_SIZE = 0.58;
+function strHash(s){ let h = 7; for(let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
+function hauntKinds(seed){
+  const list = (typeof R5_HILL_GHOSTS !== 'undefined' && R5_HILL_GHOSTS.length >= 3) ? R5_HILL_GHOSTS : ['ghost', 'ghost_flame', 'crow'];
+  const n = list.length, k = seed % n;
+  return [list[k], list[(k + 2) % n], list[(k + 4) % n]];        // three different kinds
+}
+/* the form they are met in down there (the catacombs' levels: fully grown) */
+function hauntStage(sp){ return SPECIES[sp] ? evolutionStage(sp, 90) : 0; }
+function guardHaunt(def, d){
+  const box = document.createElement('span');
+  box.className = 'guard-haunt';
+  const kinds = hauntKinds(strHash(d.key + ':' + def.id));
+  const T = WALK_T, S = HAUNT_SIZE, px = Math.round(T * S);
+  const lag = -(((def.clock || 600) * 7) % 2300);
+  box.innerHTML = HAUNT_SPOTS.map((h, i)=>
+    `<span class="gh-ghost ${h.cls}${h.right ? ' face-r' : ''}" data-sp="${kinds[i]}" style="left:${((h.x - S / 2) * T).toFixed(1)}px;` +
+    `top:${((h.y - S / 2) * T).toFixed(1)}px;width:${px}px;height:${px}px;animation-delay:${lag - i * 370}ms;">` +
+    monPortrait(kinds[i], px, { view:'front', bare:true, stage:hauntStage(kinds[i]) }) + `</span>`).join('');
+  return box;
+}
 
 /* Anything that stops you moving stops them too: somebody talking, the menu,
    a pop-up, a screen wipe, the app put away in the background. */
@@ -583,8 +625,13 @@ async function caughtEvade(id, d, g, def){
 /* The rest of the floor comes for you. Actors, not the floor's guards (they
    stand where they are): each walks in out of the dark, along the floor, to a
    square of his own within three steps of you, one after another. `sprites`
-   (2.91), if given, says who — in turn (the Old Town sends its capos too). */
-function captureStream(id, d, sprites){
+   (2.91), if given, says who — in turn. (2.95) Only soldatos ever come in a
+   crowd: the capos, the Consigliere and the Sottocapo are each one man in one
+   place. `lead` brings one of them over himself, last, from where he is
+   standing: { sprite, icon, from:[x, y], el } — `el` (his picture on the deck)
+   is hidden while he walks. Everyone faces the way he walks, and once there,
+   faces you. */
+function captureStream(id, d, sprites, lead){
   const p = walkState().at[id];
   const world = document.getElementById('walkWorld');
   if(!p || !world) return Promise.resolve();
@@ -617,6 +664,22 @@ function captureStream(id, d, sprites){
   const spots = [...round.dist.entries()].filter(([k, n])=> n >= 1 && n <= 3 && !taken.has(k))
     .map(([k, n])=>{ const [x, y] = k.split(',').map(Number); return { x, y, n, a:Math.atan2(y - p.y, x - p.x) }; })
     .sort((a, b)=> a.n - b.n || a.a - b.a).slice(0, 10);
+  /* (2.95) the one who comes himself keeps a square for the end: the one
+     nearest to where he starts, so he does not have to go round everybody */
+  let leadWalk = null;
+  if(lead && lead.from && spots.length){
+    const from = bfs(lead.from[0], lead.from[1], 80);
+    let pick = -1;
+    spots.forEach((s, i)=>{ const n = from.dist.get(key(s.x, s.y)); if(n != null && (pick < 0 || n < from.dist.get(key(spots[pick].x, spots[pick].y)))) pick = i; });
+    if(pick >= 0){
+      const s = spots.splice(pick, 1)[0], path = [];
+      /* walked back from his square to where he stands, then turned round */
+      let k = key(s.x, s.y);
+      while(k){ path.push(k.split(',').map(Number)); k = from.prev.get(k); }
+      path.reverse();
+      leadWalk = { id:'capLead', path, sprite:lead.sprite, icon:lead.icon || '🕴️', lead:true };
+    }
+  }
   const T = WALK_T;
   const walks = spots.map((s, i)=>{
     /* where he comes from: several steps further out than his square */
@@ -629,27 +692,33 @@ function captureStream(id, d, sprites){
     const path = [];
     if(best){ let k = best.k; while(k){ path.push(k.split(',').map(Number)); k = from.prev.get(k); } }
     else path.push([s.x, s.y]);
-    return { id:'cap' + i, path, sprite:sprites ? sprites[i % sprites.length] : (i % 2 ? 'soldato2' : 'soldato1'), delay:i * 170 };
+    const sprite = sprites ? sprites[i % sprites.length] : (i % 2 ? 'soldato2' : 'soldato1');
+    return { id:'cap' + i, path, sprite, icon:'💂', delay:i * 170 };
   });
+  if(leadWalk){ leadWalk.delay = walks.length * 170 + 250; walks.push(leadWalk); }
   const stepMs = 110 * SCENE_SPEED;
   return Promise.all(walks.map(wk=> new Promise(done=>{
     setTimeout(()=>{
       const [x0, y0] = wk.path[0];
-      const el = sceneActor(wk.id, { x:x0, y:y0, src:`assets/npc/${wk.sprite}.png`, icon:/^capo/.test(wk.sprite) ? '🕴️' : '💂' });
+      const el = sceneActor(wk.id, { x:x0, y:y0, src:`assets/npc/${wk.sprite}.png`, icon:wk.icon });
       if(!el) return done();
       el.classList.add('capture-guard');
+      if(wk.lead && lead.el) lead.el.style.visibility = 'hidden';    // up from his table
+      /* a long way to come: he hurries (never more than about two seconds) */
+      const ms = wk.lead ? Math.min(stepMs, 2200 * SCENE_SPEED / Math.max(1, wk.path.length - 1)) : stepMs;
       let i = 0;
       const next = ()=>{
         i++;
-        if(i >= wk.path.length) return done();
+        if(i >= wk.path.length){ actorFaceToward(el, p.x + 0.5); return done(); }   // there: he faces you
         const [x, y] = wk.path[i];
-        el.style.transition = `left ${stepMs}ms linear, top ${stepMs}ms linear`;
+        if(x !== el._o.x) actorFace(el, x > el._o.x);                            // the way he walks
+        el.style.transition = `left ${ms}ms linear, top ${ms}ms linear`;
         el._o.x = x; el._o.y = y;
         el.style.left = (x * T) + 'px'; el.style.top = (y * T) + 'px';
         el.style.zIndex = 10 + y;
-        setTimeout(next, stepMs);
+        setTimeout(next, ms);
       };
-      setTimeout(next, stepMs);
+      setTimeout(next, ms);
     }, wk.delay * SCENE_SPEED);
   }))).then(()=> sceneWait(600));
 }
@@ -905,15 +974,30 @@ function stealthCss(){
     .walk-ent.guard.sensed > :not(.guard-mark){opacity:.45;filter:grayscale(1) drop-shadow(0 0 6px rgba(150,90,220,0.9));}
     .walk-ent.guard .guard-mark{position:absolute;left:50%;top:-58%;transform:translateX(-50%);
       font:900 calc(var(--wt) * 0.6)/1 'Baloo 2',sans-serif;color:#ffd84a;text-shadow:0 2px 0 #2a1c00,0 0 6px #000;}
-    /* the night the dead rose (2.90): every man fighting a ghost */
+    /* the night the dead rose (2.90): every man fighting ghosts — (2.95) three
+       of them, wobbling and darting about him */
     @keyframes guardShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6%)}75%{transform:translateX(6%)}}
-    @keyframes guardHaunt{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
     .walk-ent.guard.haunted > img{animation:guardShake .45s ease-in-out infinite;}
-    .walk-ent.guard.haunted .guard-haunt{position:absolute;left:50%;top:45%;width:0;height:0;
-      animation:guardHaunt 1.4s linear infinite;pointer-events:none;}
-    .walk-ent.guard.haunted .gh-ghost{position:absolute;left:calc(var(--wt) * 0.30);top:calc(var(--wt) * -0.62);
-      opacity:.85;filter:drop-shadow(0 0 6px rgba(170,120,255,.95));}
-    .walk-ent.guard.haunted .gh-ghost img{display:block;filter:none;}
+    .walk-ent.guard .guard-haunt{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;
+      transition:opacity .35s ease;}
+    .walk-ent.guard .gh-ghost{position:absolute;display:block;opacity:.88;
+      filter:drop-shadow(0 0 6px rgba(170,120,255,.95));}
+    .walk-ent.guard .gh-ghost img{display:block;filter:none;width:100% !important;height:100% !important;}
+    .walk-ent.guard .gh-ghost.face-r > *{scale:-1 1;}
+    @keyframes ghWobL{0%,100%{translate:0 0;rotate:0deg}13%{translate:-22% -30%;rotate:-12deg}27%{translate:14% -8%;rotate:7deg}
+      41%{translate:-12% 18%;rotate:-5deg}58%{translate:20% -24%;rotate:10deg}72%{translate:-18% 6%;rotate:-9deg}86%{translate:8% 22%;rotate:4deg}}
+    @keyframes ghWobR{0%,100%{translate:0 0;rotate:0deg}11%{translate:20% -18%;rotate:9deg}26%{translate:-16% -32%;rotate:-8deg}
+      39%{translate:12% 14%;rotate:6deg}55%{translate:-22% -6%;rotate:-11deg}69%{translate:16% -26%;rotate:8deg}84%{translate:-8% 16%;rotate:-4deg}}
+    @keyframes ghDart{0%,100%{translate:-150% 10%;rotate:-6deg;scale:-1 1}14%{translate:-60% -30%;rotate:8deg;scale:-1 1}
+      30%{translate:40% 0%;rotate:-10deg;scale:-1 1}44%{translate:150% -20%;rotate:6deg;scale:-1 1}
+      50%{translate:155% 6%;rotate:0deg;scale:1 1}64%{translate:70% -34%;rotate:-8deg;scale:1 1}
+      80%{translate:-40% 4%;rotate:10deg;scale:1 1}94%{translate:-150% -18%;rotate:-4deg;scale:1 1}}
+    .walk-ent.guard .gh-l{animation:ghWobL 1.7s ease-in-out infinite;}
+    .walk-ent.guard .gh-r{animation:ghWobR 1.3s ease-in-out infinite;}
+    .walk-ent.guard .gh-t{animation:ghDart 2.6s ease-in-out infinite;}
+    /* (2.95) held back while the dead are still pouring up the Garrison */
+    .walk-ent.guard.haunt-hold .guard-haunt{opacity:0;}
+    .walk-ent.guard.haunt-hold > img{animation:none;}
   `;
   document.head.appendChild(s);
 }

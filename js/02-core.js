@@ -62,7 +62,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.93';
+const GAME_VERSION = '2.95';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -373,7 +373,7 @@ function playBattleMusic(isBoss, opts){
                         : ((ui.currentZone && ui.currentZone.id) || '');
   const chain = [];
 
-  if(b.npcId === 'padrino') chain.push('battle_padrino');
+  if(b.npcId === 'padrino' || b.npcId === 'padrino2') chain.push('battle_padrino');   // (2.95: padrino2, his regal dress from Region 5 on)
   const legendary = (b.enemies||[]).some(e=>SPECIES[e.species] && SPECIES[e.species].tier==='legendary')
                  || b.guardianTrial || b.scriptedLoss;
   if(legendary) chain.push('battle_legendary');
