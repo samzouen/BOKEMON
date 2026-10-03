@@ -244,10 +244,12 @@
   .mon-portrait{
     width:76px;height:76px;border-radius:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
     font-family:'Noto Sans SC';font-weight:900;font-size:30px;color:#fff;position:relative;
-    box-shadow:inset 0 -6px 0 rgba(0,0,0,0.12);
   }
-  /* Cut-out sprites (battle, evolution, catching, story scenes) never carry the
-     tile plate or its inset shadow — only the party/menu list tiles do. */
+  /* (2.92) No monster picture has the dark bevel along its bottom edge any
+     more (it was an inset shadow): on a transparent sprite it only ever drew
+     a grey band under its feet. Cut-out sprites (battle, evolution, catching,
+     story scenes) also never carry the tile plate — only the party/menu list
+     tiles do. */
   .avatar-layer .mon-portrait, .player-avatar .mon-portrait,
   .explore-avatar .avatar-img, .hero-avatar,
   .cutout .mon-portrait, .cutout img, .evo-mon .mon-portrait,
