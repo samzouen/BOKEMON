@@ -619,7 +619,7 @@ function startArena(){
   ui.battle = {
     waves:[[]], waveIndex:0, isNpc:false, allowCatch:false, name:'Test Arena',
     onWin:null, switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
-    partyStatus:{}, monStatus:{}, focusUid:null, fieldStatus:{}, usedVeryHigh:{}, usedUltra:{},
+    partyStatus:{}, monStatus:{}, focusUid:null, fieldStatus:{}, usedVeryHigh:{}, usedUltra:{}, usedSoul:{},
     acted:[], preHits:[], aftershock:[],
     arena:true, arenaCount:c.count, arenaType:c.type,
     arenaImmortal:!!c.immortal,

@@ -102,9 +102,16 @@ function r5(){
     disguised:false,        // …and on you right now
     phoenixGift:false,      // the ghost phoenix's last power given to your phoenix: the Sacred Flame, and a Fire Stone (2.91)
     phoenixGone:false,      // …and the ghost phoenix gone to rest
+    figlioMet:false,        // Figlio, home from Region 3, met outside the opera house (2.92)
+    figlioWins5:0,          // …and beaten here (his staircase starts again at 94)
+    hill:false,             // walked up the hill on his arm: the Hilltop open (2.92)
+    tower:{ beaten:[], reached:0 },   // the psychics' tower: floors whose disciple is beaten; the highest stood on (2.92)
+    holdBroken:false,       // the Ghost Master beaten: the hold on the dead is broken (2.92)
   };
   const g = p.region5;
   g.reached = g.reached || []; g.said = g.said || {};
+  g.tower = g.tower || { beaten:[], reached:0 };
+  g.tower.beaten = g.tower.beaten || [];
   return g;
 }
 function r5Zone(id){ return (REGION_ZONES[5] || []).find(z=> z.id === id) || null; }
@@ -599,24 +606,31 @@ const R5_DECKS = {
     arrive:{ top:[0,6] },
     things:[
       { x:0, y:6, walk:true, verb:'Through', where:"The Barracks", arrow:'left', act:()=> goFloor('cata_stair_r1','bottom') },
+      /* (2.92) the ghost phoenix's orb, 2×2 in the middle of the room: the
+         night it is met, and each time you come in while it waits here */
+      { x:5, y:5, w:2, h:2, verb:'Touch', act:()=> r5TouchOrb(), when:()=> r5OrbHere(),
+        mark:()=> !r5().phoenixMet || (!r5().phoenixGift && !!r5MyPhoenix()) },
       /* (2.91) the ghost phoenix, waiting here for a phoenix to give the
-         last of its power to (drawn by r5PaintGPWaiting) */
-      { x:5, y:6, verb:'Ghost phoenix', act:()=> r5ArmouryPhoenix(), when:()=> r5GPWaiting(),
+         last of its power to — risen out of its orb (r5PaintGPWaiting) */
+      { x:5, y:5, w:2, h:2, verb:'Ghost phoenix', act:()=> r5ArmouryPhoenix(), when:()=> r5GPWaiting() && !!ui.gpOut,
         mark:()=> !r5().phoenixGift && !!r5MyPhoenix() },          // a phoenix to bring it: "!"
     ],
     stealth:{ kind:'fight', feel:4,
-      /* nobody stands watch in here while the ghost phoenix waits in it (2.91) */
+      /* nobody stands watch in here while the ghost phoenix waits in it (2.91),
+         or once its orb has shown itself (2.92) */
       guards:[
-        { id:'a', kind:'soldato', path:[[1,9],[15,9]], face:'r', clock:620, pause:3, roster:'sr2_a', sprite:'soldato1', when:()=> !r5GPWaiting() },
-        { id:'b', kind:'soldato', path:[[15,3],[1,3]], face:'l', clock:580, pause:3, roster:'sr2_b', sprite:'soldato2', when:()=> !r5GPWaiting() },
-        { id:'c', kind:'soldato', path:[[14,8],[14,4]], face:'u', clock:660, pause:3, roster:'sr2_c', sprite:'soldato1', when:()=> !r5GPWaiting() },
-        { id:'l', kind:'lookout', x:6, y:6, face:'l', spin:'cw', clock:600, pause:4, roster:'sr2_l', sprite:'soldato2', when:()=> !r5GPWaiting() },
+        { id:'a', kind:'soldato', path:[[1,9],[15,9]], face:'r', clock:620, pause:3, roster:'sr2_a', sprite:'soldato1', when:()=> !r5GPHaunts() },
+        { id:'b', kind:'soldato', path:[[15,3],[1,3]], face:'l', clock:580, pause:3, roster:'sr2_b', sprite:'soldato2', when:()=> !r5GPHaunts() },
+        { id:'c', kind:'soldato', path:[[14,8],[14,4]], face:'u', clock:660, pause:3, roster:'sr2_c', sprite:'soldato1', when:()=> !r5GPHaunts() },
+        { id:'l', kind:'lookout', x:6, y:6, face:'l', spin:'cw', clock:600, pause:4, roster:'sr2_l', sprite:'soldato2', when:()=> !r5GPHaunts() },
       ],
       wild:{ rate:0.035, size:2, lv:[88,94],
         table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},{sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
-    onStep:(p, d)=> stealthStep(p, d),
+    /* (2.92) while the ghost phoenix (or its orb) is here, you and the
+       Whalelord keep turning to face it as you walk */
+    onStep:(p, d)=>{ const stop = stealthStep(p, d); r5FaceGPHere(); return stop; },
     ghostChat:(id)=> r5GhostChat(id),
   },
   /* ============================================================
@@ -911,12 +925,17 @@ const R5_DECKS = {
 "#wwwwwwwww##==####BBBBB###","############==####BBBBB###","############==######x#####",
     ],
     spawn:[12,19],
-    arrive:{ church:[12,19], tailor:[18,23], harbour:[12,38] },
+    arrive:{ church:[12,19], tailor:[18,23], harbour:[12,38], hill:[12,0] },
     things:[
       { x:12, y:19, walk:true, verb:'In', where:'The Church', arrow:'up', act:()=> r5TownChurch() },
       { x:18, y:23, walk:true, verb:'In', where:"Ugo's", arrow:'right', act:()=> goFloor('tailor', 'door') },
       { x:12, y:38, walk:true, verb:'Down', where:'The Harbour', act:()=> r5TownDown() },
-      { x:12, y:5,  w:2, verb:'Up the hill', act:()=> r5VillaRoad() },
+      { x:12, y:5,  w:2, verb:'Up the hill', act:()=> r5VillaRoad(), when:()=> !r5().hill },
+      /* (2.92) once Figlio has walked you up, the steps are yours, to the top */
+      { x:12, y:0,  w:2, walk:true, verb:'Up', where:'The Hilltop', act:()=> r5HillUp(), when:()=> !!r5().hill },
+      /* (2.92) Figlio, home from Region 3's band competition, outside the opera house */
+      { x:20, y:7,  sprite:'figlio', icon:'🎙️', verb:'Talk', act:()=> r5Figlio(), when:()=> !!r5().disguise,
+        mark:()=> !r5().figlioMet },
       { x:3,  y:7,  walk:true, verb:'Knock', act:()=> r5NonnaDoor() },
       { x:9,  y:7,  walk:true, verb:'Barber', act:()=> r5Barber() },
       { x:19, y:7,  walk:true, verb:'Opera house', act:()=> r5Opera() },
@@ -952,6 +971,207 @@ const R5_DECKS = {
     onStep:(p, d)=> stealthStep(p, d),
     ghostChat:(id)=> r5GhostChat(id),
   },
+
+  /* ============================================================
+     THE HILLTOP (2.92) — the Padrino's estate, from the hilltop's plan
+     (26×39, up the page is up the hill)
+     The steps up from the Old Town, the lemon terraces and Grandpa's
+     cottage, the terrace path, the lemon farm and the guard house, the gate
+     square — and the estate inside its walls: the villa, its forecourt and
+     fountain, and (reworked from the plan's watchtower, outside the wall)
+     the psychics' tower in the east garden. The Family's ground, like the
+     Old Town: lit, men on watch, and in uniform nobody looks twice (kind
+     'town'). Reached the first time on Figlio's arm (r5HillEscort). Drawn
+     from its grid (paintTown) until assets/zones/hilltop.png is there.
+     ============================================================ */
+  hilltop: {
+    key:'hilltop', region:5, title:'The Hilltop', bg:'region5', music:'zone_hilltop', art:'hilltop',
+    bx:0, by:0, bs:1/32, nat:[26*32, 39*32],
+    rows:[
+"###wwwwwwwwwwwwwwwwwwwwwww","###wgggggggggggggggggggggw","###wggggBBBBBBBBBBgBBBBBgw","###wggggBBBBBBBBBBgBBBBBgw",
+"###wggggBBBBBBBBBBgBBBBBgw","###wggggBBBBBBBBBBgBBBBBgw","###wggggBBBBBBBBBBgBBBBBgw","###wggggBBBBBBBBBBggg,gggw",
+"###wggggBBBBBBBBBBggg,gggw","###wgggggg,,,,,,gg~~g,gggw","###wgggggg,,,,,,gg~~g,gggw","###wg,,,,,,,,,,,,,,,,,,,gw",
+"###wwwwwwwww,,wwwwwwwwwwww","..........................","..........................","..........................",
+"ggggggBBBBBg==ggBBBBBBBggg","ggggggBBBBBg==ggBBBBBBBggg","ggggggBBBBBg==ggBBBBBBBggg","ggggggBBBBBg==ggBBBBBBBggg",
+"ggggggBBBBBg==ggBBBBBBBggg","ggggggBBBBBg==ggBBBBBBBggg","gggggggggggg==gggggggggggg","..........................",
+"..........................","gggggggggggg==,,,,,ggggggg","gggggggggggg==ggBBBBBBgggg","gggggggggggg==ggBBBBBBgggg",
+"gggggggggggg==ggBBBBBBgggg","wwwww=wwwwwg==ggBBBBBBgggg","gggggggggggg==ggBBBBBBgggg","gggggggggggg==gggggggggggg",
+"gggggggggggg==gggggggggggg","############==############","############==############","############==############",
+"############==############","############==############","############==############",
+    ],
+    spawn:[12,38],
+    arrive:{ down:[12,38], tower:[21,7] },
+    things:[
+      { x:12, y:38, w:2, walk:true, verb:'Down', where:'The Old Town', act:()=> r5HillDown() },
+      { x:21, y:7,  walk:true, verb:'In', where:'The Tower', arrow:'up', act:()=> r5TowerIn() },
+      { x:12, y:9,  w:2, walk:true, verb:'Villa', act:()=> r5VillaDoor() },
+      { x:18, y:9,  w:2, h:2, verb:'Fountain', act:()=> r5VillaFountain() },
+      { x:8,  y:15, walk:true, verb:'Lemon farm', act:()=> r5LemonFarm() },
+      { x:19, y:15, walk:true, verb:'Guard house', act:()=> r5GuardHouse() },
+      { x:18, y:25, walk:true, verb:'Knock', act:()=> r5Grandpa() },
+    ],
+    stealth:{ kind:'town', light:true, feel:0,
+      guards:[
+        { id:'a',  kind:'soldato', path:[[1,14],[24,14]], face:'r', clock:640, pause:3, sprite:'soldato2' },
+        { id:'b',  kind:'soldato', path:[[24,24],[1,24]], face:'l', clock:660, pause:3, sprite:'soldato1' },
+        { id:'c',  kind:'soldato', path:[[5,11],[23,11]], face:'r', clock:620, pause:3, sprite:'soldato2' },
+        { id:'g1', kind:'talker',  x:11, y:13, face:'r', sprite:'soldato1' },
+        { id:'g2', kind:'talker',  x:14, y:13, face:'l', sprite:'soldato2' },
+        { id:'v1', kind:'talker',  x:10, y:9,  face:'r', sprite:'soldato2' },
+        { id:'v2', kind:'talker',  x:15, y:9,  face:'l', sprite:'soldato1' },
+        { id:'l1', kind:'lookout', x:2,  y:13, face:'r', spin:'cw', clock:680, pause:5, sprite:'soldato1' },
+      ] },
+    paint:(d)=> paintTown(d),
+    onRender:(world, d)=> r5TownRender(world, d),
+    onStep:(p, d)=> stealthStep(p, d),
+    ghostChat:(id)=> r5GhostChat(id),
+  },
+
+  /* ============================================================
+     THE TOWER (2.92) — the psychics' tower, inside the estate walls
+     Thirteen floors, one room each, climbed from the door: a disciple on
+     every floor — the ghost disciples and the psychic disciples by turns —
+     and the Psychic Master and the Ghost Master at the top. A uniform does
+     not fool them: the ones who talk to the dead feel the Whalelord the
+     moment you come in, and the mind-readers hear your thoughts. Every one
+     of them fights you. Each stands in front of the stair up; beat them and they step
+     aside, and the stair is yours for good. The ghost floors are rooms of
+     candles, the psychic floors of crystal pillars. Drawn from their grids
+     (paintTower) until assets/zones/tower_ghost.png and tower_psychic.png
+     are there (11×11, 352×352 at 32 px a tile); the ground floor (its door
+     out) and the top floor (its window) look for tower_ground.png and
+     tower_top.png first, then the ghost floors' painting (artAlt).
+     ============================================================ */
+  tower_1: { key:'tower_1', region:5, tower:1, title:'The Tower · Floor 1', bg:'region5', music:'zone_tower', art:'tower_ground', artAlt:'tower_ghost',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#...*.*...#","#.........#","#...*.*...#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Out', where:'The estate', arrow:'down', act:()=> r5TowerOut() },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 2', act:()=> goFloor('tower_2', 'down'), when:()=> r5TowerBeaten(1) },
+      { x:5, y:2, sprite:'ghost_disciple1', icon:'👻', verb:'Challenge', act:()=> r5TowerChallenge(1), when:()=> !r5TowerBeaten(1) },
+      { x:3, y:2, sprite:'ghost_disciple1', icon:'👻', verb:'Talk', act:()=> r5TowerTalk(1), when:()=> r5TowerBeaten(1) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_2: { key:'tower_2', region:5, tower:2, title:'The Tower · Floor 2', bg:'region5', music:'zone_tower', art:'tower_psychic',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#..o...o..#","#.........#","#..o...o..#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 1', act:()=> goFloor('tower_1', 'up') },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 3', act:()=> goFloor('tower_3', 'down'), when:()=> r5TowerBeaten(2) },
+      { x:5, y:2, sprite:'psychic_disciple1', icon:'🔮', verb:'Challenge', act:()=> r5TowerChallenge(2), when:()=> !r5TowerBeaten(2) },
+      { x:3, y:2, sprite:'psychic_disciple1', icon:'🔮', verb:'Talk', act:()=> r5TowerTalk(2), when:()=> r5TowerBeaten(2) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_3: { key:'tower_3', region:5, tower:3, title:'The Tower · Floor 3', bg:'region5', music:'zone_tower', art:'tower_ghost',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#...*.*...#","#.........#","#...*.*...#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 2', act:()=> goFloor('tower_2', 'up') },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 4', act:()=> goFloor('tower_4', 'down'), when:()=> r5TowerBeaten(3) },
+      { x:5, y:2, sprite:'ghost_disciple2', icon:'👻', verb:'Challenge', act:()=> r5TowerChallenge(3), when:()=> !r5TowerBeaten(3) },
+      { x:3, y:2, sprite:'ghost_disciple2', icon:'👻', verb:'Talk', act:()=> r5TowerTalk(3), when:()=> r5TowerBeaten(3) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_4: { key:'tower_4', region:5, tower:4, title:'The Tower · Floor 4', bg:'region5', music:'zone_tower', art:'tower_psychic',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#..o...o..#","#.........#","#..o...o..#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 3', act:()=> goFloor('tower_3', 'up') },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 5', act:()=> goFloor('tower_5', 'down'), when:()=> r5TowerBeaten(4) },
+      { x:5, y:2, sprite:'psychic_disciple2', icon:'🔮', verb:'Challenge', act:()=> r5TowerChallenge(4), when:()=> !r5TowerBeaten(4) },
+      { x:3, y:2, sprite:'psychic_disciple2', icon:'🔮', verb:'Talk', act:()=> r5TowerTalk(4), when:()=> r5TowerBeaten(4) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_5: { key:'tower_5', region:5, tower:5, title:'The Tower · Floor 5', bg:'region5', music:'zone_tower', art:'tower_ghost',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#...*.*...#","#.........#","#...*.*...#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 4', act:()=> goFloor('tower_4', 'up') },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 6', act:()=> goFloor('tower_6', 'down'), when:()=> r5TowerBeaten(5) },
+      { x:5, y:2, sprite:'ghost_disciple3', icon:'👻', verb:'Challenge', act:()=> r5TowerChallenge(5), when:()=> !r5TowerBeaten(5) },
+      { x:3, y:2, sprite:'ghost_disciple3', icon:'👻', verb:'Talk', act:()=> r5TowerTalk(5), when:()=> r5TowerBeaten(5) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_6: { key:'tower_6', region:5, tower:6, title:'The Tower · Floor 6', bg:'region5', music:'zone_tower', art:'tower_psychic',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#..o...o..#","#.........#","#..o...o..#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 5', act:()=> goFloor('tower_5', 'up') },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 7', act:()=> goFloor('tower_7', 'down'), when:()=> r5TowerBeaten(6) },
+      { x:5, y:2, sprite:'psychic_disciple3', icon:'🔮', verb:'Challenge', act:()=> r5TowerChallenge(6), when:()=> !r5TowerBeaten(6) },
+      { x:3, y:2, sprite:'psychic_disciple3', icon:'🔮', verb:'Talk', act:()=> r5TowerTalk(6), when:()=> r5TowerBeaten(6) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_7: { key:'tower_7', region:5, tower:7, title:'The Tower · Floor 7', bg:'region5', music:'zone_tower', art:'tower_ghost',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#...*.*...#","#.........#","#...*.*...#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 6', act:()=> goFloor('tower_6', 'up') },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 8', act:()=> goFloor('tower_8', 'down'), when:()=> r5TowerBeaten(7) },
+      { x:5, y:2, sprite:'ghost_disciple4', icon:'👻', verb:'Challenge', act:()=> r5TowerChallenge(7), when:()=> !r5TowerBeaten(7) },
+      { x:3, y:2, sprite:'ghost_disciple4', icon:'👻', verb:'Talk', act:()=> r5TowerTalk(7), when:()=> r5TowerBeaten(7) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_8: { key:'tower_8', region:5, tower:8, title:'The Tower · Floor 8', bg:'region5', music:'zone_tower', art:'tower_psychic',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#..o...o..#","#.........#","#..o...o..#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 7', act:()=> goFloor('tower_7', 'up') },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 9', act:()=> goFloor('tower_9', 'down'), when:()=> r5TowerBeaten(8) },
+      { x:5, y:2, sprite:'psychic_disciple4', icon:'🔮', verb:'Challenge', act:()=> r5TowerChallenge(8), when:()=> !r5TowerBeaten(8) },
+      { x:3, y:2, sprite:'psychic_disciple4', icon:'🔮', verb:'Talk', act:()=> r5TowerTalk(8), when:()=> r5TowerBeaten(8) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_9: { key:'tower_9', region:5, tower:9, title:'The Tower · Floor 9', bg:'region5', music:'zone_tower', art:'tower_ghost',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#...*.*...#","#.........#","#...*.*...#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 8', act:()=> goFloor('tower_8', 'up') },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 10', act:()=> goFloor('tower_10', 'down'), when:()=> r5TowerBeaten(9) },
+      { x:5, y:2, sprite:'ghost_disciple5', icon:'👻', verb:'Challenge', act:()=> r5TowerChallenge(9), when:()=> !r5TowerBeaten(9) },
+      { x:3, y:2, sprite:'ghost_disciple5', icon:'👻', verb:'Talk', act:()=> r5TowerTalk(9), when:()=> r5TowerBeaten(9) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_10: { key:'tower_10', region:5, tower:10, title:'The Tower · Floor 10', bg:'region5', music:'zone_tower', art:'tower_psychic',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#..o...o..#","#.........#","#..o...o..#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 9', act:()=> goFloor('tower_9', 'up') },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 11', act:()=> goFloor('tower_11', 'down'), when:()=> r5TowerBeaten(10) },
+      { x:5, y:2, sprite:'psychic_disciple5', icon:'🔮', verb:'Challenge', act:()=> r5TowerChallenge(10), when:()=> !r5TowerBeaten(10) },
+      { x:3, y:2, sprite:'psychic_disciple5', icon:'🔮', verb:'Talk', act:()=> r5TowerTalk(10), when:()=> r5TowerBeaten(10) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_11: { key:'tower_11', region:5, tower:11, title:'The Tower · Floor 11', bg:'region5', music:'zone_tower', art:'tower_ghost',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#...*.*...#","#.........#","#...*.*...#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 10', act:()=> goFloor('tower_10', 'up') },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 12', act:()=> goFloor('tower_12', 'down'), when:()=> r5TowerBeaten(11) },
+      { x:5, y:2, sprite:'ghost_disciple6', icon:'👻', verb:'Challenge', act:()=> r5TowerChallenge(11), when:()=> !r5TowerBeaten(11) },
+      { x:3, y:2, sprite:'ghost_disciple6', icon:'👻', verb:'Talk', act:()=> r5TowerTalk(11), when:()=> r5TowerBeaten(11) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_12: { key:'tower_12', region:5, tower:12, title:'The Tower · Floor 12', bg:'region5', music:'zone_tower', art:'tower_psychic',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9], up:[5,1] },
+    rows:["###########","#####.#####","###.....###","##.......##","#..o...o..#","#.........#","#..o...o..#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 11', act:()=> goFloor('tower_11', 'up') },
+      { x:5, y:1, walk:true, verb:'Up', where:'Floor 13', act:()=> goFloor('tower_13', 'down'), when:()=> r5TowerBeaten(12) },
+      { x:5, y:2, sprite:'psychic_master', icon:'🔮', verb:'Challenge', act:()=> r5TowerChallenge(12), when:()=> !r5TowerBeaten(12) },
+      { x:3, y:2, sprite:'psychic_master', icon:'🔮', verb:'Talk', act:()=> r5TowerTalk(12), when:()=> r5TowerBeaten(12) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
+  tower_13: { key:'tower_13', region:5, tower:13, title:'The Tower · Floor 13', bg:'region5', music:'zone_tower', art:'tower_top', artAlt:'tower_ghost',
+    bx:0, by:0, bs:1/32, nat:[11*32, 11*32], spawn:[5,9], arrive:{ down:[5,9] },
+    rows:["###########","#####.#####","###.....###","##.......##","#...*.*...#","#.........#","#...*.*...#","##.......##","###.....###","#####.#####","###########"],
+    things:[
+      { x:5, y:9, walk:true, verb:'Down', where:'Floor 12', act:()=> goFloor('tower_12', 'up') },
+      { x:5, y:1, walk:true, verb:'Window', act:()=> r5TowerWindow(), when:()=> r5TowerBeaten(13) },
+      { x:5, y:2, sprite:'ghost_master', icon:'👻', verb:'Challenge', act:()=> r5TowerChallenge(13), when:()=> !r5TowerBeaten(13) },
+      { x:3, y:2, sprite:'ghost_master', icon:'👻', verb:'Talk', act:()=> r5TowerTalk(13), when:()=> r5TowerBeaten(13) },
+    ],
+    paint:(d)=> paintTower(d), onRender:(world, d)=> r5TowerRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
 };
 [...R5_FLOORS, ...R5_FLOORS_T2].forEach(id=>{ R5_DECKS[id].prizeLines = CATA_PRIZE_LINES; });
 /* Tier 2's wild tables: all thirteen on every floor (2.90). */
@@ -961,7 +1181,7 @@ Object.values(R5_DECKS).forEach(d=>{
 });
 /* Look for any floor's own painting now, so it is ready the first time the
    floor is shown (cataPainting, 14-stealth.js). */
-Object.values(R5_DECKS).forEach(d=>{ if(d.art && d.paint) cataPainting(d); });
+Object.values(R5_DECKS).forEach(d=>{ if(d.art && d.paint) cataPainting(d); if(d.artAlt) cataPainting({ art:d.artAlt }); });
 /* The side rooms, floor by floor: [room 1, room 2]. */
 const R5_ROOMS = {
   cata_landing: ['cata_landing_r1', 'cata_landing_r2'],
@@ -1157,6 +1377,9 @@ function goFloor(id, where, at){
   } else if(id === 'church' || id === 'tailor' || id === 'old_town'){
     if(d.stealth) ui.stealthFresh = true;              // the streets' men back on their rounds (2.91)
     ui.currentZone = r5Zone('old_town') || ui.currentZone;
+  } else if(id === 'hilltop' || d.tower){
+    if(d.stealth) ui.stealthFresh = true;              // (2.92)
+    ui.currentZone = r5Zone('hilltop') || ui.currentZone;
   }
   ui.returnDeck = null;
   w.busy = true;
@@ -1617,11 +1840,14 @@ function r5FloorRender(world, d){
   ['#backBtn', '#walkParty'].forEach(sel=>{ const b = $(sel); if(b) b.addEventListener('click', ()=> saveProfile()); });
   const say = html=> sceneSay([faceMon('whalelord')], whaleName(), html);
   const later = f=> setTimeout(f, 500);
-  /* The ghost phoenix, in the Armoury, once the Purple Capo is beaten (2.90). */
-  if(r5PhoenixDue(d)) return r5PhoenixScene(world, d);
+  /* The ghost phoenix, in the Armoury, once the Purple Capo is beaten (2.90):
+     (2.92) its orb, waiting to be touched. */
+  if(r5PhoenixDue(d)) return r5OrbScene(world, d);
   /* …and afterwards, waiting there for a phoenix to give the last of its
-     power to (2.91). Nobody stands watch in a haunted armoury. */
+     power to (2.91) — an orb again each time you come in (2.92). Nobody
+     stands watch in a haunted armoury. */
   if(d.key === 'cata_stair_r2' && r5GPWaiting()){
+    if(fresh) ui.gpOut = false;
     r5PaintGPWaiting();
     if(fresh && r5Once('gpWaiting'))
       later(()=> say(`<b>"The old phoenix. It came back down here when the dead were pressed down again."</b><br><br>` +
@@ -1795,18 +2021,28 @@ async function r5SenseArmoury(){
    you run (r5().rush), up the crypt stair and into the Old Town's church
    (r5().oldTown). Run out of time and they catch you: ten phrases, and
    again from the gate.
-   Art it looks for: assets/npc/ghost_phoenix.png — until then your phoenix's
-   own picture, gone dark and ghostly.
+   (2.92) It comes as a ball of darkness: a 2×2 black orb, pulsing slowly,
+   in the middle of the Armoury. Touch it and the orb fades away while the
+   ghost phoenix fades in, rising out of its centre to a little above it, and
+   floats there, slowly up and down (r5OrbScene, r5TouchOrb, r5OrbEmerge).
+   Art it looks for: assets/mon/ghost_phoenix_front.png (2.92; or the older
+   assets/npc/ghost_phoenix.png) — until then your phoenix's own picture,
+   gone dark and ghostly.
    ============================================================ */
 const R5_GP = 'The ghost phoenix';
-let _gpArt;
+const R5_GP_ART = ['assets/mon/ghost_phoenix_front.png', 'assets/npc/ghost_phoenix.png'];
+let _gpArt, _gpSrc = null;
 function r5GhostPhoenixArt(){
   if(_gpArt === undefined && typeof Image !== 'undefined'){
     _gpArt = 'looking';
-    const im = new Image();
-    im.onload = ()=>{ _gpArt = 'ok'; };
-    im.onerror = ()=>{ _gpArt = 'none'; };
-    im.src = 'assets/npc/ghost_phoenix.png';
+    const tryAt = i=>{
+      if(i >= R5_GP_ART.length){ _gpArt = 'none'; return; }
+      const im = new Image();
+      im.onload = ()=>{ _gpArt = 'ok'; _gpSrc = R5_GP_ART[i]; };
+      im.onerror = ()=> tryAt(i + 1);
+      im.src = R5_GP_ART[i];
+    };
+    tryAt(0);
   }
   return _gpArt === 'ok';
 }
@@ -1814,7 +2050,7 @@ r5GhostPhoenixArt();
 function r5GhostPhoenixHtml(px){
   r5Css();
   return r5GhostPhoenixArt()
-    ? `<img src="assets/npc/ghost_phoenix.png" alt="" style="width:${px}px;height:${px}px;object-fit:contain;">`
+    ? `<img src="${_gpSrc}" alt="" style="width:${px}px;height:${px}px;object-fit:contain;">`
     : `<span class="r5-ghostfire">${monPortrait('phoenix', px, { view:'front', bare:true })}</span>`;
 }
 function r5Css(){
@@ -1830,6 +2066,21 @@ function r5Css(){
       background:radial-gradient(circle,rgba(200,140,255,.55) 0%,rgba(120,40,200,.5) 30%,rgba(60,10,110,.32) 52%,rgba(20,0,40,0) 72%);
       animation:r5Flicker .9s ease-in-out infinite;}
     .r5-darkglow.gold{background:radial-gradient(circle,rgba(255,240,180,.85) 0%,rgba(255,190,80,.6) 32%,rgba(240,120,40,.3) 55%,rgba(240,120,40,0) 72%);}
+    /* the ghost phoenix's orb (2.92): black, pulsing slowly like a heartbeat */
+    .r5-orb{position:absolute;pointer-events:none;border-radius:50%;
+      background:radial-gradient(circle at 40% 36%,#3b2652 0%,#140a20 30%,#000 64%);
+      animation:r5OrbPulse 2.4s ease-in-out infinite;}
+    @keyframes r5OrbPulse{
+      0%,100%{transform:scale(.9);box-shadow:0 0 10px 3px rgba(110,50,190,.45),inset 0 0 12px rgba(150,90,255,.22);}
+      50%{transform:scale(1.02);box-shadow:0 0 26px 9px rgba(140,70,235,.7),inset 0 0 20px rgba(170,110,255,.4);}}
+    /* …and the ghost phoenix, risen out of it, floating slowly up and down */
+    @keyframes r5GPFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7%)}}
+    .scene-actor.r5-gpfloat .sa-in{animation:r5GPFloat 3.2s ease-in-out infinite;}
+    /* turned to face the ghost phoenix (2.92): the pictures face left; to face
+       right — towards it — they are flipped */
+    .walk-you.r5-face-r img{transform:scale(-1.275, 1.275);}
+    .walk-ghost.r5-face-r img, .walk-ghost.r5-face-r .mon-portrait img{transform:scale(-1.365, 1.365);}
+    .scene-actor.r5-face-r .sa-in > *{transform:scaleX(-1);}
     /* the run's clock (2.91) */
     .r5-rush{position:absolute;left:8px;top:8px;z-index:8;padding:4px 11px;border-radius:12px;
       background:rgba(52,22,86,.88);color:#f3e9ff;border:1px solid rgba(190,140,255,.7);
@@ -1886,6 +2137,126 @@ function r5DarkGlow(id, cx, cy, tiles, gold){
   g.style.opacity = '1';
   return g;
 }
+/* The ghost phoenix's orb (2.92): a ball of darkness over 2×2 tiles, its
+   top-left at (x, y), pulsing. A scene glow, so sceneClear clears it. */
+const R5_ORB = { x:5, y:5 };                     // its tiles in the Armoury: (5,5)–(6,6)
+function r5PaintOrb(id, x, y, fadeIn){
+  r5Css();
+  const world = $('#walkWorld'); if(!world) return null;
+  const T = WALK_T;
+  let o = document.getElementById('sg-' + id);
+  if(!o){ o = document.createElement('div'); o.id = 'sg-' + id; world.appendChild(o); }
+  o.className = 'scene-glow r5-orb';
+  o.style.left = (x * T) + 'px'; o.style.top = (y * T) + 'px';
+  o.style.width = o.style.height = (2 * T) + 'px';
+  o.style.zIndex = 12 + Math.floor(y);
+  if(fadeIn){
+    o.style.transition = 'none'; o.style.opacity = '0';
+    void o.offsetWidth;
+    o.style.transition = `opacity ${fadeIn * SCENE_SPEED}ms ease`;
+    o.style.opacity = '1';
+  }
+  return o;
+}
+/* Out of the orb: it fades slowly away while the ghost phoenix (2 tiles)
+   fades in, rising from the orb's centre to a little above it; then it
+   floats, slowly up and down. Its box's top-left ends at (x, y - 0.6). */
+const R5_GP_RISE = 0.6, R5_GP_EMERGE_MS = 2600;
+async function r5OrbEmerge(orbId, actorId, x, y, opacity){
+  const T = WALK_T, MS = R5_GP_EMERGE_MS;
+  const a = r5MonActor(actorId, 'phoenix', x, y, 2, { html:r5GhostPhoenixHtml(Math.round(T * 2)) });
+  if(a){
+    a.classList.remove('r5-gpfloat');
+    a.style.transition = 'none'; a.style.opacity = '0';
+    void a.offsetWidth;
+    a.style.transition = `top ${MS * SCENE_SPEED}ms ease-out, opacity ${MS * SCENE_SPEED}ms ease-in`;
+    a.style.top = ((y - R5_GP_RISE) * T) + 'px';
+    a.style.opacity = String(opacity != null ? opacity : 1);
+    a._o.y = y - R5_GP_RISE;
+  }
+  const orb = document.getElementById('sg-' + orbId);
+  if(orb){ orb.style.transition = `opacity ${MS * SCENE_SPEED}ms ease`; orb.style.opacity = '0'; }
+  /* the orb's "!" goes with it */
+  document.querySelectorAll('.walk-mark').forEach(m=>{ if(Math.abs(parseFloat(m.style.left) - (x + 1) * T) < 1) m.remove(); });
+  await sceneWait(MS);
+  if(orb) orb.remove();
+  if(a) a.classList.add('r5-gpfloat');
+  return a;
+}
+/* Is the orb in the Armoury now? The night it is met, once it has shown
+   itself; and while it waits there afterwards, until it is touched on this
+   visit (ui.gpOut). */
+function r5OrbHere(){
+  const r = r5();
+  if(!r.tier1) return false;
+  if(!r.phoenixMet) return !!r.said.gpOrb;
+  return r5GPWaiting() && !ui.gpOut;
+}
+/* Nobody stands watch in a haunted armoury. */
+function r5GPHaunts(){ const r = r5(); return r5GPWaiting() || !!(r.tier1 && !r.phoenixMet && r.said.gpOrb); }
+/* The first time in, with the Purple Capo beaten: the orb appears, the
+   soldatos run, and the Whalelord says to touch it. After that it is simply
+   there, until it is touched. */
+async function r5OrbScene(world, d){
+  const r = r5();
+  if(r.said.gpOrb){ r5PaintOrb('gporb', R5_ORB.x, R5_ORB.y); r5FaceGP(R5_ORB.x + 1); return; }
+  ui.sceneRunning = true;
+  const w = walkState();
+  w.busy = true;
+  if(typeof releaseKeys === 'function') releaseKeys();
+  const whale = faceMon('whalelord'), wn = whaleName();
+  await sceneWait(700);
+  ghostAlert();
+  await sceneSay([whale], wn, `<b>"Here. It is in here."</b>`);
+  r5PaintOrb('gporb', R5_ORB.x, R5_ORB.y, 1400);
+  r5FaceGP(R5_ORB.x + 1);                        // everyone turns to look at it
+  await sceneWait(1200);
+  await sceneSay([], '',
+    `In the middle of the room, where there was nothing a moment ago, hangs a ball of darkness — blacker than the dark around it, pulsing slowly, like a heartbeat.`);
+  if(r5GuardsFlee(d.key)){
+    paintStealth(d.key, d);                       // their lanterns go with them
+    await sceneSay([], '', `The soldatos see it too. Their lanterns shake — and then they are running, every one of them, out past you and away.`);
+  }
+  await sceneSay([whale], wn,
+    `<b>"There is something inside it. Something dead — and very, very angry."</b><br><br>` +
+    `<b>"Go on. Touch it. Whatever it is, it is no friend of the Family."</b>`);
+  r.said.gpOrb = true;
+  await saveProfile();
+  w.busy = false;
+  ui.sceneRunning = false;
+  refreshWalkAll();                              // its "!" and its Touch
+}
+/* Touch it: the night it is met, the whole scene; afterwards, it rises out
+   of the orb to talk to you. */
+function r5TouchOrb(){
+  const r = r5();
+  if(ui.sceneRunning || walkState().busy) return;
+  if(!r.phoenixMet) return r5PhoenixScene(null, DECKS.cata_stair_r2);
+  return r5ArmouryPhoenix();
+}
+/* Where your phoenix comes out (2.92): beside you, on the far side from the
+   ghost (whose middle is at tile column cx). */
+function r5BesideYou(p, cx){ const left = p.x < cx; return { x:p.x + (left ? -0.9 : 0.6), y:p.y - 0.9, left }; }
+/* Everyone turns to face the ghost phoenix (2.92): you, the Whalelord and
+   your phoenix. Their pictures face left, so whoever has it on their right is
+   flipped. gx is its middle, in tiles; null turns everyone back. */
+function r5FaceGP(gx){
+  r5Css();
+  const w = walkState(), p = w.at && w.at[w.deck], q = w.ghostAt && w.ghostAt[w.deck];
+  const turn = (el, cx)=>{ if(el) el.classList.toggle('r5-face-r', gx != null && cx != null && cx < gx - 0.05); };
+  turn($('#walkYou'), p ? p.x + 0.5 : null);
+  turn($('#walkGhost'), q ? q.x + 0.5 : null);
+  const m = document.getElementById('sa-myphoenix');
+  turn(m, m && m._o ? m._o.x + m._o.w / 2 : null);
+}
+/* In the Armoury, wherever the ghost phoenix (or its orb) is, face it. */
+function r5FaceGPHere(){
+  if(walkState().deck !== 'cata_stair_r2') return;
+  const a = document.getElementById('sa-gphoenix') || document.getElementById('sa-gpwait');
+  if(a && a._o) return r5FaceGP(a._o.x + a._o.w / 2);
+  if(document.getElementById('sg-gporb')) return r5FaceGP(R5_ORB.x + 1);
+  r5FaceGP(null);
+}
 /* Your phoenix, if you have one — out with you, or in storage. */
 function r5MyPhoenix(){
   const inParty = (state.party || []).find(m=> m && m.species === 'phoenix');
@@ -1923,24 +2294,18 @@ async function r5PhoenixScene(world, d){
   if(typeof releaseKeys === 'function') releaseKeys();
   const whale = faceMon('whalelord'), wn = whaleName();
   const gp = ()=> r5GhostPhoenixHtml(64);
-  const p = (w.at && w.at[d.key]) || { x:0, y:6 };
-  /* where it burns: along the middle aisle from the door, near enough that it
-     and you are on the stage together (a phone shows 7 tiles across) */
-  const FX = 5, FY = 6;
-  await sceneWait(700);
-  ghostAlert();
-  await sceneSay([whale], wn, `<b>"Here. It is in here."</b>`);
-  r5DarkGlow('gp1', FX + 0.5, FY + 0.5, 1.2);
-  await sceneWait(800);
-  await sceneSay([], '', `In the middle of the room a flame lights by itself — a dark, purple flame, burning on nothing at all.`);
-  if(r5GuardsFlee(d.key)){
-    paintStealth(d.key, d);                       // their lanterns go with them
-    await sceneSay([], '', `The soldatos see it too. Their lanterns shake — and then they are running, every one of them, out past you and away.`);
-  }
-  r5DarkGlow('gp2', FX + 0.5, FY + 0.5, 3.4);
+  const p = (w.at && w.at[d.key]) || { x:4, y:6 };
+  /* (2.92) touched, the orb fades and it rises out of it: its 2-tile box
+     ends at (GX, GY), floating; its middle at (CX, CY) */
+  const GX = R5_ORB.x, GY = R5_ORB.y - R5_GP_RISE, CX = GX + 1, CY = GY + 1;
+  let gpX = GX;                                     // where it floats now
+  r5FaceGP(CX);                                    // everyone facing it
+  if(document.getElementById('sg-gporb'))
+    await sceneSay([], '', `You put out your hand. The darkness is cold — and then, all at once, it is warm.`);
+  await r5OrbEmerge('gporb', 'gphoenix', R5_ORB.x, R5_ORB.y);
+  await sceneWait(500);
+  r5DarkGlow('gp2', CX, CY + 0.2, 3.4);
   await sceneShake(600, t=> 0.10 * (1 - t / 600));
-  r5MonActor('gphoenix', 'phoenix', FX - 0.4, FY - 1.0, 1.8, { bob:true, html:r5GhostPhoenixHtml(Math.round(WALK_T * 1.8)) });
-  await sceneWait(600);
   await sceneSay([gp()], R5_GP,
     `<b>"WHERE IS HE?"</b><br><br>Its voice roars like a fire up a chimney.<br><br><b>"The Padrino. Where is he hiding?"</b>`);
   await sceneSay([gp()], R5_GP,
@@ -1953,7 +2318,7 @@ async function r5PhoenixScene(world, d){
   await sceneSay([whale], wn,
     `<b>"Peace, friend. I am dead too. We are not your enemies."</b><br><br>` +
     `<b>"Your anger is burning you away. Stop a moment, and let us help you."</b>`);
-  r5DarkGlow('gp3', FX + 0.5, FY + 0.2, 5);
+  r5DarkGlow('gp3', CX, CY, 5);
   await sceneShake(700, t=> 0.16 * (1 - t / 700));
   await sceneSay([gp()], R5_GP,
     `<b>"STOP?"</b> The dark flames leap to the ceiling.<br><br>` +
@@ -1966,20 +2331,24 @@ async function r5PhoenixScene(world, d){
     /* Your phoenix: it knows the fire, not quite knowing why. */
     const m = mine.mon, crowned = isCrowned(m), me = displayName(m);
     const face = ()=> faceMon('phoenix', { crowned });
-    const MX = p.x + 1.2, MY = p.y - 0.6;
+    /* (2.92) beside you, on the far side from the ghost */
+    const bes = r5BesideYou(p, CX), left = bes.left, MX = bes.x, MY = bes.y;
     if(mine.stored){
       await sceneSay([], '', `A streak of light comes in through the walls from somewhere far away — your phoenix, called by something it cannot name.`);
     } else {
       await sceneSay([], '', `Something stirs beside you. Your phoenix comes out on its own, blinking at the dark fire.`);
     }
     r5MonActor('myphoenix', 'phoenix', MX, MY, 1.3, { crowned, bob:true });
+    r5FaceGP(CX);
     await sceneWait(500);
     await sceneSay([face()], me,
       `<b>"...?"</b><br><br>It tilts its head at the dark fire, as if it is listening to a song it half remembers.`);
     await sceneSay([face()], me, `<b>"That fire... I know that fire. Don't I?"</b>`);
     await sceneGlowOut(['gp2'], 500);
     await sceneSay([gp()], R5_GP, `The roaring stops.<br><br><b>"...You."</b>`);
-    await r5MoveActor('gphoenix', FX - 1.7, FY - 1.0, 900);
+    const NX = GX + (left ? -0.7 : 0.7);             // it drifts toward your phoenix
+    await r5MoveActor('gphoenix', NX, GY, 900);
+    gpX = NX;
     await sceneSay([gp()], R5_GP,
       `<b>"You have my fire in you. My core."</b> Its voice is very small now. <b>"Is it really you?"</b>`);
     await sceneSay([face()], me,
@@ -1987,7 +2356,7 @@ async function r5PhoenixScene(world, d){
     await sceneSay([gp()], R5_GP,
       `<b>"Look at you. Look how you have grown."</b><br><br>` +
       `<b>"When they came for me, I sent my core far, far away, to a quiet forest, to hatch where they could never find it. I never knew if it got there."</b>`);
-    r5DarkGlow('gpgold', FX - 1.7 + 0.9, FY - 0.1, 3.2, true);
+    r5DarkGlow('gpgold', NX + 1, GY + 1.2, 3.2, true);
     await sceneSay([gp()], R5_GP,
       `<b>"It did. And here you are — strong, and bright, and loved."</b><br><br>` +
       `The dark flames flicker, and for a moment they burn gold.<br><br>` +
@@ -1995,7 +2364,7 @@ async function r5PhoenixScene(world, d){
       `<b>"Then my last fire was worth it. Every spark of it."</b>`);
     await sceneGlowOut(['gpgold'], 600);
     /* (2.91) the rest of its power: there was no time to send it all */
-    await r5PhoenixGift(mine, { GX:FX - 1.7 + 0.9, GY:FY - 0.1 });
+    await r5PhoenixGift(mine, { GX:NX + 1, GY:GY + 1.2 });
     await sceneSay([gp()], R5_GP,
       `<b>"Listen to me, little one. I have been a fool. Every night I have fought them alone, and every night I have lost."</b>`);
     await sceneSay([gp()], R5_GP,
@@ -2040,9 +2409,9 @@ async function r5PhoenixScene(world, d){
     await sceneSay([gp()], R5_GP, `<b>"Before I rest, little one. I promise."</b>`);
   }
   /* It rises, screaming, and the whole hill answers. */
-  r5DarkGlow('gp4', FX + 0.5, FY - 1, 7);
+  r5DarkGlow('gp4', gpX + 1, GY, 7);
   sceneShake(1400, t=> 0.18 * Math.max(0, 1 - t / 1400));
-  await r5MoveActor('gphoenix', FX - 0.4, FY - 6, 1100, true);
+  await r5MoveActor('gphoenix', gpX, GY - 6, 1100, true);
   await sceneCurtain(true, 700);
   sceneClear();
   await sceneCurtainText('The ghost phoenix screams — and the whole hill answers.', 700);
@@ -2119,12 +2488,13 @@ async function r5PhoenixFarewell(where){
   const G = where === 'tailor' ? { x:9, y:6 } : { x:5, y:6 };
   if(where === 'tailor'){
     ghostAlert();
-    r5DarkGlow('gpfare', G.x + 0.5, G.y + 0.5, 2.4);
-    const a = r5MonActor('gpfare', 'phoenix', G.x - 0.4, G.y - 1.0, 1.8, { bob:true, html:r5GhostPhoenixHtml(Math.round(WALK_T * 1.8)) });
-    if(a) a.style.opacity = '0.62';
-    await sceneWait(500);
+    /* (2.92) up through the floorboards as its orb, and out of it, faint */
+    r5PaintOrb('gpforb', G.x - 0.5, G.y - 0.5, 1000);
+    r5FaceGP(G.x + 0.5);
+    await sceneWait(1100);
+    await r5OrbEmerge('gpforb', 'gpfare', G.x - 0.5, G.y - 0.5, 0.62);
     await sceneSay([], '',
-      `A dark flame flickers up through the floorboards — the ghost phoenix, so faint you can see the room through it.<br><br>` +
+      `A ball of darkness rises up through the floorboards, and out of it rises the ghost phoenix, so faint you can see the room through it.<br><br>` +
       `Ugo goes on folding his cloth. He sees nothing.`);
     await sceneSay([gp()], R5_GP, `<b>"You made it through. I held them for as long as I could."</b>`);
   }
@@ -2135,7 +2505,11 @@ async function r5PhoenixFarewell(where){
     const crowned = isCrowned(mine.mon), me = displayName(mine.mon);
     if(!document.getElementById('sa-myphoenix')){
       if(mine.stored) await sceneSay([], '', `A streak of light comes in through the walls — your phoenix, come to say goodbye.`);
-      r5MonActor('myphoenix', 'phoenix', p.x + 1.2, p.y - 0.6, 1.3, { crowned, bob:true });
+      const ga = document.getElementById('sa-' + (where === 'tailor' ? 'gpfare' : 'gpwait'));
+      const gcx = ga && ga._o ? ga._o.x + ga._o.w / 2 : G.x + 0.5;
+      const bes = r5BesideYou(p, gcx);
+      r5MonActor('myphoenix', 'phoenix', bes.x, bes.y, 1.3, { crowned, bob:true });
+      r5FaceGP(gcx);
       await sceneWait(400);
     }
     await sceneSay([faceMon('phoenix', { crowned })], me, `<b>"Will you go away now?"</b>`);
@@ -2148,6 +2522,7 @@ async function r5PhoenixFarewell(where){
   await r5MoveActor(id, x0, G.y - 5, 1600, true);
   await sceneGlowOut([id, 'gpfare', 'gpwait'], 700);
   sceneActorGone(id);
+  r5FaceGP(null);                                // nothing there to face now
   await sceneSay([], '', `And then it is gone. The air stays warm for a long time after.`);
   await sceneSay([faceMon('whalelord')], whaleName(), `<b>"Rest well, old fire."</b>`);
   sceneActorGone('myphoenix');
@@ -2159,9 +2534,15 @@ async function r5PhoenixFarewell(where){
    power given before you were safe up the hill) for you to be. */
 function r5GPWaiting(){ const r = r5(); return !!(r.phoenixMet && !r.rush && !r.phoenixGone); }
 function r5PaintGPWaiting(){
-  if(document.getElementById('sa-gpwait')) return;
-  r5DarkGlow('gpwait', 5.5, 6.5, 2.4);
-  r5MonActor('gpwait', 'phoenix', 4.6, 5.0, 1.8, { bob:true, html:r5GhostPhoenixHtml(Math.round(WALK_T * 1.8)) });
+  if(!ui.gpOut){                                  // (2.92) its orb, until it is touched
+    if(!document.getElementById('sg-gporb')) r5PaintOrb('gporb', R5_ORB.x, R5_ORB.y);
+    return r5FaceGPHere();
+  }
+  if(!document.getElementById('sa-gpwait')){
+    const a = r5MonActor('gpwait', 'phoenix', R5_ORB.x, R5_ORB.y - R5_GP_RISE, 2, { html:r5GhostPhoenixHtml(Math.round(WALK_T * 2)) });
+    if(a) a.classList.add('r5-gpfloat');
+  }
+  r5FaceGPHere();
 }
 const R5_GP_WAITING = [
   `<b>"Go on up into the Old Town. I will be here."</b>`,
@@ -2177,6 +2558,15 @@ const R5_GP_WAITING_DISGUISED = [
 async function r5ArmouryPhoenix(){
   const r = r5();
   if(ui.sceneRunning || walkState().busy) return;
+  if(!ui.gpOut){                                  // (2.92) touched: it rises out of its orb first
+    ui.sceneRunning = true; walkState().busy = true; releaseKeys();
+    r5FaceGP(R5_ORB.x + 1);
+    await r5OrbEmerge('gporb', 'gpwait', R5_ORB.x, R5_ORB.y);
+    ui.gpOut = true;
+    ui.sceneRunning = false; walkState().busy = false;
+    walkState().actSig = null;
+    refreshWalk();                                // its Touch is a Ghost phoenix now
+  }
   const gp = ()=> r5GhostPhoenixHtml(64);
   const mine = r5MyPhoenix();
   if(!r.phoenixGift && mine) return r5LateGift(mine);
@@ -2208,10 +2598,13 @@ async function r5LateGift(mine){
   const face = ()=> faceMon('phoenix', { crowned });
   const p = w.at[w.deck] || { x:4, y:6 };
   ghostAlert();
-  r5DarkGlow('gplate', 5.5, 6.2, 3.2);
+  const GC = { x:R5_ORB.x + 1, y:R5_ORB.y - R5_GP_RISE + 1.2 };   // under the floating ghost (2.92)
+  r5DarkGlow('gplate', GC.x, GC.y, 3.2);
   if(mine.stored) await sceneSay([], '', `A streak of light comes in through the walls from somewhere far away — your phoenix, called by something it cannot name.`);
   else await sceneSay([], '', `Something stirs beside you. Your phoenix comes out on its own, blinking at the dark fire.`);
-  r5MonActor('myphoenix', 'phoenix', p.x + 1.2, p.y - 0.6, 1.3, { crowned, bob:true });
+  const bes = r5BesideYou(p, GC.x);
+  r5MonActor('myphoenix', 'phoenix', bes.x, bes.y, 1.3, { crowned, bob:true });
+  r5FaceGP(GC.x);
   await sceneWait(500);
   if(r.phoenixKin){
     /* they have met before (a save from 2.90): no need to say it all again */
@@ -2227,7 +2620,7 @@ async function r5LateGift(mine){
       `<b>"Then my last fire was worth it. Every spark of it."</b>`);
   }
   await sceneGlowOut(['gplate'], 400);
-  await r5PhoenixGift(mine, { GX:5.5, GY:6.2 });
+  await r5PhoenixGift(mine, { GX:GC.x, GY:GC.y });
   if(r.disguise) await r5PhoenixFarewell('armoury');
   else await sceneSay([gp()], R5_GP, `<b>"Go on up, into the Old Town. When you are safe up there, I can rest."</b>`);
   sceneActorGone('myphoenix');
@@ -2738,7 +3131,7 @@ function paintChurch(d){
      in the Old Town    they know you — frozen to the spot, surrounded by
                         soldatos and capos, ten phrases, back in the church
    ============================================================ */
-function r5DisguiseDeck(d){ return !!(d && d.region === 5 && (d.stealth || d.key === 'church' || d.key === 'tailor')); }
+function r5DisguiseDeck(d){ return !!(d && d.region === 5 && (d.stealth || d.key === 'church' || d.key === 'tailor' || d.tower)); }
 function r5YouArt(d){
   if(!r5DisguiseDeck(d) || !r5().disguised) return null;
   const px = WALK_T;
@@ -2773,7 +3166,7 @@ async function r5ToggleDisguise(){
   if(!r.disguised) return r5SetDisguise(true);
   if(d.stealth && d.stealth.kind === 'town'){
     const yes = await r5Ask([faceMon('whalelord')], whaleName(),
-      `<b>"Here? In the street? Every one of them knows your face. They would be on us at once."</b>`, '🎭 Take it off', 'Keep it on');
+      `<b>"${d.key === 'hilltop' ? 'Here? On the Padrino\'s own hill?' : 'Here? In the street?'} Every one of them knows your face. They would be on us at once."</b>`, '🎭 Take it off', 'Keep it on');
     if(!yes) return;
     r5SetDisguise(false);
     return r5Unmask(d);
@@ -2863,33 +3256,50 @@ function r5Challenge(d, g, def){
 /* ============================================================
    THE OLD TOWN'S STREETS (2.91)
    ============================================================ */
+/* The first time in each of the Family's lit places. */
+const R5_TOWN_FIRST = {
+  old_town:`<b>"The Old Town. Soldatos on every corner, and capos at the café — and not one of them has looked twice at you."</b><br><br>` +
+           `<b>"Ugo was right. Walk as if you belong here."</b>`,
+  hilltop: `<b>"The Padrino's own hill. More of his men up here, and every one of them watching that gate."</b><br><br>` +
+           `<b>"Keep that cap on, and let them think you are Figlio's porter."</b>`,
+};
 function r5TownRender(world, d){
   const r = r5();
   if(!r.disguise){ setTimeout(()=> renderOldTownZone(), 0); return; }   // (before Ugo — the developer's way: the church)
   if(!r.disguised){ r.disguised = true; saveProfile(); walkYouRefresh(); walkSideRefresh(); }
   startStealth(world, d);
-  if(!ui.sceneRunning && r5Once('first_old_town'))
-    setTimeout(()=> sceneSay([faceMon('whalelord')], whaleName(),
-      `<b>"The Old Town. Soldatos on every corner, and capos at the café — and not one of them has looked twice at you."</b><br><br>` +
-      `<b>"Ugo was right. Walk as if you belong here."</b>`), 500);
+  if(!ui.sceneRunning && R5_TOWN_FIRST[d.key] && r5Once('first_' + d.key))
+    setTimeout(()=> sceneSay([faceMon('whalelord')], whaleName(), R5_TOWN_FIRST[d.key]), 500);
 }
 /* Out of uniform in the streets, or a face shown to one of them: frozen to
-   the spot and surrounded — soldatos, and the capos from the café — ten
-   phrases, like the catacombs' evade floors, and back in the church. */
+   the spot and surrounded — soldatos, and in the Old Town the capos from the
+   café — ten phrases, like the catacombs' evade floors. Then, in the Old
+   Town, back in the church (out of uniform, if that is how they caught you);
+   on the Hilltop (2.92), pulled in at Grandpa's door, cap and all. */
 async function r5TownCaught(id, d, g, def){
   const r = r5(), w = walkState();
   w.busy = true;
   ui.sceneRunning = true;
   const revealed = ui.r5Revealed === id;
   ui.r5Revealed = null;
+  const hill = id === 'hilltop';
   const capos = ['capo_purple'].concat(r.capoBlack ? ['capo_black'] : [], r.capoGrey ? ['capo_grey'] : []);
-  const crowd = ['soldato1', capos[0], 'soldato2', 'soldato1', capos[1] || 'soldato2', 'soldato2', capos[2] || 'soldato1', 'soldato1', 'soldato2', 'soldato1'];
+  const crowd = hill ? ['soldato1', 'soldato2']
+    : ['soldato1', capos[0], 'soldato2', 'soldato1', capos[1] || 'soldato2', 'soldato2', capos[2] || 'soldato1', 'soldato1', 'soldato2', 'soldato1'];
   await captureStream(id, d, crowd);
-  const capo = faceNpc('capo_purple', '🕴️');
-  await sceneSay([capo], 'Purple Capo', revealed
-    ? `<b>"Showing your face to my men, in the middle of the Old Town? Brave. Stupid, but brave."</b>`
-    : `<b>"Well, well. The kid from the catacombs — in one of OUR uniforms."</b>`, 'Continue');
-  await sceneSay([capo], 'Purple Capo', `<b>"Got you. There is nowhere to run up here."</b>`, 'Continue');
+  if(hill){
+    const sol = faceNpc('soldato2', '💂');
+    await sceneSay([sol], 'Soldato', revealed
+      ? `<b>"Signor Figlio's porter, eh? Signor Figlio's porter is the kid from the catacombs!"</b>`
+      : `<b>"That's no porter. That's the kid from the catacombs — on the Padrino's own hill!"</b>`, 'Continue');
+    await sceneSay([sol], 'Soldato', `<b>"Got you. Nowhere to run up here."</b>`, 'Continue');
+  } else {
+    const capo = faceNpc('capo_purple', '🕴️');
+    await sceneSay([capo], 'Purple Capo', revealed
+      ? `<b>"Showing your face to my men, in the middle of the Old Town? Brave. Stupid, but brave."</b>`
+      : `<b>"Well, well. The kid from the catacombs — in one of OUR uniforms."</b>`, 'Continue');
+    await sceneSay([capo], 'Purple Capo', `<b>"Got you. There is nowhere to run up here."</b>`, 'Continue');
+  }
   await sceneCurtain(true, 700);
   sceneClear();
   stealthHold(false);
@@ -2897,23 +3307,33 @@ async function r5TownCaught(id, d, g, def){
   ui.sceneRunning = false;
   w.busy = false;
   const back = ()=>{
-    w.at = w.at || {}; w.at.church = { x:8, y:13 }; w.face = 'u';
-    w.ghostAt = w.ghostAt || {}; w.ghostAt.church = { x:8, y:14 };
+    w.at = w.at || {}; w.ghostAt = w.ghostAt || {};
+    if(hill){
+      w.at.hilltop = { x:18, y:25 }; w.face = 'd'; w.ghostAt.hilltop = { x:17, y:25 };
+      r.disguised = true;                         // Grandpa hands you your cap
+      ui.currentZone = r5Zone('hilltop') || ui.currentZone;
+    } else {
+      w.at.church = { x:8, y:13 }; w.face = 'u'; w.ghostAt.church = { x:8, y:14 };
+      ui.currentZone = r5Zone('old_town') || ui.currentZone;
+    }
     ui.walkFresh = false;
-    ui.stealthFresh = true;                       // and the streets' men back on their rounds
-    ui.currentZone = r5Zone('old_town') || ui.currentZone;
+    ui.stealthFresh = true;                       // and the men back on their rounds
   };
+  const where = hill ? 'hilltop' : 'church';
   r.townCaught = (r.townCaught || 0) + 1;
   saveProfile();
-  if(!activePool().length){ back(); sceneCurtain(false, 400); return go('church'); }
+  if(!activePool().length){ back(); sceneCurtain(false, 400); return go(where); }
+  const wasOn = r.disguised;
   captureTest(10, ()=>{
     back();
     saveProfile();
-    storyModal(monPortrait('whalelord', 150, { view:'front', bare:true }), whaleName(),
-      `<b>"I blew out every lamp on the piazza at once, and in the dark we ran for the church. Nobody follows anybody into a church at night — not even the Family."</b><br><br>` +
-      (r.disguised ? '' : `<b>"Keep that cap on out there."</b><br><br>`) +
-      `<i>You are back in the church.</i>`,
-      ()=> go('church'), { subtitle:'The church' });
+    storyModal(monPortrait('whalelord', 150, { view:'front', bare:true }), whaleName(), hill
+      ? `<b>"I put out every lamp on the hill at once. In the dark, an old man opened his door and pulled you in, and shut it on them."</b><br><br>` +
+        `Grandpa hands you your cap. <b>"You dropped this,"</b> he says, and winks.<br><br><i>You are at Grandpa's door, in uniform.</i>`
+      : `<b>"I blew out every lamp on the piazza at once, and in the dark we ran for the church. Nobody follows anybody into a church at night — not even the Family."</b><br><br>` +
+        (wasOn ? '' : `<b>"Keep that cap on out there."</b><br><br>`) +
+        `<i>You are back in the church.</i>`,
+      ()=> go(where), { subtitle: hill ? 'The Hilltop' : 'The church' });
   });
   sceneCurtain(false, 600);                      // the black lifts off the writing
 }
@@ -2926,6 +3346,8 @@ async function r5TownDown(){
   goFloor('harbour', 'gate');
 }
 async function r5VillaRoad(){
+  const r = r5();
+  if(r.figlioMet) return r5HillEscort();        // (2.92) Figlio is waiting to take you up
   await sceneSay([], 'Up the hill',
     `The steps climb on up the hill, past the gardens, to a high wall and the roofs of a great house: the Padrino's villa.`);
   await sceneSay([faceNpc('soldato2', '💂')], 'Soldato', r5Turn('villaRoad', [
@@ -2936,7 +3358,690 @@ async function r5VillaRoad(){
   await sceneSay([faceMon('whalelord')], whaleName(), first
     ? `<b>"My core is up there. I can feel it, close enough to touch."</b><br><br><b>"Not yet. But soon."</b>`
     : `<b>"Not yet."</b>`);
+  if(r.disguise && r5Once('villaHint'))
+    await sceneSay([faceMon('whalelord')], whaleName(),
+      `<b>"Somebody in this town must be able to walk through that gate — somebody the Family would never stop."</b>`);
 }
+
+/* ============================================================
+   FIGLIO (2.92) — home from Region 3's band competition
+   Once you wear the Family's colours, Figlio is gone from the band
+   competition (10-story-r3.js figlioAway) and sings at the Old Town's opera
+   house. He knows a costume when he sees one, wants nothing to do with what
+   his father is making, and takes you up the hill: the Padrino's son walks
+   through his father's gate, and his porter with him (r5HillEscort). He
+   still fights you once a day for 3 Silver Medals (the same day's count as
+   in Region 3), his team starting again at 94 and a level higher for each
+   win here (to 105; its crowned Howler five above that). A first win ever
+   still brings his Dragon Stone.
+   ============================================================ */
+const R5_FIGLIO_LINES = [
+  `<b>"They have me singing every night but Monday. My father has never once come to listen."</b>`,
+  `<b>"You know, that uniform almost suits you. Almost."</b>`,
+  `<b>"The mediums frightened me when I was small. They still do, a little. They never blink."</b>`,
+  `<b>"If you see my father before I do, tell him— no. Don't tell him anything."</b>`,
+];
+function r5FiglioLevel(){ return 94 + Math.min(r5().figlioWins5 || 0, 11); }
+async function r5Figlio(){
+  const r = r5();
+  if(ui.sceneRunning || walkState().busy) return;
+  if(!r.figlioMet) return r5FiglioMeet();
+  const c = concertState(), face = faceNpc('figlio', '🎙️');
+  const line = r.hill ? r5Turn('figlio', R5_FIGLIO_LINES)
+                      : `<b>"Whenever you're ready, I'll take you up the hill. Meet me at the steps."</b>`;
+  if(c.figlioDay === today())
+    return sceneSay([face], 'Figlio', line + `<br><br><b>"And we've had our fight today. Once a day — I have a voice to look after."</b>`);
+  const yes = await r5Ask([face], 'Figlio',
+    line + `<br><br><i>A battle, once a day: his team starts at level <b>${r5FiglioLevel()}</b>. Win for <b>+3 Silver Medals</b>.</i>`,
+    '🎙️ Battle', 'Leave');
+  if(yes) r5FiglioFight();
+}
+async function r5FiglioMeet(){
+  const r = r5();
+  ui.sceneRunning = true;
+  const w = walkState();
+  w.busy = true;
+  releaseKeys();
+  const fig = ()=> faceNpc('figlio', '🎙️'), F = 'Figlio';
+  const c = concertState();
+  await sceneSay([fig()], F,
+    `He is running scales outside the opera house. He stops halfway up one and looks at you — at the uniform, and then at your face.<br><br>` +
+    `<b>"Well. I know a costume when I see one. I've worn a hundred."</b>`);
+  await sceneSay([fig()], F, c.figlio
+    ? `<b>"The trainer who beat the band — and me${(c.figlioWins || 0) > 1 ? ', more than once' : ''}. I'd know that face anywhere, cap or no cap."</b>`
+    : (c.bandCleared ? `<b>"You beat the band at the competition. I was watching from the wings."</b>`
+                     : `<b>"I've heard about you — the young trainer who keeps turning up wherever my father's men least want one."</b>`) +
+      `<br><br><b>"I'm Figlio. The Padrino is my father — I'm sorry to say."</b>`);
+  await sceneSay([fig()], F,
+    `<b>"Don't worry. I won't tell him. I left that house to sing, and I want nothing to do with what he's making up there."</b>`);
+  await sceneSay([fig()], F,
+    `<b>"His mediums live in a tower inside the estate walls. They came over the sea years ago to look for someone. ` +
+    `They never found who they were looking for — but they never left, either."</b><br><br>` +
+    `<b>"Now they hold every ghost in this hill down for him, with their minds."</b>`);
+  await sceneSay([fig()], F,
+    `<b>"You'll want to get up there, I suppose. Nobody gets through that gate unless they're family."</b> He smiles. ` +
+    `<b>"Lucky for you, I am. I'm expected for supper whenever I care to turn up."</b><br><br>` +
+    `<b>"Meet me at the steps up the hill when you're ready."</b>`);
+  await sceneSay([faceMon('whalelord')], whaleName(), `<b>"He cannot see me. But I like him."</b>`);
+  r.figlioMet = true;
+  await saveProfile();
+  w.busy = false;
+  ui.sceneRunning = false;
+  refreshWalkAll();                              // his "!" goes
+  toast('Figlio will take you up the hill: the steps at the top of the Old Town.');
+}
+function r5FiglioFight(){
+  if(!ensurePool()) return;
+  const L = r5FiglioLevel();
+  walkTeardown();
+  beginBattle({ isNpc:true, name:'Figlio', npcId:'figlio', bgKey:'battle_opera', figlio:true,
+    waves:[
+      [{species:'ground_starter',   level:L,     ai:'best'}],
+      [{species:'psychic_starter',  level:L + 1, ai:'best'}],
+      [{species:'ghost_starter',    level:L + 2, ai:'best'}],
+      [{species:'physical_starter', level:L + 3, ai:'best'}],
+      [{species:'flying_starter',   level:L + 4, ai:'best'}],
+      [{species:'howler',           level:L + 5, ai:'best', crowned:true, supplements:10}],
+    ],
+    onWin: ()=> r5FiglioWon() });
+}
+async function r5FiglioWon(){
+  const c = concertState(), r = r5();
+  const first = !c.figlio;
+  c.figlio = true;
+  c.figlioDay = today();
+  c.figlioWins = (c.figlioWins || 0) + 1;
+  r.figlioWins5 = (r.figlioWins5 || 0) + 1;
+  state.medals.silver = (state.medals.silver || 0) + 3;
+  const stone = first && !ownsStone('dragonStone');
+  if(stone) addStone('dragonStone', 1);
+  await saveProfile();
+  storyModal(npcPortrait('figlio', '🎙️', 140, 'transparent'), first ? 'Second, again' : 'A closer thing each time',
+    (first ? `He returns his last monster to its ball. <b>"So that settles what I actually am. A singer."</b> He laughs. <b>"Good."</b><br><br>`
+           : `He straightens his collar, breathing hard.<br><br><b>"Better. I'll be better still tomorrow."</b><br><br>`) +
+    (stone ? `He presses a stone into your hand — cut and clear, and humming. <b>"A Dragon Stone. Attach it to any dragon you're raising and it will learn far faster."</b><br><br>` : '') +
+    `<b>+3 Silver Medals</b> · next time his team is level <b>${r5FiglioLevel()}</b> and up.`,
+    ()=> go('old_town'), { subtitle:'The Old Town' });
+}
+
+/* ============================================================
+   UP THE HILL (2.92)
+   The first time, on Figlio's arm: past the steps' soldatos ("Evening,
+   Signor Figlio"), up the hill road, and through the estate gate; he leaves
+   you in the forecourt and goes in to supper. After that the steps are
+   yours — Signor Figlio's porter comes and goes — and so is Explore → The
+   Hilltop. The Hilltop is the Family's ground, like the Old Town: in uniform.
+   ============================================================ */
+async function r5HillEscort(){
+  const r = r5();
+  ui.sceneRunning = true;
+  const w = walkState();
+  w.busy = true;
+  releaseKeys();
+  const fig = ()=> faceNpc('figlio', '🎙️'), F = 'Figlio', sol = faceNpc('soldato2', '💂');
+  await sceneSay([fig()], F,
+    `Figlio comes over from the opera house, winding a long scarf round his neck.<br><br>` +
+    `<b>"There you are. Carry this, stay close, and look bored."</b> He hands you a leather case full of sheet music.`);
+  await sceneSay([sol], 'Soldato', `The soldatos at the steps straighten up.<br><br><b>"Evening, Signor Figlio. Going up to the house?"</b>`);
+  await sceneSay([fig()], F, `<b>"Supper with my father. And this junior is carrying my music, so mind you don't trip him."</b>`);
+  await sceneSay([sol], 'Soldato', `<b>"...Right you are, Signor Figlio. Up you go."</b>`);
+  await sceneSay([faceMon('whalelord')], whaleName(), `<b>"They cannot see me, and they cannot see what you are. This is going very well."</b>`);
+  await sceneCurtain(true, 700);
+  sceneClear();
+  await sceneCurtainText('Figlio walks you up the hill road — past the lemon terraces, a cottage with one lit window, and the guard house, where the soldatos stand up straight as he goes by.', 700);
+  await sceneWait(2000);
+  await sceneCurtainText('', 400);
+  await sceneCurtainText('At the top, the gate of the Padrino\'s estate swings open without a word.', 700);
+  await sceneWait(1600);
+  await sceneCurtainText('', 400);
+  /* in through the gate, behind the curtain */
+  walkTeardown();
+  w.at = w.at || {}; w.at.hilltop = { x:12, y:11 }; w.face = 'u';
+  w.ghostAt = w.ghostAt || {}; w.ghostAt.hilltop = { x:12, y:12 };
+  ui.walkFresh = false;
+  ui.stealthFresh = true;
+  ui.currentZone = r5Zone('hilltop') || ui.currentZone;
+  r.hill = true;
+  r.said.first_hilltop = true;                   // he says it all here
+  await saveProfile();
+  w.busy = false;
+  go('hilltop');                                 // (ui.sceneRunning holds: it starts nothing itself)
+  await sceneWait(500);
+  await sceneCurtain(false, 800);
+  w.busy = true;
+  sceneActor('figlio', { x:13, y:11, src:'assets/npc/figlio.png', icon:'🎙️' });
+  await sceneWait(300);
+  await sceneSay([fig()], F, `<b>"My father's house. I grew up in there."</b> He does not sound as if he misses it.`);
+  await sceneSay([fig()], F,
+    `He nods at the round tower in the east garden, its top windows glowing a faint purple.<br><br>` +
+    `<b>"And that is where his mediums live. Thirteen floors of them — and at the very top, my cousin. My father's grandniece."</b><br><br>` +
+    `<b>"She's not much older than you, and the dead do whatever she tells them. Even the mediums answer to her."</b>`);
+  await sceneSay([fig()], F,
+    `<b>"That uniform won't fool them. The ones who talk to the dead will feel anything dead you've brought up here with you — ` +
+    `and the ones who read minds will hear every thought in your head."</b>`);
+  await sceneSay([faceMon('whalelord')], whaleName(), `<b>"...He does not know how right he is."</b>`);
+  await sceneSay([fig()], F,
+    `<b>"I'm going in to supper. If anybody asks, you're my porter, and you're waiting for me."</b><br><br>` +
+    `He takes his music back, straightens his collar, and goes up to the villa's great door.`);
+  await r5MoveActor('figlio', 12, 8.5, 1000, true);
+  sceneActorGone('figlio');
+  await sceneSay([faceMon('whalelord')], whaleName(),
+    `<b>"My core is in that villa. I can feel it, close enough to touch."</b><br><br>` +
+    `<b>"But first, that tower. As long as those mediums hold the dead down, nobody in this hill can help us."</b>`);
+  w.busy = false;
+  ui.sceneRunning = false;
+  walkTeardown();
+  storyModal(npcPortrait('figlio', '🎙️', 130, 'transparent'), 'The Hilltop',
+    `<b>The Padrino's estate</b> is the Family's own hill: in uniform, as in the Old Town — take it off in sight of his men and you are surrounded. ` +
+    `They let Signor Figlio's porter come and go: the steps up from the Old Town are yours now, and so is <b>Explore → The Hilltop</b>.<br><br>` +
+    `<b>🗼 The Tower</b> — thirteen floors in the east garden, a disciple on each and two masters at the top, all highly trained: ` +
+    `<b>six waves</b> each — a disciple 13 to 15 monsters, a master 18, in threes. ` +
+    `<b>The uniform does not fool them</b>: the ghost disciples feel the Whalelord the moment you come in, and the psychic ones read your thoughts — ` +
+    `every one of them will fight you. Beat one and they step aside from the stair up — it is yours for good. Lose, and you keep every floor you have won.<br><br>` +
+    `<b>Their ghosts</b> fear a Psychic monster of yours; <b>their psychic monsters</b> fear a Physical one.<br><br>` +
+    `<b>🍋 Grandpa's cottage</b>, down the lemon terraces below the gate: rest there and Recover.`,
+    ()=> go('hilltop'), { subtitle:'The Hilltop' });
+}
+async function r5HillUp(){
+  const r = r5();
+  if(!r.disguised){
+    const yes = await r5Ask([faceMon('whalelord')], whaleName(),
+      `<b>"Up there, every one of them would know your face. Put on the disguise first."</b>`, '🎭 Put it on', 'Not now');
+    if(!yes) return;
+    r5SetDisguise(true);
+  }
+  await sceneSay([faceNpc('soldato2', '💂')], 'Soldato', r5Turn('hillUp', [
+    `<b>"Signor Figlio's porter? Up you go."</b>`,
+    `<b>"Up to the house again? Mind you don't drop his music."</b>`,
+  ]));
+  goFloor('hilltop', 'down');
+}
+function r5HillDown(){ goFloor('old_town', 'hill'); }
+/* Explore → The Hilltop: in uniform (it is put on for you), where you last
+   stood on the hill — inside the estate gate the first time. */
+function renderHilltopZone(){
+  const r = r5(), w = walkState();
+  if(!r.disguise) return renderOldTownZone();    // (the developer, before Ugo)
+  if(!r.disguised){ r.disguised = true; saveProfile(); toast('🎭 You put your uniform on before you go up.'); }
+  w.at = w.at || {}; w.ghostAt = w.ghostAt || {};
+  if(!w.at.hilltop){ w.at.hilltop = { x:12, y:11 }; w.face = 'u'; }
+  if(!w.ghostAt.hilltop) w.ghostAt.hilltop = { x:w.at.hilltop.x, y:w.at.hilltop.y };
+  ui.walkFresh = false;
+  ui.stealthFresh = true;
+  ui.currentZone = r5Zone('hilltop') || ui.currentZone;
+  return go('hilltop');
+}
+function r5VillaDoor(){
+  if(r5().holdBroken)
+    return sceneSay([faceMon('whalelord')], whaleName(),
+      `<b>"My core is behind that door. I can feel it beating, like a second heart."</b><br><br><i>The villa is coming soon.</i>`);
+  return sceneSay([faceNpc('soldato1', '💂')], 'Soldato', r5Turn('villaDoor', [
+    `<b>"Signor Figlio's porter? Wait out here. The Padrino sees nobody."</b>`,
+    `<b>"The kitchens are round the side, junior. Not this door. Never this door."</b>`,
+  ]));
+}
+function r5VillaFountain(){
+  return sceneSay([], 'The fountain', `A stone lion spits water into a round basin. Somebody has scrubbed it very, very clean.`);
+}
+function r5LemonFarm(){
+  return sceneSay([], 'The lemon farm',
+    `Crates of lemons stacked to the roof, every one stamped with the Family's mark. For the Padrino's table — and nobody else's.`);
+}
+function r5GuardHouse(){
+  return sceneSay([], 'The guard house',
+    `Inside, off-duty soldatos are playing cards and arguing about who cheated. Nobody looks up at a junior.`);
+}
+/* Grandpa (Lucia's, from the harbour): a bed and a bowl of something, up
+   here where the tower's fights are — Recover. */
+const R5_GRANDPA_LINES = [
+  `<b>"Lemonade? They're the Padrino's lemons. Don't tell him."</b>`,
+  `<b>"Lucia says the dead in the tunnels don't sleep proper. I told her that. Nobody listens to me."</b>`,
+  `<b>"That tower wasn't there when I was a boy. They built it for those mediums, and the lemons have never tasted right since."</b>`,
+];
+async function r5Grandpa(){
+  const r = r5();
+  const first = r5Once('grandpa');
+  const html = first
+    ? `The door opens a crack. An old man peers at your uniform, then at your face, and opens it all the way.<br><br>` +
+      `<b>"A junior? Up here? You look done in. Come in, sit down."</b><br><br>` +
+      `<b>"My granddaughter Lucia mends the nets down at the harbour. You've met her? She talks too much. Gets it from me."</b>`
+    : r.holdBroken ? `<b>"Can you hear that? Singing, under the hill. I haven't heard that since I was a boy."</b>`
+                   : r5Turn('grandpa', R5_GRANDPA_LINES);
+  const yes = await r5Ask([faceNpc('grandpa', '👴')], 'Grandpa', html, '🍋 Rest here', 'Not now');
+  if(yes) leaveDeck('recover');
+}
+
+/* ============================================================
+   THE TOWER (2.92) — the exorcists' tower, inside the estate walls
+   Thirteen floors: the ghost disciples and the psychic disciples by turns
+   (ghost_disciple1, psychic_disciple1, ghost_disciple2 … ghost_disciple6),
+   then the Psychic Master and, at the top, the Ghost Master.
+   Who they are: the ghost disciples — a young woman, an old woman, a young
+   man, an old man, a very old man, and an old sage in a great Taoist robe;
+   the psychic disciples — a teenage boy, a teenage girl, two young men and
+   a short young woman. The Psychic Master is a woman, the leader of the
+   exorcists' order the Padrino brought over the sea; she answers to the
+   Ghost Master — a girl in her late teens, the Padrino's grandniece, and
+   the most gifted with ghosts of any of them.
+   The uniform does not fool them: the ghost disciples (and their master)
+   feel the Whalelord the moment you come in; the psychic ones (and theirs)
+   read your thoughts. Every one of them fights you; each stands before the
+   stair up and steps aside, for good, once beaten.
+   All highly trained: six waves each. A disciple brings 13 to 15 monsters,
+   two or three a wave — the ghost disciples all Ghosts, the psychic ones all
+   Psychics (a Psychic of yours beats the first, a Physical one the second);
+   level the floor's for two waves, then one higher every two (98 on floor 1
+   to 108 on floor 11), never past the region's cap (110, REGION_CAPS[5]);
+   AI Power2 for two waves, then Best. A master brings 18, always in threes:
+   in the middle of each wave a crowned starter or elite (10 supplements),
+   flanked by two monsters with strong passives; AI Best. The Psychic
+   Master's last is a crowned Fox carrying Discombobulate +, the Ghost
+   Master's a crowned Shadow carrying Curse ✦ (cast on their first action,
+   as yours are). First wins: +1 protein a disciple; the Psychic Master
+   gives the Psychic Stone (+2 protein); the Ghost Master's fall breaks the
+   hold on the dead (+3 protein) — r5().holdBroken. Lose, and you keep every
+   floor you have won.
+   ============================================================ */
+const R5_KNIGHT_T = { species:'goblin_knight', ai:'maxer' };
+const R5_CROWNED = (species, extra)=> Object.assign({ species, crowned:true, supplements:10 }, extra || {});
+const R5_TOWER = [
+  /* 1 — a young woman */
+  { sprite:'ghost_disciple1', lv:98,
+    waves:[['ghost','crow'], ['ghost_flame','ghost'], ['crow','cyclops'], ['puppet','ghost'], ['ghost_flame','cyclops'], ['goblin','ghost','crow']],
+    sees:[`The candles all lean toward you at once. The young woman sitting among them does not even look up.<br><br><b>"A ghost has just come into my tower. A big one — a whale, of all things."</b>`,
+          `<b>"And under it, a living child in a soldato's coat. The dead do not follow soldatos about, little one. We feel the dead in here. It is what we are for."</b>`],
+    whale:`<b>"...She can feel me. They all can, the ones who talk to the dead."</b>`,
+    beaten:`<b>"...Go up, then. And take your whale with you."</b>`,
+    talk:`<b>"The stairs are yours. We do not go back on a fight."</b>` },
+  /* 2 — a teenage boy */
+  { sprite:'psychic_disciple1', lv:99,
+    waves:[['squid','squid'], ['psychic_starter','squid'], ['moon_swan','squid'], ['squid','psychic_starter'], ['moon_swan','psychic_starter'], ['squid','moon_swan','squid']],
+    sees:[`A boy not much older than you looks up from his book.<br><br><b>"I heard you coming before you reached the door. Your thoughts are very loud."</b><br><br>` +
+          `<b>"'Walk as if you belong here.' That is what you keep telling yourself. A cap hides a face. It does not hide a mind."</b>`],
+    beaten:`<b>"Your mind is louder than mine. Go on."</b>`,
+    talk:`<b>"Stop thinking so loudly. I am trying to read."</b>` },
+  /* 3 — an old woman */
+  { sprite:'ghost_disciple2', lv:100,
+    waves:[['crow','ghost'], ['goblin','ghost_flame'], ['cyclops','crow'], ['puppet','ghost'], [R5_KNIGHT_T,'ghost_flame'], ['horned_lynx','ghost','goblin']],
+    sees:[`An old woman is knitting by the candles. She does not look up either.<br><br><b>"The spirits have been whispering about you all day, dearie — a dead whale, coming up the hill beside a living child."</b>`,
+          `<b>"I can feel it at your shoulder now, cold as a cellar. They're ever so excited. I'm not. My knees hurt."</b>`],
+    beaten:`<b>"The spirits are laughing at me. Go on, dearie, before they start on you."</b>`,
+    talk:`<b>"The spirits still whisper about you. Nicer things, now. Mind the stairs, dearie."</b>` },
+  /* 4 — a teenage girl */
+  { sprite:'psychic_disciple2', lv:101,
+    waves:[['psychic_starter','squid'], ['moon_swan','squid'], ['squid','psychic_starter'], ['moon_swan','psychic_starter'], ['squid','moon_swan'], ['psychic_starter','squid','moon_swan']],
+    sees:[`A girl in a grey coat far too big for her rolls her eyes at you.<br><br><b>"Do not bother pulling the cap down. In here, we read what you are thinking."</b><br><br>` +
+          `<b>"You are thinking about the stairs behind me."</b>`],
+    beaten:`<b>"I did not see that coming. I always see things coming."</b>`,
+    talk:`<b>"You are thinking about lunch. Finally — something normal."</b>` },
+  /* 5 — a young man */
+  { sprite:'ghost_disciple3', lv:102,
+    waves:[['cyclops','ghost_flame'], ['ghost','crow','ghost'], ['horned_lynx','puppet'], ['goblin','cyclops'], ['ghost_flame',R5_KNIGHT_T], ['puppet','horned_lynx','ghost']],
+    sees:[`A young man cracks his knuckles.<br><br><b>"I could feel your whale from the floor below — cold, and very angry."</b><br><br>` +
+          `<b>"Every ghost in this hill answers to us. Even yours will, before I am finished."</b>`],
+    whale:`<b>"I answer to nobody but this child."</b>`,
+    beaten:`<b>"Your whale answers to nobody. I see that now."</b>`,
+    talk:`<b>"Your whale keeps looking at me. Tell it to stop."</b>` },
+  /* 6 — a young man */
+  { sprite:'psychic_disciple3', lv:103,
+    waves:[['moon_swan','squid'], ['psychic_starter','squid','squid'], ['moon_swan','psychic_starter'], ['squid','moon_swan'], ['psychic_starter','squid'], ['moon_swan','psychic_starter','squid']],
+    sees:[`A young man in a grey coat smiles without looking up.<br><br><b>"You are thinking that the cap was a good idea. It was not — not in here."</b><br><br>` +
+          `<b>"Halfway up already. Most of the Padrino's men never get past the first floor — and they work here."</b>`],
+    beaten:`<b>"Halfway. Hm. Perhaps you will get further than halfway."</b>`,
+    talk:`<b>"Up. Always up. Do you never get tired?"</b>` },
+  /* 7 — an old man */
+  { sprite:'ghost_disciple4', lv:104,
+    waves:[['ghost','goblin'], ['crow','ghost_flame','ghost'], ['ghost_starter','cyclops'], ['firehound','puppet'], [R5_KNIGHT_T,'horned_lynx'], ['ghost_starter','firehound','goblin']],
+    sees:[`An old man leans on his stick and peers at the air over your shoulder.<br><br><b>"Your whale has been floating behind you since the door. In here it is hard to miss — like a cold draught that glares."</b><br><br>` +
+          `<b>"Seven floors of us, and still you climb. The dead admire that. So do I — a little."</b>`],
+    beaten:`<b>"Seven down. The dead are cheering. I wish they would not."</b>`,
+    talk:`<b>"I have stopped holding them down. I can hear them singing."</b>` },
+  /* 8 — a young man */
+  { sprite:'psychic_disciple4', lv:105,
+    waves:[['squid','moon_swan'], ['psychic_starter','squid','moon_swan'], ['squid','psychic_starter'], ['moon_swan','squid'], ['psychic_starter','moon_swan'], ['squid','psychic_starter','moon_swan']],
+    sees:[`A tall young man taps his temple.<br><br><b>"Your thoughts are racing. Fear?"</b> A frown. <b>"No... you are enjoying this. How strange."</b>`],
+    beaten:`<b>"Strange child. Go on up."</b>`,
+    talk:`<b>"Strange child. You think about a whale a great deal, you know."</b>` },
+  /* 9 — a very old man */
+  { sprite:'ghost_disciple5', lv:106,
+    waves:[['ghost_flame','puppet'], ['cyclops','ghost','crow'], [R5_KNIGHT_T,'horned_lynx'], ['puppet','ghost_flame','goblin'], ['firehound','cyclops'], ['ghost_starter',R5_KNIGHT_T,'puppet']],
+    sees:[`A very, very old man is asleep in his chair. He wakes with a snort.<br><br><b>"Eh? A whale? A WHALE! In my day, ghosts were the size of a cat."</b>`,
+          `<b>"And an old fire on you, too — a phoenix's. I remember that bird. I was young then. Almost as young as you. The dead of this hill remember it too."</b>`],
+    seesPlain:[`A very, very old man is asleep in his chair. He wakes with a snort.<br><br><b>"Eh? A whale? A WHALE! In my day, ghosts were the size of a cat."</b>`,
+               `<b>"And it smells of the catacombs. You came up through the dead, the pair of you — and they let you."</b>`],
+    beaten:`<b>"That fire burns hotter than I thought. Hotter than my knees, anyway."</b>`,
+    beatenPlain:`<b>"The dead let you through, and so must I. Now let me sleep."</b>`,
+    talk:`<b>"Mind the stairs. They are older than the town. Older than me, even. Just."</b>` },
+  /* 10 — a short young woman */
+  { sprite:'psychic_disciple5', lv:107,
+    waves:[['psychic_starter','squid'], ['moon_swan','squid','psychic_starter'], ['squid','moon_swan'], ['psychic_starter','squid','moon_swan'], ['moon_swan','psychic_starter'], ['squid','moon_swan','psychic_starter']],
+    sees:[`A young woman, a head shorter than you would expect, folds her arms.<br><br>` +
+          `<b>"You are counting the floors in your head — three more — and wondering what is at the top. Your thoughts are very easy to read."</b>`,
+          `<b>"And now you are thinking I am short. I am not short. I am concentrated."</b><br><br>` +
+          `<b>"Only one of us above me, and then the masters. And then nothing at all — only the sky."</b>`],
+    beaten:`<b>"Only the masters now. And then the sky."</b>`,
+    talk:`<b>"The masters will be waiting. They always are."</b>` },
+  /* 11 — an old sage, in a great Taoist robe */
+  { sprite:'ghost_disciple6', lv:108,
+    waves:[['ghost_starter','crow'], ['ghost','puppet','cyclops'], ['firehound','horned_lynx'], [R5_KNIGHT_T,'ghost_flame','goblin'], ['puppet','firehound'], ['ghost_starter','horned_lynx',R5_KNIGHT_T]],
+    sees:[`An old man in a great Taoist robe sits cross-legged in the middle of the ring, his wide sleeves spread around him on the floor like folded wings.<br><br>` +
+          `<b>"The whale behind you has gone quiet. Even the dead fall silent before what waits upstairs."</b>`,
+          `<b>"Above me are the masters: the one who leads our order, and the young mistress she answers to. They will not be gentle. ` +
+          `Turn back, child. I am telling you this as a kindness."</b>`],
+    beaten:`<b>"The river does not argue with the stone. It goes round it, and on. Go on, then."</b>`,
+    talk:`<b>"One candle is easily blown out. Many candles together make a fire. Your whale knows this."</b>` },
+  /* 12 — the Psychic Master: the leader of the exorcists' order */
+  { sprite:'psychic_master', lv:109, master:true,
+    waves:[['moon_swan', R5_CROWNED('squid'), 'thunderhound'],
+           ['mantaray', R5_CROWNED('moon_swan'), 'moon_swan'],
+           ['thunderhound', R5_CROWNED('squid'), 'moon_swan'],
+           ['moon_swan', R5_CROWNED('moon_swan'), 'mantaray'],
+           ['thunderhound', R5_CROWNED('squid'), 'mantaray'],
+           ['moon_swan', R5_CROWNED('psychic_starter', { veryHigh:{ type:'Psychic', plus:1, cast:true } }), 'thunderhound']],
+    sees:[`The master is a tall woman in a long grey coat — one of Ugo's — and she does not blink.<br><br>` +
+          `<b>"A junior soldato who is not a junior soldato, thinking very hard about a villa, a stolen core and a whale. So you are the child the dead keep whispering about."</b>`,
+          `<b>"My order came over the sea twenty years ago, to find one ghost for the Padrino. Just one. We never found it. ` +
+          `So he kept us, to hold all the others down instead — and now we answer to his grandniece. The Signorina. Upstairs."</b>`,
+          `<b>"For twenty years we have held this hill down with our minds. Every ghost in it, quiet. Do you know what happens if we stop?"</b>`],
+    whale:`<b>"They rise."</b>`,
+    beaten:`<b>"Then it is done. Without me, my order cannot hold them for long."</b><br><br>` +
+           `A stone drops into your hand from the folds of the grey coat — cold and clear, with something turning slowly inside it.<br><br>` +
+           `<b>"Take it. A stone from my own country. It answers a mind like yours."</b> She glances at the ceiling. <b>"The Signorina will not be so kind."</b>`,
+    talk:`<b>"Twenty years we held them. I had forgotten how loud this hill is."</b>` },
+  /* 13 — the Ghost Master: the Padrino's grandniece */
+  { sprite:'ghost_master', lv:110, master:true,
+    waves:[['ghost', R5_CROWNED('goblin'), 'cyclops'],
+           ['cyclops', R5_CROWNED('horned_lynx'), 'ghost'],
+           ['puppet', R5_CROWNED('goblin_knight'), 'ghost'],
+           ['goblin_knight', R5_CROWNED('puppet'), 'cyclops'],
+           ['puppet', R5_CROWNED('firehound'), 'goblin_knight'],
+           ['firehound', R5_CROWNED('ghost_starter', { veryHigh:{ type:'Ghost', plus:2, cast:true } }), 'puppet']],
+    sees:[`A girl only a few years older than you sits in the middle of a ring of candles, eyes shut, a ghost curled at her feet like a cat.<br><br>` +
+          `<b>"I felt your whale come in at the door, thirteen floors down. A great old ghost, and angry. I have never felt one like it."</b>`,
+          `She opens her eyes.<br><br><b>"Cousin Figlio's porter."</b> She smiles. <b>"He always did bring home strays. Don't worry — I won't tell my great-uncle. ` +
+          `I'd much rather beat you myself."</b>`,
+          `<b>"He gave me his mediums when I was twelve. I'm better with the dead than all of them put together. Every ghost in this hill does what I tell it."</b>`],
+    whale:`<b>"Not every ghost, child."</b>`,
+    beaten:'',
+    talk:`<b>"Listen to them. All that singing. I'd never heard it before."</b> She is quiet for a moment. <b>"...It's rather beautiful."</b>` },
+];
+R5_TOWER.forEach((f, i)=>{
+  const n = i + 1;
+  f.kind = /^ghost/.test(f.sprite) ? 'ghost' : 'psychic';
+  f.icon = f.kind === 'ghost' ? '👻' : '🔮';
+  f.name = n === 12 ? 'Psychic Master' : n === 13 ? 'Ghost Master' : (f.kind === 'ghost' ? 'Ghost Disciple' : 'Psychic Disciple');
+  f.ai = f.ai || (f.master ? ['best', 'best', 'best', 'best', 'best', 'best'] : ['power2', 'power2', 'best', 'best', 'best', 'best']);
+  f.dare = n === 12 ? `<b>"My mind against yours, then."</b>`
+         : n === 13 ? `<b>"Come and see what the Padrino's grandniece can do."</b>`
+         : f.kind === 'ghost' ? `<b>"Come, then. Let the dead see what you are made of."</b>`
+                              : `<b>"I already know what you will do. Do it anyway."</b>`;
+});
+/* A floor's team: species by name. A disciple's at the floor's level for
+   two waves, then one higher every two; a master's the same — never past
+   the region's cap. */
+function r5TowerWaves(n){
+  const f = R5_TOWER[n - 1], top = (typeof REGION_CAPS !== 'undefined' && REGION_CAPS[5]) || 110;
+  return f.waves.map((wv, wi)=> wv.map(s=> Object.assign({ level:Math.min(f.lv + Math.floor(wi / 2), top), nerfed:false, ai:f.ai[wi] || 'best' },
+    typeof s === 'string' ? { species:s } : s)));
+}
+function r5TowerBeaten(n){ return r5().tower.beaten.includes(n); }
+function r5TowerFace(n){ const f = R5_TOWER[n - 1]; return faceNpc(f.sprite, f.icon); }
+/* The door, from the estate: the floor you have climbed to, or the ground floor. */
+async function r5TowerIn(){
+  const t = r5().tower;
+  const top = Math.min(13, Math.max(1, t.reached || 0));
+  if(top <= 1) return goFloor('tower_1', 'down');
+  const yes = await r5Ask([faceMon('whalelord')], whaleName(),
+    `<b>"We have climbed as far as floor ${top}. I remember the stairs, if you want to go straight back up."</b>`,
+    `🗼 Floor ${top}`, 'Floor 1');
+  return goFloor(yes ? 'tower_' + top : 'tower_1', 'down');
+}
+async function r5TowerOut(){
+  const r = r5();
+  if(r.disguise && !r.disguised){
+    const yes = await r5Ask([faceMon('whalelord')], whaleName(),
+      `<b>"Out there, the soldatos would know your face. Put on the disguise first."</b>`, '🎭 Put it on', 'Stay inside');
+    if(!yes) return;
+    r5SetDisguise(true);
+  }
+  goFloor('hilltop', 'tower');
+}
+/* On each floor, the first time: they see you for what you are. */
+function r5TowerRender(world, d){
+  const r = r5(), n = d.tower, f = R5_TOWER[n - 1];
+  if(n > (r.tower.reached || 0)){ r.tower.reached = n; saveProfile(); }
+  if(ui.sceneRunning || r5TowerBeaten(n) || r.said['tower_met_' + n]) return;
+  r.said['tower_met_' + n] = true;
+  saveProfile();
+  const w = walkState();
+  w.busy = true;
+  setTimeout(async ()=>{
+    ui.sceneRunning = true;
+    if(n === 1 && r5Once('towerDoor'))
+      await sceneSay([faceMon('whalelord')], whaleName(), `<b>"The air in here is thick — with minds, and with the dead they talk to. They know we are here already."</b>`);
+    const lines = (n === 9 && !r.phoenixGift) ? [].concat(f.seesPlain) : f.sees;
+    for(const line of lines) await sceneSay([r5TowerFace(n)], f.name, line);
+    if(f.whale) await sceneSay([faceMon('whalelord')], whaleName(), f.whale);
+    ui.sceneRunning = false;
+    w.busy = false;
+  }, 500);
+}
+/* What the fight is, said before it: the waves, how many, the levels, what
+   beats them — and for the masters, how their waves are made, and the
+   stone their last monster opens with. */
+function r5TowerNote(n){
+  const f = R5_TOWER[n - 1], ws = r5TowerWaves(n), all = ws.flat(), lv = all.map(s=> s.level);
+  const lo = Math.min(...lv), hi = Math.max(...lv), lvl = lo === hi ? `${lo}` : `${lo}–${hi}`;
+  const what = f.kind === 'ghost' ? 'Ghosts' : 'Psychic monsters', beat = f.kind === 'ghost' ? 'Psychic' : 'Physical';
+  if(!f.master)
+    return `<i>${ws.length} waves, ${all.length} ${what}, level ${lvl}: a <b>${beat}</b> monster of yours beats them. No running.</i>`;
+  const centre = f.kind === 'ghost' ? 'Ghost' : 'Psychic';
+  const warn = n === 12
+    ? ` The last, a crowned Fox, opens with <b>Discombobulate +</b>: for 5 turns your monsters are muddled — a muddled one swings at its own side for <b>90%</b> of its damage, certain at first and then a <b>20%</b> chance each turn, and may nap instead (<b>5%</b>).`
+    : ` The last, a crowned Shadow, opens with <b>Curse ✦</b>: for 5 turns your side takes <b>30% more</b> damage, theirs <b>15% less</b>, and your passives are muted.`;
+  return `<i>${ws.length} waves of 3 — ${all.length} monsters, level ${lvl}. In the middle of each, a <b>crowned</b> ${centre} monster; ` +
+         `either side of it, one with a strong passive. A <b>${beat}</b> monster of yours beats her ${f.kind === 'ghost' ? 'ghosts' : 'psychics'}.${warn} No running.</i>`;
+}
+async function r5TowerChallenge(n){
+  const f = R5_TOWER[n - 1];
+  if(ui.sceneRunning || walkState().busy) return;
+  const yes = await r5Ask([r5TowerFace(n)], f.name, f.dare + '<br><br>' + r5TowerNote(n), '⚔️ Fight', 'Not yet');
+  if(!yes || !ensurePool()) return;
+  walkTeardown();
+  beginBattle({ isNpc:true, name:f.name, npcId:f.sprite, noFlee:true, bgKey:'battle_tower',
+    waves:r5TowerWaves(n), onWin: ()=> r5TowerWon(n) });
+}
+async function r5TowerWon(n){
+  const r = r5(), t = r.tower, f = R5_TOWER[n - 1];
+  const first = !t.beaten.includes(n);
+  if(first) t.beaten.push(n);
+  const w = walkState();
+  w.at = w.at || {}; w.at['tower_' + n] = { x:5, y:3 }; w.face = 'u';
+  ui.walkFresh = false;
+  ui.currentZone = r5Zone('hilltop') || ui.currentZone;
+  if(n === 13 && first){ await saveProfile(); return r5HoldBreaks(); }
+  let reward = '', emblem = npcPortrait(f.sprite, f.icon, 130, 'transparent');
+  if(first && n === 12){
+    const had = ownsStone('psychicStone');
+    if(!had) addStone('psychicStone', 1);
+    state.inventory.protein = (state.inventory.protein || 0) + 2;
+    emblem = uiIcon('psychic_stone', 130, '🔮');
+    reward = (had ? '' : `<b>🔮 Psychic Stone</b> — a Psychic monster carrying it learns half again as fast (<b>1.5× experience</b>), ` +
+                         `and at a level ceiling past 100 it is the stone it charges to break through.<br><br>`) +
+             `<b>+2 Protein Supplements</b>`;
+  } else if(first){
+    state.inventory.protein = (state.inventory.protein || 0) + 1;
+    reward = `<b>+1 Protein Supplement</b>`;
+  }
+  await saveProfile();
+  const said = (n === 9 && !r.phoenixGift) ? f.beatenPlain : f.beaten;
+  storyModal(emblem, f.name,
+    said + (reward ? `<br><br>${reward}` : '') + (n < 13 ? `<br><br><i>The stair up to floor ${n + 1} is yours.</i>` : ''),
+    ()=> go('tower_' + n), { subtitle:'The Tower · Floor ' + n });
+}
+function r5TowerTalk(n){
+  const f = R5_TOWER[n - 1];
+  return sceneSay([r5TowerFace(n)], f.name, f.talk);
+}
+function r5TowerWindow(){
+  return sceneSay([], 'The window',
+    `From the top of the tower you can see all of Cosa Nostia: the villa's roofs below you, the Old Town, the harbour, and the sea going on and on.` +
+    (r5().holdBroken ? `<br><br>Pale lights drift up all over the hill, like snow falling the wrong way: the dead, free at last.` : ''));
+}
+/* The Ghost Master beaten: the hold on the dead breaks. */
+async function r5HoldBreaks(){
+  const r = r5();
+  go('tower_13');
+  ui.sceneRunning = true;
+  const w = walkState();
+  w.busy = true;
+  await sceneWait(600);
+  const gm = ()=> r5TowerFace(13), G = 'Ghost Master';
+  await sceneSay([gm()], G, `The candles gutter all at once. The ghost at her feet uncurls, looks at her — and drifts away through the wall.<br><br><b>"You don't know what you've done."</b>`);
+  await sceneSay([gm()], G, `<b>"My great-uncle trusted me with this hill. Twenty years, every ghost in it quiet — and now there's nobody left to hold them."</b>`);
+  sceneShake(1600, t=> 0.14 * Math.max(0, 1 - t / 1600));
+  await sceneWait(900);
+  await sceneCurtain(true, 700);
+  sceneClear();
+  await sceneCurtainText('Far below, under the whole hill, something lets go.', 700);
+  await sceneWait(1600);
+  await sceneCurtainText('', 400);
+  await sceneCurtainText('Out of the catacombs, the cellars and the crypt, the dead of Cosa Nostia rise — and this time nobody pushes them back down.', 700);
+  await sceneWait(2200);
+  await sceneCurtainText('', 400);
+  if(r.phoenixGone){
+    await sceneCurtainText('Somewhere in the hill, a fire that went out long ago flickers — just once.', 700);
+    await sceneWait(1700);
+    await sceneCurtainText('', 400);
+  }
+  r.holdBroken = true;
+  state.inventory.protein = (state.inventory.protein || 0) + 3;
+  await saveProfile();
+  await sceneCurtain(false, 800);
+  ghostAlert();
+  await sceneSay([faceMon('whalelord')], whaleName(), `<b>"Can you hear them? All of them, free — and singing."</b>`);
+  await sceneSay([faceMon('whalelord')], whaleName(),
+    `<b>"And my core. It is in the villa, right below us. I can feel it beating, like a second heart."</b><br><br><b>"We go there next."</b>`);
+  w.busy = false;
+  ui.sceneRunning = false;
+  walkTeardown();
+  storyModal(monPortrait('whalelord', 150, { view:'front', bare:true }), 'The hold is broken',
+    `You have beaten all thirteen floors of the psychics' tower. The dead of Cosa Nostia are free.<br><br>` +
+    `<b>+3 Protein Supplements</b><br><br><i>The villa is coming soon.</i>`,
+    ()=> go('tower_13'), { subtitle:'The Tower · Floor 13' });
+}
+/* The tower's floors, drawn from their grids (2.92) until they have
+   paintings (assets/zones/tower_ghost.png, tower_psychic.png): a round stone
+   room, a rune circle in the floor — candles round a séance ring on the
+   ghost floors, crystal pillars on the psychic ones, gold on the masters'
+   — and the stairs, down at the bottom and up at the top. */
+const _towerArt = {};
+function paintTower(d){
+  const own = cataPainting(d) || (d.artAlt ? cataPainting({ art:d.artAlt }) : null);
+  if(own) return own;
+  if(_towerArt[d.key]) return _towerArt[d.key];
+  const W = d.rows[0].length, H = d.rows.length, P = 32;
+  const c = document.createElement('canvas');
+  c.width = W * P; c.height = H * P;
+  const g = c.getContext('2d');
+  if(!g) return '';
+  const ghost = (d.tower || 1) % 2 === 1, master = (d.tower || 0) >= 12;
+  const rnd = (x, y, k)=>{ const s = Math.sin(x * 127.1 + y * 311.7 + (k || 0) * 74.7) * 43758.5453; return s - Math.floor(s); };
+  const at = (x, y)=> (y < 0 || y >= H || x < 0 || x >= W) ? '#' : d.rows[y][x];
+  g.fillStyle = '#120e18'; g.fillRect(0, 0, W * P, H * P);
+  for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
+    const ch = at(x, y), X = x * P, Y = y * P;
+    if(ch === '#'){
+      const edge = at(x, y + 1) !== '#' || at(x, y - 1) !== '#' || at(x + 1, y) !== '#' || at(x - 1, y) !== '#';
+      g.fillStyle = edge ? (ghost ? '#3a3046' : '#463650') : '#1a1422'; g.fillRect(X, Y, P, P);
+      if(edge){
+        g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1;
+        g.strokeRect(X + 0.5, Y + 0.5, P - 1, P / 2); g.strokeRect(X + 0.5, Y + P / 2 + 0.5, P - 1, P / 2 - 1);
+        if(at(x, y + 1) !== '#'){ g.fillStyle = ghost ? '#4c405a' : '#5a4866'; g.fillRect(X, Y + P - 6, P, 6); }
+      }
+      continue;
+    }
+    const tone = 52 + Math.floor(rnd(x, y) * 12);
+    g.fillStyle = ghost ? `rgb(${tone},${tone - 4},${tone + 10})` : `rgb(${tone + 14},${tone},${tone + 18})`;
+    g.fillRect(X, Y, P, P);
+    g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 1; g.strokeRect(X + 0.5, Y + 0.5, P - 1, P - 1);
+  }
+  /* the rune circle round the middle of the room */
+  const cx = W * P / 2, cy = H * P / 2;
+  g.strokeStyle = master ? 'rgba(230,190,90,0.75)' : ghost ? 'rgba(170,120,255,0.6)' : 'rgba(255,140,220,0.55)';
+  g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, P * 2.6, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = 1.5; g.beginPath(); g.arc(cx, cy, P * 2.15, 0, Math.PI * 2); g.stroke();
+  for(let k = 0; k < 16; k++){                              // marks all the way round, between the rings
+    const a = k / 16 * Math.PI * 2, r0 = P * 2.24, r1 = P * (k % 2 ? 2.4 : 2.52);
+    g.beginPath(); g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); g.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); g.stroke();
+  }
+  if(ghost){                                                // a spiral in the middle, like smoke
+    g.lineWidth = 2; g.beginPath();
+    for(let t = 0; t <= Math.PI * 6; t += 0.12){ const r = P * 0.08 + t * P * 0.085; const px = cx + Math.cos(t) * r, py = cy + Math.sin(t) * r; t ? g.lineTo(px, py) : g.moveTo(px, py); }
+    g.stroke();
+  } else {                                                  // the eye in the middle, and its rays
+    for(let k = 0; k < 12; k++){
+      const a = k / 12 * Math.PI * 2;
+      g.beginPath(); g.moveTo(cx + Math.cos(a) * P * 0.95, cy + Math.sin(a) * P * 0.95); g.lineTo(cx + Math.cos(a) * P * 1.7, cy + Math.sin(a) * P * 1.7); g.stroke();
+    }
+    g.fillStyle = 'rgba(255,170,230,0.35)'; g.beginPath(); g.ellipse(cx, cy, P * 0.7, P * 0.38, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(80,20,90,0.8)'; g.beginPath(); g.arc(cx, cy, P * 0.2, 0, Math.PI * 2); g.fill();
+  }
+  /* candles and crystal pillars */
+  for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
+    const ch = at(x, y), X = x * P, Y = y * P;
+    if(ch === '*'){
+      const gr = g.createRadialGradient(X + P / 2, Y + P / 2, 1, X + P / 2, Y + P / 2, P * 1.1);
+      gr.addColorStop(0, 'rgba(200,150,255,0.6)'); gr.addColorStop(1, 'rgba(120,60,200,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(X + P / 2, Y + P / 2, P * 1.1, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#2a2230'; g.fillRect(X + 9, Y + 16, 14, 10);
+      [[12, 10], [16, 8], [20, 10]].forEach(([qx, qy])=>{
+        g.fillStyle = '#efe6f4'; g.fillRect(X + qx - 1.5, Y + qy + 2, 3, 7);
+        g.fillStyle = master ? '#ffd36a' : '#c9a2ff'; g.beginPath(); g.arc(X + qx, Y + qy, 2.3, 0, Math.PI * 2); g.fill();
+      });
+    }
+    if(ch === 'o'){
+      const gr = g.createRadialGradient(X + P / 2, Y + P / 2, 1, X + P / 2, Y + P / 2, P * 1.0);
+      gr.addColorStop(0, 'rgba(255,170,235,0.5)'); gr.addColorStop(1, 'rgba(255,120,220,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(X + P / 2, Y + P / 2, P, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.ellipse(X + P / 2 + 2, Y + P - 6, 10, 4, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = master ? '#f2d58a' : '#e8b8ef';
+      g.beginPath(); g.moveTo(X + P / 2, Y + 2); g.lineTo(X + P - 8, Y + 12); g.lineTo(X + P - 9, Y + P - 7);
+      g.lineTo(X + 9, Y + P - 7); g.lineTo(X + 8, Y + 12); g.closePath(); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.45)'; g.fillRect(X + P / 2 - 2, Y + 6, 3, P - 16);
+    }
+  }
+  /* the stairs: up in the top alcove, down in the bottom one — but the
+     ground floor's alcove is the door out, and the top floor's a window */
+  (d.things || []).filter(t=> t.walk).forEach(t=>{
+    const X = t.x * P, Y = t.y * P, up = t.y < H / 2;
+    if(t.verb === 'Out'){
+      g.fillStyle = '#4a2f1e'; g.fillRect(X + 4, Y + 2, P - 8, P - 4);
+      g.fillStyle = '#6b4429'; g.fillRect(X + 6, Y + 4, P / 2 - 7, P - 8); g.fillRect(X + P / 2 + 1, Y + 4, P / 2 - 7, P - 8);
+      g.fillStyle = '#d9b45a'; g.beginPath(); g.arc(X + P / 2 - 3, Y + P / 2 + 1, 1.8, 0, Math.PI * 2); g.arc(X + P / 2 + 3, Y + P / 2 + 1, 1.8, 0, Math.PI * 2); g.fill();
+      return;
+    }
+    if(t.verb === 'Window'){
+      g.fillStyle = '#0b1230'; g.beginPath(); g.moveTo(X + 6, Y + P - 2); g.lineTo(X + 6, Y + 12); g.arc(X + P / 2, Y + 12, P / 2 - 6, Math.PI, 0); g.lineTo(X + P - 6, Y + P - 2); g.closePath(); g.fill();
+      g.fillStyle = '#f4ecff';
+      [[11, 10], [20, 14], [15, 20], [22, 24], [10, 26]].forEach(([sx, sy])=>{ g.fillRect(X + sx, Y + sy, 1.6, 1.6); });
+      g.strokeStyle = '#6a5a7a'; g.lineWidth = 2; g.beginPath(); g.moveTo(X + P / 2, Y + 4); g.lineTo(X + P / 2, Y + P - 2); g.stroke();
+      return;
+    }
+    for(let k = 0; k < 4; k++){
+      const v = up ? 70 + k * 18 : 120 - k * 22;
+      g.fillStyle = `rgb(${v},${v - 6},${v + 8})`;
+      g.fillRect(X + 3, Y + 3 + k * 7, P - 6, 7);
+    }
+  });
+  /* the lamp light, and the dark round the edge */
+  const vg = g.createRadialGradient(cx, cy, P * 1.5, cx, cy, P * 6.5);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.45)');
+  g.fillStyle = vg; g.fillRect(0, 0, W * P, H * P);
+  try { _towerArt[d.key] = c.toDataURL('image/png'); } catch(e){ _towerArt[d.key] = ''; }
+  return _towerArt[d.key];
+}
+
 function r5NonnaDoor(){
   return sceneSay([], "Nonna's house", r5Turn('nonnaDoor', [
     `You knock. Nobody answers. Behind the shutters, somebody is snoring like a foghorn.`,
@@ -3014,11 +4119,29 @@ const R5_TOWN_HOUSES = [
   { name:'Funicular',   x:18, y:33, w:5,  h:5,  door:[20,33], roof:'#7a5a48' },
 ];
 const R5_TOWN_LAMPS = [[7,7],[18,7],[0,8],[25,8],[7,18],[18,18],[1,20],[24,20],[7,21],[18,21],[7,30],[18,30],[2,31],[23,31],[11,32],[14,32],[1,33],[9,33]];
+/* The Hilltop (2.92), drawn the same way until assets/zones/hilltop.png is
+   there: the villa (its courtyard open to the sky, a loggia of columns along
+   its front), the psychics' round tower with its purple-lit windows, the
+   estate's pale walls and its gate, lemon terraces down the hill. */
+const R5_HILL_HOUSES = [
+  { name:'Villa',       x:8,  y:2,  w:10, h:7, door:[12,8],  roof:'#9b4b36', villa:true, wide:true },
+  { name:'Tower',       x:19, y:2,  w:5,  h:5, door:[21,6],  roof:'#3d3352', tower:true },
+  { name:'Lemon farm',  x:6,  y:16, w:5,  h:6, door:[8,16],  roof:'#b9893f' },
+  { name:'Guard house', x:16, y:16, w:7,  h:6, door:[19,16], roof:'#6f6a66' },
+  { name:"Grandpa's",   x:16, y:26, w:6,  h:5, door:[18,26], roof:'#b8643f' },
+];
+const R5_HILL_LAMPS = [[11,12],[14,12],[4,11],[24,11],[9,10],[16,10],[20,7],[22,7],[5,16],[11,16],[14,16],[23,16],[3,22],[22,22],[11,22],[14,22],[20,25],[11,32],[14,32]];
+const R5_TOWN_PLAN = {
+  old_town:{ houses:R5_TOWN_HOUSES, lamps:R5_TOWN_LAMPS },
+  hilltop: { houses:R5_HILL_HOUSES, lamps:R5_HILL_LAMPS, lemons:13, stucco:true, gate:[[11,12],[14,12]] },
+};
 const _townArt = {};
 function paintTown(d){
   const own = cataPainting(d);
   if(own) return own;
   if(_townArt[d.key]) return _townArt[d.key];
+  const plan = R5_TOWN_PLAN[d.key] || R5_TOWN_PLAN.old_town;
+  const houses = plan.houses;
   const W = d.rows[0].length, H = d.rows.length, P = 32;
   const c = document.createElement('canvas');
   c.width = W * P; c.height = H * P;
@@ -3027,9 +4150,34 @@ function paintTown(d){
   const rnd = (x, y, k)=>{ const s = Math.sin(x * 127.1 + y * 311.7 + (k || 0) * 74.7) * 43758.5453; return s - Math.floor(s); };
   const at = (x, y)=> (y < 0 || y >= H || x < 0 || x >= W) ? '#' : d.rows[y][x];
   const open = ch=> '.,=t'.includes(ch);
+  /* a round building stands on garden: its square's corners are grass */
+  const roundOn = (x, y)=> houses.some(h=> h.tower && x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h);
   /* the ground, tile by tile */
   for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
-    const ch = at(x, y), X = x * P, Y = y * P;
+    let ch = at(x, y);
+    const X = x * P, Y = y * P;
+    if(ch === 'B' && roundOn(x, y)) ch = 'g';
+    if(ch === 'g' && plan.lemons && y >= plan.lemons){      // a lemon terrace: a row of little trees
+      g.fillStyle = '#56703a'; g.fillRect(X, Y, P, P);
+      if(y % 3 === 0){ g.fillStyle = 'rgba(70,45,20,0.45)'; g.fillRect(X, Y, P, 3); }
+      const cx = X + P / 2 + (rnd(x, y, 1) - 0.5) * 6, cy = Y + P / 2 + 2, r = 9 + rnd(x, y, 2) * 3;
+      g.fillStyle = 'rgba(0,0,0,0.28)'; g.beginPath(); g.arc(cx + 2, cy + 3, r, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#2f5a2a'; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#3f7434'; g.beginPath(); g.arc(cx - 2, cy - 2, r - 3, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#f2d64a';
+      for(let k = 0; k < 4; k++){
+        const a = rnd(x, y, k + 4) * Math.PI * 2, rr = rnd(x, y, k + 8) * (r - 3);
+        g.beginPath(); g.arc(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, 2.2, 0, Math.PI * 2); g.fill();
+      }
+      continue;
+    }
+    if(ch === 'w' && plan.stucco){                         // the estate's wall: pale plaster, a tiled coping
+      g.fillStyle = '#cbb48a'; g.fillRect(X, Y, P, P);
+      g.fillStyle = 'rgba(90,70,40,0.25)'; g.fillRect(X, Y + P - 4, P, 4); g.fillRect(X + P - 3, Y, 3, P);
+      g.fillStyle = '#a5553a'; g.fillRect(X, Y, P, 7);
+      g.fillStyle = 'rgba(255,220,180,0.35)'; for(let k = 0; k < 4; k++) g.fillRect(X + k * 8 + 1, Y + 1, 5, 2);
+      continue;
+    }
     if(ch === '#' || ch === 'x'){                          // the hill's rock
       const edge = open(at(x, y - 1)) || open(at(x, y + 1)) || open(at(x - 1, y)) || open(at(x + 1, y));
       g.fillStyle = edge ? '#4b4038' : '#362e29'; g.fillRect(X, Y, P, P);
@@ -3103,10 +4251,46 @@ function paintTown(d){
       g.fillStyle = '#c7cbcf'; g.beginPath(); g.ellipse(cx, cy - 3, 4, 7, 0.4, 0, Math.PI * 2); g.fill();
     }
   }
+  /* the estate's gate: two pillars and an iron arch between them */
+  (plan.gate || []).forEach(([gx, gy])=>{
+    const X = gx * P, Y = gy * P;
+    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(X + 5, Y + 3, P - 6, P - 2);
+    g.fillStyle = '#e1d2ad'; g.fillRect(X + 3, Y - 2, P - 6, P);
+    g.strokeStyle = '#7d6a4a'; g.lineWidth = 2; g.strokeRect(X + 3, Y - 2, P - 6, P);
+    g.fillStyle = '#efe4c6'; g.beginPath(); g.arc(X + P / 2, Y + P / 2 - 3, 6, 0, Math.PI * 2); g.fill();
+  });
+  if(plan.gate && plan.gate.length === 2){
+    const [[ax, ay], [bx]] = plan.gate;
+    const mid = (ax + 1 + bx) / 2 * P, half = (bx - ax - 1) / 2 * P;
+    g.strokeStyle = '#2b2622'; g.lineWidth = 3;
+    g.beginPath(); g.arc(mid, ay * P + P / 2, half, Math.PI, 0); g.stroke();
+    g.lineWidth = 1.5;
+    for(let k = 1; k < 4; k++){ g.beginPath(); g.arc(mid, ay * P + P / 2, half * k / 4, Math.PI, 0); g.stroke(); }
+  }
   /* the houses, whole: roof, ridge, the wall with the door in it */
   const sideOf = h=> h.door[1] === h.y + h.h - 1 ? 'down' : h.door[1] === h.y ? 'up' : h.door[0] === h.x ? 'left' : 'right';
-  R5_TOWN_HOUSES.forEach(h=>{
+  houses.forEach(h=>{
     const X = h.x * P, Y = h.y * P, Wd = h.w * P, Ht = h.h * P;
+    if(h.tower){                                           // round, from above: a slate cone on a ring of stone
+      const cx = X + Wd / 2, cy = Y + Ht / 2, R = Math.min(Wd, Ht) / 2 - 4;
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.arc(cx + 5, cy + 6, R, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#5d566b'; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = 'rgba(20,14,30,0.7)'; g.lineWidth = 2; g.stroke();
+      const S = 12;
+      for(let k = 0; k < S; k++){
+        const a0 = k / S * Math.PI * 2, a1 = (k + 1) / S * Math.PI * 2;
+        g.fillStyle = k % 2 ? h.roof : '#4a3d66';
+        g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R - 7, a0, a1); g.closePath(); g.fill();
+      }
+      g.fillStyle = 'rgba(255,240,255,0.10)';                // the light falls from the upper left
+      g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R - 7, Math.PI, Math.PI * 1.5); g.closePath(); g.fill();
+      for(let k = 0; k < 8; k++){                          // its windows, all the way round
+        const a = (k + 0.5) / 8 * Math.PI * 2, wx = cx + Math.cos(a) * (R - 3.5), wy = cy + Math.sin(a) * (R - 3.5);
+        g.fillStyle = '#c9a4ff'; g.beginPath(); g.arc(wx, wy, 2.6, 0, Math.PI * 2); g.fill();
+      }
+      g.fillStyle = '#d9b45a'; g.beginPath(); g.arc(cx, cy, 4, 0, Math.PI * 2); g.fill();
+      return;
+    }
     g.fillStyle = 'rgba(0,0,0,0.30)'; g.fillRect(X + 3, Y + 4, Wd, Ht);
     g.fillStyle = h.roof; g.fillRect(X + 1, Y + 1, Wd - 2, Ht - 2);
     g.strokeStyle = 'rgba(40,20,10,0.35)'; g.lineWidth = 1;
@@ -3126,10 +4310,29 @@ function paintTown(d){
       for(let k = 0; k < h.w; k++) g.fillRect(X + k * P + 12, Y + Ht - 16, 8, 14);
       g.fillStyle = 'rgba(255,215,140,0.25)'; g.beginPath(); g.arc(X + Wd / 2, Y + Ht / 2 - 10, 34, 0, Math.PI * 2); g.fill();
     }
+    if(h.villa){                                           // the villa: a courtyard open to the sky, a loggia along its front
+      const qx = X + 3 * P, qy = Y + 2 * P, qw = Wd - 6 * P, qh = 2 * P;
+      g.fillStyle = 'rgba(40,20,10,0.55)'; g.fillRect(qx - 4, qy - 4, qw + 8, qh + 8);
+      g.fillStyle = '#d9c9a6'; g.fillRect(qx, qy, qw, qh);
+      g.strokeStyle = 'rgba(110,90,60,0.35)'; g.lineWidth = 1;
+      for(let k = 1; k < qw / 16; k++){ g.beginPath(); g.moveTo(qx + k * 16, qy); g.lineTo(qx + k * 16, qy + qh); g.stroke(); }
+      g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(qx, qy, qw, 6);
+      g.fillStyle = '#3f6b36'; g.beginPath(); g.arc(qx + qw / 2, qy + qh / 2, 13, 0, Math.PI * 2); g.fill();     // an orange tree
+      g.fillStyle = '#f0a03a';
+      for(let k = 0; k < 5; k++){ const a = k * 1.3; g.beginPath(); g.arc(qx + qw / 2 + Math.cos(a) * 7, qy + qh / 2 + Math.sin(a) * 7, 2.2, 0, Math.PI * 2); g.fill(); }
+      g.fillStyle = '#ece0c4';
+      for(let k = 0; k < h.w; k++) if(k !== 4 && k !== 5) g.fillRect(X + k * P + 12, Y + Ht - 16, 8, 14);
+    }
   });
   /* dusk over everything, then the lamps */
   g.fillStyle = 'rgba(22,26,64,0.34)'; g.fillRect(0, 0, W * P, H * P);
-  R5_TOWN_LAMPS.forEach(([lx, ly])=>{
+  houses.filter(h=> h.tower).forEach(h=>{                  // the tower's faint purple light
+    const cx = (h.x + h.w / 2) * P, cy = (h.y + h.h / 2) * P, R = Math.min(h.w, h.h) * P;
+    const gr = g.createRadialGradient(cx, cy, R * 0.3, cx, cy, R);
+    gr.addColorStop(0, 'rgba(170,120,255,0.30)'); gr.addColorStop(1, 'rgba(170,120,255,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.fill();
+  });
+  plan.lamps.forEach(([lx, ly])=>{
     const cx = lx * P + P / 2, cy = ly * P + P / 2;
     const gr = g.createRadialGradient(cx, cy, 2, cx, cy, P * 2.2);
     gr.addColorStop(0, 'rgba(255,214,130,0.55)'); gr.addColorStop(1, 'rgba(255,190,90,0)');
@@ -3139,18 +4342,19 @@ function paintTown(d){
   });
   /* lit doors and windows, and each house's name over its door */
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  R5_TOWN_HOUSES.forEach(h=>{
+  houses.forEach(h=>{
     const side = sideOf(h), [dx, dy] = h.door, DX = dx * P, DY = dy * P;
-    const glow = (x, y, w, hh)=>{ g.fillStyle = '#ffd98a'; g.fillRect(x, y, w, hh); g.fillStyle = 'rgba(255,200,110,0.35)'; g.fillRect(x - 2, y - 2, w + 4, hh + 4); };
-    if(side === 'down') glow(DX + 9, DY + P - 9, 14, 8);
+    const glow = (x, y, w, hh)=>{ g.fillStyle = h.tower ? '#d8b8ff' : '#ffd98a'; g.fillRect(x, y, w, hh); g.fillStyle = h.tower ? 'rgba(190,140,255,0.4)' : 'rgba(255,200,110,0.35)'; g.fillRect(x - 2, y - 2, w + 4, hh + 4); };
+    if(h.wide && side === 'down') glow(DX + 12, DY + P - 9, P + 8, 8);          // a great double door
+    else if(side === 'down') glow(DX + 9, DY + P - 9, 14, 8);
     else if(side === 'up') glow(DX + 9, DY + 1, 14, 8);
     else if(side === 'left') glow(DX + 1, DY + 9, 8, 14);
     else glow(DX + P - 9, DY + 9, 8, 14);
-    /* windows along the same wall */
-    for(let k = 0; k < (side === 'down' || side === 'up' ? h.w : h.h); k++){
+    /* windows along the same wall (a round tower's are already lit) */
+    for(let k = 0; k < (h.tower ? 0 : side === 'down' || side === 'up' ? h.w : h.h); k++){
       const wx = side === 'down' || side === 'up' ? h.x + k : (side === 'left' ? h.x : h.x + h.w - 1);
       const wy = side === 'down' ? h.y + h.h - 1 : side === 'up' ? h.y : h.y + k;
-      if((wx === dx && wy === dy) || rnd(wx, wy, 9) < 0.35) continue;
+      if((wx === dx && wy === dy) || (h.wide && wx === dx + 1 && wy === dy) || rnd(wx, wy, 9) < 0.35) continue;
       g.fillStyle = rnd(wx, wy, 4) < 0.7 ? '#f6cf7a' : '#40465c';
       if(side === 'down') g.fillRect(wx * P + 11, wy * P + P - 7, 10, 5);
       else if(side === 'up') g.fillRect(wx * P + 11, wy * P + 2, 10, 5);
@@ -3166,7 +4370,7 @@ function paintTown(d){
     else if(side === 'up') sy = h.y * P + 26;
     else if(side === 'left'){ sx = h.x * P + tw / 2 + 6; sy = DY + P / 2 - 18; }
     else { sx = (h.x + h.w) * P - tw / 2 - 6; sy = DY + P / 2 - 18; }
-    if(side === 'down' || side === 'up') sx = Math.max(h.x * P + tw / 2 + 4, Math.min((h.x + h.w) * P - tw / 2 - 4, DX + P / 2));
+    if(side === 'down' || side === 'up') sx = Math.max(h.x * P + tw / 2 + 4, Math.min((h.x + h.w) * P - tw / 2 - 4, DX + (h.wide ? P : P / 2)));
     g.fillStyle = 'rgba(30,20,12,0.55)'; g.fillRect(sx - tw / 2 + 1.5, sy - 7.5, tw, 16);
     g.fillStyle = '#f3e7cc'; g.fillRect(sx - tw / 2, sy - 9, tw, 16);
     g.fillStyle = '#3a2817'; g.fillText(label, sx, sy - 1);
@@ -3322,6 +4526,27 @@ const R5_GHOST_TAILOR = [
   `He cannot see me. I tried waving.`,
   `A needle and thread can do what an army could not. Remember that.`,
 ];
+/* On the Hilltop, and in the tower (2.92). */
+const R5_GHOST_HILL = [
+  `My core is in that villa. I can feel it beating, like a second heart.`,
+  `Up here their hold on the dead is so strong I can hardly think. The tower first.`,
+  `If they ever catch you up here, Grandpa's door is the one to run for.`,
+  `Figlio grew up in that house. No wonder he went off to sing.`,
+  `The soldatos up here are bored. Bored men do not look closely.`,
+];
+const R5_GHOST_HILL_FREE = [
+  `Can you hear them? The dead are singing under the hill.`,
+  `My core is behind that door. Soon.`,
+  `The mediums' hold is gone. The whole hill feels lighter.`,
+];
+const R5_GHOST_TOWER = [
+  `Their ghosts fear a mind — a Psychic of yours. Their psychic monsters fear a fist — a Physical one.`,
+  `The ones who talk to the dead can feel me. I had forgotten what it is like, to be noticed.`,
+  `The mind-readers cannot feel me at all. They hear your thoughts instead. Try thinking about lunch.`,
+  `Every floor we climb, their hold on the dead grows weaker. I can feel it loosening.`,
+  `Thirteen floors. You humans and your unlucky numbers.`,
+  `Figlio said they came here looking for someone, and never found them. I wonder who.`,
+];
 function r5GhostChat(id){
   const d = DECKS[id];
   const r = r5();
@@ -3330,6 +4555,11 @@ function r5GhostChat(id){
   if(id === 'church') return next('ghostChurch', R5_GHOST_CHURCH);
   if(id === 'old_town') return next('ghostOldTown', R5_GHOST_OLDTOWN);
   if(id === 'tailor') return next('ghostTailor', R5_GHOST_TAILOR);
+  if(id === 'hilltop') return r.holdBroken ? next('ghostHillFree', R5_GHOST_HILL_FREE) : next('ghostHill', R5_GHOST_HILL);
+  if(d && d.tower){
+    if(d.tower === 13 && r.holdBroken) return say(`The window. Look — the whole hill, and nobody holding it down.`);
+    return next('ghostTower', R5_GHOST_TOWER);
+  }
   if(!d || !d.stealth) return next('ghostTown', R5_GHOST_TOWN);
   /* (2.91) the old phoenix, waiting in the Armoury */
   if(id === 'cata_stair_r2' && r5GPWaiting())
@@ -3364,7 +4594,8 @@ function renderChallengeR5(){
   const roomsFound = R5_ALL_ROOMS.filter(f=> r.reached.includes(f)).length;
   const card = (sprite, icon, title, done, desc)=> `
     <div class="challenge-card" style="cursor:default;">
-      ${npcPortrait(sprite, icon, 54, 'transparent')}
+      ${sprite.startsWith('<') ? `<span style="width:54px;height:54px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;">${sprite}</span>`
+                               : npcPortrait(sprite, icon, 54, 'transparent')}
       <div style="flex:1;">
         <div class="cc-title">${escapeHtml(title)} ${done ? '<span class="clear-tag">Beaten</span>' : ''}</div>
         <div class="cc-desc">${desc}</div>
@@ -3380,15 +4611,23 @@ function renderChallengeR5(){
       r.capoBlack ? 'The Padrino knows you are coming.' : (r.reached.includes('cata_cistern') ? 'Holding the bridge in the Cistern.' : 'Somewhere in the catacombs.'))}
     ${card('capo_purple', '🕴️', 'Purple Capo', r.capoPurple,
       r.capoPurple ? 'Beaten twice now.' : (r.reached.includes('cata_stair') ? 'Waiting at the top of the Long Stair.' : 'Somewhere further up.'))}
-    ${r.tier1 ? card('ghost_phoenix', '🔥', 'The ghost phoenix', r.phoenixMet,
+    ${r.tier1 ? card(r5GhostPhoenixHtml(54), '🔥', 'The ghost phoenix', r.phoenixMet,
       r.phoenixGone ? 'It gave your phoenix the last of its fire, and went to rest.'
       : r.phoenixMet && r.phoenixGift ? 'It gave your phoenix the last of its fire. It will rest once you are safe up in the Old Town.'
       : r.phoenixMet && !r.rush ? 'It opened the gate, and the dead of the hill rose with it. Now it waits in the Armoury, with the last of its fire, for a phoenix.'
       : r.phoenixMet ? 'It opened the gate, and the dead of the hill rose with it.'
-                     : 'Something is burning in the Armoury, the furthest room off the Long Stair.') : ''}
+                     : 'Something dead is waiting in the Armoury, the furthest room off the Long Stair.') : ''}
     ${upper ? card('capo_grey', '🕴️', 'Grey Capo', r.capoGrey,
       r.capoGrey ? 'Nobody saw a thing.' : (r.reached.includes('cata_pit') ? 'Waiting in the middle of his ring.' : 'Somewhere under the Old Town.')) : ''}
+    ${r.figlioMet ? card('figlio', '🎙️', 'Figlio', concertState().figlioDay === today(),
+      (concertState().figlioDay === today() ? 'Beaten today. Back at the opera house tomorrow. ' : 'At the opera house in the Old Town. ') +
+      `Once a day: his team starts at level <b>${r5FiglioLevel()}</b> · win for <b>+3 Silver Medals</b>.`) : ''}
+    ${r.hill ? card('psychic_master', '🔮', 'Psychic Master', r5TowerBeaten(12),
+      r5TowerBeaten(12) ? 'The leader of the exorcists. She gave you the Psychic Stone.' : 'The leader of the exorcists, on floor 12 of the tower in the estate\'s east garden.') : ''}
+    ${r.hill ? card('ghost_master', '👻', 'Ghost Master', r5TowerBeaten(13),
+      r5TowerBeaten(13) ? 'The Padrino\'s grandniece. The hold on the dead is broken.' : 'The Padrino\'s grandniece, on floor 13 at the very top of the tower. The dead of the hill do what she tells them.') : ''}
     <div class="screen-sub" style="margin-top:12px;">Catacomb floors reached: <b>${floorsReached} of ${allFloors.length}</b> · side rooms found: <b>${roomsFound} of ${R5_ALL_ROOMS.length}</b></div>
+    ${r.hill ? `<div class="screen-sub" style="margin-top:4px;">Tower floors won: <b>${r.tower.beaten.length} of 13</b> — the disciples and masters stay beaten.</div>` : ''}
     <div class="screen-sub" style="margin-top:4px;">Soldatos you beat are back at their posts the next day. The Family regroups.</div>
     <button class="btn btn-ghost" id="returnBtn" style="margin-top:12px;">Return</button>`;
   $('#backBtn').addEventListener('click', ()=> go('region'));

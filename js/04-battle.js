@@ -321,11 +321,33 @@ function removeEStatus(e, type){
 /* Battle reference for a player monster: computeDamage needs BOTH .types (for
    effectiveness) and .uid (for status lookup). Passing the raw monster object
    fails because monsters store species, not types. */
-function monRef(m){ return { uid:m.uid, types:SPECIES[m.species].types, species:m.species, _ambush:m._ambush || 0, _omen:m._omen || 0 }; }
+function monRef(m){ return { uid:m.uid, types:SPECIES[m.species].types, species:m.species, level:m.level, _ambush:m._ambush || 0, _omen:m._omen || 0 }; }
 
-/* Steel Soul's flat bonus for one hit: bonus × ATK if the attacker is the
-   monster that cast it (`attacker` is a monRef on your side, the enemy object
-   on theirs), else 0. */
+/* STEEL SOUL (2.93 — reworked; it had grown too strong)
+   A passive and a quick move in one row (`soul:{turns:1, reduce:0.2,
+   bonus:0.1}`, the Ankylosaurus's Power2; `isQuickMove` knows it):
+   - Passive: a monster that has learnt it takes `reduce` (20%) less damage,
+     always — its alone (`soulPassive`). A ✦ Curse mutes it, as any passive.
+   - Quick move, once a battle (the 100-word meter gives it back): it costs no
+     turn, and for this turn only — never held open by Diamond Dust — its hits
+     carry +`bonus`× ATK each, and every damage reduction its side has up, its
+     own 20% included, turns into damage as well (`soulShields`).
+   Both sides alike. Its old guard (every single blow drawn to it) is gone with
+   the rework: SOUL_GUARD switches it back on. */
+const SOUL_GUARD = false;
+/* The passive half: how much less damage this monster takes for knowing
+   Steel Soul (0 if it does not, or not yet, or a ✦ Curse has it muted).
+   `m` is a monRef or a monster of yours, or an enemy. */
+function soulPassive(m){
+  if(!m || !m.species) return 0;
+  const row = (MOVES[m.species] || []).find(r=> r[6] && r[6].soul);
+  if(!row || (m.level || 1) < row[5]) return 0;
+  if(passivesMuted(m)) return 0;
+  return row[6].soul.reduce || 0;
+}
+/* Its flat bonus for one hit: bonus × ATK if the attacker is the monster that
+   cast it (`attacker` is a monRef on your side, the enemy object on theirs),
+   else 0. */
 function steelSoulBonus(attacker, atk, isPlayerAttacking){
   if(!ui.battle || !attacker) return 0;
   const st = isPlayerAttacking ? getPStatus(0,'steelSoul') : getESide('steelSoul');
@@ -345,8 +367,8 @@ function soulShields(isPlayer, attacker){
   const out = [];
   const add = r=>{ if(r > 0) out.push(r); };
   const side = type=> isPlayer ? getPStatus(0, type) : getESide(type);
-  const soul = side('steelSoul'), sa = side('spikeArmour'), aeg = side('steelAegis'), cw = side('curseWard'), sh = side('shell');
-  if(soul) add(soul.reduce || 0);
+  const sa = side('spikeArmour'), aeg = side('steelAegis'), cw = side('curseWard'), sh = side('shell');
+  add(soulPassive(attacker));                      // its own Steel Soul passive (2.93)
   if(sa) add(sa.reduce || 0.20);
   if(aeg) add(aeg.reduce || 0.30);
   if(cw) add(cw.reduce || 0);
@@ -361,6 +383,18 @@ function steelSoulAmp(attacker, isPlayerAttacking){
   const mine = isPlayerAttacking ? (attacker.uid != null && st.owner === attacker.uid) : st.owner === attacker;
   return mine ? soulShields(isPlayerAttacking, attacker).reduce((m, r)=> m * (1 + r), 1) : 1;
 }
+/* What a Steel Soul just cast adds this turn, for its message (2.93): its
+   ×, and why, then the flat bonus. A ✦ Curse muting the passive with no
+   shield up leaves only the bonus. Call it once the status is set. */
+function soulCastNote(attacker, isPlayer, bonus){
+  const amp = steelSoulAmp(attacker, isPlayer), own = soulPassive(attacker);
+  const add = `adds +${bonus}× ATK to every hit`;
+  if(amp <= 1 + 1e-9) return add;
+  const why = amp > 1 + own + 1e-9
+    ? `every shield ${isPlayer ? 'your' : 'their'} side has up${own ? `, its own ${Math.round(own * 100)}% too` : ''}`
+    : `its own ${Math.round(own * 100)}% turned to damage`;
+  return `hits <b>×${+amp.toFixed(2)}</b> (${why}) and ${add}`;
+}
 /* Steel Soul's guard (2.90): while it is up, every blow aimed at ONE monster
    of its side — a single blow, each strike of a barrage or an Ultra, the main
    blow of a splash — goes to the monster that cast it, whether it leads or
@@ -368,7 +402,7 @@ function steelSoulAmp(attacker, isPlayerAttacking){
    reach everyone. In their hands the same: your single blows must go through
    it. Returns that monster, standing, or null. */
 function soulGuardian(side){
-  if(!ui.battle) return null;
+  if(!ui.battle || !SOUL_GUARD) return null;      // (2.93) the guard is gone
   if(side === 'player'){
     const st = getPStatus(0, 'steelSoul');
     return st ? (livingField().find(m=> m.uid === st.owner) || null) : null;
@@ -455,8 +489,7 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(cwE) dmg *= (1 - (cwE.reduce || 0));
     const shE = getESide('shell');
     if(shE && shE.reduce) dmg *= (1 - shE.reduce);
-    const soulE = getESide('steelSoul');
-    if(soulE && soulE.owner === defender) dmg *= (1 - (soulE.reduce || 0));
+    dmg *= (1 - soulPassive(defender));                  // their Ankylosaurus's Steel Soul passive (2.93)
   } else { // defender is a player monster
     const ohD = getPStatus(0,'overheat');
     if(ohD) dmg *= (ohD.take || 1.5);              // the cost of Overheat
@@ -468,8 +501,7 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(cw) dmg *= (1 - (cw.reduce||0));             // Curse + / ✦ also shields
     const sh = getPStatus(0,'shell');
     if(sh && sh.reduce) dmg *= (1 - sh.reduce);    // Lava Shell
-    const soul = getPStatus(0,'steelSoul');
-    if(soul && soul.owner === defender.uid) dmg *= (1 - soul.reduce);   // only its caster is armoured
+    dmg *= (1 - soulPassive(defender));                  // Steel Soul's passive: its alone (2.93)
     /* What their side has put on yours: a Curse makes you softer, and inside
        their deep freeze you are as hard (or easy) to hurt as they were in yours. */
     const curP = getPStatus(0,'curse');
@@ -3826,7 +3858,8 @@ const REGION_ZONES = {
      Town once you have come up through them into its church (2.90). */
   5: [ { id:'harbour',   name:'The Harbour',   tint:'#6a8aa0' },
        { id:'catacombs', name:'The Catacombs', tint:'#4a3a5a', locksUntil:'r5Catacombs' },
-       { id:'old_town',  name:'The Old Town',  tint:'#9a7a5a', locksUntil:'r5OldTown' } ],
+       { id:'old_town',  name:'The Old Town',  tint:'#9a7a5a', locksUntil:'r5OldTown' },
+       { id:'hilltop',   name:'The Hilltop',   tint:'#7a8a4a', locksUntil:'r5Hill' } ],
 };
 
 /* --- Region 2, first scripted sequence: the Trial of Courage ---
@@ -4111,12 +4144,14 @@ function beginBattle(config){
     focusUid:null,           // the monster of yours in focus, if not the leader (2.83)
     enemyStatus:{},          // the enemy side's own side-wide buffs (their Overheat, their dust…)
     fieldStatus:{},          // debuffs stamped on every enemy, inherited by later waves
-    /* COOLDOWN RULE — only these two ever go on cooldown.
+    /* COOLDOWN RULE — only these ever go on cooldown.
        Basic, Power1, Power2, Ultimate and Max are NATURAL moves and are
        available every single turn, always. Only a VERY HIGH or an ULTRA stone
        is spent once per battle, and the 100-word recharge meter gives both
-       back. Nothing else should ever be added to these maps. */
-    usedVeryHigh:{}, usedUltra:{},
+       back. The one exception, agreed in 2.93: Steel Soul, the Ankylosaurus's
+       quick cast (its Power2), is once a battle too, and the same meter gives
+       it back. Nothing else should ever be added to these maps. */
+    usedVeryHigh:{}, usedUltra:{}, usedSoul:{},
   };
   ui.battle.noFleeBase = ui.battle.noFlee;     // what a Fiery Jaws lets go back to
   if(config.scriptedAlly){
@@ -4413,8 +4448,9 @@ function companionOnField(){
   return (c && c.uid === p.uid) ? c : null;
 }
 function isCompanionMon(m){ const l = leaderMon(); return !!(m && l && m.uid !== l.uid && companionOnField() === m); }
-/* A move that never spends the turn: a Very High stone's cast, or the Aria. */
-function isQuickMove(mv){ return !!(mv && ((mv.isStone && mv.stoneTier === 'veryhigh') || mv.aria)); }
+/* A move that never spends the turn: a Very High stone's cast, the Aria, or
+   (2.93) Steel Soul. */
+function isQuickMove(mv){ return !!(mv && ((mv.isStone && mv.stoneTier === 'veryhigh') || mv.aria || mv.soul)); }
 /* The words a companion's move still asks for beyond its turn's 8: the tail
    of a move that grows with extra words (Incinerate Max: 7 more, to 15, for
    its 2.75×). Bonus rounds are their own quizzes, as always. */
@@ -4740,6 +4776,11 @@ function unlockedMoves(m){
       target: t.kind==='multi2'?'Multi2':(t.kind==='status'?'Status':'Single'),
       words:t.words, unlock:0, available:!used, isStone:true, stoneTier:t.id, stoneType:st.type };
   });
+  /* Steel Soul, once cast, is spent until the 100-word meter fills (2.93).
+     Its button keeps its name and says so, rather than going dark as ???. */
+  base.forEach(mv=>{
+    if(mv.soul && mv.available && ui.battle && ui.battle.usedSoul && ui.battle.usedSoul[m.uid]){ mv.available = false; mv.spent = true; }
+  });
   /* The ghost phoenix's gift: Nova and Incinerate may leave a Sacred Flame. */
   base.forEach(mv=>{ const sf = sacredFlameBonus(m, mv); if(sf) mv.bonus = sf; });
   /* Something wound up last turn comes down this turn, already paid for. */
@@ -4919,7 +4960,7 @@ function estimateHit(mv, mon){
   /* Steel Soul's bonus rides the same buffs as the strike (2.81) */
   const soul = getPStatus(0,'steelSoul');
   const bonus = (soul && soul.owner === mon.uid) ? (soul.bonus || 0) : 0;
-  const dmg = (per + bonus) * atk * ownBuffMultiplier() * steelSoulAmp({ uid:mon.uid }, true);
+  const dmg = (per + bonus) * atk * ownBuffMultiplier() * steelSoulAmp(monRef(mon), true);
   return Math.ceil(dmg);
 }
 function moveShape(mv){
@@ -4933,6 +4974,7 @@ function moveShape(mv){
   if(mv.target === 'AOE') return 'AOE';
   if(mv.target === 'Multi2') return '2 targets';
   if(mv.revitalise) return 'Revive';
+  if(mv.soul) return 'Quick';                    // costs no turn (2.93)
   return '';
 }
 /* ============================================================
@@ -5032,21 +5074,25 @@ function moveEffectText(mv, mon, atk){
     `<b>Revive.</b> Brings <b>one fainted teammate</b> back into the fight with ` +
     `<b>${Math.round((mv.revitalise.pct||0.1)*100)}%</b> of its health. You choose who, then write the words. ` +
     `If nobody has fainted, it costs nothing to try.`);
-  if(mv.soul) out.push(
-    `<b>Steel Soul.</b> For ${mv.soul.turns} turns this monster takes <b>${Math.round(mv.soul.reduce*100)}% less damage</b> ` +
-    `and deals <b>${Math.round(mv.soul.reduce*100)}% more</b> (×${1 + mv.soul.reduce}, multiplying with Overheat, Dragon Dance ` +
-    `and the rest). <b>Every other shield</b> your side has up when it strikes turns into damage the same way, each ` +
-    `multiplying the rest: Spike Armour <b>×1.2–1.3</b>, Steel Aegis <b>×1.3–1.4</b>, a Curse ward <b>×1.1–1.15</b>, ` +
-    `a Lava Shell <b>×1.6</b> — Steel Soul with a Steel Aegis hits <b>×${+((1 + mv.soul.reduce) * 1.3).toFixed(2)}</b>. ` +
-    `It also adds <b>+${Math.ceil(mv.soul.bonus*atk)}</b> (${mv.soul.bonus}× ATK) to every hit it lands — each strike of ` +
-    `a multi-strike move, skill-stone and Ultra moves too, and an Aftershock laid while it is up. ` +
-    `Overheat, Dragon Dance and a Curse on the target multiply the bonus as they do the hit. ` +
-    `<b>It draws every single blow</b> aimed at your side: a single-target attack, each strike of a barrage or an Ultra, ` +
-    `the main blow of a splash, a quick strike, an afterimage — all go to it instead of its partner, whether it leads or ` +
-    `fights as a companion. Area moves and twin blows still reach both; a riposte still answers whoever struck. ` +
-    `Your Diamond Dust keeps it at ${mv.soul.turns} turns for as long as the dust lasts. ` +
-    `Only this monster benefits; swapping out leaves the buff behind. In an enemy's hands it is the same: ` +
-    `their shields — and a Steel it walked in with — make it hit harder, and your single blows must go through it.`);
+  if(mv.soul){
+    const r = mv.soul.reduce, pct = Math.round(r * 100);
+    out.push(
+    `<b>Steel Soul — a passive and a quick cast.</b> ` +
+    `<b>Passive:</b> once it has learnt this, it always takes <b>${pct}% less damage</b> — this monster alone. ` +
+    `A ✦ Curse mutes it, as it does any passive. ` +
+    `<b>Quick cast:</b> ${mv.words} words that <b>cost no turn</b> — you choose its move straight after. ` +
+    `<b>Once a battle</b>; the ${RECHARGE_TARGET}-word recharge meter gives it back. ` +
+    `For <b>that turn only</b> (your Diamond Dust cannot hold it open) it adds <b>+${Math.ceil(mv.soul.bonus*atk)}</b> ` +
+    `(${mv.soul.bonus}× ATK) to every hit it lands — each strike of a multi-strike move, skill-stone and Ultra moves too — ` +
+    `and turns <b>every damage reduction</b> your side has up into damage, each multiplying the rest: its own ${pct}% ` +
+    `<b>×${1 + r}</b>, Spike Armour <b>×1.2–1.3</b>, Steel Aegis <b>×1.3–1.4</b>, a Curse ward <b>×1.1–1.15</b>, ` +
+    `a Lava Shell <b>×1.6</b> — with a Steel Aegis up it hits <b>×${+((1 + r) * 1.3).toFixed(2)}</b>. ` +
+    `Overheat, Dragon Dance and a Curse on the target multiply all of it as they do the hit. ` +
+    `An Aftershock laid that turn hits for 0.3× instead of 0.2×, and keeps it. ` +
+    `Written wrong, the turn and the cast are both spent, as a stone's are; scattered by their Diamond Dust, ` +
+    `neither is. Only this monster benefits. In an enemy's hands it is the same: their shields — and a Steel it ` +
+    `walked in with — make it hit harder that turn, and it still swings in the same action.`);
+  }
   if(mv.purge) out.push(
     `<b>Purge.</b> When it reaches them it is a small Diamond Dust: it sweeps away ` +
     `<b>${mv.purge.enemyBuffs || 0} of their buff${(mv.purge.enemyBuffs || 0) === 1 ? '' : 's'}</b> (an Overheat, a Diamond Dust, ` +
@@ -5357,8 +5403,8 @@ function renderBattle(){
           return `
           <button class="move-btn ${ok?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${ok?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
-            <div class="mv-name">${mv.available || mv.chargeMore ? escapeHtml(mv.name) : '???'}</div>
-            <div class="mv-meta">${mv.available ? (compTurn ? companionMeta(mv, ctlMon) : moveMeta(mv, ctlMon)) : (mv.chargeMore ? 'Full' : 'Locked')}</div>
+            <div class="mv-name">${mv.available || mv.chargeMore || mv.spent ? escapeHtml(mv.name) : '???'}</div>
+            <div class="mv-meta">${mv.available ? (compTurn ? companionMeta(mv, ctlMon) : moveMeta(mv, ctlMon)) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : 'Locked')}</div>
           </button>`; }).join('')}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
@@ -5429,7 +5475,7 @@ function renderStatusBadges(){
       const shown = Math.max(0, st.turnsLeft - 1);
       /* What the enemy has put on you is theirs, and reads in their colour. */
       const cls = isEnemyOwned(st.type, st) ? 'foe' : 'mine';
-      const n = st.unsweepable ? '' : ` ${shown}`;
+      const n = st.unsweepable ? '' : st.type === 'steelSoul' ? ' · this turn' : ` ${shown}`;   // a quick buff (2.93)
       const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved` : '';
       out.push(`<span class="status-pill ${cls}">${STATUS_LABELS[st.type]||st.type}${n}${saved}</span>`);
     });
@@ -5482,7 +5528,8 @@ function renderStatusBadges(){
     fr.innerHTML = Object.values(enemySideStatuses()).map(st=>{
       const shown = Math.max(0, st.turnsLeft - 1);
       const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved` : '';
-      return `<span class="status-pill foe">${STATUS_LABELS[st.type]||st.type}${st.unsweepable ? '' : ' ' + shown}${saved}</span>`;
+      const n = st.unsweepable ? '' : st.type === 'steelSoul' ? ' · this turn' : ' ' + shown;   // a quick buff (2.93)
+      return `<span class="status-pill foe">${STATUS_LABELS[st.type]||st.type}${n}${saved}</span>`;
     }).join('');
   }
   // Enemy statuses render on their OWN card, above that enemy's HP bar, so it's

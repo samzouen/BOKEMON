@@ -655,11 +655,13 @@ function renderConcert(){
             ${npcPortrait(f.id,'🎤',56,'transparent')}
             ${failstarDone(f.id)?'<span class="worker-done">✓</span>':''}
           </button>`).join('')}
-        <button class="sailor-btn figlio ${figlioBeatenToday()?'done':''}" data-figlio="1">
+        ${figlioAway() ? '' : `<button class="sailor-btn figlio ${figlioBeatenToday()?'done':''}" data-figlio="1">
           ${npcPortrait('figlio','🎙️',56,'transparent')}
           ${figlioDone()?'<span class="worker-done">✓</span>':''}
-        </button>
+        </button>`}
       </div>
+      ${figlioAway() ? `<div class="plant-note" style="margin-top:10px;">Figlio's place on the bill is empty. He has gone home,
+        people say — to sing in his own town, across the sea.</div>` : ''}
     ` : `
     <div class="plant-note">Clear the sailor fans so the Electric Dojo can rehearse.
       <b>${beaten}/5</b> seen off.</div>
@@ -820,6 +822,10 @@ const FAILSTARS = [
 
 function failstarDone(id){ return (concertState().failstars||[]).includes(id); }
 function figlioDone(){ return !!concertState().figlio; }
+/* (2.92) Once you wear the Family's colours in Cosa Nostia, Figlio has gone
+   home: he sings at the Old Town's opera house now, and fights you there
+   (15-region5.js) — still once a day, still for Silver Medals. */
+function figlioAway(){ const r5s = state.progress.region5; return !!(r5s && r5s.disguise); }
 
 function openFailstar(i){
   const f = FAILSTARS[i];
@@ -1182,6 +1188,7 @@ async function dojoReward(){
 
 /* --- Figlio: the runner-up, and rather more than that --- */
 function openFiglio(){
+  if(figlioAway()) return toast('Figlio has gone home to Cosa Nostia.');
   if(figlioBeatenToday())
     return storyModal(npcPortrait('figlio','🎙️',130,'transparent'), 'Not today',
       `He waves you off, good-naturedly.<br><br>` +

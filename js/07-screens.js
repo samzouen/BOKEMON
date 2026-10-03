@@ -1125,7 +1125,7 @@ const SPAR_POOLS = {
   legendary: [
     ['newt',          'Tachypsychia: for 3 turns it dodges 80% at first (30% after) and may act again (30%). Volt Concussion: 3 strikes, 20% paralysis each.'],
     ['water_dragon',  'Cataclysm: gathers charges, then spends them all in one huge blow. Tsunami: 0.8× on both.'],
-    ['ankylosaurus',  'Steel Soul: for 3 turns it takes 20% less, hits 20% harder — more again for every other shield its side has up — (+0.1× a blow), and every single blow of yours must go through it. Rampage Max: 5 strikes on both, then an Aftershock.'],
+    ['ankylosaurus',  'Steel Soul: it always takes 20% less. Once a fight, a quick cast before it swings: that turn it hits 1.2× — more for every other shield its side has up — and +0.1× a blow. Rampage Max: 5 strikes on both, then an Aftershock.'],
     ['phoenix',       'Incinerate Max: 1.5×, growing to 2.75× with up to 7 more words (15 in all). Nova: 1× on both — and it sweeps away one of your buffs and burns one of your marks off its side.'],
     ['caladrius',     'Pacificus: half the attack, one and a half times the health. Vita: a healing light for your side. Conversio: brings the fallen back.'],
     ['forest_fairy',  'Verdant Wrath Max: 1.8× over 3 strikes. Giga Drain: 0.8×, and it heals. Overgrowth: 0.7× on both.'],

@@ -438,6 +438,8 @@ function onMoveChosen(moveIdx){
   const mon = controlMon();                  // whose buttons these are
   setFocus(mon);
   const mv=unlockedMoves(mon)[moveIdx];
+  /* Steel Soul is once a battle (2.93) */
+  if(mv && mv.spent){ ui.battle.phase='player'; toast(`${mv.name} is used — the ${RECHARGE_TARGET}-word meter brings it back.`); return; }
   /* One action begins: what it sets off afterwards (Cunning, Greed, a riposte)
      happens once for the whole of it, and belongs to whoever took it. */
   ui.battle.actionSeq = (ui.battle.actionSeq || 0) + 1;
@@ -569,7 +571,7 @@ function companionWritten(mon, mv, target, fee, tail, results){
   /* words past the turn's 8 roll into the next move, as words past any move's do */
   b.wordCarry = Math.max(0, ((ui.quiz && ui.quiz.wordsDone) || 0) - fee);
   const written = results.reduce((n,r)=>n+(r.words||countWords(r.text)),0);
-  if(feedRecharge(written)) setTimeout(()=>{ battleMsg('⚡ Second wind! Very High and Ultra moves restored.'); renderBattle(); }, 1500);
+  if(feedRecharge(written)) setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
   if(correct < fee){
     playSfx('move_miss');
     battleMsg(`${displayName(mon)}'s turn fails! (${correct}/${fee} words)`);
@@ -613,7 +615,7 @@ function onSummonPressed(){
       results.filter(r=>!r.passed).forEach(r=>{ if(!b.fightMistakes.includes(r.text)) b.fightMistakes.push(r.text); });
       const got = results.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0);
       if(feedRecharge(results.reduce((n,r)=>n+(r.words||countWords(r.text)),0)))
-        setTimeout(()=>{ battleMsg('⚡ Second wind! Very High and Ultra moves restored.'); renderBattle(); }, 1500);
+        setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
       b.phase = 'player';
       if(got < need){
         playSfx('move_miss');
@@ -759,8 +761,9 @@ function runMoveQuiz(mv, target){
 /* Words written beyond a move's requirement roll into the next move. */
 const RECHARGE_TARGET = 100;
 /* Every word written during a fight feeds a shared meter. At 100 it restores
-   every spent Very High and Ultra move — a second wind for long battles — and
-   rolls the surplus into the next charge. */
+   every spent Very High and Ultra move, and Steel Soul's cast on both sides
+   (2.93) — a second wind for long battles — and rolls the surplus into the
+   next charge. */
 function feedRecharge(words){
   const b = ui.battle;
   if(!b || !words) return false;
@@ -769,6 +772,8 @@ function feedRecharge(words){
   b.rechargeWords -= RECHARGE_TARGET;
   b.usedVeryHigh = {};
   b.usedUltra = {};
+  b.usedSoul = {};                     // and Steel Soul's once-a-battle cast (2.93)…
+  (b.enemies || []).forEach(e=>{ e._soulUsed = false; });   // …theirs too: one meter, both sides
   /* …and gives every companion back its turns (2.84) — not one that fell.
      Theirs too (2.87): one meter, both sides' companions. */
   Object.values(b.pairs || {}).forEach(p=>{ if(!p.fallen) p.turnsLeft = COMPANION.turns; });
@@ -777,6 +782,13 @@ function feedRecharge(words){
      cast — so it fires again the next time its carrier takes the field. */
   b.passiveFired = {};
   return true;
+}
+
+/* What the second wind says it gave back (2.93: Steel Soul too, if a
+   monster of yours knows it). */
+function secondWindMsg(){
+  const soul = battleParty().some(m=> m && (MOVES[m.species] || []).some(r=> r[6] && r[6].soul && (m.level || 1) >= r[5]));
+  return `⚡ Second wind! Very High and Ultra moves${soul ? ', and Steel Soul,' : ''} restored.`;
 }
 
 function bankWordSpill(mv){
@@ -963,7 +975,7 @@ function askBonusRound(mv, mon, cb){
         const got = res.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0);
         // the bonus words are words written too: they feed the meter, once
         if(feedRecharge(res.reduce((n,r)=>n+(r.words||countWords(r.text)),0)))
-          setTimeout(()=>{ battleMsg('⚡ Second wind! Very High and Ultra moves restored.'); renderBattle(); }, 1500);
+          setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
         go('battle');
         finish(got >= target);
       },
@@ -1082,7 +1094,7 @@ function offerRebirth(rise, fall, who){
       onComplete:(res)=>{
         const got = res.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0);
         if(feedRecharge(res.reduce((n,r)=>n+(r.words||countWords(r.text)),0)))
-          setTimeout(()=>{ battleMsg('⚡ Second wind! Very High and Ultra moves restored.'); renderBattle(); }, 1500);
+          setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
         if(got < REBIRTH.words) return failed();
         go('battle');
         mon.currentHp = Math.ceil(monMaxHp(mon) * REBIRTH.hp);
@@ -1187,13 +1199,14 @@ function resolveBattleMove(mv, target, results, opts){
   const recharged = feedRecharge(written);
   if(ui.battle) ui.battle.lastMove = mv;
   go('battle');
-  if(recharged) setTimeout(()=>{ battleMsg('⚡ Second wind! Very High and Ultra moves restored.'); renderBattle(); }, 1500);
+  if(recharged) setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
   /* A quick move that failed spends the turn, as always — and so it is this
      monster's action this round. */
   if(isQuickMove(mv) && correct < mv.words) markActed(mon);
 
   if(mv.slot==='UltraStone') ui.battle.usedUltra[mon.uid]=true;
   if(mv.isStone && mv.stoneTier==='veryhigh') ui.battle.usedVeryHigh[mon.uid]=true;
+  if(mv.soul){ ui.battle.usedSoul = ui.battle.usedSoul || {}; ui.battle.usedSoul[mon.uid] = true; }   // once a battle (2.93)
 
   /* Their Discombobulate on you: once the words are written, a blow turns on
      yourself instead. Wind-ups, casts and heals are not blows. */
@@ -1211,7 +1224,8 @@ function resolveBattleMove(mv, target, results, opts){
   if(castOnly && dustBlocks('player') && correct >= mv.words){
     playSfx('move_miss');
     battleMsg(`💎 Their diamond dust scatters your ${mv.name} — nothing takes hold.`);
-    if(mv.aria){ ui.battle.phase = 'player'; return renderBattle(); }
+    if(mv.soul && ui.battle.usedSoul) ui.battle.usedSoul[mon.uid] = false;   // not spent, as a stone is not (2.93)
+    if(mv.aria || mv.soul){ ui.battle.phase = 'player'; return renderBattle(); }
     return setTimeout(advanceTurn, 1100);
   }
 
@@ -1378,18 +1392,23 @@ function resolveBattleMove(mv, target, results, opts){
     playEffect(mv.name, { type:'Electric' });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
+  /* Steel Soul (2.93): a quick move, once a battle. For this turn only —
+     never held open by Diamond Dust — +0.1× ATK on each of its hits, and every
+     damage reduction its side has up (its own passive 20% too) turns into
+     damage. Written right, it costs no turn: choose its move. */
   if(mv.soul){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
-    setPStatus(0, { type:'steelSoul', turnsLeft:mv.soul.turns+1, max:mv.soul.turns+1,   // held at its own length (2.81)
+    const turns = mv.soul.turns || 1;
+    setPStatus(0, { type:'steelSoul', turnsLeft:turns, max:turns, noDust:true,
                     reduce:mv.soul.reduce, bonus:mv.soul.bonus, owner:mon.uid });
     renderStatusBadges();
-    /* every other shield already up turns into damage too (2.91): say how much */
-    const amp = steelSoulAmp(monRef(mon), true);
-    const more = amp > 1 + mv.soul.reduce + 1e-9 ? ` — ×${+amp.toFixed(2)} with your other shields up —` : '';
-    battleMsg(`${mv.name}! For ${mv.soul.turns} turns: ${Math.round(mv.soul.reduce*100)}% less damage taken, ` +
-      `${Math.round(mv.soul.reduce*100)}% more dealt${more} (+${mv.soul.bonus}× ATK a hit), and every single blow aimed at your side comes to it.`);
     playEffect(mv.name, { type:'Steel' });
-    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+    logBattle(`${displayName(mon)} used ${mv.name} (quick, once a battle)`);
+    ui.battle.phase = 'player';
+    renderBattle();
+    battleMsg(`🛡 ${mv.name}! This turn ${displayName(mon)} ${soulCastNote(monRef(mon), true, mv.soul.bonus)}. ` +
+      `It cost no turn — choose your move.`);
+    return;
   }
   if(mv.clones){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
@@ -2881,10 +2900,12 @@ function enemyMoveFor(e){
      hyperbeams every turn after. Its charge is tracked on the enemy itself. */
   if(e.ai === 'ankylo'){
     e.turnsTaken = (e.turnsTaken||0) + 1;
-    if(e.turnsTaken === 1){
-      /* the real row, so the Steel Soul it opens with is one (2.81) */
-      const ss = (MOVES[e.species] || []).find(m=> m[6] && m[6].soul);
-      return ss || ['Power2','Steel Soul',null,'Self',4,35,{soul:{turns:3, reduce:0.2, bonus:0.1}}];
+    /* (2.93) it opens with Steel Soul — a quick cast, once a battle — and
+       swings its Max in the same action. Not while your Diamond Dust is up:
+       it would only be scattered, so it waits for the dust to settle. */
+    if(!e._soulUsed && !dustBlocks('enemy')){
+      const ss = (MOVES[e.species] || []).find(m=> m[6] && m[6].soul && e.level >= m[5]);
+      if(ss) return ss;
     }
     const mx = MOVES[e.species].find(m=>m[0]==='Max');
     return mx || e.move;
@@ -3105,6 +3126,12 @@ function enemyActs(i, e){
        High stone is carried in e.stone and cast above, on its first action.) */
     if(e.arenaMove === 'ultra' && e.arenaUltra) move = enemyUltraMove(e.arenaUltra.type, e.arenaUltra.plus);
   }
+  /* Steel Soul is once a battle (2.93), whatever picked it — the arena's
+     dummy told to use it included. Spent, or about to be scattered by your
+     Diamond Dust (which would only send it round again), it swings its Max,
+     or its usual move, instead. */
+  if(move && move[6] && move[6].soul && (e._soulUsed || dustBlocks('enemy')))
+    move = (MOVES[e.species] || []).find(m=> m[0] === 'Max' && e.level >= m[5] && m[2] != null) || e.move;
   const ex = move[6] || {};
 
   /* ---- moves that deal no damage: not an attempt ---- */
@@ -3154,24 +3181,24 @@ function enemyActs(i, e){
     renderStatusBadges();
     return setTimeout(next, 1100);
   }
-  /* Steel Soul in their hands (the wild Ankylosaurus opens with it): a cast on
-     itself, not a blow — the mirror of yours, its alone: for 3 turns 20% less
-     damage taken, 20% more dealt and +0.1× ATK on every hit it lands, and
-     every single blow of yours drawn to it (2.90). Until 2.81 it went through
-     as an attack of 0: no Steel Soul at all, and a Counter stack of yours spent
-     on nothing. */
+  /* Steel Soul in their hands (the wild Ankylosaurus opens with it) — the
+     mirror of yours (2.93): a quick cast on itself, once a battle, then its
+     move in the same action. For this turn only, never held by their dust:
+     +0.1× ATK on every hit it lands, and every reduction their side has up —
+     its own passive 20% too — turns into damage. (Until 2.81 it went through
+     as an attack of 0.) */
   if(ex.soul){
+    e._soulUsed = true;
     bob(document.getElementById('enemyBob-'+idx), -1);
     playEffect(move[1], { type:'Steel', at:'enemy-' + idx });
-    const st = setESide({ type:'steelSoul', turnsLeft:ex.soul.turns + 1, max:ex.soul.turns + 1,
+    const turns = ex.soul.turns || 1;
+    const st = setESide({ type:'steelSoul', turnsLeft:turns, max:turns, noDust:true,
                           reduce:ex.soul.reduce, bonus:ex.soul.bonus, owner:e });
     renderStatusBadges();
-    const amp = st ? steelSoulAmp(e, false) : 1;
-    const more = amp > 1 + ex.soul.reduce + 1e-9 ? ` — ×${+amp.toFixed(2)} with their other shields up —` : '';
-    battleMsg(st ? `🛡 ${name} uses <b>${move[1]}</b> — for ${ex.soul.turns} turns it takes ${Math.round(ex.soul.reduce*100)}% less, ` +
-                   `hits ${Math.round(ex.soul.reduce*100)}% harder${more} (+${ex.soul.bonus}× ATK a hit), and every single blow of yours must go through it.`
+    battleMsg(st ? `🛡 ${name} uses <b>${move[1]}</b> — this turn it ${soulCastNote(e, false, ex.soul.bonus)}.`
                  : `${name} uses ${move[1]} — the diamond dust scatters it.`);
-    return setTimeout(next, 1100);
+    if(!st) e._soulUsed = false;                  // not spent, as your stone is not
+    return setTimeout(()=> enemyActs(i, e), 1100);  // quick: now its move
   }
   /* Stalk: back into hiding. */
   if(ex.grant && ex.grant.lurk){

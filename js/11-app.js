@@ -63,7 +63,8 @@ function renderZone(){
   /* Region 5: the harbour is walked; the catacombs carry on or pick a floor */
   if(z.id === 'harbour')   return renderHarbourZone();
   if(z.id === 'catacombs') return renderCatacombs();
-  if(z.id === 'old_town')  return renderOldTownZone();       // the church, for now (2.90)
+  if(z.id === 'old_town')  return renderOldTownZone();       // its streets in uniform; the church out of it (2.91)
+  if(z.id === 'hilltop')   return renderHilltopZone();        // the Padrino's estate, its tower (2.92)
   return renderZonePlain();
 }
 
@@ -161,6 +162,7 @@ function renderExplore(){
             (z.locksUntil==='r4Blocked' && !(state.progress.region4||{}).wallFound) ||
             (z.locksUntil==='r5Catacombs' && !(state.progress.region5||{}).gateBeaten) ||
             (z.locksUntil==='r5OldTown' && !(state.progress.region5||{}).oldTown && !isDev()) ||
+            (z.locksUntil==='r5Hill' && !(state.progress.region5||{}).hill && !isDev()) ||
             (z.locksUntil==='never');
           return `
           <div class="zone-item">
