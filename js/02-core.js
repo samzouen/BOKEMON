@@ -62,7 +62,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.95';
+const GAME_VERSION = '2.96';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -576,18 +576,29 @@ function hpScale(level){
   }
   return HP_SCALE_ANCHORS[HP_SCALE_ANCHORS.length-1][1];
 }
-/* ATK past level 100 (2.89): the stat itself up to 100, then 1.2× at 150 and
-   2× at 200 — linear between. With HP's 3× / 6× / 12× the ratio of HP to ATK
-   goes 3 : 5 : 6, so a monster that climbs all the way to 200 hits far harder
-   than one that stops at 150. Both sides: an enemy's ATK uses it too. */
+/* ATK past level 100 (2.89; 2.96 a curve): the stat itself up to 100, then
+   one smooth curve through 1.2× at 150 and 2× at 200 — slow at first, then
+   faster and faster towards 200, with no corner at 150 (it was two straight
+   lines, 100→150 and 150→200):
+       atkScale(L) = 1 + (4^((L − 100) / 50) − 1) / 15
+   110 1.021 · 120 1.049 · 125 1.067 · 140 1.135 · 150 1.2 ·
+   160 1.285 · 175 1.467 · 180 1.546 · 190 1.742 · 200 2
+   The 4 and the 15 come from the anchors (ATK_CURVE): any three, evenly
+   spaced and climbing faster in the second stretch, give their own curve.
+   With HP's 3× / 6× / 12× the ratio of HP to ATK goes 3 : 5 : 6 at 100 / 150 /
+   200, so a monster that climbs all the way to 200 hits far harder than one
+   that stops at 150. Both sides: an enemy's ATK uses it too. */
 const ATK_SCALE_ANCHORS = [[100,1.00],[150,1.20],[200,2.00]];
+const ATK_CURVE = (()=>{
+  const [[l0], [l1, m1], [, m2]] = ATK_SCALE_ANCHORS;
+  const r = (m2 - 1) / (m1 - 1) - 1;            // the bonus grows r× faster over the second stretch (4)
+  return { from:l0, span:l1 - l0, r, k:(m1 - 1) / (r - 1) };   // k: 1/15
+})();
 function atkScale(level){
-  if(level <= ATK_SCALE_ANCHORS[0][0]) return 1;
-  for(let i=1;i<ATK_SCALE_ANCHORS.length;i++){
-    const [l0,m0] = ATK_SCALE_ANCHORS[i-1], [l1,m1] = ATK_SCALE_ANCHORS[i];
-    if(level <= l1) return m0 + (level-l0)*(m1-m0)/(l1-l0);
-  }
-  return ATK_SCALE_ANCHORS[ATK_SCALE_ANCHORS.length-1][1];
+  const c = ATK_CURVE, top = ATK_SCALE_ANCHORS[ATK_SCALE_ANCHORS.length - 1][0];
+  if(level <= c.from) return 1;
+  const t = (Math.min(level, top) - c.from) / c.span;
+  return 1 + c.k * (Math.pow(c.r, t) - 1);
 }
 /* A monster's ATK: its stat, scaled past 100. */
 function computeAtk(species, level, supplements, mon){
@@ -1111,6 +1122,20 @@ function normalizeProfile(p){
       const sp = SPECIES[m.species];
       if(!sp || sp.isSeed || sp.isEgg || sp.isBaby || (m.level||0) <= 100) return;
       const old = Math.ceil(computeMaxStat(m.species, m.level, m.supplements, m, true) * 3);
+      if(m.currentHp >= old) m.currentHp = computeMaxHp(m.species, m.level, m.supplements, m);
+    });
+  }
+  /* 2.96: the Whalelord gained the bonus evolution every legendary that never
+     evolves has. If he was at full health without it, he is at full health
+     with it. */
+  if(!p._wl296){
+    p._wl296 = true;
+    const wl = SPECIES.whalelord, bonus = wl.bonusStages;
+    (p.party||[]).concat(p.storage||[]).forEach(m=>{
+      if(!m || m.species !== 'whalelord') return;
+      wl.bonusStages = 0;
+      const old = computeMaxHp(m.species, m.level, m.supplements, m);
+      wl.bonusStages = bonus;
       if(m.currentHp >= old) m.currentHp = computeMaxHp(m.species, m.level, m.supplements, m);
     });
   }

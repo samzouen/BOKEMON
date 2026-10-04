@@ -126,9 +126,11 @@ const SPECIES = {
   whale:           { name:'Whale',     tier:'wild',      types:['Water'],        rate:7,  nerfedRate:5,  base:70, evo:[25], evoMult:1.5, color:'#4a7a9a', glyph:'鲸' },
   /* Cuain. A legendary running on a hole where his core should be — elite in
      every respect until Region 5 gives it back. One evolution's worth of stats
-     baked in, like Phoenix: he arrives already grown. */
+     baked in, like Phoenix, Caladrius and every legendary that never evolves:
+     he arrives already grown. (2.96: `bonusStages:1` — the `preEvolved` flag
+     he had instead was never read, so until now he went without it.) */
   whalelord:       { name:'Whalelord', tier:'legendary', types:['Water','Ghost'], rate:13, nerfedRate:11, base:66, evo:[], evoMult:1.5,
-                     color:'#3a5a7a', glyph:'鲲', nerfedUntilCrowned:true, storyCrownOnly:true, preEvolved:true },
+                     bonusStages:1, color:'#3a5a7a', glyph:'鲲', nerfedUntilCrowned:true, storyCrownOnly:true },
 
   /* --- Region 5: the catacombs under Cosa Nostia. Ghosts are hard to hit
          because they are not quite there: see LURK and CUNNING in
@@ -168,6 +170,12 @@ const SPECIES = {
   phoenix:         { name:'Phoenix',     tier:'legendary', types:['Fire','Flying'], rate:13, nerfedRate:13, base:25,  evo:[],      evoMult:1.5, color:'#c8453a', glyph:'凤', frozenRegion1:true, bonusStages:1 },
   forest_fairy:    { name:'Forest Fairy',tier:'legendary', types:['Grass','Fairy'], rate:13, nerfedRate:13, base:100, evo:[1],     evoMult:1.5, color:'#5fa86b', glyph:'仙', bossOnly:true },
   sacred_seed:     { name:'Sacred Seed', tier:'special',   types:['Grass'],         rate:0,  nerfedRate:0,  base:1,   evo:[],      color:'#7fa86b', glyph:'种', isSeed:true },
+  /* Cyborg (2.94): the Padrino's artificial monster — the time monster itself,
+     the strongbox the stolen cores are fused into. A crowned legendary's
+     growth with one bonus evolution's worth on top, met at level 200. Never
+     caught: in the space-time tear it stands beside his team, never acts, can
+     never be brought below 1 HP, and rewinds the team (16-tear.js). */
+  cyborg:          { name:'Cyborg',      tier:'legendary', types:['Steel','Psychic'], rate:13, nerfedRate:13, base:200, evo:[],      evoMult:1.5, bonusStages:1, color:'#4b2d6e', glyph:'时', bossOnly:true },
 };
 
 /* Move tables live here for later phases; unused in Phase 1 but embedded now
@@ -517,6 +525,13 @@ const MOVES = {
                     ['Power2','Stalk',null,'Self',4,21,{passive:{lurk:true}, grant:{lurk:true, again:true}, blockedWhile:'lurk'}],
                     ['Ultimate','Pounce',1.25,'Single',8,41,{spendLurk:1.5}],
                     ['Max','Pounce Max',1.5,'Single',8,51,{spendLurk:1.5}]],
+  /* The time monster (2.94). In the tear it never acts; these are its blows
+     for when the story's climax gives it a turn. */
+  cyborg:          [['Basic','Second Hand',0.3,'Single',2,1],
+                    ['Power1','Clockwork Crush',0.6,'Single',4,1],
+                    ['Power2','Time Quake',0.5,'AOE',8,1],
+                    ['Ultimate','Rewind Ray',1.2,'Single',8,1],
+                    ['Max','Rewind Ray Max',1.5,'Single',8,1]],
 };
 
 const TYPE_COLORS = {
