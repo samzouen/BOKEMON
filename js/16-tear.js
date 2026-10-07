@@ -11,15 +11,18 @@
      · Enter the space-time tear — the way into Region 6 (not built yet);
      · Challenge the past — the Padrino's battle again, as a WEEKLY challenge.
 
-   CHALLENGE THE PAST
-   - Seven rounds. A round is the Padrino's whole team: six waves of two
-     (TEAR_TEAM), with Cyborg standing between them in every wave. His
-     monsters are at the level of the highest-levelled monster in your party,
-     or 110, whichever is higher; Cyborg at 200, crowned.
-   - Cyborg never takes a turn and can never be brought below 1 HP
-     (tearMakeRewinder); once nothing but it is left standing, the wave is
-     won (livingEnemies). Its wounds last the round; when a round is won it
-     rewinds the team — and itself — and they come again.
+   CHALLENGE THE PAST (3.00: the Padrino's fight in the villa, as the
+   designer set it — handover part 6 §12)
+   - Seven rounds. A round is his team ONE AT A TIME: the Rhino, the Fox, the
+     Shadow, the Jackal and the Raven (TEAR_TEAM), crowned, at the level of
+     your highest-levelled monster or 110, whichever is higher — no cap here
+     (anyLevel; 2.99 had held them at 100) — and last of all Cyborg, at 200.
+   - Beat Cyborg and the round is won: it rewinds the team — and itself — and
+     he starts again from the Rhino. Cyborg fights now (2.94–2.99 it stood
+     aside, never acting, never below 1 HP): Spacetime Rift Max, 1.5× its
+     attack, 1.1× more for every Spacetime Fracture, multiplying; Futuresight
+     dodges half of every attack and each dodge is a fracture. A ✦ Curse
+     quiets Futuresight; a Diamond Dust sweeps the fractures away.
    - Each round won pays its medals ONCE A WEEK (TEAR.pay; the week starts on
      Monday, the player's own time). Lose or leave, and what was earned stays
      earned; a new run starts again at round 1 and pays only the rounds not
@@ -30,7 +33,10 @@
    - All seven in one run: the first time ever, the Mind Stone; every time
      after that, 18 fights' worth more for the whole party.
    - Every quiz in it asks for the silver and gold words (pickWords).
-   - A loss costs nothing but the fall (10% health, as any): no XP is lost.
+   - A loss costs nothing but the fall (10% health, as any): no XP is lost —
+     the designer (3.01): "No XP penalty for losses in the rift, let the
+     player navigate it with very high skill stones of their own". The
+     challenge and the tear's page say so.
      Each round won counts as a battle for the eye break and the day's count;
      a break that falls due is taken between rounds.
    ========================================================== */
@@ -40,25 +46,20 @@ const TEAR = {
   /* round by round, paid once a week */
   pay: [ { bronze:15 }, { bronze:30 }, { silver:10 }, { silver:20 }, { gold:5 }, { gold:10 }, { gold:15 } ],
   bonusFights: 18,      // a full clear once the Mind Stone is yours
-  cyborgLevel: 200,
-  floor: 110,           // his monsters: your best, or this
-  /* How hard his monsters fight, wave by wave within a round (the first three
-     with their Power2, the last three with their best), and how much protein
-     they carry. The knobs to turn if a round is too hard or too easy. */
+  cyborgLevel: 200,     // the one monster of theirs past 100 (SPECIES.cyborg.noLevelCap)
+  floor: 110,           // (3.00) his five: your best monster's level, or this — no cap
+  /* How hard his monsters fight, wave by wave within a round (the Rhino, Fox
+     and Shadow with their Power2, the Jackal and Raven with their best;
+     Cyborg always its best), and how much protein they carry. The knobs to
+     turn if a round is too hard or too easy. */
   ai: ['power2', 'power2', 'power2', 'best', 'best', 'best'],
   supplements: 0,
   rewindMs: 1800,       // the rewind between rounds
 };
-/* The Padrino's team, wave by wave — his own, the Family's best, crowned;
-   Cyborg stands between each pair. */
-const TEAR_TEAM = [
-  [{ species:'goblin_knight' },             { species:'firehound' }],
-  [{ species:'tricerarmor' },               { species:'moon_swan' }],
-  [{ species:'horned_lynx' },               { species:'thunderhound' }],
-  [{ species:'dragon' },                    { species:'lizardape' }],
-  [{ species:'puppet' },                    { species:'loong' }],
-  [{ species:'howler' },                    { species:'toad' }],
-];
+/* (3.00) The Padrino's team, one at a time, in the order of his fight in the
+   villa — and then Cyborg (tearWaves). Until 2.99 it was six pairs of the
+   Family's elites, with Cyborg standing between each pair. */
+const TEAR_TEAM = ['ground_starter', 'psychic_starter', 'ghost_starter', 'physical_starter', 'flying_starter'];
 const TEAR_MEDAL = { bronze:'🥉', silver:'🥈', gold:'🥇' };
 
 /* ---------- where it is, and who may go ---------- */
@@ -135,7 +136,7 @@ function renderTear(){
         }).join('')}</div>
         <div class="tw-note">${all
           ? `All ${tearWord(TEAR.rounds)} won this week. The past opens again on <b>${escapeHtml(day)}</b>.`
-          : `Each round pays once a week; the next week starts on <b>${escapeHtml(day)}</b>. Lose, and you keep what you won — a new try starts again at round 1.`}</div>
+          : `Each round pays once a week; the next week starts on <b>${escapeHtml(day)}</b>. Lose, and you keep what you won, and no XP is taken — a new try starts again at round 1.`}</div>
         <div class="tw-note">${t.stone
           ? `🌀 You hold the Mind Stone. All ${tearWord(TEAR.rounds)} in one go: <b>+${TEAR.bonusFights} fights' worth</b> of XP for the whole team.`
           : `All ${tearWord(TEAR.rounds)} in one go: <b>🌀 the Mind Stone</b>.`}</div>
@@ -148,24 +149,23 @@ function renderTear(){
 }
 
 /* ---------- Challenge the past ---------- */
-/* The Padrino's monsters' level: the highest in your party, or 110. */
+/* (3.00) His five: the level of your highest-levelled monster, or 110,
+   whichever is higher — no cap here (2.99 held them at 100). */
 function tearFoeLevel(){
   const top = Math.max(0, ...battleParty().map(m=> m.level || 1));
   return Math.max(TEAR.floor, Math.min(LEVEL_MAX, top));
 }
-/* All seven rounds' waves, each [his monster, Cyborg, his monster]. */
+/* All seven rounds' waves: in each, his monsters one at a time (as many as
+   wavesPerRound leaves room for — six: all five) and then Cyborg, always the
+   round's last. */
 function tearWaves(){
   const L = tearFoeLevel();
+  const n = Math.max(1, Math.min(TEAR_TEAM.length + 1, TEAR.wavesPerRound));
   const waves = [];
   for(let r = 0; r < TEAR.rounds; r++){
-    for(let w = 0; w < TEAR.wavesPerRound; w++){
-      const pair = TEAR_TEAM[w % TEAR_TEAM.length];
-      const foe = s=> Object.assign({ level:L, ai:TEAR.ai[w % TEAR.ai.length] || 'best', crowned:true,
-                                      supplements:TEAR.supplements, nerfed:false }, s);
-      waves.push([foe(pair[0]),
-                  { species:'cyborg', level:TEAR.cyborgLevel, ai:'basic', crowned:true, nerfed:false, boss:true },
-                  foe(pair[1])]);
-    }
+    TEAR_TEAM.slice(0, n - 1).forEach((sp, w)=> waves.push([{ species:sp, level:L, ai:TEAR.ai[w] || 'best', crowned:true,
+      supplements:TEAR.supplements, nerfed:false, anyLevel:true }]));
+    waves.push([{ species:'cyborg', level:TEAR.cyborgLevel, ai:'best', crowned:true, nerfed:false, boss:true }]);
   }
   return waves;
 }
@@ -173,12 +173,13 @@ function tearChallenge(){
   if(!ensurePool()) return;
   if(tearAllPaid()) return toast(`All ${tearWord(TEAR.rounds)} rounds are won this week. The past waits for Monday.`);
   storyModal(monPortrait('cyborg', 140, { view:'front', bare:true, crowned:true }), 'Challenge the past',
-    `The tear shows you the Padrino's hill again — his whole team, and <b>Cyborg</b>, the time monster, ` +
-    `standing in the middle of them.<br><br>` +
-    `Whatever you do to Cyborg, time undoes. <b>Beat the others.</b> ${tearCap(tearWord(TEAR.wavesPerRound))} ` +
-    `${TEAR.wavesPerRound === 1 ? 'wave makes' : 'waves make'} a round; when a round falls, Cyborg rewinds it and they come ` +
-    `again — <b>${tearWord(TEAR.rounds)} rounds</b>.<br><br>` +
-    `Every move asks for your <b>silver and gold words</b>.`,
+    `The tear shows you the Padrino's villa again. He sends his monsters out one at a time — the Rhino, the Fox, the Shadow, ` +
+    `the Jackal and the Raven, crowned, at level <b>${tearFoeLevel()}</b> — and last of all <b>Cyborg</b>, the time monster, at <b>${TEAR.cyborgLevel}</b>.<br><br>` +
+    `<b>Beat Cyborg</b> and it rewinds them all, itself too, and he starts again from the Rhino — <b>${tearWord(TEAR.rounds)} rounds</b>.<br><br>` +
+    `Cyborg's <b>Futuresight</b> dodges half of your blows, and every dodge is a <b>Spacetime Fracture</b>: its Spacetime Rift Max ` +
+    `(<b>1.5×</b> its attack) hits <b>1.1×</b> harder for each one, multiplying. A <b>Curse ✦</b> quiets Futuresight; a <b>Diamond Dust</b> ` +
+    `sweeps the fractures away — bring your own <b>Very High stones</b>.<br><br>` +
+    `Lose, and nothing is taken — <b>not even XP</b>. Every move asks for your <b>silver and gold words</b>.`,
     ()=> tearBegin(), { subtitle:'The space-time tear', bg:'tear' });
 }
 function tearBegin(){
@@ -191,7 +192,9 @@ function tearBegin(){
 }
 
 /* Cyborg can be struck, but never brought below 1 HP — every path that
-   lowers an enemy's health goes through this. */
+   lowers an enemy's health goes through this. (The tear used it until 3.00,
+   when Cyborg became the round's last wave, to be beaten; kept for the
+   climax's final phase, where it flees at 1 HP — part 6 §12.) */
 function tearMakeRewinder(e){
   let hp = Math.max(1, e.hp);
   e.rewinder = true;
@@ -202,14 +205,8 @@ function tearMakeRewinder(e){
 function tearWaveStart(i){
   const b = ui.battle;
   const round = Math.floor(i / TEAR.wavesPerRound) + 1;
-  const first = i % TEAR.wavesPerRound === 0;
   b.tearRound = round;
   b.name = `Don Padrino · Round ${round} of ${TEAR.rounds}`;
-  b.enemies.forEach(e=>{
-    if(e.species !== 'cyborg') return;
-    tearMakeRewinder(e);
-    if(!first && b.tearCyborgHp != null) e.hp = b.tearCyborgHp;      // its wounds last the round
-  });
 }
 function tearWaveLabel(i){
   const round = Math.floor(i / TEAR.wavesPerRound) + 1, wave = i % TEAR.wavesPerRound + 1;
@@ -219,12 +216,10 @@ function tearWaveLabel(i){
    pay the round, and Cyborg rewinds the team. */
 function tearWaveCleared(next){
   const b = ui.battle;
-  const cy = b.enemies.find(e=> e.rewinder);
-  b.tearCyborgHp = cy ? cy.hp : null;
   if((b.waveIndex + 1) % TEAR.wavesPerRound !== 0) return next();
+  /* Cyborg beaten: the round is won, and it rewinds them all (3.00) */
   const round = Math.floor(b.waveIndex / TEAR.wavesPerRound) + 1;
   const said = tearRoundWon(round);
-  b.tearCyborgHp = null;                          // rewound: whole again
   b.phase = 'resolving';
   renderBattle();
   battleMsg(said);

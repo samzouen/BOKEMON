@@ -62,7 +62,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '2.96';
+const GAME_VERSION = '3.05';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -495,6 +495,12 @@ function monStageOf(m){
    Requires: final evolution, protein maxed, level 65+. */
 const CROWN_MIN_LEVEL = 60;
 const CROWN_LEGENDARY_STAGES = 3;
+/* No monster they field is above 100 (2.99) — makeEnemy holds every one
+   there, crowns and supplements still counted. The one exception is Cyborg,
+   the time monster, at 200 (SPECIES.cyborg.noLevelCap). The Monkey King's
+   spars are built at any level on purpose (makeEnemy's opts.anyLevel): he
+   fights five above the monster he is training, and is not the Family. */
+const ENEMY_LEVEL_CAP = 100;
 
 function isCrowned(m){ return !!(m && m.crowned); }
 function baseTier(species){ return (SPECIES[species]||{}).tier; }
@@ -1138,6 +1144,16 @@ function normalizeProfile(p){
       wl.bonusStages = bonus;
       if(m.currentHp >= old) m.currentHp = computeMaxHp(m.species, m.level, m.supplements, m);
     });
+  }
+  /* 3.00: the tower's stone is the Fairy Stone — the conduit the exorcists
+     held the dead down through, taken from the Ghost Master's ring as the
+     hold breaks. A save that broke the hold before 3.00 took it then. (A
+     Psychic Stone the Psychic Master already gave stays where it is.) */
+  if(!p._fairy300){
+    p._fairy300 = true;
+    const g5 = p.progress && p.progress.region5;
+    const inv = p.inventory = p.inventory || {};
+    if(g5 && g5.holdBroken && !(inv.fairyStone === true || Number(inv.fairyStone) > 0)) inv.fairyStone = 1;
   }
   p.moveStones = p.moveStones || [];
   /* Giga Drain became the Forest Guardian's signature move; the Grass Very High

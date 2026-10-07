@@ -18,6 +18,9 @@ const REGION_CAPS = { 1:21, 2:41, 3:61, 4:85, 5:110 };
    the top of its wild band (`max`). */
 function zoneCap(id){ const z = ZONE_LEVELS[id]; return z ? (z.cap || z.max) : 0; }
 function levelCap(){
+  /* The space-time tear's XP knows no region (2.94): while it is paid, only a
+     monster's own Crown and ceilings stop it (ui.xpNoCap, 16-tear.js). */
+  if(typeof ui !== 'undefined' && ui && ui.xpNoCap) return LEVEL_MAX;
   /* The Band Competition is a Challenge rather than a zone, so it carries its
      own ceiling; beating the band lifts the whole region. */
   const r3 = (state.progress && state.progress.region3) || {};
@@ -36,6 +39,9 @@ function levelCap(){
    · 100 is as far as an UNCROWNED monster goes, and only starters, elites and
      legendaries can wear a Crown — so only they go further. A legendary whose
      core was stolen can't be crowned by hand; it waits at 100 for its story.
+     (3.01) Where the region reaches 100 or more, a monster stopped at 100
+     stores its fights on the stone it carries once its bar is full — a wild
+     one, every fight — for a breakthrough later (storesAtHundred).
    · A crowned monster then stops at a CEILING every ten levels: 110 … 190.
      There, every fight charges the Element Stone it carries instead of its
      level. When the charge reaches the ceiling's need the monster BREAKS
@@ -97,6 +103,30 @@ function capAtCeiling(m){
 }
 /* Do this monster's fights charge a stone rather than its level? */
 function chargesStone(m){ return monGate(m) === 'ceiling' || capAtCeiling(m); }
+
+/* (3.01) STORED AT 100. In a region that lets a monster reach 100 or more
+   (Region 5's 110; the tear, which has no cap), a monster stopped at 100 —
+   waiting for its Crown or its core with its bar full, or a wild one, whose
+   road ends there — stores every fight it earns on the stone it carries, for
+   a breakthrough later. Until 3.01 those fights were lost. The designer: "let's
+   make fights at level 100 cap in a region with at least level 100 cap store
+   fights in the stone." The charge is the stone's, as at a ceiling: it moves
+   with it, and the first breakthrough (150, at 110) takes only its need.
+   The bar comes first — a Crown or a core lets it grow on at once — and the
+   stone's 1.5× is for experience, not for its own charge. */
+function storesAtHundred(m){
+  if(!m || m.level < CROWN_GATE || m.level >= LEVEL_MAX || levelCap() < CROWN_GATE) return false;
+  const gate = monGate(m);
+  if(gate === 'region' || gate === 'kind') return true;
+  if(gate === 'crown' || gate === 'core') return (m.xpFights || 0) >= fightsNeeded(m.level);
+  return false;
+}
+/* Stopped at 100 where storing applies — storing already, or (a Crown's or a
+   core's) its bar still filling first. For the screens. */
+function storeGateAtHundred(m){
+  if(!m || m.level < CROWN_GATE || m.level >= LEVEL_MAX || levelCap() < CROWN_GATE || chargesStone(m)) return false;
+  return ['region', 'kind', 'crown', 'core'].includes(monGate(m));
+}
 
 /* ---------- BREAKTHROUGHS ---------- */
 /* Fights of charge to break through a ceiling. Rapid and Grind move it with
@@ -168,9 +198,11 @@ function fightsNeeded(level){
   if(xpMode() === 'dev') return base;          // testing stays at one fight a level
   return Math.ceil(base * pastLimitMult(level));
 }
+/* Every move it learns at this level — a passive given on top can come at
+   the same level as a move (2.97: the Fox's Focus with Psywave at 21). */
 function newMoveAtLevel(species, level){
-  const mv = MOVES[species].find(m=>m[5]===level && m[1]!=null);
-  return mv ? mv[1] : null;
+  const mvs = MOVES[species].filter(m=>m[5]===level && m[1]!=null);
+  return mvs.length ? mvs.map(m=> m[1]).join(' and ') : null;
 }
 /* Spend the fights a monster has banked on levels, as far as it may go.
    Returns the level-up event, or null. */
@@ -217,16 +249,22 @@ function awardXpToParty(fightsWorth){
     // monster raised elsewhere doesn't lose a part-finished level on arrival.
     // At a cap that is also its ceiling, the stone it carries charges (2.82).
     if(m.level >= levelCap()){
-      const held = capAtCeiling(m) && stoneCarriedBy(m);
+      const held = (capAtCeiling(m) || storesAtHundred(m)) && stoneCarriedBy(m);
       if(held) setStoneCharge(held.id, stoneCharge(held.id) + credit);
       return;
     }
     const gate = monGate(m);
+    const carried = stoneCarriedBy(m);
+    /* (3.01) Stopped at 100 — its bar full, waiting for a Crown or its core,
+       or a wild one's road at its end — the fight is stored on its stone. */
+    if(carried && storesAtHundred(m)){
+      setStoneCharge(carried.id, stoneCharge(carried.id) + credit);
+      return;
+    }
     if(gate === 'kind') return;              // a wild monster's road ends at 100
     /* At a ceiling, the fight charges the stone it carries instead. When the
        charge is enough it is READY — the breakthrough itself is the player's
        (2.82), and the charge keeps building until then. */
-    const carried = stoneCarriedBy(m);
     if(gate === 'ceiling' && carried){
       const was = breakthroughReady(m);
       setStoneCharge(carried.id, stoneCharge(carried.id) + credit);
@@ -759,6 +797,7 @@ function renderInner(){
     case 'battle':        return renderBattle();
     case 'challenge':     return (state.progress.currentRegion === 5) ? renderChallengeR5()
                                : (state.progress.currentRegion === 4) ? renderChallengeR4() : renderChallenge();
+    case 'tear':          return renderTear();             // the space-time tear (2.94, 16-tear.js)
     case 'party':         return renderPartyStub();
     case 'companions':    return renderCompanions();
     case 'coreSpar':      return renderCoreSpar();

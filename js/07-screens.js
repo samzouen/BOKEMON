@@ -638,12 +638,14 @@ function stonePanel(m){
   const others = fits.filter(x=> !st || x.id !== st.id);
   const charge = st ? stoneCharge(st.id) : 0;
   const atCeiling = chargesStone(m);             // at a ceiling, or at the region's cap on one (2.82)
+  const storing = !atCeiling && storesAtHundred(m);   // stopped at 100, its bar full (3.01)
   return `<div class="crown-panel wide" style="border-color:rgba(59,126,161,.55);background:rgba(59,126,161,.14);">
     <div class="cp-art">${st ? uiIcon(st.icon, 62, st.emoji) : '<span style="font-size:44px;">💠</span>'}</div>
     <div class="cp-text">
       <div class="crown-title">${st ? escapeHtml(st.name) : 'Element Stones'}${st && charge ? ` <span>⚡ ${charge} charge</span>` : ''}</div>
       <div class="crown-sub">${st
         ? (atCeiling ? `Carried — every fight charges it for the breakthrough.`
+           : storing ? `Carried — this monster can't grow for now, so every fight is stored on the stone for a breakthrough later.`
                      : `Carried — this monster gains <b>${st.xp}×</b> experience.`)
         : `${fits.map(x=> escapeHtml(x.name)).join(', ')} ${fits.length > 1 ? 'fit' : 'fits'} this monster. ` +
           `Carried, a stone gives <b>1.5×</b> experience${canPassLimit(m) ? ', and charges its breakthroughs' : ''}.`}</div>
@@ -721,6 +723,7 @@ function breakthroughCss(){
    two never disagree — the old line claimed "0.1× ATK · Single" for a move that
    actually strikes three times. */
 function statsMoveLine(mv, mon){
+  if(mv.target === 'Passive') return 'Passive · always on';   // nothing to write, nothing to choose (2.97)
   const bits = [`${mv.words} words`];
   const dmg = estimateHit(mv, mon);
   if(dmg != null) bits.unshift(`${dmg} dmg`);
@@ -1159,7 +1162,7 @@ const MK_STONE_NAME = { starter:'Counter +', elite:'Diamond Dust +', legendary:'
    the draft, so the choosing is about something. Mechanics first. */
 const MK_STONE_LESSON = {
   wild:      `<b>No stone yet</b> — but he fights 5 levels up. Types matter: a Ghost takes only ⅔ of his blows, and Steel hits his Fairy side 1.5×.`,
-  starter:   `<b>Counter +</b>, raised on his first move, with a 15% chance each round of another. A stack takes one whole attack — every strike of it — at 80% less, and then he hits 25% harder next time and 20% harder for good. Feed it a cheap blow before a big one.`,
+  starter:   `<b>Counter +</b>, raised on his first move, with a 15% chance each round of another. A stack takes one whole attack on him or his companion — every strike of it — at 80% less; then their next blow lands 25% harder, and the one that took it hits 20% harder for good. Feed it a cheap blow before a big one.`,
   elite:     `<b>Diamond Dust +</b>: up as he arrives, and cast again on his first move (5 rounds from then) with one random Very High at + strength. While it is up nothing of yours takes hold — no hiding, flying, guard or block, no stone, no stun or sleep on him. Terrorize still works, and so does moving first. A Goblin's Greed can steal the dust — and keep it.`,
   legendary: `<b>Diamond Dust ✦</b>: up as he arrives, and cast again on his first move (5 rounds from then) with two Very Highs at ✦ strength. While it is up nothing of yours takes hold — no Tachypsychia, no Steel Soul, no stone, no stun on him — but heals and Conversio still work, and Steel still hits him 1.5×.`,
 };
@@ -1283,14 +1286,18 @@ function coreSparFight(){
   comp.currentHp = monMaxHp(comp);
   L.currentHp = monMaxHp(L);                                 // every spar starts fresh
   const def = CORE_SLOT_DEF[s.tier];
-  const mk = { species:'monkey_king', level:Math.min(LEVEL_MAX, lv + 5), ai:'random', nerfed:false };
+  /* pitched at your monster, past 100 too: a spar is not held to the cap on
+     theirs (ENEMY_LEVEL_CAP, 2.99) — he is your teacher, not the Family */
+  const mk = { species:'monkey_king', level:Math.min(LEVEL_MAX, lv + 5), ai:'random', nerfed:false, anyLevel:true };
   if(def.mkStone) mk.veryHigh = { type:def.mkStone.type, plus:def.mkStone.plus, cast:true };
   if(!ui.realParty) ui.realParty = state.party;              // only the monster in training fights
   state.party = [L];
   beginBattle({ isNpc:true, name:'The Monkey King', coreSpar:{ uid:L.uid, tier:s.tier, companion:comp },
     waves:[[mk]] });
   const b = ui.battle;
-  const foe = makeEnemy(s.his, lv, { nerfed:false, ai:SPAR_FOE_AI[s.his] || 'random', supplements:proteinCap(s.his) + 2 });
+  /* protein full, as your borrowed one is: makeEnemy counts the last at the
+     cap triple, as yours are counted (2.97; it was handed the +2 itself) */
+  const foe = makeEnemy(s.his, lv, { nerfed:false, ai:SPAR_FOE_AI[s.his] || 'random', supplements:proteinCap(s.his), anyLevel:true });
   b.foePair = { leader:b.enemies[0], mon:foe, turnsLeft:COMPANION.turns, out:false, fallen:false, summons:0 };
 }
 /* The battle is over (won, lost or given up): the party back as it was. */
@@ -1442,6 +1449,25 @@ function renderStats(){
     : `<div style="margin-top:10px;font-size:12px;font-weight:800;color:#6a4ab0;">⚡ Its breakthrough to Lv ${Math.min(LEVEL_MAX, monCeiling(m) + CEILING_STEP)} needs ${bNeed} charge.
          ${fitsHeld.length ? `Carry ${fitsHeld.map(st=> 'the ' + escapeHtml(st.name)).join(' or ')} to charge it.`
                            : `Carry a stone that fits it — ${stonesFor(m).map(st=> escapeHtml(st.name)).join(', ')} — once you find one.`}${waits}</div>`;
+  /* (3.01) Stopped at 100 where the region reaches 100 or more: once its bar
+     is full (a wild one has none to fill), every fight is stored on the stone
+     it carries, for a breakthrough later (06-progress.js storesAtHundred). */
+  const storeAt100 = storeGateAtHundred(m);
+  const storingNow = storeAt100 && storesAtHundred(m);
+  const firstCeil = CROWN_GATE + CEILING_STEP, firstNeed = breakthroughNeed(firstCeil);
+  const its = gate === 'core' ? 'his' : 'its', Its = gate === 'core' ? 'His' : 'Its';
+  const storeWhy = gate === 'kind' ? `A wild monster's road ends at ${CROWN_GATE}, so every fight is stored on the stone it carries — for whichever monster carries it to a breakthrough.`
+    : gate === 'region' ? `Every fight here is stored on the stone — for a breakthrough later.`
+    : storingNow ? `${Its} bar is full, so every fight is stored on the stone — for ${its} first breakthrough, at ${firstCeil} (it takes ${firstNeed}).`
+    : `Once ${its} bar is full, every fight is stored on the stone — for ${its} first breakthrough, at ${firstCeil} (it takes ${firstNeed}).`;
+  const storeCard = !storeAt100 ? '' : carried
+    ? `<div style="margin-top:10px;font-weight:800;font-size:13px;display:flex;justify-content:space-between;">
+         <span>⚡ Stored on the ${escapeHtml(carried.name)}</span>
+         <span style="color:var(--ink-soft);white-space:nowrap;padding-left:8px;">${shownCharge} charge</span></div>
+       <div style="font-size:11px;font-weight:700;color:var(--ink-soft);margin-top:4px;">${storeWhy} The charge stays on the stone if it moves.</div>`
+    : fitsHeld.length
+      ? `<div style="margin-top:10px;font-size:12px;font-weight:800;color:#6a4ab0;">⚡ Carry ${fitsHeld.map(st=> 'the ' + escapeHtml(st.name)).join(' or ')}, and the fights ${gate === 'core' ? 'he' : 'it'} can't use are stored on it for a breakthrough later.</div>`
+      : '';
   const suppCap = isPassenger(m) ? 0 : proteinCap(m.species, m);   // crowning raises this
   const atCap = (m.supplements||0) >= suppCap;
   const nextIsFinal = (m.supplements||0) === suppCap-1;
@@ -1452,7 +1478,9 @@ function renderStats(){
        rest live in mv[6], and discarding them left every effect move with
        nothing to describe but "a support move". Same trap as the old
        allow-list in unlockedMoves(). */
-    return { slot,name,mult,target,words,unlock,unlocked, ...(extras||{}) };
+    const out = { slot,name,mult,target,words,unlock,unlocked, ...(extras||{}) };
+    if(extras && extras.tails) out.hits = moveHitsFor(m, extras);   // a Tailed Cat: one strike per tail, three crowned (2.97)
+    return out;
   });
   moves.forEach(mv=>{ const sf = sacredFlameBonus(m, mv); if(sf) mv.bonus = sf; });   // the ghost phoenix's gift
   [[m.equippedStone,'Basic'], [m.power1Stone,'Power1']].forEach(([st, slot])=>{
@@ -1495,7 +1523,7 @@ function renderStats(){
       </div>
       ${capped?'':`<div class="hpbar" style="margin-top:8px;height:9px;"><div class="hpfill" style="width:${Math.min(100, m.xpFights/need*100)}%;background:var(--gold);"></div></div>`}
       ${waitNote ? `<div style="font-size:11px;font-weight:800;color:var(--gold);margin-top:5px;">${waitNote}</div>` : ''}
-      ${chargeCard}
+      ${chargeCard}${storeCard}
       <div style="display:flex;gap:20px;margin-top:12px;font-weight:800;">
         <div>❤️ HP <span style="color:var(--jade-dark);">${maxHp}</span></div>
         <div>⚔️ ATK <span style="color:var(--cinnabar-dark);">${monAtk(m)}</span></div>
@@ -1758,7 +1786,10 @@ function renderElementStones(){
       up to <b>${breakthroughNeed(LEVEL_MAX - CEILING_STEP)}</b> at ${LEVEL_MAX - CEILING_STEP}.
       The charge stays on the stone: move it, and a breakthrough takes only what it needs.
       ${levelCap() < LEVEL_MAX ? `Here the level cap is ${levelCap()}: a crowned monster at that ceiling still charges
-      its stone, and breaks through in a region that lets it grow.` : ''}` : ''}
+      its stone, and breaks through in a region that lets it grow.` : ''}
+      <br><br><b>Stored at ${CROWN_GATE}.</b> A monster stopped at ${CROWN_GATE} for now — waiting for its Crown or its core
+      with its bar full, or a wild one at the end of its road — stores every fight on the stone it carries, for a
+      breakthrough later.` : ''}
     </div>
 
     ${held.length ? held.map(st=>{
@@ -1767,13 +1798,14 @@ function renderElementStones(){
       const eligible = all.filter(m=> canCarry(st, m));
       const ch = stoneCharge(st.id);
       const charging = mon && chargesStone(mon);
+      const storing = mon && !charging && storesAtHundred(mon);      // (3.01) stopped at 100
       return `<div class="es-row">
         <div class="es-icon">${uiIcon(st.icon, 54, st.emoji)}</div>
         <div class="es-body">
           <div class="es-name">${escapeHtml(st.name)}${ch || charging ? ` <span style="font-size:12px;color:#6a4ab0;">⚡ ${ch}${charging ? ` / ${breakthroughNeed(monCeiling(mon))}` : ''}</span>` : ''}</div>
           ${st.triangle ? `<div class="es-sub">Fits ${escapeHtml(st.typeText)}</div>` : ''}
           <div class="es-sub">${mon
-            ? `Carried by <b>${escapeHtml(displayName(mon))}</b> · Lv ${mon.level}${breakthroughReady(mon) ? ' · <b>ready to break through</b>' : charging ? ' · charging' : ''}`
+            ? `Carried by <b>${escapeHtml(displayName(mon))}</b> · Lv ${mon.level}${breakthroughReady(mon) ? ' · <b>ready to break through</b>' : charging ? ' · charging' : storing ? ' · storing its fights' : ''}`
             : (eligible.length ? `${eligible.length} monster${eligible.length>1?'s':''} can carry it`
                                : `No ${escapeHtml(st.typeText)} monster to carry it yet`)}</div>
         </div>

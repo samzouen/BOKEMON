@@ -122,6 +122,28 @@ function guardDef(d, id){ return (d.stealth.guards || []).find(g=> g.id === id);
    comes out of the dark while the dead are up. It ends when you come up into
    the church (15-region5.js). */
 function stealthRush(d){ return !!(d && d.tier === 2 && typeof r5 === 'function' && r5().rush); }
+/* (3.00) Once you have taken the Fairy Stone from the Ghost Master's ring —
+   the conduit the exorcists held the dead down through — the dead are up for
+   good (r5().holdBroken): every soldato in Region 5, under the town, in its
+   streets and on the hill, is fighting ghosts as on the night the dead rose —
+   three round each, rooted, no eyes for you. A capo still keeps his watch.
+   Wild monsters still come out of the dark (the rush alone keeps them in). */
+function stealthHauntedForGood(d){ return !!(d && d.region === 5 && typeof r5 === 'function' && r5().holdBroken); }
+/* (3.01) Who keeps watch all the same — the designer: "capos still keep
+   watch, along with consigliere and sottocapo". The Family's own: a capo;
+   the Consigliere, who stands his pit as a capo does (kind 'capo', roster
+   'consigliere'); the Sottocapo. The dead are no strangers to them. (The
+   Sottocapo holds the villa's door in person — 15-region5.js r5VillaDoor;
+   the capos and the Consigliere at the café know you on sight, r5CapoLook.) */
+const STEALTH_WATCHERS = ['consigliere', 'sottocapo'];
+function guardKeepsWatch(def){
+  if(!def) return false;
+  return def.kind === 'capo' || STEALTH_WATCHERS.includes(def.roster) || STEALTH_WATCHERS.includes(def.sprite);
+}
+function guardHaunted(d, def){
+  if(stealthRush(d)) return true;
+  return stealthHauntedForGood(d) && !!def && !guardKeepsWatch(def);
+}
 /* In the Family's own colours (2.91): a junior soldato, and nobody on watch
    looks twice at one of those — in the catacombs or in the Old Town. They walk
    their rounds; you walk yours. Wild monsters do not care what you wear. */
@@ -163,7 +185,7 @@ function guardLight(d, g, def){
     out.add(x + ',' + y);
   };
   for(let dy = -1; dy <= 1; dy++) for(let dx = -1; dx <= 1; dx++) add(g.x + dx, g.y + dy);
-  if(stealthRush(d)) return out;           // the night the dead rose: no beam, just the glow
+  if(guardHaunted(d, def)) return out;     // fighting ghosts (the rush; for good, 3.00): no beam, just the glow
   const [fx, fy] = DIRS[g.face] || DIRS.d;
   const reach = def.reach || (def.kind === 'capo' ? 4 : 3);
   const wide = def.kind === 'capo' || def.wide;
@@ -374,8 +396,9 @@ function startStealth(world, d){
     e.innerHTML = `<img src="assets/npc/${guardSprite(def)}.png" alt="" ` +
       `onerror="walkArtMissing(this,'${icon}',${px},0)"><b class="guard-mark"></b>`;
     guardFacing(e, g.face);                       // (2.95) looking right: flipped
-    /* the night the dead rose: (2.95) three ghosts round every one of them */
-    if(stealthRush(d)){
+    /* the night the dead rose: (2.95) three ghosts round every one of them —
+       and (3.00) round every soldato for good, once the hold is broken */
+    if(guardHaunted(d, def)){
       e.classList.add('haunted');
       e.appendChild(guardHaunt(def, d));
     }
@@ -444,7 +467,7 @@ function guardBeat(id, d, g, def){
   const st = ui.stealth && ui.stealth[id];
   if(!st || st.caught || ui.screen !== id || !document.getElementById(d.stealth.light ? 'walkWorld' : 'walkFog')) return;
   if(stealthPaused()) return;
-  if(stealthRush(d)){ g.sus = 0; return; }          // fighting ghosts: he has no eyes for you
+  if(guardHaunted(d, def)){ g.sus = 0; return; }    // fighting ghosts: he has no eyes for you
   /* You are one of them (2.91): he walks his round and never looks at you
      twice. Whoever comes alongside, you can talk to (15-region5.js). */
   if(stealthDisguised(d)){

@@ -475,7 +475,9 @@ function arenaSpeciesOfType(t){
   return Object.keys(SPECIES).filter(k=>(SPECIES[k].types||[]).includes(t));
 }
 function arenaDefaultLevel(){
-  return Math.max(...state.party.concat(state.storage).map(m=>m.level), 5);
+  /* your best, but never past 100: no monster of theirs is (2.99,
+     ENEMY_LEVEL_CAP) — and the box only goes to 100 */
+  return Math.min(ENEMY_LEVEL_CAP, Math.max(...state.party.concat(state.storage).map(m=>m.level), 5));
 }
 
 function renderArena(){

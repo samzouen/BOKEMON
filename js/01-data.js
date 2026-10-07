@@ -143,6 +143,17 @@ const SPECIES = {
   puppet:          { name:'Puppet',        tier:'elite', types:['Ghost'],          rate:11, nerfedRate:11, base:82, evo:[25],    evoMult:1.5, color:'#8a5a6a', glyph:'偶' },
   horned_lynx:     { name:'Horned Lynx',   tier:'elite', types:['Ghost','Fairy'],  rate:11, nerfedRate:11, base:84, evo:[],      color:'#8a8ab8', glyph:'猞' },
 
+  /* --- Region 5: the hill's psychics (2.97). The exorcists' own, and two
+         that live among the dead of the first tier — a Psychic sees through
+         a ghost; a Physical fighter's quick, early blows break a psychic's
+         calm. The two legendaries are the masters' aces in the tower. --- */
+  tapir:           { name:'Tapir',          tier:'wild',      types:['Psychic'],       rate:7,  nerfedRate:5,  base:79,  evo:[18], evoMult:1.5, color:'#8a7aa8', glyph:'貘' },
+  tailed_cat:      { name:'Tailed Cat',     tier:'elite',     types:['Psychic'],       rate:11, nerfedRate:11, base:85,  evo:[],   color:'#7a5a9a', glyph:'尾' },
+  /* never evolves, so one evolution's worth is baked in, as every such legendary */
+  mindcat:         { name:'Mindcat',        tier:'legendary', types:['Psychic'],       rate:13, nerfedRate:13, base:109, evo:[],   evoMult:1.5, bonusStages:1, color:'#9a6ac8', glyph:'念' },
+  /* a knight in haunted armour with a flaming purple sword */
+  ghost_guardian:  { name:'Ghost Guardian', tier:'legendary', types:['Ghost','Steel'], rate:13, nerfedRate:13, base:110, evo:[31], evoMult:1.5, color:'#5b3f8a', glyph:'卫' },
+
   /* --- Legendaries & story --- */
   /* --- Region 2: Rocky Caverns starters --- */
   flying_starter:  { name:'Raven',       tier:'starter',   types:['Flying'],        rate:10, nerfedRate:10, base:5,   evo:[21,36], color:'#6b7a8f', glyph:'鸦' },
@@ -174,8 +185,9 @@ const SPECIES = {
      the strongbox the stolen cores are fused into. A crowned legendary's
      growth with one bonus evolution's worth on top, met at level 200. Never
      caught: in the space-time tear it stands beside his team, never acts, can
-     never be brought below 1 HP, and rewinds the team (16-tear.js). */
-  cyborg:          { name:'Cyborg',      tier:'legendary', types:['Steel','Psychic'], rate:13, nerfedRate:13, base:200, evo:[],      evoMult:1.5, bonusStages:1, color:'#4b2d6e', glyph:'时', bossOnly:true },
+     never be brought below 1 HP, and rewinds the team (16-tear.js). The one
+     monster of theirs above 100 (noLevelCap, 2.99; ENEMY_LEVEL_CAP). */
+  cyborg:          { name:'Cyborg',      tier:'legendary', types:['Steel','Psychic'], rate:13, nerfedRate:13, base:200, evo:[],      evoMult:1.5, bonusStages:1, color:'#4b2d6e', glyph:'时', bossOnly:true, noLevelCap:true },
 };
 
 /* Move tables live here for later phases; unused in Phase 1 but embedded now
@@ -223,15 +235,20 @@ const MOVES = {
   ghost_starter:   [['Basic','Touch',0.2,'Single',2,1],['Power1','Nightfall',0.5,'AOE',4,5],
                     ['Power2','Shadow Sneak',null,'Passive',0,21,{passive:{lurk:true, ambush:1.5}}],
                     ['Ultimate','Umbral Rend',1.25,'Single',8,41],['Max','Umbral Rend Max',1.5,'Single',8,51]],
-  psychic_starter: [['Basic','Tackle',0.2,'Single',2,1],['Power1','Mind Jab',0.4,'Single',4,5],['Power2','Psywave',0.6,'AOE',8,21],['Ultimate','Mind Shatter',1.25,'Single',8,41],['Max','Mind Shatter Max',1.5,'Single',8,51]],
+  /* (2.97) Focus rides on top as a passive of its own — it costs the Fox
+     nothing, not even Psywave. Rows in the 'Passive' slot never become buttons. */
+  psychic_starter: [['Basic','Tackle',0.2,'Single',2,1],['Power1','Mind Jab',0.4,'Single',4,5],['Power2','Psywave',0.6,'AOE',8,21],['Ultimate','Mind Shatter',1.25,'Single',8,41],['Max','Mind Shatter Max',1.5,'Single',8,51],
+                    ['Passive','Focus',null,'Passive',0,21,{passive:{focus:1.2}}]],
 
   /* --- Elites: never evolve, so their kit is their whole identity --- */
-  sumo:            [['Basic','Slap',0.2,'Single',2,1],['Power1','Palm Thrust',0.4,'Single',4,5],['Power2','Earth Stomp',0.6,'AOE',8,21],['Ultimate','Grand Charge',1.25,'Single',8,41],['Max','Grand Charge Max',1.5,'Single',8,51]],
+  sumo:            [['Basic','Slap',0.2,'Single',2,1],['Power1','Palm Thrust',0.4,'Single',4,5],['Power2','Earth Stomp',0.6,'AOE',8,21],['Ultimate','Grand Charge',1.25,'Single',8,41],['Max','Grand Charge Max',1.5,'Single',8,51],
+                    ['Passive','Iron Will',null,'Passive',0,21,{passive:{ironWill:true}}]],
   /* Goblin's Greed: a landed attack steals one of the other side's buffs. */
   goblin:          [['Basic','Claw',0.2,'Single',2,1],['Power1','Shadow Cackle',0.5,'AOE',4,5],
                     ['Power2','Goblin\'s Greed',null,'Passive',0,21,{passive:{greed:true}}],
                     ['Ultimate','Grave Mischief',1.25,'Single',8,41],['Max','Grave Mischief Max',1.5,'Single',8,51]],
-  squid:           [['Basic','Ink Jet',0.2,'Single',2,1],['Power1','Tentacle Slap',0.4,'Single',4,5],['Power2','Mind Fog',0.6,'AOE',8,21],['Ultimate','Abyssal Gaze',1.25,'Single',8,41,{mindRead:true}],['Max','Abyssal Gaze Max',1.5,'Single',8,51,{mindRead:true}]],
+  squid:           [['Basic','Ink Jet',0.2,'Single',2,1],['Power1','Tentacle Slap',0.4,'Single',4,5],['Power2','Mind Fog',0.6,'AOE',8,21],['Ultimate','Abyssal Gaze',1.25,'Single',8,41,{mindRead:true}],['Max','Abyssal Gaze Max',1.5,'Single',8,51,{mindRead:true}],
+                    ['Passive','Third Eye',null,'Passive',0,21,{passive:{thirdEye:true}}]],
 
   snail:           [['Basic','Roll',0.2,'Single',2,1],['Power1','Molten Gout',0.4,'Single',4,1],
                     ['Power2','Lava Shell',null,'Self',8,18,{shell:{reduce:0.6, thorns:0.5, turns:1}}],
@@ -244,7 +261,7 @@ const MOVES = {
                     ['Max','Slag Eruption Max',1.0,'AOE',8,51,{shell:{reduce:0, thorns:0.5, turns:1}}]],
   monkey_king:     [['Basic','Jingu Thrust',0.3,'Single',2,1],
                     ['Power1','Cloud Step',0.8,'Single',4,1,{stun:0.5}],
-                    ['Power2','72 Transformations',null,'Self',4,35,{clones:{turns:3, mult:0.5, evade:0.20}}],
+                    ['Power2','72 Transformations',null,'Self',4,35,{clones:{turns:3, mult:0.5, evade:0.20, full:true}}],
                     ['Ultimate','Heavensplitter',1.25,'Single',7,45,{bonus:{words:4, mult:2}}],
                     ['Max','Heavensplitter Max',1.5,'Single',7,999,{bonus:{words:4, mult:2}, coreOnly:true}]],
 
@@ -391,7 +408,8 @@ const MOVES = {
   strongman:       [['Basic','Shoulder Barge',0.2,'Single',2,1],
                     ['Power1','Shockwave Clap',0.3,'AOE',4,1],
                     ['Power2','Braced Stance',null,'Passive',0,21,{passive:{block:2}}],
-                    ['Ultimate','Bearhug',1.0,'Single',8,25,{stunHit:0.50}]],
+                    ['Ultimate','Bearhug',1.0,'Single',8,25,{stunHit:0.50}],
+                    ['Passive','Iron Will',null,'Passive',0,21,{passive:{ironWill:true}}]],
 
   /* --- Electric --- */
   thunderhound:    [['Basic','Snap',0.2,'Single',2,1],
@@ -525,13 +543,51 @@ const MOVES = {
                     ['Power2','Stalk',null,'Self',4,21,{passive:{lurk:true}, grant:{lurk:true, again:true}, blockedWhile:'lurk'}],
                     ['Ultimate','Pounce',1.25,'Single',8,41,{spendLurk:1.5}],
                     ['Max','Pounce Max',1.5,'Single',8,51,{spendLurk:1.5}]],
+  /* --- Region 5: the hill's psychics (2.97; handover/05 §9) --- */
+  /* Hypnosis: every blow it lands has a 20% chance to put what it hit to
+     sleep for a turn. Dream Eater lands twice as hard on a sleeper. */
+  tapir:           [['Basic','Snout Bump',0.25,'Single',2,1],
+                    ['Power1','Drowsy Mist',0.4,'AOE',4,1],
+                    ['Power2','Hypnosis',null,'Passive',0,18,{passive:{hypnosis:0.20}}],
+                    ['Ultimate','Dream Eater',1.0,'Single',8,25,{sleeperMult:2}]],
+  /* Two tails, two strikes: every move lands once per tail, each strike the
+     power written here — three tails, three strikes, when crowned (`tails`).
+     Composure (1.3× at full health) with Exploit (1.4× on the muddled and the
+     sleeping) riding on it. */
+  tailed_cat:      [['Basic','Tail Swipe',0.15,'Single',2,1,{hits:2, tails:true}],
+                    ['Power1','Witchfire',0.25,'AOE',4,1,{hits:2, tails:true}],
+                    ['Power2','Composure & Exploit',null,'Passive',0,21,{passive:{composure:1.3, exploit:1.4}}],
+                    ['Ultimate','Spirit Pounce',0.625,'Single',8,41,{hits:2, tails:true}],
+                    ['Max','Spirit Pounce Max',0.75,'Single',8,51,{hits:2, tails:true}]],
+  /* Awakened Mind: Precognition (the first blow to reach it each round, half)
+     and Amnesia on everything it does (a blow that lands makes its target
+     forget its best move for its next turn). */
+  mindcat:         [['Basic','Whisker Flick',0.3,'Single',4,1],
+                    ['Power1','Mind Pulse',0.6,'AOE',8,5],
+                    ['Power2','Awakened Mind',null,'Passive',0,35,{passive:{precog:0.5, amnesia:true}}],
+                    ['Ultimate','Forget-Me-Not',1.25,'Single',8,45],
+                    ['Max','Forget-Me-Not Max',1.5,'Single',8,55]],
+  /* The knight in haunted armour, with a flaming purple sword. Knight's Oath:
+     he takes the single blows meant for his friends, his armour turns 30% of
+     every blow, and every attack that reaches him is answered in purple fire.
+     Wraithblade's flame passes straight through block. */
+  ghost_guardian:  [['Basic','Soulfire Slash',0.3,'Single',4,1],
+                    ['Power1','Purple Pyre',0.6,'AOE',8,5],
+                    ['Power2','Knight\'s Oath',null,'Passive',0,35,{passive:{guardian:true, armour:0.30, soulfire:0.30}}],
+                    ['Ultimate','Wraithblade',1.25,'Single',8,45,{pierce:true}],
+                    ['Max','Wraithblade Max',1.5,'Single',8,55,{pierce:true}]],
   /* The time monster (2.94). In the tear it never acts; these are its blows
      for when the story's climax gives it a turn. */
+  /* (3.00) Futuresight: it dodges half of every attack, and each dodge is a
+     Spacetime Fracture — a stack its Spacetime Rift Max hits 1.1× harder for,
+     multiplying (1.1, 1.21, 1.33 …). A ✦ Curse mutes Futuresight; a Diamond
+     Dust sweeps the fractures away and lets no new one form while it holds. */
   cyborg:          [['Basic','Second Hand',0.3,'Single',2,1],
                     ['Power1','Clockwork Crush',0.6,'Single',4,1],
                     ['Power2','Time Quake',0.5,'AOE',8,1],
-                    ['Ultimate','Rewind Ray',1.2,'Single',8,1],
-                    ['Max','Rewind Ray Max',1.5,'Single',8,1]],
+                    ['Passive','Futuresight',null,'Passive',0,1,{passive:{futuresight:0.5}}],
+                    ['Ultimate','Spacetime Rift',1.2,'Single',8,1],
+                    ['Max','Spacetime Rift Max',1.5,'Single',8,1,{fracture:1.1}]],
 };
 
 const TYPE_COLORS = {

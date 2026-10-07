@@ -413,8 +413,10 @@ async function takePrize(deck, i){
   await saveProfile();
   const d = DECKS[deck], region = d.region || 4;
   const total = Object.values(book).reduce((n,o)=>n + Object.keys(o).length, 0);
-  /* (the Old Town's tier counts once its gate is open — 2.88) */
-  const sealed = x=> x.tier === 2 && typeof r5Tier2Open === 'function' && !r5Tier2Open();
+  /* (the Old Town's tier counts once its gate is open — 2.88; and a place
+     that names when it opens — 3.03, the town's rooms — once it has) */
+  const sealed = x=> (x.tier === 2 && typeof r5Tier2Open === 'function' && !r5Tier2Open()) ||
+                     (typeof x.opens === 'function' && !x.opens());
   const all = Object.values(DECKS).filter(x=> (x.region || 4) === region && !sealed(x))
                 .reduce((n, x)=> n + (x.prizes || []).length, 0);
   /* Nothing about where it was or how it got there — a child who finds one in
@@ -450,9 +452,14 @@ function cuainAboard(){ const g = r4(); return !!g.ghostAccepted; }
    stack of crates and 'G' a shut gate — all solid underfoot. The Old Town's
    tier (2.88) adds 'b' barrels, 'r' cut stone, 'k' a bunk, 'x' a rail and
    't' a table. The Old Town's streets (2.91) add 'B' a building, 'g' a
-   garden and 'w' a wall. Everything else is floor ('.', ',' bones or
-   paving, '=' a bridge or steps, 's' sand). */
-const WALK_SOLID = '#~o*cGbrkxtBgw';
+   garden and 'w' a wall. The town's rooms (3.03) add their furniture: 'K' a
+   counter, 'S' shelves or a cupboard, 'F' a stove, fireplace or oven, 'D' a
+   desk, 'R' a bed or bunk, 'H' a piano, 'P' a plant, basket or stand, 'A' an
+   armchair, 'C' a chair, 'Z' a row of theatre seats, 'J' iron bars, 'N' a
+   net on its rack, 'V' a barber's chair and 'L' a bench. Everything else is
+   floor ('.', ',' bones, paving or a rug, '=' a bridge or steps, 's' sand,
+   '_' a stage). */
+const WALK_SOLID = '#~o*cGbrkxtBgwKSFDRHPACZJNVL';
 const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true : WALK_SOLID.includes(d.rows[y][x]);
 /* A catacomb guard stands on his tile like anybody else. */
 function wOccupied(d, x, y){

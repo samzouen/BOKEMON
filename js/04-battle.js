@@ -107,6 +107,7 @@ function monStatuses(m){
 function getMStatus(m, type){ return monStatuses(m).find(s=> s.type === type) || null; }
 function setMStatus(m, status){
   if(!ui.battle || !m || !status) return null;
+  if(ironWillHolds(m, status)){ floatOver(m, 'IRON WILL'); return null; }   // no sleep, stun or muddle (2.97)
   if(!status.unsweepable && dustBlocks(statusOwner(status.type, status, 'player'))) return null;
   const st = Object.assign({ turnsLeft: STATUS_TURNS }, status);
   const list = monStatuses(m);
@@ -201,7 +202,7 @@ function discombobulatePulse(){
   livingEnemies().forEach(e=>{
     if(Math.random() >= (f.after || 0)) return;
     if(f.sleep && Math.random() < f.sleep){
-      addEStatus(e, { type:'asleep', turnsLeft:(f.sleepTurns || 1) + 1, mine:true });
+      addEStatus(e, { type:'asleep', turnsLeft:(f.sleepTurns || 1), mine:true });   // theirs: one of its turns (2.97; it slept two)
       return;
     }
     markConfused(e, f.ffPower);
@@ -267,7 +268,10 @@ function tickStatuses(){
         return;
       }
       st.turnsLeft--;
-      if(st.turnsLeft <= 0){ list.splice(list.indexOf(st), 1); afterStatusGone(st.type, 'player'); expired.push(STATUS_LABELS[st.type]||st.type); }
+      if(st.turnsLeft <= 0){
+        list.splice(list.indexOf(st), 1); afterStatusGone(st.type, 'player');
+        if(st.type !== 'forgot') expired.push(STATUS_LABELS[st.type]||st.type);   // a forgotten move simply comes back (2.97)
+      }
     });
   });
   /* Their side's own buffs age exactly as yours do. */
@@ -305,6 +309,8 @@ function eStatuses(e){ if(!e) return []; if(!Array.isArray(e.statuses)) e.status
 function getEStatus(e, type){ return eStatuses(e).find(s=>s.type===type); }
 function addEStatus(e, status){
   if(!status) return;
+  /* Iron Will (2.97): it cannot be put to sleep, stunned or muddled. */
+  if(ironWillHolds(e, status)){ floatOver(e, 'IRON WILL'); return; }
   /* An enemy's own buff can't form under your dust; your mark on it can't
      form under theirs. Polarity decides which is which. */
   if(dustBlocks(statusOwner(status.type, status, 'enemy'))) return;
@@ -321,7 +327,10 @@ function removeEStatus(e, type){
 /* Battle reference for a player monster: computeDamage needs BOTH .types (for
    effectiveness) and .uid (for status lookup). Passing the raw monster object
    fails because monsters store species, not types. */
-function monRef(m){ return { uid:m.uid, types:SPECIES[m.species].types, species:m.species, level:m.level, _ambush:m._ambush || 0, _omen:m._omen || 0 }; }
+/* `_blow` (2.97): which attack this blow belongs to — your action's number —
+   so a Precognition halves every strike of the first attack that reaches it. */
+function monRef(m){ return { uid:m.uid, types:SPECIES[m.species].types, species:m.species, level:m.level, _ambush:m._ambush || 0, _omen:m._omen || 0,
+                             _blow:(ui.battle && ui.battle.actionSeq) ? 'p' + ui.battle.actionSeq : null }; }
 
 /* STEEL SOUL (2.93 — reworked; it had grown too strong)
    A passive and a quick move in one row (`soul:{turns:1, reduce:0.2,
@@ -401,8 +410,14 @@ function soulCastNote(attacker, isPlayer, bonus){
    stands beside its leader as a companion. Area moves and twin blows still
    reach everyone. In their hands the same: your single blows must go through
    it. Returns that monster, standing, or null. */
+/* (2.97) The Ghost Guardian's Knight's Oath guards the same way, while he
+   stands with a friend beside him to guard — on either side, through every
+   path that asks here. */
 function soulGuardian(side){
-  if(!ui.battle || !SOUL_GUARD) return null;      // (2.93) the guard is gone
+  if(!ui.battle) return null;
+  const knight = knightOf(side);
+  if(knight) return knight;
+  if(!SOUL_GUARD) return null;                     // (2.93) Steel Soul's guard is gone
   if(side === 'player'){
     const st = getPStatus(0, 'steelSoul');
     return st ? (livingField().find(m=> m.uid === st.owner) || null) : null;
@@ -410,10 +425,22 @@ function soulGuardian(side){
   const st = getESide('steelSoul');
   return (st && st.owner && st.owner.hp > 0 && livingEnemies().includes(st.owner)) ? st.owner : null;
 }
+/* Knight's Oath: a guardian standing on that side with somebody to guard. */
+function knightOf(side){
+  const list = side === 'player' ? livingField() : livingEnemies().filter(e=> !e.rewinder);   // (Cyborg in the tear is nobody's friend)
+  if(list.length < 2) return null;
+  return list.find(m=>{ const p = passiveOf(m); return !!(p && p.guardian); }) || null;
+}
+/* What draws the blow, by name, for its message. */
+function guardName(g){
+  const row = g && (MOVES[g.species] || []).find(r=> r[6] && r[6].passive && r[6].passive.guardian);
+  return row ? row[1] : 'Steel Soul';
+}
 /* Unified damage calc: applies type effectiveness + all status modifiers, in a
    fixed order, then rounds up. `attacker`/`defender` are refs — use monRef() for
-   player monsters; enemy objects already carry .types. */
-function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAttacking){
+   player monsters; enemy objects already carry .types. `peek` (2.97): only an
+   estimate (an AI weighing its options) — it uses nothing up. */
+function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAttacking, peek){
   let dmg = baseFactor * attackerAtk;
   dmg *= typeMultiplier(attacker.types, defender.types);
   /* The attack that ends a Lurk may be an ambush (Ambush, Pounce); an Ill Omen
@@ -509,6 +536,9 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     const deepE = getESide('deepFreeze');
     if(deepE && deepE.taken != null) dmg *= deepE.taken;
   }
+  /* The passives (2.97): Composure, Exploit and Focus on the attacker's side;
+     Knight's Oath's armour and a Precognition on the defender's. */
+  dmg *= passiveDamageMult(attacker, defender, isPlayerAttacking, peek);
   return Math.max(0, Math.ceil(dmg));
 }
 
@@ -770,7 +800,7 @@ function applyShell(mv, mon){
 function applyClones(mv, mon){
   if(dustBlocks('player')) return;                  // their dust: no copies form
   ui.battle.clones = { turnsLeft:mv.clones.turns, mult:mv.clones.mult,
-                       evade:mv.clones.evade, uid:mon.uid };
+                       evade:mv.clones.evade, full:!!mv.clones.full, uid:mon.uid };
   setPStatus(0, { type:'clones', turnsLeft:mv.clones.turns, evade:mv.clones.evade });
 }
 /* Clone echoes: successive hits that spread across untouched enemies first. */
@@ -914,8 +944,8 @@ const VERY_HIGH = {
     { stacks:1, regain:0.15, combo:0.25, enrage:0.20 },
     { stacks:2, regain:0.20, combo:0.25, enrage:0.20 },
   ], text:[
-    '<b>1 Counter stack.</b> A stack takes an <b>entire</b> enemy attack on the guard — every hit of it — for <b>80% less damage</b>, then is spent, and the monster gains a <b>Combo</b> worth <b>+25%</b> on its next attack. <b>10%</b> chance each turn of another stack. Stacks never expire.',
-    '<b>1 Counter stack</b>, and <b>15%</b> each turn for another. Blocking with one also grants <b>Enrage</b>: <b>+20% of base ATK, permanently</b>, stacking for the rest of the battle.',
+    '<b>1 Counter stack</b> for your side. A stack takes an <b>entire</b> enemy attack on the guard — every hit of it — for <b>80% less damage</b>, whichever of yours on the field it reaches, then is spent, and your side gains a <b>Combo</b> worth <b>+25%</b> on its next attack. <b>10%</b> chance each turn of another stack. Stacks never expire.',
+    '<b>1 Counter stack</b>, and <b>15%</b> each turn for another. Blocking with one also grants the monster that blocked <b>Enrage</b>: <b>+20% of base ATK, permanently</b>, stacking for the rest of the battle.',
     '<b>2 Counter stacks</b>, and <b>20%</b> each turn for another. Blocking grants both <b>Combo</b> and <b>Enrage</b>.',
   ]},
   Ghost: { name:'Curse', turns:5, tiers:[
@@ -1289,6 +1319,10 @@ function enemyEvasion(t){
   const tac = getESide('tachy');
   if(tac && tac.owner === t && tac.fresh) tac.tested = true;             // its first-turn rate met a real blow
   if(tac && tac.owner === t) src.push(tac.fresh ? (tac.evadeFirst || 0) : (tac.evadeAfter || 0));
+  /* Futuresight (Cyborg, 3.00): it saw the blow coming. What it IS — no dust
+     sweeps it — but a ✦ Curse quiets it (passiveOf). */
+  const fs = passiveOf(t);
+  if(fs && fs.futuresight) src.push(fs.futuresight);
   let hit = 1;
   src.forEach(x=>{ if(x > 0) hit *= (1 - x); });
   return 1 - hit;
@@ -1338,9 +1372,9 @@ const STATUS_KIND = {
   spikeArmour:'buff', mirage:'buff', counter:'buff', curseWard:'buff',
   confusionField:'buff', dragonDance:'buff', machDragon:'buff', steelAegis:'buff',
   diamondDust:'buff', aria:'buff', wrath:'buff', tachy:'buff', steelSoul:'buff',
-  shell:'buff', clones:'buff', vita:'buff',
+  shell:'buff', clones:'buff', vita:'buff', fracture:'buff',
   /* debuffs: the side that put them there benefits */
-  stunned:'debuff', paralysed:'debuff', softened:'debuff', charmed:'debuff',
+  stunned:'debuff', paralysed:'debuff', softened:'debuff', charmed:'debuff', forgot:'debuff',
   charm:'debuff', disrupt:'debuff', disruptField:'debuff', asleep:'debuff',
   discombobulate:'debuff', iceTomb:'debuff', iceTombSelf:'debuff', curse:'debuff',
   leechSeed:'debuff', dot:'debuff', jaws:'debuff', bogged:'debuff',
@@ -1461,6 +1495,10 @@ function diamondDustCleanse(caster){
   if(victim === 'player'){
     if(partyCounters().length){ b.pCounter = []; cleared++; }
     if(b.pCombo){ b.pCombo = 0; cleared++; }
+  } else {
+    /* (3.01) theirs are their side's too */
+    if(foeCounters().length){ b.eCounter = []; cleared++; }
+    if(b.eCombo){ b.eCombo = 0; cleared++; }
   }
   /* 5. Their queued upkeep strikes: an Overheat's burn, an Aftershock. */
   if(b.preHits && b.preHits.length){
@@ -1569,6 +1607,9 @@ function sweepableBuffs(side){
       if(es[k].unsweepable) return;
       out.push({ label:label(k), take:()=>{ delete es[k]; afterStatusGone(k, 'enemy'); } });
     });
+    /* (3.01) their side's Counter and Combo, as yours */
+    if(foeCounters().length) out.push({ label:'↩️ Counter', take:()=>{ b.eCounter = []; } });
+    if(b.eCombo > 0) out.push({ label:`👊 Combo ×${b.eCombo}`, take:()=>{ b.eCombo = 0; } });
     livingEnemies().forEach(e=>{
       eStatuses(e).slice().forEach(st=>{
         if(st.unsweepable || statusOwner(st.type, st, 'enemy') !== 'enemy') return;
@@ -1597,6 +1638,8 @@ function monGains(m, side){
   if(m.prep > 0) add(`🎯 Prep ×${m.prep}`, ()=>{ m.prep = 0; });
   if(m.evadeTurns > 0) add('🧘 Still', ()=>{ m.evadeTurns = 0; });
   if(m.blockStacks > 0) add(`🛡 Block ×${m.blockStacks}`, ()=>{ m.blockStacks = 0; });
+  /* (a monster's own stacks and combo — both sides keep them as the side's
+     since 3.01, in b.pCounter / b.eCounter, listed by sweepableBuffs) */
   if(Array.isArray(m.counterStack) ? m.counterStack.length : m.counterStack)
     add('↩️ Counter', ()=>{ m.counterStack = Array.isArray(m.counterStack) ? [] : 0; });
   if(m.comboStacks > 0) add(`👊 Combo ×${m.comboStacks}`, ()=>{ m.comboStacks = 0; });
@@ -1704,7 +1747,7 @@ function stealableBuffs(victimSide, victims){
       if(statusOwner(k, st, 'player') !== 'player') return;
       out.push({ label:STATUS_LABELS[k] || k, take:()=>{
         const got = Object.assign({}, ps[k]);
-        if(k === 'clones' && b.clones) Object.assign(got, { mult:b.clones.mult, evade:b.clones.evade, turnsLeft:b.clones.turnsLeft });
+        if(k === 'clones' && b.clones) Object.assign(got, { mult:b.clones.mult, evade:b.clones.evade, turnsLeft:b.clones.turnsLeft, full:!!b.clones.full });
         const burnLeft = k === 'overheat' ? overheatBurnTurns('player') : 0;
         delete ps[k]; afterStatusGone(k, 'player');
         return (toSide, thief)=>{
@@ -1725,15 +1768,15 @@ function stealableBuffs(victimSide, victims){
         delete es[k]; afterStatusGone(k, 'enemy');
         return (toSide, thief)=>{
           const st2 = setPStatus(0, rehomeStatus(got, thief, toSide));
-          if(st2 && k === 'clones') b.clones = { turnsLeft:got.turnsLeft, mult:got.mult || 0.5, evade:got.evade || 0, uid:thief.uid };
+          if(st2 && k === 'clones') b.clones = { turnsLeft:got.turnsLeft, mult:got.mult || 0.5, evade:got.evade || 0, full:!!got.full, uid:thief.uid };
           if(st2) carryAcross(got, 'enemy', toSide, burnLeft);
           return !!st2;
         };
       }});
     });
   }
-  /* What the monsters it hit were holding. On your side the counter stacks
-     and the combo are the side's, not one monster's. */
+  /* What the monsters it hit were holding. The counter stacks and the combo
+     are the side's, not one monster's — on both sides since 3.01 (below). */
   const seen = new Set();
   (victims || []).forEach(m=>{
     if(!m || seen.has(m)) return;
@@ -1761,16 +1804,6 @@ function stealableBuffs(victimSide, victims){
       const o = m._overpower; m._overpower = null;
       return (s, thief)=>{ thief._overpower = o; return true; };
     }});
-    if(victimSide === 'enemy'){
-      if(counterCountOf(m)) out.push({ label:`↩️ Counter ×${counterCountOf(m)}`, take:()=>{
-        const list = m.counterStack.splice(0);
-        return (s, thief)=>{ list.forEach(c=> addCounterStack(thief, c.tier, 1)); return true; };
-      }});
-      if(m.comboStacks > 0) out.push({ label:`👊 Combo ×${m.comboStacks}`, take:()=>{
-        const n = m.comboStacks; m.comboStacks = 0;
-        return (s)=>{ b.pCombo = (b.pCombo || 0) + n; return true; };
-      }});
-    }
   });
   if(victimSide === 'player'){
     if(partyCounters().length) out.push({ label:`↩️ Counter ×${partyCounters().length}`, take:()=>{
@@ -1779,7 +1812,16 @@ function stealableBuffs(victimSide, victims){
     }});
     if(b.pCombo > 0) out.push({ label:`👊 Combo ×${b.pCombo}`, take:()=>{
       const n = b.pCombo; b.pCombo = 0;
-      return (s, thief)=>{ thief.comboStacks = (thief.comboStacks || 0) + n; return true; };
+      return (s)=>{ b.eCombo = (b.eCombo || 0) + n; return true; };
+    }});
+  } else {
+    if(foeCounters().length) out.push({ label:`↩️ Counter ×${foeCounters().length}`, take:()=>{
+      const list = b.eCounter.splice(0);
+      return (s, thief)=>{ list.forEach(c=> addCounterStack(thief, c.tier, 1)); return true; };
+    }});
+    if(b.eCombo > 0) out.push({ label:`👊 Combo ×${b.eCombo}`, take:()=>{
+      const n = b.eCombo; b.eCombo = 0;
+      return (s)=>{ b.pCombo = (b.pCombo || 0) + n; return true; };
     }});
   }
   return out;
@@ -1886,8 +1928,9 @@ function stancePills(m){
 /* ============================================================
    COUNTER · COMBO · ENRAGE
    A counter stack is a read, not a riposte: it eats ONE entire enemy attack,
-   every hit of it, and is spent. Spending one leaves the monster with a Combo
-   (a bigger next swing) and, at + and ✦, a permanent Enrage.
+   every hit of it, and is spent. Spending one leaves the side with a Combo
+   (a bigger next swing) and, at + and ✦, the monster that took it with a
+   permanent Enrage.
    ============================================================ */
 function counterStacks(){ return counterCountOf(activeMon()); }
 
@@ -1908,12 +1951,18 @@ const COUNTER_TIERS = [
 /* ------------------------------------------------------------
    WHOSE STACKS ARE THEY?
    A braced guard and the swing that follows it belong to the SIDE, not to the
-   animal holding them — swap out and your counter and combo come with you.
-   Enrage does not: that is a monster working itself up, and it stays with the
-   monster that earned it.
+   animal holding them — on both sides (3.01). A stack covers whichever of the
+   side an attack reaches — your monster out front or its companion, any of
+   their wave, their companion — and the Combo goes to the side's next attack.
+   Swap out and yours come with you; one of theirs falls and the rest of its
+   side keep them, into the next wave as your side's do. Enrage does not move:
+   that is a monster working itself up, and it stays with the monster that took
+   the blow.
 
-   Enemies keep their own, because a wave stands on the field all at once;
-   there is no bench to carry anything to.
+   Until 3.01 each of theirs kept its own ("a wave stands on the field all at
+   once; there is no bench") — but with companions yours is a field of several
+   too. The designer: "let counter stacks protect all active monsters which
+   are on, because of the companion system. Make this symmetrical for enemies."
    ------------------------------------------------------------ */
 function isOurs(holder){
   if(!holder || !holder.uid) return false;
@@ -1928,11 +1977,16 @@ function partyCounters(){
   if(!Array.isArray(b.pCounter)) b.pCounter = [];
   return b.pCounter;
 }
+/* Theirs, the mirror (3.01): one list for their whole side. */
+function foeCounters(){
+  const b = ui.battle;
+  if(!b) return [];
+  if(!Array.isArray(b.eCounter)) b.eCounter = [];
+  return b.eCounter;
+}
 function counterList(holder){
   if(!holder) return [];
-  if(isOurs(holder)) return partyCounters();      // shared across the bench
-  if(!Array.isArray(holder.counterStack)) holder.counterStack = [];
-  return holder.counterStack;
+  return isOurs(holder) ? partyCounters() : foeCounters();   // each side's, whoever holds them
 }
 function addCounterStack(holder, tier, n){
   const list = counterList(holder);
@@ -1948,6 +2002,13 @@ function takeBestCounter(holder){
   return list.splice(bi, 1)[0];
 }
 function counterCountOf(holder){ return counterList(holder).length; }
+/* A side's stacks as one pill, marked with the best of them (+ or ✦). */
+function counterPill(list, cls){
+  if(!list || !list.length) return '';
+  const best = Math.max(...list.map(s=> s.tier || 0));
+  const mark = ['', '+', '✦'][best] || '';
+  return `<span class="status-pill${cls ? ' ' + cls : ''}">🛡 Counter ×${list.length}${mark ? ' ' + mark : ''}</span>`;
+}
 
 /* Called when an enemy attack is about to land during an ACTION phase. Returns
    the damage multiplier to apply — 1 if no stack was spent. A stack covers the
@@ -1957,7 +2018,7 @@ function spendCounterStack(mon){
   if(!st) return 1;
   /* the combo travels with the side; the enrage stays with the animal */
   if(isOurs(mon)) ui.battle.pCombo = (ui.battle.pCombo||0) + 1;
-  else            mon.comboStacks = (mon.comboStacks||0) + 1;
+  else            ui.battle.eCombo = (ui.battle.eCombo||0) + 1;
   if(st.enrage) mon.enrageStacks = (mon.enrageStacks||0) + 1;
   renderStatusBadges();
   paintEnrage(mon);
@@ -1965,30 +2026,32 @@ function spendCounterStack(mon){
     + (st.enrage ? ` <b>Combo</b> and <b>Enrage</b> rise.` : ` <b>Combo</b> rises.`));
   return 1 - COUNTER_REDUCTION;
 }
-/* The same guard, in enemy hands. */
+/* The same guard, in enemy hands: their side's stack, on whichever of them
+   you reached; the Combo is their side's next attack (3.01), the Enrage this
+   one's. */
 function spendEnemyCounter(e){
   const st = takeBestCounter(e);
   if(!st) return 1;
   { const i = ui.battle ? ui.battle.enemies.indexOf(e) : -1;           // the same GUARD you see on yours
     if(i >= 0) floatMiss('enemy-' + i, 'GUARD'); }
-  e.comboStacks = (e.comboStacks||0) + 1;
+  ui.battle.eCombo = (ui.battle.eCombo||0) + 1;
   if(st.enrage) e.enrageStacks = (e.enrageStacks||0) + 1;
   renderStatusBadges();
-  battleMsg(`🛡 ${SPECIES[e.species].name} takes it on the guard — <b>80% turned away!</b> Its next blow will be heavier.`);
+  battleMsg(`🛡 ${SPECIES[e.species].name} takes it on the guard — <b>80% turned away!</b> Their next blow will be heavier.`);
   return 1 - COUNTER_REDUCTION;
 }
-/* Combo: additive, spent by the next attack. */
+/* Combo: additive, the side's, spent by its next attack. */
 function comboMultiplier(mon){
-  const c = getPStatus(0,'counter');
-  const n = (mon && isOurs(mon)) ? ((ui.battle && ui.battle.pCombo) || 0)
-                                 : ((mon && mon.comboStacks) || 0);
+  const ours = !!(mon && isOurs(mon));
+  const c = ours ? getPStatus(0,'counter') : getESide('counter');
+  const n = ui.battle ? ((ours ? ui.battle.pCombo : ui.battle.eCombo) || 0) : 0;
   if(!n) return 1;
   return 1 + n * ((c && c.combo) || 0.25);
 }
 function clearCombo(mon){
-  if(!mon) return;
-  if(isOurs(mon)){ if(ui.battle) ui.battle.pCombo = 0; }
-  else mon.comboStacks = 0;
+  if(!mon || !ui.battle) return;
+  if(isOurs(mon)) ui.battle.pCombo = 0;
+  else ui.battle.eCombo = 0;
 }
 /* Enrage: permanent for the battle, a share of BASE attack, additive. */
 function enrageBonus(mon){
@@ -2191,7 +2254,7 @@ function applyEnemyVeryHigh(e, type, plus){
     case 'Water': {
       /* Ice Tomb in enemy hands freezes YOU rather than them — every one of
          yours on the field. */
-      livingField().forEach(pm=> withFocus(pm, ()=> setPStatus(0, { type:'asleep', turnsLeft:(d.freeze || 2) + 1 })));
+      livingField().forEach(pm=> withFocus(pm, ()=> setPStatus(0, { type:'asleep', turnsLeft:(d.freeze || 2) + 1, frozen:true })));   // ice: Iron Will does not hold it off
       break;
     }
     default: return;
@@ -2251,7 +2314,7 @@ function castEnemyVeryHigh(e, type, plus){
       const tier = plus || 0;
       if(!dustBlocks('enemy')) addCounterStack(e, tier, d.stacks || 1);
       setESide({ type:'counter', turnsLeft:STATUS_TURNS + 1, tier, regain:d.regain || 0.10, combo:d.combo || 0.25, enrage:d.enrage || 0, owner:e });
-      return `↩️ ${who} casts <b>Counter</b>: braced to take your next blow on the guard.`;
+      return `↩️ ${who} casts <b>Counter</b>: their side is braced to take your next blow on the guard.`;
     }
     case 'Ghost':
       setPStatus(0, { type:'curse', turnsLeft:T + 1, extra:d.extra, mute:!!d.mute, by:'enemy' });
@@ -2929,6 +2992,7 @@ function runPreHits(done){
         const before = me.currentHp;
         const through = applyBlock(me, dmg, pid('playerBlk', me));
         me.currentHp = Math.max(0, me.currentHp - through);
+        if(through > 0) noteHurt(me);                       // an upkeep strike breaks a Focus (2.97)
         flashHit(document.getElementById(pid('playerBob', me)));
         drainHp(pid('playerHp', me), before, me.currentHp, monMaxHp(me));
         showDamageNumber(pid('playerBob', me), before - me.currentHp);
@@ -2977,7 +3041,7 @@ function canQuickStrike(side, m){
     if(!(m.currentHp > 0)) return false;
     return !(getESide('deepFreeze') || getMStatus(m,'asleep') || getMStatus(m,'stunned'));
   }
-  if(!(m.hp > 0) || (m.isDummy && !m.arenaActs)) return false;
+  if(!(m.hp > 0) || standsAside(m)) return false;
   if(getPStatus(0,'deepFreeze') || getEStatus(m,'iceTomb') || getEStatus(m,'paralysed') || getEStatus(m,'asleep')) return false;
   return !isElusive(m);
 }
@@ -3021,7 +3085,7 @@ function quickStrikeTheirs(mon, done){
     battleMsg(`⚡ ${name}'s quick attack finds nothing.`);
     return setTimeout(done, 650);
   }
-  const ref = Object.assign(monRef(mon), { _ambush:0, _omen:0 });   // an ambush or omen waits for a real blow
+  const ref = Object.assign(monRef(mon), { _ambush:0, _omen:0, _blow:newBlowId('q') });   // an ambush or omen waits for a real blow; an attack of its own (2.97)
   const dmg = computeDamage(quickOf(mon), monAtk(mon), ref, t, true);
   const hits = [{ t, idx, dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }];
   battleMsg(`⚡ Quick attack! ${name} darts in before anyone moves.`);
@@ -3035,24 +3099,26 @@ function quickStrikeYours(e, mon, done){
   { const ar = ariaState(); if(ar) ar.struck = true; }       // an attack on your side, all the same
   bob(document.getElementById('enemyBob-' + idx), -1);
   const ariaCover = ariaFieldEvasion() > 0;
-  const canReflex = !ariaCover && !ariaActive() && (MOVES[mon.species] || []).some(m=> m[6] && m[6].aria);
+  const canReflex = !ariaCover && !ariaActive() && !passivesMuted(mon) && (MOVES[mon.species] || []).some(m=> m[6] && m[6].aria);   // a ✦ Curse quiets the reflex (2.97)
   if(ariaCover || (canReflex && ariaReflex(mon))){
     noteAriaCover();
     dodgePlayer(); floatMiss(pid('playerBob'), 'MISS');
     if(ariaCover) battleMsg(`⚡ ${name}'s quick attack passes harmlessly through.`);
     return setTimeout(done, 700);
   }
-  if(Math.random() < playerEvasionFrom(e)){
+  if(!seesThrough(e) && Math.random() < playerEvasionFrom(e)){   // (a Third Eye cannot miss, 2.97)
     dodgePlayer(); floatMiss(pid('playerBob'), dodgeWord(mon));
     battleMsg(`⚡ ${name}'s quick attack finds nothing.`);
     return setTimeout(done, 650);
   }
   const omen = e._omen, amb = e._ambush;
   e._omen = 0; e._ambush = 0;                                 // kept for its real blow
+  e._blow = newBlowId('q');                                   // an attack of its own (2.97)
   const dmg = computeDamage(quickOf(e), enemyAtk(e), e, monRef(mon), false);
   e._omen = omen; e._ambush = amb;
   const before = mon.currentHp;
   const through = applyBlock(mon, dmg, pid('playerBlk'));
+  if(through > 0) noteHurt(mon);                              // it broke a Focus (2.97)
   mon.lastDamageTaken = dmg;                                  // a reflection returns the full figure
   mon.currentHp = Math.max(b.allyUnkillable ? 1 : 0, mon.currentHp - through);
   if(b.arenaImmortal && mon.currentHp <= 0) mon.currentHp = monMaxHp(mon);
@@ -3242,14 +3308,15 @@ function blockPill(holder){
    chosen as an action and never appears on the move menu. */
 /* ============================================================
    CURSE ✦ — MUTED PASSIVES
-   Diamond Dust strips what the enemy HAS: statuses, stances, block. A refined
-   Curse silences what the enemy IS: while a ✦ curse is on the field, enemy
-   passives do nothing. The always-on ones — first strike, Shadowed Wings'
-   dodge, Terrorize, Hunter's Instinct, Nocturne — go quiet and come back when
+   Diamond Dust strips what a side HAS: statuses, stances, block. A refined
+   Curse silences what its monsters ARE: while a ✦ curse is on a side, that
+   side's passives do nothing — yours under theirs, theirs under yours. The
+   always-on ones — first strike, Shadowed Wings' dodge, Terrorize, Hunter's
+   Instinct, Nocturne, a quick attack, a Bog Lurker's bog, the Whalelord's
+   reflex, and every one of the psychics' (2.97) — go quiet and come back when
    the curse lifts. A passive that fires on entry (Iron Shell, Guard, Soar…)
    does not fire for anything arriving while it holds. Stances already raised
-   are buffs, and buffs are Diamond Dust's business. Enemies only: your own
-   side's passives are never muted.
+   are buffs, and buffs are Diamond Dust's business.
    ============================================================ */
 function passivesMuted(holder){
   const b = ui.battle;
@@ -3265,15 +3332,260 @@ function passivesMuted(holder){
   }
   return false;
 }
-/* The passive a monster HAS, working or not — for pills and announcements. */
+/* The passives a monster HAS, working or not — for pills and announcements.
+   A monster may carry more than one (2.97: a passive given on top, in the
+   'Passive' slot — the Strongman's Braced Stance and Iron Will): every row it
+   has reached is merged into one, `names` in order and `name` joining them. */
 function passiveDefOf(e){
-  const list = MOVES[e.species] || [];
-  const mv = list.find(m => m[3] === 'Passive' && m[6] && m[6].passive && (e.level||1) >= m[5]);
-  return mv ? { name: mv[1], ...mv[6].passive } : null;
+  if(!e || !e.species) return null;
+  const rows = (MOVES[e.species] || []).filter(m => m[3] === 'Passive' && m[6] && m[6].passive && (e.level||1) >= m[5]);
+  if(!rows.length) return null;
+  const out = {};
+  rows.forEach(r=> Object.assign(out, r[6].passive));
+  out.names = rows.map(r=> r[1]);
+  out.name = out.names.join(' & ');
+  return out;
 }
 /* The passive that is WORKING. Every behaviour reads this one, so a passive
    added later is muted without having to be named here. */
 function passiveOf(e){ return passivesMuted(e) ? null : passiveDefOf(e); }
+
+/* ============================================================
+   THE PSYCHICS' PASSIVES (2.97 — handover/05 §9)
+   Every one is read through passiveOf, so a ✦ Curse mutes it on either side,
+   and every one works the same in either side's hands.
+     focus      Focus (the Fox): ×1.2 if nothing has hit it yet this round.
+     thirdEye   Third Eye (the Squid): its blows cannot be dodged — a mind-read
+                on every move. Block and a Counter guard still soak them.
+     composure  Composure (the Tailed Cat): ×1.3 while it is at full health.
+     exploit    Exploit (riding on Composure): ×1.4 on a target that is asleep
+                or muddled, or whose side is under the other's Discombobulate.
+     precog     Precognition (the Mindcat): the first attack to reach it each
+                round lands at half — every strike of that attack.
+     amnesia    Amnesia (the Mindcat, on everything it does): a blow that lands
+                makes its target forget its best move for its next turn; an
+                Overcharge repeat that lands, its next best as well.
+     hypnosis   Hypnosis (the Tapir): a blow that lands has a 20% chance to put
+                its target to sleep for one turn.
+     ironWill   Iron Will (the Sumo, the Strongman): cannot be put to sleep,
+                stunned or muddled.
+     guardian · armour · soulfire — Knight's Oath (the Ghost Guardian): the
+                single blows meant for his friends come to him; every blow
+                that reaches him deals 30% less; every attack that reaches him
+                is answered in purple fire, 0.3× his ATK at the attacker.
+   A HIT, for Focus, is damage from the other side that gets through to it
+   (noteHurt): not a dodge, not a blow its block soaked whole, not a muddled
+   friend's swing, not the thorns its own attack runs into.
+   ============================================================ */
+function roundNo(){ return (ui.battle && ui.battle.roundNo) || 0; }
+/* A monster's own scratch for this battle — yours by uid (so a monRef finds
+   the same one, and none of it is saved), theirs on the monster. */
+function bState(m){
+  const b = ui.battle;
+  if(!b || !m) return {};
+  if(m.uid){ b.mscratch = b.mscratch || {}; return (b.mscratch[m.uid] = b.mscratch[m.uid] || {}); }
+  return (m._scratch = m._scratch || {});
+}
+/* A monster of yours in this battle, found by uid: out on the field, or in
+   the party. */
+function battleMonByUid(uid){
+  if(!uid || !ui.battle) return null;
+  return playerField().find(m=> m.uid === uid) || battleParty().find(m=> m.uid === uid) || null;
+}
+/* The real monster behind a blow's reference: yours by uid, theirs itself. */
+function realMon(ref){ return (ref && ref.uid) ? battleMonByUid(ref.uid) : (ref || null); }
+/* Something of the other side's has hurt it this round. */
+function noteHurt(m){ if(m && ui.battle) bState(m).hitRound = roundNo(); }
+function hurtThisRound(m){ return !!m && bState(m).hitRound === roundNo(); }
+/* One attack, one id: every strike of it shares it (Precognition). Your
+   actions use the action's number (monRef); a quick attack, a riposte and
+   each attack of theirs take a fresh one. */
+function newBlowId(kind){ const b = ui.battle; if(!b) return null; b.blowN = (b.blowN || 0) + 1; return kind + b.blowN; }
+function seesThrough(m){ const p = m ? passiveOf(m) : null; return !!(p && p.thirdEye); }
+function atFullHealth(m){
+  if(!m) return false;
+  return m.uid ? m.currentHp >= monMaxHp(m) : m.hp >= m.maxHp;
+}
+/* Exploit's prey: asleep or muddled, or on a side the other's Discombobulate
+   field is over. `t` is the real target; `isPlayerAttacking` says whose. */
+function exploitable(t, isPlayerAttacking){
+  if(!t) return false;
+  if(isPlayerAttacking) return !!(getEStatus(t,'asleep') || getEStatus(t,'discombobulate') || getPStatus(0,'confusionField'));
+  return !!(getMStatus(t,'asleep') || getMStatus(t,'discombobulate') || getESide('confusionField'));
+}
+/* A word floating over a monster: yours or theirs. */
+function floatOver(m, text, cls){
+  const b = ui.battle;
+  if(!b || !m || typeof floatMiss !== 'function') return;
+  const at = m.uid ? pid('playerBob', battleMonByUid(m.uid) || m) : 'enemy-' + b.enemies.indexOf(m);
+  setTimeout(()=>{ try{ floatMiss(at, text, cls); }catch(e){} }, 380);
+}
+/* Precognition: the first attack to reach it each round lands at `f` — and
+   the rest of that attack's strikes with it. `peek` (an estimate) uses
+   nothing up. */
+function precogFactor(t, attacker, f, peek){
+  const s = bState(t), r = roundNo(), id = (attacker && attacker._blow) || null;
+  if(s.precogRound !== r){
+    if(peek) return f;
+    s.precogRound = r; s.precogBlow = id;
+    floatOver(t, 'FORESEEN');
+    return f;
+  }
+  return (id && s.precogBlow === id) ? f : 1;
+}
+/* What the attacker was like as its attack began — at full health? hit yet
+   this round? — read at the attack's first strike and kept for the rest of
+   it (by its `_blow`), so the thorns its first strike runs into cannot spoil
+   its second. */
+function attackStart(me, attacker){
+  const s = bState(me), id = (attacker && attacker._blow) || null;
+  if(id && s.startBlow === id) return s.start;
+  const st = { full:atFullHealth(me), unhurt:!hurtThisRound(me) };
+  if(id){ s.startBlow = id; s.start = st; }
+  return st;
+}
+/* What the passives do to one blow, on top of everything else. */
+function passiveDamageMult(attacker, defender, isPlayerAttacking, peek){
+  if(!ui.battle) return 1;
+  let m = 1;
+  const pa = (attacker && attacker.species) ? passiveOf(attacker) : null;
+  if(pa){
+    const me = realMon(attacker), them = realMon(defender);
+    const st = (me && (pa.composure || pa.focus)) ? attackStart(me, attacker) : null;
+    if(pa.composure && st && st.full) m *= pa.composure;
+    if(pa.exploit && exploitable(them, isPlayerAttacking)) m *= pa.exploit;
+    if(pa.focus && st && st.unhurt) m *= pa.focus;
+  }
+  const pd = (defender && defender.species) ? passiveOf(defender) : null;
+  if(pd){
+    if(pd.armour) m *= (1 - pd.armour);
+    if(pd.precog){ const them = realMon(defender); if(them) m *= precogFactor(them, attacker, pd.precog, peek); }
+  }
+  return m;
+}
+/* Iron Will: no sleep, no stun, no muddle — and an ice that is called a
+   sleep (their carried Ice Tomb's freeze) is ice, not a mind. */
+const IRON_WILL_TYPES = new Set(['asleep','stunned','paralysed','discombobulate']);
+function ironWillHolds(holder, status){
+  if(!holder || !status || !IRON_WILL_TYPES.has(status.type) || status.frozen) return false;
+  const p = passiveOf(holder);
+  return !!(p && p.ironWill);
+}
+/* Asleep for one turn — its next. Yours keep a nap as `turnsLeft:2` (the
+   round ages it as well as the turn), theirs `turnsLeft:1` (only its turn
+   does). Returns the words for the message ('' if it was asleep already). */
+function putToSleep(t, how){
+  if(!t || !ui.battle) return '';
+  const yours = !!t.uid, name = yours ? displayName(t) : SPECIES[t.species].name;
+  if(yours ? getMStatus(t,'asleep') : getEStatus(t,'asleep')) return '';
+  if(ironWillHolds(t, { type:'asleep' })){ floatOver(t, 'IRON WILL'); return `💪 ${name}'s Iron Will shrugs off ${how}!`; }
+  if(yours) setMStatus(t, { type:'asleep', turnsLeft:2, by:'enemy' });
+  else addEStatus(t, { type:'asleep', turnsLeft:1, mine:true });
+  const slept = yours ? getMStatus(t,'asleep') : getEStatus(t,'asleep');
+  return slept ? `💤 ${how} — ${name} falls asleep!` : `💎 The diamond dust keeps ${name} awake.`;
+}
+/* A Tailed Cat strikes once per tail: two, or three when crowned. */
+function tailCount(m){ return isCrowned(m) ? 3 : 2; }
+function moveHitsFor(holder, ex){ return (ex && ex.tails) ? tailCount(holder) : ((ex && ex.hits) || 0); }
+
+/* ---------- AMNESIA ----------
+   Yours: a 'forgot' status on the monster ({ names }) that the round ages —
+   one round if its turn this round is still to come, else two — so it covers
+   exactly its next turn. Theirs: the same, with `until`, the last round it
+   holds, cleared as each round begins. A side's own dust keeps it off, and
+   sweeps it away, as any mark. */
+function turnStillToCome(m){
+  const b = ui.battle;
+  const row = b && (b.order || []).find(r=> r.mon === m);
+  return !!(row && !row.acted);
+}
+function forgottenNames(m){
+  if(!m || !ui.battle) return [];
+  if(m.uid){ const st = getMStatus(m, 'forgot'); return (st && st.names) || []; }
+  const st = getEStatus(m, 'forgot');
+  return (st && (st.until == null || st.until >= roundNo()) && st.names) || [];
+}
+/* Their damaging moves as they can use them now (a Max in place of its
+   Ultimate). */
+function foeMoveRows(e){
+  const all = (MOVES[e.species] || []).filter(r=> r[1] != null && r[2] != null && r[3] !== 'Passive' && (e.level || 1) >= r[5]);
+  const hasMax = all.some(r=> r[0] === 'Max');
+  return all.filter(r=> !(hasMax && r[0] === 'Ultimate'));
+}
+/* How much a move deals to one target, in ATKs — to rank a monster's moves. */
+function foeMoveWeight(e, r){
+  const ex = r[6] || {}, hits = moveHitsFor(e, ex) || 1;
+  return (ex.split && hits > 1) ? r[2] : r[2] * hits;
+}
+function yourMoveWeight(mv){
+  const hits = mv.hits > 1 ? mv.hits : 1;
+  if(mv.slot === 'UltraStone' && mv.ultraStone){ const r = ultraHitRange(mv.ultraStone); return mv.mult * (r.min + r.max) / 2; }
+  return (mv.split && hits > 1) ? mv.mult : mv.mult * hits;
+}
+/* Its strongest moves first, past what it has already forgotten. */
+function bestMoveNames(m){
+  if(!m) return [];
+  const rank = list=> list.map((x, i)=> Object.assign(x, { i })).sort((a, c)=> (c.v - a.v) || (c.i - a.i)).map(x=> x.name);
+  if(m.uid) return rank(unlockedMoves(m).filter(mv=> mv.available && mv.mult != null && !mv.forgotten)
+                                      .map(mv=> ({ name:mv.name, v:yourMoveWeight(mv) })));
+  const fg = forgottenNames(m);
+  return rank(foeMoveRows(m).filter(r=> !fg.includes(r[1])).map(r=> ({ name:r[1], v:foeMoveWeight(m, r) })));
+}
+/* It forgets its best move — or, forgetting already, the next best as well.
+   Returns the move's name, or '' if nothing was forgotten. */
+function forgetBest(m){
+  if(!ui.battle || !m) return '';
+  const name = bestMoveNames(m)[0];
+  if(!name) return '';
+  const names = forgottenNames(m).concat(name);
+  if(m.uid) return setMStatus(m, { type:'forgot', names, turnsLeft:turnStillToCome(m) ? 1 : 2, by:'enemy' }) ? name : '';
+  const st = { type:'forgot', names, until:roundNo() + (turnStillToCome(m) ? 0 : 1), mine:true };
+  addEStatus(m, st);
+  return getEStatus(m, 'forgot') === st ? name : '';
+}
+/* What a landed attack sets off on each target it hurt: Hypnosis, Amnesia.
+   `attacker` is the real attacker; `victims` the real targets; `repeat` for
+   an Overcharge repeat (Amnesia only). Returns message lines. */
+function mindPassivesLanded(attacker, victims, repeat){
+  const p = attacker ? passiveOf(attacker) : null;
+  if(!p || !(p.hypnosis || p.amnesia) || !victims || !victims.length) return [];
+  const who = attacker.uid ? displayName(attacker) : SPECIES[attacker.species].name;
+  const lines = [];
+  victims.forEach(t=>{
+    const alive = t && (t.uid ? t.currentHp > 0 : t.hp > 0);
+    if(!alive) return;
+    const name = t.uid ? displayName(t) : SPECIES[t.species].name;
+    if(p.amnesia){
+      const f = forgetBest(t);
+      if(f){ lines.push(`💭 ${who}'s Amnesia — ${name} forgets <b>${escapeHtml(f)}</b> for its next turn!`); floatOver(t, 'FORGOT'); }
+    }
+    if(p.hypnosis && !repeat && Math.random() < p.hypnosis){
+      const said = putToSleep(t, `${who}'s Hypnosis`);
+      if(said) lines.push(said);
+    }
+  });
+  if(lines.length) renderStatusBadges();
+  return lines;
+}
+/* Knight's Oath's soulfire: what an attack that reached `holder` costs its
+   attacker (0 for anyone else). */
+function soulfireBack(holder){
+  const p = holder ? passiveOf(holder) : null;
+  if(!p || !p.soulfire) return 0;
+  return Math.ceil(p.soulfire * (holder.uid ? monAtk(holder) : enemyAtk(holder)));
+}
+/* A Bog Lurker's bog slows only while one of those holding it has its
+   passive working: a ✦ Curse on their side quiets it, and it comes back as
+   the curse lifts (2.97). Theirs are held by the monsters, yours by uid. */
+function bogWorks(st, holderSide){
+  if(!st) return false;
+  const by = st.by || [];
+  if(!by.length) return true;
+  return by.some(h=>{
+    const m = holderSide === 'enemy' ? h : battleMonByUid(h);
+    return !m || !passivesMuted(m);
+  });
+}
 function enemyHasFirstStrikePassive(){
   return livingEnemies().some(e => { const p = passiveOf(e); return p && p.first; });
 }
@@ -3391,6 +3703,10 @@ function noteCertainDodge(m){
 function beginRound(msg){
   const b = ui.battle;
   if(!b) return;
+  /* A new round (2.97): Focus, Precognition and Amnesia count by it. What
+     they forgot until last round, they remember. */
+  b.roundNo = (b.roundNo || 0) + 1;
+  (b.enemies || []).forEach(e=>{ const f = getEStatus(e, 'forgot'); if(f && f.until != null && f.until < b.roundNo) removeEStatus(e, 'forgot'); });
   advanceMirageWindows();
   b.roundMsg = msg || null;
   b.phase = 'resolving';
@@ -3521,12 +3837,12 @@ function initiativeOf(side, mon){
     if(fa && fa.slow) v -= fa.slow;                          // ✦ Frost Armour: the cold slows them
     const mirE = getESide('mirage');
     if(mirE && mirE.init && mirE.owner === mon) v += mirE.init;   // their mirage moves first
-    if(b && b.fieldStatus && b.fieldStatus.bogged) v -= 1;   // your Bog Lurker's bog
+    if(b && b.fieldStatus && bogWorks(b.fieldStatus.bogged, 'player')) v -= 1;   // your Bog Lurker's bog (quiet under their ✦ Curse, 2.97)
   } else {
     if(getPStatus(0,'disrupt')) v -= 1;                      // their jamming slows you
     const faE = getESide('frostArmour');
     if(faE && faE.slow) v -= faE.slow;                       // their ✦ Frost Armour slows you
-    if(getPStatus(0,'bogged')) v -= 1;                       // their Bog Lurker's bog
+    if(bogWorks(getPStatus(0,'bogged'), 'enemy')) v -= 1;    // their Bog Lurker's bog (quiet under your ✦ Curse, 2.97)
   }
   return v;
 }
@@ -3552,7 +3868,7 @@ function buildInitiativeOrder(){
   b.roundActed = []; b.control = null;
   const rows = [];
   livingField().forEach(m=> rows.push(playerRow(m)));
-  livingEnemies().forEach(e=>{
+  livingEnemies().filter(e=> !e.rewinder).forEach(e=>{          // Cyborg never takes a turn (2.94)
     rows.push({ side:'enemy', mon:e, idx:ui.battle.enemies.indexOf(e),
                 tier:machTier('enemy'), value:initiativeOf('enemy', e) });
   });
@@ -3706,7 +4022,10 @@ function endRound(){
   const ctrE = getESide('counter');
   if(ctrE && ctrE.regain && Math.random() < ctrE.regain){
     const holder = (ctrE.owner && ctrE.owner.hp > 0) ? ctrE.owner : livingEnemies()[0];
-    if(holder) addCounterStack(holder, ctrE.tier || 0, 1);
+    if(holder){
+      const n = addCounterStack(holder, ctrE.tier || 0, 1);      // their side's (3.01)
+      battleMsg(`🛡 They read you again — <b>${n}</b> Counter stack${n > 1 ? 's' : ''} on their side.`);
+    }
   }
   /* (their Mirage window and Overcharge rate: as yours, above) */
   const tacE = getESide('tachy');
@@ -3980,8 +4299,17 @@ const ZONE_LEVELS = {
 function makeEnemy(species, level, opts){
   opts = opts || {};
   const sp = SPECIES[species];
+  /* 2.99: none of theirs above 100 (ENEMY_LEVEL_CAP) — but Cyborg, the time
+     monster (noLevelCap, 200), and the Monkey King in a spar, five above the
+     monster he trains (opts.anyLevel; a wave spec's anyLevel too). */
+  if(!opts.anyLevel && !sp.noLevelCap) level = Math.min(level, ENEMY_LEVEL_CAP);
   const nerfed = (opts.nerfed!==undefined) ? opts.nerfed : (sp.tier==='wild');
-  const rate = nerfed ? sp.nerfedRate : sp.rate;
+  const crowned = !!opts.crowned;
+  /* Growth (2.97: as yours grows — computeMaxStat): a crowned starter or
+     elite of theirs grows at legendary rate, 13, as yours does once crowned.
+     It used to keep its own 10 or 11, so every crowned ace of theirs was
+     about a fifth weaker than the same monster of yours. */
+  const rate = (crowned && sp.tier !== 'legendary') ? 13 : (nerfed ? sp.nerfedRate : sp.rate);
   /* Wild encounters no longer auto-evolve at the threshold. Reaching the level
      only makes the evolved form POSSIBLE, so a zone keeps a mix of forms:
        evo1 reached      -> 67% base, 33% stage 1
@@ -3995,10 +4323,25 @@ function makeEnemy(species, level, opts){
     if(maxStage === 1)      stage = r < 0.67 ? 0 : 1;
     else                    stage = r < 0.20 ? 0 : (r < 0.87 ? 1 : 2);
   }
-  let stat = Math.ceil((rate/5)*level) + Math.ceil((stage + (sp.bonusStages||0))*rate*(sp.evoMult||1));
-  if(opts.crowned && sp.tier==='legendary') stat += 3*rate;      // crowned legendary
-  if(opts.supplements) stat += Math.ceil((rate/5)*opts.supplements);
-  const hp = Math.ceil(stat * hpScale(level));
+  /* Its supplements count as yours do (2.97): at the protein cap — which a
+     crown raises — the last one counts triple (effectiveSupplements). */
+  const sup = opts.supplements ? effectiveSupplements(species, opts.supplements, { species, crowned }) : 0;
+  /* The stat, as computeMaxStat makes yours from the same growth: its level,
+     its form (and any evolution baked in), a crowned legendary's three extra
+     stages, its supplements. */
+  const statAt = r=>{
+    let st = Math.ceil((r/5)*level) + Math.ceil((stage + (sp.bonusStages||0))*r*(sp.evoMult||1));
+    if(crowned && sp.tier==='legendary') st += CROWN_LEGENDARY_STAGES*r;   // crowned legendary
+    if(sup) st += Math.ceil((r/5)*sup);
+    return st;
+  };
+  /* Pacificus (2.97 in their hands too — a wild Caladrius went without it):
+     half its attack given up for health, so its health grows at 1.5× its rate
+     and its attack at half. Its Vita and Conversio are measured by that
+     health, so it heals and strikes for more. */
+  const stat = sp.pacificus ? statAt(rate * 0.5) : statAt(rate);
+  const hpStat = sp.pacificus ? statAt(rate * 1.5) : stat;
+  const hp = Math.ceil(hpStat * hpScale(level));
   // AI: 'basic' | 'power1' | 'best'. Default: wild=basic, but electric/legendary open with Power1.
   let ai = opts.ai || ((species==='electric_starter' || sp.tier==='legendary') ? 'power1' : 'basic');
   // An evolved wild picks from its whole moveset each turn
@@ -4102,8 +4445,8 @@ function beginBattle(config){
      follow it between switches. That means they also followed it between
      BATTLES — you could walk into a wild fight already holding four guards.
      Every fight starts clean. */
-  /* the side's own stacks, not any one monster's */
-  if(ui.battle){ ui.battle.pCounter = []; ui.battle.pCombo = 0; }
+  /* the side's own stacks, not any one monster's — theirs too (3.01) */
+  if(ui.battle){ ui.battle.pCounter = []; ui.battle.pCombo = 0; ui.battle.eCounter = []; ui.battle.eCombo = 0; }
   state.party.concat(state.storage || []).forEach(m=>{
     m.counterStack = []; m.comboStacks = 0; m.enrageStacks = 0;
     m.blockStacks = 0;   m.blockValue = 0;
@@ -4124,7 +4467,8 @@ function beginBattle(config){
     scriptedOneTurn: !!config.scriptedOneTurn,
     /* From Emerald March onward a trainer fight is a commitment: no fleeing.
        Region 1 keeps its gentler rules so the early game stays forgiving. */
-    noFlee: !config.coreSpar && (!!config.noFlee || (!!config.isNpc && (state.progress.currentRegion||1) >= 2)),   // a spar can be given up
+    noFlee: !config.coreSpar && !config.tear && (!!config.noFlee || (!!config.isNpc && (state.progress.currentRegion||1) >= 2)),   // a spar can be given up, and the tear left (2.94)
+    tear: !!config.tear,              // the space-time tear's weekly challenge (2.94, 16-tear.js)
     concertFight: !!config.concertFight,
     figlio: !!config.figlio,          // he leads every round
     catacomb: !!config.catacomb,      // their ghosts arrive lurking
@@ -4150,7 +4494,9 @@ function beginBattle(config){
        is spent once per battle, and the 100-word recharge meter gives both
        back. The one exception, agreed in 2.93: Steel Soul, the Ankylosaurus's
        quick cast (its Power2), is once a battle too, and the same meter gives
-       it back. Nothing else should ever be added to these maps. */
+       it back. Nothing else should ever be added to these maps. (The phoenix's
+       Rebirth keeps its own flag, b.rebirthUsed — and since 3.00 the same meter
+       clears it.) */
     usedVeryHigh:{}, usedUltra:{}, usedSoul:{},
   };
   ui.battle.noFleeBase = ui.battle.noFlee;     // what a Fiery Jaws lets go back to
@@ -4179,7 +4525,7 @@ function beginBattle(config){
 }
 function loadWave(i){
   const b = ui.battle;
-  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll, crowned:spec.crowned, forceStage:spec.forceStage, elusive:spec.elusive, enraged:spec.enraged }));
+  b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll, crowned:spec.crowned, forceStage:spec.forceStage, elusive:spec.elusive, enraged:spec.enraged, anyLevel:spec.anyLevel }));
   // Leech Seed is a FIELD effect: it re-roots on every new wave.
   /* (the tiered field-status re-application below handles Leech Seed; a bare
       copy here used to overwrite it and strip the + / ✦ bite) */
@@ -4242,25 +4588,33 @@ function onWaveCleared(){
       `the test to keep running past a knock-out.</i>`, 'arena');
   }
   if(b.waveIndex < b.waves.length-1){
-    /* The round still happened even though no enemy lived to take its turn.
-       Without this, one-shotting each wave meant statuses NEVER aged — a
-       turn-one Overheat was still running six waves later. */
-    const gone = tickStatuses();
-    endDragonLegacy();                 // the turn that used it is over
-    setFocus(null);
-    tickCompanionTurns();              // and a companion out spent one of its turns
-    /* A new round for Tachypsychia's three extra actions, as endRound gives —
-       the ones that cleared the wave used to count against the next. */
-    [getPStatus(0,'tachy'), getESide('tachy')].forEach(t=>{ if(t) t.extras = 0; });
-    b.waveIndex++;
-    loadWave(b.waveIndex);
-    renderBattle();
-    battleMsg(`Wave ${b.waveIndex+1} of ${b.waves.length}!`
-      + (gone.length ? ` (${gone.join(' and ')} wore off.)` : ''));
-    // the new arrivals face upkeep (Overheat, Aftershock) and may seize the initiative
-    setTimeout(()=> beginRound('Choose a move.'), 900);
+    const next = ()=>{
+      if(ui.battle !== b) return;          // (the fight was left meanwhile)
+      /* The round still happened even though no enemy lived to take its turn.
+         Without this, one-shotting each wave meant statuses NEVER aged — a
+         turn-one Overheat was still running six waves later. */
+      const gone = tickStatuses();
+      endDragonLegacy();                 // the turn that used it is over
+      setFocus(null);
+      tickCompanionTurns();              // and a companion out spent one of its turns
+      /* A new round for Tachypsychia's three extra actions, as endRound gives —
+         the ones that cleared the wave used to count against the next. */
+      [getPStatus(0,'tachy'), getESide('tachy')].forEach(t=>{ if(t) t.extras = 0; });
+      b.waveIndex++;
+      loadWave(b.waveIndex);
+      renderBattle();
+      battleMsg((b.tear ? tearWaveLabel(b.waveIndex) : `Wave ${b.waveIndex+1} of ${b.waves.length}!`)
+        + (gone.length ? ` (${gone.join(' and ')} wore off.)` : ''));
+      // the new arrivals face upkeep (Overheat, Aftershock) and may seize the initiative
+      setTimeout(()=> beginRound('Choose a move.'), 900);
+    };
+    /* The space-time tear (2.94): a round's last wave won pays the round, and
+       Cyborg rewinds the team, before the next round's first wave. */
+    if(b.tear) return tearWaveCleared(next);
+    next();
   } else {
     if(b.coreSpar) return coreSparWon();       // a spar with the Monkey King (2.87)
+    if(b.tear) return tearEnded('won');        // the seventh round (2.94)
     if(b.isNpc) onChallengeWon();
     else onBattleWon();
   }
@@ -4551,13 +4905,14 @@ function untouchable(m){ return stanceEvasion(m) >= 1; }
 function blowsToFinish(e, m, move){
   const mv = move || (e && e.move) || [];
   const ex = mv[6] || {};
-  const hits = (ex.hits > 1 && !ex.reflect && !ex.grudge) ? ex.hits : 1;
+  const n = moveHitsFor(e, ex);                                  // a Tailed Cat's tails (2.97)
+  const hits = (n > 1 && !ex.reflect && !ex.grudge) ? n : 1;
   const mult = mv[2] != null ? mv[2] : 0.5;
-  const per = (ex.hits > 1 && ex.split) ? mult / ex.hits : mult;
-  const one = Math.max(1, computeDamage(per, enemyAtk(e), e, monRef(m), false));
+  const per = (n > 1 && ex.split) ? mult / n : mult;
+  const one = Math.max(1, computeDamage(per, enemyAtk(e), e, monRef(m), false, true));   // an estimate (peek)
   const soak = blockStacksOf(m) * (m.blockValue || 0);
   const need = Math.ceil((m.currentHp + soak) / Math.max(1, one * hits));
-  const dodge = Math.min(0.95, playerEvasionFrom(e, m));
+  const dodge = seesThrough(e) ? 0 : Math.min(0.95, playerEvasionFrom(e, m));   // a Third Eye cannot miss (2.97)
   return need / (1 - dodge);
 }
 function enemyPickTarget(e, move, ownChoice){
@@ -4570,8 +4925,8 @@ function enemyPickTarget(e, move, ownChoice){
   if(!ownChoice){ const g = soulGuardian('player'); if(g) return g; }
   if(!enemyFocuses(e)) return mine[Math.floor(Math.random() * mine.length)];
   const cur = mine.find(m=> m.uid === b.foeFocus);
-  const open = mine.filter(m=> !untouchable(m));
-  if(cur && (!untouchable(cur) || !open.length)) return cur;
+  const open = mine.filter(m=> seesThrough(e) || !untouchable(m));          // nothing hides from a Third Eye (2.97)
+  if(cur && (seesThrough(e) || !untouchable(cur) || !open.length)) return cur;
   const pool = open.length ? open : mine;
   let best = pool[0], bestN = Infinity;
   pool.forEach(m=>{
@@ -4759,7 +5114,7 @@ function unlockedMoves(m){
        never reached the move, so Steel Soul and Tachypsychia did nothing at
        all. Adding a new mechanic must not require editing this line. */
     return { slot,name,mult,target,words,unlock, ...e,
-             scale:e.scale||null, hits:e.hits||0, split:!!e.split, charge:e.charge||null,
+             scale:e.scale||null, hits:moveHitsFor(m, e), split:!!e.split, charge:e.charge||null,   // a Tailed Cat: one per tail (2.97)
              available:(name!=null && moveUnlockedFor(m, [slot,name,mult,target,words,unlock,e])), isStone:false };
   });
   /* Equipped stone slots in by tier: High-tier "twin" skills override POWER1
@@ -4796,6 +5151,10 @@ function unlockedMoves(m){
       stonePlus:stonePlus(m.ultraStone), ultraStone:m.ultraStone, target:'MultiHit', words:t.words,
       unlock:0, available:!used, isStone:true, stoneTier:'ultra', stoneType:m.ultraStone.type });
   }
+  /* Amnesia (2.97): what their Mindcat made it forget is shut for its next
+     turn — the button keeps its name and says so. */
+  const fg = forgottenNames(m);
+  if(fg.length) base.forEach(mv=>{ if(mv.available && fg.includes(mv.name)){ mv.available = false; mv.forgotten = true; } });
   return base;
 }
 
@@ -4906,6 +5265,13 @@ function companionCss(){
   document.head.appendChild(st);
 }
 
+/* How many places the enemy row is laid out for. Cyborg alone stands as the
+   middle of a wave of three would (3.00): the designer's picture of it, with
+   room on either side for its past and future. */
+function enemyFieldSlots(b){
+  const list = (b && b.enemies) || [];
+  return (list.length === 1 && list[0].species === 'cyborg') ? 3 : list.length;
+}
 function enemySpriteSize(count){
   const n = Math.max(1, count||1);
   const per = (battleWidth() - (n-1)*10) / n;      // share of the row per enemy
@@ -5006,6 +5372,10 @@ function moveEffectText(mv, mon, atk){
   const maxHp = mon ? monMaxHp(mon) : 0;
   const ofHp = f => maxHp ? `<b>${Math.ceil(f * maxHp)} HP</b> (${Math.round(f * 100)}% of its max health)`
                           : `<b>${Math.round(f * 100)}%</b> of its max health`;
+  if(mv.fracture) out.push(
+    `<b>Spacetime Fracture.</b> For every fracture on it — one each time its Futuresight dodges a strike — this hits ` +
+    `<b>${mv.fracture}×</b> harder, multiplying: ${[1, 2, 3, 5].map(n=> `${n}: <b>${Math.pow(mv.fracture, n).toFixed(2)}×</b>`).join(', ')}. ` +
+    `A Diamond Dust sweeps the fractures away.`);
   if(mv.vita) out.push(
     `<b>Vita.</b> At once, everyone still standing on your side is healed by ${ofHp(mv.vita.pulse || 0.2)}. ` +
     `Then the light stays for <b>${mv.vita.turns || 5} turns</b>, and every turn it heals whichever teammate ` +
@@ -5110,6 +5480,15 @@ function moveEffectText(mv, mon, atk){
     `battle ends. Your Diamond Dust keeps it at ${mv.tachy.turns} turns for as long as the dust lasts. ` +
     `All of it is this monster's alone: whoever takes its place gets none of it.`);
   if(mv.mindRead) out.push(`<b>Mind-read:</b> this attack ignores evasion — it cannot be dodged.`);
+  /* (2.97) a Tailed Cat's tails, Dream Eater, Wraithblade */
+  if(mv.tails) out.push(
+    `<b>One strike per tail:</b> two tails, two strikes — a <b>crowned</b> Tailed Cat grows a third tail and strikes <b>three</b> times. ` +
+    `Each strike rolls its own dodge and meets its own block stack.`);
+  if(mv.sleeperMult) out.push(
+    `<b>Dream Eater:</b> against a monster that is <b>asleep</b> it deals <b>${mv.sleeperMult}×</b> — ` +
+    `<b>${Math.ceil((mv.mult || 0) * mv.sleeperMult * atk)}</b>.`);
+  if(mv.pierce) out.push(
+    `<b>Purple flame:</b> it passes straight through <b>block</b> — no block stack soaks any of it. A Counter guard still reads it.`);
   if(mv.charm) out.push(
     `<b>Charm.</b> For ${mv.charm.turns} turns each enemy has a <b>${Math.round(mv.charm.chance*100)}% chance</b> ` +
     `to lose its turn entirely.`);
@@ -5171,7 +5550,7 @@ function moveEffectText(mv, mon, atk){
   /* the Max ability carries the Rebirth passive */
   if(mon && hasRebirth(mon) && isMaxAbility(mon, mv)) out.push(
     `<b>Rebirth</b> (passive): if the Phoenix faints while a Sacred Flame burns, write <b>${REBIRTH.words} words</b> ` +
-    `to rise again with <b>${Math.round(REBIRTH.hp*100)}% HP</b> (${Math.ceil(REBIRTH.hp*monMaxHp(mon))}). Once per battle.`);
+    `to rise again with <b>${Math.round(REBIRTH.hp*100)}% HP</b> (${Math.ceil(REBIRTH.hp*monMaxHp(mon))}). Once — and once more each time the recharge meter fills.`);
   if(mv.bonus && mv.bonus.aftershock){
     const pct = aftershockPct(false), soulPct = aftershockPct(true);
     out.push(`Afterwards you may write <b>${mv.bonus.words} bonus words</b> from your whole list. Succeed and an ` +
@@ -5187,9 +5566,12 @@ function moveEffectText(mv, mon, atk){
   if(mv.shell) out.push(
     `This monster takes <b>${Math.round(mv.shell.reduce*100)}% less damage</b> and returns ` +
     `<b>${Math.ceil(mv.shell.thorns*atk)}</b> to anything that strikes it.`);
-  if(mv.clones) out.push(
-    `Two copies echo each move for ${mv.clones.turns} turns at half power, and you dodge ` +
-    `<b>${Math.round(mv.clones.evade*100)}%</b> of attacks.`);
+  if(mv.clones) out.push(mv.clones.full
+    ? `Two clones stand beside him for his next <b>${mv.clones.turns}</b> attacks: each adds <b>${Math.round(mv.clones.mult*100)}%</b> of the ` +
+      `whole blow he lands — its bonus words included — so every one of them does <b>${+(1 + 2 * mv.clones.mult).toFixed(2)}×</b>. ` +
+      `This turn goes on them; over the four turns that is half as much damage again. He dodges <b>${Math.round(mv.clones.evade*100)}%</b> of attacks while they stand.`
+    : `Two copies echo each move for ${mv.clones.turns} turns at half power, and you dodge ` +
+      `<b>${Math.round(mv.clones.evade*100)}%</b> of attacks.`);
   if(mv.charge){
     const d = mv.charge;
     const ns = Array.from({ length:chargeCaps(d).lucky }, (_, i)=> i + 1);
@@ -5216,7 +5598,7 @@ function moveEffectText(mv, mon, atk){
     if(p.airborne)     bits.push(`starts <b>airborne</b>, dodging <b>70%</b> of attacks for a turn`);
     if(p.invisible)    bits.push(`starts <b>unseen</b>, dodging <b>80%</b> of attacks for a turn`);
     if(p.evadeTurns)   bits.push(`begins in perfect <b>stillness</b> — every attack misses for the first ${p.evadeTurns > 1 ? p.evadeTurns + ' turns' : 'turn'} it is attacked (a turn nobody attacks it does not use it up)`);
-    if(p.counterTurns || p.counterStack) bits.push(`begins with a <b>Counter stack</b> — one whole attack taken on the guard for <b>80% less</b>, and its next blow lands <b>25%</b> harder`);
+    if(p.counterTurns || p.counterStack) bits.push(`begins with a <b>Counter stack</b> for its side — one whole attack on any of them taken on the guard for <b>80% less</b>, and the side's next blow lands <b>25%</b> harder`);
     if(p.first)        bits.push(`always takes the <b>first move</b> of the round`);
     if(p.quick)        bits.push(`gets one free <b>quick attack</b> at the start of every round, before anyone moves: ` +
       `<b>${p.quick}×</b> ATK (<b>${Math.ceil(p.quick * atk)}</b>, before type and armour) on one enemy at random — ` +
@@ -5243,8 +5625,36 @@ function moveEffectText(mv, mon, atk){
     if(p.greed)        bits.push(`<b>steals one of the other side's buffs</b> with every attack that lands — a side effect such as ` +
       `Overheat or Diamond Dust, or something the monster it hit was holding (block, a stance, a Lurk). The buff keeps its ` +
       `turns and works for your side now. The Whalelord's Aria and Wrath cannot be taken`);
+    /* the psychics' (2.97; handover/05 §9) */
+    if(p.focus)        bits.push(`<b>Focuses</b>: if nothing has hit it yet this round when its turn comes, its attack deals ` +
+      `<b>${p.focus}×</b> (<b>+${Math.round((p.focus - 1) * 100)}%</b>). A hit is damage that gets through to it — a dodged blow, one its ` +
+      `block soaks whole, or a muddled friend's swing does not count; a quick attack, or an Overheat's burn or an Aftershock at the start of the round, does`);
+    if(p.thirdEye)     bits.push(`sees through every dodge (<b>Third Eye</b>): nothing it throws can be dodged — not a Lurk, Cunning, ` +
+      `Stillness, Airborne, Unseen or any other evasion. A block or a Counter guard still soaks it`);
+    if(p.composure)    bits.push(`keeps its <b>Composure</b>: at <b>full health</b> its attacks deal <b>${p.composure}×</b> ` +
+      `(<b>+${Math.round((p.composure - 1) * 100)}%</b>) — one hit before it moves, and that is gone until it is healed`);
+    if(p.exploit)      bits.push(`<b>Exploits</b> the helpless: <b>${p.exploit}×</b> (<b>+${Math.round((p.exploit - 1) * 100)}%</b>) on a monster that is ` +
+      `<b>asleep</b> or <b>muddled</b>, or on a side under the other's Discombobulate` +
+      (p.composure ? ` — <b>${+(p.composure * p.exploit).toFixed(2)}×</b> together with Composure` : ''));
+    if(p.precog)       bits.push(`sees each round's first attack coming (<b>Precognition</b>): the first attack to reach it each round ` +
+      `deals <b>${Math.round((1 - p.precog) * 100)}% less</b> — every strike of that attack — and the rest land in full`);
+    if(p.amnesia)      bits.push(`clouds the mind of whatever it hits (<b>Amnesia</b>): every blow it lands makes that monster ` +
+      `<b>forget its best move</b> for its next turn (its button is shut), and an Overcharge repeat that lands makes it forget the next best too`);
+    if(p.hypnosis)     bits.push(`<b>hypnotises</b>: each blow it lands has a <b>${Math.round(p.hypnosis * 100)}%</b> chance to put that monster ` +
+      `<b>to sleep</b> for its next turn`);
+    if(p.ironWill)     bits.push(`has an <b>Iron Will</b>: it cannot be put to sleep, stunned or muddled — Nocturne, Hypnosis, Hunter's Instinct, ` +
+      `a stunning blow, Discombobulate and Lunacy all fail on it. Plain damage still lands`);
+    if(p.guardian)     bits.push(`<b>guards its friends</b>: every single blow aimed at another monster on its side comes to it instead — ` +
+      `area blows still reach everyone`);
+    if(p.armour)       bits.push(`takes <b>${Math.round(p.armour * 100)}% less</b> damage from every blow (its haunted armour)`);
+    if(p.futuresight)  bits.push(`sees every blow coming (<b>Futuresight</b>): it dodges <b>${Math.round(p.futuresight * 100)}%</b> of every attack, ` +
+      `strike by strike, and each dodge leaves a <b>Spacetime Fracture</b> on it — its Spacetime Rift Max hits <b>1.1×</b> harder for every one, ` +
+      `multiplying. A Diamond Dust sweeps the fractures away and lets no new one form while it holds`);
+    if(p.soulfire)     bits.push(`answers every attack that reaches it with its <b>flaming purple sword</b>: ` +
+      `<b>${Math.ceil(p.soulfire * atk)}</b> damage (${p.soulfire}× ATK) to the attacker, no dodging it`);
     out.push(`<b>Passive.</b> Active the moment it enters battle: this monster ` +
-             (bits.length ? bits.join(', and ') + '.' : 'gains its stance at once.'));
+             (bits.length ? bits.join(', and ') + '.' : 'gains its stance at once.') +
+             ` A ✦ Curse on its side mutes it while it lasts.`);
   }
   return out;
 }
@@ -5362,11 +5772,11 @@ function renderBattle(){
       <div class="foe-side-row" id="foeSideRow"></div>
       <div class="enemy-row">
         ${b.enemies.map((e,i)=>`
-          <div class="enemy-card ${e.hp<=0?'fainted':''}" data-enemy="${i}" id="enemy-${i}" style="width:${enemySpriteSize(b.enemies.length)+16}px;">
+          <div class="enemy-card ${e.hp<=0?'fainted':''}" data-enemy="${i}" id="enemy-${i}" style="width:${enemySpriteSize(enemyFieldSlots(b))+16}px;">
             <div class="enemy-status" id="enemyStatus-${i}"></div>
-            <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,enemySpriteSize(b.enemies.length),{view:'front',bare:true,crowned:!!e.crowned,stage:e.stage||0,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
+            <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,enemySpriteSize(enemyFieldSlots(b)),{view:'front',bare:true,crowned:!!e.crowned,stage:e.stage||0,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
             <div class="info-layer name-plate">
-              <div class="mon-title">${SPECIES[e.species].name} <span>Lv ${e.level}</span>${foeCompanionTag(e)}</div>
+              <div class="mon-title">${SPECIES[e.species].name} <span>Lv ${e.level}</span>${foeCompanionTag(e)}${e.rewinder ? ' <span class="foe-comp-tag" title="Time undoes whatever you do to it">⏳</span>' : ''}</div>
               ${blockBar('enemyBlk-'+i, e)}
               ${hpBar2('enemyHp-'+i, e.hp, e.maxHp, false)}
             </div>
@@ -5403,13 +5813,13 @@ function renderBattle(){
           return `
           <button class="move-btn ${ok?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${ok?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
-            <div class="mv-name">${mv.available || mv.chargeMore || mv.spent ? escapeHtml(mv.name) : '???'}</div>
-            <div class="mv-meta">${mv.available ? (compTurn ? companionMeta(mv, ctlMon) : moveMeta(mv, ctlMon)) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : 'Locked')}</div>
+            <div class="mv-name">${mv.available || mv.chargeMore || mv.spent || mv.forgotten ? escapeHtml(mv.name) : '???'}</div>
+            <div class="mv-meta">${mv.available ? (compTurn ? companionMeta(mv, ctlMon) : moveMeta(mv, ctlMon)) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : 'Locked')}</div>
           </button>`; }).join('')}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
         <button class="side-btn" id="switchBtn" ${(b.switchedThisTurn || !canAct)?'disabled':''}>🔄 Switch</button>
-        <button class="side-btn" id="fleeBtn" ${(b.noFlee || !canAct)?'disabled':''}>${b.arena?'🚪 Exit':b.coreSpar?'🏳️ Give up':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
+        <button class="side-btn" id="fleeBtn" ${(b.noFlee || !canAct)?'disabled':''}>${b.arena?'🚪 Exit':b.coreSpar?'🏳️ Give up':b.tear?'🚪 Leave':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
         <button class="side-btn" id="skipBtn" ${canAct?'':'disabled'}>⏭️ Skip turn</button>
         ${b.arena?'<button class="side-btn" id="arenaMoveBtn" style="background:var(--gold);color:#fff;" '+(canAct?'':'disabled')+'>🧪 Test move</button>':''}
       </div>
@@ -5460,7 +5870,11 @@ const STATUS_LABELS = {
   discombobulate:'🌀 Confused', confusionField:'🌀 Heads Spinning', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', enraged:'🐋 Enraged', aria:'👻 Haunting Aria', wrath:'💢 Gathering Wrath', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
   vita:'🕊 Vita', jaws:'🔥 Held Fast', bogged:'🌫 Bogged', lurk:'🌑 Lurk', cunning:'🌘 Cunning',
+  forgot:'💭 Forgot', fracture:'⏳ Spacetime Fracture',
 };
+/* A pill's words: most are their label and the turns left; a forgotten move
+   (2.97) says which, and lasts the one turn. */
+function forgotPill(st){ return `💭 Forgot ${escapeHtml((st.names || []).join(', '))}`; }
 function renderStatusBadges(){
   if(!ui.battle) return;
   pruneBogs();
@@ -5475,6 +5889,7 @@ function renderStatusBadges(){
       const shown = Math.max(0, st.turnsLeft - 1);
       /* What the enemy has put on you is theirs, and reads in their colour. */
       const cls = isEnemyOwned(st.type, st) ? 'foe' : 'mine';
+      if(st.type === 'forgot'){ out.push(`<span class="status-pill ${cls}">${forgotPill(st)}</span>`); return; }
       const n = st.unsweepable ? '' : st.type === 'steelSoul' ? ' · this turn' : ` ${shown}`;   // a quick buff (2.93)
       const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved` : '';
       out.push(`<span class="status-pill ${cls}">${STATUS_LABELS[st.type]||st.type}${n}${saved}</span>`);
@@ -5487,17 +5902,12 @@ function renderStatusBadges(){
     refreshAllBlockBars();
     const wr = getPStatus(0,'wrath');
     if(wr && wr.stacks) out.push(`<span class="status-pill">💢 Wrath ×${wr.stacks}</span>`);
-    const me1 = mon;
-    const cl = counterList(me1);
-    if(cl.length){
-      const best = Math.max(...cl.map(s=>s.tier));
-      const mark = ['','+','✦'][best] || '';
-      out.push(`<span class="status-pill">🛡 Counter ×${cl.length}${mark?' '+mark:''}</span>`);
-    }
+    /* the side's Counter stacks and Combo — one pill each (3.01: the stacks
+       were drawn twice, once as the leader's and once as the party's) */
     const me0 = mon;
     const pc = (ui.battle && ui.battle.pCombo) || 0;
-    const ps = partyCounters().length;
-    if(ps) out.push(`<span class="status-pill">🛡 Counter ×${ps}</span>`);
+    const cpill = counterPill(partyCounters(), '');
+    if(cpill) out.push(cpill);
     if(pc) out.push(`<span class="status-pill">👊 Combo ×${pc}</span>`);
     if(me0 && me0.enrageStacks) out.push(`<span class="status-pill">🔥 Enrage ×${me0.enrageStacks} (+${enrageBonus(me0)} ATK)</span>`);
     if(me0) paintEnrage(me0);
@@ -5511,6 +5921,7 @@ function renderStatusBadges(){
     if(cm){
       const own = monStatuses(cm).map(st=>{
         const cls = isEnemyOwned(st.type, st) ? 'foe' : 'mine';
+        if(st.type === 'forgot') return `<span class="status-pill ${cls}">🤝 ${forgotPill(st)}</span>`;
         return `<span class="status-pill ${cls}">🤝 ${STATUS_LABELS[st.type]||st.type} ${Math.max(0, st.turnsLeft - 1)}</span>`;
       });
       const sp3 = stancePills(cm);
@@ -5525,12 +5936,16 @@ function renderStatusBadges(){
      belong to the whole side rather than to any one of them. */
   const fr = $('#foeSideRow');
   if(fr){
+    const ec = (ui.battle && ui.battle.eCombo) || 0;
     fr.innerHTML = Object.values(enemySideStatuses()).map(st=>{
       const shown = Math.max(0, st.turnsLeft - 1);
       const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved` : '';
       const n = st.unsweepable ? '' : st.type === 'steelSoul' ? ' · this turn' : ' ' + shown;   // a quick buff (2.93)
       return `<span class="status-pill foe">${STATUS_LABELS[st.type]||st.type}${n}${saved}</span>`;
-    }).join('');
+    }).join('')
+      /* (3.01) their Counter stacks and Combo are their side's, as yours are */
+      + counterPill(foeCounters(), 'foe')
+      + (ec ? `<span class="status-pill foe">👊 Combo ×${ec}</span>` : '');
   }
   // Enemy statuses render on their OWN card, above that enemy's HP bar, so it's
   // obvious which monster in a group is afflicted.
@@ -5555,18 +5970,18 @@ function renderStatusBadges(){
        put two icons on every confused monster. Only things that are NOT
        statuses — stances, stacks, plain fields — belong in `extras`. */
     if(e.gooed)          extras.push('<span class="status-pill foe">🌋 Pinned</span>');
-    if(counterCountOf(e)) extras.push(`<span class="status-pill foe">🛡 Counter ×${counterCountOf(e)}</span>`);
-    if(e.comboStacks)     extras.push(`<span class="status-pill foe">👊 Combo ×${e.comboStacks}</span>`);
+    /* (their Counter stacks and Combo: the side's row above, since 3.01) */
     if(e.guard)          extras.push('<span class="status-pill foe">🛡 Guard</span>');
     if(e.airborne > 0)   extras.push('<span class="status-pill foe">🕊 Airborne</span>');
     if(e.invisible > 0)  extras.push('<span class="status-pill foe">👤 Unseen</span>');
     if(e.prep > 0)       extras.push(`<span class="status-pill foe">🎯 Prep ×${e.prep}</span>`);
     const pd = passiveDefOf(e);
-    if(pd) extras.push(passivesMuted(e)
-      ? `<span class="status-pill foe" style="opacity:.75;text-decoration:line-through;">🔇 ${pd.name}</span>`
-      : `<span class="status-pill foe">✨ ${pd.name}</span>`);
-    slot.innerHTML = eStatuses(e).map(st=>{
-      const extra = st.type==='iceTomb' ? ` ${st.turnsLeft}` : '';
+    if(pd) (pd.names || [pd.name]).forEach(nm=> extras.push(passivesMuted(e)      // one pill a passive (2.97)
+      ? `<span class="status-pill foe" style="opacity:.75;text-decoration:line-through;">🔇 ${escapeHtml(nm)}</span>`
+      : `<span class="status-pill foe">✨ ${escapeHtml(nm)}</span>`));
+    slot.innerHTML = eStatuses(e).filter(st=> st.type !== 'forgot' || forgottenNames(e).length).map(st=>{
+      if(st.type === 'forgot') return `<span class="status-pill foe">${forgotPill(st)}</span>`;
+      const extra = st.type==='iceTomb' ? ` ${st.turnsLeft}` : st.type==='fracture' ? ` ×${st.stacks || 1}` : '';
       return `<span class="status-pill foe">${STATUS_LABELS[st.type]||st.type}${extra}</span>`;
     }).join('') + extras.join('');
   });
