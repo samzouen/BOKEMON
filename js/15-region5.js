@@ -207,7 +207,7 @@ const R5_DECKS = {
       { x:5,  y:37, sprite:'ship_captain', icon:'⚓', verb:'Captain', act:()=> r5Captain() },
       { x:4,  y:38, walk:true, verb:'Board', where:'The Vane Shear', act:()=> r5Board() },
     ],
-    onRender:(world, d)=>{ if(!r5().arrived) r5ArrivalScene(); },
+    onRender:(world, d)=> r5HarbourRender(world, d),
     ghostChat:(id)=> r5GhostChat(id),
   },
 
@@ -237,6 +237,8 @@ const R5_DECKS = {
     ],
     stealth:{ kind:'fight', sense:2, feel:4,
       intro:()=> r5DarkIntro(),
+      /* (3.07) and every day after, the first thing he ever said down here */
+      first:`<b>"Dark, is it not? You cannot see a thing."</b><br><br><b>"I can. The dead do not need eyes."</b>`,
       guards:[
         { id:'a', kind:'soldato', path:[[3,16],[17,16]], face:'r', clock:600, pause:3, roster:'landing_a', sprite:'soldato1' },
         { id:'b', kind:'lookout', x:10, y:5, face:'d', spin:'ccw', clock:640, pause:4, roster:'landing_b', sprite:'soldato2' },
@@ -1153,6 +1155,11 @@ const R5_DECKS = {
     things:[
       { x:6, y:7, walk:true, verb:'Out', where:'The Old Town', arrow:'down', act:()=> r5RoomOut('old_town', 'cafe') },
       { x:6, y:2, sprite:'barista', icon:'☕', verb:'Talk', act:()=> r5Folk('barista') },
+      /* (3.07) two soldatos over their coffee, at the table furthest from the
+         door (the find, 11,5, left clear) — out in the streets with the dead
+         once the hold breaks */
+      { x:2, y:4, sprite:'soldato2', icon:'💂', verb:'Talk', act:()=> r5Folk('cafe1'), when:()=> !r5().holdBroken, faceR:true },
+      { x:4, y:4, sprite:'soldato1', icon:'💂', verb:'Talk', act:()=> r5Folk('cafe2'), when:()=> !r5().holdBroken },
     ],
     paint:(d)=> paintRoom(d), onRender:(world, d)=> r5RoomRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
   room_trattoria: { key:'room_trattoria', region:5, house:true, zone:'old_town', title:"The trattoria", bg:'region5', music:'zone_old_town', art:'room_trattoria', opens:()=> !!r5().disguise,
@@ -1161,6 +1168,10 @@ const R5_DECKS = {
     things:[
       { x:6, y:8, walk:true, verb:'Out', where:'The Old Town', arrow:'down', act:()=> r5RoomOut('old_town', 'trattoria') },
       { x:6, y:3, sprite:'trattoria_cook', icon:'🍝', verb:'Talk', act:()=> r5Trattoria() },
+      /* (3.07) two soldatos at their supper, either side of a table (the
+         find, 11,4, left clear) — gone once the hold breaks */
+      { x:2, y:5, sprite:'soldato1', icon:'💂', verb:'Talk', act:()=> r5Folk('tratt1'), when:()=> !r5().holdBroken, faceR:true },
+      { x:4, y:5, sprite:'soldato2', icon:'💂', verb:'Talk', act:()=> r5Folk('tratt2'), when:()=> !r5().holdBroken },
     ],
     paint:(d)=> paintRoom(d), onRender:(world, d)=> r5RoomRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
   room_gelateria: { key:'room_gelateria', region:5, house:true, zone:'old_town', title:"The gelateria", bg:'region5', music:'zone_old_town', art:'room_gelateria', opens:()=> !!r5().disguise,
@@ -1192,7 +1203,7 @@ const R5_DECKS = {
     rows:["#############","#RR.RR..SS.F#","#...........#","#...........#","#....tt.....#","#...........#","#R.........R#","#R.........R#","######.######"],
     things:[
       { x:6, y:8, walk:true, verb:'Out', where:'The Hilltop', arrow:'down', act:()=> r5RoomOut('hilltop', 'guards') },
-      { x:4, y:4, sprite:'soldato1', icon:'💂', verb:'Talk', act:()=> r5Folk('cards1'), when:()=> !r5().holdBroken },
+      { x:4, y:4, sprite:'soldato1', icon:'💂', verb:'Talk', act:()=> r5Folk('cards1'), when:()=> !r5().holdBroken, faceR:true },   // (3.07) facing his cards
       { x:7, y:4, sprite:'soldato2', icon:'💂', verb:'Talk', act:()=> r5Folk('cards2'), when:()=> !r5().holdBroken },
     ],
     paint:(d)=> paintRoom(d), onRender:(world, d)=> r5RoomRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
@@ -1780,6 +1791,14 @@ async function r5Board(){
 /* ============================================================
    ARRIVING
    ============================================================ */
+/* (3.07) What he felt the moment he stepped ashore, said again on the first
+   visit each day. */
+const R5_HARBOUR_WORD = `<b>"My core. I can feel it, up there, at the very top of the town."</b><br><br>` +
+                        `<b>"Jax brought it here. And he did not bring it for himself."</b>`;
+function r5HarbourRender(world, d){
+  if(!r5().arrived) return r5ArrivalScene();
+  if(!ui.sceneRunning && r5DailyDue('first_harbour')) r5PlaceWord('harbour', 'first_harbour', R5_HARBOUR_WORD);
+}
 async function r5ArrivalScene(){
   if(ui.sceneRunning) return;
   ui.sceneRunning = true;
@@ -1797,14 +1816,13 @@ async function r5ArrivalScene(){
   ghostAlert();
   await sceneWait(600);
   await sceneSay([whale], wn, `<b>"It is here."</b>`);
-  await sceneSay([whale], wn,
-    `<b>"My core. I can feel it, up there, at the very top of the town."</b><br><br>` +
-    `<b>"Jax brought it here. And he did not bring it for himself."</b>`);
+  await sceneSay([whale], wn, R5_HARBOUR_WORD);
   await sceneSay([whale], wn,
     `<b>"There is something else, too. Under our feet. A great many somethings."</b><br><br>` +
     `<b>"This whole hill is full of the dead."</b>`);
   await sceneSay([me], name, `<b>"Then let's find a way up."</b>`);
   r5().arrived = true;
+  r5().said.first_harbour = r5Day();             // (3.07) his word for the harbour: said, for today
   await saveProfile();
   w.busy = false;
   ui.sceneRunning = false;
@@ -1838,6 +1856,28 @@ function r5Ask(faces, name, html, yes, no){
 }
 /* A line that is only ever said once. */
 function r5Once(key){ const r = r5(); if(r.said[key]) return false; r.said[key] = true; saveProfile(); return true; }
+/* (3.07) …and a line said once a day: the Whalelord's word as you step into
+   a place (the designer: "Please make the special whalelord dialogue when we
+   step in each place for the first time repeat once a day. It's such a waste
+   of great dialogue to only have it once ever"). said[key] keeps the day it
+   was last said (r5Day, 14-stealth.js); `true`, from a save before 3.07, was
+   some other day. What happens once in the story (the night the dead rose,
+   the ghost phoenix, the Monkey King…) stays r5Once. */
+function r5Daily(key){ const r = r5(), t = r5Day(); if(r.said[key] === t) return false; r.said[key] = t; saveProfile(); return true; }
+function r5DailyDue(key){ return r5().said[key] !== r5Day(); }
+/* …said half a second after you come in, if you are still there and nobody
+   else has started talking — and only then counted as said for the day
+   (and `onSay` told, for anything said along with it). */
+function r5PlaceWord(deck, key, lines, onSay){
+  setTimeout(async ()=>{
+    const w = walkState();
+    if(ui.screen !== deck || w.deck !== deck || w.busy || ui.sceneRunning || !document.getElementById('walkWorld') ||
+       document.querySelector('.scene-say') || document.body.classList.contains('in-scene')) return;
+    if(!r5Daily(key)) return;
+    if(onSay) onSay();
+    for(const html of [].concat(lines)) await sceneSay([faceMon('whalelord')], whaleName(), html);
+  }, 500);
+}
 /* Somebody with more than one thing to say says the next one each time. */
 function r5Next(key, lines){
   const r = r5();
@@ -2349,9 +2389,15 @@ function r5FloorRender(world, d){
     if(fresh && R5_RUSH_LINES[d.key] && r5Once('rush_' + d.key)) later(()=> say(R5_RUSH_LINES[d.key]));
     return;
   }
-  /* The first time on each floor, the Whalelord says something about it. */
-  if(d.stealth.first && r5Once('first_' + d.key))
-    return later(async ()=>{ await say(d.stealth.first); if(d.stealth.warn) await say(d.stealth.warn); });
+  /* The Whalelord's word as you come onto each floor — (3.07) once a day, for
+     as long as it is true (r5FloorWord); on a new day after a day's fighting,
+     with the Family's men back at their posts, he says that too. */
+  const word = fresh && r5DailyDue('first_' + d.key) ? r5FloorWord(d) : [];
+  if(word.length){
+    const back = d.stealth.kind === 'fight' && r.regrouped;
+    return r5PlaceWord(d.key, 'first_' + d.key, back ? word.concat(R5_REGROUPED) : word,
+                       back ? ()=>{ r.regrouped = false; saveProfile(); } : null);
+  }
   /* The first time in the dark in disguise (2.91). */
   if(r.disguised && fresh && r5Once('disguisedDark'))
     return later(()=> say(`<b>"In that uniform, nobody down here will look at you twice. Walk right past them, if you like."</b><br><br>` +
@@ -2363,24 +2409,44 @@ function r5FloorRender(world, d){
   /* With the Purple Capo beaten, he feels it: something burning in the Armoury. */
   if(r.tier1 && !r.phoenixMet && fresh && (d.key === 'cata_stair' || d.key === 'cata_stair_r1') && r5Once('senseArmoury'))
     return later(async ()=>{ await r5SenseArmoury(); await r5WispLead(); });   // (3.02) and the little light leads
-  /* An evade floor warns you every time you come in (2.72). */
-  if(d.stealth.kind === 'evade' && fresh && !recaught && d.stealth.again) return later(()=> say(d.stealth.again));
+  /* An evade floor warns you every time you come in (2.72) — (3.07) while the
+     Family can still catch you: once the dead are loose for good, nobody on
+     it has eyes for you. */
+  if(d.stealth.kind === 'evade' && fresh && !recaught && d.stealth.again && !r.holdBroken) return later(()=> say(d.stealth.again));
   /* A new day, and the Family has manned its posts again (said as you come
      in fresh, which is when the men are back at their posts). */
   if(d.stealth.kind === 'fight' && fresh && r.regrouped){
     r.regrouped = false;
     saveProfile();
-    later(()=> say(`<b>"They are back. Every post we emptied has a man on it again."</b><br><br>` +
-                   `<b>"The Family regroups every day. So will we."</b>`));
+    later(()=> say(R5_REGROUPED));
   }
+}
+const R5_REGROUPED = `<b>"They are back. Every post we emptied has a man on it again."</b><br><br>` +
+                     `<b>"The Family regroups every day. So will we."</b>`;
+/* (3.07) What the Whalelord says as you come onto a floor, now that it comes
+   round every day: the floor's `first` — while it is still true — and after
+   it its `warn` (an evade floor's: one sees you, they all come) only while
+   the Family can still catch you. The Landing's is the first thing he ever
+   said in the dark (r5DarkIntro says it all, the first time). */
+const R5_FIRST_WHILE = {
+  cata_cistern:()=> !r5().holdBroken || !r5().capoBlack,   // the lanterns: the Black Capo keeps his watch out there, if he is still on his bridge
+  cata_bones:  ()=> !r5().holdBroken,                      // "Far too many to fight"
+  cata_stair:  ()=> !r5().capoPurple,                      // "Someone is waiting at the top of these stairs. Someone who knows you."
+  cata_pit:    ()=> !r5().capoGrey,                        // "…someone is standing in the middle of the ring"
+};
+function r5FloorWord(d){
+  const s = d.stealth, ok = R5_FIRST_WHILE[d.key];
+  if(!s || !s.first || (ok && !ok())) return [];
+  return s.warn && !r5().holdBroken ? [s.first, s.warn] : [s.first];
 }
 async function r5DarkIntro(){
   const r = r5();
   r.intro = true;
+  r.said.first_cata_landing = r5Day();            // (3.07) his word for the Landing, said here for today
   saveProfile();
   await sceneWait(500);
   const whale = faceMon('whalelord'), wn = whaleName();
-  await sceneSay([whale], wn, `<b>"Dark, is it not? You cannot see a thing."</b><br><br><b>"I can. The dead do not need eyes."</b>`);
+  await sceneSay([whale], wn, DECKS.cata_landing.stealth.first);
   await sceneSay([whale], wn,
     `<b>"I will show you what is right round us, even through the walls. A step or two, no further. Past that, it is black."</b>`);
   await sceneSay([whale], wn,
@@ -3656,9 +3722,11 @@ async function r5DisguiseScene(){
 function r5TailorRender(world, d){
   if(ui.sceneRunning) return;
   if(!r5().disguise) return r5DisguiseScene();      // (left half-way through: it goes on)
-  if(r5Once('first_tailor_after'))
-    setTimeout(()=> sceneSay([faceMon('whalelord')], whaleName(),
-      `<b>"Ugo's back room. Nobody comes in here but Ugo — so if you ever want that cap off, this is the place."</b>`), 500);
+  /* (3.07) once a day — and once the dead are loose, nobody cares about the cap */
+  if(r5DailyDue('first_tailor_after'))
+    r5PlaceWord('tailor', 'first_tailor_after', r5().holdBroken
+      ? `<b>"Ugo's back room. Nobody comes in here but Ugo."</b>`
+      : `<b>"Ugo's back room. Nobody comes in here but Ugo — so if you ever want that cap off, this is the place."</b>`);
 }
 const R5_UGO_LINES = [
   `<b>"Back again? Let me look at you. Hm. The sash is crooked. There."</b>`,
@@ -3859,6 +3927,8 @@ async function r5ToggleDisguise(){
   const r = r5(), d = DECKS[walkState().deck];
   if(!r.disguise || !d) return;
   if(!r.disguised) return r5SetDisguise(true);
+  if(r5MenInRoom(d))                              // (3.07) the guard house, the café, the trattoria
+    return sceneSay([faceMon('whalelord')], whaleName(), `<b>"Not in here. Those men would know your face in a moment."</b>`);
   /* (3.00) with the dead up for good, nobody in the street has eyes for you */
   if(d.stealth && d.stealth.kind === 'town' && !stealthHauntedForGood(d)){
     const yes = await r5Ask([faceMon('whalelord')], whaleName(),
@@ -3956,18 +4026,28 @@ function r5Challenge(d, g, def){
 /* ============================================================
    THE OLD TOWN'S STREETS (2.91)
    ============================================================ */
-/* The first time in each of the Family's lit places. */
+/* His word in each of the Family's lit places — the first time, and (3.07)
+   the first time each day after that. */
 const R5_TOWN_FIRST = {
   old_town:`<b>"The Old Town. Soldatos on every corner, and capos at the café — and not one of them has looked twice at you."</b><br><br>` +
            `<b>"Ugo was right. Walk as if you belong here."</b>`,
   hilltop: `<b>"The Padrino's own hill. More of his men up here, and every one of them watching that gate."</b><br><br>` +
            `<b>"Keep that cap on, and let them think you are Figlio's porter."</b>`,
 };
+/* (3.07) …and once the dead are loose for good, what is true of it now (the
+   capos still keep their watch, but none gets up from his table). */
+const R5_TOWN_FREE = {
+  old_town:`<b>"The Old Town. Soldatos on every corner — and every one of them has three of the dead to deal with."</b><br><br>` +
+           `<b>"Only the capos at the café still have eyes for anybody. Let them look. Not one of them will get up from his table."</b>`,
+  hilltop: `<b>"The Padrino's own hill. More of his men up here than anywhere — and not one of them watching that gate now."</b><br><br>` +
+           `<b>"Listen. Even up here, the dead are singing."</b>`,
+};
 function r5TownRender(world, d){
   const r = r5();
   if(!r.disguise){ setTimeout(()=> renderOldTownZone(), 0); return; }   // (before Ugo — the developer's way: the church)
   /* (3.00) once the hold is broken nobody needs it: every soldato is busy with the dead */
   if(!r.disguised && !r.holdBroken){ r.disguised = true; saveProfile(); walkYouRefresh(); walkSideRefresh(); }
+  const fresh = !!ui.stealthFresh;                // (3.07) in through a door or up the steps — not back from a fight or a menu
   startStealth(world, d);
   /* (3.02) a save that broke the hold before Nino was in the story: the
      Ghost Master comes down the hill to tell you about him */
@@ -3977,8 +4057,8 @@ function r5TownRender(world, d){
     setTimeout(()=>{ if(ui.screen === 'hilltop' && r5MKDue() && !ui.sceneRunning) r5MKVilla(); }, 600);
     return;
   }
-  if(!ui.sceneRunning && R5_TOWN_FIRST[d.key] && r5Once('first_' + d.key))
-    setTimeout(()=> sceneSay([faceMon('whalelord')], whaleName(), R5_TOWN_FIRST[d.key]), 500);
+  if(!ui.sceneRunning && fresh && R5_TOWN_FIRST[d.key] && r5DailyDue('first_' + d.key))
+    r5PlaceWord(d.key, 'first_' + d.key, (r.holdBroken ? R5_TOWN_FREE : R5_TOWN_FIRST)[d.key]);
 }
 /* Out of uniform in the streets, or a face shown to one of them: frozen to
    the spot and surrounded — soldatos, and in the Old Town the capos from the
@@ -4225,7 +4305,7 @@ async function r5HillEscort(){
   ui.stealthFresh = true;
   ui.currentZone = r5Zone('hilltop') || ui.currentZone;
   r.hill = true;
-  r.said.first_hilltop = true;                   // he says it all here
+  r.said.first_hilltop = r5Day();                // he says it all here (3.07: for today)
   await saveProfile();
   w.busy = false;
   go('hilltop');                                 // (ui.sceneRunning holds: it starts nothing itself)
@@ -4384,11 +4464,13 @@ const R5_ROOM_DOOR = {
   room_police:{ name:'The police station',
     text:()=> `Through the window: two policemen at their desks, wide awake and sitting very straight, as if they have been waiting all night for something to happen.` },
   room_post:{ name:'The post office',
-    text:()=> `The post office is still open. Somebody inside is humming over a pile of letters.` },
+    text:()=> `The post office is still open. Inside, a young woman is sorting a mountain of letters, very fast.` },
   room_cafe:{ name:'The café',
-    text:()=> `The capos' tables are all outside. Inside, it smells of coffee, and a barista is polishing the same cup over and over.` },
+    text:()=> `The capos' tables are all outside. Inside, it smells of coffee, and the barista is humming one of Figlio's songs as she polishes the cups.` +
+      (r5().holdBroken ? '' : `<br><br>Two soldatos sit over their coffee at a corner table, talking in low voices.`) },   // (3.07)
   room_trattoria:{ name:'The trattoria',
-    text:()=> `Something inside smells wonderful. Garlic, and tomatoes, and bread.` },
+    text:()=> `Something inside smells wonderful. Garlic, and tomatoes, and bread.` +
+      (r5().holdBroken ? '' : `<br><br>Two soldatos are already at a table, eating as if they have not eaten all week.`) },   // (3.07)
   room_gelateria:{ name:'The gelateria',
     text:()=> `A sign on the door says <b>CLOSED</b> — but the lights are on, and somebody inside is stirring a huge silver tub.` },
   room_grandpa:{ face:['grandpa', '👴'], name:'Grandpa',
@@ -4415,8 +4497,12 @@ async function r5RoomDoor(id){
   const d = DECKS[id];
   if(!d || ui.sceneRunning || walkState().busy || document.querySelector('.scene-say')) return;
   const door = R5_ROOM_DOOR[id];
-  if(door && r5Once('door_' + id))
+  if(door && r5Once('door_' + id)){
+    /* (3.07) the guard house's door says it already, after the hold breaks:
+       not again inside (r5RoomRender) */
+    if(id === 'room_guards' && r5().holdBroken) r5().said.guardsEmpty = true;
     await sceneSay(door.face ? [faceNpc(door.face[0], door.face[1])] : [], door.name, door.text());
+  }
   goFloor(id, 'door');
 }
 /* Out onto the street: in the Old Town and on the Hilltop, in uniform (until
@@ -4432,13 +4518,29 @@ async function r5RoomOut(zone, where){
   }
   goFloor(zone, where);
 }
+/* Where the Family's men sat — the guard house's card players, and (3.07)
+   the café's and the trattoria's soldatos — once the dead are loose for good:
+   said once, the first time in after that. */
+const R5_ROOM_EMPTY = {
+  room_guards:   { key:'guardsEmpty',
+    text:`The cards lie scattered across the table, a game left half-played. Every soldato on the hill is out fighting the dead.` },
+  room_cafe:     { key:'emptyCafe',
+    text:`Two cups of coffee going cold on a table, and the chairs pushed back in a hurry. The soldatos who were drinking them are out in the streets, fighting the dead.` },
+  room_trattoria:{ key:'emptyTrattoria',
+    text:`Two plates of clams, barely touched, and the chairs pushed back in a hurry. The soldatos who were eating them are out in the streets, fighting the dead.` },
+};
 function r5RoomRender(world, d){
   if(ui.sceneRunning) return;
-  /* back in the guard house after the dead rose: nobody left at the cards */
-  if(d.key === 'room_guards' && r5().holdBroken && r5().said.door_room_guards && r5Once('guardsEmpty'))
-    setTimeout(()=> sceneSay([], 'The guard house',
-      `The cards lie scattered across the table, a game left half-played. Every soldato on the hill is out fighting the dead.`), 500);
+  const e = R5_ROOM_EMPTY[d.key];
+  if(e && r5().holdBroken && !r5().said[e.key])
+    setTimeout(()=>{
+      if(ui.screen !== d.key || ui.sceneRunning || document.querySelector('.scene-say') || !r5Once(e.key)) return;
+      sceneSay([], d.title, e.text);
+    }, 500);
 }
+/* (3.07) Not in front of the Family's men, sitting in a room (the guard
+   house's, the café's, the trattoria's): no taking the uniform off there. */
+function r5MenInRoom(d){ return !!(d && d.house && deckThings(d).some(t=> /^soldato/.test(t.sprite || ''))); }
 /* Whoever lives in the room, and what they say — in turn, the first line
    first. `free`: once, the first time after the dead are loose for good;
    `nino`: once, the first time after you have met him; `whale`: what the
@@ -4504,14 +4606,15 @@ const R5_FOLK = {
     ],
     whale:{ 2:`<b>"It looks nothing like you. They have drawn your ears far too big."</b>` },
     free:`<b>"A ghost walked into our cell last night — straight through the bars."</b> He sighs. <b>"Twenty years, and our first prisoner walks out again."</b>` },
-  barista:{ name:'Barista Gianni', sprite:'barista', icon:'☕',
+  /* (3.06, the designer: "barista - jolly young female") */
+  barista:{ name:'Barista Gina', sprite:'barista', icon:'☕',
     lines:[
-      `<b>"Coffee? You're far too young for coffee. Hot milk, then."</b> He winks. <b>"With a little coffee in it."</b>`,
-      `<b>"The capos drink twelve coffees a night. Twelve! They never sleep."</b> He polishes a cup. <b>"Maybe that's why they're so grumpy."</b>`,
-      `<b>"That table by the door is the capos'. They count the Family's money on it every night. I count the cups."</b>`,
-      `<b>"The Consigliere takes three sugars. Don't tell anybody — he thinks it makes him look soft."</b>`,
+      `<b>"Coffee? You're far too young for coffee!"</b> She laughs. <b>"Hot milk, then — with a little coffee in it. Our secret."</b>`,
+      `<b>"The capos drink twelve coffees a night. Twelve! They never sleep."</b> She giggles. <b>"Maybe that's why they're so grumpy."</b>`,
+      `<b>"That table by the door is the capos'. They count the Family's money on it every night. I count the cups — and I always win."</b>`,
+      `<b>"The Consigliere takes three sugars."</b> She puts a finger to her lips. <b>"Don't tell anybody — he thinks it makes him look soft."</b>`,
     ],
-    free:`<b>"A ghost came in tonight and sat at table four. I brought him an espresso."</b> He shrugs. <b>"He seemed to like it."</b>` },
+    free:`<b>"A ghost came in tonight and sat at table four, so I brought him an espresso."</b> She beams. <b>"He seemed to like it!"</b>` },
   gelataio:{ name:'Gelataio Paolo', sprite:'gelataio', icon:'🍨',
     lines:[
       `<b>"Closed! Closed."</b> He looks at you. <b>"…Oh, all right. One taste. Pistachio — it's the best. I underlined it three times."</b>`,
@@ -4537,6 +4640,35 @@ const R5_FOLK = {
       `<b>"I don't cheat. I'm just lucky."</b> He lays down his cards. <b>"Every single time."</b>`,
       `<b>"Don't touch the cards, junior."</b>`,
       `<b>"Your turn on the gate tonight? Rather you than me."</b>`,
+    ] },
+  /* (3.07, the designer: "Can we have some soldatos or capos in the
+     eatery/cafe … But not covering the ticket spot") — soldatos: each capo is
+     one man in one place, and theirs are the tables outside. They talk to a
+     junior as one of their own, and they know only what soldatos are told. */
+  cafe1:{ name:'Soldato', sprite:'soldato2', icon:'💂',
+    lines:[
+      `<b>"Shh! The capos are right outside. If anybody asks, I've been on my rounds all night."</b> He blows on his coffee.`,
+      `<b>"This is my fifth coffee tonight. I can't feel my ears."</b>`,
+      `<b>"Gina gives us the broken biscuits. The capos get the whole ones. That's the Family for you."</b>`,
+    ] },
+  cafe2:{ name:'Soldato', sprite:'soldato1', icon:'💂',
+    lines:[
+      `<b>"Did you hear? Some kid went right through the catacombs, past every one of us — and beat two capos!"</b> He shakes his head. <b>"A KID. Imagine."</b>`,
+      `<b>"The Padrino's great work, up at the villa? Nearly ready, they say. Then no more night shifts. Ever."</b>`,
+      `<b>"I was a junior once. My first night on the gate, I saluted a lamp-post."</b> He sighs. <b>"It was very dark."</b>`,
+    ],
+    whale:{ 0:`<b>"…Keep a straight face."</b>` } },
+  tratt1:{ name:'Soldato', sprite:'soldato1', icon:'💂',
+    lines:[
+      `<b>"Clams again! Every night, clams. The Family takes all the fish, and then the Family eats clams."</b> He eats another one anyway.`,
+      `<b>"Best food in Cosa Nostia. Don't tell my mother I said that."</b>`,
+      `<b>"I'm not hiding from the capos. I'm having a very, very long supper."</b>`,
+    ] },
+  tratt2:{ name:'Soldato', sprite:'soldato2', icon:'💂',
+    lines:[
+      `<b>"Eat up, junior. Franco says you'll never grow if you only eat once a day."</b>`,
+      `<b>"Down in the catacombs it's cold, and dark, and full of ghosts. Up here, there's bread."</b> He tears off a big piece. <b>"I know where I'd rather be."</b>`,
+      `<b>"Psst. If Franco asks, you LOVED the clams."</b>`,
     ] },
 };
 async function r5Folk(id){
@@ -4575,9 +4707,9 @@ const R5_ROOM_FIND = {
   room_barber:    `The barber winks. <b>"Tips! Nobody has left me a tip in twenty years. Keep them."</b>`,
   room_opera:     `The Maestro does not look up from the keys. <b>"Coins on the stage? Thrown for Figlio, I expect. He won't miss them. Keep them."</b>`,
   room_police:    `Officer Bianchi peers in through the bars. <b>"Oh! The last prisoner left those — twenty years ago. I don't think he's coming back for them. Keep them."</b>`,
-  room_post:      `The postmistress smiles. <b>"No name on it, and no address. That makes it yours."</b>`,
-  room_cafe:      `The barista grins. <b>"Change from the capos' coffees. They never wait for it. Take it."</b>`,
-  room_trattoria: `Mamma Rosa waves her ladle at you. <b>"Tips under the plates! Take them, take them — you're a growing junior."</b>`,
+  room_post:      `Carla does not even stop sorting. <b>"No name on it, no address? Then it's yours!"</b>`,
+  room_cafe:      `The barista laughs. <b>"Change from the capos' coffees! They never wait for it. Take it."</b>`,
+  room_trattoria: `Chef Franco waves his ladle at you. <b>"Tips under the plates! Take them, take them — you're a growing junior."</b>`,
   room_gelateria: `Paolo looks at the tokens, then at you. <b>"I dropped those in the pistachio. You can keep them."</b> He thinks. <b>"Wash them first."</b>`,
   room_grandpa:   `Grandpa chuckles. <b>"Lemon money! The Padrino pays me in tokens and lemons, and I've more lemons than I'll ever need. Keep it."</b>`,
   room_lemons:    `Sergio squints at what you have found. <b>"The Padrino's coins? He drops them when he comes to count the lemons. He won't count those. Keep them."</b>`,
@@ -4603,6 +4735,13 @@ const R5_GHOST_ROOMS = {
   room_grandpa:   `If they ever catch you up here, this is the door to run for.`,
   room_lemons:    `Every lemon on the hill, for one man's table. That is the Padrino all over.`,
   room_guards:    `Off duty, they are only tired men playing cards. It is the uniform that makes them frightening.`,
+};
+/* (3.07) …said once a day now: these two only while the Family can still
+   catch you (once the dead are loose, nobody runs for Grandpa's door, and
+   the guard house's cards lie where they fell). */
+const R5_GHOST_ROOMS_WHILE = {
+  room_grandpa:()=> !r5().holdBroken,
+  room_guards: ()=> !r5().holdBroken,
 };
 
 /* ============================================================
@@ -4815,9 +4954,12 @@ function r5VillaIn(){ return goFloor('villa', 'door'); }
 const R5_VILLA_FIRST = [
   `Inside, the villa is quiet. Lamps are lit. A clock is ticking. Nobody is running, and nobody is shouting.`,
 ];
+/* (3.07) …and his first word inside, said again on the first visit each day. */
+const R5_VILLA_WORD = `<b>"The dead are everywhere tonight. Every street, every tunnel. But not in this house."</b>`;
 function r5VillaRender(world, d){
   if(ui.sceneRunning) return;
   if(!r5().villa) return setTimeout(()=> r5VillaArrive(), 500);
+  if(r5DailyDue('first_villa')) r5PlaceWord('villa', 'first_villa', R5_VILLA_WORD);
 }
 async function r5VillaArrive(){
   const r = r5();
@@ -4827,8 +4969,9 @@ async function r5VillaArrive(){
   w.busy = true;
   releaseKeys();
   const W = whaleName(), whale = ()=> faceMon('whalelord');
+  r.said.first_villa = r5Day();                  // (3.07) his word for the villa: said here, for today
   await sceneSay([], 'The villa', R5_VILLA_FIRST[0]);
-  await sceneSay([whale()], W, `<b>"The dead are everywhere tonight. Every street, every tunnel. But not in this house."</b>`);
+  await sceneSay([whale()], W, R5_VILLA_WORD);
   ghostAlert();
   await sceneSay([whale()], W, `<b>"Something under this house is keeping them away."</b><br><br><b>"…I think I know who."</b>`);
   await sceneSay([whale()], W,
@@ -5145,18 +5288,26 @@ async function r5TowerOut(){
   goFloor('hilltop', 'tower');
 }
 /* On each floor, the first time: they see you for what you are. */
+/* (3.07) His word in the tower — the first time in, and the first time each
+   day after that, for as long as it holds the dead down. */
+const R5_TOWER_WORD = `<b>"The air in here is thick — with minds, and with the dead they talk to. They know we are here already."</b>`;
 function r5TowerRender(world, d){
   const r = r5(), n = d.tower, f = R5_TOWER[n - 1];
   if(n > (r.tower.reached || 0)){ r.tower.reached = n; saveProfile(); }
-  if(ui.sceneRunning || r5TowerBeaten(n) || r.said['tower_met_' + n]) return;
+  if(ui.sceneRunning) return;
+  const word = !r.holdBroken && r5DailyDue('towerDoor');
+  if(r5TowerBeaten(n) || r.said['tower_met_' + n]){
+    if(word) r5PlaceWord(d.key, 'towerDoor', R5_TOWER_WORD);
+    return;
+  }
   r.said['tower_met_' + n] = true;
   saveProfile();
   const w = walkState();
   w.busy = true;
   setTimeout(async ()=>{
     ui.sceneRunning = true;
-    if(n === 1 && r5Once('towerDoor'))
-      await sceneSay([faceMon('whalelord')], whaleName(), `<b>"The air in here is thick — with minds, and with the dead they talk to. They know we are here already."</b>`);
+    if(word && r5Daily('towerDoor'))                // (said before whoever is waiting on this floor sees you)
+      await sceneSay([faceMon('whalelord')], whaleName(), R5_TOWER_WORD);
     const lines = (n === 9 && !r.phoenixGift) ? [].concat(f.seesPlain) : f.sees;
     for(const line of lines) await sceneSay([r5TowerFace(n)], f.name, line);
     if(f.whale) await sceneSay([faceMon('whalelord')], whaleName(), f.whale);
@@ -5442,30 +5593,34 @@ function paintTower(d){
   return _towerArt[d.key];
 }
 
-/* (3.03) The post office's postmistress, wide awake behind her grille. */
+/* (3.03) The post office's clerk, behind her grille — (3.06, the designer:
+   "post clerk - busy young female") a young woman who never stops sorting. */
 async function r5PostOffice(){
   const r = r5();
   const nino = r.ninoMet && (r.said.t_post || 0) >= 3 && r5Once('postNino');   // (once she has told you about the letters)
   const free = !nino && r.holdBroken && r5Once('postFree');
-  const yes = await r5Ask([faceNpc('post_clerk', '📮')], 'Postmistress Carla', nino
-    ? `<b>"Nino…"</b> She opens the drawer again, and looks at all the envelopes. <b>"So that is who the letters were for."</b> She closes it very gently.`
-    : free ? `<b>"No post tonight. The postman saw a ghost and dropped the lot."</b>`
+  const yes = await r5Ask([faceNpc('post_clerk', '📮')], 'Post clerk Carla', nino
+    ? `<b>"Nino…"</b> For once she stops sorting altogether, and opens the drawer again. <b>"So that is who the letters were for."</b> She closes it very gently.`
+    : free ? `<b>"No post tonight! The postman saw a ghost and dropped the lot — and now I'm sorting it all off the floor."</b>`
     : r5Turn('post', [
-      `She looks up from a pile of letters, wide awake.<br><br><b>"Parcels to mind, junior? Round the back. I don't ask what's in them."</b>`,
-      `<b>"Letters for the Family go in the red sack. Letters for everybody else go in the slow sack."</b>`,
+      `She does not look up. Letters fly from her hands into the pigeonholes, one after another.<br><br>` +
+        `<b>"Parcels to mind, junior? Round the back. I don't ask what's in them — I haven't got time!"</b>`,
+      `<b>"Letters for the Family go in the red sack. Letters for everybody else go in the slow sack."</b> Two more land in the slow sack while she says it.`,
       `<b>"Every year, one letter comes down from the villa. No stamp, no address — just one word on it: NINO."</b><br><br>` +
-        `She opens a drawer full of envelopes. <b>"I never know where to send it. So I keep them all."</b>`,
+        `She stops, just for a moment, and opens a drawer full of envelopes. <b>"I never know where to send it. So I keep them all."</b>`,
     ]), '📦 Storage', 'Leave');
   if(yes) leaveDeck('storage');
 }
-/* (3.03) Mamma Rosa, in her kitchen. */
+/* (3.03) The trattoria's cook, in his kitchen — (3.07, the designer: "Apart
+   from the females I mentioned in the new NPC uploads, the rest are male")
+   Chef Franco; he was Mamma Rosa. (The save keeps her keys: t_rosa, rosaFree.) */
 async function r5Trattoria(){
   const r = r5();
   const free = r.holdBroken && r5Once('rosaFree');
-  const yes = await r5Ask([faceNpc('trattoria_cook', '🍝')], 'Mamma Rosa', free
-    ? `<b>"A ghost came into my kitchen tonight and tasted my sauce. He said it needs more salt."</b> She tastes it. <b>"…He's right."</b>`
+  const yes = await r5Ask([faceNpc('trattoria_cook', '🍝')], 'Chef Franco', free
+    ? `<b>"A ghost came into my kitchen tonight and tasted my sauce. Said it needs more salt."</b> Franco tastes it, and frowns. <b>"…He's right."</b>`
     : r5Turn('rosa', [
-      `She waves a ladle at you.<br><br><b>"Sit, sit! Soldato, junior, I don't care who you work for — nobody leaves my kitchen hungry."</b>`,
+      `He waves a ladle at you.<br><br><b>"Sit, sit! Soldato, junior, I don't care who you work for — nobody leaves my kitchen hungry."</b>`,
       `<b>"Pasta with clams tonight. Tomorrow, pasta with clams. The Family takes all the fish, so we eat clams."</b>`,
       `<b>"Eat! You'll never grow if you only eat once a day."</b>`,
     ]), '🍝 Rest here', 'Not now');
@@ -6605,11 +6760,13 @@ function r5GhostChat(id){
     ? r5Ask([faceMon('whalelord')], whaleName(), `<b>"${line}"</b>`, 'OK', '🪨 The stones').then(ok=>{ if(!ok) return r5StonesReminder(); })
     : sceneSay([faceMon('whalelord')], whaleName(), `<b>"${line}"</b>`);
   const next = (key, list)=>{ const i = (r.said[key] || 0) % list.length; r.said[key] = i + 1; return say(list[i]); };
-  /* (3.03) in a room in the town: a word about the room the first time, then
-     what he says in that part of town */
+  /* (3.03) in a room in the town: a word about the room the first time —
+     (3.07) the first time each day, while it is true — then what he says in
+     that part of town */
   if(id === 'villa') return next('ghostVilla', R5_GHOST_VILLA);   // (3.04)
   if(d && d.house){
-    if(R5_GHOST_ROOMS[id] && r5Once('ghostRoom_' + id)) return say(R5_GHOST_ROOMS[id]);
+    const holds = !R5_GHOST_ROOMS_WHILE[id] || R5_GHOST_ROOMS_WHILE[id]();
+    if(R5_GHOST_ROOMS[id] && holds && r5Daily('ghostRoom_' + id)) return say(R5_GHOST_ROOMS[id]);
     if(d.zone === 'old_town') return next('ghostOldTown', R5_GHOST_OLDTOWN);
     if(d.zone === 'hilltop') return r.holdBroken ? next('ghostHillFree', R5_GHOST_HILL_FREE) : next('ghostHill', R5_GHOST_HILL);
     return next('ghostTown', R5_GHOST_TOWN);

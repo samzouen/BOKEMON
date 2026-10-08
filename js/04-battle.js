@@ -2433,6 +2433,16 @@ function resolveEnemyAfterimages(done){
     if(k >= n || !me){ setFocus(null); clearAfterimages(); return setTimeout(done, 300); }
     setFocus(me);
     k++;
+    /* (3.08) an attack like any other: the Aria counts it, and its untouchable
+       turn — or the Whalelord's reflex — lets it through (it used to do
+       neither) */
+    noteAriaAttack();
+    const covered = ariaFieldEvasion() > 0;
+    if(ariaPassesThrough(me)){
+      floatMiss(pid('playerBob'), 'MISS'); dodgePlayer();
+      if(covered) battleMsg(`👥 One of their afterimages strikes — and passes harmlessly through.`);
+      return setTimeout(step, 620);
+    }
     if(Math.random() < playerEvasionFrom(null)){
       floatMiss(pid('playerBob'), dodgeWord(me)); dodgePlayer();
       battleMsg(`👥 One of their afterimages strikes — and finds nothing.`);
@@ -2610,32 +2620,101 @@ function enemyVitaPulse(done){
      Gathering Wrath scales with how much the TEAM has been hurt
    ============================================================ */
 
-/* ---- Haunting Aria: a 5-turn field the whole party stands in ---- */
+/* ---- Haunting Aria: a 5-turn field the whole party stands in ----
+   (3.08, the designer's revenge counter) While it runs his VENGEANCE builds:
+   every enemy attack on your side adds 1 — landed, dodged or passing straight
+   through — and every turn adds a random 0.35–0.7 more, attacked or not. At 1
+   or more, in a turn's pre-action phase, his apparition strikes every enemy
+   and it drops by 1: one strike a turn at most, so a heavy beating banks
+   strikes for the turns after. It starts at 0 — at 1 if an attack woke him.
+   (Before 3.08: a 50% roll each turn, certain if they had attacked since the
+   last one.) */
 function ariaState(){ return ui.battle ? getPStatus(0,'aria') : null; }
 function ariaActive(){ const a = ariaState(); return !!(a && a.turnsLeft > 0); }
 
-function castAria(mon, def, byReflex){
+/* `pierced`: woken by an attack that cannot be dodged — he goes into the
+   Aria all the same, but that blow lands (3.09), and its line is said with
+   the blow (ariaPiercedNote), not here. */
+function castAria(mon, def, byReflex, pierced){
   const b = ui.battle;
   if(!b || ariaActive()) return false;
-  /* Five rolls, one in the pre-action phase of each of the next five rounds —
-     the same phase as Overheat's burn, so it happens whether the last round
-     ended with the enemy's attacks or with a wave you knocked out. Stored with
-     the usual +1 so the cast round is not counted; ariaRetaliate() ends it
-     straight after the fifth roll, and the badge shows the rolls to come. */
-  setPStatus(0, {
+  /* Five turns of it, each with its pre-action phase — the same phase as
+     Overheat's burn, so it comes whether the last round ended with the
+     enemy's attacks or with a wave you knocked out. Stored with the usual +1
+     so the cast round is not counted; ariaRetaliate() ends it straight after
+     the fifth, and the badge shows the turns to come.
+     (3.09, the designer: "Diamond dust should not sweep aria because it's a
+     state that whalelord goes into") — unsweepable: no Diamond Dust sweeps
+     it or keeps it from starting, no Nova takes it, nothing steals it. (Your
+     own dust still holds it open, as it holds anything of yours.) */
+  const per = def.perAttack || 1;
+  const st = setPStatus(0, {
     type:'aria', turnsLeft:(def.turns||5) + 1,
-    pulse:def.pulse || 0.5, chance:(def.chance == null ? 0.5 : def.chance),
+    pulse:def.pulse || 0.5,
+    perAttack:per, drift:def.drift || [0.35, 0.7],
+    vengeance: byReflex ? per : 0,  // the attack that woke him counts
     atk: monAtk(mon), owner: mon.uid,
     fieldEvade: 1,                 // one turn of total evasion, for ANYONE on the field —
-    coverUsed: !!byReflex,         // spent only in a round an attack actually passed through (2.74)
-    struck: !!byReflex,            // the attack that woke him counts: vengeance is owed
+    coverUsed: !!byReflex && !pierced,   // spent only in a round an attack actually passed through (2.74)
+    unsweepable: true, state: true,      // a state he goes into, not a buff (3.09) — `state`: it still counts down
   });
+  if(!st) return false;
   renderStatusBadges();
-  battleMsg(byReflex
+  if(pierced) b._ariaPierced = ` The ghostly whalelord begins to sing — but this blow sees straight through him. Prepare for vengeance.`;
+  else battleMsg(byReflex
     ? `Attacks pass harmlessly through the ghostly whalelord. Prepare for vengeance.`
     : `Ominous whalesong fills the air.`);
   return true;
 }
+/* (3.08) An enemy attack on your side, while the Aria runs: one more for his
+   vengeance. Called ONCE per attack, wherever it comes from — their move (at
+   the attempt, however many hits or targets it has), a quick attack, a
+   riposte, an afterimage, an Overcharge repeat, a copy's echo, Conversio's
+   take — whether it lands, misses or passes straight through. */
+function noteAriaAttack(){
+  const a = ariaState();
+  if(!a) return;
+  a.vengeance = (a.vengeance || 0) + (a.perAttack || 1);
+  renderStatusBadges();
+}
+/* (3.08) Any enemy attack reaching one of yours meets the Aria the same way —
+   it used to depend on what kind of attack it was: the untouchable turn lets
+   it pass through, and the Whalelord, struck with no Aria running, sings by
+   reflex and it finds nothing where he was. (Their riposte, their
+   afterimages, their Overcharge repeats and echoes, and their Conversio
+   never woke him; their afterimages ignored the untouchable turn too.)
+   Count the attack first (noteAriaAttack): a reflex then starts the count at
+   1 for the attack that woke him. Returns true if it passed through.
+   (3.09, the designer: "evasion piercing moves should hit through the
+   evasion") `pierce`: an attack that cannot be dodged — a mind-read, a Third
+   Eye, their Tachypsychia's own blows, Conversio's take — sees straight
+   through the haunting: it lands, it does not spend the untouchable turn,
+   and a reflex it wakes is the Aria alone (he still goes into it; the blow
+   still lands). The caller adds ariaPiercedNote() to the blow's line. */
+function ariaPassesThrough(mon, pierce){
+  const canReflex = mon && !ariaActive() && !passivesMuted(mon)            // a ✦ Curse quiets the reflex (2.97)
+                 && (MOVES[mon.species] || []).some(m=> m[6] && m[6].aria);
+  if(pierce){
+    if(ariaFieldEvasion() > 0 && ui.battle) ui.battle._ariaPierced = ` It sees straight through the haunting.`;
+    else if(canReflex) ariaReflex(mon, true);
+    return false;
+  }
+  if(ariaFieldEvasion() > 0){ noteAriaCover(); return true; }
+  if(canReflex && ariaReflex(mon)){ noteAriaCover(); return true; }
+  return false;
+}
+/* (3.09) What a blow that saw straight through the haunting says with its
+   own line — once: read and cleared. */
+function ariaPiercedNote(){
+  const b = ui.battle;
+  if(!b || !b._ariaPierced) return '';
+  const s = b._ariaPierced;
+  b._ariaPierced = null;
+  return s;
+}
+/* His vengeance as the badge shows it: a tenth at a time, rounded DOWN, so it
+   never reads 1.0 before it is really there. */
+function ariaVengeanceShown(a){ return (Math.floor(((a && a.vengeance) || 0) * 10 + 1e-6) / 10).toFixed(1); }
 /* The turn of untouchability belongs to the FIELD, so a monster swapping in
    during it inherits the protection. It is only used up by a round in which an
    attack actually passed through it: a round when nobody attacked your side
@@ -2648,31 +2727,33 @@ function ariaFieldEvasion(){
 function noteAriaCover(){ const a = ariaState(); if(a && a.fieldEvade > 0) a.coverUsed = true; }
 /* The passive: struck while the Aria is not running, it sings by reflex and the
    blow misses. Costs no turn and no words. */
-function ariaReflex(mon){
+function ariaReflex(mon, pierced){
   if(ariaActive()) return false;
   const mv = (MOVES[mon.species]||[]).find(m=>m[6] && m[6].aria);
   if(!mv) return false;
-  return castAria(mon, mv[6].aria, true);
+  return castAria(mon, mv[6].aria, true, pierced);
 }
 /* The pre-action phase (called from beginRound, beside Overheat's burn):
-   every round the Aria lasts, his apparition may strike every enemy — a coin
-   flip, or certain if any enemy attacked your side since the last roll (an
-   attack that passed straight through still counts). After the fifth roll the
-   Aria has ended. */
+   every round the Aria lasts, his vengeance grows by a random 0.35–0.7 —
+   attacked or not — and then, at 1 or more, his apparition strikes every
+   enemy and it drops by 1 (3.08). Once a turn at most: what is left over
+   waits for the next. After the fifth turn the Aria has ended (and its
+   vengeance with it). */
 function ariaRetaliate(done){
   const a = ariaState();
   if(!a) return done();
-  const provoked = !!a.struck;
-  a.struck = false;
   const last = a.turnsLeft <= 1;
   const finish = ()=>{
-    if(last && ariaState() === a){ removePStatus(0, 'aria'); renderStatusBadges(); }
+    if(last && ariaState() === a){ removePStatus(0, 'aria'); }
+    renderStatusBadges();
     done();
   };
-  const chance = provoked ? 1 : (a.chance == null ? 0.5 : a.chance);
-  if(Math.random() >= chance) return finish();
+  const [lo, hi] = a.drift || [0.35, 0.7];
+  a.vengeance = (a.vengeance || 0) + lo + Math.random() * (hi - lo);
+  if(a.vengeance + 1e-9 < 1) return finish();
   const foes = livingEnemies();
   if(!foes.length) return finish();
+  a.vengeance = Math.max(0, a.vengeance - 1);
   const dmg = Math.ceil((a.pulse || 0.5) * a.atk * ownBuffMultiplier());
   const hits = foes.map(t=>({ t, idx:ui.battle.enemies.indexOf(t), dmg,
                               oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }));
@@ -3026,9 +3107,9 @@ function runPreHits(done){
    front strikes a random enemy; each of theirs strikes whoever you have out
    front.
    It is a free strike, like an afterimage: evasion has its say (a lurker is
-   not there; the Aria's field lets it pass through — and hears it, so the
-   apparition's next roll is certain; the Whalelord struck with no Aria
-   running sings by reflex), and one block stack soaks it — but it never meets
+   not there; the Aria's field lets it pass through — and counts it, 1 more
+   for his vengeance (3.08); the Whalelord struck with no Aria running sings
+   by reflex), and one block stack soaks it — but it never meets
    a Counter guard, leaves no Mirage copies, feeds no Leech Seed, sets off no
    Greed or Cunning and draws no riposte. A monster that could not act this
    round (frozen, asleep, stunned, fleeing) does not strike, and a ✦ Curse
@@ -3096,14 +3177,12 @@ function quickStrikeYours(e, mon, done){
   const b = ui.battle;
   const idx = b.enemies.indexOf(e), name = SPECIES[e.species].name;
   if(e.lurk || e.cunning){ breakCover(e); e._ambush = 0; renderStatusBadges(); }
-  { const ar = ariaState(); if(ar) ar.struck = true; }       // an attack on your side, all the same
+  noteAriaAttack();                                           // an attack on your side, all the same
   bob(document.getElementById('enemyBob-' + idx), -1);
-  const ariaCover = ariaFieldEvasion() > 0;
-  const canReflex = !ariaCover && !ariaActive() && !passivesMuted(mon) && (MOVES[mon.species] || []).some(m=> m[6] && m[6].aria);   // a ✦ Curse quiets the reflex (2.97)
-  if(ariaCover || (canReflex && ariaReflex(mon))){
-    noteAriaCover();
+  const covered = ariaFieldEvasion() > 0;
+  if(ariaPassesThrough(mon, seesThrough(e))){                 // the untouchable turn, or his reflex (3.08: one rule for every attack; 3.09: a Third Eye sees through)
     dodgePlayer(); floatMiss(pid('playerBob'), 'MISS');
-    if(ariaCover) battleMsg(`⚡ ${name}'s quick attack passes harmlessly through.`);
+    if(covered) battleMsg(`⚡ ${name}'s quick attack passes harmlessly through.`);
     return setTimeout(done, 700);
   }
   if(!seesThrough(e) && Math.random() < playerEvasionFrom(e)){   // (a Third Eye cannot miss, 2.97)
@@ -3127,7 +3206,7 @@ function quickStrikeYours(e, mon, done){
   showDamageNumber(pid('playerBob'), before - mon.currentHp);
   floatBlocked(pid('playerBob'), dmg - through);
   playSfx('hit_taken');
-  battleMsg(`⚡ Quick attack! ${name} darts in before anyone moves.`);
+  battleMsg(`⚡ Quick attack! ${name} darts in before anyone moves.` + ariaPiercedNote());
   setTimeout(done, 650);
 }
 
@@ -3709,6 +3788,7 @@ function beginRound(msg){
   (b.enemies || []).forEach(e=>{ const f = getEStatus(e, 'forgot'); if(f && f.until != null && f.until < b.roundNo) removeEStatus(e, 'forgot'); });
   advanceMirageWindows();
   b.roundMsg = msg || null;
+  b._ariaPierced = null;                         // (3.09) a note no blow said is not carried over
   b.phase = 'resolving';
   renderBattle();
 
@@ -4037,9 +4117,6 @@ function endRound(){
     battleMsg(`🛡 Another read — <b>${counterCountOf(gm)}</b> Counter stack${counterCountOf(gm)>1?'s':''} ready.`);
   }
 
-  const ar = getPStatus(0,'aria');
-  if(ar && ar.fieldEvade > 0 && ar.coverUsed) ar.fieldEvade--;   // the untouchable turn is spent — if it was used
-  if(ar) ar.coverUsed = false;
   endDragonLegacy();                             // a Legacy spent this turn is over
   tickCompanionTurns();                          // a companion out spends one of its turns
   tickFoePairTurns();                            // and theirs (2.87)
@@ -4048,6 +4125,12 @@ function endRound(){
      pre-action phase, in beginRound.) */
   resolveAfterimages(()=> resolveEnemyAfterimages(()=>{
     if(!ui.battle) return;
+    /* The Aria's untouchable turn is spent — if it was used (2.74). (3.08)
+       After the end phase's afterimages, which meet it now and belong to this
+       round. */
+    const ar = getPStatus(0,'aria');
+    if(ar && ar.fieldEvade > 0 && ar.coverUsed) ar.fieldEvade--;
+    if(ar) ar.coverUsed = false;
     if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
     const onward = ()=>{
       const gone = tickStatuses();
@@ -5423,16 +5506,22 @@ function moveEffectText(mv, mon, atk){
         : ''));
   }
   if(mv.aria){
-    const ch = mv.aria.chance == null ? 0.5 : mv.aria.chance;
+    /* (3.08) the designer's revenge counter, with its own numbers */
+    const per = mv.aria.perAttack || 1, [lo, hi] = mv.aria.drift || [0.35, 0.7];
     out.push(
       `Haunting Aria triggers automatically when enemies attack the Whalelord, causing their attacks to pass ` +
       `through harmlessly for one turn — the first turn they actually attack (a turn in which nobody attacks ` +
-      `does not use it up). You can also spell to trigger it <b>without consuming a turn</b>.`);
+      `does not use it up). Attacks that cannot be dodged — a mind-read, a Third Eye — still hit through it. ` +
+      `You can also spell to trigger it <b>without consuming a turn</b>.`);
     out.push(
-      `Then, for <b>${mv.aria.turns} turns</b>, the Whalelord haunts his enemies, with a <b>${Math.round(ch * 100)}%</b> ` +
-      `chance each turn to strike every enemy for <b>${Math.ceil((mv.aria.pulse || 0.5) * atk)}</b> damage. ` +
-      `Enemy attacks incur his vengeance, raising the chance to <b>100%</b>.`);
-    out.push(`Haunting Aria cannot be triggered again until the previous Aria has ended.`);
+      `Then, for <b>${mv.aria.turns} turns</b>, his <b>vengeance</b> builds: every enemy attack on your side adds ` +
+      `<b>${per}</b> — landed, dodged or passing through — and every turn adds <b>${lo}–${hi}</b> more, attacked or not. ` +
+      `At the start of each turn, once it has reached <b>1</b>, his apparition strikes every enemy for ` +
+      `<b>${Math.ceil((mv.aria.pulse || 0.5) * atk)}</b> damage and it drops by <b>1</b> — once a turn at most, so ` +
+      `anything left over carries to the next turn. It starts at 0 (at ${per} if an attack woke him).`);
+    out.push(`It is a state he goes into, not a buff: their <b>Diamond Dust cannot sweep it</b> or stop it starting, and no ` +
+      `Nova or theft takes it. Your own Diamond Dust keeps it at <b>${STATUS_TURNS} turns</b> while the dust lasts, as it ` +
+      `does all your effects. Haunting Aria cannot be triggered again until the previous Aria has ended.`);
   }
   if(mv.passive && mv.passive.noFlee) out.push(
     `While he is out, <b>no enemy can flee</b> — not even an Elusive one.`);
@@ -5630,7 +5719,7 @@ function moveEffectText(mv, mon, atk){
       `<b>${p.focus}×</b> (<b>+${Math.round((p.focus - 1) * 100)}%</b>). A hit is damage that gets through to it — a dodged blow, one its ` +
       `block soaks whole, or a muddled friend's swing does not count; a quick attack, or an Overheat's burn or an Aftershock at the start of the round, does`);
     if(p.thirdEye)     bits.push(`sees through every dodge (<b>Third Eye</b>): nothing it throws can be dodged — not a Lurk, Cunning, ` +
-      `Stillness, Airborne, Unseen or any other evasion. A block or a Counter guard still soaks it`);
+      `Stillness, Airborne, Unseen, a Haunting Aria or any other evasion. A block or a Counter guard still soaks it`);
     if(p.composure)    bits.push(`keeps its <b>Composure</b>: at <b>full health</b> its attacks deal <b>${p.composure}×</b> ` +
       `(<b>+${Math.round((p.composure - 1) * 100)}%</b>) — one hit before it moves, and that is gone until it is healed`);
     if(p.exploit)      bits.push(`<b>Exploits</b> the helpless: <b>${p.exploit}×</b> (<b>+${Math.round((p.exploit - 1) * 100)}%</b>) on a monster that is ` +
@@ -5890,8 +5979,9 @@ function renderStatusBadges(){
       /* What the enemy has put on you is theirs, and reads in their colour. */
       const cls = isEnemyOwned(st.type, st) ? 'foe' : 'mine';
       if(st.type === 'forgot'){ out.push(`<span class="status-pill ${cls}">${forgotPill(st)}</span>`); return; }
-      const n = st.unsweepable ? '' : st.type === 'steelSoul' ? ' · this turn' : ` ${shown}`;   // a quick buff (2.93)
-      const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved` : '';
+      const n = (st.unsweepable && !st.state) ? '' : st.type === 'steelSoul' ? ' · this turn' : ` ${shown}`;   // a quick buff (2.93); (3.09) a state still counts down
+      const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved`
+                  : st.type === 'aria' ? ` · vengeance ${ariaVengeanceShown(st)}` : '';   // (3.08) his revenge counter
       out.push(`<span class="status-pill ${cls}">${STATUS_LABELS[st.type]||st.type}${n}${saved}</span>`);
     });
     const af = aftershockBonusHits();

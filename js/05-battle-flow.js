@@ -1231,15 +1231,16 @@ function resolveBattleMove(mv, target, results, opts){
     if(f > 0) return muddledSelfStrike(mv, mon, f);
   }
   /* Their Diamond Dust: nothing of yours takes hold while it lasts. Say so,
-     rather than letting the cast go quiet. A song costs no turn, so the turn
-     is still yours; anything else spends it, as it would have anyway. */
-  const castOnly = mv.aria || (mv.shell && mv.mult == null) || mv.tachy || mv.grant ||
+     rather than letting the cast go quiet. A quick cast costs no turn, so the
+     turn is still yours; anything else spends it, as it would have anyway.
+     (3.09) Not the Haunting Aria: a state he goes into, which no dust stops. */
+  const castOnly = (mv.shell && mv.mult == null) || mv.tachy || mv.grant ||
                    mv.charm || mv.disrupt || mv.soul || mv.clones || mv.dot;
   if(castOnly && dustBlocks('player') && correct >= mv.words){
     playSfx('move_miss');
     battleMsg(`💎 Their diamond dust scatters your ${mv.name} — nothing takes hold.`);
     if(mv.soul && ui.battle.usedSoul) ui.battle.usedSoul[mon.uid] = false;   // not spent, as a stone is not (2.93)
-    if(mv.aria || mv.soul){ ui.battle.phase = 'player'; return renderBattle(); }
+    if(mv.soul){ ui.battle.phase = 'player'; return renderBattle(); }
     return setTimeout(advanceTurn, 1100);
   }
 
@@ -1958,10 +1959,17 @@ function postPlayerAction(mon, hits){
     const attacked = dodged.has(k) || struck.some(h=> h.t === k);
     if(!attacked && !landed.length) return;
     const who = SPECIES[k.species].name;
-    { const ar = ariaState(); if(ar) ar.struck = true; }
-    const covered = ariaFieldEvasion() > 0;
-    if(covered) noteAriaCover();
-    if(covered || (!seesThrough(k) && Math.random() < playerEvasionFrom(k))){
+    /* (3.08) an attack like any other as far as the Aria goes: counted, and
+       the untouchable turn — or now the Whalelord's reflex, which a riposte
+       never used to wake — lets it through */
+    noteAriaAttack();
+    if(ariaPassesThrough(mon, seesThrough(k))){         // (3.09: a Third Eye sees straight through it)
+      floatMiss(pid('playerBob'), 'MISS'); dodgePlayer();
+      lines.push(`⚔️ ${who} ripostes — and it passes harmlessly through.`);
+      return;
+    }
+    const seen = ariaPiercedNote();
+    if(!seesThrough(k) && Math.random() < playerEvasionFrom(k)){
       floatMiss(pid('playerBob'), dodgeWord(mon)); dodgePlayer();
       lines.push(`⚔️ ${who} ripostes — and finds nothing.`);
       return;
@@ -1977,7 +1985,7 @@ function postPlayerAction(mon, hits){
     drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon));
     showDamageNumber(pid('playerBob'), before - mon.currentHp);
     floatBlocked(pid('playerBob'), dmg - through);
-    lines.push(`⚔️ ${who} ripostes — ${before - mon.currentHp}!`);
+    lines.push(`⚔️ ${who} ripostes — ${before - mon.currentHp}!` + seen);
   });
   if(!lines.length) return 0;
   renderStatusBadges();
@@ -2214,13 +2222,19 @@ function enemyConversio(e, def, next){
      yours it goes for (2.84). */
   const mon = enemyPickTarget(e, null) || activeMon();
   if(e.lurk || e.cunning){ breakCover(e); e._ambush = 0; }
+  /* an attack all the same (3.08: the Aria counts it). (3.09) No evasion
+     stops it — it simply takes, as in your hands — so it sees straight
+     through the haunting too: it lands, and a reflex it wakes is the Aria
+     alone. */
+  noteAriaAttack();
+  ariaPassesThrough(mon, true);
+  const seen = ariaPiercedNote();
   const dmg = Math.ceil((def.direct || 0.33) * e.maxHp);
   const before = mon.currentHp;
   mon.currentHp = Math.max(0, mon.currentHp - dmg);
-  { const arv = ariaState(); if(arv) arv.struck = true; }   // an attack all the same
   drainHp(pid('playerHp', mon), before, mon.currentHp, monMaxHp(mon));
   battleMsg(`🕊 ${name} uses <b>Conversio</b> — with nobody to raise, the light turns outward and takes ` +
-            `<b>${before - mon.currentHp}</b>.`);
+            `<b>${before - mon.currentHp}</b>.` + seen);
   setTimeout(next, 1100);                   // (a fall is dealt with as the next one moves)
 }
 
@@ -2397,7 +2411,7 @@ function enemyCounter_unused(t, idx, dmg, delay){
     const before = m.currentHp;
     m.currentHp = Math.max(0, m.currentHp - back);
     m.lastDamageTaken = back;
-    const ar = ariaState(); if(ar) ar.struck = true;
+    noteAriaAttack();
     counterDrift(document.getElementById('enemyBob-'+idx), document.getElementById('enemyBob-'+idx));
     drainHp(pid('playerHp'), before, m.currentHp, monMaxHp(m));
     showDamageNumber(pid('playerBob'), back);
@@ -3290,11 +3304,12 @@ function enemyActs(i, e){
 
   /* ---- an ATTEMPT: from here on this is an attack ---- */
   /* Every damaging move an enemy ATTEMPTS is remembered — once per move,
-     landed or not. The Haunting Aria remembers too: any attack on your side,
-     even one that passes straight through, makes the apparition's next strike
-     certain. And whatever hid this monster is gone. */
+     landed or not. The Haunting Aria remembers too: (3.08) any attack on your
+     side, even one that passes straight through, adds 1 to his vengeance —
+     once for the whole move, however many hits or targets it has. And
+     whatever hid this monster is gone. */
   noteWrath();
-  { const arv = ariaState(); if(arv) arv.struck = true; }
+  noteAriaAttack();
   e._blow = newBlowId('e');                       // one attack: its strikes share this (Precognition, 2.97)
   if(e.lurk || e.cunning){ breakCover(e, ex.spendLurk); renderStatusBadges(); }
   if(e._windup === move) e._windup = null;
@@ -3351,24 +3366,33 @@ function enemyStrikeOn(ctx, step, done){
   }
   /* A turn of Haunting Aria covers the whole FIELD, so whoever stands in it is
      untouchable; and if the Whalelord is struck with no Aria running, he sings
-     by reflex and the blow finds nothing where he was. */
+     by reflex and the blow finds nothing where he was (ariaPassesThrough —
+     3.08: the same for every kind of attack of theirs). */
+  /* (3.09) A blow that cannot be dodged — a mind-read (their Abyssal Gaze,
+     their stolen Tachypsychia's own blows) or a Third Eye — sees straight
+     through the haunting too ("evasion piercing moves should hit through the
+     evasion"): it lands, and a reflex it wakes is the Aria alone. */
+  const tacE = getESide('tachy');
+  const sure = !!ex.mindRead || !!(tacE && tacE.owner === e) || seesThrough(e);   // a Third Eye reads you (2.97)
   const ariaCover = ariaFieldEvasion() > 0;
-  const canReflex = !ariaCover && !ariaActive() && !passivesMuted(mon)        // a ✦ Curse quiets the reflex (2.97)
-                 && (MOVES[mon.species]||[]).some(m=>m[6] && m[6].aria);
-  if(ariaCover || (canReflex && ariaReflex(mon))){
-    noteAriaCover();                         // the untouchable turn has done its work this round
+  if(ariaPassesThrough(mon, sure)){          // (the untouchable turn has done its work this round)
     dodgePlayer(); floatMiss(pid('playerBob'), 'MISS');
     if(ariaCover) battleMsg('The attack passes harmlessly through.');
     if(last()){ e._ambush = 0; burnOut(e, ex); }   // a Ghost Flame spends itself either way
     const rip = playerRiposte(e);            // it dealt nothing: a Knight answers
     return pause(rip ? 1500 : 800);
   }
+  /* (3.09) It saw straight through the haunting: said on the line that says
+     what the blow did (the "used" line is gone a moment later) — once an
+     attack, unless the second of yours it reaches has news of its own (the
+     first woke him; the second meets the song he woke into). */
+  const seen0 = ariaPiercedNote();
+  const seen = (seen0 && seen0 !== ctx.seenSaid) ? seen0 : '';
+  if(seen) ctx.seenSaid = seen;
   /* Every evasion source rolls separately and stacks multiplicatively — unless
      the blow is a mind-read (their Abyssal Gaze, their stolen Tachypsychia). */
   const tacAny = getPStatus(0,'tachy');
   const tac = (tacAny && tacAny.owner === mon.uid) ? tacAny : null;   // its caster's alone (2.80)
-  const tacE = getESide('tachy');
-  const sure = !!ex.mindRead || !!(tacE && tacE.owner === e) || seesThrough(e);   // a Third Eye reads you (2.97)
   const evadeChance = sure ? 0 : playerEvasionFrom(e);
   /* Same reasoning as the bonus action: if Tachypsychia is about to expire and
      has never once caused a miss, make this one miss. */
@@ -3415,13 +3439,12 @@ function enemyStrikeOn(ctx, step, done){
       const rel = stoopRelease(e, ex.stoop);
       const before = mon.currentHp;
       mon.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, mon.currentHp - (rel.hits || 0));
-      { const ar = ariaState(); if(ar) ar.struck = true; }
-      flashHit($('#' + pid('playerBob')));
+      flashHit($('#' + pid('playerBob')));          // (its attack was counted at the attempt — 3.08)
       showDamageNumber(pid('playerBob'), before - mon.currentHp);
       drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon));
       playSfx('hit_taken');
       battleMsg(`🦅 <b>PIERCING STOOP</b> — it comes down out of the sun. ` +
-                `<b>${before - mon.currentHp}</b> health simply gone. Nothing stops it.`);
+                `<b>${before - mon.currentHp}</b> health simply gone. Nothing stops it.` + seen);
       renderStatusBadges();
       return setTimeout(()=>{
         if(mon.currentHp <= 0) return setTimeout(onMonFainted, 650);
@@ -3436,7 +3459,7 @@ function enemyStrikeOn(ctx, step, done){
          multiplier and returned nothing at all. */
       dmg = Math.ceil((e.lastDamageTaken || 0) * ex.reflect);
       if(dmg <= 0){
-        battleMsg(`${name} tried ${move[1]} — but there was nothing to give back.`);
+        battleMsg(`${name} tried ${move[1]} — but there was nothing to give back.` + seen);
         e._ambush = 0;
         return setTimeout(ctx.next, 800);
       }
@@ -3531,8 +3554,7 @@ function enemyStrikeOn(ctx, step, done){
       }
       if(totalBlocked > 0) floatBlocked(pid('playerBob'), totalBlocked);
       if(totalTaken > 0) noteHurt(mon);       // a hit: its Focus is broken this round (2.97)
-      const ar = ariaState();
-      if(ar) ar.struck = true;                // the dead whale takes note
+      /* (the dead whale took note at the attempt: one attack, counted once — 3.08) */
       if(ui.battle.arenaImmortal && mon.currentHp <= 0){
         mon.currentHp = monMaxHp(mon);          // back to full, test continues
         msg += ' (immortal — restored)';
@@ -3545,6 +3567,7 @@ function enemyStrikeOn(ctx, step, done){
       msg += hitCount > 1
         ? `${name} struck ${hitCount} times for ${totalTaken} damage${who}!`
         : `${name} dealt ${totalTaken} damage${who}!`;
+      msg += seen;                            // (3.09) …straight through the haunting
       if(totalBlocked > 0) msg = `🛡 Blocked ${totalBlocked}! ` + msg;
       if(dreamFed) msg += ' It feeds on the dream — twice as hard!';
       if(ex.pierce && blockStacksOf(mon)) msg += ' The purple flame passes straight through your block!';
@@ -3804,6 +3827,16 @@ function enemyFollowUps(i, e, move, ctx, next){
     const me = d && d.mon;
     if(!me || !standing(d)) return then();
     setFocus(me);
+    /* (3.08) another attack, as far as the Aria is concerned: counted, and its
+       untouchable turn (or the Whalelord's reflex) lets it through */
+    noteAriaAttack();
+    const covered = ariaFieldEvasion() > 0;
+    if(ariaPassesThrough(me, seesThrough(e))){          // (3.09: a Third Eye sees straight through it)
+      dodgePlayer(); floatMiss(pid('playerBob'), 'MISS');
+      if(covered) battleMsg(`${label} — and passes harmlessly through.`);
+      return setTimeout(then, 650);
+    }
+    const seen = ariaPiercedNote();
     if(!seesThrough(e) && Math.random() < playerEvasionFrom(e)){   // (a Third Eye cannot miss, 2.97)
       dodgePlayer(); floatMiss(pid('playerBob'), dodgeWord(me));
       battleMsg(`${label} — and misses.`);
@@ -3823,12 +3856,11 @@ function enemyFollowUps(i, e, move, ctx, next){
     showDamageNumber(pid('playerBob'), before - me.currentHp);
     floatBlocked(pid('playerBob'), soaked);
     drainHp(pid('playerHp'), before, me.currentHp, monMaxHp(me));
-    const ar = ariaState(); if(ar) ar.struck = true;
     if(before > me.currentHp) noteHurt(me);
     /* an Overcharge repeat that lands makes it forget one more (2.97) */
     const forgot = (repeatOf && before > me.currentHp) ? mindPassivesLanded(e, [me], true) : [];
     battleMsg(`${label} — ${before - me.currentHp}!` + (fed > 0 ? ` 🌿 Their seeds drink deep — ${fed} HP to each of them.` : '') +
-              (forgot.length ? ' ' + forgot.join(' ') : ''));
+              (forgot.length ? ' ' + forgot.join(' ') : '') + seen);
     setTimeout(then, forgot.length ? 1300 : 750);
   };
   /* Their Overcharge repeats a blow that REACHED you, even one your block

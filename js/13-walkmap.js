@@ -94,8 +94,14 @@ function thingMidX(t){
   return t.x + ox + (t.w || 1) / 2;
 }
 /* A person on the deck (not a door, a sign or a body on the floor): turns to
-   look at you while you are beside them. */
+   look at you while you are beside them. (3.07) `faceR`: someone who sits
+   facing right (to a table on their right, say) — turned back that way when
+   you walk on. */
 function thingTurns(t){ return !!(t.sprite && !t.walk && !t.rot && !t.still); }
+function thingFaceNear(t, p, near){
+  const dx = p ? p.x + 0.5 - thingMidX(t) : 0;
+  faceRight(t.el, near && Math.abs(dx) > 0.05 ? dx > 0 : !!t.faceR);
+}
 
 /* Each deck: its grid, who stands where, and where its painting sits — all in
    TILE units, so the numbers mean the same at any zoom. */
@@ -664,6 +670,7 @@ function renderWalkDeck(id){
       ? `<img src="assets/npc/${t.sprite}.png" alt=""${spin} onerror="walkArtMissing(this,'${(t.icon||'').replace(/'/g,'')}',${fallPx},${t.rot||0})">`
       : `<span style="font-size:${fallPx}px;line-height:1;">${t.icon||''}</span>`;
     world.appendChild(e); t.el = e;
+    if(t.faceR) faceRight(e, true);     // (3.07) sat facing right
     /* A task: a yellow "!" bobbing over their head, nine tenths of a tile tall. */
     /* Knocked silly: a slow spiral just above the head. Placed by its corner,
        not by a centring shift — a shift underneath the spin made it orbit a
@@ -905,7 +912,7 @@ function refreshWalk(){
   d.things.forEach(t=>{
     if(!t.el) return;
     t.el.classList.toggle('near', near.includes(t));
-    if(thingTurns(t)) faceRight(t.el, near.includes(t) && p.x + 0.5 > thingMidX(t) + 0.05);
+    if(thingTurns(t)) thingFaceNear(t, p, near.includes(t));
   });
   /* …and whatever else the deck says is beside you (2.91: in Cosa Nostia, in
      disguise, the Family's men walking past): d.nearActs(d, p) → [{ key,
