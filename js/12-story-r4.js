@@ -510,7 +510,14 @@ function whaleWallCaptain(){
 
 function confirmWhaleDive(){
   const g = r4();
-  if((g.whaleWins||0) >= WHALE_WINS_TO_GHOST && !g.ghostMet) return quietWater();
+  /* Once you have been through them, they let you past to him — until his
+     question has been answered (3.10). It used to ask `!ghostMet`, which is
+     saved the moment he first speaks ("Something older"), while his answer
+     (ghostAccepted) is saved three screens later, after "Avenge me": a
+     meeting left in between — the app closed, the menu opened — left a save
+     that had met him but never answered, and every dive after it was the
+     enraged wall again, for good. Now an unanswered meeting plays again. */
+  if((g.whaleWins||0) >= WHALE_WINS_TO_GHOST && !g.ghostAccepted) return quietWater();
   storyModal('🐋', 'The whales are enraged',
     `Every one of them is facing the ship, and they have not moved in hours.<br><br>` +
     `<i>Going over the side now means going through them.</i><br><br>` +
