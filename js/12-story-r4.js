@@ -2180,7 +2180,13 @@ function culpritBattle(i){
 }
 function startCulpritFight(i){
   if(!ensurePool()) return;
-  if(i === 0) return beginBattle(Object.assign(culpritBattle(0), { onWin: ()=> startCulpritFight(1) }));
+  if(i === 0){
+    /* (3.29) The reveal has been seen: a fight broken off after this starts
+       again with a word from him, not the whole reveal (culpritLock). */
+    const g = r4();
+    if(!g.culpritFought){ g.culpritFought = true; saveProfile(); }
+    return beginBattle(Object.assign(culpritBattle(0), { onWin: ()=> startCulpritFight(1) }));
+  }
   storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'),
     crewName('scientist_supervisor'),
     `<b>"She was the hands."</b> He steps over her fallen monsters without looking down.<br><br>` +
@@ -2230,12 +2236,37 @@ function escapeLock(){
              label:null, stage:()=> stageRoom(), auto:()=> runWakeUp() };
   return null;
 }
+/* (3.29) Named, but not yet beaten. The app closed somewhere between "You're
+   the culprit!" and the supervisor's last monster, or the fight was lost: the
+   two of them stand at the front with the crew in the way, and nothing there
+   started the fight again — the save was stuck. Now any deck puts you back
+   below the two of them and it starts again: the whole reveal if the fighting
+   had not begun (culpritFought), else a word from him and the fight from
+   Mireille. The lock's scene runs only when a deck is drawn, and a deck drawn
+   means the reveal or the fight is no longer on the screen. */
+function culpritLock(){
+  const g = r4();
+  if(!(g.culpritNamed && !g.solved && !g.escapeStage)) return null;
+  return { deck:'laboratory_deck', x:UP_FRONT_YOU.x, y:UP_FRONT_YOU.y,
+           ghost:{ x:UP_FRONT_GHOST.x, y:UP_FRONT_GHOST.y }, face:'u',
+           label:null, auto:()=> resumeCulprit() };
+}
+function resumeCulprit(){
+  if(!r4().culpritFought) return accuseCulprit();
+  storyModal(npcPortrait('scientist_supervisor','🧑‍🔬',130,'transparent'),
+    crewName('scientist_supervisor'),
+    `<b>"Back again?"</b> He has not moved an inch. Mireille has not looked up.<br><br>` +
+    `<b>"You should have kept counting whales."</b>`,
+    ()=> startCulpritFight(0), { bg:'battle_laboratory_deck', subtitle:'Laboratory' });
+}
+
 /* Whatever scene has you, if any. The walkmap asks only this. */
-function storyLock(){ return corpseLock() || escapeLock() || revivalLock(); }
+function storyLock(){ return corpseLock() || culpritLock() || escapeLock() || revivalLock(); }
 
 async function startEpilogue(){
   const g = r4();
   g.escapeStage = 'epilogue';
+  delete g.culpritFought;                      // (3.29) beaten: the lock has no more use for it
   await saveProfile();
   go('laboratory_deck');                       // the lock starts the epilogue itself
 }
