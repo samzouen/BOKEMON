@@ -195,7 +195,7 @@ const R5_DECKS = {
 "####.##..#######..##.#####","####.##..###.###..#...####","..........................","..........................",
 "########..######..########","########..######..########","########..######..########","########..######..########",
 "########.########.########","########.########.########","#####.##.###..###.########","####..##...#..#...###.####",
-"..........................","..........................","##.........#..#.#........#","#.........##..####.##.#.##",
+"..........................","..........................","##.........#..#.#........#","#.........##..####.####.##",
 "##.......##...####.####.##","####..####################","####..####################","####..####################",
 "####..####################","####..####################","####..####################",
     ],
@@ -227,7 +227,8 @@ const R5_DECKS = {
         when:()=> r5().gateBeaten },
       { x:2,  y:31, sprite:'soldato1', icon:'💂', verb:'Talk', act:()=> r5GateSoldato(),
         when:()=> !r5().gateBeaten, mark:()=> r5().heardTunnels },
-      { x:21, y:31, sprite:'lighthouse_keeper', icon:'🏮', verb:'Talk', act:()=> r5Keeper() },
+      /* (3.31) on the sand above his lighthouse, not on its roof (the square he stood on is the roof now) */
+      { x:21, y:30, sprite:'lighthouse_keeper', icon:'🏮', verb:'Talk', act:()=> r5Keeper() },
       { x:5,  y:37, sprite:'ship_captain', icon:'⚓', verb:'Captain', act:()=> r5Captain() },
       { x:4,  y:38, walk:true, verb:'Board', where:'The Vane Shear', act:()=> r5Board() },
     ],
@@ -1148,48 +1149,63 @@ const R5_DECKS = {
     rows:[
 "#ggggggggggg==#BBBBBBBBBB#","#BBBBBBggggg==#BBBBBBBBBB#","#BBBBBBBBBBB==#BBBBBBBBBB#","#BBBBBBBBBBB==#BBBBBBBBBB#",
 "#BBBBBBBBBBB==#BBBBBBBBBB#","#BBBBBBBBBBB==#BBBBBBBBBB#","#BBBBBBBBBBB==#BBBBBBBBBB#","..........................",
-"..........................","#gggggg.BBBBBBBBBB.gggggg#","#BBBBBB.BBBBBBBBBB.BBBBBB#","#BBBBBB.BBBBBBBBBB.BBBBBB#",
-"#BBBBBB.BBBBBBBBBB.BBBBBB#","#BBBBBB.BBBBBBBBBB.BBBBBB#","#BBBBBB.BBBBBBBBBB.BBBBBB#","#BBBBBB.BBBBBBBBBB.BBBBBB#",
-"#BBBBBB.BBBBBBBBBB.BBBBBB#","#BBBBBB.BBBBBBBBBB.BBBBBB#","........BBBBBBBBBB........","..........======..........",
-"..........======..........","#BBBBBB,,,,,,,,,,,,BBBBBB#","#BBBBBB,,t,,,,,,,,,BBBBBB#","#BBBBBB,,,,,,,,,,,,BBBBBB#",
-"#BBBBBB,,,,,,,,,,,,BBBBBB#","#BBBBBB,,t,,~~,,,,,BBBBBB#","#BBBBBB,,,,,~~,,,,,BBBBBB#","#BBBBBB,,,,,,,,,,,,BBBBBB#",
-"#BBBBBB,,,,,,,,,,,,BBBBBB#","#BBBBBB,,,,,,,,,,,,BBBBBB#","#BBBBBB,,,,,,,,,,,,BBBBBB#","..........................",
-"..........................","#,,,,,,,,,##==####BBBBB###","#,,,,,,,,,##==####BBBBB###","#,,,,,,,,,##==####BBBBB###",
-"#wwwwwwwww##==####BBBBB###","############==####BBBBB###","############==######x#####",
+"..........................","=gggggg.BBBBBBBBBB.gggggg=","=BBBBBB.BBBBBBBBBB.BBBBBB=","=BBBBBB.BBBBBBBBBB.BBBBBB=",
+"=BBBBBB.BBBBBBBBBB.BBBBBB=","=BBBBBB.BBBBBBBBBB.BBBBBB=","=BBBBBB.BBBBBBBBBB.BBBBBB=","=BBBBBB.BBBBBBBBBB.BBBBBB=",
+"=BBBBBB.BBBBBBBBBB.BBBBBB=","=BBBBBB.BBBBBBBBBB.BBBBBB=","........BBBBBBBBBB........","..........======..........",
+"..........======..........",".BBBBBB,,,,,,,,,,,,BBBBBB=","=BBBBBBt,,,,,,,,,,tBBBBBB=","=BBBBBB,,,t,,,,,,,,BBBBBB=",
+"=BBBBBB,,,,,~~,,,,,BBBBBB=","=BBBBBB,,,,~~~~,,,,BBBBBB=",".BBBBBBg,,t~~~~,,,gBBBBBB=",".BBBBBB,,,,,~~,,,,,BBBBBB=",
+".BBBBBB,,,,,,,,,,,,BBBBBB=",".BBBBBBg,,,,,,,,,,gBBBBBB.",".BBBBBB,,,,,,,,,,,,BBBBBB.","..........................",
+"#w........................","#w,,,,,,,,,,==####BBBBB###","#w,tt,,,,,tw==####BBBBB###","#wwwt,,,,,tw==####BBBBB###",
+"###ww,,ttttw==####BBBBB###","#####wwwwwww==####BBBBB###","############==######x#####",
     ],
     spawn:[12,19],
     arrive:{ church:[12,19], tailor:[18,23], harbour:[12,38], hill:[12,0],
              /* (3.03) out of the town's rooms, onto their doors */
-             nonna:[3,7], barber:[9,7], opera:[19,7], police:[3,18], post:[21,18], cafe:[7,23], trattoria:[7,28], gelateria:[18,28] },
+             nonna:[3,7], barber:[9,7], opera:[19,7], police:[3,18], post:[21,18], cafe:[7,23], trattoria:[3,31], gelateria:[21,31] },
+    /* (3.31) The church's roof and bell tower stand up over the street behind
+       it (rows 7–8): whoever walks there goes behind them, and they turn
+       see-through while you are near (walkOverlays, 13-walkmap.js). Traced
+       round the painting of 2026-10-20 — a new painting needs a new outline. */
+    over:[
+      { name:'church roof', foot:9, poly:[
+        [7.96,9.5],[7.96,8.86],[8.02,8.80],[8.17,8.80],[8.17,8.40],[8.24,8.30],[9.15,8.30],[9.16,8.18],[9.26,8.18],
+        [9.26,7.70],[9.38,7.70],[9.38,8.18],[9.48,8.18],[9.50,8.30],[10.44,8.30],[10.51,8.37],[10.51,8.76],[10.72,8.76],
+        [12.83,7.81],[12.90,7.70],[13.10,7.70],[13.17,7.80],[15.47,8.85],[15.53,8.92],[15.53,9.5]] },
+    ],
     things:[
-      { x:12, y:19, walk:true, verb:'In', where:'The Church', arrow:'up', act:()=> r5TownChurch() },
-      { x:18, y:23, walk:true, verb:'In', where:"Ugo's", arrow:'right', act:()=> goFloor('tailor', 'door') },
+      { x:12, y:19, w:2, walk:true, verb:'In', where:'The Church', arrow:'up', act:()=> r5TownChurch() },
+      /* (3.31) the café's and Ugo's side doors are two squares tall, as the painting has them */
+      { x:18, y:23, h:2, walk:true, verb:'In', where:"Ugo's", arrow:'right', act:()=> goFloor('tailor', 'door') },
       { x:12, y:38, walk:true, verb:'Down', where:'The Harbour', act:()=> r5TownDown() },
       { x:12, y:5,  w:2, verb:'Up the hill', act:()=> r5VillaRoad(), when:()=> !r5().hill },
       /* (2.92) once Figlio has walked you up, the steps are yours, to the top */
       { x:12, y:0,  w:2, walk:true, verb:'Up', where:'The Hilltop', act:()=> r5HillUp(), when:()=> !!r5().hill },
-      /* (2.92) Figlio, home from Region 3's band competition, outside the opera house */
-      { x:20, y:7,  sprite:'figlio', icon:'🎙️', verb:'Talk', act:()=> r5Figlio(), when:()=> !!r5().disguise,
+      /* (2.92) Figlio, home from Region 3's band competition, outside the opera house —
+         (3.31) by its right-hand door: the way in is the big one in the middle */
+      { x:21, y:7,  sprite:'figlio', icon:'🎙️', verb:'Talk', act:()=> r5Figlio(), when:()=> !!r5().disguise,
         mark:()=> !r5().figlioMet },
       /* (3.03) every house and shop on the streets has its room, and its people in it */
+      /* (3.31) a door the painting draws wide takes two squares (Nonna's and the barber's are narrow: one) */
       { x:3,  y:7,  walk:true, verb:'In', where:"Nonna's", arrow:'up', act:()=> r5RoomDoor('room_nonna') },
       { x:9,  y:7,  walk:true, verb:'In', where:"The barber's", arrow:'up', act:()=> r5RoomDoor('room_barber') },
-      { x:19, y:7,  walk:true, verb:'In', where:'The opera house', arrow:'up', act:()=> r5RoomDoor('room_opera') },
-      { x:3,  y:18, walk:true, verb:'In', where:'The police station', arrow:'up', act:()=> r5RoomDoor('room_police') },
-      { x:21, y:18, walk:true, verb:'In', where:'The post office', arrow:'up', act:()=> r5RoomDoor('room_post') },
-      { x:7,  y:23, walk:true, verb:'In', where:'The café', arrow:'left', act:()=> r5RoomDoor('room_cafe') },
-      { x:7,  y:28, walk:true, verb:'In', where:'The trattoria', arrow:'left', act:()=> r5RoomDoor('room_trattoria') },
-      { x:18, y:28, walk:true, verb:'In', where:'The gelateria', arrow:'right', act:()=> r5RoomDoor('room_gelateria') },
-      { x:12, y:25, w:2, h:2, verb:'Fountain', act:()=> r5Fountain() },
+      { x:19, y:7,  w:2, walk:true, verb:'In', where:'The opera house', arrow:'up', act:()=> r5RoomDoor('room_opera') },
+      { x:3,  y:18, w:2, walk:true, verb:'In', where:'The police station', arrow:'up', act:()=> r5RoomDoor('room_police') },
+      { x:21, y:18, w:2, walk:true, verb:'In', where:'The post office', arrow:'up', act:()=> r5RoomDoor('room_post') },
+      { x:7,  y:23, h:2, walk:true, verb:'In', where:'The café', arrow:'left', act:()=> r5RoomDoor('room_cafe') },
+      /* (3.30) the trattoria and the gelateria open onto the street below, as the painting has them */
+      { x:3,  y:31, w:2, walk:true, verb:'In', where:'The trattoria', arrow:'up', act:()=> r5RoomDoor('room_trattoria') },
+      { x:21, y:31, w:2, walk:true, verb:'In', where:'The gelateria', arrow:'up', act:()=> r5RoomDoor('room_gelateria') },
+      { x:11, y:24, w:4, h:4, verb:'Fountain', act:()=> r5Fountain() },        // (3.30) the painting's fountain is bigger
       { x:5,  y:35, walk:true, verb:'Look', act:()=> r5Belvedere() },
       { x:20, y:32, walk:true, verb:'Funicular', act:()=> r5TownFunicular() },
       /* the capos, at the café's tables: whichever you have beaten below —
          (2.95) and the Consigliere, once he has walked out of his ring. Each
          of them is one man, in one place: down there, or up here. */
       /* (3.18) …until the villa's door is broken: then they are all down on the Watch, under the villa */
-      { x:10, y:22, sprite:'capo_purple', icon:'🕴️', verb:'Capo', act:()=> r5CapoLook('purple'), when:()=> !!r5().capoPurple && !r5().sottoBeaten },
-      { x:10, y:25, sprite:'capo_black',  icon:'🕴️', verb:'Capo', act:()=> r5CapoLook('black'), when:()=> !!r5().capoBlack && !r5().sottoBeaten },
-      { x:8,  y:25, sprite:'consigliere', icon:'🕴️', verb:'Consigliere', act:()=> r5CapoLook('consigliere'), when:()=> !!r5().capoGrey && !r5().sottoBeaten },
+      /* (3.30) on the painting's chairs: two at the near table, one at the far one */
+      { x:11, y:23, sprite:'capo_purple', icon:'🕴️', verb:'Capo', act:()=> r5CapoLook('purple'), when:()=> !!r5().capoPurple && !r5().sottoBeaten },
+      { x:9,  y:23, sprite:'capo_black',  icon:'🕴️', verb:'Capo', act:()=> r5CapoLook('black'), when:()=> !!r5().capoBlack && !r5().sottoBeaten },
+      { x:9,  y:25, sprite:'consigliere', icon:'🕴️', verb:'Consigliere', act:()=> r5CapoLook('consigliere'), when:()=> !!r5().capoGrey && !r5().sottoBeaten },
     ],
     stealth:{ kind:'town', light:true, feel:0,
       guards:[
@@ -9108,11 +9124,11 @@ const R5_TOWN_HOUSES = [
   { name:'Opera house', x:15, y:0,  w:10, h:7,  door:[19,6],  roof:'#8f4a3a', grand:true },
   { name:'Police',      x:1,  y:10, w:6,  h:8,  door:[3,17],  roof:'#6f6a66' },
   { name:'Church',      x:8,  y:9,  w:10, h:10, door:[12,18], roof:'#5f6670', church:true },
-  { name:'Post office', x:19, y:10, w:6,  h:8,  door:[21,17], roof:'#b25a3c' },
+  { name:'Post office', x:19, y:10, w:6,  h:8,  door:[22,17], roof:'#b25a3c' },
   { name:'Café',        x:1,  y:21, w:6,  h:5,  door:[6,23],  roof:'#a8573e' },
-  { name:'Trattoria',   x:1,  y:26, w:6,  h:5,  door:[6,28],  roof:'#bb6a45' },
+  { name:'Trattoria',   x:1,  y:26, w:6,  h:5,  door:[4,30],  roof:'#bb6a45' },
   { name:'Tailor',      x:19, y:21, w:6,  h:5,  door:[19,23], roof:'#9a4d3a' },
-  { name:'Gelateria',   x:19, y:26, w:6,  h:5,  door:[19,28], roof:'#c27b52' },
+  { name:'Gelateria',   x:19, y:26, w:6,  h:5,  door:[22,30], roof:'#c27b52' },
   { name:'Funicular',   x:18, y:33, w:5,  h:5,  door:[20,33], roof:'#7a5a48' },
 ];
 const R5_TOWN_LAMPS = [[7,7],[18,7],[0,8],[25,8],[7,18],[18,18],[1,20],[24,20],[7,21],[18,21],[7,30],[18,30],[2,31],[23,31],[11,32],[14,32],[1,33],[9,33]];

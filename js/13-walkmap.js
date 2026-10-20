@@ -563,6 +563,12 @@ function walkCss(){
        top of whatever else it is doing */
     .walk-ent.face-r > img, .walk-ent.face-r > .walk-emoji, .walk-ent.face-r > .crowned-wrap,
     .scene-actor.face-r .sa-in > *, .walk-fish.face-r > *{scale:-1 1;}
+    /* (3.31) a piece of the painting that stands up in front of a street (the
+       Old Town's church roof), laid back over whoever walks behind it — and
+       see-through while you are near it (walkOverlays) */
+    .walk-over{position:absolute;pointer-events:none;background-repeat:no-repeat;transition:opacity .3s ease;}
+    .walk-over.see{opacity:.4;}
+    .walk-still .walk-over{transition:none !important;}
   `;
   document.head.appendChild(st);
 }
@@ -654,6 +660,10 @@ function renderWalkDeck(id){
   });
 
   const world = $('#walkWorld');
+  /* (3.31) whatever of the painting stands up over a street (d.over), laid
+     back over it — first, so that whoever stands in front of it, on its own
+     row or lower down, is drawn after it and over it */
+  walkOverlays(world, d, artUrl, nat);
   /* people and doorways */
   d.things.forEach(t=> { if(t.el) t.el = null; });
   deckThings(d).forEach(t=>{
@@ -768,8 +778,10 @@ function renderWalkDeck(id){
     const kind = both ? 'both' : (t.arrow || (t.verb === 'Up' ? 'up' : 'down'));
     const e = document.createElement('div');
     e.className = 'walk-stair';
-    e.style.left = (t.x*WALK_T + (WALK_T-A)/2) + 'px';
-    e.style.top  = (t.y*WALK_T + (WALK_T-A)/2) + 'px';
+    /* (3.31) in the middle of a doorway two squares wide (or tall), under the
+       painted door, not on its first square */
+    e.style.left = (t.x*WALK_T + ((t.w || 1)*WALK_T - A)/2) + 'px';
+    e.style.top  = (t.y*WALK_T + ((t.h || 1)*WALK_T - A)/2) + 'px';
     e.innerHTML = ARROW[kind];
     world.appendChild(e);
   });
@@ -846,6 +858,92 @@ function walkTeardown(){
   if(typeof stopStealth === 'function') stopStealth();
 }
 
+/* (3.31) A painting drawn the way the town's are — fronts facing you, roofs
+   reaching up the page — has buildings that stand up over the street behind
+   them: the Old Town's church roof and bell tower reach up across rows 7–8.
+   Somebody walking along there should go BEHIND the roof, not across the top
+   of it. A deck says so with `over`:
+     over:[{ poly:[[x,y], …], foot }]
+   poly — the outline of what stands up, in tiles, traced round the painting;
+   foot — the first row of the building's own ground: anybody on a row above
+          it is behind it, anybody on it or below is in front (default: the
+          outline's lowest row).
+   Each is the painting itself, cut to that outline and laid back over the
+   painting at the same place — nothing is painted twice, and nothing has to
+   be cut out of the picture by hand. While you or the ghost stand where it
+   hides you, or a step from there, it turns see-through, so nobody loses
+   sight of themselves; the Family's men walk behind it as anybody would.
+   Only over the deck's own painting: a map drawn from its grid while it has
+   none has nothing standing up to cover anybody. */
+function walkOverlays(world, d, artUrl, nat){
+  if(!d.over || !d.art || artUrl !== `assets/zones/${d.art}.png`) return;
+  d.over.forEach((o, i)=>{
+    const xs = o.poly.map(p=> p[0]), ys = o.poly.map(p=> p[1]);
+    const x0 = Math.floor(Math.min(...xs)), y0 = Math.floor(Math.min(...ys));
+    const x1 = Math.ceil(Math.max(...xs)),  y1 = Math.ceil(Math.max(...ys));
+    const foot = o.foot != null ? o.foot : Math.floor(Math.max(...ys));
+    const pc = (v, a, b)=> ((v - a) / (b - a) * 100).toFixed(3) + '%';
+    const clip = 'polygon(' + o.poly.map(([x, y])=> pc(x, x0, x1) + ' ' + pc(y, y0, y1)).join(', ') + ')';
+    const el = document.createElement('div');
+    el.className = 'walk-over';
+    el.dataset.over = o.name || String(i);
+    el.style.left = (x0 * WALK_T) + 'px';
+    el.style.top = (y0 * WALK_T) + 'px';
+    el.style.width = ((x1 - x0) * WALK_T) + 'px';
+    el.style.height = ((y1 - y0) * WALK_T) + 'px';
+    el.style.backgroundImage = `url('${artUrl}')`;
+    el.style.backgroundSize = `${nat[0]*d.bs*WALK_T}px ${nat[1]*d.bs*WALK_T}px`;
+    el.style.backgroundPosition = `${(d.bx - x0)*WALK_T}px ${(d.by - y0)*WALK_T}px`;
+    el.style.webkitClipPath = clip;
+    el.style.clipPath = clip;
+    el.style.zIndex = 10 + foot;          // over row foot-1 (10 + y), under row foot (later in the page)
+    /* the walls it lies over keep their shading when Path is on (the same
+       cells as the deck's own, so the same switch shows and hides them) */
+    const shade = document.createElement('div');
+    shade.className = 'walk-shade';
+    for(let y = y0; y < y1; y++) for(let x = x0; x < x1; x++){
+      if(!wSolid(d, x, y)) continue;
+      const c = document.createElement('i');
+      c.style.cssText = `left:${(x - x0)*WALK_T - 1}px;top:${(y - y0)*WALK_T - 1}px;` +
+                        `width:${WALK_T + 2}px;height:${WALK_T + 2}px;`;
+      shade.appendChild(c);
+    }
+    el.appendChild(shade);
+    el._near = walkOverNear(o.poly, foot);
+    world.appendChild(el);
+  });
+}
+/* The squares where somebody standing would be hidden by the outline, and
+   every square a step from one of those: "near" it. Somebody is drawn in the
+   middle of their square, from the top of it to a little below it. */
+function walkOverNear(poly, foot){
+  const inside = (x, y)=>{
+    let c = false;
+    for(let i = 0, j = poly.length - 1; i < poly.length; j = i++){
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  const xs = poly.map(p=> p[0]), ys = poly.map(p=> p[1]);
+  const near = new Set();
+  for(let y = Math.floor(Math.min(...ys)) - 1; y < foot; y++)
+    for(let x = Math.floor(Math.min(...xs)) - 1; x <= Math.ceil(Math.max(...xs)); x++){
+      const hid = [0.25, 0.5, 0.75].some(fx=> [0.05, 0.35, 0.65, 0.95, 1.1].some(fy=> inside(x + fx, y + fy)));
+      if(hid) [[0,0],[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx, dy])=> near.add((x + dx) + ',' + (y + dy)));
+    }
+  return near;
+}
+/* See-through while you (p) or the ghost (q) are near it; solid otherwise. */
+function walkOverRefresh(p, q){
+  const world = $('#walkWorld');
+  if(!world) return;
+  world.querySelectorAll('.walk-over').forEach(el=>{
+    const by = s=> !!(s && el._near && el._near.has(s.x + ',' + s.y));
+    el.classList.toggle('see', by(p) || by(q));
+  });
+}
+
 /* The camera follows you until the map runs out. At an edge the map stops and
    YOU carry on across the stage, so there is never a black margin beyond the
    painting; walk back inland and you slide to the middle again. A map smaller
@@ -878,6 +976,7 @@ function refreshWalk(){
     gh.style.zIndex = 10 + q.y;
     faceRight(gh, w.ghostFaceX === 'r');
   }
+  walkOverRefresh(p, gh && w.ghostAt && w.ghostAt[w.deck]);   // (3.31) a roof you are behind: see-through
 
   /* a mark on each tile you could step onto — the only question you have */
   steps.innerHTML = '';
