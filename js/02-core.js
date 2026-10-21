@@ -59,6 +59,7 @@ const SFX_MAP = {
   stone_ultra:      'stone_ultra.mp3',
   // interface
   ui_click:         'ui_click.mp3',
+  ui_back:          'ui_back.mp3',        // (3.40) the quieter tap: a way back, a conversation's Continue (clickSound)
 };
 
 /* music track name -> filename in assets/bgm/ */
@@ -67,7 +68,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.38';
+const GAME_VERSION = '3.40';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -95,6 +96,7 @@ const BGM_MAP = {
   // climactic encounters
   battle_legendary: 'battle_legendary.mp3',   // Phoenix, Forest Guardian, the Dragon
   battle_padrino:   'battle_padrino.mp3',     // Don Padrino
+  battle_padrino_final: 'battle_padrino_final.mp3',   // (3.39) his last fight — the vault, round by round to Cyborg's fall (b.climax)
 };
 
 /* Try each track in turn; the first one that actually loads wins. */
@@ -190,9 +192,45 @@ try{
     const el = e.target.closest('button, .menu-card, .region-card, .challenge-card, .mon-index-card, .party-head, .stone-card, .drawer-item');
     if(!el || el.disabled) return;
     if(el.closest('.write-box, .quiz-write')) return;
+    const kind = clickSound(el);                     // (3.40) silent, the quieter one, or the click
+    if(kind === 'none') return;
+    if(kind === 'back') return playBackSfx();
     playSfx('ui_click');
   }, true);
 }catch(e){}
+/* (3.40) Which sound a tap makes — the designer: "a different sound hook for
+   'back buttons' so not everything sounds the same. Also, direction keys
+   should be silent to prevent overload of button press sounds … conversation
+   continue buttons should also be the more muted 'back' sound".
+     'none'   the walking arrows (`.wkey`), pressed over and over;
+     'back'   a way back — a "← …" button (`.back-link`, #backBtn), Cancel,
+              Close, ✕, "Not yet", "Back" — and a conversation's Continue:
+              the button of a box along the bottom (sceneSay), its "Leave"
+              (r5Ask's no; its yes is an action, and clicks), a story page's
+              Continue or "Leave it" (#sceneNext — "Dive" is an action);
+     'click'  everything else.
+   A button may say outright with data-sfx="none" / "back" / "click". */
+function clickSound(el){
+  if(!el) return 'click';
+  const set = el.closest('[data-sfx]');
+  if(set) return set.dataset.sfx;
+  if(el.classList.contains('wkey')) return 'none';
+  const label = (el.textContent || '').trim();
+  if(el.classList.contains('back-link') || el.id === 'backBtn' || /^←/.test(label)) return 'back';
+  if(/^(cancel|close|back|not yet|✕|×)$/i.test(label)) return 'back';
+  if(el.closest('.scene-say')) return el.dataset.a === '1' ? 'click' : 'back';
+  if(el.id === 'sceneBack') return 'back';
+  if(el.id === 'sceneNext') return /^dive$/i.test(label) ? 'click' : 'back';
+  return 'click';
+}
+/* The quieter tap: its own file if there is one (assets/sfx/ui_back.mp3),
+   else the click at under half its strength. */
+const BACK_FALLBACK_VOL = 0.45;
+function playBackSfx(){
+  const f = SFX_MAP.ui_back;
+  if(f && !audio.missing[f]) return playSfx('ui_back');
+  return playSfx('ui_click', { vol:BACK_FALLBACK_VOL });
+}
 
 /* (3.28) SOUND EFFECTS FROM MEMORY. On an iPad an <audio> element may only
    start when a tap has started it, and it fetches its file only when first
@@ -232,10 +270,11 @@ function playSfxSoon(event, waitMs){
   return null;
 }
 
-function playSfx(event){
+function playSfx(event, opts){
   try{
     const file = SFX_MAP[event];
     if(!file || !audio.unlocked || audio.missing[file]) return null;
+    const vol = (opts && opts.vol != null) ? Math.max(0, Math.min(1, opts.vol)) : 1;   // (3.40) a softer play of it (playBackSfx)
     /* (3.28) from memory, when it is there: one voice a sound, as the element
        was — asked again, it starts again */
     const buf = sfxBufferOf(file);
@@ -243,7 +282,7 @@ function playSfx(event){
       const prev = audio.sfxNow[file];
       if(prev){ try{ prev.src.stop(); }catch(e){} }
       const g = actx.createGain();
-      g.gain.value = 1;
+      g.gain.value = vol;
       g.connect(sfxGain);
       const node = actx.createBufferSource();
       node.buffer = buf;
@@ -282,10 +321,10 @@ function playSfx(event){
       try{
         const now = (actx && actx.currentTime) || 0;
         entry.gain.gain.cancelScheduledValues(now);
-        entry.gain.gain.setValueAtTime(1, now);
-      }catch(e){ entry.gain.gain.value = 1; }
+        entry.gain.gain.setValueAtTime(vol, now);
+      }catch(e){ entry.gain.gain.value = vol; }
     } else {
-      entry.el.volume = sfxVolume();               // non-Web-Audio fallback
+      entry.el.volume = sfxVolume() * vol;         // non-Web-Audio fallback
     }
     entry._fadeTimer && clearTimeout(entry._fadeTimer);
     entry.el.currentTime = 0;
@@ -448,6 +487,10 @@ function playBattleMusic(isBoss, opts){
   }
   const chain = [];
 
+  /* (3.39) the designer: "battle_padrino_final is indeed for padrino's last
+     fight" — the vault (r5ClimaxBattle, `climax`), the Test Arena's copy of
+     it too; his own theme if the file is not there */
+  if(b.climax) chain.push('battle_padrino_final');
   if(b.npcId === 'padrino' || b.npcId === 'padrino2') chain.push('battle_padrino');   // (2.95: padrino2, his regal dress from Region 5 on)
   const legendary = (b.enemies||[]).some(e=>SPECIES[e.species] && SPECIES[e.species].tier==='legendary')
                  || b.guardianTrial || b.scriptedLoss;
