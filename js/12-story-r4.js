@@ -1793,13 +1793,40 @@ function hunts(){
     g.hunts = {
       day: today(),
       a: { sci:who[0], species: R4_WILD[Math.floor(Math.random()*R4_WILD.length)], reward:5 },
-      b: { sci:who[1], species: (Math.random()<0.5 ? 'water_starter'
-              : R4_ELITE[Math.floor(Math.random()*R4_ELITE.length)]), reward:10 },
+      b: { sci:who[1], species: huntRarePick(), reward:10 },
       doneA:false, doneB:false,
     };
     saveProfile();
   }
+  /* (3.41) a rare request made before 3.41 asked for one: two more join it */
+  const rb = g.hunts.b;
+  if(rb && !g.hunts.doneB && huntWants(rb).length < HUNT_RARE_COUNT){
+    rb.species = huntRarePick(huntWants(rb));
+    saveProfile();
+  }
   return g.hunts;
+}
+/* (3.41) The rare request — the designer: "please increase the variety of
+   elite/starter monsters requested by the scientists to 3, up from 1, to make
+   it easier to find. any one of the 3 will work." Three of the Turtle and the
+   elites, never the same twice; beating any one of them while diving brings
+   the specimen. (One, half the time the Turtle, until then.) */
+const HUNT_RARE_POOL = ['water_starter', ...R4_ELITE];
+const HUNT_RARE_COUNT = 3;
+function huntRarePick(keep){
+  const out = (keep || []).filter(sp=> HUNT_RARE_POOL.includes(sp));
+  const rest = HUNT_RARE_POOL.filter(sp=> !out.includes(sp)).sort(()=> Math.random() - 0.5);
+  return out.concat(rest).slice(0, HUNT_RARE_COUNT);
+}
+/* What a request asks for: one species, or (the rare one, 3.41) any of three. */
+function huntWants(d){ return d ? [].concat(d.species || []).filter(Boolean) : []; }
+/* "a Turtle", "a Turtle, an Otter or a Loong" */
+function huntNames(d, bold){
+  const nm = sp=> { const n = SPECIES[sp] ? SPECIES[sp].name : sp; return bold ? `<b>${escapeHtml(n)}</b>` : escapeHtml(n); };
+  const list = huntWants(d).map(nm);
+  const first = huntWants(d)[0], name0 = first && SPECIES[first] ? SPECIES[first].name : (first || '');
+  const art = /^[aeiou]/i.test(name0) ? 'an' : 'a';
+  return art + ' ' + (list.length > 1 ? list.slice(0, -1).join(', ') + ' or ' + list[list.length - 1] : (list[0] || ''));
 }
 /* Called whenever a wild dive is won — checks both hunts against what fell. */
 async function checkHunts(defeated){
@@ -1809,11 +1836,12 @@ async function checkHunts(defeated){
   let got = null;
   [['a','doneA'],['b','doneB']].forEach(([k,dk])=>{
     if(h[dk] || !h[k]) return;
-    if(defeated.includes(h[k].species)){
+    const hit = huntWants(h[k]).find(sp=> defeated.includes(sp));   // (3.41) any one of them
+    if(hit){
       h[dk] = true;
       state.inventory.tokens = (state.inventory.tokens||0) + h[k].reward;
       got = got || [];
-      got.push({ sci:h[k].sci, species:h[k].species, reward:h[k].reward });
+      got.push({ sci:h[k].sci, species:hit, reward:h[k].reward });
     }
   });
   if(got) await saveProfile();
@@ -1826,30 +1854,44 @@ function huntRequest(key){
   const d = h[key];
   if(!d) return;
   const done = key === 'a' ? h.doneA : h.doneB;
-  const nm = SPECIES[d.species] ? SPECIES[d.species].name : d.species;
+  const wants = huntWants(d), many = wants.length > 1;
+  const px = many ? 92 : 130;
   storyModal(npcPortrait('scientist'+d.sci,'🧑‍🔬',120,'transparent'), crewName('scientist'+d.sci),
     done
       ? `<b>"You brought it. That is the whole afternoon accounted for."</b><br><br>` +
         `<i>Nothing more today.</i>`
-      : `<b>"This one."</b> ${crewFirst('scientist'+d.sci)} turns a plate towards you.<br><br>` +
-        `<div style="display:flex;justify-content:center;margin:10px 0;">
-           ${monPortrait(d.species, 130, { view:'front', bare:true })}
+      : `<b>"${many ? 'Any one of these.' : 'This one.'}"</b> ${crewFirst('scientist'+d.sci)} turns a plate towards you.<br><br>` +
+        `<div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:10px 0;">
+           ${wants.map(sp=> `<div style="text-align:center;">${monPortrait(sp, px, { view:'front', bare:true })}` +
+             `<div style="font-weight:800;">${escapeHtml(SPECIES[sp] ? SPECIES[sp].name : sp)}</div></div>`).join('')}
          </div>` +
-        `<b>${escapeHtml(nm)}</b><br><br>` +
-        `<i>"Beat one and bring the readings back. ${tokenIcon(15)} ${d.reward} tokens for the trouble."</i>`,
+        `<i>"Beat ${many ? 'one of them' : 'one'} and bring the readings back. ${tokenIcon(15)} ${d.reward} tokens for the trouble."</i>`,
     ()=>go(ui.prevScreen === 'challenge' ? 'challenge' : 'laboratory_deck'),
     { bg:'battle_laboratory_deck', subtitle:'Laboratory',
-      action: done ? null : { label:'🌊 Capture', fn:()=>go('weather_deck') } });
+      action: done ? null : { label:'🌊 Capture', fn:()=> captureFromLab() } });
+}
+/* (3.41) The designer: "when accessing capture from the scientist's screen,
+   please set the player at the dive square on the grid immediately instead of
+   the staircase" — on the Weather Deck beside Pell, at the ladder over the
+   side (his Dive is right there). */
+const DIVE_SQUARE = { x:6, y:18 };
+function captureFromLab(){
+  const w = walkState();
+  w.at = w.at || {};
+  w.at.weather_deck = { x:DIVE_SQUARE.x, y:DIVE_SQUARE.y };
+  w.face = 'u';
+  if(cuainAboard()){ w.ghostAt = w.ghostAt || {}; w.ghostAt.weather_deck = { x:DIVE_SQUARE.x, y:DIVE_SQUARE.y }; }
+  ui.walkFresh = false;
+  go('weather_deck');
 }
 
 function huntsPanel(){
   const h = hunts();
   const row = (k, dk)=>{
     const d = h[k]; if(!d) return '';
-    const nm = SPECIES[d.species] ? SPECIES[d.species].name : d.species;
     return `<button class="hunt-row ${h[dk]?'done':''}" data-hunt="${k}">
       ${npcPortrait('scientist'+d.sci,'🧑‍🔬',36,'transparent')}
-      <span><b>${escapeHtml(crewFirst('scientist'+d.sci))}</b> wants a <b>${escapeHtml(nm)}</b></span>
+      <span><b>${escapeHtml(crewFirst('scientist'+d.sci))}</b> wants ${huntNames(d, true)}</span>
       <span class="hunt-pay">${h[dk] ? '✓' : tokenIcon(14)+' '+d.reward}</span>
     </button>`;
   };
