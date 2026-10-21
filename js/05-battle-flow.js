@@ -1516,13 +1516,15 @@ function resolveBattleMove(mv, target, results, opts){
   }
   /* (3.15) the psychics' support moves: Woolly Warmth, Transfusion, Kindle,
      Gallop, Glitch, and the Mime's Copycat. */
-  if(mv.mend || mv.transfuse || mv.kindle || mv.gallop || (mv.glitch && mv.mult == null) || mv.copy){
+  if(mv.mend || mv.transfuse || mv.kindle || mv.gallop || mv.enchant || mv.stargaze || (mv.glitch && mv.mult == null) || mv.copy){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
     if(mv.copy) return runCopycat(mon, mv, target);
     if(mv.glitch) return runGlitch(mon, mv, target);
     let line = '';
     if(mv.mend) line = castMend('player', mon, mv.mend, mv.name);
     else if(mv.transfuse) line = castTransfuse('player', mon, mv.transfuse, mv.name).line;
+    else if(mv.enchant) line = castEnchant('player', mon, mv.enchant, mv.name);      // (3.36) the Firefox's
+    else if(mv.stargaze) line = castStargazer('player', mon, mv.stargaze, mv.name);  // (3.37) its Stargazer
     else if(mv.kindle){
       const ok = castSideBuff('player', mon, 'kindle', { deal:mv.kindle.deal }, mv.kindle.turns, mv.name);
       line = ok ? `🔥 <b>${escapeHtml(mv.name)}</b> — for ${mv.kindle.turns} turns your side deals <b>${mv.kindle.deal}×</b>.`
@@ -1723,7 +1725,12 @@ function resolveBattleMove(mv, target, results, opts){
   if(mv.target==='MultiHit') return resolveMultiHit(mv, mon, correct);
 
   // Single / AOE (standard species moves + Low/Mid stone moves)
-  let factor = mv.isStone ? (correct>=mv.words ? mv.mult : 0) : moveFactor(mv.slot, mv.mult, mv.words, correct);
+  /* (3.35) Extinguish has no multiplier of its own (it is its health), so the
+     words decide only whether it goes off: all of them, or it misses. It
+     used to read as no multiplier at all — "missed!" with every word right. */
+  let factor = mv.isStone ? (correct>=mv.words ? mv.mult : 0)
+             : mv.extinguish ? ((noQuiz || correct >= mv.words) ? 1 : 0)
+             : moveFactor(mv.slot, mv.mult, mv.words, correct);
   if(mv.scale && correct > mv.words && factor > 0){
     factor = scaledFactor(mv, correct);
   }
@@ -1761,7 +1768,7 @@ function resolveBattleMove(mv, target, results, opts){
   }
   if(ui.battle) ui.battle.lastFactor = factor;   // (3.00) the whole blow, bonus and all: what full clones echo half of
   if(factor<=0){ playSfx('move_miss'); battleMsg(`${mv.name} missed! (${wordsTag(correct, mv)} words)`); setTimeout(advanceTurn,900); return; }
-  /* A wind-up (Grave Quake, Burn Bright): the words are spent now, the turn
+  /* A wind-up (Grave Quake): the words are spent now, the turn
      passes, and the blow comes down next turn for nothing. Not an attempt, so
      a Lurk holds through it. */
   if(mv.windup && !noQuiz){
@@ -2657,10 +2664,22 @@ function enemyBarrier(e, move, next){
 /* (3.15) The psychics' support moves in their hands. Each when it is worth
    it, and never the same one twice running (`_lastCast`). The Mime's
    Invisible Wall and Copycat are its own (enemyActs). */
-const PSY_SUPPORTERS = new Set(['puffball', 'nurse', 'ram', 'polygon', 'unicorn']);   // (3.26) the Firefox's Kindle went
+const PSY_SUPPORTERS = new Set(['puffball', 'nurse', 'ram', 'polygon', 'unicorn', 'firefox']);   // (3.26) the Firefox's Kindle went; (3.36) its Enchant came
 function foeSupportPick(e){
   const rows = (MOVES[e.species] || []).filter(r=> r[1] != null && r[2] == null && r[3] !== 'Passive' && r[6] && (e.level || 1) >= r[5]);
   const hurt = m=> hpOfMon(m) / Math.max(1, maxHpOfMon(m));
+  /* (3.36) a Firefox's spell: the strongest it knows, while its side has none
+     as strong up (and your dust would not scatter it) */
+  const spells = rows.filter(r=> r[6].enchant).sort((a, b)=> (b[6].enchant.deal || 0) - (a[6].enchant.deal || 0));
+  if(spells.length && !dustBlocks('enemy')){
+    const up = getESide('enchant');
+    if(!up || (up.deal || 0) < spells[0][6].enchant.deal) return spells[0];
+  }
+  /* (3.37) its Stargazer: when something of yours could dodge them — a Lurk,
+     a Mirage, an Aria, any evasion — and its side has none up */
+  const gaze = rows.find(r=> r[6].stargaze);
+  if(gaze && !getESide('stargaze') && !dustBlocks('enemy') &&
+     livingField().some(m=> playerEvasionFrom(e, m) > 0 || untouchable(m))) return gaze;
   for(const r of rows){
     const x = r[6];
     if(e._lastCast === r[1] || x.copy) continue;
@@ -2684,6 +2703,8 @@ function enemyPsySupport(e, move, next){
   let line = '';
   if(x.mend) line = castMend('enemy', e, x.mend, move[1]);
   else if(x.transfuse) line = castTransfuse('enemy', e, x.transfuse, move[1]).line;
+  else if(x.enchant) line = castEnchant('enemy', e, x.enchant, move[1]);          // (3.36)
+  else if(x.stargaze) line = castStargazer('enemy', e, x.stargaze, move[1]);     // (3.37)
   else if(x.kindle){
     const ok = castSideBuff('enemy', e, 'kindle', { deal:x.kindle.deal }, x.kindle.turns, move[1]);
     line = ok ? `🔥 ${name} uses <b>${escapeHtml(move[1])}</b> — for ${x.kindle.turns} turns their side deals <b>${x.kindle.deal}×</b>.`
@@ -3852,7 +3873,7 @@ function enemyActs(i, e){
     if(move && move[1] === 'Vita') e._vitaCast = true;
     e._lastCast = move ? move[1] : null;
   }
-  /* A Ghost Flame does one thing, and it takes two turns to do it. */
+  /* A Ghost Flame does one thing — (3.35) on its first turn, no wind-up. */
   if(e.species === 'ghost_flame'){
     const x = (MOVES.ghost_flame || []).find(m=>m[6] && m[6].extinguish && e.level >= m[5]);
     if(x) move = x;
@@ -3950,7 +3971,7 @@ function enemyActs(i, e){
   /* (3.15) the psychics' support moves — and a Glitch's Data Spike, or a
      Copycat's first copied attack, goes on as an ordinary blow */
   const sx = (move && move[2] == null && move[6]) || null;
-  if(sx && (sx.mend || sx.transfuse || sx.kindle || sx.gallop)) return enemyPsySupport(e, move, next);
+  if(sx && (sx.mend || sx.transfuse || sx.kindle || sx.gallop || sx.enchant || sx.stargaze)) return enemyPsySupport(e, move, next);
   if(sx && sx.glitch){ const g = enemyGlitch(e, move, next); if(g === true) return; move = g; }
   if(sx && sx.copy){
     const c = enemyCopycat(e, move);
@@ -3979,7 +4000,7 @@ function enemyActs(i, e){
     battleMsg(`🦅 ${name} climbs — <b>${n}</b> of ${ex.stoop.max}. It is much harder to see up there.`);
     return setTimeout(next, 900);
   }
-  /* A wind-up (Burn Bright, Grave Quake's first turn): it gathers, and a Lurk
+  /* A wind-up (Grave Quake's first turn): it gathers, and a Lurk
      holds through it. The move comes down on its next action. */
   if(ex.windup && e._windup !== move){
     e._windup = move;

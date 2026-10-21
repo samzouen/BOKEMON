@@ -67,7 +67,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.31';
+const GAME_VERSION = '3.37';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -90,6 +90,7 @@ const BGM_MAP = {
   battle_tranquil_forest: 'battle_tranquil_forest.mp3',
   battle_sacred_grove:    'battle_sacred_grove.mp3',
   battle_rocky_caverns:   'battle_rocky_caverns.mp3',
+  battle_encounter:       'battle_encounter.mp3',   // (3.34) a monster met on foot, in every region (walkEncounter)
 
   // climactic encounters
   battle_legendary: 'battle_legendary.mp3',   // Phoenix, Forest Guardian, the Dragon
@@ -439,6 +440,12 @@ function playBattleMusic(isBoss, opts){
      was leaking the wrong zone's battle theme into them. */
   const place = b.bgKey ? b.bgKey.replace(/^battle_/, '')
                         : ((ui.currentZone && ui.currentZone.id) || '');
+  /* (3.34) a monster met on foot, in any region: the walking meetings' one
+     track, already playing since the first flash (walkEncounter) — kept */
+  if(b.encounter && typeof ENCOUNTER_MUSIC !== 'undefined'){
+    playMusicChain(ENCOUNTER_MUSIC, { loop:true });
+    return;
+  }
   const chain = [];
 
   if(b.npcId === 'padrino' || b.npcId === 'padrino2') chain.push('battle_padrino');   // (2.95: padrino2, his regal dress from Region 5 on)

@@ -652,6 +652,9 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(dd) dmg *= (dd.deal || 1.25);               // multiplies WITH overheat
     const kd = getPStatus(0,'kindle');
     if(kd) dmg *= (kd.deal || 1.2);                // (3.15) Kindle — a Polygon's Overclock (the Firefox's went in 3.26)
+    const en = getPStatus(0,'enchant');
+    if(en) dmg *= (en.deal || 1.3);                // (3.36) the Firefox's Enchant, Grand Enchantment
+    dmg *= 1 + sideAura('player', 'empower');      // (3.36) its Stargazer's Cheer: +10% while it stands
     // Dragon Legacy stacks multiplicatively with the above
     if(ui.battle && ui.battle.legacyBonus) dmg *= (1 + ui.battle.legacyBonus);
     /* (Steel Soul's bonus is added above, before these buffs.) Steel Soul's
@@ -684,6 +687,9 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(ddE) dmg *= (ddE.deal || 1.25);
     const kdE = getESide('kindle');
     if(kdE) dmg *= (kdE.deal || 1.2);                        // (3.15) their Kindle — a Polygon's Overclock (3.26)
+    const enE = getESide('enchant');
+    if(enE) dmg *= (enE.deal || 1.3);                        // (3.36) their Firefox's Enchant
+    dmg *= 1 + sideAura('enemy', 'empower');                 // (3.36) their Firefox's Cheer
     dmg *= steelSoulAmp(attacker, false);                    // theirs hits harder too (2.90; every shield, 2.91)
     const softE = getEStatus(attacker,'softened');          // your weaken on it
     if(softE) dmg *= (1 - (softE.amount || 0.5));
@@ -1609,7 +1615,7 @@ const STATUS_KIND = {
   confusionField:'buff', dragonDance:'buff', machDragon:'buff', steelAegis:'buff',
   diamondDust:'buff', aria:'buff', wrath:'buff', tachy:'buff', steelSoul:'buff',
   shell:'buff', clones:'buff', vita:'buff', fracture:'buff', barrier:'buff',
-  kindle:'buff', gallop:'buff', iceBarrier:'buff', fleece:'buff',
+  kindle:'buff', gallop:'buff', iceBarrier:'buff', fleece:'buff', enchant:'buff', stargaze:'buff',
   /* debuffs: the side that put them there benefits */
   stunned:'debuff', paralysed:'debuff', softened:'debuff', charmed:'debuff', forgot:'debuff',
   charm:'debuff', disrupt:'debuff', disruptField:'debuff', asleep:'debuff',
@@ -2675,6 +2681,8 @@ function enemyBuffMultiplier(){
   const oh = getESide('overheat'); if(oh) m *= (oh.deal || 1.5);
   const dd = getESide('dragonDance'); if(dd) m *= (dd.deal || 1.25);
   const kd = getESide('kindle'); if(kd) m *= (kd.deal || 1.2);       // (3.15)
+  const en = getESide('enchant'); if(en) m *= (en.deal || 1.3);      // (3.36) their Firefox's Enchant
+  m *= 1 + sideAura('enemy', 'empower');                              // (3.36) and its Cheer
   m *= attackCut('enemy');                                            // (3.16) your Ice Barrier, your chill
   return m;
 }
@@ -3962,6 +3970,9 @@ function seesThrough(m){
   if(!m) return false;
   const p = passiveOf(m);
   if(p && p.thirdEye) return true;
+  /* (3.37) a Firefox's Stargazer: for its turns, nothing its side throws
+     can be dodged — as a Lock-On, for a while */
+  if(ui.battle && (m.uid ? getPStatus(0, 'stargaze') : getESide('stargaze'))) return true;
   return sideAura(m.uid ? 'player' : 'enemy', 'lockOn') > 0;
 }
 function atFullHealth(m){
@@ -4069,6 +4080,8 @@ function passiveDamageMult(attacker, defender, isPlayerAttacking, peek, opts){
   const pd = (defender && defender.species) ? passiveOf(defender) : null;
   if(pd){
     if(pd.armour) m *= (1 - pd.armour);
+    /* (3.37) the Hermit Sloth's: half from every attack until it has moved this round */
+    if(pd.braced){ const them = realMon(defender); if(them && notYetMoved(them)) m *= (1 - pd.braced); }
     if(pd.precog){ const them = realMon(defender); if(them) m *= precogFactor(them, attacker, pd.precog, peek); }
   }
   return m;
@@ -4113,6 +4126,17 @@ function turnStillToCome(m){
   const b = ui.battle;
   const row = b && (b.order || []).find(r=> r.mon === m);
   return !!(row && !row.acted);
+}
+/* (3.37) It has not moved yet this round: its place in the order still to
+   come, or no place in it (out since the order was drawn up) — or the
+   round's order not drawn up yet (the first strikes of a round, before
+   anybody moves). Its own turn begun, it has moved. */
+function notYetMoved(m){
+  const b = ui.battle;
+  if(!b || !m) return false;
+  if(b.orderRound !== b.roundNo) return true;
+  const row = (b.order || []).find(r=> r.mon === m);
+  return row ? !row.acted : true;
 }
 function forgottenNames(m){
   if(!m || !ui.battle) return [];
@@ -4209,8 +4233,18 @@ function soulfireBack(holder){
      ward        Tidal Ward (the Seadragon): its side takes 15% less.
      trueSight   Arcane Sight (the Firefox): the other side dodges its side's
                  strikes half as often (sightFactor).
-     meditate    (3.26) Meditate (the Firefox's Stargazer, the Quetzal's
-                 Shimmering Plumage): +15% for every turn it ends untouched,
+     empower     (3.36) Cheer — (3.37) the Firefox's Blazing Speed, with
+                 `speed`: while it stands, its side deals 15% more
+                 (computeDamage); 10%, with Arcane Sight, in 3.36.
+     speed       (3.37) Blazing Speed: it moves three steps sooner
+                 (initiativeOf), itself only.
+     braced      (3.37) the Hermit Sloth's: half from every attack until it
+                 has moved in the round (notYetMoved, passiveDamageMult).
+     shakeOff    (3.37) the Hermit Sloth's: at the end of every turn one of
+                 the other side's marks on itself comes off (shakeOffMarks,
+                 endRound) — its own, not its side's.
+     meditate    (3.26) Meditate (the Quetzal's Shimmering Plumage; the
+                 Firefox's Stargazer until 3.36): +15% for every turn it ends untouched,
                  to +60%; a hit starts it again (meditateStacks).
      sleepBack   Lullaby Reflex (the Nurse): every strike that reaches it has
                  a 50% chance to put the attacker to sleep for its next turn.
@@ -4442,6 +4476,38 @@ function sylphCleanse(){
   });
   renderStatusBadges();
 }
+/* (3.37) The Hermit Sloth's own (`shakeOff`): at the end of every turn one
+   of the other side's marks on ITSELF comes off — the worst first. A
+   monster's own marks only (a freeze, a nap, a stun, a muddle, a blinding, a
+   forgotten move, a weakened blow): never its side's (a Curse, a seed, a
+   burn, a field stay). The same in either side's hands. */
+const SHAKE_ORDER = ['iceTomb', 'asleep', 'stunned', 'paralysed', 'discombobulate', 'blinded', 'forgot', 'softened'];
+const SHAKE_WORDS = { iceTomb:'the ice', asleep:'its sleep', stunned:'the stun', paralysed:'the stun', discombobulate:'its confusion',
+                      blinded:'the blinding light', forgot:'its forgetting', softened:'its weakness' };
+function shakeOffMarks(){
+  if(!ui.battle) return 0;
+  const lines = [];
+  ['player', 'enemy'].forEach(side=>{
+    const yours = side === 'player';
+    sideField(side).forEach(m=>{
+      const p = passiveOf(m);
+      if(!p || !p.shakeOff || hpOfMon(m) <= 0) return;
+      for(let k = 0; k < p.shakeOff; k++){
+        const type = SHAKE_ORDER.find(t=>{
+          const st = yours ? getMStatus(m, t) : getEStatus(m, t);
+          return st && statusOwner(t, st, side) !== side;
+        });
+        if(!type) break;
+        if(yours) removeMStatus(m, type); else removeEStatus(m, type);
+        const def = passiveDefOf(m);
+        lines.push(`🦥 ${yours ? '' : 'Their '}${escapeHtml(monName(m))}'s ${escapeHtml((def && def.name) || 'passive')} — it shakes off ` +
+          `${SHAKE_WORDS[type] || 'a mark'}.`);
+      }
+    });
+  });
+  if(lines.length){ renderStatusBadges(); battleMsg(lines.join(' ')); }
+  return lines.length;
+}
 /* Sylph's Grace, at the start of the turn: each of the other side may fall
    asleep for its turn. */
 function sylphDrowse(){
@@ -4488,6 +4554,39 @@ function castSideBuff(side, caster, type, fields, turns, name){
   const ok = side === 'player' ? setPStatus(0, st) : setESide(st);
   renderStatusBadges();
   return ok;
+}
+/* (3.37) The Firefox's Stargazer — the designer: "For 3 turns, your side
+   gains 100% hit chance against evasion": for `turns` turns nothing the
+   caster's side throws can be dodged (seesThrough reads it), as a Plasma
+   Manta's Lock-On does while it stands. Either side; their dust scatters
+   it, yours holds it open. Returns the line to say. */
+function castStargazer(side, caster, def, name){
+  const yours = side === 'player', turns = (def && def.turns) || 3;
+  const ok = castSideBuff(side, caster, 'stargaze', {}, turns, name);
+  const who = yours ? '' : `${escapeHtml(monName(caster))} uses `;
+  return ok
+    ? `🔭 ${who}<b>${escapeHtml(name)}</b> — for ${turns} turns nothing ${yours ? 'your' : 'their'} side throws can be dodged.`
+    : `🔭 ${who}${escapeHtml(name)} — but ${yours ? 'their' : 'your'} diamond dust clouds the stars.`;
+}
+/* (3.36) The Firefox's Enchant and Grand Enchantment — the designer: "change
+   firefox to be a supporting companion with strong attack buffs such as
+   enchant". For `turns` turns every attack of the caster's side deals
+   `deal`× — and, with `init`, the side moves that many steps sooner. One
+   spell at a time: cast again, its turns start again, and one already up
+   that is stronger (a Grand Enchantment under an Enchant) stays as strong.
+   The same in either side's hands. Returns the line to say. */
+function castEnchant(side, caster, def, name){
+  const yours = side === 'player';
+  const cur = yours ? getPStatus(0, 'enchant') : getESide('enchant');
+  const deal = Math.max(def.deal || 1.3, (cur && cur.deal) || 0);
+  const init = Math.max(def.init || 0, (cur && cur.init) || 0);
+  const turns = def.turns || 3;
+  const ok = castSideBuff(side, caster, 'enchant', init ? { deal, init } : { deal }, turns, name);
+  const who = yours ? '' : `${escapeHtml(monName(caster))} uses `;
+  return ok
+    ? `🪄 ${who}<b>${escapeHtml(name)}</b> — for ${turns} turns ${yours ? 'your' : 'their'} side deals <b>${deal}×</b>` +
+      (init ? ' and moves a step sooner.' : '.')
+    : `🪄 ${who}${escapeHtml(name)} — but ${yours ? 'their' : 'your'} diamond dust scatters the spell.`;
 }
 /* Woolly Warmth (the Ram): every one of its side on the field, by a share
    of the Ram's own health. */
@@ -4888,11 +4987,14 @@ function initiativeOf(side, mon){
   const b = ui.battle;
   const p = passiveOf(mon);
   if(p && p.first) v += 1;                                   // Lightning Cat, either side
-  if(p && p.slow) v -= p.slow;                               // (3.15) Carapace, Hermit's Patience: a step later
+  if(p && p.slow) v -= p.slow;                               // (3.15) Carapace a step later; (3.37) the Hermit Sloth three
+  if(p && p.speed) v += p.speed;                             // (3.37) the Firefox's Blazing Speed: three steps sooner
   v += sideAura(side, 'slipstream');                         // (3.15) a Plasma Manta on its side: all a step sooner
   v -= sideAura(side === 'player' ? 'enemy' : 'player', 'undertow');   // (3.27) a Seadragon on the other side: all a step later
   const gal = side === 'player' ? getPStatus(0,'gallop') : getESide('gallop');
   if(gal) v += (gal.init || 1);                              // (3.15) a Unicorn's Gallop
+  const ench = side === 'player' ? getPStatus(0,'enchant') : getESide('enchant');
+  if(ench && ench.init) v += ench.init;                      // (3.36) a Firefox's Grand Enchantment
   /* "In an enemy's hands this always strikes first." The per-monster order
      had quietly dropped it: Swift Strike and its cousins stopped leading. */
   if(side === 'enemy'){
@@ -4941,6 +5043,7 @@ function buildInitiativeOrder(){
   const b = ui.battle;
   /* A fresh round: nobody of yours has acted yet. */
   b.roundActed = []; b.control = null;
+  b.orderRound = b.roundNo;                      // (3.37) the order this round's (notYetMoved)
   const rows = [];
   livingField().forEach(m=> rows.push(playerRow(m)));
   livingEnemies().filter(e=> !e.rewinder && !e.broken).forEach(e=>{   // Cyborg never takes a turn in the tear (2.94), nor broken (3.19)
@@ -5121,6 +5224,7 @@ function endRound(){
   }
 
   sylphCleanse();                                // (3.15) a Sylph lifts one of the other side's marks
+  shakeOffMarks();                               // (3.37) a Hermit Sloth shakes one off itself
   endDragonLegacy();                             // a Legacy spent this turn is over
   tickCompanionTurns();                          // a companion out spends one of its turns
   tickFoePairTurns();                            // and theirs (2.87)
@@ -5581,6 +5685,7 @@ function beginBattle(config){
     concertFight: !!config.concertFight,
     figlio: !!config.figlio,          // he leads every round
     catacomb: !!config.catacomb,      // their ghosts arrive lurking
+    encounter: !!config.encounter,    // (3.34) met on foot: the walking meetings' one track (walkEncounter)
     scriptedLoss: config.scriptedLoss||null,
     coreSpar: config.coreSpar || null,   // a training spar with the Monkey King (2.86): { uid, tier, hp }
     arenaChallenge: config.arenaChallenge || null,   // (3.11) a story fight in the Test Arena: nothing after it counts (08-screens2.js)
@@ -6722,6 +6827,9 @@ function ownBuffMultiplier(){
   if(dd) m *= (dd.deal || 1.25);
   const kd = getPStatus(0,'kindle');
   if(kd) m *= (kd.deal || 1.2);            // (3.15) Kindle — a Polygon's Overclock (3.26)
+  const en = getPStatus(0,'enchant');
+  if(en) m *= (en.deal || 1.3);            // (3.36) the Firefox's Enchant
+  m *= 1 + sideAura('player', 'empower');  // (3.36) and its Cheer
   m *= wrathDamageBonus();                 // every grudge held makes you hit harder
   m *= comboMultiplier(activeMon());       // a blow you read makes the next one bigger
   m *= terrorizeFactor();                  // something on the field is frightening
@@ -6850,7 +6958,11 @@ function passiveBits(p, atk){
     `to deal <b>${p.crit.mult || 2}×</b>`);
   if(p.hitCap)       bits.push(`can never lose more than <b>${Math.abs(p.hitCap - 1/3) < 0.01 ? 'a third' : Math.round(p.hitCap * 100) + '%'}</b> of its health ` +
     `to a single hit (<b>Carapace</b>) — what gets past its shields is cut down to that`);
-  if(p.slow)         bits.push(`moves <b>a step later</b> than it otherwise would`);
+  if(p.slow)         bits.push(`moves <b>${p.slow > 1 ? p.slow + ' steps' : 'a step'} later</b> than it otherwise would`);
+  if(p.speed)        bits.push(`moves <b>${p.speed > 1 ? p.speed + ' steps' : 'a step'} sooner</b> than it otherwise would`);
+  if(p.braced)       bits.push(`takes <b>${Math.round(p.braced * 100)}% less</b> from every attack until it has moved in the round`);
+  if(p.shakeOff)     bits.push(`at the end of every turn shakes off <b>one</b> mark the other side has put on it — asleep, stunned, frozen, ` +
+    `confused, blinded, forgetting or weakened (a mark on its whole side — a Curse, a seed, a burn — stays)`);
   if(p.slipstream)   bits.push(`speeds its whole side (<b>Slipstream</b>): while it stands, every monster of its side on the field — itself too — moves <b>a step sooner</b>`);
   if(p.lockOn)       bits.push(`locks its side on (<b>Lock-On</b>): while it stands, nothing any monster of its side throws can be dodged — ` +
     `not a Lurk, a Mirage or any other evasion; a block still soaks it`);
@@ -6858,6 +6970,8 @@ function passiveBits(p, atk){
   if(p.undertow)     bits.push(`drags the other side back (<b>Undertow</b>): while it stands, every monster of the other side moves <b>a step later</b>`);   // (3.27)
   if(p.trueSight)    bits.push(`sees through tricks (<b>Arcane Sight</b>): while it stands, the other side dodges its side's strikes ` +
     `<b>${Math.round(p.trueSight * 100)}% less often</b> — a Lurk, a Mirage or a certain dodge included`);
+  if(p.empower)      bits.push(`fires its side up: while it stands, every attack of its side deals ` +
+    `<b>${Math.round(p.empower * 100)}% more</b>`);
   if(p.meditate)     bits.push(`<b>Meditates</b>: every turn it ends untouched, its attacks deal <b>+${Math.round(p.meditate * 100)}%</b> more, ` +
     `up to <b>+${Math.round(p.meditate * (p.meditateMax || 4) * 100)}%</b>; a hit that gets through to it starts it again`);
   if(p.sleepBack)    bits.push(`soothes its attackers (<b>Lullaby Reflex</b>): every strike that reaches it has a <b>${Math.round(p.sleepBack * 100)}%</b> chance ` +
@@ -6945,6 +7059,17 @@ function moveEffectText(mv, mon, atk){
   if(mv.kindle) out.push(
     `<b>${escapeHtml(mv.name)}.</b> For <b>${mv.kindle.turns} turns</b> every attack of your side deals <b>${mv.kindle.deal}×</b> ` +
     `(+${Math.round((mv.kindle.deal - 1) * 100)}%), multiplying with Overheat and Dragon Dance. Their Diamond Dust smothers it; yours holds it open.`);
+  /* (3.36) the Firefox's: Enchant, Grand Enchantment (castEnchant) */
+  if(mv.enchant) out.push(
+    `<b>${escapeHtml(mv.name)}.</b> For <b>${mv.enchant.turns || 3} turns</b> every attack of your side deals <b>${mv.enchant.deal}×</b> ` +
+    `(+${Math.round((mv.enchant.deal - 1) * 100)}%), multiplying with Overheat, Dragon Dance and Kindle` +
+    (mv.enchant.init ? `; and your side moves <b>a step sooner</b>` : '') +
+    `. Cast again, its turns start again. Their Diamond Dust scatters it; yours holds it open.`);
+  /* (3.37) the Firefox's Stargazer (seesThrough) */
+  if(mv.stargaze) out.push(
+    `<b>${escapeHtml(mv.name)}.</b> For <b>${mv.stargaze.turns || 3} turns</b> every attack of your side <b>hits</b>: nothing it throws can be dodged — ` +
+    `not a Lurk, a Mirage or any other evasion — and a blinded one of yours does not go wide. A block still soaks it. ` +
+    `Their Diamond Dust scatters it; yours holds it open.`);
   if(mv.gallop) out.push(
     `<b>${escapeHtml(mv.name)}.</b> For <b>${mv.gallop.turns} turns</b> every monster of your side moves <b>${mv.gallop.init > 1 ? mv.gallop.init + ' steps' : 'a step'} sooner</b> ` +
     `in the turn order — ahead of an enemy that would otherwise go first. Their Diamond Dust stops it.`);
@@ -7464,7 +7589,7 @@ const STATUS_LABELS = {
   dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
   vita:'🕊 Vita', jaws:'🔥 Held Fast', bogged:'🌫 Bogged', lurk:'🌑 Lurk', cunning:'🌘 Cunning',
   forgot:'💭 Forgot', fracture:'⏳ Spacetime Fracture', barrier:'🧱 Barrier', iceBarrier:'🧊 Ice Barrier',
-  kindle:'🔥 Kindled', gallop:'🦄 Gallop', blinded:'🔆 Blinded', fleece:'🐑 Fleece',
+  kindle:'🔥 Kindled', gallop:'🦄 Gallop', blinded:'🔆 Blinded', fleece:'🐑 Fleece', enchant:'🪄 Enchanted', stargaze:'🔭 Stargazer',
 };
 /* A pill's words: most are their label and the turns left; a forgotten move
    (2.97) says which, and lasts the one turn. */

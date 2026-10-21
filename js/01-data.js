@@ -168,7 +168,7 @@ const SPECIES = {
   quetzal:         { name:'Quetzal',        tier:'wild',  types:['Psychic','Flying'], rate:7,  nerfedRate:5,  base:93, evo:[18],    evoMult:1.5, color:'#3aa070', glyph:'羽' },
   /* a Caladrius in miniature: half its attack given up for health (Pacificus 50%) */
   nurse:           { name:'Nurse',          tier:'wild',  types:['Psychic'],          rate:7,  nerfedRate:5,  base:94, evo:[11,25], pacificus:0.5, color:'#f0a0a8', glyph:'护' },
-  hermit_sloth:    { name:'Hermit Sloth',   tier:'wild',  types:['Psychic','Water'],  rate:7,  nerfedRate:5,  base:94, evo:[11,25], color:'#8a9a7a', glyph:'懒' },
+  hermit_sloth:    { name:'Hermit Sloth',   tier:'elite', types:['Psychic','Water'],  rate:11, nerfedRate:11, base:94, evo:[21,41], color:'#8a9a7a', glyph:'懒' },   // (3.36) elite, two evolutions still
   unicorn:         { name:'Unicorn',        tier:'wild',  types:['Psychic'],          rate:7,  nerfedRate:5,  base:95, evo:[18],    evoMult:1.5, color:'#d8d0f0', glyph:'角' },
   /* (3.24) the designer: "change ram to wild with 1 evolution, psychic,
      support role, you can keep the moveset" — an elite with no evolution
@@ -183,7 +183,7 @@ const SPECIES = {
   ladybird:        { name:'Ladybird',       tier:'elite', types:['Psychic','Flying'], rate:11, nerfedRate:11, base:97, evo:[21,41], color:'#d8342c', glyph:'瓢' },
   mime:            { name:'Mime',           tier:'elite', types:['Psychic'],          rate:11, nerfedRate:11, base:97, evo:[21,41], color:'#f0f0f0', glyph:'丑' },
   /* a fox mage */
-  firefox:         { name:'Firefox',        tier:'elite', types:['Psychic','Fire'],   rate:11, nerfedRate:11, base:97, evo:[],      color:'#e86a3a', glyph:'巫' },
+  firefox:         { name:'Firefox',        tier:'wild',  types:['Psychic','Fire'],   rate:7,  nerfedRate:5,  base:97, evo:[11,25], color:'#e86a3a', glyph:'巫' },   // (3.36) wild, two evolutions
   seadragon:       { name:'Seadragon',      tier:'elite', types:['Psychic','Water'],  rate:11, nerfedRate:11, base:96, evo:[41],    evoMult:1.5, color:'#3a7ab8', glyph:'蛟' },
   plasma_manta:    { name:'Plasma Manta',   tier:'elite', types:['Psychic','Flying'], rate:11, nerfedRate:11, base:97, evo:[],      color:'#8a5ae8', glyph:'鲼' },
   sylph:           { name:'Sylph',          tier:'elite', types:['Psychic','Fairy'],  rate:11, nerfedRate:11, base:98, evo:[21,41], color:'#a8e0c8', glyph:'灵' },
@@ -593,11 +593,13 @@ const MOVES = {
                     ['Power1','Chill',0.45,'Single',4,5],
                     ['Power2','Peekaboo',null,'Passive',0,18,{passive:{cunning:{first:0.5, after:0.5}}}],
                     ['Ultimate','Wail',0.9,'AOE',8,25,{softenHit:{chance:1.0, amount:0.5}}]],
-  /* It burns bright for a turn, then puts itself out on you. */
+  /* It puts itself out on you. (3.35) The designer: "ghost flame should
+     explode after only 1 turn, not two" — no Burn Bright wind-up any more:
+     Extinguish comes down the turn it is used, on either side. */
   ghost_flame:     [['Basic','Flicker',0.25,'Single',2,1],
                     ['Power1','Will-o\'-Wisp',0.45,'Single',4,5],
                     ['Power2','Foxfire',0.6,'AOE',8,18],
-                    ['Ultimate','Extinguish',null,'AOE',8,25,{windup:{name:'Burn Bright', say:'{name} burns brighter and brighter…'}, extinguish:{hpMult:1.5}}]],
+                    ['Ultimate','Extinguish',null,'AOE',8,25,{extinguish:{hpMult:1.5}}]],
   /* Riposte: Cunning once, and any blow that deals him nothing is answered. */
   goblin_knight:   [['Basic','Rusted Blade',0.3,'Single',2,1],
                     ['Power1','Shield Bash',0.4,'AOE',4,1,{stunHit:0.20}],   // (3.27) every foe, 20% stun each (one foe at 0.45 until then)
@@ -695,11 +697,19 @@ const MOVES = {
                     ['Ultimate','Transfusion',null,'Self',8,25,{transfuse:{pct:0.30}}],
                     ['Passive','Selfless Heart',null,'Passive',0,1,{statNote:true}]],
   /* "passively slower but passive retaliation" — and its Ultimate pays back
-     a hit it has taken this round. */
+     a hit it has taken this round. (3.36) The designer: "hermit sloth is now
+     elite and still has 2 evolutions" — at 21 and 41, as the elites evolve,
+     its moves at the elites' levels, and an elite's Max. */
   hermit_sloth:    [['Basic','Slow Swipe',0.3,'Single',2,1],
-                    ['Power1','Hook Claw',0.45,'Single',4,5],
-                    ['Power2','Hermit\'s Patience',null,'Passive',0,11,{passive:{slow:1, retaliate:0.4}}],
-                    ['Ultimate','Pent-up Fury',1.0,'Single',8,25,{revenge:1.5}]],
+                    ['Power1','Hook Claw',0.45,'Single',4,1],
+                    /* (3.37) The designer: "if it has not yet moved this turn, it takes 50%
+                       less damage from attacks. Gives sloth -3 initiative. Remove the hitback
+                       … instead the sloth cleanses one debuff on itself (not its wave) each
+                       turn. Help me name this passive" — Hermit's Patience (a step later,
+                       0.4× back at every attack) until then. */
+                    ['Power2','Slow and Steady',null,'Passive',0,21,{passive:{slow:3, braced:0.5, shakeOff:1}}],
+                    ['Ultimate','Pent-up Fury',1.0,'Single',8,41,{revenge:1.5}],
+                    ['Max','Pent-up Fury Max',1.25,'Single',8,51,{revenge:1.5}]],
   /* "team initiative support" (Gallop); Moonlit Retribution: every strike of
      its side the other side dodges banks 1.2× its ATK, which falls on all of
      them at the end of the turn — no dodging it ("counter to ghosts").
@@ -775,11 +785,24 @@ const MOVES = {
      Arcane Sight and Meditate. "arcane meteor should be improved to
      3.25/4.5" (2.5/3.0 until then) — and an Overcharge that comes up as it
      gathers brings it down the same turn (resolveBattleMove, enemyActs). */
+  /* (3.36) The designer: "firefox is now wild but has 2 evolutions … change
+     firefox to be a supporting companion with strong attack buffs such as
+     enchant". Wild (it evolves at 11 and 25, as the wild psychics do, and has
+     no Max), and its side's spellcaster: Enchant, 1.3× to every attack of
+     its side for 3 turns; Grand Enchantment, 1.5× and a step sooner
+     (castEnchant); Stargazer keeps Arcane Sight and cheers its side on — 10%
+     more while it stands (`empower`, in Meditate's place). Spellfire and
+     Arcane Meteor are gone. */
+  /* (3.37) The designer: "change stargazer to Blazing Speed: Firefox gains +3
+     initiative personally and also buffs team damage by 15%, both as a
+     passive. (power2) Change enchant to stargazer: For 3 turns, your side
+     gains 100% hit chance against evasion. Keep grand enchantment as is."
+     Stargazer is a 3-turn Lock-On for its side (seesThrough); Arcane Sight
+     went with the old Stargazer. */
   firefox:         [['Basic','Ember Bolt',0.3,'Single',2,1],
-                    ['Power1','Spellfire',0.5,'AOE',4,1],
-                    ['Power2','Stargazer',null,'Passive',0,21,{passive:{trueSight:0.5, meditate:0.15, meditateMax:4}}],
-                    ['Ultimate','Arcane Meteor',3.25,'Single',8,41,{windup:{name:'Gathering Starlight', say:'{name} raises its staff, and the air begins to glow…'}, focusBreak:0.5}],
-                    ['Max','Arcane Meteor Max',4.5,'Single',8,51,{windup:{name:'Gathering Starlight', say:'{name} raises its staff, and the air begins to glow…'}, focusBreak:0.5}]],
+                    ['Power1','Stargazer',null,'Self',4,5,{stargaze:{turns:3}}],
+                    ['Power2','Blazing Speed',null,'Passive',0,11,{passive:{speed:3, empower:0.15}}],
+                    ['Ultimate','Grand Enchantment',null,'Self',8,25,{enchant:{deal:1.5, turns:3, init:1}}]],
   /* "defensive/supportive, applies debuffs hydra uses": it weakens and sends
      to sleep; Tidal Ward, its side takes 15% less while it stands. (3.27)
      "Name the pair Psionic Tide": Tidal Ward and Undertow — while it stands,

@@ -816,13 +816,15 @@ function catacombEncounter(d){
   ui.returnDeck = d.key;                  // flee, catch or explore on: back to this spot
   walkState().busy = true;
   stealthHold(true);
-  setTimeout(()=>{
+  /* (3.34) met on foot: the flashes, the black, the fight fading in, and the
+     walking meetings' own track (walkEncounter, 13-walkmap.js) */
+  walkEncounter(()=>{
     stealthHold(false);
     walkState().busy = false;
     walkTeardown();
     beginBattle({ waves:[wave], isNpc:false, allowCatch:true, name:'Something in the dark',
-      catacomb:true, bgKey:'battle_catacombs', onWin: ()=> resumeVictory() });
-  }, 350);
+      catacomb:true, bgKey:'battle_catacombs', encounter:true, onWin: ()=> resumeVictory() });
+  });
 }
 
 /* ---------- the painting, drawn from the grid ---------- */
