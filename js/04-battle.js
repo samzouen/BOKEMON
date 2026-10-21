@@ -453,7 +453,7 @@ function tickStatuses(){
       st.turnsLeft--;
       if(st.turnsLeft <= 0){
         list.splice(list.indexOf(st), 1); afterStatusGone(st.type, 'player');
-        if(st.type !== 'forgot') expired.push(STATUS_LABELS[st.type]||st.type);   // a forgotten move simply comes back (2.97)
+        if(st.type !== 'forgot' && st.type !== 'taunted') expired.push(STATUS_LABELS[st.type]||st.type);   // a forgotten move simply comes back (2.97); a taunt simply ends (3.38)
       }
     });
   });
@@ -1617,7 +1617,7 @@ const STATUS_KIND = {
   shell:'buff', clones:'buff', vita:'buff', fracture:'buff', barrier:'buff',
   kindle:'buff', gallop:'buff', iceBarrier:'buff', fleece:'buff', enchant:'buff', stargaze:'buff',
   /* debuffs: the side that put them there benefits */
-  stunned:'debuff', paralysed:'debuff', softened:'debuff', charmed:'debuff', forgot:'debuff',
+  stunned:'debuff', paralysed:'debuff', softened:'debuff', charmed:'debuff', forgot:'debuff', taunted:'debuff',   // (3.38) a taunt
   charm:'debuff', disrupt:'debuff', disruptField:'debuff', asleep:'debuff',
   discombobulate:'debuff', iceTomb:'debuff', curse:'debuff', chill:'debuff',
   leechSeed:'debuff', dot:'debuff', jaws:'debuff', bogged:'debuff',
@@ -3560,7 +3560,7 @@ function quickStrikeYours(e, mon, done){
   const before = mon.currentHp;
   breakShields('enemy', e, mon, e._blow, pid('playerBlk'), pid('playerBob'));   // their Dragon Dance, before it hits (3.13)
   const through = capHit(mon, applyBlock(mon, dmg, pid('playerBlk')));   // (3.15) a Carapace
-  if(through > 0) noteHurt(mon);                              // it broke a Focus (2.97)
+  if(through > 0) noteHurt(mon, e._blow);                     // it broke a Focus (2.97); an attack of its own (3.38)
   mon.lastDamageTaken = dmg;                                  // a reflection returns the full figure
   mon.currentHp = Math.max(b.allyUnkillable ? 1 : 0, mon.currentHp - through);
   if(b.arenaImmortal && mon.currentHp <= 0) mon.currentHp = monMaxHp(mon);
@@ -3952,14 +3952,39 @@ function battleMonByUid(uid){
 /* The real monster behind a blow's reference: yours by uid, theirs itself. */
 function realMon(ref){ return (ref && ref.uid) ? battleMonByUid(ref.uid) : (ref || null); }
 /* Something of the other side's has hurt it this round. */
-function noteHurt(m){
+function noteHurt(m, blow){
   if(!m || !ui.battle) return;
-  const s = bState(m);
-  s.hitRound = roundNo();
+  const s = bState(m), r = roundNo();
+  if(s.hitRound !== r) s.hitBlows = [];
+  s.hitRound = r;
+  /* (3.38) which attack it was (its `_blow`, or your action's key): Pent-up
+     Fury counts the attacks, not the strikes */
+  if(blow && !(s.hitBlows || (s.hitBlows = [])).includes(blow)) s.hitBlows.push(blow);
   if(s.focus) s.focus.hurt = true;                 // (3.15) a hit while it gathers (Arcane Meteor)
   s.meditate = 0;                                  // (3.26) Meditate starts again
 }
 function hurtThisRound(m){ return !!m && bState(m).hitRound === roundNo(); }
+/* (3.38) How many attacks of the other side have got through to it this
+   round. ONE ATTACK as the engine counts one (shieldBreakOf): all a move's
+   strikes, its Overcharge repeat and an echo of it; a quick attack and a
+   riposte are attacks of their own. A burn, an upkeep strike, an Aftershock,
+   an afterimage or a spike that rides on a blow is not an attack; nor is a
+   blow its shields soaked whole, or one it dodged. */
+function attacksThisRound(m){
+  if(!m || !ui.battle) return 0;
+  const s = bState(m);
+  return s.hitRound === roundNo() ? (s.hitBlows || []).length : 0;
+}
+/* (3.38) Pent-up Fury's pay-back — the designer: "1.5/1.75/2x damage for each
+   attack (not hit) it suffers that turn": `rv` [1.5, 1.75, 2] — one attack
+   of theirs this round 1.5×, two 1.75×, three or more 2× (a bare number: that
+   for any). 1 with none. The same either side. */
+function revengeFactor(m, rv){
+  if(!rv) return 1;
+  const steps = Array.isArray(rv) ? rv : [rv];
+  const n = attacksThisRound(m);
+  return n > 0 ? steps[Math.min(n, steps.length) - 1] : 1;
+}
 /* One attack, one id: every strike of it shares it (Precognition). Your
    actions use the action's number (monRef); a quick attack, a riposte and
    each attack of theirs take a fresh one. */
@@ -4182,6 +4207,60 @@ function forgetBest(m){
   addEStatus(m, st);
   return getEStatus(m, 'forgot') === st ? name : '';
 }
+/* ---------- TAUNT (3.38) ----------
+   The Hermit Sloth's Mocking Yawn — the designer: "puts a 1 turn taunt,
+   forcing enemy monsters to attack it with their most powerful moves on the
+   next turn". Every one the yawn gets through to is taunted for its next
+   turn: it throws its strongest attack (tauntPick), and a blow it aims at
+   one goes to the Sloth (enemyPickTarget; yours, promptTarget). An area move
+   still strikes them all. Yours: a 'taunted' status on the monster
+   ({ taunter }) that the round ages — one round if its turn this round is
+   still to come, else two, as Amnesia's. Theirs: the same with `until`,
+   cleared as each round begins. The other side's dust keeps it off and
+   sweeps it, as any mark; with the Sloth gone from the field it is over. A
+   monster that follows a script (a boss, the Don's dragon, Jax's three, the
+   eagle, the Caladrius…) keeps its own move, and aims it at the Sloth. */
+function tauntMark(t, by, def){
+  if(!t || !by || !ui.battle) return false;
+  const extra = Math.max(0, ((def && def.turns) || 1) - 1);
+  if(t.uid) setMStatus(t, { type:'taunted', taunter:by, turnsLeft:(turnStillToCome(t) ? 1 : 2) + extra, by:'enemy' });
+  else addEStatus(t, { type:'taunted', taunter:by, until:roundNo() + (turnStillToCome(t) ? 0 : 1) + extra, mine:true });
+  return !!(t.uid ? getMStatus(t, 'taunted') : getEStatus(t, 'taunted'));
+}
+/* The taunt on `m` while it holds — its taunter still standing on the field — or null. */
+function tauntOf(m){
+  if(!m || !ui.battle) return null;
+  const st = m.uid ? getMStatus(m, 'taunted') : getEStatus(m, 'taunted');
+  if(!st || !st.taunter) return null;
+  if(!m.uid && st.until != null && st.until < roundNo()) return null;
+  const t = st.taunter;
+  const there = t.uid ? livingField().includes(t) : (t.hp > 0 && (ui.battle.enemies || []).includes(t));
+  return there ? st : null;
+}
+function tauntName(st){ const t = st && st.taunter; return !t ? '' : t.uid ? displayName(t) : SPECIES[t.species].name; }
+/* The strongest attack it can throw this turn. Yours from its buttons (`list`,
+   unlockedMoves'): not a stone, a charge or a wind-up's first turn. Theirs
+   from its rows (foeMoveRows): not a wind-up, a climb, a charge or a copy. */
+function tauntPick(m, list){
+  const best = xs=> xs.sort((a, c)=> (c.v - a.v) || (c.i - a.i)).map(x=> x.it)[0] || null;
+  if(m.uid) return best((list || []).map((mv, i)=> ({ it:mv, i, v:yourMoveWeight(mv) })).filter(({ it:mv })=>
+    mv.available && mv.mult != null && mv.mult > 0 && !mv.isStone && !mv.charge && !mv.chargeSpend && !mv.chargeMore &&
+    (!mv.windup || mv.windupReady) && mv.target !== 'Status'));
+  const fg = forgottenNames(m);
+  return best(foeMoveRows(m).map((r, i)=> ({ it:r, i, v:foeMoveWeight(m, r) })).filter(({ it:r })=>{
+    const x = r[6] || {};
+    return r[2] > 0 && !fg.includes(r[1]) && !x.windup && !x.stoop && !x.charge && !x.copy && r[3] !== 'Charge';
+  }));
+}
+/* Whose move a taunt chooses: an ordinary fighter's, not one that follows a script. */
+const TAUNT_SCRIPTED_AI = new Set(['ankylo', 'cataclysm', 'dragon', 'tricer', 'firehound', 'maxer', 'stoop', 'caladrius']);
+function tauntTurnsMove(e){
+  if(!e || e.boss || e.rewinder || e.broken) return false;
+  if(TAUNT_SCRIPTED_AI.has(e.ai)) return false;
+  return !['cormorant', 'caladrius', 'ghost_flame', 'horned_lynx'].includes(e.species);
+}
+/* Its pill: "🥱 Taunted · Hermit Sloth" while it holds. */
+function tauntPill(m){ const st = tauntOf(m); return st ? `🥱 Taunted · ${escapeHtml(tauntName(st))}` : ''; }
 /* What a landed attack sets off on each target it hurt: Hypnosis, Amnesia.
    `attacker` is the real attacker; `victims` the real targets; `repeat` for
    an Overcharge repeat (Amnesia only). Returns message lines. */
@@ -4481,9 +4560,9 @@ function sylphCleanse(){
    monster's own marks only (a freeze, a nap, a stun, a muddle, a blinding, a
    forgotten move, a weakened blow): never its side's (a Curse, a seed, a
    burn, a field stay). The same in either side's hands. */
-const SHAKE_ORDER = ['iceTomb', 'asleep', 'stunned', 'paralysed', 'discombobulate', 'blinded', 'forgot', 'softened'];
+const SHAKE_ORDER = ['iceTomb', 'asleep', 'stunned', 'paralysed', 'discombobulate', 'blinded', 'taunted', 'forgot', 'softened'];   // (3.38) a taunt
 const SHAKE_WORDS = { iceTomb:'the ice', asleep:'its sleep', stunned:'the stun', paralysed:'the stun', discombobulate:'its confusion',
-                      blinded:'the blinding light', forgot:'its forgetting', softened:'its weakness' };
+                      blinded:'the blinding light', taunted:'the taunt', forgot:'its forgetting', softened:'its weakness' };
 function shakeOffMarks(){
   if(!ui.battle) return 0;
   const lines = [];
@@ -4847,7 +4926,7 @@ function beginRound(msg){
      they forgot until last round, they remember. */
   b.roundNo = (b.roundNo || 0) + 1;
   /* …and (3.25) a blinding of theirs that has had its turns sees again */
-  (b.enemies || []).forEach(e=> ['forgot', 'blinded'].forEach(k=>{ const f = getEStatus(e, k); if(f && f.until != null && f.until < b.roundNo) removeEStatus(e, k); }));
+  (b.enemies || []).forEach(e=> ['forgot', 'blinded', 'taunted'].forEach(k=>{ const f = getEStatus(e, k); if(f && f.until != null && f.until < b.roundNo) removeEStatus(e, k); }));   // (3.38) a taunt too
   advanceMirageWindows();
   b.roundMsg = msg || null;
   b._ariaPierced = null;                         // (3.09) a note no blow said is not carried over
@@ -6413,6 +6492,9 @@ function enemyPickTarget(e, move, ownChoice){
      blow of theirs — comes to it. (enemyTargetPlan asks for the AI's own
      choice, to say whom it shielded.) */
   if(!ownChoice){ const g = soulGuardian('player'); if(g) return g; }
+  /* (3.38) Taunted: the one that yawned at it, whoever it would rather have */
+  const tn = tauntOf(e);
+  if(tn && mine.includes(tn.taunter)) return tn.taunter;
   if(!enemyFocuses(e)) return mine[Math.floor(Math.random() * mine.length)];
   const cur = mine.find(m=> m.uid === b.foeFocus);
   const open = mine.filter(m=> seesThrough(e) || !untouchable(m));          // nothing hides from a Third Eye (2.97)
@@ -6656,6 +6738,12 @@ function unlockedMoves(m){
      turn — the button keeps its name and says so. */
   const fg = forgottenNames(m);
   if(fg.length) base.forEach(mv=>{ if(mv.available && fg.includes(mv.name)){ mv.available = false; mv.forgotten = true; } });
+  /* (3.38) Taunted (a Hermit Sloth's Mocking Yawn): its strongest attack only,
+     this turn — the other buttons keep their names and say so. */
+  if(tauntOf(m)){
+    const pick = tauntPick(m, base);
+    if(pick) base.forEach(mv=>{ if(mv.available && mv !== pick){ mv.available = false; mv.taunted = true; } });
+  }
   return base;
 }
 
@@ -6962,7 +7050,7 @@ function passiveBits(p, atk){
   if(p.speed)        bits.push(`moves <b>${p.speed > 1 ? p.speed + ' steps' : 'a step'} sooner</b> than it otherwise would`);
   if(p.braced)       bits.push(`takes <b>${Math.round(p.braced * 100)}% less</b> from every attack until it has moved in the round`);
   if(p.shakeOff)     bits.push(`at the end of every turn shakes off <b>one</b> mark the other side has put on it — asleep, stunned, frozen, ` +
-    `confused, blinded, forgetting or weakened (a mark on its whole side — a Curse, a seed, a burn — stays)`);
+    `confused, blinded, taunted, forgetting or weakened (a mark on its whole side — a Curse, a seed, a burn — stays)`);
   if(p.slipstream)   bits.push(`speeds its whole side (<b>Slipstream</b>): while it stands, every monster of its side on the field — itself too — moves <b>a step sooner</b>`);
   if(p.lockOn)       bits.push(`locks its side on (<b>Lock-On</b>): while it stands, nothing any monster of its side throws can be dodged — ` +
     `not a Lurk, a Mirage or any other evasion; a block still soaks it`);
@@ -7092,8 +7180,20 @@ function moveEffectText(mv, mon, atk){
   if(mv.focusBreak) out.push(
     `<b>Focus:</b> if anything hits it while it gathers (a hit that gets through — a dodge, or a blow a shield soaks whole, does not count), ` +
     `it comes down at <b>${Math.round(mv.focusBreak * 100)}%</b>: <b>${Math.ceil((mv.mult || 0) * mv.focusBreak * atk)}</b> instead of <b>${Math.ceil((mv.mult || 0) * atk)}</b>.`);
-  if(mv.revenge) out.push(
-    `<b>Pays back:</b> if anything of theirs has hit it this round, it deals <b>${mv.revenge}×</b> — <b>${Math.ceil((mv.mult || 0) * mv.revenge * atk)}</b>.`);
+  /* (3.38) by the attacks of theirs that have got through to it this round */
+  if(mv.revenge){
+    const steps = Array.isArray(mv.revenge) ? mv.revenge : [mv.revenge];
+    const at = x=> Math.ceil((mv.mult || 0) * x * atk);
+    out.push(steps.length > 1
+      ? `<b>Pays back:</b> the more attacks of theirs that have hit it this round, the harder — ` +
+        steps.map((x, i)=> `${i + 1}${i === steps.length - 1 ? ' or more' : ''}: <b>${x}×</b> (${at(x)})`).join(', ') +
+        `. A move with many strikes counts as one attack.`
+      : `<b>Pays back:</b> if anything of theirs has hit it this round, it deals <b>${steps[0]}×</b> — <b>${at(steps[0])}</b>.`);
+  }
+  /* (3.38) the Hermit Sloth's Mocking Yawn (tauntMark) */
+  if(mv.taunt) out.push(
+    `<b>Taunt.</b> Every enemy it hits is taunted for its next turn: it must use its <b>strongest attack</b>, aimed at this monster ` +
+    `(an attack that hits everyone still hits everyone). Their Diamond Dust keeps it off.`);
   if(mv.shieldGain) out.push(
     `<b>Shield value +${mv.shieldGain}:</b> every full 1 of it becomes a shield on this monster at once, worth its ATK${atk ? ` (<b>${Math.ceil(atk)}</b>)` : ''}; ` +
     `what is left over waits for its next move.`);
@@ -7531,8 +7631,8 @@ function renderBattle(){
           return `
           <button class="move-btn ${ok?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${ok?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
-            <div class="mv-name">${mv.available || mv.chargeMore || mv.spent || mv.forgotten ? escapeHtml(mv.name) : '???'}</div>
-            <div class="mv-meta">${mv.available ? (compTurn ? companionMeta(mv, ctlMon) : moveMeta(mv, ctlMon)) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : 'Locked')}</div>
+            <div class="mv-name">${mv.available || mv.chargeMore || mv.spent || mv.forgotten || mv.taunted ? escapeHtml(mv.name) : '???'}</div>
+            <div class="mv-meta">${mv.available ? (compTurn ? companionMeta(mv, ctlMon) : moveMeta(mv, ctlMon)) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : 'Locked')}</div>
           </button>`; }).join('')}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
@@ -7590,6 +7690,7 @@ const STATUS_LABELS = {
   vita:'🕊 Vita', jaws:'🔥 Held Fast', bogged:'🌫 Bogged', lurk:'🌑 Lurk', cunning:'🌘 Cunning',
   forgot:'💭 Forgot', fracture:'⏳ Spacetime Fracture', barrier:'🧱 Barrier', iceBarrier:'🧊 Ice Barrier',
   kindle:'🔥 Kindled', gallop:'🦄 Gallop', blinded:'🔆 Blinded', fleece:'🐑 Fleece', enchant:'🪄 Enchanted', stargaze:'🔭 Stargazer',
+  taunted:'🥱 Taunted',
 };
 /* A pill's words: most are their label and the turns left; a forgotten move
    (2.97) says which, and lasts the one turn. */
@@ -7620,6 +7721,7 @@ function renderStatusBadges(){
       /* What the enemy has put on you is theirs, and reads in their colour. */
       const cls = isEnemyOwned(st.type, st) ? 'foe' : 'mine';
       if(st.type === 'forgot'){ out.push(`<span class="status-pill ${cls}">${forgotPill(st)}</span>`); return; }
+      if(st.type === 'taunted'){ const tp = tauntPill(mon); if(tp) out.push(`<span class="status-pill ${cls}">${tp}</span>`); return; }   // (3.38)
       const tail = monPillTail(st, mon);                                    // (3.16) a nap, a freeze, a confusion
       const n = tail != null ? tail : (st.unsweepable && !st.state) ? '' : st.type === 'steelSoul' ? ' · this turn'
               : st.type === 'barrier' ? ` · −${Math.round((st.reduce || 0.5) * 100)}%` : ` ${shown}`;   // a quick buff (2.93); (3.09) a state still counts down; (3.14) a barrier lasts to its caster's next turn
@@ -7657,6 +7759,7 @@ function renderStatusBadges(){
       const own = monStatuses(cm).map(st=>{
         const cls = isEnemyOwned(st.type, st) ? 'foe' : 'mine';
         if(st.type === 'forgot') return `<span class="status-pill ${cls}">🤝 ${forgotPill(st)}</span>`;
+        if(st.type === 'taunted'){ const tp = tauntPill(cm); return tp ? `<span class="status-pill ${cls}">🤝 ${tp}</span>` : ''; }   // (3.38)
         const tail = monPillTail(st, cm);
         return `<span class="status-pill ${cls}">🤝 ${STATUS_LABELS[st.type]||st.type}${tail != null ? tail : ' ' + Math.max(0, st.turnsLeft - 1)}</span>`;
       });
@@ -7718,8 +7821,9 @@ function renderStatusBadges(){
     if(pd) (pd.names || [pd.name]).forEach(nm=> extras.push(passivesMuted(e)      // one pill a passive (2.97)
       ? `<span class="status-pill foe" style="opacity:.75;text-decoration:line-through;">🔇 ${escapeHtml(nm)}</span>`
       : `<span class="status-pill foe">✨ ${escapeHtml(nm)}</span>`));
-    slot.innerHTML = eStatuses(e).filter(st=> (st.type !== 'forgot' || forgottenNames(e).length) && (st.type !== 'blinded' || blindOf(e))).map(st=>{
+    slot.innerHTML = eStatuses(e).filter(st=> (st.type !== 'forgot' || forgottenNames(e).length) && (st.type !== 'blinded' || blindOf(e)) && (st.type !== 'taunted' || tauntOf(e))).map(st=>{
       if(st.type === 'forgot') return `<span class="status-pill foe">${forgotPill(st)}</span>`;
+      if(st.type === 'taunted') return `<span class="status-pill foe">${tauntPill(e)}</span>`;   // (3.38)
       const hit = st.type === 'discombobulate' ? confusionHit(e, st) : 0;   // (3.16) what its confused swing will deal
       const extra = st.type==='iceTomb' ? ` ${st.turnsLeft}` : st.type==='fracture' ? ` ×${st.stacks || 1}` : hit ? ` · hits ${hit}`
                   : (st.type === 'blinded' && st.until != null) ? ` ${Math.max(1, st.until - roundNo() + 1)}` : '';   // (3.25) as yours: the turns it still has

@@ -468,7 +468,10 @@ function cuainAboard(){ const g = r4(); return !!g.ghostAccepted; }
    floor ('.', ',' bones, paving or a rug, '=' a bridge or steps, 's' sand,
    '_' a stage). */
 const WALK_SOLID = '#~o*cGbrkxtBgwKSFDRHPACZJNVLhMQEY';   // (3.18) h: a catacomb wall with a child's chalk drawing on it; (3.19) the vault's M Q E Y
-const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true : WALK_SOLID.includes(d.rows[y][x]);
+/* (3.33) …and a deck can keep squares shut while the story says so: d.shut(x, y)
+   → true, solid for now (the Hilltop's poolside, until the villa is open) */
+const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? true :
+  (WALK_SOLID.includes(d.rows[y][x]) || !!(d.shut && d.shut(x, y)));
 /* A catacomb guard stands on his tile like anybody else. */
 function wOccupied(d, x, y){
   return !!(d.stealth && typeof stealthOccupied === 'function' && stealthOccupied(d, x, y));
@@ -1190,6 +1193,59 @@ function tileWipe(then){
   }, 18);
 }
 
+/* (3.34) A monster met by walking — the catacombs' "something in the dark",
+   and any wild meeting on foot to come (the designer: "please have the screen
+   flash light and dark for 1.5s and then turn black for 0.5s before quickly
+   fading in to the battle scene. it should play the same soundtrack
+   universally for all regions whenever walking the sprite encounters a
+   monster. this is different than dive or SOS in Region 4"). `begin` starts
+   the fight (with `encounter:true`, so it keeps the track); it is called once
+   the screen is black, and the fight fades in. One track for every region's
+   walking meetings, from the first flash on: battle_encounter, else the plain
+   wild theme. The flashes come two a second — under three, so they are safe
+   for eyes that flashing can hurt. Nothing can be pressed until it is over. */
+const ENCOUNTER_MUSIC = ['battle_encounter', 'battle_wild'];
+const ENCOUNTER_MS = { flash:1500, black:500, fade:300 };
+let _encounterOn = false;
+function walkEncounter(begin){
+  if(_encounterOn) return;
+  _encounterOn = true;
+  if(!document.getElementById('encounterCss')){
+    const st = document.createElement('style');
+    st.id = 'encounterCss';
+    st.textContent = `
+      #encounterFlash{position:fixed;inset:0;z-index:9999;pointer-events:auto;background:#000;opacity:0;}
+      #encounterFlash.flash{animation:encounterFlash 1.5s linear forwards;}
+      #encounterFlash.black{animation:none;background:#000;opacity:1;}
+      #encounterFlash.out{animation:none;background:#000;opacity:0;transition:opacity .3s ease-out;}
+      @keyframes encounterFlash{
+        0%{background:#fff;opacity:0}       8%{background:#fff;opacity:.9}    20%{background:#000;opacity:.8}
+        33.3%{background:#000;opacity:.8}   41.6%{background:#fff;opacity:.9}  53.3%{background:#000;opacity:.8}
+        66.6%{background:#000;opacity:.8}   75%{background:#fff;opacity:.9}    87%{background:#000;opacity:.9}
+        100%{background:#000;opacity:1}}`;
+    document.head.appendChild(st);
+  }
+  const S = (typeof SCENE_SPEED === 'number' && SCENE_SPEED > 0) ? SCENE_SPEED : 1;
+  const fx = document.createElement('div');
+  fx.id = 'encounterFlash';
+  fx.style.animationDuration = (ENCOUNTER_MS.flash * S) + 'ms';
+  fx.style.transitionDuration = (ENCOUNTER_MS.fade * S) + 'ms';
+  document.body.appendChild(fx);
+  playMusicChain(ENCOUNTER_MUSIC, { loop:true });          // the meeting's own track, from the first flash
+  void fx.offsetWidth;
+  fx.classList.add('flash');                                // light and dark…
+  setTimeout(()=>{ fx.classList.remove('flash'); fx.classList.add('black'); }, ENCOUNTER_MS.flash * S);   // …then black
+  setTimeout(()=>{
+    try { begin(); }
+    finally {
+      requestAnimationFrame(()=>{
+        fx.classList.remove('black'); fx.classList.add('out');                  // the fight fades in
+        setTimeout(()=>{ fx.remove(); _encounterOn = false; }, ENCOUNTER_MS.fade * S + 60);
+      });
+    }
+  }, (ENCOUNTER_MS.flash + ENCOUNTER_MS.black) * S);
+}
+
 /* ---------- what the things do ---------- */
 /* Somebody says something before you go over the side. It costs one tap and it
    is the difference between a menu and a place. Repeat dives skip it, because
@@ -1327,6 +1383,15 @@ function sceneCss(){
   document.head.appendChild(st);
 }
 
+/* (3.35) A person on the deck (`.walk-ent img`, index.html) is drawn 1.314
+   times its tile, grown from the middle. The designer: "tailor ugo is rather
+   too small when he first appears compared to his later size. he initially
+   appears even smaller than the player's sprite" — in a scene he was drawn at
+   the tile, a quarter smaller. Now a person in a scene (a picture from
+   assets/npc/) is drawn as big as they are on the deck: Ugo, Figlio, the
+   Madrina, the Ghost Master, the Family's men walking in, the ship's crew.
+   `person:false` keeps one at its tile. */
+const WALK_PERSON_SCALE = 1.314;
 /* Put someone on the deck, or change them. x/y/w/h in tiles (x/y is the top-
    left corner, and may be fractional). src is an image path; flip faces the
    other way; faint lays them on their side, a fifth of a tile lower. */
@@ -1359,6 +1424,8 @@ function sceneActor(id, o){
   const art = inner.firstChild;
   if(art && art.style){
     const t = [];
+    const person = a.person != null ? !!a.person : /^assets\/npc\//.test(a.src || '');
+    if(person) t.push(`scale(${WALK_PERSON_SCALE})`);             // (3.35) as big as on the deck
     if(a.faint) t.push(`translateY(20%) rotate(${a.faint > 0 ? 90 : -90}deg)`);
     art.style.transform = t.join(' ');
   }

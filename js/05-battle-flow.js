@@ -569,6 +569,14 @@ function promptTarget(mv, onPick){
     (onPick||(t=>runMoveQuiz(mv,t)))(guard);
     return;
   }
+  /* (3.38) Taunted (their Hermit Sloth's Mocking Yawn): a single blow — or a
+     twin's first — must go to the one that yawned. */
+  const who = controlMon(), tn = (mv.target === 'Single' || mv.target === 'Multi2') ? tauntOf(who) : null;
+  if(tn && living.includes(tn.taunter)){
+    battleMsg(`🥱 ${escapeHtml(displayName(who))} is taunted — it must go for ${escapeHtml(tauntName(tn))}!`);
+    (onPick||(t=>runMoveQuiz(mv,t)))(tn.taunter);
+    return;
+  }
   battleMsg('Choose a target.');
   const ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:75;display:flex;align-items:flex-end;justify-content:center;';
@@ -1419,6 +1427,12 @@ function restoreRealParty(){
 
 function resolveBattleMove(mv, target, results, opts){
   const mon=activeMon();
+  /* (3.38) Taunted (their Hermit Sloth's Mocking Yawn): a blow aimed at one
+     of them goes to the one that yawned (promptTarget has said so) — unless
+     their Steel Soul draws it, below. */
+  { const tn = tauntOf(mon);
+    if(tn && (mv.target === 'Single' || mv.target === 'SingleAOE' || mv.target === 'Multi2') &&
+       livingEnemies().includes(tn.taunter)) target = tn.taunter; }
   /* Their Steel Soul (2.90): a blow aimed at one of them goes to the one that
      cast it — and so does a splash's main blow. */
   { const g = soulGuardian('enemy');
@@ -1754,7 +1768,9 @@ function resolveBattleMove(mv, target, results, opts){
      at half. Said with the blow (takePsyNote). */
   if(ui.battle && factor > 0 && !reentry){
     let note = '';
-    if(mv.revenge && hurtThisRound(mon)){ factor *= mv.revenge; note += ` Pent-up fury — ${mv.revenge}×!`; }
+    /* (3.38) by the attacks of theirs that got through to it this round */
+    const rf = mv.revenge ? revengeFactor(mon, mv.revenge) : 1;
+    if(rf > 1){ const n = attacksThisRound(mon); factor *= rf; note += ` Pent-up fury — ${rf}× for ${n} attack${n > 1 ? 's' : ''}!`; }
     if(mv.randomMult){
       const [lo, hi] = mv.randomMult, r = +(lo + Math.random() * (hi - lo)).toFixed(2);
       factor *= r; note += ` Its power rolls ×${r}!`;
@@ -1964,6 +1980,20 @@ function resolveBattleMove(mv, target, results, opts){
       });
       if(bl.length){ renderStatusBadges(); setTimeout(()=> battleMsg(bl.join(' ')), 750); }
     }
+    /* (3.38) Mocking Yawn: every one it got through to is taunted — its next
+       turn its strongest attack, at this monster (tauntMark) */
+    if(mv.taunt){
+      const got = [], kept = [];
+      hits.forEach(h=>{
+        if(!(h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged) || got.includes(h.t) || kept.includes(h.t)) return;
+        (tauntMark(h.t, mon, mv.taunt) ? got : kept).push(h.t);
+      });
+      const nm = a=> a.map(t=> SPECIES[t.species].name).join(' and '), many = got.length > 1;
+      const said = (got.length ? `🥱 ${nm(got)} ${many ? 'are' : 'is'} taunted — next turn ${many ? 'they' : 'it'} must hit ` +
+                                 `${escapeHtml(displayName(mon))} with ${many ? 'their' : 'its'} strongest move!` : '') +
+                   (kept.length ? ` 💎 The diamond dust keeps ${nm(kept)} calm.` : '');
+      if(said){ renderStatusBadges(); setTimeout(()=> battleMsg(said.trim()), 850); }
+    }
     /* (3.26) the Squid's Abyssal Gaze Max: a muddle on the one it hits — its
        next swing turns on its own side (markConfused; Iron Will and their
        dust keep it out) */
@@ -2125,7 +2155,7 @@ function landStrike(h, opts){
   h.oldHp = before;
   h.newHp = Math.max(0, before - through);
   if(raw > 0) t.lastDamageTaken = raw;          // a reflection returns the full figure, as yours does
-  if(through > 0) noteHurt(t);                  // a hit: its Focus is broken this round (2.97)
+  if(through > 0) noteHurt(t, yourStrikeKey(opts));   // a hit: its Focus is broken this round (2.97); which attack (3.38)
   /* Arena immortality: a knock-out becomes a full heal, so a test runs as
      long as the tester wants without anything respawning. */
   if(ui.battle && ui.battle.arenaImmortal && h.newHp <= 0) h.newHp = t.maxHp;
@@ -2421,7 +2451,7 @@ function postPlayerAction(mon, hits){
     breakShields('enemy', k, mon, k._blow, pid('playerBlk'), pid('playerBob'));   // their Dragon Dance first (3.13)
     const through = capHit(mon, applyBlock(mon, dmg, pid('playerBlk')));   // (3.15) a Carapace
     mon.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, mon.currentHp - through);
-    if(through > 0) noteHurt(mon);
+    if(through > 0) noteHurt(mon, k._blow);                     // (3.38) a riposte: an attack of its own
     counterDrift(document.getElementById('enemyBob-' + b.enemies.indexOf(k)), document.getElementById(pid('playerBob')));
     flashHit($('#' + pid('playerBob')));
     drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon));
@@ -3597,7 +3627,7 @@ function smartValue(e, r, mine){
     if(!m) return;
     let one = computeDamage(per, atk, e, monRef(m), false, true) * n;   // an estimate (peek)
     if(ex.sleeperMult && getMStatus(m,'asleep')) one *= ex.sleeperMult;
-    if(ex.revenge && hurtThisRound(e)) one *= ex.revenge;
+    if(ex.revenge) one *= revengeFactor(e, ex.revenge);                 // (3.38) by the attacks it has taken
     if(ex.randomMult) one *= (ex.randomMult[0] + ex.randomMult[1]) / 2;
     if(ex.fullHpDouble && e.hp >= e.maxHp) one *= 2;
     const dodge = (ex.mindRead || seesThrough(e)) ? 0 : Math.min(0.95, playerEvasionFrom(e, m));
@@ -3918,6 +3948,31 @@ function enemyActs(i, e){
     const beam = by('Blinding Beam Max') || by('Blinding Beam');
     if(beam) move = beam;
   }
+  /* (3.38) The Hermit Sloth — the designer: Mocking Yawn "forcing enemy
+     monsters to attack it", and Pent-up Fury "1.5/1.75/2x damage for each
+     attack … it suffers that turn". With its Fury (41) it yawns, then pays
+     back: Mocking Yawn while none of yours is taunted by it (and your dust
+     would not keep the taunt off), its Fury while one is. Before 41, its
+     usual judgement. */
+  if(e.species === 'hermit_sloth' && !e._forcedMove){
+    const list = MOVES.hermit_sloth || [];
+    const by = n=> list.find(m=> m[1] === n && (e.level || 1) >= m[5]);
+    const fury = by('Pent-up Fury Max') || by('Pent-up Fury'), yawn = by('Mocking Yawn');
+    if(fury && yawn){
+      const taunting = livingField().some(m=>{ const t = tauntOf(m); return t && t.taunter === e; });
+      move = (!taunting && !dustBlocks('enemy')) ? yawn : fury;
+    }
+  }
+  /* (3.38) Taunted — your Hermit Sloth's Mocking Yawn: this turn its
+     strongest attack (tauntPick), aimed at the Sloth (enemyPickTarget). One
+     that follows a script keeps its move and still aims at the Sloth. */
+  const taunt = tauntOf(e);
+  let tauntSaid = '';
+  if(taunt && !e._forcedMove){
+    const row = tauntTurnsMove(e) ? tauntPick(e) : null;
+    if(row) move = row;
+    tauntSaid = `🥱 ${name} is taunted — it goes for ${escapeHtml(tauntName(taunt))}! `;
+  }
   if(move && move[1]) e._lastCast = move[1];
   /* Something wound up last turn comes down now, whatever else it had in mind. */
   if(e._windup) move = e._windup;
@@ -3941,7 +3996,7 @@ function enemyActs(i, e){
     move = (MOVES[e.species] || []).find(m=> m[0] === 'Max' && e.level >= m[5] && m[2] != null) || e.move;
   /* Amnesia (2.97): a move it has forgotten is shut for this turn. It uses
      the best one it still remembers — or, remembering none, stands there. */
-  let forgotNote = '';
+  let forgotNote = tauntSaid;                                  // (3.38) a taunt says so first
   if(move && forgottenNames(e).includes(move[1])){
     if(e._windup === move) e._windup = null;                 // what it wound up is lost
     const alt = bestMoveNames(e)[0];
@@ -3950,7 +4005,7 @@ function enemyActs(i, e){
       battleMsg(`💭 ${name} cannot remember how to fight!`);
       return setTimeout(next, 1000);
     }
-    forgotNote = `💭 ${name} cannot remember ${escapeHtml(move[1])}. `;
+    forgotNote += `💭 ${name} cannot remember ${escapeHtml(move[1])}. `;
     move = row;
   }
   /* Caladrius's gifts, turned the other way. These have no damage figure, so
@@ -4075,12 +4130,14 @@ function enemyActs(i, e){
   /* (3.15) settled as the attack begins: Pent-up Fury, Random Access's roll,
      a broken Arcane Meteor; Shell Spin's shield value; and the attack written
      down, for a Mime of yours to copy */
-  e._revengeOn = !!(ex.revenge && hurtThisRound(e));
+  e._revengeX = ex.revenge ? revengeFactor(e, ex.revenge) : 1;     // (3.38) 1.5 / 1.75 / 2 by the attacks it has taken
+  e._revengeOn = e._revengeX > 1;
   e._randRoll = ex.randomMult ? +(ex.randomMult[0] + Math.random() * (ex.randomMult[1] - ex.randomMult[0])).toFixed(2) : 0;
   if(ex.focusBreak){ const f = bState(e).focus; e._focusBroken = !!(f && f.hurt); bState(e).focus = null; } else e._focusBroken = false;
   if(ex.shieldGain) gainShieldValue(e, ex.shieldGain);
   if(move[2] != null) noteTurnMove(e, { name:move._copiedName || move[1], mult:move[2], target:move[3], ex:copyExtras(ex, moveHitsFor(e, ex)) });
-  { const psy = (e._revengeOn ? ` Pent-up fury — ${ex.revenge}×!` : '') + (e._randRoll ? ` Its power rolls ×${e._randRoll}!` : '') +
+  { const ra = attacksThisRound(e);
+    const psy = (e._revengeOn ? ` Pent-up fury — ${e._revengeX}× for ${ra} attack${ra > 1 ? 's' : ''}!` : '') + (e._randRoll ? ` Its power rolls ×${e._randRoll}!` : '') +
                 (e._focusBroken ? ` Struck while it gathered — it falls at ${Math.round(ex.focusBreak * 100)}%.` : '');
     if(psy) forgotNote += psy.trim() + ' '; }
   if(e.lurk || e.cunning){ breakCover(e, ex.spendLurk); renderStatusBadges(); }
@@ -4292,7 +4349,7 @@ function enemyStrikeOn(ctx, step, done){
       if(ctx.mults.rage !== 1) dmg = Math.ceil(dmg * ctx.mults.rage);
       /* (3.15) Pent-up Fury paid back, Random Access's roll, an Arcane Meteor
          broken by a hit while it gathered — settled as the attack began */
-      if(ex.revenge && e._revengeOn) dmg = Math.ceil(dmg * ex.revenge);
+      if(ex.revenge && e._revengeOn) dmg = Math.ceil(dmg * e._revengeX);
       if(ex.randomMult && e._randRoll) dmg = Math.ceil(dmg * e._randRoll);
       if(ex.focusBreak && e._focusBroken) dmg = Math.ceil(dmg * ex.focusBreak);
       /* Overpower: +25% outright, and a quarter again on anything smaller. */
@@ -4369,7 +4426,7 @@ function enemyStrikeOn(ctx, step, done){
         }
       }
       if(totalBlocked > 0) floatBlocked(pid('playerBob'), totalBlocked);
-      if(totalTaken > 0) noteHurt(mon);       // a hit: its Focus is broken this round (2.97)
+      if(totalTaken > 0) noteHurt(mon, e._blow);   // a hit: its Focus is broken this round (2.97); which attack (3.38)
       /* (the dead whale took note at the attempt: one attack, counted once — 3.08) */
       if(ui.battle.arenaImmortal && mon.currentHp <= 0){
         mon.currentHp = monMaxHp(mon);          // back to full, test continues
@@ -4461,6 +4518,13 @@ function enemyStrikeOn(ctx, step, done){
     if(ex.blindHit && totalTaken > 0 && mon.currentHp > 0){
       const z = blindMark(mon, ex.blindHit);
       if(z){ msg += ' ' + z; renderStatusBadges(); }
+    }
+    /* (3.38) their Mocking Yawn that got through: taunted for its next turn —
+       its strongest move, at their Sloth */
+    if(ex.taunt && totalTaken > 0 && mon.currentHp > 0){
+      if(tauntMark(mon, e, ex.taunt)) msg += ` 🥱 ${escapeHtml(displayName(mon))} is taunted — next turn it must hit ${name} with its strongest move!`;
+      else msg += ` 💎 The diamond dust keeps ${escapeHtml(displayName(mon))} calm.`;
+      renderStatusBadges();
     }
     /* (3.26) a gaze that confuses (the Squid's Abyssal Gaze Max) */
     if(ex.confuseHit && totalTaken > 0 && mon.currentHp > 0 && !getMStatus(mon,'discombobulate') && Math.random() < (ex.confuseHit.chance || 0.25)){
@@ -4722,7 +4786,7 @@ function enemyFollowUps(i, e, move, ctx, next){
     showDamageNumber(pid('playerBob'), before - me.currentHp);
     floatBlocked(pid('playerBob'), soaked);
     drainHp(pid('playerHp'), before, me.currentHp, monMaxHp(me));
-    if(before > me.currentHp) noteHurt(me);
+    if(before > me.currentHp) noteHurt(me, e._blow);      // (3.38) its repeat or echo: the same attack
     /* an Overcharge repeat that lands makes it forget one more (2.97) */
     const forgot = (repeatOf && before > me.currentHp) ? mindPassivesLanded(e, [me], true) : [];
     battleMsg(`${label} — ${before - me.currentHp}!` + (fed > 0 ? ` 🌿 Their seeds drink deep — ${fed} HP to each of them.` : '') +

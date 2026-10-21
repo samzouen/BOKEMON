@@ -62,12 +62,12 @@ const SPECIES = {
   /* Legendary who lost his crown: runs at elite growth until the story
      restores it, then regains rate 13 AND the three crowned stages. */
   monkey_king:     { name:'Monkey',      tier:'legendary', types:['Physical','Fairy'], rate:13, nerfedRate:13, base:61, evo:[31], evoMult:1.5,
-                     color:'#b8813a', glyph:'猴', nerfedUntilCrowned:true, storyCrownOnly:true },
+                     color:'#b8813a', glyph:'猴', nerfedUntilCrowned:true, storyCrownOnly:true, oneLook:true },
 
   newt_baby:       { name:'Thunder Newt Baby', tier:'special', types:['Psychic','Electric'], rate:0, nerfedRate:0, base:1, evo:[], color:'#7fa8c8', glyph:'蝾', isBaby:true, hatchesAt:31, hatchesInto:'newt' },
   newt:            { name:'Thunder Newt', tier:'legendary', types:['Psychic','Electric'], rate:13, nerfedRate:13, base:31, evo:[31], evoMult:1.5,
-                     color:'#5f9ac8', glyph:'雷', nerfedUntilCrowned:true, storyCrownOnly:true },
-  ankylosaurus:    { name:'Ankylosaurus', tier:'legendary', types:['Ground','Steel'], rate:13, nerfedRate:13, base:65, evo:[5], evoMult:1.5, color:'#7a8a6a', glyph:'甲' },
+                     color:'#5f9ac8', glyph:'雷', nerfedUntilCrowned:true, storyCrownOnly:true, oneLook:true },
+  ankylosaurus:    { name:'Ankylosaurus', tier:'legendary', types:['Ground','Steel'], rate:13, nerfedRate:13, base:65, evo:[5], evoMult:1.5, color:'#7a8a6a', glyph:'甲', oneLook:true },
 
   /* --- Region 3: the Electric Dojo --- */
   thunderdog:      { name:'Thunderdog',     tier:'wild',  types:['Electric'], rate:7,  nerfedRate:5,  base:54, evo:[18],    evoMult:1.5, color:'#e0b53a', glyph:'犬' },
@@ -206,15 +206,23 @@ const SPECIES = {
 
   /* --- Story monsters --- */
   lanternfish:     { name:'Lanternfish', tier:'wild',      types:['Water','Electric'], rate:7, nerfedRate:5, base:5, evo:[18], evoMult:1.5, color:'#4fa8b8', glyph:'灯' },
-  water_dragon:    { name:'Water Dragon',tier:'legendary', types:['Water','Dragon'],rate:13, nerfedRate:13, base:100, evo:[31],    evoMult:1.5, color:'#2f7fa8', glyph:'龙', bossOnly:true },
+  /* (3.38) `oneLook` — the designer: "they don't evolve from a monster to a
+     monster. they are born from eggs/seeds/stones at different levels … the
+     'evolution' is into the base sprite, hence they do not need the next
+     tier of <name>1 … crowned versions are named after the base sprite too,
+     but with the additional _c_." Their one evolution (its stats) is the
+     birth; every stage of them is the base picture (spriteKey): the Monkey
+     King, the Thunder Newt, the Ankylosaurus, the Water Dragon (and its
+     weakened self) and the Forest Fairy. */
+  water_dragon:    { name:'Water Dragon',tier:'legendary', types:['Water','Dragon'],rate:13, nerfedRate:13, base:100, evo:[31],    evoMult:1.5, color:'#2f7fa8', glyph:'龙', bossOnly:true, oneLook:true },
   /* Hatched from the egg with its core still missing: legendary by nature,
      elite in practice until Region 5 returns what was taken. */
   water_dragon_nerfed:{ name:'Water Dragon', tier:'legendary', types:['Water','Dragon'],rate:13, nerfedRate:11, base:31, evo:[31], evoMult:1.5,
-                     color:'#5a92a8', glyph:'龙', weakened:true, nerfedUntilCrowned:true, storyCrownOnly:true },
+                     color:'#5a92a8', glyph:'龙', weakened:true, nerfedUntilCrowned:true, storyCrownOnly:true, oneLook:true },
   dragon_egg:      { name:'Dragon Egg',  tier:'special',   types:['Water','Dragon'],rate:0,  nerfedRate:0,  base:1,   evo:[],      color:'#7fa8b8', glyph:'卵', isEgg:true, hatchesAt:31, hatchesInto:'water_dragon_nerfed' },
 
   phoenix:         { name:'Phoenix',     tier:'legendary', types:['Fire','Flying'], rate:13, nerfedRate:13, base:25,  evo:[],      evoMult:1.5, color:'#c8453a', glyph:'凤', frozenRegion1:true, bonusStages:1 },
-  forest_fairy:    { name:'Forest Fairy',tier:'legendary', types:['Grass','Fairy'], rate:13, nerfedRate:13, base:100, evo:[1],     evoMult:1.5, color:'#5fa86b', glyph:'仙', bossOnly:true },
+  forest_fairy:    { name:'Forest Fairy',tier:'legendary', types:['Grass','Fairy'], rate:13, nerfedRate:13, base:100, evo:[1],     evoMult:1.5, color:'#5fa86b', glyph:'仙', bossOnly:true, oneLook:true },
   sacred_seed:     { name:'Sacred Seed', tier:'special',   types:['Grass'],         rate:0,  nerfedRate:0,  base:1,   evo:[],      color:'#7fa86b', glyph:'种', isSeed:true },
   /* Cyborg (2.94): the Padrino's artificial monster — the time monster itself,
      the strongbox the stolen cores are fused into. A crowned legendary's
@@ -701,15 +709,24 @@ const MOVES = {
      elite and still has 2 evolutions" — at 21 and 41, as the elites evolve,
      its moves at the elites' levels, and an elite's Max. */
   hermit_sloth:    [['Basic','Slow Swipe',0.3,'Single',2,1],
-                    ['Power1','Hook Claw',0.45,'Single',4,1],
+                    /* (3.38) The designer: "change hermit sloth's power1 attack to mocking
+                       yawn: AOE 0.4 dmg, and puts a 1 turn taunt, forcing enemy monsters to
+                       attack it with their most powerful moves on the next turn" (tauntMark,
+                       tauntOf). Hook Claw (0.45 to one) until then. */
+                    ['Power1','Mocking Yawn',0.4,'AOE',4,1,{taunt:{turns:1}}],
                     /* (3.37) The designer: "if it has not yet moved this turn, it takes 50%
                        less damage from attacks. Gives sloth -3 initiative. Remove the hitback
                        … instead the sloth cleanses one debuff on itself (not its wave) each
                        turn. Help me name this passive" — Hermit's Patience (a step later,
                        0.4× back at every attack) until then. */
                     ['Power2','Slow and Steady',null,'Passive',0,21,{passive:{slow:3, braced:0.5, shakeOff:1}}],
-                    ['Ultimate','Pent-up Fury',1.0,'Single',8,41,{revenge:1.5}],
-                    ['Max','Pent-up Fury Max',1.25,'Single',8,51,{revenge:1.5}]],
+                    /* (3.38) "increase the multiplier to 1.5/1.75/2x damage for each attack
+                       (not hit) it suffers that turn, meaning multi-hit attacks still count
+                       as 1 attack" — by the attacks of theirs that got through to it this
+                       round (attacksThisRound): one 1.5×, two 1.75×, three or more 2×. A
+                       flat 1.5× after anything at all until then. */
+                    ['Ultimate','Pent-up Fury',1.0,'Single',8,41,{revenge:[1.5, 1.75, 2]}],
+                    ['Max','Pent-up Fury Max',1.25,'Single',8,51,{revenge:[1.5, 1.75, 2]}]],
   /* "team initiative support" (Gallop); Moonlit Retribution: every strike of
      its side the other side dodges banks 1.2× its ATK, which falls on all of
      them at the end of the turn — no dodging it ("counter to ghosts").

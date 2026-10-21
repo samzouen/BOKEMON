@@ -167,12 +167,20 @@ function r5T2Table(more){
    (3.24) The Ram is one of the wild ones now, and the Ladybird one of the
    eight elites in its place. (3.26) "squid goes to villa, max level 98":
    the Squid, an elite only trainers had, is one of the rarer ones here too
-   (+2 levels; met at 98 at most, as everything wild — CATCH_LEVEL_CAP). */
-const R5_T3_WILD = ['leopard','puffball','polygon','quetzal','nurse','hermit_sloth','unicorn','ram','tapir',
-                    'hydra','ladybird','mime','firefox','seadragon','plasma_manta','sylph','steelcrab','squid',
-                    'psychic_starter','flying_starter'];
-const R5_T3_RARE = { hydra:2, ladybird:2, mime:2, firefox:2, seadragon:2, plasma_manta:2, sylph:2, steelcrab:2, squid:2,
-                     psychic_starter:1, flying_starter:1 };
+   (+2 levels; met at 98 at most, as everything wild — CATCH_LEVEL_CAP).
+   (3.35) The designer: "tailed cat appeared in the harbour-connected
+   catacombs (the first tier) when all psychic monsters should only appear
+   in the third tier - the villa-connected catacombs". The Tailed Cat has
+   left the first tier's floors and rooms (the Long Stair, the Bone Halls'
+   and the Stair's rooms) and lives here, one of the rarer ones (1, +2). No
+   wild Psychic is met anywhere in the first two tiers now.
+   (3.36) The Firefox is a wild one now and the Hermit Sloth an elite: each
+   has taken the other's place in the lists. */
+const R5_T3_WILD = ['leopard','puffball','polygon','quetzal','nurse','firefox','unicorn','ram','tapir',
+                    'hydra','ladybird','mime','hermit_sloth','seadragon','plasma_manta','sylph','steelcrab','squid',
+                    'tailed_cat','psychic_starter','flying_starter'];
+const R5_T3_RARE = { hydra:2, ladybird:2, mime:2, hermit_sloth:2, seadragon:2, plasma_manta:2, sylph:2, steelcrab:2, squid:2,
+                     tailed_cat:2, psychic_starter:1, flying_starter:1 };
 function r5T3Table(more){
   return R5_T3_WILD.map(sp=> Object.assign({ sp, w:(more && more[sp]) || (R5_T3_RARE[sp] ? 1 : 2) },
                                            R5_T3_RARE[sp] ? { plus:R5_T3_RARE[sp] } : {}));
@@ -405,7 +413,7 @@ const R5_DECKS = {
       ],
       wild:{ rate:0.04, size:3, lv:[80,86],
         table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},
-               {sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'tailed_cat',w:1,plus:2},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
+               {sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -565,7 +573,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:8, y:7, face:'d', spin:'ccw', clock:620, pause:4, roster:'br1_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.035, size:2, lv:[84,90],
-        table:[{sp:'ghost',w:3},{sp:'crow',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin_knight',w:1,plus:2},{sp:'tailed_cat',w:1,plus:2},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
+        table:[{sp:'ghost',w:3},{sp:'crow',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin_knight',w:1,plus:2},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -594,7 +602,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:15, y:5, face:'l', spin:'cw', clock:600, pause:4, roster:'br2_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.035, size:2, lv:[86,92],
-        table:[{sp:'ghost',w:3},{sp:'crow',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin_knight',w:1,plus:2},{sp:'tailed_cat',w:1,plus:2},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
+        table:[{sp:'ghost',w:3},{sp:'crow',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin_knight',w:1,plus:2},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -625,7 +633,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:3, y:2, face:'r', spin:'ccw', clock:620, pause:4, roster:'sr1_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.035, size:2, lv:[86,92],
-        table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},{sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'tailed_cat',w:1,plus:2},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
+        table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},{sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -665,7 +673,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:6, y:6, face:'l', spin:'cw', clock:600, pause:4, roster:'sr2_l', sprite:'soldato2', when:()=> !r5GPHaunts() },
       ],
       wild:{ rate:0.035, size:2, lv:[88,94],
-        table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},{sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'tailed_cat',w:1,plus:2},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
+        table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},{sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     /* (2.92) while the ghost phoenix (or its orb) is here, you and the
@@ -978,7 +986,7 @@ const R5_DECKS = {
         { id:'b', kind:'soldato', path:[[4,26],[21,26]], face:'r', clock:640, pause:3, roster:'watch_b', sprite:'soldato2' },
       ],
       /* more of the strong ones here: Hydras, Mimes, Firefoxes */
-      wild:{ rate:0.025, size:3, lv:[94,98], t3:true, more:{ hydra:2, mime:2, firefox:2 } } },
+      wild:{ rate:0.025, size:3, lv:[94,98], t3:true, more:{ hydra:2, mime:2, firefox:3 } } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -1238,51 +1246,77 @@ const R5_DECKS = {
      Old Town: lit, men on watch, and in uniform nobody looks twice (kind
      'town'). Reached the first time on Figlio's arm (r5HillEscort). Drawn
      from its grid (paintTown) until assets/zones/hilltop.png is there.
+     (3.32) Fitted to the designer's painting (2026-10-20), every door at the
+     bottom of its building: the villa's great door at the top of its
+     courtyard, the fountain in the middle, two lanes round it; the estate's
+     path two lanes wide inside the gate, the pool's terrace scenery; the
+     tower's door and its path; the road two lanes, and below it the lemon
+     farm's shed door (two squares), the guard house's door and the brick
+     path down; the second road; Grandpa's door onto a road of its own.
      ============================================================ */
   hilltop: {
     key:'hilltop', region:5, title:'The Hilltop', bg:'region5', music:'zone_hilltop', art:'hilltop',
     bx:0, by:0, bs:1/32, nat:[26*32, 39*32],
     rows:[
-"###wwwwwwwwwwwwwwwwwwwwwww","###wgggggggggggggggggggggw","###wggggBBBBBBBBBBgBBBBBgw","###wggggBBBBBBBBBBgBBBBBgw",
-"###wggggBBBBBBBBBBgBBBBBgw","###wggggBBBBBBBBBBgBBBBBgw","###wggggBBBBBBBBBBgBBBBBgw","###wggggBBBBBBBBBBggg,gggw",
-"###wggggBBBBBBBBBBggg,gggw","###wgggggg,,,,,,gg~~g,gggw","###wgggggg,,,,,,gg~~g,gggw","###wg,,,,,,,,,,,,,,,,,,,gw",
-"###wwwwwwwww,,wwwwwwwwwwww","..........................","..........................","..........................",
-"ggggggBBBBBg==ggBBBBBBBggg","ggggggBBBBBg==ggBBBBBBBggg","ggggggBBBBBg==ggBBBBBBBggg","ggggggBBBBBg==ggBBBBBBBggg",
-"ggggggBBBBBg==ggBBBBBBBggg","ggggggBBBBBg==ggBBBBBBBggg","gggggggggggg==gggggggggggg","..........................",
-"..........................","gggggggggggg==,,,,,ggggggg","gggggggggggg==ggBBBBBBgggg","gggggggggggg==ggBBBBBBgggg",
-"gggggggggggg==ggBBBBBBgggg","wwwww=wwwwwg==ggBBBBBBgggg","gggggggggggg==ggBBBBBBgggg","gggggggggggg==gggggggggggg",
-"gggggggggggg==gggggggggggg","############==############","############==############","############==############",
-"############==############","############==############","############==############",
+"ggggBBBBBBBBBBBBBBBBBBBBgg","ggggBBBBBBBBBBBBBBBBBBBBgg","ggggggggBBBBBBBBBBgBBBBBgg","ggggggggBBBBBBBBBBgBBBBBgg",
+"ggggggggBBB,,,,BBBgBBBBBgg","ggggggggBB,,~~,,BBgBBBBBgg","ggggggggBBg,~~,gBBgBB,gggg","ggggggggBBg,,,,gBBggg,gggg",
+"gggggggggggg,,ggggggg,gggg","gggggg,,gggg,,ggggggg,gggg","gggggg,,,,,,,,,,,,,,,,,,gg","gggggg,,gg,g,,g,gg,,g,,ggg",
+"wwwwwwwwwwww,,wwwwwwwwwwww","..........................","..........................","gggggggggggg==gggggggggggg",
+"ggggggBBBBBg==ggBBBBBBBggg","ggggggBBBBBg==ggBBBBBBBggg","gggggBBBBBBg==ggBBBBBBBggg","gggggBBBBBBg==ggBBBBBBBggg",
+"gggggggggBBg==ggBBBBBBBggg","gggggggg,,,g==ggBBB,BBBggg","gggggggg,,gg==ggggg,gggggg","..........................",
+"..........................","gggggggggggg==gggggggggggg","gggggggggggg==gggBBBBBgggg","gggggggggggg==gggBBBBBgggg",
+"gggggggggggg==gggBBBBBgggg","gggggggggggg==gggBBBBBgggg","gggggggggggg==ggggg,gggggg","gggggggggggg==............",
+"gggggggggggg==............","############==gggggggggggg","############==gggggggggggg","############==gggggggggggg",
+"############==gggggggggggg","############==gggggggggggg","############==gggggggggggg",
     ],
     spawn:[12,38],
-    arrive:{ down:[12,38], tower:[21,7],
-             /* (3.03) out of the hill's rooms, onto their doors */
-             lemons:[8,15], guards:[19,15], grandpa:[18,25],
-             villa:[12,9] },                                   // (3.04) out of the villa's great door
+    arrive:{ down:[12,38], tower:[21,6],
+             /* (3.03) out of the hill's rooms, onto their doors — (3.32) at the bottom of each */
+             lemons:[9,21], guards:[19,21], grandpa:[19,30],
+             villa:[12,4] },                                   // (3.04) out of the villa's great door
+    /* (3.32) the two topiaries beside the gate stand up over the path behind
+       them (walkOverlays, 13-walkmap.js): whoever walks there goes behind
+       them. Traced round the painting of 2026-10-20. */
+    /* (3.33) the poolside's corner — below the lower deck chair, right of the
+       screen (6–7, rows 9–11) — shut until the villa is open (wSolid) */
+    shut:(x, y)=> x >= 6 && x <= 7 && y >= 9 && y <= 11 && !r5().sottoBeaten,
+    over:[
+      { name:'topiary, west of the gate', foot:11, poly:[[11.25,10.45],[11.32,10.38],[11.66,10.38],[11.73,10.45],[11.73,10.84],
+        [11.84,10.94],[11.84,11.36],[11.6,11.45],[11.6,11.72],[11.1,11.72],[11.1,10.94],[11.24,10.84]] },
+      { name:'topiary, east of the gate', foot:11, poly:[[14.35,10.45],[14.41,10.38],[14.73,10.38],[14.79,10.45],[14.79,10.84],
+        [14.96,10.95],[14.96,11.36],[14.9,11.45],[14.9,11.78],[14.48,11.78],[14.48,11.45],[14.22,11.36],[14.22,10.95],[14.35,10.84]] },
+    ],
     things:[
       { x:12, y:38, w:2, walk:true, verb:'Down', where:'The Old Town', act:()=> r5HillDown() },
-      { x:21, y:7,  walk:true, verb:'In', where:'The Tower', arrow:'up', act:()=> r5TowerIn() },
+      { x:21, y:6,  walk:true, verb:'In', where:'The Tower', arrow:'up', act:()=> r5TowerIn() },
       /* (2.95) the Sottocapo, the Padrino's right hand, filling the villa's
-         great doorway: nobody goes in past him */
-      { x:12, y:9,  w:2, sprite:'sottocapo', icon:'🕴️', verb:'Talk', act:()=> r5VillaDoor(), when:()=> !r5().sottoBeaten,
+         great doorway: nobody goes in past him — (3.32) between the middle
+         columns, at the top of the courtyard; you speak to him from beside them */
+      { x:12, y:4,  w:2, sprite:'sottocapo', icon:'🕴️', verb:'Talk', act:()=> r5VillaDoor(), when:()=> !r5().sottoBeaten,
         mark:()=> !!r5().holdBroken },
       /* (3.04) beaten, he runs inside, down to his master: the door is yours */
-      { x:12, y:9,  w:2, walk:true, verb:'In', where:'The villa', arrow:'up', act:()=> r5RoomDoor('villa'), when:()=> !!r5().sottoBeaten },
-      { x:18, y:9,  w:2, h:2, verb:'Fountain', act:()=> r5VillaFountain() },
-      /* (3.03) the hill's houses have their rooms, and their people in them */
-      { x:8,  y:15, walk:true, verb:'In', where:'The lemon farm', arrow:'down', act:()=> r5RoomDoor('room_lemons') },
-      { x:19, y:15, walk:true, verb:'In', where:'The guard house', arrow:'down', act:()=> r5RoomDoor('room_guards') },
-      { x:18, y:25, walk:true, verb:'In', where:"Grandpa's", arrow:'down', act:()=> r5RoomDoor('room_grandpa') },
+      { x:12, y:4,  w:2, walk:true, verb:'In', where:'The villa', arrow:'up', act:()=> r5RoomDoor('villa'), when:()=> !!r5().sottoBeaten },
+      { x:12, y:5,  w:2, h:2, verb:'Fountain', act:()=> r5VillaFountain() },   // (3.32) in the courtyard, before the door
+      /* (3.03) the hill's houses have their rooms, and their people in them —
+         (3.32) every door at the bottom of its building: the lemon farm's is
+         its packing shed's (two squares: the big door is behind its crates) */
+      { x:9,  y:21, w:2, walk:true, verb:'In', where:'The lemon farm', arrow:'up', act:()=> r5RoomDoor('room_lemons') },
+      /* (3.33) up on the dirt patch, in the doorway */
+      { x:19, y:21, walk:true, verb:'In', where:'The guard house', arrow:'up', act:()=> r5RoomDoor('room_guards') },
+      { x:19, y:30, walk:true, verb:'In', where:"Grandpa's", arrow:'up', act:()=> r5RoomDoor('room_grandpa') },
+      /* (3.33) the Padrino's pool, once the villa is open: at the water's
+         corner, a swim — the Whalelord will not have it (r5PoolDive) */
+      { x:5,  y:9,  verb:'Dive and relax', act:()=> r5PoolDive(), when:()=> !!r5().sottoBeaten },
     ],
     stealth:{ kind:'town', light:true, feel:0,
       guards:[
         { id:'a',  kind:'soldato', path:[[1,14],[24,14]], face:'r', clock:640, pause:3, sprite:'soldato2' },
         { id:'b',  kind:'soldato', path:[[24,24],[1,24]], face:'l', clock:660, pause:3, sprite:'soldato1' },
-        { id:'c',  kind:'soldato', path:[[5,11],[23,11]], face:'r', clock:620, pause:3, sprite:'soldato2' },
+        { id:'c',  kind:'soldato', path:[[8,10],[23,10]], face:'r', clock:620, pause:3, sprite:'soldato2' },
         { id:'g1', kind:'talker',  x:11, y:13, face:'r', sprite:'soldato1' },
         { id:'g2', kind:'talker',  x:14, y:13, face:'l', sprite:'soldato2' },
-        { id:'v1', kind:'talker',  x:10, y:9,  face:'r', sprite:'soldato2' },
-        { id:'v2', kind:'talker',  x:15, y:9,  face:'l', sprite:'soldato1' },
+        { id:'v1', kind:'talker',  x:10, y:5,  face:'r', sprite:'soldato2' },      // (3.32) either side of the fountain
+        { id:'v2', kind:'talker',  x:15, y:5,  face:'l', sprite:'soldato1' },
         { id:'l1', kind:'lookout', x:2,  y:13, face:'r', spin:'cw', clock:680, pause:5, sprite:'soldato1' },
       ] },
     paint:(d)=> paintTown(d),
@@ -1640,7 +1674,8 @@ const R5_ALL_ROOMS = Object.values(R5_ROOMS).flat();
    its floors and side rooms. The ghosts that pour up the Garrison the night
    the dead rise, and haunt the Family's men (14-stealth.js), are these. (2.97:
    the Tailed Cats that live down there among them are not dead; 3.14: the
-   Tapirs have left, and the Goblin and Jax's Firehound are among the dead.) */
+   Tapirs have left, and the Goblin and Jax's Firehound are among the dead;
+   3.35: the Tailed Cats have gone up under the villa, with the psychics.) */
 const R5_HILL_GHOSTS = [...new Set([...R5_FLOORS, ...R5_ALL_ROOMS].flatMap(id=>{
   const w = R5_DECKS[id] && R5_DECKS[id].stealth && R5_DECKS[id].stealth.wild;
   return ((w && w.table) || []).map(t=> t.sp);
@@ -2688,7 +2723,9 @@ async function r5BoneVision(){
    in (r5MaliceStep, from r5NoteStep), never while anything else is said:
      malice1      the first time — any catacomb floor or room but the Landing,
                   the Old Town's streets, the Hilltop
-     (the ghost phoenix: the Whalelord wonders if that is it — r5SenseArmoury)
+     (the ghost phoenix: the Whalelord wonders if that is it — r5SenseArmoury;
+     3.35: the phoenix tells him no — something very old is behind the
+     Padrino, and it is cold (said.gpBehind) — and the lines below follow on)
      maliceGP     "despite ghost phoenix disappearing … the malice has not left
                   the island": the first time after it goes to rest ('rest'); or,
                   with no phoenix of yours, once you are up in the Old Town:
@@ -2810,13 +2847,22 @@ async function r5Malice(key){
     await fs(`I felt it too. It was there, and then it was gone — as if it hid again, the moment it knew we felt it.`);
     await fs(`It is very old. Older than my grove. Older than anything I know.`);
     await ws(`And it hates. I have never felt anything hate like that. Not even me, when I lost my core.`);
+    /* (3.35) felt for the first time after the old phoenix's warning */
+    if(s.gpBehind) await ws(`The old phoenix said something very old is behind the Padrino. I think we just felt it.`);
   } else if(key === 'maliceGP' && r.phoenixGone){
     await ws(`That cold again.`);
-    await ws(`I was sure it was the old phoenix I had been feeling, all this time. All that anger. But the old phoenix is at rest now — and this is still here.`);
-    await fs(`It was never the phoenix. The phoenix burned. This is cold — and it is still down there, deep under the island. Waiting.`);
+    if(s.gpBehind){                                // (3.35) it told you what this was
+      await ws(`The old phoenix is at rest now — and this is still here. The phoenix was right: something very old is behind the Padrino.`);
+      await fs(`The phoenix burned. This is cold — and it is still down there, deep under the island. Waiting.`);
+    } else {
+      await ws(`I was sure it was the old phoenix I had been feeling, all this time. All that anger. But the old phoenix is at rest now — and this is still here.`);
+      await fs(`It was never the phoenix. The phoenix burned. This is cold — and it is still down there, deep under the island. Waiting.`);
+    }
   } else if(key === 'maliceGP'){
     await ws(`That cold again.`);
-    await ws(`It is not the old phoenix. The phoenix is down in the Armoury, far behind us, warm and sad. This comes from much deeper.`);
+    await ws(s.gpBehind
+      ? `It is not the old phoenix. The phoenix is down in the Armoury, far behind us. This is the thing it told us of — the thing behind the Padrino.`
+      : `It is not the old phoenix. The phoenix is down in the Armoury, far behind us, warm and sad. This comes from much deeper.`);
     await fs(`The phoenix burns. This is cold. Something else is down there — something very old.`);
   } else if(key === 'maliceGPRest'){
     await ws(`The old phoenix is at rest now. And still the cold is here. It never had anything to do with the phoenix.`);
@@ -2830,6 +2876,139 @@ async function r5Malice(key){
   }
   w.busy = false;
   ui.sceneRunning = false;
+}
+
+/* ============================================================
+   THE WHALELORD'S SENSE (3.35)
+   The designer: "let whalelord have a button to advise about the monsters
+   available on each level of the catacombs. He should say, 'I sense these
+   monsters on this floor' - their sprites should then appear small but can
+   be clicked to be enlarged similar to barnaby's culprit guessing window.
+   this will help the player identify the floors needed to catch their
+   missing monsters."
+   A button with his face in the stage's top-left corner, on every catacomb
+   floor and side room — not on the night the dead rose (nothing wild comes
+   out then, and the clock sits there). Pressed, his card: "I sense these
+   monsters on this floor." (in a side room, "in this room"), and the wild
+   ones of this floor or room, small, in the form you meet them in here — a
+   ✓ on any you have caught, "rare" under the rarer ones (they come a little
+   stronger, `plus`). Tap one to see it big, with its name (as Barnaby's
+   board does, zoomMon). Nothing on the floor moves while it is open (the
+   card is a .refine-scrim, which stealthPaused counts).
+   ============================================================ */
+function r5SenseDue(d){ return !!(d && r5IsCata(d) && !stealthRush(d) && !d.vault); }
+function r5SenseButton(d){
+  const stage = $('#walkStage');
+  const old = document.getElementById('r5Sense');
+  if(!stage || !r5SenseDue(d)){ if(old) old.remove(); return null; }
+  if(old) return old;
+  r5SenseCss();
+  const b = document.createElement('button');
+  b.id = 'r5Sense';
+  b.className = 'r5-sense-btn';
+  b.innerHTML = `${monPortrait('whalelord', 26, { view:'front', bare:true, crowned:whaleName() === 'Cuain' })}<span>Sense<br>monsters</span>`;
+  b.addEventListener('click', ()=> r5SenseCard());
+  stage.appendChild(b);
+  return b;
+}
+/* This floor's wild ones, once each, in the table's order (the common ones
+   first): the form each is met in here — at the level catacombEncounter
+   pitches the pack at (your strongest, held to the floor's band) — whether
+   you have caught one, and whether it is one of the rarer ones. */
+function r5SenseList(d){
+  const w = d && d.stealth && d.stealth.wild;
+  const table = (w && w.table) || [];
+  const [lo, hi] = (w && w.lv) || [76, 84];
+  const best = Math.max(lo, ...battleParty().map(m=> m.level || 0));
+  const base = Math.max(lo, Math.min(hi, best));
+  const caught = state.caughtSpecies || [], seen = new Set();
+  return table.filter(t=> SPECIES[t.sp] && !seen.has(t.sp) && seen.add(t.sp)).map(t=>{
+    const lv = Math.min(CATCH_LEVEL_CAP, base + (t.plus || 0));
+    return { sp:t.sp, stage:evolutionStage(t.sp, lv), rare:!!t.plus, caught:caught.includes(t.sp) };
+  });
+}
+function r5SenseCard(){
+  const w = walkState(), d = DECKS[w.deck];
+  if(!d || !r5SenseDue(d) || w.busy || ui.sceneRunning || document.querySelector('.scene-say, .refine-scrim, .mon-zoom')) return;
+  r5SenseCss();
+  boardCss();
+  if(typeof releaseKeys === 'function') releaseKeys();
+  const list = r5SenseList(d);
+  const where = R5_ALL_ROOMS.includes(d.key) ? 'in this room' : 'on this floor';
+  const ov = document.createElement('div');
+  ov.className = 'refine-scrim r5-sense';
+  ov.innerHTML = `
+    <div class="refine-card">
+      <div class="r5-sense-head">
+        ${faceMon('whalelord', { crowned:whaleName() === 'Cuain' })}
+        <div>
+          <div class="refine-name">${escapeHtml(whaleName())}</div>
+          <div class="r5-sense-say"><b>${list.length ? `"I sense these monsters ${where}."` : `"I sense no wild monsters ${where}."`}</b></div>
+        </div>
+      </div>
+      ${list.length ? `
+      <div class="r5-sense-grid">
+        ${list.map(m=> `<button class="r5-sense-mon${m.caught ? ' got' : ''}" data-sp="${m.sp}" data-stage="${m.stage}" aria-label="${escapeHtml(SPECIES[m.sp].name)}">
+          ${monPortrait(m.sp, 52, { view:'front', bare:true, stage:m.stage })}
+          ${m.caught ? '<span class="r5-sense-got">✓</span>' : ''}
+          ${m.rare ? '<span class="r5-sense-rare">rare</span>' : ''}
+        </button>`).join('')}
+      </div>
+      <div class="refine-sub">Tap a monster to see it bigger. ✓ means you have caught one.</div>` : ''}
+      <button class="btn btn-ghost" id="r5SenseBack" style="margin-top:10px;">Back</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = ()=>{ if(ov.parentNode) ov.remove(); };
+  ov.querySelector('#r5SenseBack').addEventListener('click', close);
+  ov.addEventListener('click', e=>{ if(e.target === ov) close(); });
+  ov.querySelectorAll('[data-sp]').forEach(b=> b.addEventListener('click', ()=>
+    r5SenseZoom(b.dataset.sp, +b.dataset.stage, b.classList.contains('got'))));
+}
+/* One of them at full size, with its name — tap outside it to go back. */
+function r5SenseZoom(sp, stage, caught){
+  boardCss();
+  r5SenseCss();
+  const z = document.createElement('div');
+  z.className = 'mon-zoom r5-sense-zoom';
+  z.innerHTML = `<div class="r5-sz-in">
+    ${monPortrait(sp, ZOOM_PX, { view:'front', bare:true, stage })}
+    <div class="r5-sz-name">${escapeHtml(SPECIES[sp].name)}</div>
+    <div class="r5-sz-got${caught ? '' : ' not'}">${caught ? '✓ Caught' : 'Not caught yet'}</div>
+  </div>`;
+  z.addEventListener('click', e=>{ if(e.target === z) z.remove(); });
+  document.body.appendChild(z);
+}
+function r5SenseCss(){
+  if(document.getElementById('r5SenseCss')) return;
+  const st = document.createElement('style');
+  st.id = 'r5SenseCss';
+  st.textContent = `
+    .r5-sense-btn{position:absolute;left:8px;top:8px;z-index:8;display:flex;align-items:center;gap:5px;
+      background:rgba(244,236,216,.9);border:1px solid var(--line);border-radius:10px;padding:3px 9px 3px 4px;
+      font:800 11px/1.1 system-ui;color:var(--ink-soft);text-align:left;cursor:pointer;}
+    .r5-sense-btn .mon-portrait{width:26px !important;height:26px !important;box-shadow:none !important;background:none !important;}
+    .r5-sense-btn:active{transform:scale(.95);}
+    .r5-sense .refine-card{max-width:400px;}
+    .r5-sense-head{display:flex;align-items:center;gap:10px;text-align:left;}
+    .r5-sense-head .mon-portrait{flex:none;}
+    .r5-sense-say{font-size:15px;line-height:1.35;margin-top:2px;}
+    .r5-sense-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:14px 0 8px;}
+    .r5-sense-mon{all:unset;position:relative;width:60px;height:60px;border-radius:12px;cursor:zoom-in;
+      display:flex;align-items:center;justify-content:center;background:var(--paper-2);border:2px solid var(--line);}
+    .r5-sense-mon.got{border-color:var(--jade);background:rgba(95,168,107,.14);}
+    .r5-sense-mon:active{transform:scale(.94);}
+    .r5-sense-mon .mon-sprite{filter:none !important;box-shadow:none !important;background:transparent !important;}
+    .r5-sense-got{position:absolute;right:-5px;top:-6px;width:19px;height:19px;border-radius:50%;background:var(--jade);
+      color:#fff;font:900 12px/19px system-ui;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+    .r5-sense-rare{position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);padding:0 5px;border-radius:7px;
+      background:#6a4a9a;color:#fff;font:800 9px/14px system-ui;letter-spacing:.04em;}
+    .mon-zoom.r5-sense-zoom{background:rgba(20,18,14,.9);}
+    .r5-sz-in{display:flex;flex-direction:column;align-items:center;gap:8px;}
+    .r5-sz-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:28px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.6);}
+    .r5-sz-got{font:800 14px system-ui;color:#c9f5cf;}
+    .r5-sz-got.not{color:#f3e2b8;}
+  `;
+  document.head.appendChild(st);
 }
 
 /* ============================================================
@@ -2847,6 +3026,7 @@ function r5FloorRender(world, d){
   const say = html=> sceneSay([faceMon('whalelord')], whaleName(), html);
   const later = f=> setTimeout(f, 500);
   r5WispRender(d);                                // (3.02) the little light, where it waits
+  r5SenseButton(d);                               // (3.35) the Whalelord's "Sense monsters"
   /* (3.18) under the villa: the first time on each floor, its scene; after
      that Nino at his stop, then the floor's word as on any other */
   if(d.under){
@@ -3047,9 +3227,13 @@ async function r5SenseArmoury(){
     `<b>"Wait."</b><br><br><b>"There is something else in this hill. Not the Family's men. Something dead — and so angry that it burns."</b>`);
   await sceneSay([whale], wn,
     `<b>"It is in the rooms off this stair. The furthest one: the Armoury, past the Barracks."</b>`);
-  /* (3.17) the red herring (part 6 §12c): is this the cold they have felt? */
-  if(r5().said.malice1)
+  /* (3.17) the red herring (part 6 §12c): is this the cold they have felt?
+     (3.35: the phoenix sets him right — gpHerring) */
+  if(r5().said.malice1){
+    r5().said.gpHerring = true;
+    saveProfile();
     await sceneSay([whale], wn, `<b>"So much anger… Perhaps that is what we have been feeling, deep under the hill, all this time."</b>`);
+  }
 }
 
 /* ============================================================
@@ -3118,6 +3302,9 @@ function r5Css(){
   const st = document.createElement('style');
   st.id = 'r5Css';
   st.textContent = `
+    /* (3.33) waist-deep in the Padrino's pool, for a moment (r5PoolDive) */
+    .walk-you img{transition:translate .18s ease, clip-path .18s ease;}
+    .walk-you.r5-dunk img{translate:0 24%;clip-path:inset(0 0 34% 0);}
     .r5-ghostfire{display:inline-block;line-height:0;
       filter:brightness(.6) sepia(1) hue-rotate(225deg) saturate(3) drop-shadow(0 0 8px rgba(170,90,255,.95));opacity:.92;}
     @keyframes r5Flicker{0%,100%{transform:scale(1);filter:brightness(1)}40%{transform:scale(1.07);filter:brightness(1.35)}
@@ -3543,23 +3730,48 @@ async function r5PhoenixScene(world, d){
       `<b>"I had no time to send all my power with my core. What is left of it is here, with me — and it belongs to that phoenix, not to me. ` +
       `If you ever find it, bring it to me."</b>`);
   }
-  /* (3.02) the little light that brought you here (part 6 §12b, scene 3) */
+  /* (3.02) the little light that brought you here (part 6 §12b, scene 3).
+     (3.35) The designer: "ghost phoenix's dialogue should not promise the
+     little light not to have war. but instead persuade the little light that
+     padrino must be stopped and that a greater evil lurks behind him
+     (referencing nemesis)". It is Nemesis that whispers to the Padrino in his
+     dreams (part 6 §12c); the phoenix has felt it in the hill, and the little
+     light knows it too. And the cold the Whalelord and the Forest Fairy have
+     felt is this: the Whalelord's guess at the stair (r5SenseArmoury) set
+     right, and said again as the cold comes back (r5Malice, gpBehind). */
   if(r5NinoEarly() && (document.getElementById('sg-wisp') || r.said.wispLanding)){
     if(!document.getElementById('sg-wisp')) r5Wisp(5.5, 3.1, 600);
     await sceneSay([gp()], R5_GP, `It turns its burning eyes on the little light.<br><br><b>"So, little light. You brought them to me."</b>`);
     await sceneSay([gp()], R5_GP,
-      `<b>"Every night I want to burn this whole Family down. And every night, it asks me not to. It does not want anyone hurt. Not even them."</b>`);
-    await sceneSay([gp()], R5_GP, `<b>"All right, little light. No war. Just a way through for your friend."</b>`);
+      `<b>"Every night I want to burn this whole Family down. And every night, you ask me not to. You do not want anyone hurt. Not even them."</b>`);
+    await sceneSay([gp()], R5_GP,
+      `<b>"But listen to me, little light. The Padrino must be stopped. His men hunt monsters for their cores — and he will not stop until he has them all."</b>`);
+    await sceneSay([gp()], R5_GP,
+      `<b>"And he is not the worst of it. Something is behind him. Something very old, and very cruel. At night it whispers to him, and he does what it says."</b><br><br>` +
+      `The little light trembles.`);
+    if(r.said.malice1)
+      await sceneSay([whale], wn, r.said.gpHerring
+        ? `<b>"Something very old… The cold! We have felt it, deep under the island. I thought it was you, phoenix."</b>`
+        : `<b>"Something very old… The cold! We have felt it too, deep under the island."</b>`);
+    if(r.said.gpHerring) await sceneSay([gp()], R5_GP, `<b>"Me? I burn, whale. That thing is cold."</b>`);
+    await sceneSay([gp()], R5_GP,
+      `<b>"If nobody stops the Padrino, that thing gets everything it wants. We cannot wait any longer."</b><br><br>` +
+      `The little light sinks low, for a long moment. Then it bobs up and down. Yes.`);
+    r.said.gpBehind = true;                        // told: something is behind him (r5Malice)
   }
-  /* The plan, and the three minutes (2.91). */
+  /* The plan, and the three minutes (2.91). (3.35) The designer: it "should
+     not assure the player that if they fail, the ghosts will push again …
+     the phoenix should not lower narrative stakes. the boys should feel a
+     sense of urgency". Caught, you are still sent back to run again
+     (r5RushOut) — it just does not say so beforehand. */
   await sceneSay([gp()], R5_GP,
     `<b>"So we will not fight them alone any more. If every ghost in this hill pushes at once, we can break free of the psychics — for a little while."</b>`);
   await sceneSay([gp()], R5_GP,
     `<b>"Three minutes. That is the longest we can hold out before their minds press us down again."</b><br><br>` +
     `<b>"For those three minutes the dead will hold every one of the Padrino's soldiers on the floors above — soldatos, capos, all of them."</b>`);
   await sceneSay([gp()], R5_GP,
-    `<b>"So run. Up through all four floors and out at the top, into the church, and do not stop."</b><br><br>` +
-    `<b>"If the time runs out before you are through, they will catch you — and we will push again, and you will run again."</b>`);
+    `<b>"So run. Up through all four floors and out at the top, into the church."</b><br><br>` +
+    `<b>"We cannot hold them one second longer. If the time runs out before you are through, they will catch you. Do not stop for anything!"</b>`);
   if(mine){
     await sceneSay([faceMon('phoenix', { crowned:isCrowned(mine.mon) })], displayName(mine.mon), `<b>"Will I see you again?"</b>`);
     await sceneSay([gp()], R5_GP, `<b>"Before I rest, little one. I promise."</b>`);
@@ -4655,7 +4867,7 @@ async function r5TownCaught(id, d, g, def){
   const back = ()=>{
     w.at = w.at || {}; w.ghostAt = w.ghostAt || {};
     if(hill){
-      w.at.hilltop = { x:18, y:25 }; w.face = 'd'; w.ghostAt.hilltop = { x:17, y:25 };
+      w.at.hilltop = { x:19, y:30 }; w.face = 'd'; w.ghostAt.hilltop = { x:19, y:31 };   // (3.32) his door is at the bottom now
       r.disguised = true;                         // Grandpa hands you your cap
       ui.currentZone = r5Zone('hilltop') || ui.currentZone;
     } else {
@@ -4957,7 +5169,77 @@ async function r5VillaDoor(){
   return sceneSay([sotto()], S, r5Turn('villaDoor', R5_SOTTOCAPO_LINES));
 }
 function r5VillaFountain(){
-  return sceneSay([], 'The fountain', `A stone lion spits water into a round basin. Somebody has scrubbed it very, very clean.`);
+  return sceneSay([], 'The fountain', `Water spills from a little stone bowl on top into a wide round basin. Somebody has scrubbed it very, very clean.`);
+}
+/* (3.33) The Padrino's pool (the designer: "when the player reaches the
+   edges of the pool, allow the interaction: 'Dive and relax', whereupon the
+   sprite goes halfway into the pool's bottom right tile but gets thrown back
+   out by the whalelord who quickly slides into that square. The whalelord
+   then interjects by mock-scolding the player … in simple, direct writing").
+   Open once the villa is: the poolside's corner, below the lower deck chair
+   and right of the screen (the Hilltop's `shut`). His lines in turn; while
+   the Padrino still has the cores, every other one says so. He floats in —
+   a ghost: no splash. */
+const R5_POOL_DIVE = { x:5, y:9 };                 // the water's bottom-right square
+const R5_POOL_TEASE = [
+  `<b>"What does a land-monkey like you want to do in the water?"</b>`,
+  `<b>"Let's not make ourselves <i>too</i> comfortable, shall we?"</b>`,
+  `<b>"You swim like a rock. A small, heavy rock."</b>`,
+  `<b>"Whales swim. Land-monkeys sink. Out you come."</b>`,
+  `<b>"A swim? Now? We are not on holiday."</b>`,
+  `<b>"You cannot hold your breath for one minute. I could hold mine for an hour."</b>`,
+];
+const R5_POOL_HURRY = [
+  `<b>"No time for a swim! The Padrino is getting away."</b>`,
+  `<b>"The cores are right there, under this house. Swim later!"</b>`,
+  `<b>"My core is under this villa, and you want to go for a swim?"</b>`,
+  `<b>"The Padrino is down there with the cores. Let's go and catch him."</b>`,
+];
+function r5PoolLine(){
+  if(r5VaultAt('won')) return r5Turn('poolFree', R5_POOL_TEASE);     // the cores are out of his hands
+  const mix = [];
+  R5_POOL_TEASE.forEach((t, i)=>{ mix.push(t); if(R5_POOL_HURRY[i]) mix.push(R5_POOL_HURRY[i]); });
+  return r5Turn('pool', mix);
+}
+async function r5PoolDive(){
+  const w = walkState();
+  if(w.busy || ui.sceneRunning || w.deck !== 'hilltop') return;
+  const me = document.getElementById('walkYou'), gh = document.getElementById('walkGhost');
+  const p = w.at && w.at.hilltop;
+  if(!me || !p) return;
+  r5Css();
+  ui.sceneRunning = true;
+  w.busy = true;
+  releaseKeys();
+  const T = WALK_T, P = R5_POOL_DIVE;
+  const put = (el, x, y, ms, ease)=>{
+    el.style.transition = `transform ${Math.round(ms * SCENE_SPEED)}ms ${ease}`;
+    el.style.transform = `translate3d(${x * T}px,${y * T}px,0)`;
+  };
+  walkFaceToward(P.x + 0.5);
+  /* in you go: halfway into the water's corner square, up to your middle */
+  put(me, (p.x + P.x) / 2, (p.y + P.y) / 2, 380, 'ease-out');
+  me.classList.add('r5-dunk');
+  await sceneWait(480);
+  /* he gets there first — and pushes you back out */
+  if(gh){
+    gh.style.zIndex = 10 + P.y + 1;                  // in front of you as he comes
+    put(gh, P.x, P.y, 240, 'ease-in');
+    await sceneWait(200);
+  }
+  me.classList.remove('r5-dunk');
+  put(me, p.x + 0.2 * Math.sign(p.x - P.x), p.y + 0.2 * Math.sign(p.y - P.y), 170, 'ease-out');
+  await sceneWait(190);
+  put(me, p.x, p.y, 160, 'ease-in-out');
+  await sceneWait(200);
+  me.style.transition = '';
+  if(gh){ gh.style.transition = ''; w.ghostAt = w.ghostAt || {}; w.ghostAt.hilltop = { x:P.x, y:P.y }; }
+  walkGhostFaceToward(p.x + 0.5);                   // he looks at you…
+  walkFaceToward(P.x + 0.5);                        // …and you at him
+  refreshWalk();
+  await sceneSay([faceMon('whalelord')], whaleName(), r5PoolLine());
+  w.busy = false;
+  ui.sceneRunning = false;
 }
 /* Grandpa (Lucia's, from the harbour): a bed and a bowl of something, up
    here where the tower's fights are — Recover. */
@@ -5354,8 +5636,9 @@ async function r5StonesReminder(){
    piece — the stones, and where each one is — and leaps over the
    Sottocapo's head into the villa. */
 function r5MKDue(){ const r = r5(); return !!(r.holdBroken && r.ninoMet && !r.mkVilla); }
-/* The forecourt, before the villa's door. */
-function r5InForecourt(p){ return !!p && p.y <= 11 && p.x >= 9 && p.x <= 16; }
+/* The forecourt, before the villa's door — (3.32) its courtyard, round the
+   fountain, from the top of the path up to the door. */
+function r5InForecourt(p){ return !!p && p.y >= 4 && p.y <= 8 && p.x >= 10 && p.x <= 15; }
 function r5HillStep(d, p){
   if(d.key !== 'hilltop' || ui.sceneRunning || !r5MKDue() || !r5InForecourt(p)) return;
   setTimeout(()=>{ if(ui.screen === 'hilltop' && r5MKDue() && !ui.sceneRunning) r5MKVilla(); }, 250);
@@ -5385,14 +5668,19 @@ async function r5MKVilla(){
   const MK = 'Monkey King', mk = ()=> faceMon('monkey_king', { stage:1 });
   const W = whaleName(), whale = ()=> faceMon('whalelord');
   const S = 'Sottocapo', sotto = ()=> faceNpc('sottocapo', '🕴️');
-  /* where he lands: two steps to your side, not on the Whalelord */
-  let lx = p.x + 2;
-  if(lx > 16 || (q.x === lx && q.y === p.y)) lx = p.x - 2;
-  r5MonActor('mk', 'monkey_king', lx - 0.2, p.y - 7, 1.4, { html:monPortrait('monkey_king', Math.round(WALK_T * 1.4), { view:'front', bare:true, stage:1 }), z:70 });
+  /* where he lands: beside you — two steps along if there is room, else one,
+     else above or below you — on open ground, never on the Whalelord, a
+     soldato, the fountain or the Sottocapo (3.32: the courtyard is narrow) */
+  const hd = DECKS.hilltop;
+  const open = (x, y)=> !wSolid(hd, x, y) && !wBlockedBy(hd, x, y) && !wOccupied(hd, x, y) &&
+                        !(x === p.x && y === p.y) && !(x === q.x && y === q.y);
+  const [lx, ly] = [[2,0],[-2,0],[1,0],[-1,0],[0,-1],[0,1],[1,-1],[-1,-1],[1,1],[-1,1],[0,-2],[0,2]]
+    .map(([dx, dy])=> [p.x + dx, p.y + dy]).find(([x, y])=> open(x, y)) || [p.x + 1, p.y];
+  r5MonActor('mk', 'monkey_king', lx - 0.2, ly - 7, 1.4, { html:monPortrait('monkey_king', Math.round(WALK_T * 1.4), { view:'front', bare:true, stage:1 }), z:70 });
   actorFace('mk', lx < p.x);                     // he looks at you
   walkFaceToward(lx + 0.5);
   await sceneWait(300);
-  await r5LeapActor('mk', lx - 0.2, p.y - 0.4, 700, 0, false);
+  await r5LeapActor('mk', lx - 0.2, ly - 0.4, 700, 0, false);
   sceneShake(500, t=> 0.1 * Math.max(0, 1 - t / 500));
   await sceneWait(400);
   await sceneSay([], '', `Somebody drops out of the sky and lands beside you with a thump — and straightens up, grinning, with one of the Padrino's lemons in his hand, peel and all.`);
@@ -5434,9 +5722,10 @@ async function r5MKVilla(){
     await sceneSay([mk()], MK, `<b>"Then it has been here a long time."</b> He scowls at the ground under his feet. <b>"It troubles me."</b>`);
   } else await sceneSay([mk()], MK, `He scowls at the ground under his feet.<br><br><b>"It troubles me."</b>`);
   await sceneSay([mk()], MK, `<b>"I have waited a long time for this. I go first."</b>`);
-  /* over the Sottocapo's head, onto the roof, and in */
+  /* over the Sottocapo's head, onto the roof, and in — (3.32) the roof over
+     the great door, at the top of the courtyard */
   sceneShake(400, t=> 0.08 * Math.max(0, 1 - t / 400));
-  await r5LeapActor('mk', 12.3, 2.6, 1300, 3, true);
+  await r5LeapActor('mk', 12.3, 0.2, 1300, 3, true);
   sceneActorGone('mk');
   r.mkVilla = true;
   await saveProfile();
@@ -5496,8 +5785,9 @@ async function r5SottoBeaten(){
   if(first) state.inventory.protein = (state.inventory.protein || 0) + 3;
   await saveProfile();
   const w = walkState();
-  w.at = w.at || {}; w.at.hilltop = { x:12, y:10 }; w.face = 'u';
-  w.ghostAt = w.ghostAt || {}; w.ghostAt.hilltop = { x:13, y:10 };
+  /* (3.32) on the step beside the open door, facing it */
+  w.at = w.at || {}; w.at.hilltop = { x:11, y:4 }; w.face = 'r'; w.faceX = 'r';
+  w.ghostAt = w.ghostAt || {}; w.ghostAt.hilltop = { x:11, y:5 };
   ui.walkFresh = false;
   ui.stealthFresh = true;
   ui.currentZone = r5Zone('hilltop') || ui.currentZone;
@@ -8469,7 +8759,8 @@ function r5VaultCss(){
    two); the Psychic Master's six waves of three are the new elites — the
    designer: "please give psychic master a bunch of these elites in triple
    waves" — crowned Hydra, Steelcrab, Firefox, Mime and Tailed Cat in the
-   middle, and the crowned Mindcat last.
+   middle, and the crowned Mindcat last. (3.24–3.25: the Ladybird in the
+   Steelcrab's middle; 3.36: the Hermit Sloth in the Firefox's.)
    First wins: +1 protein a disciple; the Psychic Master +3 protein (3.01;
    she gave +2 and the Psychic Stone until 3.00, +2 alone in 3.00); the
    Ghost Master +3 protein — and (3.00) in
@@ -8578,10 +8869,14 @@ const R5_TOWER = [
        psychic master when in the centre, but otherwise leave it uncrowned":
        the second wave's Ladybird steps into its middle, crowned, and the
        Steelcrab out to its flank; the fourth wave's stays a flank,
-       uncrowned. Both beam you every turn — blinded, then Exploited. */
+       uncrowned. Both beam you every turn — blinded, then Exploited.
+       (3.36) The Firefox is a wild one now, so the third wave's middle is a
+       crowned Hermit Sloth, an elite now (a master's centre is a crowned
+       starter, elite or legendary); her Firefoxes on the flanks enchant
+       her side. */
     waves:[['seadragon', R5_CROWNED('hydra'), 'sylph'],
            ['steelcrab', R5_CROWNED('ladybird'), 'firefox'],
-           ['plasma_manta', R5_CROWNED('firefox'), 'seadragon'],
+           ['plasma_manta', R5_CROWNED('hermit_sloth'), 'seadragon'],   // (3.36) a crowned Firefox until the Firefox went wild
            ['sylph', R5_CROWNED('mime'), 'ladybird'],
            ['steelcrab', R5_CROWNED('tailed_cat'), 'plasma_manta'],
            ['hydra', R5_CROWNED('mindcat', { veryHigh:{ type:'Psychic', plus:1, cast:true } }), 'firefox']],
@@ -9136,14 +9431,15 @@ const R5_TOWN_LAMPS = [[7,7],[18,7],[0,8],[25,8],[7,18],[18,18],[1,20],[24,20],[
    there: the villa (its courtyard open to the sky, a loggia of columns along
    its front), the psychics' round tower with its purple-lit windows, the
    estate's pale walls and its gate, lemon terraces down the hill. */
+/* (3.32) as the painting has them, every door at the bottom */
 const R5_HILL_HOUSES = [
-  { name:'Villa',       x:8,  y:2,  w:10, h:7, door:[12,8],  roof:'#9b4b36', villa:true, wide:true },
-  { name:'Tower',       x:19, y:2,  w:5,  h:5, door:[21,6],  roof:'#3d3352', tower:true },
-  { name:'Lemon farm',  x:6,  y:16, w:5,  h:6, door:[8,16],  roof:'#b9893f' },
-  { name:'Guard house', x:16, y:16, w:7,  h:6, door:[19,16], roof:'#6f6a66' },
-  { name:"Grandpa's",   x:16, y:26, w:6,  h:5, door:[18,26], roof:'#b8643f' },
+  { name:'Villa',       x:8,  y:0,  w:10, h:4, door:[12,3],  roof:'#9b4b36', villa:true, wide:true },
+  { name:'Tower',       x:20, y:0,  w:4,  h:6, door:[21,5],  roof:'#3d3352', tower:true },
+  { name:'Lemon farm',  x:5,  y:16, w:6,  h:5, door:[9,20],  roof:'#b9893f' },
+  { name:'Guard house', x:16, y:16, w:7,  h:5, door:[19,20], roof:'#6f6a66' },   // (3.33) its doorway walked into
+  { name:"Grandpa's",   x:17, y:26, w:5,  h:4, door:[19,29], roof:'#b8643f' },
 ];
-const R5_HILL_LAMPS = [[11,12],[14,12],[4,11],[24,11],[9,10],[16,10],[20,7],[22,7],[5,16],[11,16],[14,16],[23,16],[3,22],[22,22],[11,22],[14,22],[20,25],[11,32],[14,32]];
+const R5_HILL_LAMPS = [[11,12],[14,12],[20,9],[22,9],[10,5],[15,5],[11,19],[14,19],[11,27],[14,27],[11,30],[14,30],[18,31],[20,31]];
 const R5_TOWN_PLAN = {
   old_town:{ houses:R5_TOWN_HOUSES, lamps:R5_TOWN_LAMPS },
   hilltop: { houses:R5_HILL_HOUSES, lamps:R5_HILL_LAMPS, lemons:13, stucco:true, gate:[[11,12],[14,12]] },

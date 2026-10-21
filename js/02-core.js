@@ -67,7 +67,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.37';
+const GAME_VERSION = '3.38';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1484,7 +1484,11 @@ function crownSparkles(px){
      water_starter2       second evolution
    combined with the view suffix, e.g. water_starter1_front.png */
 function spriteKey(species, stage, crowned){
-  return species + (stage ? String(stage) : '') + (crowned ? '_c' : '');
+  /* (3.38) A legendary born from an egg, a seed or a stone (`oneLook`) is its
+     base picture at every stage — its one evolution is the birth — and
+     crowned, `<species>_c`. */
+  const st = (typeof SPECIES !== 'undefined' && SPECIES[species] && SPECIES[species].oneLook) ? 0 : stage;
+  return species + (st ? String(st) : '') + (crowned ? '_c' : '');
 }
 function spritePath(species, stage, view, crowned){
   const key = spriteKey(species, stage, crowned);
@@ -1596,9 +1600,10 @@ function spriteFallback(img){
         for(const v of views) chain.push(spritePath(species, st, v==='icon'?'icon':v, cr));
       }
     }
+    const ladder = [...new Set(chain)];          // (3.38) a one-look legendary's stages are one picture: tried once
     attempt++;
     img.dataset.try = String(attempt);
-    if(attempt < chain.length){ img.src = chain[attempt]; return; }
+    if(attempt < ladder.length){ img.src = ladder[attempt]; return; }
     // nothing in the ladder exists — remember that too, and draw the tile
     spriteResolved[spriteCacheKey(species, stage, view, crowned)] = null;
     img.outerHTML = monPortraitFallback(species, +img.dataset.px);
