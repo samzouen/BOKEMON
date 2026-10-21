@@ -68,7 +68,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.40';
+const GAME_VERSION = '3.41';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -223,13 +223,14 @@ function clickSound(el){
   if(el.id === 'sceneNext') return /^dive$/i.test(label) ? 'click' : 'back';
   return 'click';
 }
-/* The quieter tap: its own file if there is one (assets/sfx/ui_back.mp3),
-   else the click at under half its strength. */
-const BACK_FALLBACK_VOL = 0.45;
+/* The quieter tap: its own file (assets/sfx/ui_back.mp3), at its level —
+   else the click's file at under a third of its strength (3.40's 45%, 30%
+   softer: 3.41). */
+const BACK_FALLBACK_GAIN = 0.315;
 function playBackSfx(){
   const f = SFX_MAP.ui_back;
   if(f && !audio.missing[f]) return playSfx('ui_back');
-  return playSfx('ui_click', { vol:BACK_FALLBACK_VOL });
+  return playSfx('ui_click', { gain:BACK_FALLBACK_GAIN });
 }
 
 /* (3.28) SOUND EFFECTS FROM MEMORY. On an iPad an <audio> element may only
@@ -270,11 +271,23 @@ function playSfxSoon(event, waitMs){
   return null;
 }
 
+/* (3.41) Some effects play softer than their files, before the sound-effects
+   slider — the designer: "please make ui_click 60% softer by default even
+   before volume control adjustments … ui_back is fairly soft but make it 30%
+   softer by default". */
+const SFX_LEVEL = { ui_click:0.4, ui_back:0.7 };
+/* How loud an effect plays, before the slider: `gain` outright, else its
+   level (SFX_LEVEL) times `vol` — (3.40) a softer play of it. */
+function sfxGainFor(event, opts){
+  const lvl = SFX_LEVEL[event] != null ? SFX_LEVEL[event] : 1;
+  const g = (opts && opts.gain != null) ? opts.gain : lvl * ((opts && opts.vol != null) ? opts.vol : 1);
+  return Math.max(0, Math.min(1, g));
+}
 function playSfx(event, opts){
   try{
     const file = SFX_MAP[event];
     if(!file || !audio.unlocked || audio.missing[file]) return null;
-    const vol = (opts && opts.vol != null) ? Math.max(0, Math.min(1, opts.vol)) : 1;   // (3.40) a softer play of it (playBackSfx)
+    const vol = sfxGainFor(event, opts);
     /* (3.28) from memory, when it is there: one voice a sound, as the element
        was — asked again, it starts again */
     const buf = sfxBufferOf(file);
