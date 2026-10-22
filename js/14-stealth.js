@@ -336,6 +336,9 @@ function paintStealth(id, d){
     const felt = !seenNow && p && Math.max(Math.abs(g.x - p.x), Math.abs(g.y - p.y)) <= feel;
     el.style.display = (seenNow || felt) ? '' : 'none';
     el.classList.toggle('sensed', !!felt);
+    /* (3.43) a charm he carries: felt, and glowing, only within the Whalelord's feel of you */
+    if(el.classList.contains('charm-bearer'))
+      el.classList.toggle('charm-near', !!(p && Math.max(Math.abs(g.x - p.x), Math.abs(g.y - p.y)) <= feel));
     el.dataset.face = g.face;
     guardFacing(el, g.face);
     const mk = el.querySelector('.guard-mark');
@@ -400,6 +403,12 @@ function startStealth(world, d){
     e.innerHTML = `<img src="assets/npc/${guardSprite(def)}.png" alt="" ` +
       `onerror="walkArtMissing(this,'${icon}',${px},0)"><b class="guard-mark"></b>`;
     guardFacing(e, g.face);                       // (2.95) looking right: flipped
+    /* (3.43) one carrying a charm for the tower: the Whalelord feels it when
+       he is near it, and it glows (15-region5.js r5CharmBearer; paintStealth) */
+    if(d.region === 5 && typeof r5CharmBearer === 'function' && r5CharmBearer(id, g.id)){
+      e.classList.add('charm-bearer');
+      e.insertAdjacentHTML('beforeend', '<i class="guard-charm">🧿</i>');
+    }
     /* the night the dead rose: (2.95) three ghosts round every one of them —
        and (3.00) round every soldato for good, once the hold is broken */
     if(guardHaunted(d, def)){
@@ -592,6 +601,9 @@ function caughtFight(id, d, g, def, shout){
         const s = ui.stealth && ui.stealth[id];
         if(s) s.guards = s.guards.filter(x=> x.id !== g.id);
         saveProfile();
+        /* (3.43) one carrying a charm for the tower gives it up */
+        const ch = (d.region === 5 && typeof r5CharmChamberOf === 'function') ? r5CharmChamberOf(id, g.id) : null;
+        if(ch) return r5CharmWon(ch, roster, d, ()=> go(id));
         if(roster.onBeaten) return roster.onBeaten(id, d);
         storyModal(npcPortrait(who, def.kind === 'capo' ? '🕴️' : '💂', 130, 'transparent'), roster.label,
           roster.beaten || `He will not be back on watch today.`,
@@ -1148,7 +1160,18 @@ function stealthCss(){
     .walk-fog i.fog-lamp{background:rgba(255,196,90,0.22);box-shadow:inset 0 0 6px rgba(255,190,80,0.35);}
     .walk-fog i.fog-fire{background:rgba(255,150,60,0.10);}
     .walk-ent.guard img, .scene-actor.capture-guard img{filter:drop-shadow(0 0 5px rgba(255,200,90,0.8));}
-    .walk-ent.guard.sensed > :not(.guard-mark){opacity:.45;filter:grayscale(1) drop-shadow(0 0 6px rgba(150,90,220,0.9));}
+    .walk-ent.guard.sensed > :not(.guard-mark):not(.guard-charm){opacity:.45;filter:grayscale(1) drop-shadow(0 0 6px rgba(150,90,220,0.9));}
+    /* (3.43) a charm for the tower: the man carrying it glows, the charm over
+       his shoulder pulses — felt through the walls as he is */
+    .walk-ent.guard.charm-bearer.charm-near > img{filter:drop-shadow(0 0 5px rgba(110,255,200,0.95)) drop-shadow(0 0 10px rgba(170,110,255,0.85));}
+    .walk-ent.guard.charm-bearer.charm-near.sensed > img{opacity:.6;filter:grayscale(.6) drop-shadow(0 0 6px rgba(110,255,200,0.95)) drop-shadow(0 0 10px rgba(170,110,255,0.85));}
+    .walk-ent.guard.charm-bearer:not(.charm-near) .guard-charm{display:none;}
+    @keyframes charmPulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.2);opacity:1}}
+    .walk-ent.guard .guard-charm{position:absolute;right:-14%;top:-24%;font-style:normal;font-size:calc(var(--wt) * 0.42);line-height:1;
+      pointer-events:none;filter:drop-shadow(0 0 4px rgba(110,255,200,.95)) drop-shadow(0 0 8px rgba(170,110,255,.9));animation:charmPulse 1.6s ease-in-out infinite;}
+    .walk-ent.r5-charm-drop{display:flex;align-items:center;justify-content:center;pointer-events:none;}
+    .walk-ent.r5-charm-drop span{font-size:calc(var(--wt) * 0.55);line-height:1;
+      filter:drop-shadow(0 0 6px rgba(110,255,200,.95)) drop-shadow(0 0 12px rgba(170,110,255,.9));animation:charmPulse 1.6s ease-in-out infinite;}
     .walk-ent.guard .guard-mark{position:absolute;left:50%;top:-58%;transform:translateX(-50%);
       font:900 calc(var(--wt) * 0.6)/1 'Baloo 2',sans-serif;color:#ffd84a;text-shadow:0 2px 0 #2a1c00,0 0 6px #000;}
     /* the night the dead rose (2.90): every man fighting ghosts — (2.95) three

@@ -750,6 +750,7 @@ function gotcha(enemy){
 }
 
 function go(screen){
+  if(typeof closeStatusTip === 'function') closeStatusTip();   // (3.42) a pill's card goes with the screen it was on
   if(screen !== 'quiz') document.body.classList.remove('writing');
   document.body.classList.remove('in-scene');
   /* A daily reward held back during a fight gets its moment once the player is

@@ -68,7 +68,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.41';
+const GAME_VERSION = '3.43';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -189,7 +189,7 @@ try{
   document.addEventListener('pointerdown', unlockAudio, { once:false, passive:true });
   document.addEventListener('keydown', unlockAudio, { passive:true });
   document.addEventListener('click', (e)=>{
-    const el = e.target.closest('button, .menu-card, .region-card, .challenge-card, .mon-index-card, .party-head, .stone-card, .drawer-item');
+    const el = e.target.closest('button, .menu-card, .region-card, .challenge-card, .mon-index-card, .party-head, .stone-card, .drawer-item, .status-pill[data-st], .blk-wrap');
     if(!el || el.disabled) return;
     if(el.closest('.write-box, .quiz-write')) return;
     const kind = clickSound(el);                     // (3.40) silent, the quieter one, or the click
@@ -208,6 +208,7 @@ try{
               the button of a box along the bottom (sceneSay), its "Leave"
               (r5Ask's no; its yes is an action, and clicks), a story page's
               Continue or "Leave it" (#sceneNext — "Dive" is an action);
+              (3.42) and a battle pill or shield bar opening its card;
      'click'  everything else.
    A button may say outright with data-sfx="none" / "back" / "click". */
 function clickSound(el){
@@ -215,6 +216,7 @@ function clickSound(el){
   const set = el.closest('[data-sfx]');
   if(set) return set.dataset.sfx;
   if(el.classList.contains('wkey')) return 'none';
+  if(el.matches('.status-pill, .blk-wrap')) return 'back';    // (3.42) a battle pill opening its card: the quiet one
   const label = (el.textContent || '').trim();
   if(el.classList.contains('back-link') || el.id === 'backBtn' || /^←/.test(label)) return 'back';
   if(/^(cancel|close|back|not yet|✕|×)$/i.test(label)) return 'back';

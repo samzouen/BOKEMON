@@ -2184,19 +2184,18 @@ function stoneDescription(s){
     if(!d) return '';
     const head = `<b>${escapeHtml(d.name)}${mark ? ' '+mark : ''}</b>`;
     const dur  = d.turns ? ` · ${d.turns} turns` : '';
-    return `${head}${dur}<br>${d.text}<br><i>Once per battle, restored by the recharge meter.</i>`;
+    return `${head}${dur}<br>${d.text}<br><i>Once a battle — the recharge meter brings it back.</i>`;   // (3.42) shorter
   }
   if(s.tier === 'ultra'){
     const r = ultraHitRange(s);
     const m = stoneMult(s);
-    return `Hits <b>${r.min}–${r.max}</b> times across the enemies at ${m}× ATK each.` +
-           `<br><i>Once per battle, restored by the recharge meter.</i>`;
+    return `Hits <b>${r.min}–${r.max}</b> times at random enemies for ${m}× ATK each.` +
+           `<br><i>Once a battle — the recharge meter brings it back.</i>`;
   }
   if(s.tier === 'high'){
-    return `Strikes <b>two different enemies</b> for ${stoneMult(s)}× ATK.` +
-           (livingEnemies && false ? '' : '<br>With three or more foes you choose the first target.');
+    return `Hits <b>2 different enemies</b> for ${stoneMult(s)}× ATK each.`;
   }
-  return `Replaces the Basic move, dealing ${stoneMult(s)}× ATK.`;
+  return `Replaces the Basic move: ${stoneMult(s)}× ATK.`;
 }
 
 

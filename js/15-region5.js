@@ -3025,6 +3025,7 @@ function r5FloorRender(world, d){
   ['#backBtn', '#walkParty'].forEach(sel=>{ const b = $(sel); if(b) b.addEventListener('click', ()=> saveProfile()); });
   const say = html=> sceneSay([faceMon('whalelord')], whaleName(), html);
   const later = f=> setTimeout(f, 500);
+  r5PaintDroppedCharms(world, d);                 // (3.43) a charm on the floor where its man stood
   r5WispRender(d);                                // (3.02) the little light, where it waits
   r5SenseButton(d);                               // (3.35) the Whalelord's "Sense monsters"
   /* (3.18) under the villa: the first time on each floor, its scene; after
@@ -4717,6 +4718,12 @@ function r5GuardsMoved(d){
   refreshWalk();
 }
 function r5NearActs(d, p){
+  /* (3.43) a charm lying where the man who carried it stood */
+  const charms = (d.stealth ? r5CharmDropped(d.key) : []).filter(o=> Math.abs(o.x - p.x) + Math.abs(o.y - p.y) <= 1)
+    .map(o=> ({ key:'charm-' + o.ch.key, html:'🧿 Take<small>the charm</small>', at:{ x:o.x, y:o.y }, act:()=> r5PickCharm(d, o.ch) }));
+  return charms.concat(r5NearSoldatos(d, p));
+}
+function r5NearSoldatos(d, p){
   if(!d.stealth || !stealthDisguised(d) || stealthRush(d)) return [];
   const st = ui.stealth && ui.stealth[d.key];
   if(!st || st.caught) return [];
@@ -8770,6 +8777,224 @@ function r5VaultCss(){
    in Region 5 fighting ghosts from then on (14-stealth.js guardHaunted).
    Lose, and you keep every floor you have won.
    ============================================================ */
+/* ============================================================
+   THE TOWER'S CHARMS (3.43)
+   The designer: "3 big buffs that live on charms on the soldatos, not a
+   buried spot, to encourage fighting soldatos … 3 random soldatos on each
+   floor (1 in each chamber) hold the charms that siphon energy towards the
+   tower. Players must defeat 2 floors' worth of soldatos (6 in total) to
+   remove one buff in backward order (starting from 3, to 2, to 1)." And:
+   "Could the whalelord also highlight the slightly cheesy 6 6 6 aspect of
+   this format? … as he tracks, it counts up to 6-6-6 or removes from the
+   original 6-6-6".
+   And (the designer, again): "Let's allow whalelord to sense them when
+   nearby. 17 fights and one picked off the floor. If encountered early,
+   whalelord senses that it drains his energy and channels the collective
+   energies of ghosts in the catacombs towards the top of the hill. Only
+   activate the rest of the charms after the Soldato disguise has been
+   picked up. The floor one can be picked up as a teaser first, or left
+   there".
+   Eighteen chambers on the six fight floors: under the harbour each floor
+   and its two rooms; under the Old Town, three parts of each floor (it has
+   no rooms). The Armoury's charm lies on its floor from the start, behind
+   the racks (`floor`): the teaser, there until it is picked up. In each of
+   the other seventeen one soldato or lookout carries a charm — once Ugo's
+   uniform is yours (`r5CharmsAwake`: since the night the dead rose, the
+   mediums have handed them out) — picked once for the save
+   (`r5().charms.bearer`); beaten, he gives it up for good (`taken`), and
+   the Family's morning regroup brings him back without it. The Whalelord
+   feels a charm when he is near it, within his feel of the men (4 tiles):
+   then its bearer glows (14-stealth.js). Every six break the next siphon
+   (04-battle.js, THE TOWER'S SIPHONS): 3 the drain, then 2 the theft, then
+   1 the curse — the count, as the Whalelord keeps it, from 6-6-6 down to
+   0-0-0. Once the hold on the dead is broken the tower is done with, and
+   so are the charms.
+   ============================================================ */
+const R5_CHARM_CHAMBERS = [
+  { key:'cata_landing',    deck:'cata_landing',    name:'The Landing' },
+  { key:'cata_landing_r1', deck:'cata_landing_r1', name:'The Counting Room' },
+  { key:'cata_landing_r2', deck:'cata_landing_r2', name:'The Old Ossuary' },
+  { key:'cata_cistern',    deck:'cata_cistern',    name:'The Cistern' },
+  { key:'cata_cistern_r1', deck:'cata_cistern_r1', name:'The Pump Room' },
+  { key:'cata_cistern_r2', deck:'cata_cistern_r2', name:'The Drowned Chapel' },
+  { key:'cata_stair',      deck:'cata_stair',      name:'The Long Stair' },
+  { key:'cata_stair_r1',   deck:'cata_stair_r1',   name:'The Barracks' },
+  { key:'cata_stair_r2',   deck:'cata_stair_r2',   name:'The Armoury', floor:[15, 10] },   // on the floor, behind the racks: the teaser
+  { key:'cata_quarry#1',   deck:'cata_quarry',     name:'The Quarry — the old gallery', ids:['d', 'l'] },
+  { key:'cata_quarry#2',   deck:'cata_quarry',     name:'The Quarry — the terraces', ids:['b', 'c'] },
+  { key:'cata_quarry#3',   deck:'cata_quarry',     name:'The Quarry — the quarry floor', ids:['a', 'm'] },
+  { key:'cata_cellars#1',  deck:'cata_cellars',    name:'The Wine Cellars — the upper vault', ids:['a', 'l'] },
+  { key:'cata_cellars#2',  deck:'cata_cellars',    name:'The Wine Cellars — the drain', ids:['b', 'c'] },
+  { key:'cata_cellars#3',  deck:'cata_cellars',    name:'The Wine Cellars — the bottling room', ids:['d'] },
+  { key:'cata_pit#1',      deck:'cata_pit',        name:'The Fight Pit — under the crypt stair', ids:['l'] },
+  { key:'cata_pit#2',      deck:'cata_pit',        name:'The Fight Pit — the west gallery', ids:['a'] },
+  { key:'cata_pit#3',      deck:'cata_pit',        name:'The Fight Pit — the south benches', ids:['b', 'c'] },
+];
+const R5_CHARMS_PER_SIPHON = 6;
+/* The save's charms: who carries each (picked the first time it is asked),
+   and which are taken. */
+function r5Charms(){
+  const r = r5();
+  const c = r.charms = r.charms || {};
+  c.bearer = c.bearer || {};
+  c.taken = c.taken || [];
+  R5_CHARM_CHAMBERS.forEach(ch=>{
+    if(c.bearer[ch.key] || ch.floor) return;
+    const d = DECKS[ch.deck];
+    const pool = ((d && d.stealth && d.stealth.guards) || [])
+      .filter(g=> (g.kind === 'soldato' || g.kind === 'lookout') && (!ch.ids || ch.ids.includes(g.id))).map(g=> g.id);
+    if(pool.length) c.bearer[ch.key] = pool[Math.floor(Math.random() * pool.length)];
+  });
+  return c;
+}
+function r5CharmCount(){ return r5Charms().taken.filter(k=> R5_CHARM_CHAMBERS.some(ch=> ch.key === k)).length; }
+/* The siphons still up: 3 until six are taken, 2 until twelve, 1 until all
+   eighteen — none once the hold is broken. */
+function r5SiphonsUp(){
+  if(r5().holdBroken) return [];
+  const n = r5CharmCount();
+  return [1, 2, 3].filter(s=> n < (4 - s) * R5_CHARMS_PER_SIPHON);
+}
+/* The count as he keeps it: what is left feeding each siphon, in the order
+   they break — 6-6-6 at the start, 5-6-6 after one, 0-0-0 at the end. */
+function r5CharmCountdown(n){
+  if(n == null) n = r5CharmCount();
+  return [0, 1, 2].map(i=> R5_CHARMS_PER_SIPHON - Math.max(0, Math.min(R5_CHARMS_PER_SIPHON, n - i * R5_CHARMS_PER_SIPHON)));
+}
+function r5CharmTag(n){ return r5CharmCountdown(n).join('-'); }
+/* How many more charms until siphon `s` breaks — at the start 6 for the
+   drain, 12 for the theft, 18 for the curse (each pill's card says it). */
+function r5CharmsToBreak(s){ return Math.max(0, (4 - s) * R5_CHARMS_PER_SIPHON - r5CharmCount()); }
+/* The seventeen carried ones wake once Ugo's uniform is yours. */
+function r5CharmsAwake(){ const r = r5(); return !!r.disguise && !r.holdBroken; }
+/* The chamber whose charm guard `id` on `deck` still carries, or null. */
+function r5CharmChamberOf(deck, id){
+  if(!r5CharmsAwake()) return null;
+  const c = r5Charms();
+  return R5_CHARM_CHAMBERS.find(ch=> ch.deck === deck && c.bearer[ch.key] === id && !c.taken.includes(ch.key)) || null;
+}
+function r5CharmBearer(deck, id){ return !!r5CharmChamberOf(deck, id); }
+/* The charm lying on `deck`'s floor, until it is picked up: [{ ch, x, y }]. */
+function r5CharmDropped(deck){
+  if(r5().holdBroken) return [];
+  const c = r5Charms();
+  return R5_CHARM_CHAMBERS.filter(ch=> ch.deck === deck && ch.floor && !c.taken.includes(ch.key))
+    .map(ch=> ({ ch, x:ch.floor[0], y:ch.floor[1] }));
+}
+function r5PaintDroppedCharms(world, d){
+  r5CharmDropped(d.key).forEach(o=>{
+    const e = document.createElement('div');
+    e.className = 'walk-ent r5-charm-drop';
+    e.id = 'charmDrop-' + o.ch.key.replace('#', '-');
+    e.style.transform = `translate3d(${o.x * WALK_T}px,${o.y * WALK_T}px,0)`;
+    e.style.zIndex = 10 + o.y;
+    e.innerHTML = '<span>🧿</span>';
+    world.appendChild(e);
+  });
+}
+/* What the Whalelord says as each one is taken: the count, 6-6-6 going
+   down. Before he knows what they feed (the tower's word, r5SiphonReveal), the
+   breaks are only "something up the hill" going hungry. */
+const R5_CHARM_DIGITS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six'];
+function r5CharmSay(n, armouryToo){
+  const t = r5CharmCountdown(n).map(x=> R5_CHARM_DIGITS[x]).join('-');
+  const T = t[0].toUpperCase() + t.slice(1);
+  const knows = !!r5().said.siphonReveal;
+  if(n === 1) return `<b>"Six-six-six… ${t}! One down."</b>`;
+  /* the first carried one, the Armoury's teaser taken before it: two down */
+  if(armouryToo && n === 2) return `<b>"Six-six-six… ${t}! Two down — with the one from the Armoury."</b>`;
+  if(n === 6) return knows ? `<b>"${T}! The drain is broken. That tower cannot drink your strength any more."</b>`
+                           : `<b>"${T}! One stream of anger cut. Whatever is up that hill just went a little hungrier."</b>`;
+  if(n === 12) return knows ? `<b>"${T}! The theft is broken. Whatever you build up in there stays yours now."</b>`
+                            : `<b>"${T}! Two streams cut. Up the hill, something is getting very hungry."</b>`;
+  if(n === 18) return knows ? `<b>"${T}. No more six-six-six! The curse is broken. Now that tower has to fight us fair."</b>`
+                            : `<b>"${T}. No more six-six-six! Whatever was drinking up there will have to go thirsty."</b>`;
+  return `<b>"${T}.${[' Keep going.', ' Another one quiet.', ' I felt that one go.', ''][n % 4]}"</b>`;
+}
+const R5_CHARM_EMBLEM = `<div style="font-size:92px;line-height:1;filter:drop-shadow(0 0 10px rgba(120,255,200,.9)) drop-shadow(0 0 20px rgba(170,120,255,.8));">🧿</div>`;
+function r5TakeCharm(ch){
+  const c = r5Charms();
+  if(!c.taken.includes(ch.key)) c.taken.push(ch.key);
+  saveProfile();
+  return r5CharmCount();
+}
+/* What the Whalelord makes of it. Picked up early — before the uniform,
+   when it is the only one — the teaser: what it does to him, and where it
+   sends it all. The first one after that: there are more now, seventeen,
+   and the count's 6-6-6 (said in the charm's own page, not over the floor
+   while the men walk their rounds). Then the count. */
+const R5_CHARM_TEASER = [
+  `<b>"Careful with that. Hold it away from me."</b>`,
+  `<b>"It is pulling at me — drinking my strength, and the strength of every ghost in these tunnels, all the anger of the dead down here — and sending it up the hill. All the way to the top."</b>`,
+  `<b>"Who would want the anger of the dead? And what for? Keep it. I do not want anybody else to have it."</b>`,
+];
+const R5_CHARM_FIRST = [
+  `<b>"So that is what I could feel. These charms are full of the anger of the dead down here — every grudge they ever had — and they send it all up the hill. Something up there is drinking it."</b>`,
+  `<b>"Since the night the dead rose, the soldatos have been carrying them. I can feel them now, all through these tunnels: six, and six, and six. Six-six-six! Whoever made these does like a bit of drama."</b>`,
+  `<b>"When I am near one, it glows. Beat whoever carries it, and take every one. I will keep count."</b>`,
+];
+const R5_CHARM_AGAIN = [
+  `<b>"That pull again — the same as the charm we found in the Armoury. Since the night the dead rose, the soldatos have been carrying them, all through these tunnels."</b>`,
+  `<b>"I can feel them all now: six, and six, and six. Six-six-six! Whoever made these does like a bit of drama."</b>`,
+  `<b>"When I am near one, it glows. Beat whoever carries it, and take every one. I will keep count."</b>`,
+];
+function r5CharmWords(n){
+  const r = r5(), lead = `<br><br><b>${whaleName()}:</b> `;
+  if(!r5CharmsAwake()){                            // the teaser: the only one, so far
+    r.said.charmTeaser = true; saveProfile();
+    return lead + R5_CHARM_TEASER.join('<br><br>');
+  }
+  const first = !r.said.charmSeen;
+  if(first){ r.said.charmSeen = true; saveProfile(); }
+  return lead + (first ? (r.said.charmTeaser ? R5_CHARM_AGAIN : R5_CHARM_FIRST).join('<br><br>') + '<br><br>' : '') + r5CharmSay(n, first && !!r.said.charmTeaser);
+}
+/* Beaten, he gives it up (14-stealth.js caughtFight's win) — after what he
+   would have said beaten, as any soldato. */
+function r5CharmWon(ch, roster, d, then){
+  const n = r5TakeCharm(ch);
+  storyModal(R5_CHARM_EMBLEM, roster.label,
+    `${roster.beaten || 'He will not be back on watch today.'}<br><br>` +
+    `🧿 <b>He was carrying a charm</b>: a little stone eye on a cord, warm, and humming with the anger of the dead. You take it, and it goes quiet.` +
+    r5CharmWords(n), then, { subtitle:d.title });
+}
+/* …or it lies where he dropped it. */
+function r5PickCharm(d, ch){
+  if(walkState().busy || ui.sceneRunning) return;
+  const n = r5TakeCharm(ch);
+  storyModal(R5_CHARM_EMBLEM, 'A charm',
+    `Lying in the corner, behind the racks: a little stone eye on a cord, warm, and humming with the anger of the dead. You pick it up, and it goes quiet.` +
+    r5CharmWords(n), ()=> go(d.key), { subtitle:d.title });
+}
+/* In the tower, the first time (on a floor met for the first time, or the
+   first challenge): what the charms feed. */
+function r5SiphonRevealLines(){
+  const n = r5CharmCount();
+  return [
+    `<b>"So this is where it all goes. This tower does not just hold the dead down — it drinks from them."</b>`,
+    `<b>"All the anger in those catacombs, every grudge, pulled up the hill through the charms the soldatos carry — and poured into whoever stands in here."</b>`,
+    `<b>"Three siphons. The first curses us every round, and makes them so hard to hit and so hard to hurt that we would barely scratch them. The second takes everything we build up and hands it to them. The third drinks a third of our strength every turn and gives it to them — and muddles us before we even start."</b>`,
+    `<b>"Six charms feed each one. Six-six-six! Take six and the drain breaks; six more, the theft; six more, the curse."</b>` +
+      (n ? `<br><br><b>"We have taken ${n} already. That leaves ${r5CharmTag(n)}."</b>` : ''),
+    `<b>"We can fight them now, if you like. I would not."</b>`,
+  ];
+}
+async function r5SiphonReveal(){
+  if(!r5SiphonsUp().length || !r5Once('siphonReveal')) return;
+  for(const html of r5SiphonRevealLines()) await sceneSay([faceMon('whalelord')], whaleName(), html);
+}
+/* What the challenge says about them, while any is up. */
+function r5SiphonNote(up){
+  up = up || r5SiphonsUp();
+  if(!up.length) return '';
+  const what = {
+    3:`a third of your team's HP drained every turn, into theirs — and your team starts the fight confused`,
+    2:`everything your side puts up crosses to theirs at the end of every round`,
+    1:`your team cursed every round, while they dodge 66% and take 66% less`,
+  };
+  return `<br><br><b>🗼 The tower's siphons</b> — charms left <b>${r5CharmTag()}</b>:` +
+    up.slice().sort((a, b)=> b - a).map(s=> `<br>· <b>${SIPHON_NAMES[s]}</b>: ${what[s]}`).join('');
+}
+
 const R5_KNIGHT_T = { species:'goblin_knight', ai:'maxer' };
 const R5_CROWNED = (species, extra)=> Object.assign({ species, crowned:true, supplements:10 }, extra || {});
 const R5_TOWER = [
@@ -8978,6 +9203,7 @@ function r5TowerRender(world, d){
     const lines = (n === 9 && !r.phoenixGift) ? [].concat(f.seesPlain) : f.sees;
     for(const line of lines) await sceneSay([r5TowerFace(n)], f.name, line);
     if(f.whale) await sceneSay([faceMon('whalelord')], whaleName(), f.whale);
+    await r5SiphonReveal();                         // (3.43) the first time in, while the charms still feed it
     if(n === 13 && r5NinoEarly()) await r5TowerFlicker();   // (3.02) "…What was that?"
     ui.sceneRunning = false;
     w.busy = false;
@@ -9008,10 +9234,20 @@ function r5TowerNote(n){
 async function r5TowerChallenge(n){
   const f = R5_TOWER[n - 1];
   if(ui.sceneRunning || walkState().busy) return;
-  const yes = await r5Ask([r5TowerFace(n)], f.name, f.dare + '<br><br>' + r5TowerNote(n), '⚔️ Fight', 'Not yet');
+  /* (3.43) the tower's siphons, fed by the soldatos' charms: the Whalelord
+     says what they are the first time (if a floor's first meeting has not
+     already), and the challenge says which are up and the count */
+  const w = walkState();
+  if(r5SiphonsUp().length && !r5().said.siphonReveal){
+    w.busy = true; ui.sceneRunning = true;
+    try{ await r5SiphonReveal(); } finally{ ui.sceneRunning = false; w.busy = false; }
+  }
+  const up = r5SiphonsUp();
+  const yes = await r5Ask([r5TowerFace(n)], f.name, f.dare + '<br><br>' + r5TowerNote(n) + r5SiphonNote(up), '⚔️ Fight', 'Not yet');
   if(!yes || !ensurePool()) return;
   walkTeardown();
-  beginBattle(Object.assign(r5TowerBattle(n), { onWin: ()=> r5TowerWon(n) }));
+  /* only here: the Test Arena's copies (r5TowerBattle) have no siphons */
+  beginBattle(Object.assign(r5TowerBattle(n), { onWin: ()=> r5TowerWon(n) }, up.length ? { siphon:up } : {}));
 }
 function r5TowerBattle(n){
   const f = R5_TOWER[n - 1];
