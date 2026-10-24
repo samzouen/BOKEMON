@@ -1336,10 +1336,15 @@ const R5_DECKS = {
      it (R5_ROOM_FIND). In at the building's door (r5RoomDoor), out at its
      own (r5RoomOut). The Old Town's and the Hilltop's count among the finds
      once you can walk there (opens).
+     (3.44) Signora Marta's, Lucia's, Nonna's and Grandpa's are painted (the
+     designer's pick of Gemini's paintings of rooms-sheet-1): their grids
+     follow the paintings — every piece of furniture blocks, and the open
+     floor is open. Behind Nonna's armchair and Grandpa's rocking chair two
+     squares are cut off (5,1 and 6,1), as the chairs stand in the way.
      ============================================================ */
   room_marta: { key:'room_marta', region:5, house:true, zone:'harbour', title:"Signora Marta's", bg:'region5', music:'zone_harbour', art:'room_marta',
-    bx:0, by:0, bs:1/32, nat:[11*32, 8*32], spawn:[5,7], arrive:{ door:[5,7] }, prizes:[[9,6]],
-    rows:["###########","#SSF...SSR#","#........R#","#..CtC....#","#..CtC..P.#","#...,,,...#","#.........#","#####.#####"],
+    bx:0, by:0, bs:1/32, nat:[11*32, 8*32], spawn:[5,7], arrive:{ door:[5,7] }, prizes:[[9,5]],   // (3.44) off the painting's new table
+    rows:["###########","#SSF...SSR#","#........R#","#S.CtC....#","#S.CtC..P.#","#...,,,...#","#......CtC#","#####.#####"],   // (3.44) as painted: a dresser on the left wall, a little table bottom right
     things:[
       { x:5, y:7, walk:true, verb:'Out', where:'The Harbour', arrow:'down', act:()=> r5RoomOut('harbour', 'marta') },
       { x:6, y:2, sprite:'fishwife', icon:'👩', verb:'Talk', act:()=> r5Marta() },
@@ -1347,7 +1352,7 @@ const R5_DECKS = {
     paint:(d)=> paintRoom(d), onRender:(world, d)=> r5RoomRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
   room_lucia: { key:'room_lucia', region:5, house:true, zone:'harbour', title:"Lucia's", bg:'region5', music:'zone_harbour', art:'room_lucia',
     bx:0, by:0, bs:1/32, nat:[11*32, 8*32], spawn:[5,7], arrive:{ door:[5,7] }, prizes:[[3,1]],
-    rows:["###########","#NN.SS.NNR#","#........R#","#.N.....t.#","#.N..,,.C.#","#....,,...#","#.........#","#####.#####"],
+    rows:["###########","#NN.SS.NNR#","#N......CR#","#NN....CtC#","#NN..,,.C.#","#N...,,...#","#.........#","#####.#####"],   // (3.44) as painted: nets down the left wall, four chairs round the table
     things:[
       { x:5, y:7, walk:true, verb:'Out', where:'The Harbour', arrow:'down', act:()=> r5RoomOut('harbour', 'lucia') },
       { x:5, y:3, sprite:'pippo', icon:'🧒', verb:'Talk', act:()=> r5Folk('pippo') },
@@ -1379,10 +1384,10 @@ const R5_DECKS = {
     paint:(d)=> paintRoom(d), onRender:(world, d)=> r5RoomRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
   room_nonna: { key:'room_nonna', region:5, house:true, zone:'old_town', title:"Nonna's", bg:'region5', music:'zone_old_town', art:'room_nonna', opens:()=> !!r5().disguise,
     bx:0, by:0, bs:1/32, nat:[11*32, 9*32], spawn:[5,8], arrive:{ door:[5,8] }, prizes:[[9,6]],
-    rows:["###########","#SS.F..SSP#","#...A.....#","#.,,,,,...#","#.,,,,,.t.#","#.,,,,,CtC#","#.........#","#P.......R#","#####.#####"],
+    rows:["###########","#SS.F..SSP#","#...CAA...#","#.,,,,,...#","#.,,,,,CtC#","#.,,,,,CtC#","#.........#","#.......RR#","#####.#####"],   // (3.44) as painted: her armchair by the fire, a stool, a wide bed
     things:[
       { x:5, y:8, walk:true, verb:'Out', where:'The Old Town', arrow:'down', act:()=> r5RoomOut('old_town', 'nonna') },
-      { x:5, y:2, sprite:'nonna', icon:'👵', verb:'Talk', act:()=> r5Folk('nonna') },
+      { x:7, y:2, sprite:'nonna', icon:'👵', verb:'Talk', act:()=> r5Folk('nonna') },   // (3.44) beside her armchair
     ],
     paint:(d)=> paintRoom(d), onRender:(world, d)=> r5RoomRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
   room_barber: { key:'room_barber', region:5, house:true, zone:'old_town', title:"The barber's", bg:'region5', music:'zone_old_town', art:'room_barber', opens:()=> !!r5().disguise,
@@ -1454,10 +1459,10 @@ const R5_DECKS = {
     paint:(d)=> paintRoom(d), onRender:(world, d)=> r5RoomRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
   room_grandpa: { key:'room_grandpa', region:5, house:true, zone:'hilltop', title:"Grandpa's", bg:'region5', music:'zone_hilltop', art:'room_grandpa', opens:()=> !!r5().hill,
     bx:0, by:0, bs:1/32, nat:[11*32, 8*32], spawn:[5,7], arrive:{ door:[5,7] }, prizes:[[1,6]],
-    rows:["###########","#SS.F...SR#","#...A....R#","#.........#","#..CtC..P.#","#...,,,...#","#...,,,...#","#####.#####"],
+    rows:["###########","#SS.F..SSR#","#...CAA..R#","#.........#","#..CtC..P.#","#...,,,...#","#...,,,...#","#####.#####"],   // (3.44) as painted: his rocking chair by the fire, a stool, more jars
     things:[
       { x:5, y:7, walk:true, verb:'Out', where:'The Hilltop', arrow:'down', act:()=> r5RoomOut('hilltop', 'grandpa') },
-      { x:5, y:2, sprite:'grandpa', icon:'👴', verb:'Talk', act:()=> r5Grandpa() },
+      { x:7, y:2, sprite:'grandpa', icon:'👴', verb:'Talk', act:()=> r5Grandpa() },   // (3.44) beside his rocking chair
     ],
     paint:(d)=> paintRoom(d), onRender:(world, d)=> r5RoomRender(world, d), ghostChat:(id)=> r5GhostChat(id) },
   room_lemons: { key:'room_lemons', region:5, house:true, zone:'hilltop', title:"The lemon farm", bg:'region5', music:'zone_hilltop', art:'room_lemons', opens:()=> !!r5().hill,
