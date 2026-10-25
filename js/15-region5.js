@@ -146,7 +146,13 @@ function r5Tier3Open(){ return !!r5().madrinaMet; }
    Each floor's `arrive` names where its stairs are: `top` is the stair up,
    `bottom` the stair down. Arriving puts you on that stair.
    ============================================================ */
-/* Tier 2's wild monsters (2.90): the thirteen physical monsters the ghosts
+/* (3.46) The designer: "Are ghost starter and psychic starter capturable in
+   the catacombs? my son can't find ghost starter". The Fox was (under the
+   villa, one of the rarer ones), the Shadow nowhere wild. Now each tier has
+   its starters, once in a long while: the Shadow on every first-tier floor
+   and side room (weight 0.4, a level up: about one monster in 25–33 met
+   there), the Jackal in the second, the Fox and the Raven in the third.
+   Tier 2's wild monsters (2.90): the thirteen physical monsters the ghosts
    drove up out of the depths, every one of them on every floor. A floor's
    wild block says `t2:true` and which kinds it has more of (`more`: a weight
    in place of the usual 2, or 1 for a rare one); its table is filled in
@@ -279,7 +285,7 @@ const R5_DECKS = {
         { id:'d', kind:'soldato', path:[[3,10],[19,10]], face:'r', clock:580, pause:3, roster:'landing_d', sprite:'soldato1' },
       ],
       wild:{ rate:0.035, size:2, lv:[76,82],
-        table:[{sp:'crow',w:3},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:1}] } },
+        table:[{sp:'crow',w:3},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:1},{sp:'ghost_starter',w:0.4,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -321,7 +327,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:19, y:11, face:'u', spin:'ccw', clock:660, pause:4, roster:'cistern_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.04, size:3, lv:[78,84],
-        table:[{sp:'crow',w:2},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1}] } },
+        table:[{sp:'crow',w:2},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'ghost_starter',w:0.4,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -413,7 +419,7 @@ const R5_DECKS = {
       ],
       wild:{ rate:0.04, size:3, lv:[80,86],
         table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},
-               {sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
+               {sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2},{sp:'ghost_starter',w:0.4,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -451,7 +457,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:4, y:6, face:'d', spin:'ccw', clock:620, pause:4, roster:'lr1_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.035, size:2, lv:[80,86],
-        table:[{sp:'crow',w:3},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:1}] } },
+        table:[{sp:'crow',w:3},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:1},{sp:'ghost_starter',w:0.4,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -481,7 +487,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:8, y:5, face:'u', spin:'cw', clock:600, pause:4, roster:'lr2_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.035, size:2, lv:[82,88],
-        table:[{sp:'crow',w:3},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:1}] } },
+        table:[{sp:'crow',w:3},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:1},{sp:'ghost_starter',w:0.4,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -512,7 +518,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:9, y:9, face:'u', spin:'ccw', clock:620, pause:4, roster:'cr1_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.035, size:2, lv:[82,88],
-        table:[{sp:'crow',w:2},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1}] } },
+        table:[{sp:'crow',w:2},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'ghost_starter',w:0.4,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -542,7 +548,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:10, y:6, face:'l', spin:'cw', clock:600, pause:4, roster:'cr2_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.035, size:2, lv:[84,90],
-        table:[{sp:'crow',w:2},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1}] } },
+        table:[{sp:'crow',w:2},{sp:'ghost',w:3},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'ghost_starter',w:0.4,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -573,7 +579,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:8, y:7, face:'d', spin:'ccw', clock:620, pause:4, roster:'br1_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.035, size:2, lv:[84,90],
-        table:[{sp:'ghost',w:3},{sp:'crow',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin_knight',w:1,plus:2},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
+        table:[{sp:'ghost',w:3},{sp:'crow',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin_knight',w:1,plus:2},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2},{sp:'ghost_starter',w:0.4,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -602,7 +608,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:15, y:5, face:'l', spin:'cw', clock:600, pause:4, roster:'br2_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.035, size:2, lv:[86,92],
-        table:[{sp:'ghost',w:3},{sp:'crow',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin_knight',w:1,plus:2},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
+        table:[{sp:'ghost',w:3},{sp:'crow',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'puppet',w:1,plus:1},{sp:'goblin_knight',w:1,plus:2},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2},{sp:'ghost_starter',w:0.4,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -633,7 +639,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:3, y:2, face:'r', spin:'ccw', clock:620, pause:4, roster:'sr1_l', sprite:'soldato2' },
       ],
       wild:{ rate:0.035, size:2, lv:[86,92],
-        table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},{sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
+        table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},{sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2},{sp:'ghost_starter',w:0.4,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     onStep:(p, d)=> stealthStep(p, d),
@@ -673,7 +679,7 @@ const R5_DECKS = {
         { id:'l', kind:'lookout', x:6, y:6, face:'l', spin:'cw', clock:600, pause:4, roster:'sr2_l', sprite:'soldato2', when:()=> !r5GPHaunts() },
       ],
       wild:{ rate:0.035, size:2, lv:[88,94],
-        table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},{sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2}] } },
+        table:[{sp:'ghost',w:2},{sp:'cyclops',w:2},{sp:'ghost_flame',w:2},{sp:'crow',w:1},{sp:'goblin_knight',w:1,plus:2},{sp:'horned_lynx',w:1,plus:2},{sp:'puppet',w:1,plus:1},{sp:'goblin',w:1,plus:1},{sp:'firehound',w:1,plus:2},{sp:'ghost_starter',w:0.4,plus:1}] } },
     paint:(d)=> paintCatacomb(d),
     onRender:(world, d)=> r5FloorRender(world, d),
     /* (2.92) while the ghost phoenix (or its orb) is here, you and the
@@ -1312,7 +1318,11 @@ const R5_DECKS = {
       guards:[
         { id:'a',  kind:'soldato', path:[[1,14],[24,14]], face:'r', clock:640, pause:3, sprite:'soldato2' },
         { id:'b',  kind:'soldato', path:[[24,24],[1,24]], face:'l', clock:660, pause:3, sprite:'soldato1' },
-        { id:'c',  kind:'soldato', path:[[8,10],[23,10]], face:'r', clock:620, pause:3, sprite:'soldato2' },
+        /* (3.46) the designer: "blocks the path to the swimming pool, ruining the joke". Once the dead are
+           loose a haunted man stands where his round starts (guardStart) and fights ghosts there — this one
+           started at (8,10), the one square onto the poolside. Now he starts at the path's east end (23,10),
+           a dead end, and walks only the tower's side of the gate (14–23): never the pool's way (8–11). */
+        { id:'c',  kind:'soldato', path:[[23,10],[14,10]], face:'l', clock:620, pause:3, sprite:'soldato2' },
         { id:'g1', kind:'talker',  x:11, y:13, face:'r', sprite:'soldato1' },
         { id:'g2', kind:'talker',  x:14, y:13, face:'l', sprite:'soldato2' },
         { id:'v1', kind:'talker',  x:10, y:5,  face:'r', sprite:'soldato2' },      // (3.32) either side of the fountain
@@ -1680,11 +1690,13 @@ const R5_ALL_ROOMS = Object.values(R5_ROOMS).flat();
    the dead rise, and haunt the Family's men (14-stealth.js), are these. (2.97:
    the Tailed Cats that live down there among them are not dead; 3.14: the
    Tapirs have left, and the Goblin and Jax's Firehound are among the dead;
-   3.35: the Tailed Cats have gone up under the villa, with the psychics.) */
+   3.35: the Tailed Cats have gone up under the villa, with the psychics.)
+   (3.46) The Shadow, met down there once in a long while, is no ghost of the
+   hill: a starter, not among them. */
 const R5_HILL_GHOSTS = [...new Set([...R5_FLOORS, ...R5_ALL_ROOMS].flatMap(id=>{
   const w = R5_DECKS[id] && R5_DECKS[id].stealth && R5_DECKS[id].stealth.wild;
   return ((w && w.table) || []).map(t=> t.sp);
-}))].filter(sp=> ((SPECIES[sp] || {}).types || []).includes('Ghost'));
+}))].filter(sp=> ((SPECIES[sp] || {}).types || []).includes('Ghost') && (SPECIES[sp] || {}).tier !== 'starter');
 /* The disguise (2.91), wherever it works — every catacomb floor and side
    room, the church, Ugo's and the Old Town's streets: put on or taken off
    from the button beside Party (13-walkmap.js), it makes you a junior
@@ -2650,7 +2662,7 @@ async function r5NinoCatchUp(){
   await sceneSay([wl()], W, `<b>"Look — the little light. It has come out of the tower after us."</b>`);
   r5NinoActor(gx, gy - 0.25, 1200);
   await sceneGlowOut(['wisp'], 1200);
-  await sceneSay([r5NinoFace()], '', `It grows — and grows — into a boy. A small boy in short trousers and a cap, see-through like mist. He looks at you, and smiles.`);
+  await sceneSay([r5NinoFace()], '', `It grows — and grows — into a boy. A young boy with curly hair, see-through like mist. He looks at you, and smiles.`);
   await sceneSay([wl()], W, `<b>"Now I can see him properly. He is not a monster at all. He is a boy. A human boy."</b>`);
   await sceneSay([r5NinoFace()], '', `He writes in the air with one finger. The letters glow for a moment, then fade:<br><br><span class="r5-airname"><b>N I N O</b></span>`);
   await sceneSay([wl()], W, `<b>"Nino. That is his name."</b>`);
@@ -4820,6 +4832,7 @@ function r5TownRender(world, d){
   if(!r.disguised && !r.holdBroken){ r.disguised = true; saveProfile(); walkYouRefresh(); walkSideRefresh(); }
   const fresh = !!ui.stealthFresh;                // (3.07) in through a door or up the steps — not back from a fight or a menu
   startStealth(world, d);
+  r5HauntCafe(d);                                 // (3.46) the café's capos too, once the dead are loose
   /* (3.02) a save that broke the hold before Nino was in the story: the
      Ghost Master comes down the hill to tell you about him */
   if(d.key === 'hilltop' && r.holdBroken && !r.ninoMet && !ui.sceneRunning){ setTimeout(()=> r5NinoCatchUp(), 600); return; }
@@ -5754,11 +5767,29 @@ async function r5MKVilla(){
   refreshWalkAll();
   return r5SottoAsk();
 }
-/* The Sottocapo, between you and the door, until he is beaten. */
+/* The Sottocapo, between you and the door, until he is beaten.
+   (3.46) The designer: "Sottocapo should have 6 waves of crowned monsters in
+   the centre along with strong ghost and psychic companions like cyclops
+   etc". His best, crowned (10 supplements), one in the middle of each wave
+   — the last his Lizardape, as before; either side of it, one of the hill's
+   strong Ghosts and one of its Psychics. (Until 3.46: 4 waves, 10 monsters —
+   his old team from the caverns first, the Golem, Earth Snake and Bat; then
+   his best; the Lizardape alone crowned.) In waves 1 and 5 the Cyclops's Bog
+   Lurker slows your side a step, so all three of his move first. */
 const R5_SOTTO_LV = 100;
+const R5_SOTTO_WAVES = [            // [a Ghost, his crowned one, a Psychic]
+  ['cyclops',       'thunderhound',  'tailed_cat'],
+  ['puppet',        'goblin_knight', 'mime'],
+  ['horned_lynx',   'tricerarmor',   'hermit_sloth'],
+  ['goblin',        'firehound',     'squid'],
+  ['cyclops',       'sumo',          'ladybird'],
+  ['goblin_knight', 'lizardape',     'hydra'],
+];
 function r5SottoNote(){
-  return `<i>The Padrino's right hand: <b>4 waves — 10 monsters, level ${R5_SOTTO_LV}</b> — his old team from the caverns, grown up, then his ` +
-    `best; the last a <b>crowned Lizardape</b> (10 supplements). No running. Win for <b>+3 Protein Supplements</b>.</i>`;
+  const n = R5_SOTTO_WAVES.length;
+  return `<i>The Padrino's right hand: <b>${n} waves — ${n * 3} monsters, level ${R5_SOTTO_LV}</b>. In the middle of each, one of his best, ` +
+    `<b>crowned</b> (10 supplements) — the last his <b>Lizardape</b>; either side of it, one of the hill's ` +
+    `strong <b>Ghosts</b> and one of its <b>Psychics</b>. No running. Win for <b>+3 Protein Supplements</b>.</i>`;
 }
 async function r5SottoAsk(){
   const r = r5(), S = 'Sottocapo';
@@ -5775,15 +5806,19 @@ async function r5SottoAsk(){
   }
   r5SottoFight();
 }
+/* how each fights: a Goblin Knight swings its Max, a psychic thinks (3.16), the rest their best */
+function r5SottoAi(sp){
+  if(sp === 'goblin_knight') return 'maxer';
+  return ((SPECIES[sp] || {}).types || []).includes('Psychic') ? 'smart' : 'best';
+}
 function r5SottoBattle(){
   const L = R5_SOTTO_LV;
   return { isNpc:true, name:'Sottocapo', npcId:'sottocapo', noFlee:true, bgKey:'battle_villa',
-    waves:[
-      [{species:'golem', level:L, ai:'best'}, {species:'earth_snake', level:L, ai:'best'}, {species:'bat', level:L, ai:'best'}],
-      [{species:'thunderhound', level:L, ai:'best'}, {species:'goblin_knight', level:L, ai:'maxer'}, {species:'firehound', level:L, ai:'best'}],
-      [{species:'tricerarmor', level:L, ai:'best'}, {species:'sumo', level:L, ai:'best'}, {species:'horned_lynx', level:L, ai:'best'}],
-      [{species:'lizardape', level:L, ai:'best', crowned:true, supplements:10}],
-    ] };
+    waves:R5_SOTTO_WAVES.map(([ghost, his, psychic])=> [
+      { species:ghost, level:L, ai:r5SottoAi(ghost) },
+      { species:his, level:L, ai:r5SottoAi(his), crowned:true, supplements:10 },
+      { species:psychic, level:L, ai:r5SottoAi(psychic) },
+    ]) };
 }
 function r5SottoFight(){
   if(!ensurePool()) return;
@@ -6538,7 +6573,8 @@ async function r5JaxBeaten(){
    team round you in a circle (the Whalelord at the top), your stones float
    to him — and the fight.
    THE FIGHT (r5ClimaxBattle — §12 steps 1–5, decision 3): his five, crowned
-   at 100 with 10 protein, one at a time, then Cyborg at 200 — three times,
+   at 100 with 10 protein — (3.46) each in the middle of a wave of three, two
+   of the Family's strongest beside it (R5_VAULT_SIDES) — then Cyborg at 200 — three times,
    Cyborg turning back time between (r5ClimaxCleared). The Monkey King at
    your side (04-battle.js, "AN ALLY AT YOUR SIDE"). Cyborg's first arrival:
    its past, its present and its future, for a moment (r5CyborgSplit). After
@@ -6558,6 +6594,32 @@ async function r5JaxBeaten(){
    ============================================================ */
 const R5_VAULT_TEAM = ['ground_starter', 'psychic_starter', 'ghost_starter', 'physical_starter', 'flying_starter'];
 const R5_VAULT_LV = 100, R5_VAULT_CYBORG = 200;
+/* (3.46) The designer: "Padrino's monsters should be 5 waves crowned with
+   strong side monsters likewise, but some of the side monsters should be
+   crowned too. have at least one other crowned monster on the side in
+   addition to the 5 crowned starters." Each of his five stands in the middle
+   of its wave, crowned, with two of the Family's strongest either side —
+   and two of those crowned as well: the Mindcat beside his Fox, the
+   Lizardape beside his Jackal. Every round the same: Cyborg turns them all
+   back. (Until 3.46 his five came one at a time, alone.) */
+const R5_VAULT_SIDES = {
+  ground_starter:   ['goblin_knight', 'tricerarmor'],
+  psychic_starter:  ['hydra', { sp:'mindcat', crowned:true }],
+  ghost_starter:    ['puppet', 'horned_lynx'],
+  physical_starter: ['sumo', { sp:'lizardape', crowned:true }],
+  flying_starter:   ['ladybird', 'plasma_manta'],
+};
+function r5VaultWave(sp){
+  const one = (o, centre)=>{
+    const s = typeof o === 'string' ? { sp:o } : o;
+    const crowned = centre || !!s.crowned;
+    return Object.assign({ species:s.sp, level:R5_VAULT_LV, nerfed:false,
+      ai:centre ? 'best' : (s.sp === 'goblin_knight' ? 'maxer' : ((SPECIES[s.sp] || {}).types || []).includes('Psychic') ? 'smart' : 'best') },
+      crowned ? { crowned:true, supplements:10 } : {});
+  };
+  const [l, r] = R5_VAULT_SIDES[sp];
+  return [one(l), one({ sp }, true), one(r)];
+}
 const R5_CLIMAX_XP = 38;            // 19 waves, at an NPC fight's 2 a wave
 /* Where everyone stands (tiles: an actor's top-left). The room is 11 × 11,
    all of it in view. */
@@ -6643,7 +6705,8 @@ async function r5VaultDoor(){
 }
 /* What the fight will be — said before it, as every fight's note is. */
 function r5VaultNote(){
-  return `<i>Inside: the Padrino. His <b>Rhino, Fox, Shadow, Jackal and Raven</b>, one at a time — crowned, level ${R5_VAULT_LV} — ` +
+  return `<i>Inside: the Padrino. His <b>Rhino, Fox, Shadow, Jackal and Raven</b> — crowned, level ${R5_VAULT_LV} — each in the middle of a wave, ` +
+    `with two of the Family's strongest either side of it (his <b>Mindcat</b> and <b>Lizardape</b> crowned too) — ` +
     `and then <b>Cyborg</b>, the time monster, level ${R5_VAULT_CYBORG}. <b>Beat them three times.</b> ` +
     `The <b>Monkey King</b> fights beside you, with the power of every stone you carry. No running — ` +
     `but if you lose, <b>nothing is lost</b>, not even XP: you can try again.</i>`;
@@ -7141,7 +7204,7 @@ function r5ClimaxBattle(opts){
   opts = opts || {};
   const waves = [];
   for(let k = 0; k < 3; k++){
-    R5_VAULT_TEAM.forEach(sp=> waves.push([{ species:sp, level:R5_VAULT_LV, ai:'best', crowned:true, supplements:10, nerfed:false }]));
+    R5_VAULT_TEAM.forEach(sp=> waves.push(r5VaultWave(sp)));   // (3.46) each in the middle of its wave
     waves.push([{ species:'cyborg', level:R5_VAULT_CYBORG, ai:'best', crowned:true, nerfed:false, boss:true }]);
   }
   waves.push([{ species:'cyborg', level:R5_VAULT_CYBORG, ai:'best', crowned:true, nerfed:false, boss:true }]);   // the last phase: broken
@@ -9429,7 +9492,7 @@ async function r5HoldBreaks(){
   await sceneWait(500);
   r5NinoActor(5.7, 4.05, 1400);
   await sceneGlowOut(['wisp'], 1400);
-  await sceneSay([r5NinoFace()], '', `In the dark, the little light grows — and grows — into a boy. A small boy in short trousers and a cap, see-through like mist.`);
+  await sceneSay([r5NinoFace()], '', `In the dark, the little light grows — and grows — into a boy. A young boy with curly hair, see-through like mist.`);
   await sceneSay([wl()], W, `<b>"Now I can see him properly. He is not a monster at all. He is a boy. A human boy."</b>`);
   await sceneSay([gm()], G, `<b>"What are you staring at?"</b> She looks straight through him. <b>"There's nothing there."</b>`);
   await sceneSay([wl()], W, `<b>"She still cannot see him."</b><br><br>Then, very softly: <b>"…But I think I know who you are. You are Nino. Aren't you?"</b>`);
@@ -9626,25 +9689,46 @@ function r5TownFunicular(){
 /* The capos at the café's tables (and, 2.95, the Consigliere): a junior does
    not speak to one. (3.01) Once the dead are up for good you may walk the
    streets out of uniform — and these three keep their watch: they know you on
-   sight, though none of them gets up from his table. */
+   sight, though none of them gets up from his table. (3.46) The designer:
+   "the capos and consigliere are still chilling outside the cafe when the
+   ghosts are loose. only the soldatos seem harangued." Now three of the
+   hill's dead plague each of them too, as they do every soldato
+   (r5HauntCafe) — and what they say has the ghosts in it. */
 const R5_CAPO_SEES_YOU = {
-  purple:`He lowers his newspaper an inch and looks straight at you over the top of it.<br><br>` +
-         `<b>"The kid from the catacombs. In my piazza, in his own clothes."</b> He turns a page. <b>"Enjoy it while my men have the dead to deal with."</b>`,
-  black:`He stops stirring. His eyes come to rest on you, and stay there.<br><br>` +
-        `<b>"I'd know that face anywhere now. Walk on, kid. I'm watching you."</b>`,
-  consigliere:`He doesn't look up from his ledger.<br><br>` +
-        `<b>"Ah. The one who emptied my pit. You're in the book too, little one — in red ink."</b>`,
+  purple:`A ghost keeps snatching at his newspaper. He swats it away, then looks straight at you over the top of the page.<br><br>` +
+         `<b>"The kid from the catacombs. In my piazza, in his own clothes."</b> The ghost tugs at the paper again. <b>"And I can't even get up. SHOO!"</b>`,
+  black:`A ghost is blowing bubbles in his coffee. He stops stirring, and his eyes come to rest on you.<br><br>` +
+        `<b>"I'd know that face anywhere now. Walk on, kid. I'm watching you — when this thing lets me."</b>`,
+  consigliere:`Two ghosts are flipping the pages of his ledger back and forth, faster than he can count.<br><br>` +
+        `<b>"Ah. The one who emptied my pit. You're in the book too, little one — in red ink. If they ever let me find the page."</b>`,
 };
+/* (3.46) …and in uniform, once the dead are loose: what you see at their table */
+const R5_CAPO_HAUNTED = {
+  purple:`He is trying to read the newspaper, but a ghost keeps poking its head up through the page.`,
+  black:`A ghost keeps blowing bubbles in his coffee. He stirs it very slowly, and pretends it is not there.`,
+  consigliere:`He is trying to count the night's takings, but a ghost keeps slamming his little black ledger shut.`,
+};
+const R5_CAFE_CHIEFS = ['capo_purple', 'capo_black', 'consigliere'];
+/* (3.46) Three ghosts round each of the café's three, as round every
+   soldato (guardHaunt, 14-stealth.js), once the dead are loose. */
+function r5HauntCafe(d){
+  if(!d || d.key !== 'old_town' || !r5().holdBroken || typeof guardHaunt !== 'function') return;
+  deckThings(d).filter(t=> t.el && R5_CAFE_CHIEFS.includes(t.sprite)).forEach(t=>{
+    if(t.el.querySelector('.guard-haunt')) return;
+    t.el.classList.add('haunted');
+    t.el.appendChild(guardHaunt({ id:'cafe-' + t.sprite, clock:700 }, d));
+  });
+}
 function r5CapoLook(which){
   const name = { purple:'Purple Capo', black:'Black Capo', consigliere:'Consigliere' }[which];
   const sprite = which === 'consigliere' ? 'consigliere' : 'capo_' + which;
   if(r5().holdBroken && !r5().disguised && R5_CAPO_SEES_YOU[which])
     return sceneSay([faceNpc(sprite, '🕴️')], name, R5_CAPO_SEES_YOU[which]);
-  const what = {
+  const what = (r5().holdBroken ? R5_CAPO_HAUNTED : {
     purple:`He is reading the newspaper, and does not look up.`,
     black:`He stirs his coffee very slowly, watching the piazza. His eyes slide over you, and away.`,
     consigliere:`He is counting the night's takings from his pit into a little black ledger, line by line, and muttering.`,
-  }[which];
+  })[which];
   const who = which === 'consigliere' ? 'the Consigliere' : 'a capo';
   return sceneSay([faceNpc(sprite, '🕴️')], name, `${what}<br><br><i>A junior does not speak to ${who} unless he is spoken to.</i>`);
 }
@@ -10856,7 +10940,7 @@ function renderChallengeR5(){
       r5TowerBeaten(13) ? 'The Padrino\'s grandniece. The hold on the dead is broken.' : 'The Padrino\'s grandniece, on floor 13 at the very top of the tower. The dead of the hill do what she tells them.') : ''}
     ${r.hill ? card('sottocapo', '🕴️', 'Sottocapo', !!r.sottoBeaten,
       r.sottoBeaten ? 'He ran inside, down to his master, ahead of you.'
-      : r.mkVilla ? 'At the villa\'s great door, and he will fight you for it: 4 waves — 10 monsters, level 100, the last a crowned Lizardape.'
+      : r.mkVilla ? 'At the villa\'s great door, and he will fight you for it: 6 waves — 18 monsters, level 100, a crowned one in the middle of each, the last his Lizardape.'
       : 'The Padrino\'s right hand, filling the villa\'s great doorway.') : ''}
     ${(r.reached.includes('cata_crypt') || r.jaxBeaten) ? card('rival_padrino', '🧑', 'Jax', !!r.jaxBeaten,
       r.ending ? 'He runs the Family now, with the Ghost Master. Nino\'s rule: no more hurting monsters. (Mostly.)'

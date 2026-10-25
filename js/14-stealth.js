@@ -83,7 +83,73 @@ function resetStealth(id, d){
     guards: stealthOnWatch(d).filter(g=> !beaten.includes(g.id)).map(g=> guardStart(g)),
     timers: [], caught: false, calm: 6,
   };
+  hauntedStandAside(d, ui.stealth[id]);          // (3.46)
   return ui.stealth[id];
+}
+/* (3.46) Once the dead are loose for good, a haunted man stands where his
+   round begins and fights ghosts there for good (guardBeat) — and in a narrow
+   place he shut a way for good: the Hilltop's poolside (the designer: "blocks
+   the path to the swimming pool, ruining the joke"), the Landing's find in
+   its corner. So as a floor starts, each of them whose standing there cuts
+   anything off takes the first square along his own round where nothing open
+   is cut off by the men standing (or, failing that, the one that cuts off
+   least). Until the hold breaks nobody is moved. */
+function patrolTiles(def){
+  const p = def.path || [], out = [];
+  p.forEach(([x0, y0], i)=>{
+    if(!i) out.push([x0, y0]);
+    if(i + 1 >= p.length) return;
+    const [x1, y1] = p[i + 1];
+    let x = x0, y = y0;
+    while(x !== x1 || y !== y1){ x += Math.sign(x1 - x); y += Math.sign(y1 - y); out.push([x, y]); }
+  });
+  return out;
+}
+function hauntedStandAside(d, st){
+  if(!stealthHauntedForGood(d) || !st || !st.guards.length) return;
+  const people = new Set();
+  (typeof deckThings === 'function' ? deckThings(d) : (d.things || [])).filter(t=> t.sprite && !t.walk).forEach(t=>{
+    for(let i = 0; i < (t.w || 1); i++) for(let j = 0; j < (t.h || 1); j++) people.add((t.x + i) + ',' + (t.y + j));
+  });
+  const starts = [...Object.values(d.arrive || {}), d.spawn].filter(a=> Array.isArray(a) && !wSolid(d, a[0], a[1]));
+  const reach = block=>{
+    const seen = new Set(), q = [];
+    starts.forEach(([x, y])=>{ const k = x + ',' + y; if(!seen.has(k) && !block.has(k)){ seen.add(k); q.push([x, y]); } });
+    while(q.length){
+      const [x, y] = q.shift();
+      for(const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx = x + dx, ny = y + dy, k = nx + ',' + ny;
+        if(!seen.has(k) && !block.has(k) && !wSolid(d, nx, ny)){ seen.add(k); q.push([nx, ny]); }
+      }
+    }
+    return seen;
+  };
+  const free = reach(people);
+  const cut = ()=>{
+    const block = new Set(people);
+    st.guards.forEach(g=> block.add(g.x + ',' + g.y));
+    const r = reach(block);
+    let n = 0;
+    free.forEach(k=>{ if(!r.has(k) && !block.has(k)) n++; });
+    return n;
+  };
+  if(!cut()) return;
+  st.guards.forEach(g=>{
+    const def = guardDef(d, g.id);
+    if(!def || !def.path || !guardHaunted(d, def)) return;
+    let bestN = cut();
+    if(!bestN) return;
+    let best = [g.x, g.y];
+    const ox = g.x, oy = g.y;
+    for(const [x, y] of patrolTiles(def)){
+      if(people.has(x + ',' + y) || st.guards.some(o=> o !== g && o.x === x && o.y === y)) continue;
+      g.x = x; g.y = y;
+      const n = cut();
+      if(n < bestN){ best = [x, y]; bestN = n; if(!n) break; }
+    }
+    g.x = ox; g.y = oy;
+    g.x = best[0]; g.y = best[1];
+  });
 }
 /* The men a floor has on watch: all of them, bar any whose `when` says he is
    not there at this point in the story (2.91: nobody stands watch in the
@@ -1175,15 +1241,20 @@ function stealthCss(){
     .walk-ent.guard .guard-mark{position:absolute;left:50%;top:-58%;transform:translateX(-50%);
       font:900 calc(var(--wt) * 0.6)/1 'Baloo 2',sans-serif;color:#ffd84a;text-shadow:0 2px 0 #2a1c00,0 0 6px #000;}
     /* the night the dead rose (2.90): every man fighting ghosts — (2.95) three
-       of them, wobbling and darting about him */
-    @keyframes guardShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6%)}75%{transform:translateX(6%)}}
-    .walk-ent.guard.haunted > img{animation:guardShake .45s ease-in-out infinite;}
-    .walk-ent.guard .guard-haunt{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;
+       of them, wobbling and darting about him. (3.46) The shake moves the
+       picture with translate: a transform here took the place of the
+       person's scale(1.314) (.walk-ent img, index.html), and every haunted man
+       shrank — the designer: "when the ghosts are loose … the soldato sprites
+       become smaller". Any walker can be haunted (.haunted): (3.46) the
+       café's capos and Consigliere too (15-region5.js, r5HauntCafe). */
+    @keyframes guardShake{0%,100%{translate:0 0}25%{translate:-6% 0}75%{translate:6% 0}}
+    .walk-ent.haunted > img{animation:guardShake .45s ease-in-out infinite;}
+    .walk-ent .guard-haunt{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;
       transition:opacity .35s ease;}
-    .walk-ent.guard .gh-ghost{position:absolute;display:block;opacity:.88;
+    .walk-ent .gh-ghost{position:absolute;display:block;opacity:.88;
       filter:drop-shadow(0 0 6px rgba(170,120,255,.95));}
-    .walk-ent.guard .gh-ghost img{display:block;filter:none;width:100% !important;height:100% !important;}
-    .walk-ent.guard .gh-ghost.face-r > *{scale:-1 1;}
+    .walk-ent .gh-ghost img{display:block;filter:none;width:100% !important;height:100% !important;}
+    .walk-ent .gh-ghost.face-r > *{scale:-1 1;}
     @keyframes ghWobL{0%,100%{translate:0 0;rotate:0deg}13%{translate:-22% -30%;rotate:-12deg}27%{translate:14% -8%;rotate:7deg}
       41%{translate:-12% 18%;rotate:-5deg}58%{translate:20% -24%;rotate:10deg}72%{translate:-18% 6%;rotate:-9deg}86%{translate:8% 22%;rotate:4deg}}
     @keyframes ghWobR{0%,100%{translate:0 0;rotate:0deg}11%{translate:20% -18%;rotate:9deg}26%{translate:-16% -32%;rotate:-8deg}
@@ -1192,12 +1263,12 @@ function stealthCss(){
       30%{translate:40% 0%;rotate:-10deg;scale:-1 1}44%{translate:150% -20%;rotate:6deg;scale:-1 1}
       50%{translate:155% 6%;rotate:0deg;scale:1 1}64%{translate:70% -34%;rotate:-8deg;scale:1 1}
       80%{translate:-40% 4%;rotate:10deg;scale:1 1}94%{translate:-150% -18%;rotate:-4deg;scale:1 1}}
-    .walk-ent.guard .gh-l{animation:ghWobL 1.7s ease-in-out infinite;}
-    .walk-ent.guard .gh-r{animation:ghWobR 1.3s ease-in-out infinite;}
-    .walk-ent.guard .gh-t{animation:ghDart 2.6s ease-in-out infinite;}
+    .walk-ent .gh-l{animation:ghWobL 1.7s ease-in-out infinite;}
+    .walk-ent .gh-r{animation:ghWobR 1.3s ease-in-out infinite;}
+    .walk-ent .gh-t{animation:ghDart 2.6s ease-in-out infinite;}
     /* (2.95) held back while the dead are still pouring up the Garrison */
-    .walk-ent.guard.haunt-hold .guard-haunt{opacity:0;}
-    .walk-ent.guard.haunt-hold > img{animation:none;}
+    .walk-ent.haunt-hold .guard-haunt{opacity:0;}
+    .walk-ent.haunt-hold > img{animation:none;}
   `;
   document.head.appendChild(s);
 }

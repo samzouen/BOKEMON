@@ -881,7 +881,8 @@ function arenaChallengers(){
   add(5, 'r5_figlio', 'Figlio (the opera)', N('figlio'), '🎙️', [V(()=> r5FiglioBattle())],
     ()=> `His team starts at Lv 94 and is a level higher for every win at the opera, up to 100 — <b>Lv ${r5FiglioLv(0)}–${r5FiglioLv(5)}</b> on this profile.`);
   add(5, 'r5_sotto', 'Sottocapo (the villa door)', N('sottocapo'), '🕴️', [V(()=> r5SottoBattle())],
-    `His caverns team grown up, then his best, all Lv ${R5_SOTTO_LV}; the last a crowned Lizardape.`);
+    ()=> `Six waves at Lv ${R5_SOTTO_LV}: his best, crowned, one in the middle of each (the last his Lizardape), ` +
+         `with one of the hill's strong Ghosts and one of its Psychics either side.`);
   add(5, 'r5_disciples', 'Ghost Disciples (the tower)', N('ghost_disciple1'), '👻', ARENA_GHOST_FLOORS.map(n=> V(()=> r5TowerBattle(n), `Floor ${n}`, R5_TOWER[n - 1].sprite)),
     v=> r5TowerNote(+v.label.replace(/\D/g, '')));
   add(5, 'r5_psy_disciples', 'Psychic Disciples (the tower)', N('psychic_disciple1'), '🔮', ARENA_PSYCHIC_FLOORS.map(n=> V(()=> r5TowerBattle(n), `Floor ${n}`, R5_TOWER[n - 1].sprite)),
@@ -893,7 +894,8 @@ function arenaChallengers(){
   /* (3.18, 3.19) under the villa: Jax at the vault's door, and the vault itself */
   add(5, 'r5_jax', 'Jax (the vault door)', N('rival_padrino'), '🧑', [V(()=> r5JaxBattle())], ()=> r5JaxNote());
   add(5, 'r5_vault', 'Don Padrino — the vault', N('padrino2'), '⏳', [V(()=> r5ClimaxBattle({ arena:true }))],
-    ()=> `The climax: his Rhino, Fox, Shadow, Jackal and Raven, crowned at ${R5_VAULT_LV} with 10 protein, then Cyborg at ${R5_VAULT_CYBORG} — three times, ` +
+    ()=> `The climax: his Rhino, Fox, Shadow, Jackal and Raven, crowned at ${R5_VAULT_LV} with 10 protein, each in the middle of a wave with two of the Family's strongest ` +
+         `(his Mindcat and Lizardape crowned too), then Cyborg at ${R5_VAULT_CYBORG} — three times, ` +
          `Cyborg turning back time between. The <b>Monkey King</b> fights at your side with every stone you hold (and his own Physical Stone), ` +
          `casting before you move; after the third round, Heavensplitter Max breaks Cyborg, and you clear its bar to 1 HP. ` +
          `Here he says each stone's line every time.`);
