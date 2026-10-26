@@ -6574,7 +6574,8 @@ async function r5JaxBeaten(){
    to him — and the fight.
    THE FIGHT (r5ClimaxBattle — §12 steps 1–5, decision 3): his five, crowned
    at 100 with 10 protein — (3.46) each in the middle of a wave of three, two
-   of the Family's strongest beside it (R5_VAULT_SIDES) — then Cyborg at 200 — three times,
+   of the Family's strongest beside it (R5_VAULT_SIDES; 3.47: every one of
+   them crowned too) — then Cyborg at 200 — three times,
    Cyborg turning back time between (r5ClimaxCleared). The Monkey King at
    your side (04-battle.js, "AN ALLY AT YOUR SIDE"). Cyborg's first arrival:
    its past, its present and its future, for a moment (r5CyborgSplit). After
@@ -6598,27 +6599,32 @@ const R5_VAULT_LV = 100, R5_VAULT_CYBORG = 200;
    strong side monsters likewise, but some of the side monsters should be
    crowned too. have at least one other crowned monster on the side in
    addition to the 5 crowned starters." Each of his five stands in the middle
-   of its wave, crowned, with two of the Family's strongest either side —
-   and two of those crowned as well: the Mindcat beside his Fox, the
-   Lizardape beside his Jackal. Every round the same: Cyborg turns them all
-   back. (Until 3.46 his five came one at a time, alone.) */
+   of its wave, crowned, with two of the Family's strongest either side.
+   Every round the same: Cyborg turns them all back. (Until 3.46 his five
+   came one at a time, alone.)
+   (3.47) The designer: "padrino should not have crowned mindcat as that is a
+   legendary. can you crown every other monster he has please?" The Mindcat
+   is the Psychic Master's (her last wave's middle): beside his Fox now, a
+   Tailed Cat. And every one of them is crowned: his five and the ten beside
+   them, each with 10 supplements — and Cyborg, as before. No legendary of
+   his but Cyborg. */
 const R5_VAULT_SIDES = {
   ground_starter:   ['goblin_knight', 'tricerarmor'],
-  psychic_starter:  ['hydra', { sp:'mindcat', crowned:true }],
-  ghost_starter:    ['puppet', 'horned_lynx'],
-  physical_starter: ['sumo', { sp:'lizardape', crowned:true }],
-  flying_starter:   ['ladybird', 'plasma_manta'],
+  psychic_starter:  ['hydra',         'tailed_cat'],
+  ghost_starter:    ['puppet',        'horned_lynx'],
+  physical_starter: ['sumo',          'lizardape'],
+  flying_starter:   ['ladybird',      'plasma_manta'],
 };
+/* how each fights: his five their best; a Goblin Knight swings its Max, a psychic thinks (3.16), the rest their best */
+function r5VaultAi(sp, centre){
+  if(centre) return 'best';
+  if(sp === 'goblin_knight') return 'maxer';
+  return ((SPECIES[sp] || {}).types || []).includes('Psychic') ? 'smart' : 'best';
+}
 function r5VaultWave(sp){
-  const one = (o, centre)=>{
-    const s = typeof o === 'string' ? { sp:o } : o;
-    const crowned = centre || !!s.crowned;
-    return Object.assign({ species:s.sp, level:R5_VAULT_LV, nerfed:false,
-      ai:centre ? 'best' : (s.sp === 'goblin_knight' ? 'maxer' : ((SPECIES[s.sp] || {}).types || []).includes('Psychic') ? 'smart' : 'best') },
-      crowned ? { crowned:true, supplements:10 } : {});
-  };
+  const one = (s, centre)=> ({ species:s, level:R5_VAULT_LV, nerfed:false, crowned:true, supplements:10, ai:r5VaultAi(s, centre) });
   const [l, r] = R5_VAULT_SIDES[sp];
-  return [one(l), one({ sp }, true), one(r)];
+  return [one(l), one(sp, true), one(r)];
 }
 const R5_CLIMAX_XP = 38;            // 19 waves, at an NPC fight's 2 a wave
 /* Where everyone stands (tiles: an actor's top-left). The room is 11 × 11,
@@ -6705,8 +6711,8 @@ async function r5VaultDoor(){
 }
 /* What the fight will be — said before it, as every fight's note is. */
 function r5VaultNote(){
-  return `<i>Inside: the Padrino. His <b>Rhino, Fox, Shadow, Jackal and Raven</b> — crowned, level ${R5_VAULT_LV} — each in the middle of a wave, ` +
-    `with two of the Family's strongest either side of it (his <b>Mindcat</b> and <b>Lizardape</b> crowned too) — ` +
+  return `<i>Inside: the Padrino. His <b>Rhino, Fox, Shadow, Jackal and Raven</b>, level ${R5_VAULT_LV}, each in the middle of a wave, ` +
+    `with two of the Family's strongest either side of it — <b>every one of them crowned</b> — ` +
     `and then <b>Cyborg</b>, the time monster, level ${R5_VAULT_CYBORG}. <b>Beat them three times.</b> ` +
     `The <b>Monkey King</b> fights beside you, with the power of every stone you carry. No running — ` +
     `but if you lose, <b>nothing is lost</b>, not even XP: you can try again.</i>`;
