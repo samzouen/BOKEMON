@@ -68,7 +68,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.47';
+const GAME_VERSION = '3.49';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -115,6 +115,10 @@ function playMusicChain(names, opts){
 
 const audio = {
   unlocked: false,
+  musicBlocked: null,    // (3.49) the track an iPad would not start without a tap
+  sfxTries: {},          // (3.49) file -> how many times its decode has been tried
+  sfxQueue: [],          // (3.49) files waiting to be fetched and decoded, one at a time
+  sfxPumping: false,
   sfxCache: {},          // event file -> {el, src, gain} — the <audio> fallback
   sfxBuf: {},            // (3.28) file -> its decoded AudioBuffer, or 'loading' / 'failed'
   sfxNow: {},            // (3.28) file -> the voice playing it from memory { src, gain }
@@ -138,8 +142,32 @@ function ensureAudioCtx(){
     actx = new AC();
     musicGain = actx.createGain(); musicGain.gain.value = musicVolume(); musicGain.connect(actx.destination);
     sfxGain   = actx.createGain(); sfxGain.gain.value   = sfxVolume();   sfxGain.connect(actx.destination);
+    /* (3.49) An iPad stops the sound system now and then — the screen locked,
+       another app's sound, the spoken prompts — and leaves it 'interrupted'
+       (Safari's own word) or 'suspended'. Asked to start again as soon as it
+       stops, and at every tap (wakeAudio). */
+    actx.onstatechange = ()=>{ if(audio.unlocked && actx && actx.state !== 'running' && actx.state !== 'closed') setTimeout(wakeAudio, 250); };
   }catch(e){ actx = null; }
   return actx;
+}
+/* (3.49) Start the sound system again if it is stopped for any reason. It
+   used to be woken only when 'suspended' — an iPad's 'interrupted' stayed
+   silent until the page was reloaded. */
+function wakeAudio(){
+  const ctx = actx;
+  if(!ctx || ctx.state === 'running' || ctx.state === 'closed') return;
+  try{ const p = ctx.resume(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
+}
+/* (3.49) A track an iPad would not start (it was asked for long after the
+   last tap — after a scene, or a timer) is started at the next tap, instead
+   of staying silent until the next change of track. Likewise one the iPad
+   paused. */
+function retryBlockedMusic(){
+  const el = audio.musicEl;
+  if(!el || !audio.unlocked) return;
+  if(audio.musicBlocked !== el && !(el.paused && !el.ended)) return;
+  audio.musicBlocked = null;
+  try{ const p = el.play(); if(p && p.catch) p.catch(()=>{ if(audio.musicEl === el) audio.musicBlocked = el; }); }catch(e){}
 }
 /* Attach an <audio> element to a gain bus. Each element may only ever be
    connected once, so the node is cached on the element itself. */
@@ -177,12 +205,15 @@ function sfxVolume(){ return (state?.settings?.sfxVolume ?? 0.55); }
 function musicVolume(){ return (state?.settings?.musicVolume ?? 0.10); }
 
 function unlockAudio(){
-  const ctx = ensureAudioCtx();
-  if(ctx && ctx.state === 'suspended'){ try{ ctx.resume(); }catch(e){} }
-  if(audio.unlocked) return;
+  ensureAudioCtx();
+  wakeAudio();                                     // (3.49) any stop, not only 'suspended'
+  if(audio.unlocked){ retryBlockedMusic(); return; }
   audio.unlocked = true;
   applyVolumes();
-  preloadSfx(Object.keys(SFX_MAP));                // (3.28) every effect fetched and decoded once, now
+  /* (3.28) every effect fetched and decoded once, now — (3.49) one at a
+     time, the short and important ones first, the long ones last (the
+     defeat's 2¼ minutes decodes to about 50 MB), and tried again if one fails */
+  preloadSfx(SFX_PRELOAD_ORDER.concat(Object.keys(SFX_MAP)));
   if(audio.musicName && !audio.musicEl) playMusic(audio.musicName);
 }
 try{
@@ -243,32 +274,88 @@ function playBackSfx(){
    then plays from memory through the unlocked AudioContext the moment it is
    asked for, whenever that is. The <audio> element below stays as the
    fallback: no Web Audio, a file still on its way, a decode that failed. */
-function loadSfxBuffer(file){
+/* (3.49) The effects to have first: the ones a child hears every minute, and
+   the cues that come long after a tap (a catch, an evolution and its
+   fanfare); the long ones (the stone roll, the evolution, the defeat) last. */
+const SFX_PRELOAD_ORDER = ['answer_correct', 'answer_wrong', 'ui_click', 'ui_back', 'hit_dealt', 'hit_taken', 'victory', 'level_up',
+  'catch_success', 'catch_miss', 'stone_ultra', 'stone_veryhigh', 'stone_high', 'stone_mid', 'stone_low', 'recovery_heal',
+  'evolution', 'stone_roll', 'core_blast', 'defeat'];
+const SFX_TRIES = 3;                                   // a decode that fails is tried again, up to three times
+/* Can this file still be fetched? (never asked, or failed with tries left) */
+function sfxWanted(file){
+  const b = audio.sfxBuf[file];
+  if(audio.missing[file] || b === 'loading' || (b && typeof b === 'object')) return false;
+  return b !== 'failed' || (audio.sfxTries[file] || 0) < SFX_TRIES;
+}
+function loadSfxBuffer(file, first){
+  if(!file || !sfxWanted(file)) return;
+  audio.sfxQueue = audio.sfxQueue.filter(f=> f !== file);
+  if(first) audio.sfxQueue.unshift(file); else audio.sfxQueue.push(file);
+  pumpSfxQueue();
+}
+/* One file at a time: fetched, decoded, kept — then the next. */
+function pumpSfxQueue(){
+  if(audio.sfxPumping) return;
   const ctx = ensureAudioCtx();
-  if(!ctx || typeof fetch !== 'function' || audio.sfxBuf[file] || audio.missing[file]) return;
+  if(!ctx || typeof fetch !== 'function') return;
+  const file = audio.sfxQueue.shift();
+  if(!file) return;
+  if(!sfxWanted(file)) return pumpSfxQueue();
+  audio.sfxPumping = true;
   audio.sfxBuf[file] = 'loading';
+  audio.sfxTries[file] = (audio.sfxTries[file] || 0) + 1;
+  const done = ()=>{ audio.sfxPumping = false; setTimeout(pumpSfxQueue, 0); };
   fetch(SFX_DIR + file)
     .then(r=>{ if(!r.ok){ if(r.status === 404) audio.missing[file] = true; throw new Error('sfx ' + r.status); } return r.arrayBuffer(); })
     .then(data=> new Promise((ok, no)=>{                // Safari's older decodeAudioData only calls back
       const p = ctx.decodeAudioData(data, ok, no);
       if(p && p.then) p.then(ok, no);
     }))
-    .then(buf=>{ audio.sfxBuf[file] = buf; })
-    .catch(()=>{ audio.sfxBuf[file] = 'failed'; });
+    .then(buf=>{ audio.sfxBuf[file] = buf; done(); })
+    .catch(()=>{
+      audio.sfxBuf[file] = 'failed';
+      /* tried again a little later, at the back of the queue, while tries are left */
+      if(!audio.missing[file] && (audio.sfxTries[file] || 0) < SFX_TRIES) setTimeout(()=> loadSfxBuffer(file), 1500);
+      done();
+    });
 }
-function preloadSfx(events){
-  (events || []).forEach(ev=>{ const f = SFX_MAP[ev]; if(f) loadSfxBuffer(f); });
+/* `first`: to the front of the queue — the next to be fetched. */
+function preloadSfx(events, first){
+  const files = [];
+  (events || []).forEach(ev=>{ const f = SFX_MAP[ev]; if(f && !files.includes(f)) files.push(f); });
+  (first ? files.slice().reverse() : files).forEach(f=> loadSfxBuffer(f, first));
 }
+/* (3.49) In memory and ready, or as good as it will get within `ms`: for a
+   scene to wait on before a cue it must not miss. Resolves true if all made it. */
+function ensureSfx(events, ms){
+  preloadSfx(events, true);
+  const files = (events || []).map(ev=> SFX_MAP[ev]).filter(Boolean);
+  const ready = ()=> files.every(f=> sfxBufferOf(f) || audio.missing[f] || (audio.sfxBuf[f] === 'failed' && !sfxWanted(f)));
+  return new Promise(res=>{
+    if(!audio.unlocked || ready()) return res(files.every(f=> !!sfxBufferOf(f)));
+    const t0 = Date.now();
+    const iv = setInterval(()=>{
+      if(ready() || Date.now() - t0 > (ms || 3000)){ clearInterval(iv); res(files.every(f=> !!sfxBufferOf(f))); }
+    }, 80);
+  });
+}
+/* (3.49) Stop an effect now (a short fade), wherever it is playing from. */
+function stopSfx(event, ms){ fadeOutSfx(event, ms || 120); }
 function sfxBufferOf(file){ const b = audio.sfxBuf[file]; return (b && typeof b === 'object') ? b : null; }
 /* A cue that must not be missed: at once if it is in memory; if it is still
    on its way, the moment it lands (up to `waitMs`), then the fallback. */
 function playSfxSoon(event, waitMs){
   const file = SFX_MAP[event];
   if(!file) return null;
-  if(audio.sfxBuf[file] !== 'loading') return playSfx(event);
+  if(sfxBufferOf(file) || !audio.unlocked) return playSfx(event);
+  /* (3.49) not in memory: next in line, and waited for while it is in the
+     queue as well as while it loads */
+  loadSfxBuffer(file, true);
+  const pending = ()=> audio.sfxBuf[file] === 'loading' || audio.sfxQueue.includes(file);
+  if(!pending()) return playSfx(event);
   const t0 = Date.now();
   const iv = setInterval(()=>{
-    if(audio.sfxBuf[file] !== 'loading' || Date.now() - t0 > (waitMs || 1500)){ clearInterval(iv); playSfx(event); }
+    if(!pending() || Date.now() - t0 > (waitMs || 1500)){ clearInterval(iv); playSfx(event); }
   }, 50);
   return null;
 }
@@ -290,6 +377,7 @@ function playSfx(event, opts){
     const file = SFX_MAP[event];
     if(!file || !audio.unlocked || audio.missing[file]) return null;
     const vol = sfxGainFor(event, opts);
+    wakeAudio();                                       // (3.49) stopped by the iPad? started again first
     /* (3.28) from memory, when it is there: one voice a sound, as the element
        was — asked again, it starts again */
     const buf = sfxBufferOf(file);
@@ -308,12 +396,14 @@ function playSfx(event, opts){
       node.start(0);
       return voice;
     }
-    loadSfxBuffer(file);                               // in memory for next time
+    loadSfxBuffer(file, true);                         // in memory for next time — (3.49) next in line
     const src = SFX_DIR + file;
     let entry = audio.sfxCache[file];
     if(!entry){
       const el = new Audio(src);
-      el.addEventListener('error', ()=>{ audio.missing[file] = true; });
+      /* (3.49) not marked missing here: an iPad raises an error for a load it
+         cut short, too, and that silenced the sound for the rest of the day.
+         Missing is what the fetch finds (a 404). */
       entry = { el, gain:null };
       const ctx = ensureAudioCtx();
       if(ctx){
@@ -454,7 +544,7 @@ function playMusic(name, opts){
     }
 
     const p = el.play();
-    if(p && p.catch) p.catch(()=>{});
+    if(p && p.catch) p.catch(()=>{ if(audio.musicEl === el) audio.musicBlocked = el; });   // (3.49) retryBlockedMusic, at the next tap
   }catch(e){}
 }
 
@@ -464,6 +554,7 @@ function fadeOutMusic(ms){
   if(!el) return;
   audio.musicEl = null;          // detach immediately so a new track can start
   audio.pendingChain = null;
+  if(audio.musicBlocked === el) audio.musicBlocked = null;
   const dur = ms || MUSIC_FADE_MS;
   const kill = ()=>{ try{ el.pause(); el.currentTime = 0; }catch(e){} };
   if(el._gain && actx){
@@ -918,7 +1009,8 @@ async function flushCloudPush(){
 }
 try{
   document.addEventListener('visibilitychange', ()=>{
-    if(!document.hidden) setTimeout(unstickBattle, 400); if(document.visibilityState==='hidden') flushCloudPush(); });
+    if(!document.hidden){ setTimeout(unstickBattle, 400); wakeAudio(); }      // (3.49) the sound system too
+    if(document.visibilityState==='hidden') flushCloudPush(); });
   window.addEventListener('pagehide', flushCloudPush);
 }catch(e){}
 
@@ -2079,7 +2171,47 @@ function recordMastery(text){
   text = phraseKey(text);
   state.wordMastery = state.wordMastery || {};
   state.wordMastery[text] = (state.wordMastery[text] || 0) + 1;
+  /* (3.49) reaching 🥇 just now: with auto-advance on, the next phrase takes its place as priority */
+  if(state.wordMastery[text] === MASTERY_CHECKPOINTS.gold){
+    const moved = advancePriority(text);
+    if(moved) setTimeout(()=> toast(`🥇 ${moved.from} is gold — ${moved.to} is a priority word now.`), 1200);
+  }
   return checkMasteryRewards();
+}
+/* ---------- PRIORITY AUTO-ADVANCE (3.49) ----------
+   The designer: "could there be a mode in spelling list which can be toggled
+   on to autoprogress the current priority word to the next unselected
+   priority word when the current one reaches 25/25 gold mastery? turning
+   this on keeps the total number of priority words the same by deselecting
+   the gold mastered word and automatically checking the next non-priority
+   word to priority in focus mode."
+   state.settings.priorityAdvance, a switch on the Spelling List. When a
+   priority phrase reaches 🥇 (25), it stops being priority, and the next
+   phrase after it in the Spelling List's order that is not priority and not
+   🥇 yet becomes priority instead (from the top of the list again if there is
+   none below it), so the number of priority phrases stays the same. With no
+   phrase left to take its place it stays priority. Turned on, it does the
+   same at once for every priority phrase already 🥇 (advanceAllPriority). */
+function advancePriority(text){
+  if(!state || !state.settings || !state.settings.priorityAdvance) return null;
+  const key = phraseKey(text), gold = MASTERY_CHECKPOINTS.gold;
+  if(!wordFlags(key).priority || masteryOf(key) < gold) return null;
+  const rows = wordRows();
+  const at = rows.findIndex(r=> r.text === key);
+  const order = at < 0 ? rows : rows.slice(at + 1).concat(rows.slice(0, at));
+  const next = order.find(r=> r.text !== key && !r.priority && masteryOf(r.text) < gold);
+  if(!next) return null;
+  setWordFlag(key, 'priority', false);
+  setWordFlag(next.text, 'priority', true);
+  return { from:key, to:next.text };
+}
+function advanceAllPriority(){
+  const gold = MASTERY_CHECKPOINTS.gold, moved = [];
+  wordRows().filter(r=> r.priority && masteryOf(r.text) >= gold).forEach(r=>{
+    const m = advancePriority(r.text);
+    if(m) moved.push(m);
+  });
+  return moved;
 }
 /* Medals are granted as words cross a tier, but progress made BEFORE medals
    existed (or before a tier's threshold changed) would otherwise never pay out.

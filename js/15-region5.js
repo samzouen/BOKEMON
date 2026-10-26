@@ -6492,23 +6492,98 @@ async function r5Grave(){
 }
 
 /* --- Jax, at the vault's great door --- */
-const R5_JAX_LV = 100;
+/* (3.48) The designer: "please buff jax too by giving him triple monster
+   waves, and give all his main monsters (in the centre) very high stone star
+   moves appropriate to their types, on top of the ones that already had it.
+   all his main monsters should be level 100 crowned. make jax's waves extra
+   strong. give his first wave cyclops and firefox to buff his main monster
+   and give his first monster a strong hit. his dragon should have mach
+   dragon star so it will guarantee a first blow in conjunction with cyclops.
+   repeat cyclops in 2 other waves with goblins to steal enemy buffs."
+   Six waves of three, all at 100. In the middle, his own six, crowned (10
+   supplements), each carrying a Very High stone ✦ of its own type: its
+   passive from the moment it comes out, the stone cast on its first action
+   (instant — it still attacks). Each fights by the script it had on the
+   ship ('dragon': Rage, then Dragon Drive Max; 'tricer': Overpower, then
+   Trample; the Firehound its Jaws; the Thundercat and the Loong their Max;
+   the Eagle climbs and falls). He leads every round (`figlio`).
+   1. The Dragon — Dragon ✦: Mach Dragon ✦ the moment it comes out, and the
+      Cyclops beside it slows your side a step (Bog Lurker), so his side moves
+      first even against your own Mach Dragon ✦; Dragon Dance ✦ cast (1.35×,
+      3 shields broken each blow); then Rage, so its first blow is a certain
+      critical (1.5×). The Firefox beside it moves before them all (Blazing
+      Speed, its side +15%) and casts Grand Enchantment (1.5× for 3 turns).
+   2. The Tricerarmor — Steel ✦: 3 shields as it comes out; Steel Aegis ✦ (his
+      side takes 40% less, 4 more shields). A Cyclops again, and a Goblin
+      (Goblin's Greed: each blow it lands steals one of your buffs) — while
+      the Dragon's Mach Dragon ✦ still runs, still first.
+   3. The Thundercat — Electric ✦ (Overcharge ✦: his side 3 steps sooner, its
+      first blow that lands always strikes twice, then 30%). A Plasma Manta
+      (Plasma Current: a step sooner, and nothing of theirs can be dodged)
+      and a Tailed Cat (four strikes a Max).
+   4. The Firehound — Fire ✦ (Overheat ✦: his side deals 1.5× and takes 1.1×,
+      and your side burns for 0.25× its ATK every turn). A Goblin Knight
+      (Grave Charge Max always strikes first) and a Lizardape (Primal Rend Max,
+      double from full health).
+   5. The Loong — Dragon ✦ (Mach Dragon ✦ again, Dragon Dance ✦), in the air
+      as it comes out (Soar): its first Dragon Dive Max lands double. A
+      Cyclops and a Goblin again.
+   6. The Eagle — Flying ✦ (Mirage ✦: nothing touches his side the first turn
+      it is attacked, then a quarter of blows miss and leave afterimages; 3
+      steps sooner); it climbs for three turns, then Piercing Stoop Max. A
+      Seadragon (Psionic Tide: your side a step later) and a Ladybird
+      (Blinding Beam Max).
+   (Until 3.48: his six one at a time, the Eagle alone crowned, no stones.)
+   (3.49) The designer: "give loong ice tomb, change all moves to + to nerf
+   it. put all his monsters at 95 instead of 100." Every stone at + now, not
+   ✦ (R5_JAX_PLUS), and all eighteen at level 95 (R5_JAX_LV): the Dragon's
+   Mach Dragon (+, not ✦ — your own Mach Dragon ✦ outranks it), Dragon Dance
+   + (1.30×, 2 shields a blow); Steel Aegis + (1 shield on arrival; cast,
+   35% less and 2 shields); Overcharge + (its first blow that lands 75% to
+   strike twice, then 25%; 2 steps sooner); Overheat + (1.5× dealt, 1.3×
+   taken, no burn); Mirage + (one afterimage a dodge, 2 steps sooner) — and
+   the Loong carries Ice Tomb + (Water): cast on its first move, every one of
+   yours on the field frozen for its next 2 turns, then 2 steps later and 20%
+   weaker for 5. The rest of the comments above are 3.48's ✦. */
+const R5_JAX_LV = 95;
+const R5_JAX_PLUS = 1;          // + (3.49; ✦ in 3.48)
+const R5_JAX_SIX = [            // his own, in the middle: [species, its stone, how it fights]
+  ['dragon',      'Dragon',   'dragon'],
+  ['tricerarmor', 'Steel',    'tricer'],
+  ['thundercat',  'Electric', 'maxer'],
+  ['firehound',   'Fire',     'firehound'],
+  ['loong',       'Water',    'maxer'],     // (3.49) Ice Tomb; Dragon Dance in 3.48
+  ['eagle',       'Flying',   'stoop'],
+];
+const R5_JAX_SIDES = [          // either side of each
+  ['cyclops',       'firefox'],
+  ['cyclops',       'goblin'],
+  ['plasma_manta',  'tailed_cat'],
+  ['goblin_knight', 'lizardape'],
+  ['cyclops',       'goblin'],
+  ['seadragon',     'ladybird'],
+];
 function r5JaxNote(){
-  return `<i>Jax: <b>6 monsters, one at a time, level ${R5_JAX_LV}</b> — his Dragon, Tricerarmor, Thundercat, Firehound and Loong, ` +
-    `and last his <b>crowned Eagle</b> (10 supplements). <b>He always moves first.</b> No stones — he lost his on the ship. ` +
-    `No running. Win for <b>+3 Protein Supplements</b>.</i>`;
+  return `<i>Jax: <b>6 waves of three — 18 monsters, level ${R5_JAX_LV}</b>. In the middle of each, one of his own six, ` +
+    `<b>crowned</b> (10 supplements), with a <b>Very High stone +</b> of its type, cast on its first move: his Dragon ` +
+    `(Dragon Dance + — and Mach Dragon the moment it comes out), Tricerarmor (Steel Aegis +), Thundercat (Overcharge +), ` +
+    `Firehound (Overheat +), Loong (<b>Ice Tomb +</b>: your side frozen for 2 turns) and Eagle (Mirage +). <b>He always moves first.</b> ` +
+    `His Cyclopses slow your side; his Goblins steal your buffs. No running. Win for <b>+3 Protein Supplements</b>.</i>`;
+}
+/* how a side fights: a Goblin Knight swings its Max, a psychic thinks (3.16), the rest their best */
+function r5JaxSideAi(sp){
+  if(sp === 'goblin_knight') return 'maxer';
+  return ((SPECIES[sp] || {}).types || []).includes('Psychic') ? 'smart' : 'best';
 }
 function r5JaxBattle(){
   const L = R5_JAX_LV;
+  const side = sp=> ({ species:sp, level:L, ai:r5JaxSideAi(sp) });
   return { isNpc:true, name:'Jax', npcId:'rival_padrino', noFlee:true, figlio:true, bgKey:'battle_catacombs', catacomb:true,
-    waves:[
-      [{ species:'dragon', level:L, ai:'best' }],
-      [{ species:'tricerarmor', level:L, ai:'best' }],
-      [{ species:'thundercat', level:L, ai:'maxer' }],
-      [{ species:'firehound', level:L, ai:'best' }],
-      [{ species:'loong', level:L, ai:'best' }],
-      [{ species:'eagle', level:L, ai:'best', crowned:true, supplements:10 }],
-    ] };
+    waves:R5_JAX_SIX.map(([sp, stone, ai], i)=> [
+      side(R5_JAX_SIDES[i][0]),
+      { species:sp, level:L, ai, crowned:true, supplements:10, veryHigh:{ type:stone, plus:R5_JAX_PLUS, cast:true } },
+      side(R5_JAX_SIDES[i][1]),
+    ]) };
 }
 async function r5JaxDoor(){
   const r = r5(), w = walkState();
@@ -7353,6 +7428,20 @@ async function r5ClimaxBreak(done){
   renderBattle();
   r5Sparks('battle');
   await tell(`Heavensplitter Max! Cyborg cracks open — and the cores burst out of it like shooting stars. The Monkey King catches them, one by one. Then his crown fades away again.`);
+  /* (3.49) The designer: "can we put the steel stone on cyborg to be
+     extracted at a relevant point in the story, when it is beaten? perhaps as
+     the cores fly out, it comes out afterwards?" Last out of it, the Steel
+     Stone that held its metal body together — to your feet, and yours (in
+     the story only; the Test Arena's copy writes nothing to your save). The
+     Monkey King keeps it in the air with the rest (allyStoneTypes reads
+     your stones as he casts). */
+  if(!b.arenaChallenge && !ownsStone('steelStone')){
+    await r5SteelOut(document.getElementById('enemyBob-0'), document.getElementById('playerBob'));
+    addStone('steelStone', 1);
+    r5Vault().steel = true;
+    await saveProfile();
+    await tell(`Last of all, something heavy and grey tumbles out after them, and rolls across the floor to your feet with a clank: <b>the Steel Stone</b> — the stone that held Cyborg's metal body together. It is yours now.`);
+  }
   await paSay(`<b>"No… NO! Cyborg! Get up!"</b>`);
   await mkSay(`<b>"Without the cores it is only a broken machine. It cannot move."</b>`);
   await mkSay(`<b>"It is yours, little one. Finish it! I will keep your stones in the air."</b>`);
@@ -7441,6 +7530,31 @@ async function r5CoresBurst(fromEl, toEl){
   });
   orbs.forEach(({ o })=> o.remove());
 }
+/* (3.49) The Steel Stone: out of it after the cores, heavier — up, then down
+   with a bounce at your monster's feet. */
+async function r5SteelOut(fromEl, toEl){
+  r5VaultCss();
+  if(!fromEl) return sceneWait(600);
+  const rf = fromEl.getBoundingClientRect(), rt = toEl ? toEl.getBoundingClientRect() : rf;
+  const fx = rf.left + rf.width / 2, fy = rf.top + rf.height / 2;
+  const tx = rt.left + rt.width * 0.62, ty = rt.top + rt.height * 0.88;
+  const o = document.createElement('div');
+  o.className = 'r5-steel-out';
+  o.innerHTML = uiIcon('steel_stone', 34, '🛡');
+  o.style.cssText = `position:fixed;left:${fx}px;top:${fy}px;width:34px;height:34px;margin:-17px 0 0 -17px;z-index:85;pointer-events:none;filter:drop-shadow(0 0 6px #cfd8e0);`;
+  document.body.appendChild(o);
+  await sceneWait(250);
+  await r5Tween(1100, t=>{
+    const e = t < 0.8 ? t / 0.8 : 1;
+    const bounce = t < 0.8 ? 0 : Math.sin((t - 0.8) / 0.2 * Math.PI) * 14;
+    o.style.left = (fx + (tx - fx) * e) + 'px';
+    o.style.top = (fy + (ty - fy) * e - Math.sin(Math.PI * e) * 90 - bounce) + 'px';
+    o.style.rotate = (t * 540) + 'deg';
+  });
+  playSfx('stone_mid');
+  await sceneWait(500);
+  o.remove();
+}
 /* ---------- Cyborg, broken: a short circuit, hand-drawn ----------
    (the designer: "a tilt to the sprite and a hand drawn (not emoticon) short
    circuit electricity animation that flashes in at times over the sprite")
@@ -7515,6 +7629,12 @@ async function r5ClimaxWon(){
   const levelUps = first ? (awardXpToParty(R5_CLIMAX_XP) || []) : [];
   const brk = tallyBattleForEyeBreak();
   await saveProfile();
+  /* (3.49) the designer: "when all cores are returned, please preload the
+     evolution music at a suitable time before that, along with the fanfare
+     when evolution into the crowned forms complete for each monster" — now,
+     the fight won: the evolution, its fanfare and the cores' own sound to
+     the front of the queue, in memory long before the first core comes home */
+  preloadSfx(['evolution', 'stone_ultra', 'stone_veryhigh'], true);
   /* Cyborg trembles where it stands; the screen fades to white */
   const card = document.getElementById('enemy-0');
   if(card) card.classList.add('r5-tremble');
@@ -7667,7 +7787,13 @@ function r5WhaleFace(){
   return faceMon('whalelord', { crowned:!!(c && c.crowned) });
 }
 function r5SceneDone(){ const w = walkState(); w.busy = false; ui.sceneRunning = false; }
-function r5Evolve(list){ return new Promise(done=> playEvolutions(list, done)); }
+/* (3.49) Every story evolution here waits, if it must (up to 4 s), for its
+   music and its fanfare to be in memory first — the cores coming home, the
+   Monkey King's crown, the fight's own — so the climax is never silent. */
+async function r5Evolve(list){
+  await ensureSfx(['evolution', 'stone_ultra'], 4000);
+  return new Promise(done=> playEvolutions(list, done));
+}
 
 /* ---------- the chapters, in order ---------- */
 async function r5VaultChapters(resumed){
@@ -7710,6 +7836,7 @@ function r5MKHands(){
   return o ? { x:o.x + o.w / 2, y:o.y + o.h * 0.62 } : { x:R5_VP.mk.x + 0.7, y:R5_VP.mk.y + 0.85 };
 }
 async function r5VaultShowcase(resumed){
+  preloadSfx(['evolution', 'stone_ultra', 'stone_veryhigh'], true);   // (3.49) (a story picked up again later, too)
   const w = walkState(), P = R5_VP;
   const mk = html=> sceneSay([r5MKFace()], R5_MK, html);
   const say = html=> sceneSay([], '', html);
@@ -10950,7 +11077,7 @@ function renderChallengeR5(){
       : 'The Padrino\'s right hand, filling the villa\'s great doorway.') : ''}
     ${(r.reached.includes('cata_crypt') || r.jaxBeaten) ? card('rival_padrino', '🧑', 'Jax', !!r.jaxBeaten,
       r.ending ? 'He runs the Family now, with the Ghost Master. Nino\'s rule: no more hurting monsters. (Mostly.)'
-      : r.jaxBeaten ? 'He went into the vault ahead of you.' : 'At the vault\'s great door, in the Family Crypt: 6 monsters, one at a time, level 100, the last a crowned Eagle. He always moves first.') : ''}
+      : r.jaxBeaten ? 'He went into the vault ahead of you.' : 'At the vault\'s great door, in the Family Crypt: 6 waves — 18 monsters, level 95, his own six crowned in the middle, each with a Very High stone +. He always moves first.') : ''}
     ${(r.vault && r.vault.won) ? card('padrino2', '🕴️', 'Don Padrino', true,
       r.ending ? 'Beaten in the vault, with the Monkey King at your side. He kept his promise to Nino, and sailed away with him and the Madrina to see the world.'
       : 'Beaten in the vault, with the Monkey King at your side.') : ''}

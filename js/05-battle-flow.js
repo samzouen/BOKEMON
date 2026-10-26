@@ -3567,7 +3567,8 @@ function enemyTurn(){
 function bestSpecial(e){
   const mon = activeMon();
   if(!mon) return null;
-  const list = (MOVES[e.species] || []).filter(m=> m[1] != null && m[2] == null && m[6] && (e.level || 1) >= m[5]);
+  let list = (MOVES[e.species] || []).filter(m=> m[1] != null && m[2] == null && m[6] && (e.level || 1) >= m[5]);
+  if(foesFierce()) list = list.filter(m=> m[0] === 'Ultimate' || m[0] === 'Max');   // (3.48) from Region 5: its Ultimate and Max only
   for(const m of list){
     const x = m[6];
     if(x.reflect && e.lastDamageTaken > 0){
@@ -3659,7 +3660,11 @@ function smartMove(e){
   if(!mine.length) return null;
   const fg = forgottenNames(e);
   let best = null, bestV = -1;
-  foeMoveRows(e).forEach(r=>{
+  /* (3.48) from Region 5 (foesFierce): its Ultimate and Max — what it has of
+     them — weighed as ever; the rest only if it has neither */
+  let rows = foeMoveRows(e);
+  if(foesFierce()){ const top = rows.filter(r=> r[0] === 'Ultimate' || r[0] === 'Max'); if(top.length) rows = top; }
+  rows.forEach(r=>{
     const ex = r[6] || {};
     if(fg.includes(r[1]) || ex.copy || ex.stoop || ex.charge || r[3] === 'Charge') return;   // (its own scripts)
     const v = smartValue(e, r, mine);
@@ -3846,6 +3851,23 @@ function enemyActs(i, e){
     if(ib) return enemyIceBarrier(e, ib, ()=> enemyActs(i, e));
   }
 
+  /* (3.48) From Region 5 on (foesFierce), what costs it no turn comes first,
+     wherever it has it: Rage and Overpower on its first action, as Jax's
+     scripts always took them (a script that does it itself is left to it) —
+     and, below, Steel Soul, once a battle. Then its move, in the same action. */
+  let fierceSoul = null;
+  if(foesFierce() && !e._forcedMove && !(e._copyQueue && e._copyQueue.length)){
+    const kit = (MOVES[e.species] || []).filter(m=> m[6] && (e.level || 1) >= m[5]);
+    if(!e._fierceOpened){
+      e._fierceOpened = true;
+      const rg = kit.find(m=> m[6].rage);
+      if(rg && e.ai !== 'dragon'){ rageState(e).forced = true; battleMsg(`💢 ${name} works itself into a rage.`); }
+      const op = kit.find(m=> m[6].overpower);
+      if(op && e.ai !== 'tricer') castOverpower(e, op[6].overpower);
+    }
+    const ss = kit.find(m=> m[6].soul);
+    if(ss && e.ai !== 'ankylo' && !e._soulUsed && !dustBlocks('enemy')) fierceSoul = ss;
+  }
   /* Removed: a call to initiativeMoveFor(), which never existed as a function.
      It was guarded by b.turnOrder, which the per-monster initiative rewrite
      left permanently null — so short-circuiting meant it never ran and never
@@ -3884,7 +3906,9 @@ function enemyActs(i, e){
   }
   /* The eagle climbs for three turns and then falls on you. */
   if(e.ai === 'stoop'){
-    const stoop = (MOVES[e.species] || []).find(m=>m[6] && m[6].stoop);
+    const list = MOVES[e.species] || [];
+    /* (3.48) from Region 5 (foesFierce), its Max where its level has it */
+    const stoop = (foesFierce() && list.find(m=> m[0] === 'Max' && m[6] && m[6].stoop && (e.level || 1) >= m[5])) || list.find(m=>m[6] && m[6].stoop);
     if(stoop) move = stoop;
   }
   /* A cormorant does one thing. */
@@ -3988,6 +4012,7 @@ function enemyActs(i, e){
   }
   /* (3.15) a Copycat's next copied attack */
   if(e._forcedMove){ move = e._forcedMove; e._forcedMove = null; }
+  else if(fierceSoul) move = fierceSoul;             // (3.48) quick: then its move
   /* Steel Soul is once a battle (2.93), whatever picked it — the arena's
      dummy told to use it included. Spent, or about to be scattered by your
      Diamond Dust (which would only send it round again), it swings its Max,

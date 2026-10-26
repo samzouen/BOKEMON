@@ -1075,7 +1075,8 @@ function startArenaChallenge(x, v, cfg){
   state.party.forEach(m=>{ m.currentHp = monMaxHp(m); });
   ui.arenaRun = { id:x.id, label:v.label || x.label, zone:ui.currentZone || null };
   ui.currentZone = null;                       // its own backdrop, or the plain one
-  beginBattle(Object.assign(cfg, { arenaChallenge:x.id, onWin: ()=> arenaChallengeOver('won') }));
+  /* (3.48) the fight is its card's region's, wherever you are: from Region 5 on, fierce (foesFierce) */
+  beginBattle(Object.assign(cfg, { arenaChallenge:x.id, foeRegion:x.region, onWin: ()=> arenaChallengeOver('won') }));
 }
 function arenaSnapshotParty(){
   const hp = {};

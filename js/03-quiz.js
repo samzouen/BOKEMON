@@ -133,6 +133,55 @@ function overmasteryStats(){
   };
 }
 
+/* (3.49) The designer: "please give a way for overmastery vs capacity
+   against total number of gold medals to be viewed. also, when overmastery
+   is capped, do extra practices get stored to grant overmastery once more
+   gold medals are unlocked? they should so that extra practice is not wasted".
+   They are, and always were: each phrase keeps its whole count (wordMastery
+   is never capped or trimmed), so the pool is every completion past 🥇, ever.
+   Only what PAYS is capped; when more phrases reach 🥇 the room grows and
+   reconcileOvermastery pays what was waiting at once. This card (on the
+   Spelling List) shows it: the 🥇 phrases, the room they make, the pool,
+   what has paid and what is waiting, and when the next 25 opens. */
+function overmasteryView(){
+  const s = overmasteryStats(), C = OVERMASTERY_CYCLE, St = OVERMASTERY_STEPS;
+  const room = s.maxCycles * C, paid = state.overmasteryAwarded || { bronze:0, silver:0, gold:0 };
+  const waiting = s.excess - s.usable;
+  /* the next 25 of room: the fewest 🥇 phrases that make one more cycle */
+  let g = s.goldWords + 1;
+  while(Math.ceil(g * OVERMASTERY_CAP_RATIO) <= s.maxCycles) g++;
+  const nextRoom = `The next ${C} of room comes at <b>${g}</b> 🥇 phrases (${g - s.goldWords} more).`;
+  let next;
+  if(!s.goldWords) next = `No phrase is 🥇 yet: the pool starts with the first one.`;
+  else if(waiting > 0) next = `<b>${waiting}</b> waiting — paid as soon as there is room. ${nextRoom}`;
+  else if(s.usable >= room) next = `The room is full to the last practice. ${nextRoom}`;
+  else {
+    const p = s.partial;
+    const [icon, at] = p < St.bronze ? ['🥉', St.bronze] : (p < St.silver ? ['🥈', St.silver] : ['🥇', St.gold]);
+    next = `Next: ${icon} in <b>${at - p}</b> more. Room left: <b>${room - s.usable}</b>.`;
+  }
+  const pct = room ? Math.min(100, s.usable / room * 100) : 0;
+  return `
+    <div class="hp-card om-card" style="margin-bottom:14px;">
+      <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">✨ Overmastery</div>
+      <div style="font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.45;margin:2px 0 8px;">
+        Each time a 🥇 phrase (${MASTERY_CHECKPOINTS.gold}/${MASTERY_CHECKPOINTS.gold}) is written right again, it goes into one pool. Every ${C} in the pool pays 🥉 at ${St.bronze}, 🥈 at ${St.silver} and 🥇 at ${St.gold}.
+        The room is ${Math.round(OVERMASTERY_CAP_RATIO * 100)}% of your 🥇 phrases, rounded up, × ${C}. Nothing past the room is lost: it waits.</div>
+      <div class="hpbar" style="height:10px;"><div class="hpfill om-fill" style="width:${pct}%;background:var(--gold);"></div></div>
+      <div class="om-lines" style="font-size:13px;font-weight:700;line-height:1.6;margin-top:8px;">
+        <div>🥇 phrases (a gold medal each): <b class="om-gold">${s.goldWords}</b> → room for <b>${s.maxCycles}</b> × ${C} = <b class="om-room">${room}</b></div>
+        <div>In the pool: <b class="om-pool">${s.excess}</b> · paying: <b class="om-used">${s.usable}</b> of <b>${room}</b></div>
+        <div>Paid so far: 🥉 <b>${paid.bronze || 0}</b> · 🥈 <b>${paid.silver || 0}</b> · 🥇 <b>${paid.gold || 0}</b></div>
+        <div class="om-next" style="color:var(--ink-soft);">${next}</div>
+      </div>
+    </div>`;
+}
+/* the same, in one line (the parent area's summary) */
+function overmasteryLine(){
+  const s = overmasteryStats(), room = s.maxCycles * OVERMASTERY_CYCLE, waiting = s.excess - s.usable;
+  return `✨ Overmastery: <b>${s.usable}/${room}</b> paying` + (waiting > 0 ? ` · <b>${waiting}</b> waiting` : '') + ` (${s.goldWords} 🥇 phrases)`;
+}
+
 function reconcileOvermastery(){
   if(!state) return null;
   state.overmasteryAwarded = state.overmasteryAwarded || { bronze:0, silver:0, gold:0 };

@@ -5785,6 +5785,50 @@ function makeEnemy(species, level, opts){
   return e;
 }
 
+/* ============================================================
+   FIERCE FOES (3.48) — Region 5 onwards
+   The designer: "buff enemy AI. all enemies in region 5 onwards should use
+   ultimate/max moves, and use instant moves (like very high moves) before
+   that too, wherever possible."
+   A fight belongs to a region (b.foeRegion: where you are; a Test Arena
+   challenge, its card's; a spar with the Monkey King, none — and the arena's
+   own fights with their dummies are never one). From Region 5 on, every
+   monster of theirs:
+   · fights with its Max — or its Ultimate where it has no Max yet — not a
+     Basic or a Power move: a 'basic', 'power1', 'power2' or an evolved wild's
+     'random' fights as 'best' (fierceUp, as each wave walks on); an Eagle
+     climbs and falls with its Piercing Stoop ('stoop', its Max where it has
+     it); the psychics' judgement (smartMove) and a 'best' monster's special
+     (bestSpecial) weigh their Ultimate and Max only. Where it has no damaging
+     Ultimate or Max (a Firefox), its best blow;
+   · first uses what costs it no turn, wherever it has one (enemyActs): its
+     Very High stone on its first action (as before), Caladrius's Ice Barrier
+     (as before), Steel Soul (once a battle, not under your dust) — and Rage
+     and Overpower on its first action, as Jax's scripts have always taken
+     them — and then its move.
+   Kept as they are: every script (Jax's, the Padrino's dragons, the Mime's
+   wall and copy, the Hermit Sloth's yawn, the Horned Lynx's stalk, the
+   Ladybird's beam, a Ghost Flame, Caladrius), a 'maxer', 'smart' itself, and
+   the psychics' support moves when each is worth it (foeSupportPick). A
+   stone is still cast once a battle, as yours is (they have no meter).
+   ============================================================ */
+const FIERCE_REGION = 5;
+const FIERCE_FROM = new Set(['basic', 'power1', 'power2', 'random']);
+function foesFierce(){ const b = ui.battle; return !!(b && !b.arena && (b.foeRegion || 0) >= FIERCE_REGION); }
+function fierceUp(e){
+  if(!e || e.isDummy) return;
+  const rows = (MOVES[e.species] || []).filter(m=> m[1] != null && (e.level || 1) >= m[5]);
+  const top = rows.filter(m=> m[0] === 'Max' || m[0] === 'Ultimate');
+  /* an Eagle's Ultimate and Max are the climb and the fall */
+  if((FIERCE_FROM.has(e.ai) || e.ai === 'best') && top.length && top.every(m=> m[6] && m[6].stoop)){ e.ai = 'stoop'; e._planned = null; return; }
+  if(!FIERCE_FROM.has(e.ai)) return;
+  e.ai = 'best';
+  e._planned = null;
+  const dmg = rows.filter(m=> m[2] != null);
+  const by = s=> dmg.find(m=> m[0] === s);
+  e.move = by('Max') || by('Ultimate') || by('Power2') || by('Power1') || by('Basic') || e.move;
+}
+
 /* Sacred Grove runs its own encounter table while the trial is unresolved. */
 function inSacredGroveTrial(){
   const r2 = state.progress.region2 || {};
@@ -5898,6 +5942,10 @@ function beginBattle(config){
     scriptedLoss: config.scriptedLoss||null,
     coreSpar: config.coreSpar || null,   // a training spar with the Monkey King (2.86): { uid, tier, hp }
     arenaChallenge: config.arenaChallenge || null,   // (3.11) a story fight in the Test Arena: nothing after it counts (08-screens2.js)
+    /* (3.48) whose region the fight belongs to — where you are; a Test Arena
+       challenge, its card's (`foeRegion`); a spar with the Monkey King, none.
+       From Region 5 on their monsters fight fierce (foesFierce). */
+    foeRegion: config.foeRegion != null ? config.foeRegion : (config.coreSpar ? 0 : ((state.progress && state.progress.currentRegion) || 1)),
     scriptedAlly: config.scriptedAlly||null, allyMove: config.allyMove||null,
     allyUnkillable: !!config.allyUnkillable, enemiesFirst: !!config.enemiesFirst,
     /* (3.19) the vault: the Monkey King at your side (an AI ally, never one
@@ -5960,6 +6008,7 @@ function loadWave(i){
   const b = ui.battle;
   tallyWave();                     // (3.22) one more wave for the day — the daily limit counts waves
   b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll, crowned:spec.crowned, forceStage:spec.forceStage, elusive:spec.elusive, enraged:spec.enraged, anyLevel:spec.anyLevel, catchable:!!b.allowCatch }));
+  if(foesFierce()) b.enemies.forEach(fierceUp);   // (3.48) from Region 5 on: their Ultimate and Max
   // Leech Seed is a FIELD effect: it re-roots on every new wave.
   /* (the tiered field-status re-application below handles Leech Seed; a bare
       copy here used to overwrite it and strip the + / ✦ bite) */

@@ -456,14 +456,19 @@ function playEvolutions(list, done){
   const next = ()=>{
     if(i >= list.length){ done(); return; }
     const ev = list[i++];
-    playSfx('evolution');
+    /* (3.49) the designer: "the fanfare should stop the moment the next
+       evolution begins" — the last one's fanfare, and a core's or a crown's
+       (stone_veryhigh) still ringing, go as this one starts */
+    stopSfx('stone_ultra', 120);
+    stopSfx('stone_veryhigh', 120);
+    playSfxSoon('evolution', 2500);                       // (3.49) waits for it if still on its way
     /* (3.28) The fanfare is made ready now, so it can start the instant the
        new form shows (finish). A Very High stone's fanfare used to be timed
        for EVO_FLASH_MS − 200 — but the flicker starts 500 ms in and runs a
        little past EVO_FLASH_MS, so it went off while the forms were still
        flickering, 0.7 s before the reveal, and the reveal's own fanfare came
        after it. One fanfare now, on the reveal. */
-    preloadSfx(['stone_ultra']);
+    preloadSfx(['stone_ultra'], true);
     const sp = SPECIES[ev.species];
     /* Explicit stages when the caller worked them out; otherwise derive them.
        The pair must always be CONSECUTIVE — the form you were, and the form you
@@ -660,6 +665,12 @@ function startCatch(enemy){
     words.push(poolWords.pop());
   }
   ui.catchTarget = enemy;
+  /* (3.49) the designer: "some of the music such as capturing monsters is not
+     playing once the monster is caught at the naming page … please check to
+     see if the music can be preloaded while doing the spelling to catch a
+     monster". Its jingle (and the miss's) to the front of the queue now, in
+     memory well before the last phrase is written (preloadSfx). */
+  preloadSfx(['catch_success', 'catch_miss'], true);
   startQuiz({
     title:`Catching ${SPECIES[enemy.species].name}`,
     subtitle:`Spell ${words.length} to seal it. One slip is risky — two lets it escape!`,
@@ -677,7 +688,7 @@ function resolveCatch(enemy, results){
   else caught = false;                                   // second mistake always fails
   if(caught) gotcha(enemy);
   else {
-    playSfx('catch_miss');
+    playSfxSoon('catch_miss', 2500);                     // (3.49) as the jingle: waits for it if still on its way
     go('battle'); // reuse container
     $('#brandSub').textContent='Catch';
     screenEl.innerHTML = `
@@ -710,7 +721,10 @@ const CATCH_MESSAGES = {
 function gotcha(enemy){
   /* Remember the form it was actually caught in, so a Lv55 base-form catch
      becomes stage 1 at Lv56 and stage 2 at Lv57 rather than jumping instantly. */
-  playSfx('catch_success');
+  /* (3.49) from memory, waiting up to 2½ s if it is still on its way — it
+     comes long after the last tap, and an iPad will not start the fallback
+     then (playSfxSoon) */
+  playSfxSoon('catch_success', 2500);
   const sp = SPECIES[enemy.species];
   const ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at center,#fff7e0,#e8dcc0);gap:16px;';

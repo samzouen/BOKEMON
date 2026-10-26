@@ -262,7 +262,20 @@ function renderSpellingManage(){
           <span class="slider-ui"></span>
         </label>
       </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);">
+        <div style="padding-right:10px;">
+          <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">Auto-advance priority</div>
+          <div style="font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.4;">${state.settings.priorityAdvance
+            ? `On: when a priority word reaches 🥇 ${MASTERY_CHECKPOINTS.gold}/${MASTERY_CHECKPOINTS.gold}, the next word after it in the list that is not priority and not 🥇 yet becomes priority instead — always ${priorityCount} priority words.`
+            : `When a priority word reaches 🥇 ${MASTERY_CHECKPOINTS.gold}/${MASTERY_CHECKPOINTS.gold}, its P moves to the next word after it in the list that is not 🥇 yet, so the number of priority words stays the same.`}</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="advanceToggle" ${state.settings.priorityAdvance?'checked':''}>
+          <span class="slider-ui"></span>
+        </label>
+      </div>
     </div>
+    ${overmasteryView()}
 
 
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:12px;">
@@ -309,6 +322,15 @@ function renderSpellingManage(){
 
   $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
 
+  /* (3.49) auto-advance: on, every priority word already 🥇 moves on at once */
+  $('#advanceToggle').addEventListener('change', async e=>{
+    state.settings.priorityAdvance = e.target.checked;
+    const moved = e.target.checked ? advanceAllPriority() : [];
+    await saveProfile();
+    if(moved.length) toast(moved.length === 1 ? `🥇 ${moved[0].from} is gold — ${moved[0].to} is a priority word now.`
+                                              : `🥇 ${moved.length} gold words handed their priority to the next ones.`);
+    renderSpellingManage();
+  });
   $('#focusToggle').addEventListener('change', async e=>{
     if(e.target.checked && wordRows().filter(w=>w.priority).length===0){
       e.target.checked = false;
@@ -677,6 +699,7 @@ function renderParentArea(){
       <div class="pc-summary">
         <div>⚡ Levelling: <b>${XP_MODES[xpMode()].label}</b></div>
         <div>✍️ Leniency: <b>${lenLabel(state.settings.leniency||1)}</b></div>
+        <div>${overmasteryLine()}</div>
         <div>👀 Eye breaks: <b>${every>0?`${mins} min every ${every} waves`:'off'}</b></div>
         <div>📅 Waves a day: <b>${dailyUnlimited()?'unlimited':(dailyLimit()===0?'switched off':dailyLimit())}</b> · ${wavesToday()} so far today (${battlesToday()} ${battlesToday() === 1 ? 'battle' : 'battles'})</div>
         ${dailyOverrideActive() ? `<div>🔓 Opened by a grown-up: <b>${state.dailyOverrideOpen ? 'no time limit'
