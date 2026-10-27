@@ -1900,7 +1900,7 @@ function monGains(m, side){
   if(Array.isArray(m.counterStack) ? m.counterStack.length : m.counterStack)
     add('↩️ Counter', ()=>{ m.counterStack = Array.isArray(m.counterStack) ? [] : 0; });
   if(m.comboStacks > 0) add(`👊 Combo ×${m.comboStacks}`, ()=>{ m.comboStacks = 0; });
-  if(m.enrageStacks > 0) add(`🔥 Enrage ×${m.enrageStacks}`, ()=>{ m.enrageStacks = 0; });
+  if(m.enrageStacks > 0) add(`😤 Enrage ×${m.enrageStacks}`, ()=>{ m.enrageStacks = 0; });
   if(m.lurk) add('🌑 Lurk', ()=>{ m.lurk = false; });
   if(m.cunning) add('🌘 Cunning', ()=>{ m.cunning = false; });
   if(m.evadeAlways && !m.evadeUnsweepable) add('💨 Evasion', ()=>{ m.evadeAlways = 0; });
@@ -2057,7 +2057,7 @@ function stealableBuffs(victimSide, victims){
     }});
     if(m.lurk) out.push({ label:'🌑 Lurk', take:()=>{ m.lurk = false; return (s, thief)=>{ thief.lurk = true; return true; }; } });
     if(m.cunning) out.push({ label:'🌘 Cunning', take:()=>{ m.cunning = false; return (s, thief)=>{ thief.cunning = true; return true; }; } });
-    if(m.enrageStacks > 0) moveField('enrageStacks', `🔥 Enrage ×${m.enrageStacks}`);
+    if(m.enrageStacks > 0) moveField('enrageStacks', `😤 Enrage ×${m.enrageStacks}`);
     if(m._overpower && m._overpower.turnsLeft > 0) out.push({ label:'💪 Overpower', take:()=>{
       const o = m._overpower; m._overpower = null;
       return (s, thief)=>{ thief._overpower = o; return true; };
@@ -2175,7 +2175,7 @@ function stanceSummary(g){
    companion (its pills say 🤝 first). */
 function stancePills(m, who){
   const out = [];
-  const w = who || 'p', mk = w === 'c' ? '🤝 ' : '';
+  const w = who || 'p', mk = '';                     // (3.52) a companion's are on its own card: no 🤝 needed
   const pill = (key, text)=> out.push(`<span class="status-pill mine"${pillAt(key, w)}>${mk}${text}</span>`);
   if(m && m.lurk)         pill('lurk', '🌑 Lurk');
   if(m && m.cunning)      pill('cunning', '🌘 Cunning');
@@ -2845,12 +2845,17 @@ function morsBlocksRevival(mon){ return morsMarks(mon) >= MORS_LIMIT; }
    never a Caladrius the marks have taken.
    ============================================================ */
 function revivableFallen(caster){
-  return battleParty().filter(m=> m.currentHp <= 0 && m !== caster && !morsBlocksRevival(m));
+  const party = battleParty().filter(m=> m.currentHp <= 0 && m !== caster && !morsBlocksRevival(m));
+  /* (3.52) a companion is a full monster now: one that has fainted can be
+     brought back too — beside its leader again, if its leader is out */
+  const comps = (ui.battle && companionsAllowed())
+    ? bondedCompanions().filter(c=> c.currentHp <= 0 && c !== caster && !morsBlocksRevival(c)) : [];
+  return party.concat(comps);
 }
 
 /* Vita: an immediate pulse, then a field that tends whoever is worst off. */
-/* Everyone of yours a heal can reach: the party, and a companion out on the
-   field (2.84 — it is outside the revivals, not the healing). */
+/* Everyone of yours a heal can reach: the party, and the companion on the
+   field (2.84; since 3.52 the revivals reach every companion too). */
 function healableAllies(){
   const c = companionOnField();
   return c ? battleParty().concat([c]) : battleParty();
@@ -4958,9 +4963,6 @@ function beginRound(msg){
        out front before anyone acts: send the next one out, THEN build the
        order, so the newcomer takes this round's turn and nothing is skipped. */
     const order = ()=>{ b.order = buildInitiativeOrder(); b.orderStep = 0; runTurnStep(); };
-    /* Their companion's first call (2.87) comes as the first round opens, so
-       it is on the field before anyone moves — his first turn, whoever is
-       quicker. Later calls come on his own actions (enemyActs). */
     const go = ()=>{
       if(!ui.battle || battleDone()) return;
       /* (3.19) The start of the turn, before anyone chooses: your Forest
@@ -4969,13 +4971,6 @@ function beginRound(msg){
       overgrowthPhase('start', ()=> allyPreTurn(()=>{
         if(!ui.battle) return;
         if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
-        const fp = foePair();
-        if(fp && !fp.summons && foeCanSummon(fp.leader)){
-          const said = foeSummon();
-          renderBattle();
-          if(said) battleMsg(said);
-          return setTimeout(order, 1300);
-        }
         order();
       }));
     };
@@ -5020,9 +5015,19 @@ function battleDone(){
   setTimeout(()=>{ if(ui.battle === b && b.onDone) b.onDone(); }, 600);
   return true;
 }
-/* Nobody of yours is left standing: no party member, and no companion
-   standing in for one. */
-function sideDefeated(){ return !battleParty().some(m=> m.currentHp > 0) && !standingIn(); }
+/* Nobody of yours can fight on: no party member standing, and no companion
+   of one either (3.52: it would come out with its leader, and stand in). */
+function sideDefeated(){ return !battleParty().some(m=> canTakeField(m)) && !standingIn(); }
+/* (3.52) Who can be sent out or switched in: a party monster that can fight,
+   or whose companion still can. */
+function sendOutOptions(exceptIdx){
+  return state.party.map((m,i)=>({m,i})).filter(o=> o.i !== exceptIdx && canTakeField(o.m));
+}
+/* A newcomer out front arrives as any monster of yours does — its entry
+   passives, once a battle — if it is standing. */
+function enterLeader(nm){
+  if(nm && nm.currentHp > 0 && !nm._entered){ nm._entered = true; applyEntryPassives(nm, nm.species, nm.level, monAtk(nm)); }
+}
 /* The monster out front fell outside anyone's turn: choose the next one, run
    its entry passives, then carry on. */
 function replaceFallenThen(next){
@@ -5030,14 +5035,13 @@ function replaceFallenThen(next){
   const c = chargeState();
   if(c && fallen && c.uid === fallen.uid) triggerDragonLegacy();
   battleMsg(`${displayName(fallen)} fainted!`);
-  const options = state.party.map((m,i)=>({m,i})).filter(o=>o.m.currentHp>0 && !isPassenger(o.m));
+  const options = sendOutOptions(-1);
   if(!options.length) return onPlayerDefeated();
   monsterChooser('Send out…', options, (i)=>{
     ui.battle.activeIndex = i; ui.battle.switchedThisTurn = false;
     setFocus(null);
-    const nm = state.party[i];
-    if(nm && !nm._entered){ nm._entered = true; applyEntryPassives(nm, nm.species, nm.level, monAtk(nm)); }
-    pairSwitched(fallen);               // its companion comes back out, if it was out
+    enterLeader(state.party[i]);
+    pairSwitched(fallen);               // its companion comes out with it
     renderBattle();
     next();
   }, false);
@@ -5110,11 +5114,12 @@ function initiativeOf(side, mon){
 }
 
 /* Each monster of yours on the field has its own place in the order (2.84):
-   the leader, and a companion that is out. Ties go to the leader — it is on
-   the left — so the companion leads only on an initiative of its own. */
+   the leader, and its companion. (3.52) The designer: "if of the same
+   initiative value as each other, the left takes precedence" — whichever of
+   the two stands on the left (standsLeft; the ⇄ on the Party page). */
 function playerRow(m){
   const lead = m === leaderMon();
-  return { side:'player', mon:m, idx: lead ? -2 : -1, role: lead ? 'leader' : 'companion',
+  return { side:'player', mon:m, idx: standsLeft(m) ? -2 : -1, role: lead ? 'leader' : 'companion',
            tier:machTier('player'), value:initiativeOf('player', m) };
 }
 function orderCompare(a, c){
@@ -5149,7 +5154,6 @@ function runTurnStep(){
   if(!b || !b.order) return;
   if(battleDone()) return;                       // (3.19) a fight that ends on its own terms (the vault's last phase)
   if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
-  noteFoeStandIn();
   if(sideDefeated()){
     const f = leaderMon();
     if(rebirthDue(f)) return offerRebirth(()=> runTurnStep(), ()=> onPlayerDefeated(), f);
@@ -5430,8 +5434,6 @@ function endRound(){
   sylphCleanse();                                // (3.15) a Sylph lifts one of the other side's marks
   shakeOffMarks();                               // (3.37) a Hermit Sloth shakes one off itself
   endDragonLegacy();                             // a Legacy spent this turn is over
-  tickCompanionTurns();                          // a companion out spends one of its turns
-  tickFoePairTurns();                            // and theirs (2.87)
 
   /* (The Haunting Aria no longer rolls here: it rolls in the next round's
      pre-action phase, in beginRound.) */
@@ -5472,27 +5474,6 @@ function endRound(){
     });
   })));
 }
-/* A companion out on the field spends one of its turns each round; with none
-   left it goes back into its leader's core (handover 07). */
-function tickCompanionTurns(){
-  const b = ui.battle, l = leaderMon();
-  const c = companionOnField();
-  if(!b || !l || !c) return;
-  const p = b.pairs[l.uid];
-  p.turnsLeft = Math.max(0, p.turnsLeft - 1);
-  if(p.turnsLeft <= 0 && c.currentHp > 0) companionReturns(c, p);
-}
-function companionReturns(c, p){
-  const l = leaderMon();
-  const cs = chargeState();
-  if(cs && cs.uid === c.uid) triggerDragonLegacy();     // its stored power passes on
-  p.out = false;
-  if(ui.battle.focusUid === c.uid) setFocus(null);
-  battleMsg(`🤝 ${displayName(c)} goes back into ${displayName(l)}'s core.` +
-            (l.currentHp <= 0 ? ` ${displayName(l)} cannot fight on.` : ''));
-  renderBattle();
-}
-
 /* Anything that costs one of yours its place this round: their Ice Tomb, a
    jam, a nap, a stun, a charm. Says so and returns true — the caller passes
    the turn on. The monster is the one in focus. */
@@ -5535,8 +5516,7 @@ function playerHeldDown(){
 /* The player's slice of the round, for one monster of yours (the one in
    focus). It decides nothing about order — losing the turn to a stun or a
    charm simply hands straight on to the next step. The choice is this
-   monster's own: its buttons, its move (a companion's costs its 8 words for
-   the turn — handover 07). */
+   monster's own: its buttons, its move, its words (3.52: a companion's too). */
 function beginPlayerPhase(msg, mon){
   const b = ui.battle;
   if(!b) return;
@@ -5546,8 +5526,7 @@ function beginPlayerPhase(msg, mon){
   b.phase = 'player';
   renderBattle();
   /* (the line over the buttons already says whose turn it is) */
-  if(isCompanionMon(mon)) battleMsg(`Pick any of ${escapeHtml(displayName(mon))}'s moves — write all ${COMPANION.turnWords} words, or its turn fails.`);
-  else if(msg) battleMsg(msg);
+  if(msg) battleMsg(msg);
 }
 
 /* ---------- BATTLE MODULE (Phase 3: wild encounters) ---------- */
@@ -5920,13 +5899,13 @@ function beginBattle(config){
     m.lurk = false; m.lurkUsed = 0; m.cunning = false; m.hitsDealt = 0;
     m._ambush = 0;  m._windup = null; m._omen = 0; m._seizedLast = false;
   });
-  restCompanions();                              // every fight starts them whole (2.84)
   ui.battle = {
     waves: config.waves, waveIndex:0,
     isNpc: !!config.isNpc, allowCatch: !!config.allowCatch,
     challenge: config.challenge || null, name: config.name || 'Battle',
     onWin: config.onWin || null, onWaveStart: config.onWaveStart || null, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
     onLose: config.onLose || null,    // (3.12) what a lost fight settles once the team has come round — Jax's wager (onPlayerDefeated)
+    noPrize: !!config.noPrize,        // (3.52) nothing for it: no experience, no tokens (onChallengeWon) — a soldato's, after Region 5's story
     guardianTrial: !!config.guardianTrial, leechSeed:false, bgKey: config.bgKey||null,
     alwaysFirst: !!config.alwaysFirst,
     scriptedOneTurn: !!config.scriptedOneTurn,
@@ -5996,7 +5975,10 @@ function beginBattle(config){
   state.party.forEach(m=>{ m.guard=false; m.airborne=0; m.invisible=0; m.prep=0; m.blockStacks=0; m._entered=false; });
   loadWave(0);
   const lead = leaderMon();
-  if(lead){ lead._entered = true; applyEntryPassives(lead, lead.species, lead.level, monAtk(lead)); }
+  if(lead){ lead._entered = true; if(lead.currentHp > 0) applyEntryPassives(lead, lead.species, lead.level, monAtk(lead)); }
+  /* (3.52) its companion is out beside it from the start, arriving as it does */
+  const comp = companionOnField();
+  if(comp && comp.currentHp > 0){ comp._entered = true; applyEntryPassives(comp, comp.species, comp.level, monAtk(comp)); }
   playBattleMusic(!!config.isNpc, { silentIntro: !!config.silentIntro });
   go('battle');
   /* Every battle, scripted or not, starts a normal round. `enemiesFirst` is
@@ -6046,11 +6028,14 @@ function loadWave(i){
     setTimeout(()=> battleMsg(passivesMuted(withPassive) ? `🔇 ${who} is silenced by the curse!` : `⚡ ${who} is active!`), 600);
   }
   /* A borrowed story monster is the only thing in the party, so it simply
-     stays. Otherwise keep whoever was fighting, as long as they're standing. */
+     stays. Otherwise keep whoever was fighting, as long as they're standing
+     (3.52: or their companion is) — else the first standing, else the first
+     whose companion still can. */
   const cur = state.party[b.activeIndex];
-  let ai = (cur && cur.currentHp>0 && !isPassenger(cur))
+  let ai = (cur && canTakeField(cur))
     ? b.activeIndex
     : state.party.findIndex(m=>m.currentHp>0 && !isPassenger(m));
+  if(ai<0) ai = state.party.findIndex(m=> canTakeField(m));
   if(ai<0) ai=0;
   b.activeIndex = ai; b.switchedThisTurn=false;
   /* A fresh wave starts a fresh round: reset who has acted so the new arrivals
@@ -6080,7 +6065,6 @@ function onWaveCleared(){
       const gone = tickStatuses();
       endDragonLegacy();                 // the turn that used it is over
       setFocus(null);
-      tickCompanionTurns();              // and a companion out spent one of its turns
       /* A new round for Tachypsychia's three extra actions, as endRound gives —
          the ones that cleared the wave used to count against the next. */
       [getPStatus(0,'tachy'), getESide('tachy')].forEach(t=>{ if(t) t.extras = 0; });
@@ -6200,32 +6184,33 @@ function pid(base, mon){
 }
 
 /* ============================================================
-   COMPANIONS (2.84, reworked 2.85 — handover/07-COMPANIONS.md, phase 2)
+   COMPANIONS (2.84; 3.52 — full monsters, side by side)
    A party monster — the LEADER — holds the shared core of a monster from your
    collection, its COMPANION (leader.companionUid: a monster in storage, never
-   one of the party). In battle a summon (4 words, and the turn stays yours)
-   brings it out beside the leader for up to five turns; the recharge meter
-   gives them back. Up to six summons a battle.
-   A companion has its own place in the order and chooses its own move there.
-   Its TURN costs 8 words, whatever the move (COMPANION.turnWords): all 8 or
-   the whole turn fails. Only a move's extras still cost words — the tail of
-   a move that grows with extra words (Incinerate Max: 7 more for its 2.75×),
-   and bonus rounds. A quick move (a Very High stone) leaves its turn open, and
-   what it does next that turn is already paid for (control.paid).
-   Battle state, per leader: ui.battle.pairs[leaderUid] =
-     { uid, turnsLeft, out, fallen }
-   `out` stays true while the pair is switched off, so it comes back out with
-   its leader; its turns only run while it is on the field (they FREEZE).
-   A companion is not a party member: its own battle HP, full at the start of
-   every fight (readyCompanion; restCompanions puts it back after), and it is
-   outside Revitalise, Conversio and the party's defeat check — though while
-   it stands in for a fallen leader the fight goes on.
-   Bonding for real — the Crown, the core slot and its training, the
-   Companions page — is phase 3 (2.86, 07-screens.js). All of it is behind
-   the developer profile (companionsUnlocked) until the end of Region 5 sets
-   state.companionsUnlocked.
+   one of the party). The designer, 3.52: "Companions are no longer temporary
+   but are full companions that appear together with each other … They now
+   operate as full monsters. Using their move costs the regular amount of
+   words. No need to summon them anymore." So in every fight that allows them
+   (companionsAllowed) a companion is on the field with its leader from the
+   start, for the whole fight:
+     - each of the two has its own place in the order, by initiative; on a
+       tie the one standing on the LEFT goes first (leader.companionLeft puts
+       the companion there — the ⇄ on the Party page);
+     - its moves cost their own words, as anyone's do — by default words
+       learned to 🥈 silver or 🥇 gold (battleWordsMode, 05);
+     - its health is its own and stays hurt after a fight, as the party's
+       does: Recover heals it, Revitalise and Conversio bring it back, and
+       your side is beaten only when no leader and no companion can fight;
+     - a leader that falls is stood in for: its companion fights on alone
+       until it falls too, or you switch.
+   Their side has the same rules in the Monkey King's spars (2.87).
+   Battle state, per leader: ui.battle.pairs[leaderUid] = { uid, fallen }
+   (`fallen`: its fall has been dealt with, so it is off the field — until
+   something brings it back).
+   Bonding — the Crown, the core slot and its training, the Companions page —
+   is 07-screens.js. All of it is behind the developer profile
+   (companionsUnlocked) until the end of Region 5 sets state.companionsUnlocked.
    ============================================================ */
-const COMPANION = { summonWords:4, turns:5, maxSummons:6, turnWords:8 };
 function companionsUnlocked(){
   return !!(state && (state.companionsUnlocked || (typeof isDev === 'function' && isDev())));
 }
@@ -6252,24 +6237,33 @@ function bondedCompanions(){
   });
   return out;
 }
+/* (3.52) A pair as it stands, left to right: its leader first, unless the
+   leader has put its companion on its left (the ⇄ on the Party page). */
+function pairOrder(leader, comp){
+  if(!leader) return [];
+  if(!comp) return [leader];
+  return leader.companionLeft ? [comp, leader] : [leader, comp];
+}
 /* This battle's record of a leader's pair — made the first time it is asked
-   for, which is when the companion is readied for the fight. */
+   for, which is when the companion is readied for the fight. One that comes
+   into the fight already fainted is off the field until something brings it
+   back. */
 function pairOf(leader){
   const b = ui.battle;
-  if(!b || !leader) return null;
+  if(!b || !leader || !companionsAllowed()) return null;
   const c = companionOf(leader);
   if(!c) return null;
   b.pairs = b.pairs || {};
   let p = b.pairs[leader.uid];
   if(!p || p.uid !== c.uid){
-    p = b.pairs[leader.uid] = { uid:c.uid, turnsLeft:COMPANION.turns, out:false, fallen:false };
+    p = b.pairs[leader.uid] = { uid:c.uid, fallen:c.currentHp <= 0 };
     readyCompanion(c);
   }
   return p;
 }
-/* Full health and a clean slate, as every fight starts for the party. */
+/* A clean slate, as every fight starts for the party — its health as it is
+   (3.52: it keeps its hurts between fights, as the party does). */
 function readyCompanion(c){
-  c.currentHp = monMaxHp(c);
   c.counterStack = []; c.comboStacks = 0; c.enrageStacks = 0;
   c.blockStacks = 0;   c.blockValue = 0;
   c._rage = null;      c._overpower = null; c._stoop = null;
@@ -6278,27 +6272,39 @@ function readyCompanion(c){
   c._ambush = 0;  c._windup = null; c._omen = 0; c._seizedLast = false;
   c.guard = false; c.airborne = 0; c.invisible = 0; c.prep = 0; c.evadeTurns = 0;
 }
-/* Out of battle a companion is always whole: what it lost was the fight's. */
+/* Every companion made whole — where the story heals the whole team (the
+   vault's rewind, the Forest Guardian's gift). Ordinary healing is
+   healParty's, which counts them in (3.52). */
 function restCompanions(){ bondedCompanions().forEach(c=>{ c.currentHp = monMaxHp(c); }); }
-/* The current leader's companion, while it is out on the field. */
+/* The current leader's companion, while it is on the field: always, from the
+   start of the fight (3.52), unless it has fallen. */
 function companionOnField(){
   const b = ui.battle, l = leaderMon();
-  if(!b || !l || !b.pairs) return null;
-  const p = b.pairs[l.uid];
-  if(!p || !p.out || p.fallen) return null;
+  if(!b || !l) return null;
+  const p = pairOf(l);
+  if(!p || p.fallen) return null;
   const c = companionOf(l);
   return (c && c.uid === p.uid) ? c : null;
 }
 function isCompanionMon(m){ const l = leaderMon(); return !!(m && l && m.uid !== l.uid && companionOnField() === m); }
+/* (3.52) Can this party monster's side of the pair still fight — itself, or
+   its companion (which comes out with it, and stands in)? */
+function companionCanFight(m){
+  if(!m || !companionsAllowed()) return false;
+  const c = companionOf(m);
+  return !!(c && c.currentHp > 0);
+}
+function canTakeField(m){ return !!m && !isPassenger(m) && (m.currentHp > 0 || companionCanFight(m)); }
+/* (3.52) Your monsters on the field as they stand, left to right — and the
+   one on the left goes first on a tie of initiative. */
+function fieldOrder(){
+  const l = leaderMon();
+  return l ? pairOrder(l, companionOnField()) : [];
+}
+function standsLeft(m){ const f = fieldOrder(); return !f.length || f[0] === m; }
 /* A move that never spends the turn: a Very High stone's cast, the Aria, or
    (2.93) Steel Soul. */
 function isQuickMove(mv){ return !!(mv && ((mv.isStone && mv.stoneTier === 'veryhigh') || mv.aria || mv.soul || mv.iceBarrier)); }   // (3.16) Ice Barrier too
-/* The words a companion's move still asks for beyond its turn's 8: the tail
-   of a move that grows with extra words (Incinerate Max: 7 more, to 15, for
-   its 2.75×). Bonus rounds are their own quizzes, as always. */
-function companionTail(mv){
-  return (mv && mv.scale && !mv.windupReady) ? Math.max(0, scaleCeilWords(mv) - mv.words) : 0;
-}
 /* The companion takes its place in this round's order — after whoever is
    acting now, where its initiative puts it among the rest. */
 function insertCompanionRow(c){
@@ -6314,10 +6320,10 @@ function insertCompanionRow(c){
   b.order.splice(at, 0, row);
 }
 /* The leader out front has changed (a switch, a send-out, Vengeance's swap):
-   the companion that was out goes back with its leader — its turns frozen —
-   and the newcomer's comes back out if it was out,
-   arriving as any monster of yours does. The leader's place in the order
-   passes to the newcomer. */
+   the old pair goes back together, and the newcomer's companion comes out
+   with it, arriving as any monster of yours does. The leader's place in the
+   order passes to the newcomer. A newcomer that is itself down (3.52: its
+   companion can still fight) is stood in for at once. */
 function pairSwitched(oldLeader){
   const b = ui.battle;
   if(!b) return;
@@ -6333,31 +6339,38 @@ function pairSwitched(oldLeader){
     if(!c._entered){ c._entered = true; applyEntryPassives(c, c.species, c.level, monAtk(c)); }
     else applyStonePassives(c);
     insertCompanionRow(c);
+    if(nl && nl.currentHp <= 0) noteStandIn();
   }
 }
-/* A companion has fallen: out for the rest of this fight (handover 07). */
+/* A companion has fainted: off the field, its leader fighting on — until a
+   Revitalise or a Conversio brings it back (3.52). */
 function companionFalls(c){
   const b = ui.battle, l = leaderMon();
   const p = l && b && b.pairs && b.pairs[l.uid];
   if(!p || p.uid !== c.uid) return;
   const cs = chargeState();
   if(cs && cs.uid === c.uid) triggerDragonLegacy();     // its stored power passes on
-  p.fallen = true; p.out = false;
+  p.fallen = true;
   if(b.focusUid === c.uid) b.focusUid = null;
   if(b.foeFocus === c.uid) b.foeFocus = null;
-  battleMsg(`🤝 ${displayName(c)} has fallen — it is out for the rest of this fight.`);
+  battleMsg(`🤝 ${displayName(c)} fainted!` + (l.currentHp > 0 ? ` ${displayName(l)} fights on.` : ''));
   renderBattle();
 }
-/* The leader has fallen with its companion out: the companion fights on alone
-   — its own moves, 8 words a turn — until its turns run out. */
+/* (3.52) Brought back (Revitalise, Conversio): on the field again, beside its
+   leader if its leader is out. */
+function companionRises(c){
+  const b = ui.battle;
+  if(!b || !c) return;
+  Object.values(b.pairs || {}).forEach(p=>{ if(p.uid === c.uid) p.fallen = false; });
+}
+/* The leader has fallen with its companion beside it: the companion fights
+   on alone, until it falls too or you switch. */
 function noteStandIn(){
   const b = ui.battle, l = leaderMon(), c = companionOnField();
   if(!b || !l || !c || b.standInFor === l.uid) return;
   b.standInFor = l.uid;
   if(b.foeFocus === l.uid) b.foeFocus = null;
-  const p = b.pairs[l.uid];
-  battleMsg(`🤝 ${displayName(l)} has fallen — ${displayName(c)} stands in for it` +
-            ` while its turns last (${p ? p.turnsLeft : 0} left).`);
+  battleMsg(`🤝 ${displayName(l)} is down — ${displayName(c)} fights on!`);
   renderBattle();
 }
 /* Something of yours on the field has fallen and not been dealt with yet. */
@@ -6463,7 +6476,7 @@ async function allyCastOne(type){
   }
   const name = (veryHighDef(type === 'FairyHold' ? 'Fairy' : type, 2) || {}).name || type;
   if(type === 'FairyLine') return;                      // the dust's passive: already in the air
-  playSfx('stone_veryhigh');
+  playSfx('power_up');                                  // (3.51) not the fanfare
   bob(document.getElementById('allyBob'), +1);
   if(type === 'FairyHold'){
     A.spent.Fairy = true;
@@ -6573,7 +6586,7 @@ function allyTurn(){
     A.cloneWave = b.waveIndex;
     A.clones = ALLY_STRIKE.clones;
     bob(document.getElementById('allyBob'), +1);
-    playSfx('stone_veryhigh');
+    playSfx('power_up');                                 // (3.51) not the fanfare
     renderBattle();
     battleMsg(`🐒 ${name} — 72 Transformations! Two clones of him spring up at his side: his next <b>${ALLY_STRIKE.clones}</b> blows land with theirs — <b>twice as hard</b>.`);
     return setTimeout(advanceTurn, 1500);
@@ -6613,13 +6626,16 @@ function allyStrike(t, done){
   }, 420);
 }
 /* His figure beside yours, and his line on your plate. */
+/* (3.52) His card beside yours, as your monsters' are: the same size, his
+   plate under him. */
 function allyAvatarHtml(){
   const A = battleAlly();
   if(!A) return '';
-  const m = A.mon, px = Math.round(playerSpriteSize() * 0.66);
-  return `<div class="bob player-avatar ally-avatar${A.golden ? ' golden' : ''}" id="allyBob">${monPortrait(m.species, px, { view:'back', bare:true, stage:monStage(m), crowned:isCrowned(m), breathe:'normal' })}` +
+  const m = A.mon, px = playerSpriteSize();
+  return `<div class="my-card ally-card" id="allyCard" style="width:${px + 16}px;"><div class="card-status"></div>` +
+    `<div class="bob player-avatar ally-avatar${A.golden ? ' golden' : ''}" id="allyBob">${monPortrait(m.species, px, { view:'back', bare:true, stage:monStage(m), crowned:isCrowned(m), breathe:'normal' })}` +
     (A.clones > 0 ? `<span class="ally-clones" aria-hidden="true">${monPortrait(m.species, Math.round(px * 0.62), { view:'back', bare:true, stage:monStage(m) })}${monPortrait(m.species, Math.round(px * 0.62), { view:'back', bare:true, stage:monStage(m) })}</span>` : '') +
-    `</div>`;
+    `</div><div class="info-layer name-plate">${allyPlateHtml()}</div></div>`;
 }
 function allyPlateHtml(){
   const A = battleAlly();
@@ -6721,34 +6737,13 @@ function enemyTargetPlan(e, move){
   }
   return [{ mon:main }];
 }
-/* The summon, and why not: '' when it can be done now, else the reason. */
-function summonBlock(){
-  const b = ui.battle, l = leaderMon();
-  if(!companionsAllowed() || !l) return 'none';
-  const c = companionOf(l);
-  if(!c) return 'none';
-  const p = pairOf(l);
-  if(l.currentHp <= 0) return 'down';
-  if(p.fallen) return 'fallen';
-  if(p.out) return 'out';
-  if(p.turnsLeft <= 0) return 'tired';
-  if((b.summons || 0) >= COMPANION.maxSummons) return 'spent';
-  const ctl = b.control;
-  if(ctl && ctl.mode === 'solo' && ctl.uid !== l.uid) return 'busy';   // the companion's own action
-  return '';
-}
 /* ============================================================
-   THEIR COMPANION (2.87 — the Monkey King's spars; handover/07)
-   A leader on their side can hold a companion's core as yours does:
-   b.foePair = { leader, mon, turnsLeft, out, fallen, summons, entered }.
-   On its leader's own action it is called out — free, as your summon keeps
-   your turn (enemyActs) — and takes its place in this round's order. Five
-   turns out, counted by the round (the round it came out counts); at 0 it
-   goes back into the core, off the field (out of b.enemies), and YOUR
-   recharge meter gives it its five back, as it gives yours (feedRecharge).
-   Six calls a battle at most. It falls: out for the fight. Its leader falls
-   while it is out: it stands in until its turns run out, and the fight is
-   over when nobody of theirs is left standing on the field.
+   THEIR COMPANION (2.87 — the Monkey King's spars; 3.52)
+   A leader on their side can hold a companion's core as yours does, and
+   (3.52) by the same rules as yours: both are on the field from the start —
+   the Monkey King and the one he chose, two of their wave (coreSparFight) —
+   each with its own place in the order, and the fight is over when nobody of
+   theirs is left standing. b.foePair = { leader, mon } marks which is which.
    ============================================================ */
 function foePair(){ return (ui.battle && ui.battle.foePair) || null; }
 /* "Cyclops's Bog Lurker" — but "Goblin's Greed", not "Goblin's Goblin's Greed". */
@@ -6756,77 +6751,10 @@ function passiveTitle(e, pd){
   const name = SPECIES[e.species].name;
   return pd.name.startsWith(name) ? pd.name : `${name}'s ${pd.name}`;
 }
-function foeCanSummon(e){
-  const p = foePair();
-  if(!p || p.leader !== e || !e || e.hp <= 0) return false;
-  if(p.mon.hp <= 0) p.fallen = true;
-  return !p.out && !p.fallen && p.turnsLeft > 0 && (p.summons || 0) < COMPANION.maxSummons;
-}
-/* Called out: onto the field, into this round's order. Returns its line. */
-function foeSummon(){
-  const b = ui.battle, p = foePair();
-  if(!b || !p) return '';
-  p.out = true;
-  p.summons = (p.summons || 0) + 1;
-  if(!b.enemies.includes(p.mon)) b.enemies.push(p.mon);
-  if(!p.entered){ p.entered = true; foeArrives(p.mon); }
-  insertEnemyRow(p.mon);
-  playSfx('stone_veryhigh');
-  const n = p.turnsLeft;
-  return `🤝 ${SPECIES[p.leader.species].name} calls ${SPECIES[p.mon.species].name} out of his core — ${n} turn${n === 1 ? '' : 's'}!`;
-}
-/* Arriving as any of theirs does on a new wave: your fields on their side
-   reach it, and its passive takes hold (once a battle, as yours). */
-function foeArrives(e){
-  const fs = (ui.battle && ui.battle.fieldStatus) || {};
-  if(fs.leechSeed) addEStatus(e, Object.assign({}, fs.leechSeed));
-  if(fs.chill)     addEStatus(e, Object.assign({}, fs.chill));   // (3.16)
-  if(fs.curse)     addEStatus(e, Object.assign({}, fs.curse));
-  if(fs.disruptField) addEStatus(e, { type:'disrupt', turnsLeft:fs.disruptField.turnsLeft, stun:fs.disruptField.stun, mine:!!fs.disruptField.mine });
-  applyEntryPassives(e, e.species, e.level, e.atk);
-  const pd = passiveDefOf(e);
-  if(pd && pd.names.length){
-    const who = passiveTitle(e, pd);
-    setTimeout(()=> battleMsg(passivesMuted(e) ? `🔇 ${who} is silenced by the curse!` : `⚡ ${who} is active!`), 1400);
-  }
-}
-/* One of theirs arriving mid-round takes its place after whoever is acting. */
-function insertEnemyRow(e){
-  const b = ui.battle;
-  if(!b || !b.order || !e) return;
-  if(b.order.some(r=> r.side === 'enemy' && r.mon === e && !r.acted)) return;
-  const row = { side:'enemy', mon:e, idx:b.enemies.indexOf(e), tier:machTier('enemy'), value:initiativeOf('enemy', e) };
-  let at = b.order.length;
-  for(let j = (b.orderStep || 0) + 1; j < b.order.length; j++){
-    if(orderCompare(row, b.order[j]) < 0){ at = j; break; }
-  }
-  b.order.splice(at, 0, row);
-}
-/* The round is over: one of its turns spent; with none left it goes home. */
-function tickFoePairTurns(){
-  const b = ui.battle, p = foePair();
-  if(!b || !p || !p.out) return;
-  if(p.mon.hp <= 0){ p.fallen = true; p.out = false; return; }   // fell: it stays where it fell
-  p.turnsLeft = Math.max(0, p.turnsLeft - 1);
-  if(p.turnsLeft > 0) return;
-  p.out = false;
-  const i = b.enemies.indexOf(p.mon);
-  if(i >= 0) b.enemies.splice(i, 1);                               // off the field, back into the core
-  const lead = SPECIES[p.leader.species].name, name = SPECIES[p.mon.species].name;
-  battleMsg(`🤝 ${name} goes back into ${lead}'s core.` + (p.leader.hp <= 0 ? ` ${lead} cannot fight on.` : ''));
-  renderBattle();
-}
-/* Their leader has fallen with its companion out: it stands in. Said once. */
-function noteFoeStandIn(){
-  const p = foePair();
-  if(!p || p.standSaid || !p.out || p.leader.hp > 0 || p.mon.hp <= 0) return;
-  p.standSaid = true;
-  battleMsg(`🤝 ${SPECIES[p.leader.species].name} is down — ${SPECIES[p.mon.species].name} fights on while its turns last (${p.turnsLeft} left).`);
-}
-/* The tag on their companion's plate: its turns, as yours shows. */
+/* The tag on their companion's plate. */
 function foeCompanionTag(e){
   const p = foePair();
-  return (p && p.mon === e && p.out) ? ` <span class="foe-comp-tag">🤝 ⏳${p.turnsLeft}</span>` : '';
+  return (p && p.mon === e) ? ` <span class="foe-comp-tag" title="${escapeHtml(SPECIES[p.leader.species].name)}'s companion">🤝</span>` : '';
 }
 function monMaxHp(m){ return computeMaxHp(m.species, m.level, m.supplements, m); }
 /* Enrage is bolted on top of the natural figure, from the undressed base, so
@@ -6861,15 +6789,20 @@ function unlockedMoves(m){
   /* Passives take effect on entering the field; they never appear as buttons. */
   const base = MOVES[m.species].filter(mv=>mv[0]!=='Max' && mv[3]!=='Passive').map(mv=>{
     let [slot,name,mult,target,words,unlock,extra]=mv;
-    if(slot==='Ultimate' && maxMv){ [,name,mult,target,words,unlock,extra] = maxMv; }
+    const isMax = slot==='Ultimate' && !!maxMv;
+    if(isMax){ [,name,mult,target,words,unlock,extra] = maxMv; }
     const e = extra || {};
     /* Spread the whole extras object. The old allow-list silently dropped any
        property it hadn't been told about — which is why `soul` and `tachy`
        never reached the move, so Steel Soul and Tachypsychia did nothing at
        all. Adding a new mechanic must not require editing this line. */
+    /* (3.51) The Max in the Ultimate's place is unlocked — that is how it got
+       there (moveUnlockedFor, asked of its own row). Asked again as an
+       'Ultimate', a crowned Monkey King's, Water Dragon's or Thunder Newt's
+       fell to the Dragon Core check (coreOnly) and showed locked, ???. */
     return { slot,name,mult,target,words,unlock, ...e,
              scale:e.scale||null, hits:moveHitsFor(m, e), split:!!e.split, charge:e.charge||null,   // (3.26) a move's own strikes
-             available:(name!=null && moveUnlockedFor(m, [slot,name,mult,target,words,unlock,e])), isStone:false };
+             available:(name!=null && (isMax || moveUnlockedFor(m, [slot,name,mult,target,words,unlock,e]))), isStone:false };
   });
   /* Equipped stone slots in by tier: High-tier "twin" skills override POWER1
      (they're a step above a basic swing), everything else overrides Basic. */
@@ -6926,14 +6859,17 @@ function unlockedMoves(m){
   return base;
 }
 
+/* (3.52) One size of health bar for every monster on the field, yours and
+   theirs — the designer: "Standardise … the size of the health bars and
+   texts". (`big` is no longer used: kept so old calls still read.) */
+const HPBAR = { h:9, num:11 };
 function hpBar2(id, cur, max, big){
   const pct = Math.max(0, cur/max*100);
-  const h = big?12:7;
-  return `<div class="hpbar2" id="${id}" style="height:${h}px;">
+  return `<div class="hpbar2" id="${id}" style="height:${HPBAR.h}px;">
     <div class="hp-red" style="width:${pct}%;"></div>
     <div class="hp-green" style="width:${pct}%;background:${pct<30?'var(--cinnabar)':'var(--jade)'};"></div>
   </div>
-  <div class="hp-num" id="${id}-num" style="font-size:${big?11:10}px;">${Math.max(0,cur)}/${max}</div>`;
+  <div class="hp-num" id="${id}-num" style="font-size:${HPBAR.num}px;">${Math.max(0,cur)}/${max}</div>`;
 }
 /* Battle sprites scale with the viewport so the stage doesn't feel empty on a
    big screen, and shrink when several enemies share the row. */
@@ -6942,69 +6878,55 @@ function battleWidth(){
   const w = el ? el.getBoundingClientRect().width : Math.min(window.innerWidth, 480);
   return Math.max(320, w - 32);
 }
+/* (3.52) Your monsters are drawn as their wave is — a card each, side by
+   side — and all at one size, alone or in a pair (the designer: "Standardise
+   the height of the sprites"): the size for two across, a touch larger than
+   theirs, since yours are nearer. */
 function playerSpriteSize(){
-  const byW = battleWidth() * 0.42;
-  const byH = window.innerHeight * 0.22;
-  return Math.round(Math.max(120, Math.min(byW, byH, 230)));
+  const per = (battleWidth() - 10) / 2;            // two cards across
+  const byH = window.innerHeight * 0.19;
+  return Math.round(Math.max(96, Math.min(per * 0.8, byH, 190)));
 }
-/* A pair shares the space one monster had: the leader a little smaller, the
-   companion smaller again, so the plate keeps its room. */
-function pairSpriteSize(lead){ return Math.round(playerSpriteSize() * (lead ? 0.78 : 0.64)); }
-/* The companion's plate, under the leader's: its name, its turns left, its
-   block and its health. */
-function companionPlateHtml(c){
-  const p = pairOf(leaderMon());
-  const turns = p ? p.turnsLeft : 0;
-  return `<div class="comp-plate">
-    <div class="mon-title comp-title">🤝 ${escapeHtml(displayName(c))}${crownMark(c)} <span>Lv ${c.level}</span>
-      <b class="comp-turns" title="Turns left on the field">⏳${turns}</b></div>
-    ${blockBar('companionBlk', c)}
-    ${hpBar2('companionHp', c.currentHp, monMaxHp(c), false)}
-  </div>`;
+/* (3.52) Who stands on your side of the field, left to right: the leader
+   and its companion (shown even when it has fainted — greyed, so the row
+   keeps its shape — while the leader fights on). */
+function shownPlayers(){
+  const l = leaderMon();
+  if(!l) return [];
+  const c = (companionsAllowed() && pairOf(l)) ? companionOf(l) : null;
+  return pairOrder(l, c);
 }
-/* The summon: a small button with the companion's face — or, when it cannot
-   come out now, the reason. Nothing at all without a bonded companion. */
-function summonButtonHtml(canAct){
-  const why = summonBlock();
-  if(why === 'none' || why === 'out') return '';
-  const l = leaderMon(), c = companionOf(l), p = pairOf(l);
-  const face = monPortrait(c.species, 34, { view:'front', bare:true, stage:monStage(c), crowned:isCrowned(c) });
-  const note = why === 'fallen' ? 'has fallen this fight'
-             : why === 'tired'  ? 'resting — the recharge meter wakes it'
-             : why === 'spent'  ? `no summons left (${COMPANION.maxSummons} a battle)`
-             : why === 'down'   ? `${escapeHtml(displayName(l))} cannot share its core now`
-             : `${COMPANION.summonWords} words · ${p.turnsLeft} turn${p.turnsLeft === 1 ? '' : 's'}`;
-  const ok = !why && canAct;
-  return `<button class="summon-btn" id="summonBtn" ${ok ? '' : 'disabled'}>${face}
-    <span><b>Summon ${escapeHtml(displayName(c))}</b><small>${note}</small></span></button>`;
+/* One card of yours, as one of theirs is drawn: its own marks in a row of
+   symbols, the sprite, its name, its shields, its health — and its ATK. The
+   leader's page elements are playerBob / playerHp / playerBlk / playerStatus,
+   its companion's companionBob and the rest (pid). `acting`: whose turn the
+   buttons are. */
+function playerCardHtml(m, base, acting){
+  const px = playerSpriteSize();
+  const hp = m.currentHp, max = monMaxHp(m), down = hp <= 0;
+  return `<div class="my-card${down ? ' down' : ''}${acting ? ' acting' : ''}" id="${base}Card" style="width:${px + 16}px;">
+      <div class="card-status" id="${base}Status"></div>
+      <div class="bob player-avatar${down ? ' down' : ''}" id="${base}Bob">${monPortrait(m.species, px, { view:'back', bare:true, crowned:isCrowned(m), stage:monStage(m), breathe: hp > 0 ? ((hp / max) < 0.3 ? 'weak' : 'normal') : null })}</div>
+      <div class="info-layer name-plate">
+        <div class="mon-title">${escapeHtml(displayName(m))}${crownMark(m)} <span>Lv ${m.level}</span></div>
+        ${blockBar(base + 'Blk', m)}
+        ${hpBar2(base + 'Hp', hp, max, false)}
+        <div class="atk-line">ATK ${monAtk(m)}</div>
+      </div>
+    </div>`;
 }
-/* The line over the buttons while a companion is out: whose turn it is, and
-   on the companion's, what it costs. */
+/* The line over the buttons with two of yours on the field: whose turn it
+   is (its card glows too) — or who is fighting on for whom. */
 function pairLineHtml(lead, comp, ctlMon, canAct){
-  if(!comp && ctlMon === lead) return '';
+  if(!comp) return '';
   const n = m=> escapeHtml(displayName(m));
   const ctl = ui.battle && ui.battle.control;
   let t;
-  if(canAct && ctlMon !== lead){
-    const price = (ctl && ctl.paid) ? 'paid — its next move is free'
-                : `any move for ${COMPANION.turnWords} words`;
-    t = standingIn() ? `🤝 ${n(ctlMon)} stands in for ${n(lead)} · ${price}`
-      : (ctl && ctl.extra) ? `⚡ ${n(ctlMon)} acts again · ${price}`
-      : `🤝 ${n(ctlMon)}'s turn · ${price}`;
-  }
-  else if(canAct) t = `${n(lead)}'s turn`;
-  else t = comp ? (standingIn() ? `🤝 ${n(comp)} stands in for ${n(lead)}` : `🤝 ${n(lead)} & ${n(comp)}`) : '';
+  if(canAct && ctlMon) t = standingIn() ? `🤝 ${n(ctlMon)} fights on for ${n(lead)}`
+                        : (ctl && ctl.extra) ? `⚡ ${n(ctlMon)} acts again`
+                        : `${n(ctlMon)}'s turn`;
+  else t = standingIn() ? `🤝 ${n(comp)} fights on for ${n(lead)}` : '';
   return t ? `<div class="pair-line">${t}</div>` : '';
-}
-/* A companion's button: its turn's 8 words (or "free" once they are paid)
-   instead of the move's own, and a tail its move still asks for. */
-function companionMeta(mv, comp){
-  const ctl = ui.battle && ui.battle.control;
-  const tail = companionTail(mv);
-  const cost = ((ctl && ctl.paid) ? 'free' : `${COMPANION.turnWords}字`) + (tail ? ` +${tail}` : '');
-  if(mv.windupReady) return `Ready · ${cost}`;
-  const base = moveMeta(mv, comp);
-  return /^\d+字/.test(base) ? base.replace(/^\d+字/, cost) : `${cost} · ${base}`;
 }
 let _companionCssDone = false;
 function companionCss(){
@@ -7013,36 +6935,48 @@ function companionCss(){
   const st = document.createElement('style');
   st.id = 'companionCss';
   st.textContent = `
-  .player-card.pair{ gap:6px; }
-  .player-card.pair .companion-avatar{ margin-left:-18px; align-self:flex-end; }
+  /* (3.52) your side, as theirs: a row of cards */
+  .player-card.my-row{ display:flex; align-items:flex-end; justify-content:flex-start; gap:10px; padding:2px 0 0; margin:0; }
+  .my-card{ position:relative; text-align:center; flex:0 0 auto; border-radius:14px; transition:box-shadow .25s, background .25s; }
+  .my-card .player-avatar{ position:relative; z-index:7; display:inline-block; }
+  .my-card .name-plate, .enemy-card .name-plate{ display:block; padding:0 4px; }   /* every bar the card's width */
+  .my-card.acting{ background:radial-gradient(ellipse at 50% 72%, rgba(255,215,110,.38), rgba(255,215,110,0) 70%); }
+  .my-card.acting .mon-title{ text-decoration:underline; text-decoration-color:rgba(201,154,63,.85); text-decoration-thickness:3px; text-underline-offset:3px; }
+  .my-card.down .name-plate{ opacity:.5; }
   .player-avatar.down .mon-sprite, .player-avatar.down img{ filter:grayscale(1) brightness(.8); opacity:.55; }
-  .comp-plate{ margin-top:6px; padding-top:5px; border-top:1.5px dashed rgba(35,32,25,0.25); }
-  .comp-title{ font-size:14px; }
-  .comp-title span{ font-size:14px; }
-  .comp-turns{ font-size:12px; font-weight:800; color:var(--ink); margin-left:4px; white-space:nowrap; }
-  .summon-btn{ display:flex; align-items:center; gap:8px; margin-top:7px; width:100%; text-align:left;
-    background:var(--paper-2); border:2px solid var(--jade); border-radius:12px; padding:4px 8px 4px 4px;
-    cursor:pointer; box-shadow:0 2px 0 var(--jade-dark); font:inherit; color:var(--ink); }
-  .summon-btn b{ display:block; font-family:'Baloo 2',cursive; font-size:13px; line-height:1.1; }
-  .summon-btn small{ display:block; font-size:10px; font-weight:700; color:var(--ink-soft); }
-  .summon-btn:disabled{ opacity:.55; cursor:default; box-shadow:none; border-color:var(--line); }
-  .summon-btn .mon-portrait, .summon-btn .mon-sprite{ flex-shrink:0; }
+  .my-card .atk-line{ font-size:12px; }
+  .my-side{ display:flex; align-items:center; gap:10px; margin:4px 0 2px; position:relative; z-index:10; }
+  .my-side .status-row{ flex:1; min-width:0; margin:0; }
+  .my-side .recharge{ flex:0 0 38%; margin:0; }
   .pair-line{ text-align:center; font-size:12px; font-weight:800; color:var(--jade-dark); margin:-4px 0 8px; }
   .mon-title .foe-comp-tag{ color:#8a5a1a; font-weight:800; }
-  /* (3.19) an ally at your side: the Monkey King, in the vault */
-  .player-card.with-ally{ gap:4px; }
-  .player-card .ally-avatar{ position:relative; margin-left:-22px; align-self:flex-end; }
+  /* (3.19) an ally at your side: the Monkey King, in the vault — a card of his own (3.52) */
+  .player-card .ally-card .ally-avatar{ position:relative; z-index:7; display:inline-block; }
   .player-card .ally-avatar.golden .mon-sprite, .player-card .ally-avatar.golden img{ filter:drop-shadow(0 0 7px rgba(255,214,90,.95)) drop-shadow(0 0 16px rgba(255,190,40,.6)); }
   .ally-clones{ position:absolute; inset:auto 0 0 0; display:flex; justify-content:space-between; pointer-events:none; opacity:.5; z-index:-1; }
   .ally-clones > *:first-child{ transform:translate(-30%, -34%); }
   .ally-clones > *:last-child{ transform:translate(30%, -34%); }
   /* (3.19) a lone Cyborg stands where the middle of a wave of three would (3.00) */
   .enemy-row.centred{ justify-content:center; }
-  .ally-plate{ margin-top:6px; padding:4px 7px; border-radius:10px; background:linear-gradient(180deg, #fff6d8, #f6e3a8);
-    border:1.5px solid #d6b354; font-size:13px; line-height:1.25; color:var(--ink); }
+  .ally-plate{ margin-top:2px; padding:4px 7px; border-radius:10px; background:linear-gradient(180deg, #fff6d8, #f6e3a8);
+    border:1.5px solid #d6b354; font-size:13px; line-height:1.25; color:var(--ink); text-align:center; }
   .ally-plate b{ font-family:'Baloo 2',cursive; }
   .ally-plate span{ font-size:12px; font-weight:800; color:var(--ink-soft); }
   .ally-plate small{ display:block; font-size:10px; font-weight:700; color:#7a5a10; }
+  /* (3.52) a status is its symbol, in one row: tap it for its words */
+  .card-status, .enemy-status{ position:relative; z-index:10; display:flex; flex-wrap:nowrap; gap:3px; justify-content:flex-start;
+    overflow-x:auto; overflow-y:hidden; scrollbar-width:none; min-height:24px; margin-bottom:2px; -webkit-overflow-scrolling:touch; }
+  .card-status::-webkit-scrollbar, .enemy-status::-webkit-scrollbar, .status-row::-webkit-scrollbar, .foe-side-row::-webkit-scrollbar{ display:none; }
+  .card-status > :first-child, .enemy-status > :first-child, .status-row > :first-child, .foe-side-row > :first-child{ margin-left:auto; }
+  .card-status > :last-child, .enemy-status > :last-child, .status-row > :last-child, .foe-side-row > :last-child{ margin-right:auto; }
+  .status-row, .foe-side-row{ flex-wrap:nowrap !important; justify-content:flex-start !important; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; }
+  .status-pill.sym{ display:inline-flex !important; align-items:center; justify-content:center; flex:0 0 auto; box-sizing:border-box;
+    min-width:24px; height:24px; padding:0 4px !important; border-radius:12px; font-size:14px !important; line-height:1; white-space:nowrap; }
+  .status-pill.sym sub{ font-family:'Nunito',sans-serif; font-size:10px; font-weight:900; line-height:1; margin-left:1px; position:relative; top:3px; vertical-align:baseline; }
+  .status-pill.sym.muted{ opacity:.6; }
+  .status-pill.sym.last{ animation:pillLast 2.4s ease-in-out infinite; }
+  @keyframes pillLast{ 0%,100%{ background-color:rgba(214,48,38,.16); box-shadow:none; } 50%{ background-color:rgba(214,48,38,.88); box-shadow:0 0 6px rgba(214,48,38,.6); } }
+  @media (prefers-reduced-motion: reduce){ .status-pill.sym.last{ animation:none; background-color:rgba(214,48,38,.7); } }
   `;
   document.head.appendChild(st);
 }
@@ -7576,12 +7510,14 @@ function renderBattle(){
   const ctlMon = controlMon() || mon;
   const moves = unlockedMoves(ctlMon);
   const comp = companionOnField();
-  const compTurn = !!(comp && ctlMon === comp);        // the companion's own choice: its price
   // Turn-lock: buttons are only truly interactive once it's genuinely the
   // player's turn again — not just while their own move's animation plays,
   // and not during the enemy's turn. Fixes a bug where a second move could be
   // clicked mid-animation and its quiz silently got wiped on the next redraw.
   const canAct = (b.phase || 'player') === 'player';
+  /* (3.52) your side as theirs: a card each, left to right as they stand */
+  const shown = shownPlayers();
+  const pair = shown.length > 1;
   companionCss();
   screenEl.innerHTML = `
     <div class="battle-stage" id="battleStage">
@@ -7604,25 +7540,18 @@ function renderBattle(){
 
       <div class="battlefield" aria-hidden="true"></div>
 
-      <div class="player-card${comp ? ' pair' : ''}${b.ally ? ' with-ally' : ''}">
-        <div class="bob player-avatar${mon.currentHp <= 0 ? ' down' : ''}" id="playerBob">${monPortrait(mon.species, (comp || b.ally) ? pairSpriteSize(true) : playerSpriteSize(),{view:'back',bare:true,crowned:isCrowned(mon),stage:monStage(mon),breathe: mon.currentHp>0 ? ((mon.currentHp/monMaxHp(mon))<0.3 ? 'weak':'normal') : null})}</div>
-        ${comp ? `<div class="bob player-avatar companion-avatar" id="companionBob">${monPortrait(comp.species, pairSpriteSize(false),{view:'back',bare:true,crowned:isCrowned(comp),stage:monStage(comp),breathe: comp.currentHp>0 ? ((comp.currentHp/monMaxHp(comp))<0.3 ? 'weak':'normal') : null})}</div>` : ''}
+      <div class="player-card my-row" id="myRow">
+        ${shown.map(m=> playerCardHtml(m, m === mon ? 'player' : 'companion', pair && canAct && m === ctlMon)).join('')}
         ${allyAvatarHtml()}
-        <div class="info-layer name-plate player-plate">
-          <div class="mon-title big">${escapeHtml(displayName(mon))}${crownMark(mon)} <span>Lv ${mon.level}</span></div>
-          ${blockBar('playerBlk', mon)}
-          ${hpBar2('playerHp', mon.currentHp, monMaxHp(mon), true)}
-          <div class="atk-line">ATK ${monAtk(mon)}</div>
-          <div class="recharge">
-            <span style="width:${Math.min(100,(b.rechargeWords||0)/RECHARGE_TARGET*100)}%"></span>
-            <b>${b.rechargeWords||0}/${RECHARGE_TARGET}</b>
-          </div>
-          ${comp ? companionPlateHtml(comp) : summonButtonHtml(canAct)}
-          ${allyPlateHtml()}
+      </div>
+      <div class="my-side">
+        <div id="statusRow" class="status-row"></div>
+        <div class="recharge" title="The recharge meter: every word you write fills it">
+          <span style="width:${Math.min(100,(b.rechargeWords||0)/RECHARGE_TARGET*100)}%"></span>
+          <b>⚡ ${b.rechargeWords||0}/${RECHARGE_TARGET}</b>
         </div>
       </div>
     </div>
-    <div id="statusRow" class="status-row"></div>
     <div id="battleMsg" style="text-align:center;font-weight:700;font-size:14px;min-height:20px;margin-bottom:10px;color:var(--ink-soft);">${canAct ? 'Choose a move.' : ''}</div>
     ${pairLineHtml(mon, comp, ctlMon, canAct)}
     <div style="display:flex;gap:12px;">
@@ -7635,7 +7564,7 @@ function renderBattle(){
           <button class="move-btn ${ok?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${ok?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
             <div class="mv-name">${mv.available || mv.chargeMore || mv.spent || mv.forgotten || mv.taunted ? escapeHtml(mv.name) : '???'}</div>
-            <div class="mv-meta">${mv.available ? (compTurn ? companionMeta(mv, ctlMon) : moveMeta(mv, ctlMon)) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : 'Locked')}</div>
+            <div class="mv-meta">${mv.available ? moveMeta(mv, ctlMon) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : 'Locked')}</div>
           </button>`; }).join('')}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
@@ -7658,8 +7587,6 @@ function renderBattle(){
   `;
   screenEl.querySelectorAll('.move-btn:not(.locked)').forEach(btn=> btn.addEventListener('click', ()=>onMoveChosen(+btn.dataset.move)));
   $('#switchBtn').addEventListener('click', onSwitchPressed);
-  const smb = $('#summonBtn');
-  if(smb) smb.addEventListener('click', onSummonPressed);
   const sk = $('#skipBtn');
   if(sk) sk.addEventListener('click', ()=>{
     /* Pass the turn without acting — exactly what a misspelled move does, so
@@ -7685,16 +7612,73 @@ function renderBattle(){
   renderStatusBadges();
 }
 
+/* (3.52) Every status has a symbol of its own on its side's rows — the pill
+   shows it alone — so where two shared one, one of them has a new one:
+   Overheat 🌡️ (a burn is 🔥), Enrage 😤, Kindled 🕯️, Held Fast ⛓️, Spike
+   Armour 🦔, Steel Soul ⚙️, Steel Aegis 🛡️ (Guard and your Counter stacks
+   keep 🛡), Haunting Aria 🎶, Warded 🧿, Dragon Dance 🐲, Weakened 📉,
+   Confused 😵, Tachypsychia ⏱️, Paralysed 💫, Still 🗿, Shell 🐚, Vita 💖,
+   a Spacetime Fracture 🕳️, Blinded 🙈. */
 const STATUS_LABELS = {
-  overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🛡️ Spike Armour',
-  counter:'↩️ Counter', combo:'👊 Combo', enrage:'🔥 Enrage', mirageImages:'👥 Afterimages', iceTomb:'🧊 Frozen', chill:'❄️ Chilled', curse:'👻 Cursed', stunned:'💫 Stunned', machDragon:'🐉 Mach Dragon', softened:'🌀 Weakened', evadeTurns:'🧘 Still', asleep:'💤 Asleep',
-  discombobulate:'🌀 Confused', confusionField:'🌀 Discombobulate', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', enraged:'🐋 Enraged', aria:'👻 Haunting Aria', wrath:'💢 Gathering Wrath', paralysed:'💫 Stunned', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'👻 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'⚡ Paralysed', tachy:'🌀 Tachypsychia', steelSoul:'🛡 Steel Soul', shell:'🌋 Shell', clones:'👥 Clones', dot:'🔥 Burning',
-  dragonDance:'🐉 Dragon Dance', steelAegis:'🛡 Steel Aegis', mirage:'✨ Mirage',
-  vita:'🕊 Vita', jaws:'🔥 Held Fast', bogged:'🌫 Bogged', lurk:'🌑 Lurk', cunning:'🌘 Cunning',
-  forgot:'💭 Forgot', fracture:'⏳ Spacetime Fracture', barrier:'🧱 Barrier', iceBarrier:'🧊 Ice Barrier',
-  kindle:'🔥 Kindled', gallop:'🦄 Gallop', blinded:'🔆 Blinded', fleece:'🐑 Fleece', enchant:'🪄 Enchanted', stargaze:'🔭 Stargazer',
+  overheat:'🌡️ Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🦔 Spike Armour',
+  counter:'↩️ Counter', combo:'👊 Combo', enrage:'😤 Enrage', mirageImages:'👥 Afterimages', iceTomb:'🧊 Frozen', chill:'❄️ Chilled', curse:'👻 Cursed', stunned:'💫 Stunned', machDragon:'🐉 Mach Dragon', softened:'📉 Weakened', evadeTurns:'🗿 Still', asleep:'💤 Asleep',
+  discombobulate:'😵 Confused', confusionField:'🌀 Discombobulate', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', enraged:'🐋 Enraged', aria:'🎶 Haunting Aria', wrath:'💢 Gathering Wrath', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'🧿 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'💫 Paralysed', tachy:'⏱️ Tachypsychia', steelSoul:'⚙️ Steel Soul', shell:'🐚 Shell', clones:'👥 Clones', dot:'🔥 Burning',
+  dragonDance:'🐲 Dragon Dance', steelAegis:'🛡️ Steel Aegis', mirage:'✨ Mirage',
+  vita:'💖 Vita', jaws:'⛓️ Held Fast', bogged:'🌫 Bogged', lurk:'🌑 Lurk', cunning:'🌘 Cunning',
+  forgot:'💭 Forgot', fracture:'🕳️ Spacetime Fracture', barrier:'🧱 Barrier', iceBarrier:'🧊 Ice Barrier',
+  kindle:'🕯️ Kindled', gallop:'🦄 Gallop', blinded:'🙈 Blinded', fleece:'🐑 Fleece', enchant:'🪄 Enchanted', stargaze:'🔭 Stargazer',
   taunted:'🥱 Taunted',
 };
+/* ============================================================
+   STATUSES AS SYMBOLS (3.52)
+   The designer: "Should we have symbols for each status that can be pressed
+   for more details instead? Keep the turns left within the description, but
+   give a red background and slowly flash fade in and out when there is only
+   1 turn left on that status. I hope we can keep statuses to one row."
+   Every pill is built in words as before (its label, its count, its turns),
+   then drawn as its symbol alone, with a small count for stacks (×3) — its
+   words kept in data-full for the card a tap opens (statusTipFor), which
+   says the turns in a sentence. On its last turn it pulses red (`last`).
+   A row never wraps: it scrolls sideways if it ever has to.
+   ============================================================ */
+/* Pills built outside the labels, by key: their symbol. */
+const PILL_SYMBOL = { counterStack:'🛡', sacredFlame:'🔥', aftershock:'💥', overgrowth:'🌿', wrathStacks:'💢',
+  windup:'⏳', omen:'🐦', meditate:'🧘', passive:'✨' };
+/* The turns a pill says it has after this one (its label, then a number), or
+   null — a freeze and a blinding count theirs with this one in. */
+function pillTurnsAfter(key, full){
+  const label = STATUS_LABELS[key];
+  if(!label || key === 'barrier') return null;
+  const t = (full || '').replace(/^🤝\s*/u, '').trim();
+  const k = new RegExp('^' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' (\\d+)(?: · .*)?$', 'u').exec(t);
+  if(!k) return null;
+  const n = +k[1];
+  return (key === 'iceTomb' || key === 'blinded') ? Math.max(0, n - 1) : n;
+}
+function symbolizePills(root){
+  if(!root) return;
+  root.querySelectorAll('.status-pill').forEach(el=>{
+    if(el.classList.contains('sym')) return;
+    const full = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    if(!full) return;
+    const key = el.dataset.st || '';
+    const first = full.split(' ')[0];
+    const sym = (key === 'passive' && /^🔇/u.test(full)) ? '🔇' : (PILL_SYMBOL[key] || first);
+    let sub = '';
+    const k = /×\s?(\d+)(?:\s?([+✦]))?/u.exec(full);
+    if(k) sub = k[1] + (k[2] || '');
+    else if(/^siphon\d$/.test(key)) sub = ['', 'I', 'II', 'III'][+key.slice(-1)] || '';
+    el.dataset.full = full;
+    el.dataset.sym = sym;
+    el.classList.add('sym');
+    el.setAttribute('aria-label', full);
+    if(el.style && el.style.textDecoration) el.classList.add('muted');
+    el.style.textDecoration = '';
+    el.textContent = sym;
+    if(sub){ const sb = document.createElement('sub'); sb.textContent = sub; el.appendChild(sb); }
+    if(pillTurnsAfter(key, full) === 0) el.classList.add('last');
+  });
+}
 /* A pill's words: most are their label and the turns left; a forgotten move
    (2.97) says which, and lasts the one turn. */
 function forgotPill(st){ return `💭 Forgot ${escapeHtml((st.names || []).join(', '))}`; }
@@ -7709,31 +7693,50 @@ function monPillTail(st, m){
   if(st.type === 'discombobulate'){ const n = confusionHit(m, st); return n ? ` · hits ${n}` : ''; }
   return null;
 }
+/* One status's pill, in its words: its label and the turns it has after
+   this one — or what a nap, a freeze, a confusion says instead (monPillTail,
+   of `m`, the one holding it). (3.52) Drawn as its symbol (symbolizePills);
+   the words come up when it is tapped. */
+function statusPillHtml(st, who, m){
+  // turnsLeft is stored with a +1 grace so the cast turn counts; show the
+  // number of turns the player will actually still have it for.
+  const shown = Math.max(0, st.turnsLeft - 1);
+  /* What the enemy has put on you is theirs, and reads in their colour. */
+  const cls = isEnemyOwned(st.type, st) ? 'foe' : 'mine';
+  const at = pillAt(st.type, who);
+  if(st.type === 'forgot') return `<span class="status-pill ${cls}"${at}>${forgotPill(st)}</span>`;
+  if(st.type === 'taunted'){ const tp = m ? tauntPill(m) : ''; return tp ? `<span class="status-pill ${cls}"${at}>${tp}</span>` : ''; }   // (3.38)
+  const tail = m ? monPillTail(st, m) : null;                             // (3.16) a nap, a freeze, a confusion
+  const n = tail != null ? tail : (st.unsweepable && !st.state) ? '' : st.type === 'steelSoul' ? ' · this turn'
+          : st.type === 'barrier' ? ` · −${Math.round((st.reduce || 0.5) * 100)}%` : ` ${shown}`;   // a quick buff (2.93); (3.09) a state still counts down; (3.14) a barrier lasts to its caster's next turn
+  const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved`
+              : st.type === 'aria' ? ` · vengeance ${ariaVengeanceShown(st)}` : '';   // (3.08) his revenge counter
+  return `<span class="status-pill ${cls}"${at}>${(st.type === 'barrier' && st.label) || STATUS_LABELS[st.type] || st.type}${n}${saved}</span>`;
+}
 function renderStatusBadges(){
   if(!ui.battle) return;
   pruneBogs();
-  // Player-side statuses stay in the shared row under the stage.
+  const mon = leaderMon();
+  /* (3.52) Each card of yours carries its own marks — its debuffs, its
+     stances, its Enrage — in one row of symbols over it ('p' the leader's,
+     'c' its companion's); your side's buffs and stacks are the row under
+     the cards (#statusRow, 'ps'). */
+  shownPlayers().forEach(m=>{
+    const base = m === mon ? 'player' : 'companion', who = base === 'player' ? 'p' : 'c';
+    const slot = document.getElementById(base + 'Status');
+    paintEnrage(m);
+    if(!slot) return;
+    if(m.currentHp <= 0){ slot.innerHTML = ''; return; }
+    const out = monStatuses(m).map(st=> statusPillHtml(st, who, m));
+    if(m.enrageStacks) out.push(`<span class="status-pill"${pillAt('enrage', who)}>😤 Enrage ×${m.enrageStacks} (+${enrageBonus(m)} ATK)</span>`);
+    const sp = stancePills(m, who);
+    if(sp) out.push(sp);
+    slot.innerHTML = out.join('');
+    symbolizePills(slot);
+  });
   const row = $('#statusRow');
   if(row){
-    const out = [];
-    const mon = leaderMon();
-    /* (3.42) whose: the side's ('ps') or the leader's own ('p'), for its card */
-    Object.values(partyStatuses()).map(st=> [st, 'ps']).concat(monStatuses(mon).map(st=> [st, 'p'])).forEach(([st, who])=>{
-      // turnsLeft is stored with a +1 grace so the cast turn counts; show the
-      // number of turns the player will actually still have it for.
-      const shown = Math.max(0, st.turnsLeft - 1);
-      /* What the enemy has put on you is theirs, and reads in their colour. */
-      const cls = isEnemyOwned(st.type, st) ? 'foe' : 'mine';
-      const at = pillAt(st.type, who);
-      if(st.type === 'forgot'){ out.push(`<span class="status-pill ${cls}"${at}>${forgotPill(st)}</span>`); return; }
-      if(st.type === 'taunted'){ const tp = tauntPill(mon); if(tp) out.push(`<span class="status-pill ${cls}"${at}>${tp}</span>`); return; }   // (3.38)
-      const tail = monPillTail(st, mon);                                    // (3.16) a nap, a freeze, a confusion
-      const n = tail != null ? tail : (st.unsweepable && !st.state) ? '' : st.type === 'steelSoul' ? ' · this turn'
-              : st.type === 'barrier' ? ` · −${Math.round((st.reduce || 0.5) * 100)}%` : ` ${shown}`;   // a quick buff (2.93); (3.09) a state still counts down; (3.14) a barrier lasts to its caster's next turn
-      const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved`
-                  : st.type === 'aria' ? ` · vengeance ${ariaVengeanceShown(st)}` : '';   // (3.08) his revenge counter
-      out.push(`<span class="status-pill ${cls}"${at}>${(st.type === 'barrier' && st.label) || STATUS_LABELS[st.type] || st.type}${n}${saved}</span>`);
-    });
+    const out = Object.values(partyStatuses()).map(st=> statusPillHtml(st, 'ps', mon));
     const af = aftershockBonusHits();
     if(af) out.push(`<span class="status-pill mine"${pillAt('aftershock', 'ps')}>💥 Aftershock ×${af}</span>`);
     const sfl = sacredFlameCount();
@@ -7741,42 +7744,20 @@ function renderStatusBadges(){
     if(sfl) out.push(`<span class="status-pill mine"${pillAt('sacredFlame', 'ps')}>🔥 Sacred Flame ×${sfl}${(phx && !ui.battle.rebirthUsed) ? ' · Rebirth ready' : ''}</span>`);
     const ogs = overgrowthStacks();                                         // (3.19) the Forest Guardian's gift
     if(ogs) out.push(`<span class="status-pill mine"${pillAt('overgrowth', 'ps')}>🌿 Overgrowth ×${ogs} · ATK +${Math.round(ogs * FOREST_GIFT.step * 100)}%</span>`);
-    refreshAllBlockBars();
     const wr = getPStatus(0,'wrath');
     if(wr && wr.stacks) out.push(`<span class="status-pill"${pillAt('wrathStacks', 'ps')}>💢 Wrath ×${wr.stacks}</span>`);
     /* the side's Counter stacks and Combo — one pill each (3.01: the stacks
        were drawn twice, once as the leader's and once as the party's) */
-    const me0 = mon;
     const pc = (ui.battle && ui.battle.pCombo) || 0;
     const cpill = counterPill(partyCounters(), '');
     if(cpill) out.push(cpill);
     if(pc) out.push(`<span class="status-pill"${pillAt('combo', 'ps')}>👊 Combo ×${pc}</span>`);
-    if(me0 && me0.enrageStacks) out.push(`<span class="status-pill"${pillAt('enrage', 'p')}>🔥 Enrage ×${me0.enrageStacks} (+${enrageBonus(me0)} ATK)</span>`);
-    if(me0) paintEnrage(me0);
     const mir1 = getPStatus(0,'mirage');
     if(mir1 && mir1.pending) out.push(`<span class="status-pill"${pillAt('mirageImages', 'ps')}>👥 Afterimages ×${mir1.pending}</span>`);
-    const sp2 = stancePills(mon, 'p');
-    if(sp2) out.push(sp2);
-    /* The companion's own: its debuffs, its stances, its Enrage — marked 🤝 so
-       nobody reads them as the leader's. */
-    const cm = companionOnField();
-    if(cm){
-      const own = monStatuses(cm).map(st=>{
-        const cls = isEnemyOwned(st.type, st) ? 'foe' : 'mine';
-        const at = pillAt(st.type, 'c');
-        if(st.type === 'forgot') return `<span class="status-pill ${cls}"${at}>🤝 ${forgotPill(st)}</span>`;
-        if(st.type === 'taunted'){ const tp = tauntPill(cm); return tp ? `<span class="status-pill ${cls}"${at}>🤝 ${tp}</span>` : ''; }   // (3.38)
-        const tail = monPillTail(st, cm);
-        return `<span class="status-pill ${cls}"${at}>🤝 ${STATUS_LABELS[st.type]||st.type}${tail != null ? tail : ' ' + Math.max(0, st.turnsLeft - 1)}</span>`;
-      });
-      const sp3 = stancePills(cm, 'c');                                     // (3.42: it says 🤝 itself)
-      if(sp3) own.push(sp3);
-      if(cm.enrageStacks) own.push(`<span class="status-pill"${pillAt('enrage', 'c')}>🤝 🔥 Enrage ×${cm.enrageStacks}</span>`);
-      paintEnrage(cm);
-      out.push(...own);
-    }
     row.innerHTML = out.join('');
+    symbolizePills(row);
   }
+  refreshAllBlockBars();
   /* The enemy side's own side-wide buffs: one row above their cards, since they
      belong to the whole side rather than to any one of them. */
   const fr = $('#foeSideRow');
@@ -7793,6 +7774,7 @@ function renderStatusBadges(){
       + counterPill(foeCounters(), 'foe')
       + siphonPills()                                  // (3.43) the tower's siphons
       + (ec ? `<span class="status-pill foe"${pillAt('combo', 'fs')}>👊 Combo ×${ec}</span>` : '');
+    symbolizePills(fr);
   }
   // Enemy statuses render on their OWN card, above that enemy's HP bar, so it's
   // obvious which monster in a group is afflicted.
@@ -7837,6 +7819,7 @@ function renderStatusBadges(){
                   : (st.type === 'blinded' && st.until != null) ? ` ${Math.max(1, st.until - roundNo() + 1)}` : '';   // (3.25) as yours: the turns it still has
       return ep(st.type, `${STATUS_LABELS[st.type]||st.type}${extra}`);
     }).join('') + extras.join('');
+    symbolizePills(slot);
   });
   paintConcealment();
 }
@@ -8051,7 +8034,7 @@ function statusTipText(key, st, c, pill){
       return `${c.W} is winding up${nm ? ` <b>${escapeHtml(nm)}</b>` : ''}: it lands next turn${c.yours ? ', with no words to write' : ''}.`; }
     case 'omen': return m ? `${c.W}'s next blow hits <b>${pc(m._omen)}%</b> harder.` : '';
     case 'passive': {
-      const nm = (pill && pill.textContent || '').replace(/^\s*(✨|🔇)\s*/u, '').trim();
+      const nm = pillWords(pill).replace(/^\s*(✨|🔇)\s*/u, '').trim();
       const row = m ? (MOVES[m.species] || []).find(r=> r[1] === nm && r[6] && r[6].passive) : null;
       const bits = row ? passiveBits(row[6].passive, tipAtk(m)) : [];
       if(!bits.length) return '';
@@ -8059,17 +8042,26 @@ function statusTipText(key, st, c, pill){
   }
   return '';
 }
-/* The number after a timed pill's name is the turns it has after this one
-   (its +1 grace taken off): said in words. A freeze and a blinding count
-   their own way, and say so in their text. */
+/* (3.52) A pill's words — what it said before it was drawn as its symbol. */
+function pillWords(el){ return el ? (((el.dataset && el.dataset.full) || el.textContent || '').replace(/\s+/g, ' ').trim()) : ''; }
+/* The card's title for a pill: its symbol and its words, without the number
+   of turns — that is said under it, in a sentence. */
+function pillTitle(key, el){
+  const full = pillWords(el);
+  const words = full.split(' ');
+  const sym = (el.dataset && el.dataset.sym) || words[0];
+  let rest = words.slice(1).join(' ');
+  if(pillTurnsAfter(key, full) != null) rest = rest.replace(/ \d+((?: · .*)?)$/u, '$1');
+  return `${sym} ${rest}`.trim();
+}
+/* The turns a timed pill has after this one (its +1 grace taken off), said
+   in words. A freeze and a blinding count their own way, and say so in their
+   text. */
 function tipTurnsLine(key, pill){
-  const label = ['barrier', 'iceTomb', 'blinded'].includes(key) ? null : STATUS_LABELS[key];
-  if(!label) return '';
-  const t = (pill.textContent || '').replace(/^🤝\s*/u, '').trim();
-  const k = new RegExp('^' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' (\\d+)(?: · .*)?$', 'u').exec(t);
-  if(!k) return '';
-  const n = +k[1];
-  return n === 0 ? 'This is its last turn.' : `${n} turn${n === 1 ? '' : 's'} left after this one.`;
+  if(['barrier', 'iceTomb', 'blinded'].includes(key)) return '';
+  const n = pillTurnsAfter(key, pillWords(pill));
+  if(n == null) return '';
+  return n === 0 ? '⏳ Last turn! It wears off after this one.' : `⏳ This turn and ${n} more.`;
 }
 
 let _statusTipCssDone = false;
@@ -8090,6 +8082,7 @@ function statusTipCss(){
   #statusTip.mine{ border-color:rgba(47,143,111,0.55); }
   #statusTip .tip-title{ font-family:'Baloo 2',cursive; font-weight:800; font-size:15px; margin-bottom:3px; }
   #statusTip .tip-turns{ margin-top:5px; font-size:12px; font-weight:700; opacity:.7; }
+  #statusTip .tip-turns.last{ opacity:1; color:var(--cinnabar-dark); font-weight:800; }
   @keyframes tipIn{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:none; } }
   `;
   document.head.appendChild(st);
@@ -8111,8 +8104,10 @@ function statusTipFor(el){
   const c = tipHolder(t.who);
   if(!c) return null;
   const text = statusTipText(t.key, tipStatus(t.key, t.who, c), c, el);
-  if(!text) return null;
-  const title = t.key === 'block' ? `🛡 Shields ×${blockStacksOf(c.mon)}` : escapeHtml((el.textContent || '').trim());
+  /* (3.52) a symbol is all the pill shows now, so its card always opens —
+     its name at least, even with nothing more to say */
+  if(!text && t.key === 'block') return null;
+  const title = t.key === 'block' ? `🛡 Shields ×${blockStacksOf(c.mon)}` : escapeHtml(pillTitle(t.key, el));
   return { title, text, turns:tipTurnsLine(t.key, el), cls:el.classList.contains('foe') ? 'foe' : el.classList.contains('mine') ? 'mine' : '' };
 }
 function closeStatusTip(){
@@ -8128,7 +8123,7 @@ function openStatusTip(el){
   const sc = document.createElement('div');
   sc.id = 'statusTipScrim';
   sc.innerHTML = `<div id="statusTip" class="${tip.cls}" role="dialog"><div class="tip-title">${tip.title}</div>` +
-    `<div class="tip-text">${tip.text}</div>${tip.turns ? `<div class="tip-turns">${tip.turns}</div>` : ''}</div>`;
+    `${tip.text ? `<div class="tip-text">${tip.text}</div>` : ''}${tip.turns ? `<div class="tip-turns${el.classList.contains('last') ? ' last' : ''}">${tip.turns}</div>` : ''}</div>`;
   /* A tap outside the card closes it, and goes no further — nothing under it
      is pressed. A tap on the card leaves it open. */
   sc.addEventListener('click', e=>{

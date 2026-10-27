@@ -291,11 +291,10 @@ function drainHp(id, oldCur, newCur, max){
 function onSwitchPressed(){
   const b=ui.battle;
   if(b.switchedThisTurn) return;
-  const options = state.party.map((m,i)=>({m,i})).filter(o=>o.i!==b.activeIndex && o.m.currentHp>0 && !isPassenger(o.m));
+  const options = sendOutOptions(b.activeIndex);        // (3.52) a pair whose companion can still fight, too
   if(options.length===0){ toast('No other monster can fight.'); return; }
   monsterChooser('Switch to…', options, (i)=>{
-    const sw = state.party[i];
-    if(sw && !sw._entered){ sw._entered = true; applyEntryPassives(sw, sw.species, sw.level, monAtk(sw)); }
+    enterLeader(state.party[i]);
     const c = chargeState();
     const outComp = companionOnField();
     /* stored power passes on — the dragon's own, or a companion dragon's that
@@ -310,19 +309,21 @@ function onSwitchPressed(){
        Dragon Dance + carrier brought in mid-fight takes the initiative at once,
        and a Steel Aegis carrier arrives already holding block. */
     const inc = leaderMon();
-    if(inc && !inc._entered){ inc._entered = true; applyEntryPassives(inc, inc.species, inc.level, monAtk(inc)); }
-    else if(inc) applyStonePassives(inc);
-    /* The pair changes with its leader (2.84): the companion that was out goes
-       back with its leader, its turns frozen; the newcomer's comes back out if
-       it was out, with its own place in this round. The choice is still yours. */
+    if(inc && inc.currentHp > 0 && !inc._entered){ inc._entered = true; applyEntryPassives(inc, inc.species, inc.level, monAtk(inc)); }
+    else if(inc && inc.currentHp > 0) applyStonePassives(inc);
+    /* The pair changes with its leader (2.84): the old pair goes back
+       together, and the newcomer's companion comes out with it, with its own
+       place in this round. The choice is still yours — the newcomer's, or
+       (3.52) its companion's if the newcomer itself is down. */
     pairSwitched(outgoing);
-    setFocus(null);
-    ui.battle.control = { mode:'solo', uid:inc.uid, extra };
+    const front = frontMon() || inc;
+    setFocus(front === inc ? null : front);
+    ui.battle.control = { mode:'solo', uid:front.uid, extra };
     renderBattle();
     /* Bringing the Whalelord back discharges everything he is owed — free, and
      it does not cost the turn the switch already gave you. */
     const back = leaderMon();
-    const owed = back && (MOVES[back.species]||[]).some(m=>m[6] && m[6].wrath) && wrathStacks() > 0;
+    const owed = back && back.currentHp > 0 && (MOVES[back.species]||[]).some(m=>m[6] && m[6].wrath) && wrathStacks() > 0;
     if(owed){
       ui.battle.phase = 'resolving';
       renderBattle();
@@ -411,17 +412,31 @@ function chooseRevival(mv, mon, onPick){
     return;
   }
   if(pool.length === 1) return onPick(pool[0]);
-  monsterChooser('Bring back…', pool.map(m=>({ m, i:state.party.indexOf(m) })),
-    i=> onPick(state.party[i]), true,
-    ()=>{ ui.battle.phase = 'player'; renderBattle(); });
+  /* (3.52) a fainted companion can be brought back too: it is chosen by its
+     own uid, since it is not one of the party */
+  monsterChooser('Bring back…', pool.map((m, k)=>({ m, i:k })),
+    k=> onPick(pool[k]), true,
+    ()=>{ ui.battle.phase = 'player'; renderBattle(); }, true);
 }
-function monsterChooser(title, options, onPick, dismissable=true, onCancel=null){
+/* `bare`: the options are the monsters themselves, not a party pair (a
+   revival's list). Otherwise each option is a party monster — and (3.52)
+   with its companion beside it, when it has one: the pair comes out
+   together. */
+function monsterChooser(title, options, onPick, dismissable=true, onCancel=null, bare=false){
   const scrim=document.createElement('div');
   scrim.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:70;display:flex;align-items:flex-end;justify-content:center;';
-  scrim.innerHTML=`<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;">
+  const line = m=> `${escapeHtml(displayName(m))} · Lv ${m.level} · ${Math.max(0, m.currentHp)}/${monMaxHp(m)} HP`;
+  const opt = o=>{
+    const c = (!bare && ui.screen === 'battle' && ui.battle && companionsAllowed()) ? companionOf(o.m) : null;
+    const face = m=> monPortrait(m.species,36,{stage:monStage(m),crowned:isCrowned(m)});
+    const one = m=> `<span class="sw-one${m.currentHp <= 0 ? ' down' : ''}">${face(m)}<span>${line(m)}</span></span>`;
+    return `<button class="btn btn-ghost sw-opt" data-i="${o.i}" style="margin-bottom:8px;display:flex;flex-direction:column;align-items:stretch;gap:6px;">
+      ${c ? pairOrder(o.m, c).map(one).join('') : one(o.m)}</button>`;
+  };
+  scrim.innerHTML=`<style>.sw-one{display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;} .sw-one.down{opacity:.5;}</style>
+    <div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;max-height:86vh;overflow-y:auto;">
     <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;margin-bottom:12px;">${escapeHtml(title)}</div>
-    ${options.map(o=>`<button class="btn btn-ghost sw-opt" data-i="${o.i}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;">
-      ${monPortrait(o.m.species,36,{stage:monStage(o.m),crowned:isCrowned(o.m)})}<span>${escapeHtml(displayName(o.m))} · Lv ${o.m.level} · ${o.m.currentHp}/${monMaxHp(o.m)} HP</span></button>`).join('')}
+    ${options.map(opt).join('')}
     ${dismissable?'<button class="btn btn-ghost" id="chCancel" style="margin-top:4px;">Cancel</button>':''}
   </div>`;
   document.body.appendChild(scrim);
@@ -524,11 +539,8 @@ function onMoveChosen(moveIdx){
   ui.battle.actionDodges = [];
   /* A wound-up move comes down for free; choosing anything else lets it go. */
   if(mon && mon._windup && !(mv && mv.windupReady)) mon._windup = null;
-  /* A companion's move (2.85): its turn's 8 words, whatever the move. */
-  if(mv && isCompanionMon(mon)){
-    if(mv.locked){ ui.battle.phase='player'; toast('Not while the Cataclysm is building.'); return; }
-    return companionChoose(mon, mv);
-  }
+  /* (3.52) A companion's move is any monster's now: its own words, by the
+     same road (the words it writes: battleWordsMode). */
   if(mv && mv.windupReady){
     if(mv.target === 'Single' && livingEnemies().length > 1) return promptTarget(mv, t=> resolveBattleMove(mv, t, [], { noQuiz:true }));
     return resolveBattleMove(mv, mv.target === 'Single' ? livingEnemies()[0] : null, [], { noQuiz:true });
@@ -604,132 +616,9 @@ function promptTarget(mv, onPick){
     (onPick||(x=>runMoveQuiz(mv,x)))(t);
   }));
 }
-/* ============================================================
-   A COMPANION'S TURN (2.85 — handover/07-COMPANIONS.md)
-   At its own place in the order a companion chooses any of its own moves,
-   and its turn costs 8 words (COMPANION.turnWords) whatever the move: all 8,
-   or the whole turn fails. Only a move's extras still ask for words — the
-   tail of a move that grows with extra words, in the same quiz (Incinerate
-   Max: 8, and up to 7 more for its 2.75×) — and its bonus rounds, as always.
-   A quick move (a Very High stone) leaves the turn open, and the next move
-   that turn is already paid for (control.paid); an extra action
-   (Tachypsychia) is a turn of its own. Moves that are free for the party —
-   a wound-up blow coming down, charges being spent — are still a turn, and
-   still its 8 words.
-   ============================================================ */
-function companionChoose(mon, mv){
-  if(mv.revitalise) return chooseRevival(mv, mon, m=>{ mv.reviveUid = m.uid; companionAct(mon, mv, null); });
-  if(mv.transfuse && !transfuseNeeded(mon)) return transfuseRefused(mv, mon);   // (3.15)
-  const many = livingEnemies().length;
-  /* aimed as the leader's are: a single target (or a status that needs one)
-     is chosen with 2+ enemies, a twin blow's first with 3+ */
-  const single = mv.target === 'Single' || (mv.target === 'Status' && STATUS_NEEDS_TARGET.includes(mv.stoneType));
-  if(single && many > 1) return promptTarget(mv, t=> companionAct(mon, mv, t));
-  if(mv.target === 'Multi2' && many > 2) return promptTarget(mv, t=> companionAct(mon, mv, t));
-  companionAct(mon, mv, (single || mv.target === 'Multi2') ? livingEnemies()[0] : null);
-}
-function companionAct(mon, mv, target){
-  const b = ui.battle;
-  const ctl = b.control;
-  const fee = (ctl && ctl.paid) ? 0 : COMPANION.turnWords;
-  const tail = companionTail(mv);
-  const need = fee + tail;
-  if(need <= 0) return companionFire(mon, mv, target, mv.words);   // paid for already, nothing more to write
-  const carry = b.wordCarry || 0;
-  const name = displayName(mon);
-  startQuiz({
-    title: mv.name,
-    subtitle: fee
-      ? `🤝 ${name}'s turn · write ${fee} words for any move${tail ? ` — keep going for up to ${mv.scale.max}×!` : ''}`
-      : `🤝 This turn is paid for — up to ${tail} more words for up to ${mv.scale.max}×`,
-    words: pickWords(Math.max(0, need - carry)), stopAtFirstMiss:true, lockExit:true,
-    wordTarget: need,
-    stopAt: tail ? Math.max(1, fee) : 0,     // a growing move may stop once the turn is paid
-    startingWords: carry,
-    onComplete:(results)=> companionWritten(mon, mv, target, fee, tail, results),
-    onExit:()=>{ go('battle'); },
-  });
-}
-function companionWritten(mon, mv, target, fee, tail, results){
-  const b = ui.battle;
-  go('battle');
-  if(!b) return;
-  results.filter(r=>!r.passed).forEach(r=>{ if(!b.fightMistakes.includes(r.text)) b.fightMistakes.push(r.text); });
-  const carry = (ui.quiz && ui.quiz.config ? (ui.quiz.config.startingWords||0) : 0);
-  const correct = results.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0) + carry;
-  /* words past the turn's 8 roll into the next move, as words past any move's do */
-  b.wordCarry = Math.max(0, ((ui.quiz && ui.quiz.wordsDone) || 0) - fee);
-  const written = results.reduce((n,r)=>n+(r.words||countWords(r.text)),0);
-  if(feedRecharge(written)) setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
-  if(correct < fee){
-    playSfx('move_miss');
-    battleMsg(`${displayName(mon)}'s turn fails! (${correct}/${fee} words)`);
-    logBattle(`${displayName(mon)} (companion) — turn failed, ${correct}/${fee} words`);
-    return setTimeout(advanceTurn, 900);
-  }
-  if(b.control && b.control.uid === mon.uid) b.control.paid = true;
-  /* its move lands as if its own words were written — and as far up its tail
-     as the words past the 8 reach */
-  companionFire(mon, mv, target, mv.words + Math.min(tail, Math.max(0, correct - fee)));
-}
-function companionFire(mon, mv, target, correct){
-  setFocus(mon);
-  if(mv.windupReady) return resolveBattleMove(mv, target, [], { noQuiz:true });
-  if(mv.chargeSpend) return resolveChargeSpend(mv, mon, target);
-  if(mv.charge || mv.chargeMore) return applyChargeResult(mv, mon, correct);
-  return resolveBattleMove(mv, target, [], { pre:{ correct } });
-}
 /* "(8/15 words)": a move's own count in a message, unless something set
    another for it (ui.battle._wordsTag). */
 function wordsTag(correct, mv){ return (ui.battle && ui.battle._wordsTag) || `${correct}/${mv.words}`; }
-/* ---------- SUMMONING (2.84) ----------
-   Four words, and the turn stays yours. The companion comes out beside its
-   leader for the turns it has left (five a fight; the recharge meter gives
-   them back), and takes its place in this round's order — so it has a turn
-   of its own this round. */
-function onSummonPressed(){
-  const b = ui.battle;
-  if(!b || (b.phase || 'player') !== 'player') return;
-  if(summonBlock()) return;
-  const leader = leaderMon(), comp = companionOf(leader), p = pairOf(leader);
-  b.phase = 'resolving';
-  const need = COMPANION.summonWords;
-  startQuiz({
-    title: `Summon ${displayName(comp)}`,
-    subtitle: `${displayName(leader)} shares its core — write ${need} words${revisionWords().length ? ' you have learned to silver or gold' : ''}. The turn stays yours.`,
-    words: pickWords(need, true), stopAtFirstMiss:true, lockExit:true,
-    wordTarget: need,
-    onComplete:(results)=>{
-      go('battle');
-      results.filter(r=>!r.passed).forEach(r=>{ if(!b.fightMistakes.includes(r.text)) b.fightMistakes.push(r.text); });
-      const got = results.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0);
-      if(feedRecharge(results.reduce((n,r)=>n+(r.words||countWords(r.text)),0)))
-        setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
-      b.phase = 'player';
-      if(got < need){
-        playSfx('move_miss');
-        renderBattle();
-        battleMsg(`The core flickers — ${escapeHtml(displayName(comp))} doesn't come. (${got}/${need} words) It is still your turn.`);
-        return;
-      }
-      summonCompanion(leader, comp, p);
-      renderBattle();
-      battleMsg(`🤝 ${escapeHtml(displayName(comp))} steps out beside ${escapeHtml(displayName(leader))} — ${p.turnsLeft} turn${p.turnsLeft === 1 ? '' : 's'}!`);
-    },
-    onExit:()=>{ go('battle'); if(ui.battle){ ui.battle.phase = 'player'; renderBattle(); } },
-  });
-}
-function summonCompanion(leader, comp, p){
-  const b = ui.battle;
-  p.out = true;
-  b.summons = (b.summons || 0) + 1;
-  playSfx('stone_veryhigh');
-  /* it arrives as any monster of yours does: its passives, a refined stone's */
-  if(!comp._entered){ comp._entered = true; applyEntryPassives(comp, comp.species, comp.level, monAtk(comp)); }
-  else applyStonePassives(comp);
-  insertCompanionRow(comp);
-}
-
 /* Supply enough phrases to satisfy a WORD target. Shortest entries are 2
    characters, so ceil(target/2) phrases always suffices; a few spares are added
    so the quiz never runs dry if a miss shortens the run. */
@@ -739,10 +628,14 @@ function summonCompanion(leader, comp, p){
    ones) broke that assumption and could run the quiz dry before the target
    was reached, which read as the move "fizzling out" mid-fight. */
 /* `revision`: draw from the phrases learned to silver or gold instead
-   (revisionPool, 2.89) — a summoning always does, and so does every quiz in a
-   spar with the Monkey King, and (2.94) every quiz in the space-time tear. */
+   (revisionPool, 2.89) — as every quiz in a spar with the Monkey King does,
+   and (2.94) every quiz in the space-time tear. Not said: (3.52) whatever
+   the parents' setting says for the monster whose words these are
+   (battleWordsRevise) — by default the day's checked words for your party,
+   and the learned ones for a companion. */
 function pickWords(wordTarget, revision){
-  const pool = (revision || (ui.battle && (ui.battle.coreSpar || ui.battle.tear))) ? revisionPool() : activePool().map(w=>w.text);
+  const rev = revision != null ? revision : battleWordsRevise(ui.battle ? activeMon() : null);
+  const pool = (rev || (ui.battle && (ui.battle.coreSpar || ui.battle.tear))) ? revisionPool() : activePool().map(w=>w.text);
   if(pool.length===0) return [];
   const buffer = Math.max(4, Math.ceil(wordTarget * 0.3));   // headroom for misses/spill
   const needChars = wordTarget + buffer;
@@ -757,6 +650,34 @@ function pickWords(wordTarget, revision){
   return out;
 }
 function countWords(text){ return (text||'').length; }   // one hanzi = one word
+/* ============================================================
+   WHICH WORDS A FIGHT USES (3.52)
+   The designer: "companions use revision words instead of current words by
+   default. A toggle in the parents' setting of the spelling list sets them to
+   use presently selected words instead: 3 settings — Default (checked words
+   for main monsters, silver/gold words for companions); New (checked words
+   for all only); Revision (silver/gold words only)."
+   state.settings.battleWords: 'default' | 'new' | 'revision'. "Revision"
+   words are revisionPool's — every phrase learned to 🥈 silver or 🥇 gold,
+   in any list (the day's checked words until the first one gets there). A
+   spar and the tear revise whatever the setting (pickWords).
+   ============================================================ */
+const BATTLE_WORDS = {
+  default:  { label:'Default',  desc:'Checked words for your party · 🥈 silver and 🥇 gold words for companions' },
+  new:      { label:'New',      desc:'Checked words for every monster, companions too' },
+  revision: { label:'Revision', desc:'🥈 Silver and 🥇 gold words only, for every monster' },
+};
+function battleWordsMode(){
+  const m = state && state.settings && state.settings.battleWords;
+  return BATTLE_WORDS[m] ? m : 'default';
+}
+/* Does this monster of yours write learned words, by the setting? */
+function battleWordsRevise(mon){
+  const mode = battleWordsMode();
+  if(mode === 'revision') return true;
+  if(mode === 'new') return false;
+  return !!(mon && ui.battle && isCompanionMon(mon));
+}
 /* Moves that cost the user HP when they land. Self-damage runs through the same
    pipeline, so Overheat correctly increases it too (per the design). */
 const SELF_DAMAGE = { 'Nova': 0.15 };
@@ -850,9 +771,12 @@ function runMoveQuiz(mv, target){
   // until the player slips or the cap is reached.
   const ceilWords = scaleCeilWords(mv);
   const words = pickWords(Math.max(0, ceilWords - carry));
+  /* (3.52) whose move, when two of yours are out — and whose words */
+  const who = (ui.battle && playerField().length > 1) ? `${displayName(activeMon())}: ` : '';
+  const learned = ui.battle && !ui.battle.coreSpar && !ui.battle.tear && battleWordsRevise(activeMon()) && revisionWords().length;
   startQuiz({
     title:mv.name,
-    subtitle:`${mv.isStone?stoneTierDef(mv.stoneTier).label+' move':(mv.slot==='Basic'?'Basic move':mv.slot)} · write ${mv.words} words to power it up${mv.scale?` — keep going for up to ${mv.scale.max}× !`:''}`,
+    subtitle:`${who}${mv.isStone?stoneTierDef(mv.stoneTier).label+' move':(mv.slot==='Basic'?'Basic move':mv.slot)} · write ${mv.words} words to power it up${mv.scale?` — keep going for up to ${mv.scale.max}× !`:''}${learned ? ' · 🥈🥇 words you have learned' : ''}`,
     words, stopAtFirstMiss:true, lockExit:true,
     wordTarget: ceilWords,
     stopAt: mv.scale ? mv.words : 0,     // scaling moves may be ended once powered
@@ -879,10 +803,6 @@ function feedRecharge(words){
   b.usedSoul = {};                     // and Steel Soul's once-a-battle cast (2.93)…
   b.rebirthUsed = false;               // …and the phoenix's Rebirth (3.00, the designer's call)…
   (b.enemies || []).forEach(e=>{ e._soulUsed = false; });   // …theirs too: one meter, both sides
-  /* …and gives every companion back its turns (2.84) — not one that fell.
-     Theirs too (2.87): one meter, both sides' companions. */
-  Object.values(b.pairs || {}).forEach(p=>{ if(!p.fallen) p.turnsLeft = COMPANION.turns; });
-  if(b.foePair && !b.foePair.fallen && b.foePair.mon.hp > 0) b.foePair.turnsLeft = COMPANION.turns;
   /* A refined stone's free passive re-arms with the same bar that restores a
      cast — so it fires again the next time its carrier takes the field. */
   b.passiveFired = {};
@@ -1310,7 +1230,7 @@ function overgrowthPhase(phase, done){
       if(ui.battle !== b) return;
       if(won){
         og.stacks = Math.min(FOREST_GIFT.maxStacks, og.stacks + 1);
-        playSfx('stone_veryhigh');
+        playSfx('power_up');                             // (3.51) the Forest Fairy's ATK up: the power-up
         renderBattle();
         battleMsg(`🌿 Overgrowth! Vines and blossom wind round your whole team — ATK <b>+${Math.round(og.stacks * FOREST_GIFT.step * 100)}%</b> ` +
           `for the rest of the battle (${og.stacks} of ${FOREST_GIFT.maxStacks}).`);
@@ -2586,7 +2506,7 @@ function afterPlayerAttackReal(mon, hits){
    there to refuse. */
 function offerVengeanceSwap(mon, hits){
   const others = state.party.map((m,i)=>({m,i}))
-    .filter(o=>o.m.currentHp>0 && o.m !== mon && !isPassenger(o.m));
+    .filter(o=>o.m.currentHp>0 && o.m !== mon && o.i !== ui.battle.activeIndex && !isPassenger(o.m));
   if(!others.length) return afterPlayerAttack(mon, hits);
   const ov = document.createElement('div');
   ov.className = 'refine-scrim';
@@ -2649,6 +2569,7 @@ function castRevitalise(mon, mv){
   const pct = (mv.revitalise && mv.revitalise.pct) || 0.10;
   m.currentHp = Math.max(1, Math.ceil(pct * monMaxHp(m)));
   if(m === leaderMon()) ui.battle.standInFor = null;    // back on its feet: no longer stood in for
+  companionRises(m);                                    // (3.52) a companion back beside its leader
   playSfx('recovery_heal');
   playEffect(mv.name, { type: SPECIES[mon.species].types[0] });
   renderBattle();
@@ -2823,8 +2744,11 @@ function enemyConversio(e, def, next){
 }
 
 function runConversio(mon, def){
-  const fallen = ()=> state.party.map((m,i)=>({m,i}))
-    .filter(o=>o.m.currentHp <= 0 && !isPassenger(o.m) && o.m !== mon);
+  /* (3.52) a fainted companion of your party's can be raised too: it is a
+     full monster now */
+  const fallen = ()=> state.party.filter(m=> m.currentHp <= 0 && !isPassenger(m) && m !== mon)
+    .concat((ui.battle && companionsAllowed()) ? bondedCompanions().filter(c=> c.currentHp <= 0 && c !== mon) : [])
+    .map((m, k)=> ({ m, i:k }));
 
   if(!fallen().length){
     const t = livingEnemies()[0];
@@ -2869,9 +2793,10 @@ function runConversio(mon, def){
     const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
     ov.querySelectorAll('[data-rev]').forEach(b=>b.addEventListener('click', ()=>{
       close();
-      const m = state.party[+b.dataset.rev];
+      const m = pool[+b.dataset.rev].m;
       m.currentHp = Math.max(1, Math.ceil((def.pct || 0.33) * monMaxHp(m)));
       if(m === leaderMon()) ui.battle.standInFor = null;
+      companionRises(m);
       raised++;
       battleMsg(`🕊 ${displayName(m)} draws breath again.`);
       addMors(mon, 1);
@@ -3825,14 +3750,6 @@ function enemyActs(i, e){
     runEnemyAttack(i+1);
   };
 
-  /* Their companion (2.87): its leader calls it out at the start of its own
-     action — free, as your summon keeps your turn — and then acts. */
-  if(foeCanSummon(e)){
-    const said = foeSummon();
-    renderBattle();
-    if(said) battleMsg(said);
-    return setTimeout(()=> enemyActs(i, e), 1300);
-  }
   /* A trainer's stone, cast on its first action. Under your dust it waits —
      except Diamond Dust itself, which sweeps yours away first. */
   if(e.stone && e.stone.cast && !e.stone.used && (e.stone.type === 'Fairy' || !dustBlocks('enemy'))){
@@ -4912,11 +4829,11 @@ function endEnemyRound(){
   setTimeout(advanceTurn, 500);
 }
 
-/* Something of yours has fallen. 2.84: a companion that falls leaves the
-   field for the rest of the fight (the Sacred Flame phoenix may rise first)
-   and the fight goes on around its leader; a leader that falls with its
-   companion out is stood in for — the companion fights on alone until its
-   turns run out, and only then comes "Send out…". */
+/* Something of yours has fallen. A companion that falls leaves the field
+   (the Sacred Flame phoenix may rise first) and the fight goes on around its
+   leader; a leader that falls with its companion beside it is stood in for
+   — the companion fights on alone (3.52: until it falls too, or you
+   switch), and only then comes "Send out…". */
 function onMonFainted(noRebirth){
   const b = ui.battle;
   if(!b) return;
@@ -4946,14 +4863,17 @@ function onMonFainted(noRebirth){
   if(c && lead && c.uid === lead.uid) triggerDragonLegacy();
   if(sideDefeated()){ return onPlayerDefeated(); }
   battleMsg(`${displayName(lead)} fainted!`);
-  const options=state.party.map((m,i)=>({m,i})).filter(o=>o.m.currentHp>0 && !isPassenger(o.m));
+  const options = sendOutOptions(-1);          // (3.52) a pair whose companion can still fight, too
   monsterChooser('Send out…', options, (i)=>{
     const outgoing = leaderMon();
     ui.battle.activeIndex=i; ui.battle.switchedThisTurn=false;
     setFocus(null);
-    const nm = state.party[i];
-    if(nm && !nm._entered){ nm._entered = true; applyEntryPassives(nm, nm.species, nm.level, monAtk(nm)); }
-    pairSwitched(outgoing);            // its companion comes back out, if it was out
+    enterLeader(state.party[i]);
+    pairSwitched(outgoing);            // its companion comes out with it
+    /* whose the buttons are: the newcomer's — or, if it is down, its
+       companion's, standing in */
+    const nm = frontMon() || state.party[i];
+    if(nm !== state.party[i]) setFocus(nm);
 
     if(livingEnemies().length===0){ renderBattle(); return setTimeout(()=>onWaveCleared(), 500); }
 
@@ -4966,7 +4886,7 @@ function onMonFainted(noRebirth){
        a fresh action every time. */
     const b2 = ui.battle;
     const row = leaderRow();
-    if(row){ row.mon = state.party[i]; }
+    if(row){ row.mon = nm; }
     if(row && row.acted){
       b2.phase = 'resolving';
       renderBattle();
@@ -5011,7 +4931,8 @@ function onPlayerDefeated(){
   document.body.appendChild(fade);
   requestAnimationFrame(()=>{ fade.style.opacity='1'; });
   setTimeout(async ()=>{
-    battleParty().forEach(m=>{ m.currentHp=Math.max(1,Math.floor(monMaxHp(m)*0.10)); m.xpFights=xpAfterDefeat(m); });
+    /* (3.52) companions with them: full monsters, they come round as the party does */
+    battleParty().concat(bondedCompanions()).forEach(m=>{ m.currentHp=Math.max(1,Math.floor(monMaxHp(m)*0.10)); m.xpFights=xpAfterDefeat(m); });
     await saveProfile();
     if(onLose){
       try { await onLose(); }

@@ -206,7 +206,18 @@ function guardKeepsWatch(def){
   if(!def) return false;
   return def.kind === 'capo' || STEALTH_WATCHERS.includes(def.roster) || STEALTH_WATCHERS.includes(def.sprite);
 }
+/* (3.52) After the story's end (r5().ending) the Family is Jax's, under
+   Nino's rule, and the designer: "the patrolling soldatos should not catch
+   or surround anymore, but if talked to, they talk sourly to the player and
+   says Jax's orders are to leave the player alone unless the player is
+   looking for a fight. No rewards though, the player can go begging
+   elsewhere, Jax says." So: nobody of theirs catches you or surrounds you,
+   anywhere in Region 5; the dead are at rest (no man is fighting ghosts);
+   every soldato walks his round, and comes over to talk if you go up to him
+   (15-region5.js r5NearSoldatos). */
+function stealthPeace(d){ return !!(d && d.region === 5 && typeof r5 === 'function' && r5().ending); }
 function guardHaunted(d, def){
+  if(stealthPeace(d)) return false;               // (3.52) the dead are at rest
   if(stealthRush(d)) return true;
   /* (3.18) under the villa no ghost comes: Nino keeps the dead away from his
      brother's house (15-region5.js, the floors under the villa — `under`) */
@@ -321,7 +332,7 @@ function patrolStep(d, g, def){
   /* He does not walk through you: stepping into you is seeing you — unless
      you are wearing his colours (2.91), when he just waits for you to move. */
   const p = (typeof walkState === 'function') ? walkState().at[d.key] : null;
-  if(p && p.x === nx && p.y === ny){ if(!stealthDisguised(d)) g.sus = 1; return; }
+  if(p && p.x === nx && p.y === ny){ if(!stealthDisguised(d) && !stealthPeace(d)) g.sus = 1; return; }
   g.x = nx; g.y = ny;
 }
 function inGuardLight(id, d, g, def){
@@ -548,8 +559,9 @@ function guardBeat(id, d, g, def){
   if(stealthPaused()) return;
   if(guardHaunted(d, def)){ g.sus = 0; return; }    // fighting ghosts: he has no eyes for you
   /* You are one of them (2.91): he walks his round and never looks at you
-     twice. Whoever comes alongside, you can talk to (15-region5.js). */
-  if(stealthDisguised(d)){
+     twice. Whoever comes alongside, you can talk to (15-region5.js). (3.52)
+     And after the story, whatever you wear: Jax's orders. */
+  if(stealthDisguised(d) || stealthPeace(d)){
     g.sus = 0; g.spotted = false;
     guardAdvance(d, g, def);
     paintStealth(id, d);

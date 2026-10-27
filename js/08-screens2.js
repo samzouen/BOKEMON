@@ -11,12 +11,15 @@
      resets it); loop reps grant no heal, completing the loop heals 5% to all
    - remediated words still stay in the recent-wrong history for future sessions */
 function monMax(m){ return computeMaxHp(m.species, m.level, m.supplements, m); }
-function partyFull(){ return battleParty().every(m=>m.currentHp>=monMax(m)); }
+/* (3.52) The team a Recover heals: the party, and each leader's companion —
+   full monsters now, which keep their hurts between fights as the party does. */
+function healingTeam(){ return battleParty().concat(typeof bondedCompanions === 'function' ? bondedCompanions() : []); }
+function partyFull(){ return healingTeam().every(m=>m.currentHp>=monMax(m)); }
 function healParty(pct){
   playSfx('recovery_heal');
   // Round UP (and heal at least 1) so a monster on very low HP always makes
   // progress — flooring could yield 0 and leave it permanently stuck.
-  battleParty().forEach(m=>{
+  healingTeam().forEach(m=>{
     const max = monMax(m);
     const gain = Math.max(1, Math.ceil(max*pct));
     m.currentHp = Math.min(max, m.currentHp + gain);
@@ -38,7 +41,7 @@ function startRecovery(){
   };
   recoveryStep();
 }
-function partyHpTotal(){ return state.party.reduce((s,m)=>s+Math.max(0,m.currentHp),0); }
+function partyHpTotal(){ return state.party.concat(typeof bondedCompanions === 'function' ? bondedCompanions() : []).reduce((s,m)=>s+Math.max(0,m.currentHp),0); }
 
 function nextRecoveryWord(){
   const r = ui.recovery;
@@ -116,12 +119,19 @@ function finishRecovery(){
   $('#doneBtn').addEventListener('click', ()=>go('region'));
 }
 function renderPartyHpCard(){
+  /* (3.52) each companion under its leader: Recover heals it too */
+  const rows = [];
+  state.party.forEach(m=>{
+    rows.push([m, false]);
+    const c = (typeof companionOf === 'function' && companionsUnlocked() && !isPassenger(m)) ? companionOf(m) : null;
+    if(c) rows.push([c, true]);
+  });
   return `<div class="hp-card">
-    ${state.party.map(m=>{ const max=monMax(m); return `
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+    ${rows.map(([m, comp])=>{ const max=monMax(m); return `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;${comp ? 'padding-left:18px;' : ''}">
         ${monPortrait(m.species,30,{stage:monStage(m),crowned:isCrowned(m)})}
         <div style="flex:1;">
-          <div style="font-size:12px;font-weight:800;">${escapeHtml(displayName(m))}</div>
+          <div style="font-size:12px;font-weight:800;">${comp ? '🤝 ' : ''}${escapeHtml(displayName(m))}</div>
           <div class="hpbar"><div class="hpfill" style="width:${Math.max(0,m.currentHp/max*100)}%;background:${m.currentHp/max<0.3?'var(--cinnabar)':'var(--jade)'};"></div></div>
         </div>
         <div style="font-size:11px;color:var(--ink-soft);font-weight:700;">${Math.max(0,m.currentHp)}/${max}</div>
@@ -162,9 +172,11 @@ function onChallengeWon(){
      story after the fight has moved on (enforceEyeBreak). */
   tallyBattleForEyeBreak();
   // NPC fights are worth 2 fights' XP per wave (e.g. the 5-wave Rival = 10)
+  /* (3.52) …but a fight with nothing for it (a soldato's, after Region 5's
+     story — "No rewards though") gives no experience and no tokens */
   const waves = Array.isArray(b.waves) ? b.waves.length : 1;
-  const levelUps = awardXpToParty(waves * 2);
-  const tokens = rollTokenDrop();
+  const levelUps = b.noPrize ? [] : awardXpToParty(waves * 2);
+  const tokens = b.noPrize ? 0 : rollTokenDrop();
   saveProfile();
   if(tokens) toast(tokens > 1 ? `🎫 You found ${tokens} Skill Tokens!` : '🎫 You found a Skill Token!');
   levelUps.filter(e=> e.breakthrough || e.ready).forEach((e, i)=>
@@ -1072,7 +1084,7 @@ function startArenaChallenge(x, v, cfg){
      the catching. */
   ['onWin', 'onLose', 'scriptedLoss', 'guardianTrial', 'tear', 'coreSpar', 'challenge', 'allowCatch'].forEach(k=> delete cfg[k]);
   arenaSnapshotParty();
-  state.party.forEach(m=>{ m.currentHp = monMaxHp(m); });
+  healingTeam().forEach(m=>{ m.currentHp = monMaxHp(m); });   // (3.52) the companions too
   ui.arenaRun = { id:x.id, label:v.label || x.label, zone:ui.currentZone || null };
   ui.currentZone = null;                       // its own backdrop, or the plain one
   /* (3.48) the fight is its card's region's, wherever you are: from Region 5 on, fierce (foesFierce) */

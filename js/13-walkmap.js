@@ -534,6 +534,7 @@ function walkCss(){
   st.id = 'walkCss';
   st.textContent = `
     .walk-still .walk-world, .walk-still .walk-ent{transition:none !important;}
+    .walk-world{transform-origin:0 0;}           /* (3.51) the scene camera's zoom is from the painting's corner */
     /* (3.20) a crowned picture (Cuain, his core home) fills its tile as a plain one does */
     .walk-ent .crowned-wrap{width:100% !important;height:100% !important;}
     .walk-mark{position:absolute;aspect-ratio:40/96;transform:translateX(-50%);pointer-events:none;
@@ -578,6 +579,8 @@ function walkCss(){
 function renderWalkDeck(id){
   walkCss();
   clearWalkFx();
+  ui.sceneCam = null;                    // (3.51) a deck starts on you, and with nobody turned to by its speech
+  ui.sayHook = null;
   /* A scene can pin you in place. Whichever deck you pick — and however you
      leave the region and come back — you are put down where the story left
      you, and you stay there until it is finished. The stage is in the save,
@@ -957,18 +960,98 @@ function walkCam(centre, mapPx, stagePx){
   if(mapPx <= stagePx) return -mapPx / 2;
   return Math.max(stagePx / 2 - mapPx, Math.min(-stagePx / 2, -centre));
 }
+/* ---------- THE SCENE CAMERA (3.51) ----------
+   The designer, of the vault: "keep the whole scene at original size (the
+   room won't fit in the screen), but … add panning each time to different
+   parts of the action". While a scene holds the camera (ui.sceneCam: the
+   point it looks at, in tiles, and its zoom — 1 is the deck's own size, less
+   shows more of it), the deck looks there instead of at you, as near the
+   edge as the painting allows. sceneLook pans to a person, a place or a few
+   of them at once — pulling back only as far as it must to show them all —
+   and sceneCamFree gives the camera back to you. ui.sayHook (a deck's own)
+   is told who is speaking as each line comes up, so a scene can turn to
+   them. */
+function walkCamXY(){
+  const w = walkState(), d = DECKS[w.deck];
+  if(!d) return null;
+  const p = w.at[w.deck] || { x:0, y:0 };
+  const stageEl = $('#walkStage');
+  const SW = (stageEl && stageEl.clientWidth)  || WALK_VIEW * WALK_T;
+  const SH = (stageEl && stageEl.clientHeight) || WALK_VIEW * WALK_T;
+  const cols = d.rows[0].length, rows = d.rows.length, cam = ui.sceneCam, T = WALK_T;
+  const s = cam ? (cam.zoom || 1) : 1;
+  const cx = cam ? cam.x * T : p.x * T + T / 2, cy = cam ? cam.y * T : p.y * T + T / 2;
+  return { s, SW, SH, cols, rows, tx:walkCam(cx * s, cols * T * s, SW), ty:walkCam(cy * s, rows * T * s, SH) };
+}
+/* What the stage shows now, in tiles. */
+function sceneCamView(){
+  const c = walkCamXY(); if(!c) return null;
+  const T = WALK_T * c.s;
+  return { x0:(-c.SW / 2 - c.tx) / T, x1:(c.SW / 2 - c.tx) / T, y0:(-c.SH / 2 - c.ty) / T, y1:(c.SH / 2 - c.ty) / T };
+}
+/* A box round something on the deck, in tiles: 'room', 'you', an actor's
+   id ('padrino' is #sa-padrino), a point {x, y}, a box {x, y, w, h} (its
+   top-left), or a list of any of these. */
+function sceneBox(t){
+  const w = walkState(), d = DECKS[w.deck];
+  if(!t || !d) return null;
+  if(Array.isArray(t)){
+    const bs = t.map(sceneBox).filter(Boolean);
+    if(!bs.length) return null;
+    return { x0:Math.min(...bs.map(b=> b.x0)), y0:Math.min(...bs.map(b=> b.y0)), x1:Math.max(...bs.map(b=> b.x1)), y1:Math.max(...bs.map(b=> b.y1)) };
+  }
+  if(t === 'room') return { x0:0, y0:0, x1:d.rows[0].length, y1:d.rows.length };
+  if(t === 'you'){ const p = w.at[w.deck]; return p ? { x0:p.x, y0:p.y, x1:p.x + 1, y1:p.y + 1 } : null; }
+  if(typeof t === 'string'){
+    const el = document.getElementById('sa-' + t), o = el && el._o;
+    return o ? { x0:o.x, y0:o.y, x1:o.x + (o.w || 1), y1:o.y + (o.h || 1) } : null;
+  }
+  if(typeof t === 'object' && Number.isFinite(t.x) && Number.isFinite(t.y)){
+    return t.w != null ? { x0:t.x, y0:t.y, x1:t.x + t.w, y1:t.y + (t.h || t.w) } : { x0:t.x - 0.5, y0:t.y - 0.5, x1:t.x + 0.5, y1:t.y + 0.5 };
+  }
+  return null;
+}
+/* Look at it. opts: ms (the pan, 700), pad (tiles round it, 0.6), lazy (only
+   if it is not well in view already), zoom (a set zoom instead of "as near as
+   fits"). Resolves when the camera is there. */
+function sceneLook(target, opts){
+  opts = opts || {};
+  const b = sceneBox(target), c = walkCamXY();
+  if(!b || !c) return Promise.resolve();
+  const pad = opts.pad != null ? opts.pad : 0.6;
+  if(opts.lazy){
+    const v = sceneCamView();
+    const m = 0.25;
+    if(v && b.x0 - m >= v.x0 && b.x1 + m <= v.x1 && b.y0 - m >= v.y0 && b.y1 + m <= v.y1) return Promise.resolve();
+  }
+  const T = WALK_T;
+  const roomFit = Math.min(1, c.SW / (c.cols * T), c.SH / (c.rows * T));
+  const fit = Math.min(1, c.SW / ((b.x1 - b.x0 + 2 * pad) * T), c.SH / ((b.y1 - b.y0 + 2 * pad) * T));
+  const zoom = Math.max(roomFit, Math.min(1, opts.zoom || fit));
+  ui.sceneCam = { x:(b.x0 + b.x1) / 2, y:(b.y0 + b.y1) / 2, zoom };
+  const ms = opts.ms != null ? opts.ms : 700;
+  const world = $('#walkWorld');
+  if(world) world.style.transition = `transform ${Math.max(1, ms * SCENE_SPEED)}ms ease-in-out`;
+  refreshWalk();
+  return sceneWait(ms);
+}
+/* The camera back to you (and the deck's own easy follow back on). */
+function sceneCamFree(ms){
+  if(!ui.sceneCam) return Promise.resolve();
+  ms = ms != null ? ms : 600;
+  ui.sceneCam = null;
+  const world = $('#walkWorld');
+  if(world) world.style.transition = `transform ${Math.max(1, ms * SCENE_SPEED)}ms ease-in-out`;
+  refreshWalk();
+  return sceneWait(ms).then(()=>{ const wd = $('#walkWorld'); if(wd && !ui.sceneCam) wd.style.transition = ''; });
+}
 function refreshWalk(){
   const w = walkState(), d = DECKS[w.deck]; if(!d) return;
   const p = w.at[w.deck];
   const world = $('#walkWorld'), me = $('#walkYou'), steps = $('#walkSteps');
   if(!world || !me) return;
-  const stageEl = $('#walkStage');
-  const SW = (stageEl && stageEl.clientWidth)  || WALK_VIEW * WALK_T;
-  const SH = (stageEl && stageEl.clientHeight) || WALK_VIEW * WALK_T;
-  const cols = d.rows[0].length, rows = d.rows.length;
-  world.style.transform =
-    `translate3d(${walkCam(p.x*WALK_T + WALK_T/2, cols*WALK_T, SW)}px, ` +
-    `${walkCam(p.y*WALK_T + WALK_T/2, rows*WALK_T, SH)}px, 0)`;
+  const c = walkCamXY();
+  world.style.transform = `translate3d(${c.tx}px, ${c.ty}px, 0)` + (c.s !== 1 ? ` scale(${c.s.toFixed(4)})` : '');
   me.style.transform = `translate3d(${p.x*WALK_T}px,${p.y*WALK_T}px,0)`;
   me.style.zIndex = 10 + p.y;
   faceRight(me, w.faceX === 'r');                  // (2.95) the way you last walked, or turned
@@ -1028,7 +1111,7 @@ function refreshWalk(){
   /* Rebuilding this on every single step was the choppiness: four dots and a
      stack of buttons torn down and recreated several times a second. It now
      only redraws when what you are standing beside actually changes. */
-  const sig = near.map(t=>t.x+','+t.y+t.verb).join('|') + '#' + (cuainAboard()?'g':'') + '#' + extra.map(a=> a.key).join('|');
+  const sig = near.map(t=>t.x+','+t.y+t.verb).join('|') + '#' + (cuainAboard() ? 'g' + (whaleName() === 'Cuain' ? 'c' : '') : '') + '#' + extra.map(a=> a.key).join('|');   // (3.51) his button again when he is crowned
   if(sig === w.actSig) return;
   w.actSig = sig;
   const acts = $('#walkActs');
@@ -1491,6 +1574,14 @@ function sceneShimmer(ms){
     requestAnimationFrame(frame);
   });
 }
+/* (3.51) The Whalelord following you, drawn again as he is now: crowned once
+   his core is home. He was drawn when the deck was, so after his crowning in
+   the vault (the cores coming home) he came back uncrowned from the ring
+   until the next deck. */
+function walkGhostRedraw(){
+  const gh = document.getElementById('walkGhost');
+  if(gh) gh.innerHTML = monPortrait('whalelord', 30, { view:'front', bare:true, crowned:whaleName() === 'Cuain' });
+}
 /* One jump of the quest mark over the Whalelord: he has felt something. */
 function ghostAlert(){
   walkCss(); sceneCss();
@@ -1558,6 +1649,7 @@ function sceneFaintPlayer(dir){
    a list of picture HTML (one, or two side by side). */
 function sceneSay(faces, name, html, button){
   sceneCss();
+  if(ui.sayHook){ try { ui.sayHook(name, faces); } catch(e){} }     // (3.51) a deck that turns to whoever speaks
   return new Promise(done=>{
     const box = document.createElement('div');
     box.className = 'scene-say';

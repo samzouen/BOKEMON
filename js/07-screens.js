@@ -337,12 +337,18 @@ function renderHome(){
 
 function renderPartyStrip(){
   if(!state.party.length) return '';
+  /* (3.52) each companion beside its leader, as it fights */
+  const team = [];
+  state.party.forEach(m=>{
+    const c = (companionsUnlocked() && !isPassenger(m)) ? companionOf(m) : null;
+    pairOrder(m, c).forEach(x=> team.push([x, x === c]));
+  });
   return `<div class="party-strip">
-    ${state.party.map(m=>`
+    ${team.map(([m, comp])=>`
       <div class="party-chip">
         ${monPortrait(m.species,34,{stage:monStage(m),crowned:isCrowned(m)})}
         <div>
-          <div class="pc-name">${escapeHtml(displayName(m))}</div>
+          <div class="pc-name">${comp ? '🤝 ' : ''}${escapeHtml(displayName(m))}</div>
           <div class="pc-lvl">Lv ${m.level}</div>
         </div>
       </div>
@@ -415,9 +421,9 @@ function renderPartyStub(){
     <div class="party-head-row">
       <div>
         <div class="screen-title" style="margin:0;">Your Party</div>
-        <div class="screen-sub" style="margin:0;">${battleParty().length} / 6 · tap one for options</div>
+        <div class="screen-sub" style="margin:0;">${battleParty().length} / 6${companionsUnlocked() && bondedCompanions().length ? ` · 🤝 ${bondedCompanions().length} companion${bondedCompanions().length === 1 ? '' : 's'}` : ''} · tap one for options</div>
       </div>
-      <button class="btn btn-ghost storage-corner" id="storageBtn">📦 ${state.storage.length}</button>
+      <button class="btn btn-ghost storage-corner" id="storageBtn">📦 ${storedMonsters().length}</button>
     </div>
     ${companionsUnlocked() ? `<button class="btn btn-ghost" id="compBtn" style="margin-top:10px;">🤝 Companions</button>` : ''}
     <div id="partyList" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;"></div>
@@ -429,39 +435,84 @@ function renderPartyStub(){
   renderPartyList();
 }
 
-function renderPartyList(){
-  const list = $('#partyList');
-  if(!list) return;
-  breakthroughCss();
-  companionsCss();
-  list.innerHTML = state.party.map((m,idx)=>{
-    const maxHp = monMaxHp(m);
-    const open = ui.partyOpen===m.uid;
-    const ready = breakthroughReady(m);          // its breakthrough waits for a tap (2.82)
-    const portrait = monPortrait(m.species,52,{stage:monStage(m),crowned:isCrowned(m)});
-    return `
-    <div class="party-card ${isSeed(m)?'seed-card':''}" data-uid="${m.uid}">
-      <div class="party-head" ${isSeed(m)?'':`data-tap="${m.uid}"`}>
+/* (3.52) The party, with each companion beside its leader: the designer —
+   "The monster avatars and stats appear side by side when paired as
+   companions … An attached monster can be shifted left or right to take
+   priority as needed." The ⇄ between them swaps their sides
+   (leader.companionLeft); the one on the left goes first in battle when
+   they are just as quick. */
+function partyHeadHtml(m, opts){
+  opts = opts || {};
+  const maxHp = monMaxHp(m);
+  const ready = breakthroughReady(m);          // its breakthrough waits for a tap (2.82)
+  const px = opts.pair ? 44 : 52;
+  const portrait = monPortrait(m.species, px, { stage:monStage(m), crowned:isCrowned(m) });
+  return `<div class="party-head${opts.pair ? ' pair-head' : ''}${ui.partyOpen === m.uid ? ' open' : ''}" ${isSeed(m) ? '' : `data-tap="${m.uid}"`}>
         ${ready ? `<span class="bt-ready" title="Ready to break through">${portrait}</span>` : portrait}
-        <div style="flex:1;">
-          <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">${escapeHtml(displayName(m))}${crownMark(m)} <span style="font-size:12px;color:var(--ink-soft);">Lv ${m.level}</span></div>
+        <div style="flex:1;min-width:0;">
+          <div class="ph-name">${opts.comp ? '<span class="ph-comp" title="Companion">🤝</span> ' : ''}${escapeHtml(displayName(m))}${crownMark(m)} <span>Lv ${m.level}</span></div>
           <div>${typeBadges(m.species)}</div>
           ${isSeed(m)
             ? `<div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:5px;font-style:italic;">In your care — cannot battle.</div>`
             : `<div class="hpbar" style="margin-top:5px;"><div class="hpfill" style="width:${Math.max(0,m.currentHp/maxHp*100)}%;background:${m.currentHp/maxHp<0.3?'var(--cinnabar)':'var(--jade)'};"></div></div>
                <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:2px;">${Math.max(0,m.currentHp)}/${maxHp} HP · ATK ${monAtk(m)}</div>
-               ${partyCompanionLine(m)}`}
+               ${opts.pair ? '' : partyCompanionLine(m)}`}
         </div>
-      </div>
-      ${open ? `
+      </div>`;
+}
+function partyPairCss(){
+  if(document.getElementById('partyPairCss')) return;
+  const st = document.createElement('style');
+  st.id = 'partyPairCss';
+  st.textContent = `
+  .ph-name{ font-family:'Baloo 2',cursive; font-weight:700; font-size:16px; line-height:1.2; }
+  .ph-name > span:last-child{ font-size:12px; color:var(--ink-soft); }
+  .pair-heads{ display:flex; align-items:stretch; gap:6px; }
+  .pair-heads .pair-head{ flex:1; min-width:0; gap:8px; padding:4px; border-radius:12px; }
+  .pair-heads .pair-head.open{ background:rgba(201,154,63,.12); }
+  .pair-heads .ph-name{ font-size:14px; }
+  .pair-swap{ flex:0 0 auto; align-self:center; width:34px; height:34px; border-radius:50%; border:2px solid var(--line);
+    background:var(--paper); font-size:17px; font-weight:900; color:var(--ink); cursor:pointer; padding:0; box-shadow:0 2px 0 var(--paper-3); }
+  .pair-swap:active{ transform:translateY(1px); box-shadow:none; }
+  .pair-foot{ margin-top:6px; font-size:11px; font-weight:700; color:var(--ink-soft); text-align:center; }
+  @media (max-width:420px){ .pair-heads{ flex-direction:column; } .pair-swap{ transform:rotate(90deg); } }`;
+  document.head.appendChild(st);
+}
+function renderPartyList(){
+  const list = $('#partyList');
+  if(!list) return;
+  breakthroughCss();
+  companionsCss();
+  partyPairCss();
+  const actionsFor = (m, idx, comp)=>{
+    const ready = breakthroughReady(m);
+    return `
         <div class="party-actions">
           ${ready ? `<button class="mini-btn bt-btn" data-break="${m.uid}">⚡ Break through to Lv ${Math.min(LEVEL_MAX, monCeiling(m) + CEILING_STEP)}</button>` : ''}
           <button class="mini-btn" data-stats="${m.uid}">📊 Stats &amp; Moves</button>
+          ${comp ? `<button class="mini-btn" data-comps="1">🤝 Companions</button>` : `
           <button class="mini-btn" data-up="${idx}" ${idx===0?'disabled':''}>▲ Up</button>
           <button class="mini-btn" data-down="${idx}" ${idx===state.party.length-1?'disabled':''}>▼ Down</button>
-          ${isFixedMember(m) ? '' : `<button class="mini-btn" data-store="${m.uid}" ${battleParty().length<=1?'disabled':''}>📦 To storage</button>`}
-        </div>
-      ` : ''}
+          ${isFixedMember(m) ? '' : `<button class="mini-btn" data-store="${m.uid}" ${battleParty().length<=1?'disabled':''}>📦 To storage</button>`}`}
+        </div>`;
+  };
+  list.innerHTML = state.party.map((m,idx)=>{
+    const c = (companionsUnlocked() && !isPassenger(m)) ? companionOf(m) : null;
+    if(!c){
+      return `
+    <div class="party-card ${isSeed(m)?'seed-card':''}" data-uid="${m.uid}">
+      ${partyHeadHtml(m)}
+      ${ui.partyOpen===m.uid ? actionsFor(m, idx, false) : ''}
+    </div>`;
+    }
+    const [L, R] = pairOrder(m, c);
+    const head = x=> partyHeadHtml(x, { pair:true, comp:x === c });
+    const open = ui.partyOpen === m.uid ? actionsFor(m, idx, false) : ui.partyOpen === c.uid ? actionsFor(c, idx, true) : '';
+    return `
+    <div class="party-card pair-card" data-uid="${m.uid}">
+      <div class="pair-heads">${head(L)}<button class="pair-swap" data-swap="${m.uid}" title="Swap sides" aria-label="Swap sides">⇄</button>${head(R)}</div>
+      <div class="pair-foot">🤝 ${escapeHtml(displayName(c))} fights beside ${escapeHtml(displayName(m))} · on a tie, ${escapeHtml(displayName(L))} (left) goes first</div>
+      ${open}
     </div>`;
   }).join('');
 
@@ -470,10 +521,21 @@ function renderPartyList(){
     ui.partyOpen = (ui.partyOpen===uid) ? null : uid;
     renderPartyList();
   }));
+  list.querySelectorAll('[data-swap]').forEach(b=>b.addEventListener('click', async e=>{
+    e.stopPropagation();
+    const L = state.party.find(x=> x.uid === b.dataset.swap);
+    if(!L) return;
+    L.companionLeft = !L.companionLeft;
+    if(!L.companionLeft) delete L.companionLeft;
+    playSfx('ui_click');
+    await saveProfile();
+    renderPartyList();
+  }));
+  list.querySelectorAll('[data-comps]').forEach(b=>b.addEventListener('click', e=>{ e.stopPropagation(); go('companions'); }));
   list.querySelectorAll('[data-stats]').forEach(b=>b.addEventListener('click', e=>{ e.stopPropagation(); ui.statsUid=b.dataset.stats; go('stats'); }));
   list.querySelectorAll('[data-break]').forEach(b=>b.addEventListener('click', e=>{
     e.stopPropagation();
-    const m = state.party.find(x=> x.uid === b.dataset.break);
+    const m = state.party.concat(bondedCompanions()).find(x=> x.uid === b.dataset.break);
     if(m) doBreakthrough(m, renderPartyList);
   }));
   list.querySelectorAll('[data-up]').forEach(b=>b.addEventListener('click', async e=>{ e.stopPropagation(); const i=+b.dataset.up; [state.party[i-1],state.party[i]]=[state.party[i],state.party[i-1]]; await saveProfile(); renderPartyList(); }));
@@ -493,7 +555,8 @@ function renderPartyList(){
     state.storage.push(m);
     ui.partyOpen=null;
     await saveProfile();
-    toast(`${displayName(m)} moved to storage.`);
+    const c = companionsUnlocked() ? companionOf(m) : null;   // (3.52) its companion goes with it
+    toast(c ? `${displayName(m)} moved to storage — ${displayName(c)} goes with it.` : `${displayName(m)} moved to storage.`);
     renderPartyStub();
   }));
 }
@@ -694,7 +757,7 @@ async function doBreakthrough(m, after){
   const bt = tryBreakthrough(m);
   if(!bt){ toast('Not ready to break through yet.'); return; }
   await saveProfile();
-  playSfx('evolution');
+  playSfx('power_up');                                  // (3.51) a power-up — not half a minute of the evolution's music under a toast
   toast(`⚡ ${displayName(m)} broke through! It can grow to Lv ${bt.breakthrough} now.` +
         (bt.to > bt.from ? ` It grew to Lv ${bt.to}!` : ''));
   if(after) after();
@@ -809,6 +872,7 @@ function confirmCrown(m){
     async ()=>{
       if((state.inventory.crowns||0) < 1){ toast('You have no Crowns.'); return; }
       const snapshot = state.inventory.crowns;
+      const stageFrom = monStage(m);                 // (3.51) the form it shows now — a held-back one too (evoFloor)
       state.inventory.crowns--;
       m.crowned = true;
       m.currentHp = Math.min(monMaxHp(m), m.currentHp + (monMaxHp(m) - Math.ceil(monMaxHp(m)/1.2)));
@@ -817,8 +881,9 @@ function confirmCrown(m){
       hideSyncingOverlay(sv);
       if(!okc){ state.inventory.crowns = snapshot; m.crowned = false; showSyncFailure(); return; }
       // Crowning deserves the full transformation, not just a sound.
+      /* (3.51) from the form it showed to its last one, crowned */
       playEvolutions([{ uid:m.uid, species:m.species, name:displayName(m), crowned:true,
-                        from:m.level, to:m.level, evos:[m.level], newMoves:[] }], ()=>{
+                        from:m.level, to:m.level, evos:[m.level], newMoves:[], stageFrom, stageTo:monStage(m) }], ()=>{
         toast(`✦ ${displayName(m)} is crowned!`);
         renderStats();
       });
@@ -956,7 +1021,7 @@ function renderCompanions(){
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Party</button>
     <div class="screen-title">Companions</div>
-    <div class="screen-sub">A crowned monster can hold the core of one monster from your storage, and call it out in battle. The Monkey King trains its core slot.</div>
+    <div class="screen-sub">A crowned monster can hold the core of one monster from your storage. They fight side by side in every battle, and the companion travels with its leader — into storage too. The Monkey King trains the core slot.</div>
     <div class="medal-bar" style="margin-bottom:12px;"><span>🥈 ${med.silver || 0}</span><span>🥇 ${med.gold || 0}</span><span>${crownIcon(16)} ${state.inventory.crowns || 0}</span></div>
     <div id="compList">${leaders.map(companionCardHtml).join('')}</div>`;
   $('#backBtn').addEventListener('click', ()=> go('party'));
@@ -1056,7 +1121,7 @@ function bondCompanion(L, c){
   (state.party || []).concat(state.storage || []).forEach(m=>{ if(m !== L && m.companionUid === c.uid) delete m.companionUid; });
   L.companionUid = c.uid;
   saveProfile();
-  playSfx('stone_veryhigh');
+  playSfx('power_up');                                  // (3.51) a power-up, not the fanfare
   toast(`🤝 ${displayName(L)} now holds ${displayName(c)}'s core.`);
   if(ui.screen === 'companions') renderCompanions(); else render();
 }
@@ -1079,8 +1144,8 @@ function letGoCompanion(L){
    drawn from the pool of the slot's tier; you choose one, and the Monkey King
    takes his favourite of the other two (never the same monster). He fights
    5 levels above the monster being trained, carrying his stone for the tier;
-   both companions are at the trained monster's level, protein full. He calls
-   his companion out as you call yours (THEIR COMPANION, 04). Win all five and
+   both companions are at the trained monster's level, protein full, and both
+   are on the field from the start (3.52; THEIR COMPANION, 04). Win all five and
    the medals are paid and the slot is yours; lose one, or give up, and the
    training ends — nothing paid, the monster's health as it was before. No
    experience changes hands: sparring is practice. */
@@ -1152,6 +1217,9 @@ function sparMatchup(sp){
   return out.join(' · ');
 }
 function drawSparTrio(tier){ return shuffle((SPAR_POOLS[tier] || []).map(r=> r[0])).slice(0, 3); }
+/* (3.51) The Monkey King as he looks now: crowned once the story has given
+   his crown back (r5MKCrowned, 15-region5.js). */
+function mkCrownedLook(){ return typeof r5MKCrowned === 'function' && r5MKCrowned(); }
 /* His favourite of what is left: the first in his pool's order. */
 function monkeyKingPick(tier, left){
   const order = (SPAR_POOLS[tier] || []).map(r=> r[0]);
@@ -1181,7 +1249,7 @@ function openCoreTraining(L){
   const first = !L.coreSlot;
   screenEl.innerHTML = `
     <div class="scene">
-      <div class="scene-emblem">${monPortrait('monkey_king', 140, { view:'front', bare:true, stage:1 })}</div>
+      <div class="scene-emblem">${monPortrait('monkey_king', 140, { view:'front', bare:true, stage:1, crowned:mkCrownedLook() })}</div>
       <div class="scene-title">The Monkey King</div>
       <div class="scene-body">
         <p>${first
@@ -1247,14 +1315,14 @@ function renderCoreSpar(){
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Leave the training</button>
     <div class="spar-head">
-      ${monPortrait('monkey_king', 52, { view:'front', bare:true, stage:1 })}
+      ${monPortrait('monkey_king', 52, { view:'front', bare:true, stage:1, crowned:mkCrownedLook() })}
       <div style="flex:1;min-width:0;">
         <div class="screen-title" style="margin:0;">Spar ${s.n} of ${SPAR_COUNT}</div>
         <div class="spar-pips" title="${s.wins} won">${pips}</div>
       </div>
     </div>
     <div class="screen-sub">${s.mine
-      ? `The Monkey King takes the <b>${escapeHtml(SPECIES[s.his].name)}</b>. ${nm} fights with the <b>${escapeHtml(SPECIES[s.mine].name)}</b> — summon it in battle (4 words).`
+      ? `The Monkey King takes the <b>${escapeHtml(SPECIES[s.his].name)}</b>. ${nm} fights with the <b>${escapeHtml(SPECIES[s.mine].name)}</b> beside it, from the start — and his fights beside him.`
       : `Choose ${nm}'s companion for this spar. The Monkey King then takes his favourite of the other two.`}</div>
     <div class="spar-cards">${s.draw.map(card).join('')}</div>
     ${MK_STONE_LESSON[s.tier] ? `<div class="spar-stone">🐒 ${MK_STONE_LESSON[s.tier]}</div>` : ''}
@@ -1292,13 +1360,19 @@ function coreSparFight(){
   if(def.mkStone) mk.veryHigh = { type:def.mkStone.type, plus:def.mkStone.plus, cast:true };
   if(!ui.realParty) ui.realParty = state.party;              // only the monster in training fights
   state.party = [L];
+  /* (3.52) his companion is on the field beside him from the start, as
+     yours is beside yours: two of their wave. Protein full, as your borrowed
+     one is: makeEnemy counts the last at the cap triple, as yours are
+     counted (2.97; it was handed the +2 itself). */
+  const foeSpec = { species:s.his, level:lv, nerfed:false, ai:SPAR_FOE_AI[s.his] || 'random', supplements:proteinCap(s.his), anyLevel:true };
   beginBattle({ isNpc:true, name:'The Monkey King', coreSpar:{ uid:L.uid, tier:s.tier, companion:comp },
-    waves:[[mk]] });
+    waves:[[mk, foeSpec]] });
   const b = ui.battle;
-  /* protein full, as your borrowed one is: makeEnemy counts the last at the
-     cap triple, as yours are counted (2.97; it was handed the +2 itself) */
-  const foe = makeEnemy(s.his, lv, { nerfed:false, ai:SPAR_FOE_AI[s.his] || 'random', supplements:proteinCap(s.his), anyLevel:true });
-  b.foePair = { leader:b.enemies[0], mon:foe, turnsLeft:COMPANION.turns, out:false, fallen:false, summons:0 };
+  b.foePair = { leader:b.enemies[0], mon:b.enemies[1] };
+  /* (3.51) crowned to look at, once his crown is his again — his picture only:
+     he spars as he always did (a crowned one's strength is not in the lesson) */
+  if(mkCrownedLook() && b.enemies[0]) b.enemies[0].crowned = true;
+  renderBattle();
 }
 /* The battle is over (won, lost or given up): the party back as it was. */
 function sparCleanup(){
@@ -1359,7 +1433,7 @@ async function coreTrainingPassed(uid, tier){
     if(was) L.coreSlot = was; else delete L.coreSlot;
     showSyncFailure(); return;
   }
-  playSfx('evolution');
+  playSfx('power_up');                                  // (3.51) a power-up, not the fanfare
   const nm = escapeHtml(displayName(L));
   challengeResult('🐒', `${def.label} core slot!`,
     `Five of five. The Monkey King nods. "${tier === 'legendary' ? 'Any core at all, now. I could not have taught this once. I thought I needed no one.' : 'Good. It holds.'}"` +
@@ -1368,18 +1442,22 @@ async function coreTrainingPassed(uid, tier){
 }
 
 /* ---------- elsewhere: the party, storage and Stats pages ---------- */
-/* One line on a party card: who it holds. */
+/* One line on a party card: who it holds (a pair is drawn side by side, so
+   this is for a slot still empty). */
 function partyCompanionLine(m){
   if(!companionsUnlocked() || isPassenger(m)) return '';
   const c = companionOf(m);
   if(c) return `<div class="comp-tag">🤝 ${escapeHtml(displayName(c))} <span style="color:var(--ink-soft);">· Lv ${c.level}</span></div>`;
-  return m.coreSlot ? `<div class="comp-tag" style="color:var(--ink-soft);">🤝 ${CORE_SLOT_DEF[m.coreSlot].label} slot · no companion</div>` : '';
+  return m.coreSlot ? `<div class="comp-tag" style="color:var(--ink-soft);">🤝 ${CORE_SLOT_DEF[m.coreSlot].label} slot · no companion yet</div>` : '';
 }
-/* On a storage card: whose companion it is. */
+/* On a storage card: whose companion it is — or (3.52) a stored leader's,
+   who goes with it. */
 function storageCompanionLine(m){
   if(!companionsUnlocked()) return '';
   const L = leaderOf(m);
-  return L ? `<div class="comp-tag">🤝 with ${escapeHtml(displayName(L))}</div>` : '';
+  if(L) return `<div class="comp-tag">🤝 with ${escapeHtml(displayName(L))}</div>`;
+  const c = companionOf(m);
+  return c ? `<div class="comp-tag">🤝 ${escapeHtml(displayName(c))} goes with it</div>` : '';
 }
 /* The panel on a Stats page. */
 function companionPanel(m){
@@ -1387,14 +1465,14 @@ function companionPanel(m){
   const L = leaderOf(m);
   if(L) return `<div class="crown-panel" style="background:rgba(90,150,110,.12);border-color:rgba(60,120,80,.45);">
       <div class="crown-title">🤝 Companion</div>
-      <div class="crown-sub">${escapeHtml(displayName(L))} holds its core, and can call it out in battle.</div></div>`;
+      <div class="crown-sub">${escapeHtml(displayName(L))} holds its core: they fight side by side in every battle.</div></div>`;
   if(!isCrowned(m)) return '';
   const c = companionOf(m);
   const inParty = state.party.includes(m);
   return `<div class="crown-panel" style="background:rgba(90,150,110,.12);border-color:rgba(60,120,80,.45);">
       <div class="crown-title">🤝 Core slot ${corePips(m)}</div>
       <div class="crown-sub">${m.coreSlot ? `${CORE_SLOT_DEF[m.coreSlot].label}: holds ${CORE_SLOT_DEF[m.coreSlot].holds}.` : 'None yet — the Monkey King trains one.'}
-        ${c ? `<br>It holds <b>${escapeHtml(displayName(c))}</b>'s core.` : ''}${inParty ? '' : '<br>A leader fights from the party.'}</div>
+        ${c ? `<br>It holds <b>${escapeHtml(displayName(c))}</b>'s core: they fight side by side, and go where it goes.` : ''}${inParty ? '' : '<br>A leader fights from the party.'}</div>
       ${inParty ? `<button class="btn btn-ghost" id="toCompanions" style="margin-top:10px;">🤝 Companions…</button>` : ''}
     </div>`;
 }
@@ -1708,6 +1786,71 @@ function renderStats(){
     renderStats();
   });
 }
+/* ---------- storage: what is in it, and its filters (3.52) ----------
+   The designer: "Changes for storage: I want filters by element type and by
+   rarity please." Rarity is the species' tier — Wild, Starter, Elite,
+   Legendary, and Special (the Mouse, eggs, seeds, babies). A monster of two
+   types is found under either. ui.storageFilter keeps the choice while the
+   game is open. */
+const STORAGE_TIERS = [['wild', 'Wild'], ['starter', 'Starter'], ['elite', 'Elite'], ['legendary', 'Legendary'], ['special', 'Special']];
+function storedMonsters(){
+  const st = state.storage || [];
+  if(!companionsUnlocked()) return st.slice();
+  const withParty = new Set(bondedCompanions().map(c=> c.uid));
+  return st.filter(m=> !withParty.has(m.uid));
+}
+function storageMatches(m, f){
+  const sp = SPECIES[m.species] || {};
+  if(f.type && !(sp.types || []).includes(f.type)) return false;
+  if(f.tier && sp.tier !== f.tier) return false;
+  return true;
+}
+/* A stored leader's companion (stored too) straight after it. */
+function storageSorted(list){
+  const out = [], put = new Set();
+  list.forEach(m=>{
+    if(put.has(m.uid)) return;
+    const L = companionsUnlocked() ? leaderOf(m) : null;
+    if(L && list.includes(L) && !put.has(L.uid)) return;          // it comes with its leader
+    out.push(m); put.add(m.uid);
+    const c = companionsUnlocked() ? companionOf(m) : null;
+    if(c && list.includes(c) && !put.has(c.uid)){ out.push(c); put.add(c.uid); }
+  });
+  list.forEach(m=>{ if(!put.has(m.uid)){ out.push(m); put.add(m.uid); } });
+  return out;
+}
+function storageFilterHtml(stored, f){
+  const types = Object.keys(TYPE_COLORS);
+  const nType = t=> stored.filter(m=> ((SPECIES[m.species] || {}).types || []).includes(t)).length;
+  const nTier = t=> stored.filter(m=> (SPECIES[m.species] || {}).tier === t).length;
+  const opt = (v, label, n, on)=> `<option value="${v}" ${on ? 'selected' : ''} ${n === 0 && !on ? 'disabled' : ''}>${label}${n != null ? ` (${n})` : ''}</option>`;
+  return `<div class="stor-filter">
+      <label class="sf-pick${f.type ? ' on' : ''}" ${f.type ? `style="--tc:${TYPE_COLORS[f.type] || '#888'}"` : ''}><span>Type</span>
+        <select id="sfType">${opt('', 'All types', null, !f.type)}${types.map(t=> opt(t, t, nType(t), f.type === t)).join('')}</select></label>
+      <label class="sf-pick${f.tier ? ' on' : ''}"><span>Rarity</span>
+        <select id="sfTier">${opt('', 'All', null, !f.tier)}${STORAGE_TIERS.map(([t, l])=> opt(t, l, nTier(t), f.tier === t)).join('')}</select></label>
+      ${(f.type || f.tier) ? `<button class="sf-clear" id="sfClear" title="Show them all">✕</button>` : ''}
+    </div>`;
+}
+function wireStorageFilter(){
+  if(!document.getElementById('storFilterCss')){
+    const st = document.createElement('style');
+    st.id = 'storFilterCss';
+    st.textContent = `
+    .stor-filter{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:-2px 0 10px; }
+    .sf-pick{ display:flex; align-items:center; gap:5px; flex:1 1 120px; min-width:0; padding:4px 6px 4px 9px; border-radius:20px;
+      background:var(--paper); border:1.5px solid var(--line); font-size:11px; font-weight:800; color:var(--ink-soft); }
+    .sf-pick.on{ border-color:var(--tc, var(--gold)); background:rgba(201,154,63,.12); color:var(--ink); }
+    .sf-pick select{ flex:1; min-width:0; border:none; background:transparent; font:inherit; font-size:12px; font-weight:800; color:var(--ink); padding:2px 0; }
+    .sf-clear{ flex:0 0 auto; width:28px; height:28px; border-radius:50%; border:1.5px solid var(--line); background:var(--paper); font-weight:900; cursor:pointer; }`;
+    document.head.appendChild(st);
+  }
+  const f = ui.storageFilter || (ui.storageFilter = { type:'', tier:'' });
+  const ty = $('#sfType'), ti = $('#sfTier'), cl = $('#sfClear');
+  if(ty) ty.addEventListener('change', ()=>{ f.type = ty.value; renderStorage(); });
+  if(ti) ti.addEventListener('change', ()=>{ f.tier = ti.value; renderStorage(); });
+  if(cl) cl.addEventListener('click', ()=>{ f.type = ''; f.tier = ''; renderStorage(); });
+}
 function renderStorage(){
   setScreenBg('home');
   $('#brandSub').textContent = 'Storage';
@@ -1715,6 +1858,11 @@ function renderStorage(){
   if(!Array.isArray(state.moveStones)) state.moveStones = [];
   if(!state.inventory) state.inventory = { protein:0, strangeKey:false, tokens:0, eliteTokens:0 };
 
+  /* (3.52) a companion whose leader is in the party is with the party now —
+     the Party page shows them side by side — so it is not listed here */
+  const stored = storedMonsters();
+  const f = ui.storageFilter || (ui.storageFilter = { type:'', tier:'' });
+  const shown = storageSorted(stored.filter(m=> storageMatches(m, f)));
   screenEl.innerHTML = `
     <div class="party-head-row">
       <button class="back-link" id="backBtn" style="margin:0;">← ${ui.storageFrom==='shop'?'Shop':'Party'}</button>
@@ -1724,7 +1872,8 @@ function renderStorage(){
 
     <div class="storage-cols">
       <div class="storage-col col-mons">
-        <div class="col-head">🐾 Monsters <span>${state.storage.length}</span></div>
+        <div class="col-head">🐾 Monsters <span>${shown.length === stored.length ? stored.length : `${shown.length} of ${stored.length}`}</span></div>
+        ${stored.length ? storageFilterHtml(stored, f) : ''}
         <div id="storageList"></div>
       </div>
       <div class="storage-col col-stones">
@@ -1741,16 +1890,20 @@ function renderStorage(){
 
   const list = $('#storageList');
   companionsCss();
-  if(state.storage.length===0){
+  wireStorageFilter();
+  if(stored.length===0){
     list.innerHTML = `<div class="col-empty">No stored monsters.</div>`;
+  } else if(!shown.length){
+    list.innerHTML = `<div class="col-empty">No stored monsters like that.</div>`;
   } else {
-    list.innerHTML = state.storage.map(m=>`
+    list.innerHTML = shown.map(m=>`
       <div class="party-card" style="padding:10px;margin-bottom:8px;">
         <div class="party-head" style="gap:9px;">
           ${monPortrait(m.species,44,{stage:monStage(m),crowned:isCrowned(m)})}
           <div style="flex:1;min-width:0;">
             <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:14px;">${escapeHtml(displayName(m))}</div>
             <div style="font-size:12px;color:var(--ink-soft);font-weight:800;">Lv ${m.level}</div>
+            <div style="font-size:10px;margin-top:2px;">${typeBadges(m.species)}</div>
             ${storageCompanionLine(m)}
           </div>
         </div>

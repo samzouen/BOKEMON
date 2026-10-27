@@ -57,9 +57,30 @@ const SFX_MAP = {
   stone_high:       'stone_high.mp3',
   stone_veryhigh:   'stone_veryhigh.mp3',
   stone_ultra:      'stone_ultra.mp3',
+  /* (3.51) the designer: the fanfare (stone_veryhigh and stone_ultra are one
+     file) "is currently too overused and too triumphant". It stays for what
+     it is — a stone won, refined or taught, and an evolution's new form —
+     and everything that only powers up has its own sound now: a summons (and
+     a bond), Overgrowth, the Monkey King's casts and his clones, every surge
+     in the vault's story, Nemesis made whole. Until power_up.mp3 is there
+     the level-up sound stands in (SFX_STANDIN). */
+  power_up:         'power_up.mp3',
+  core_tinkle:      'core_tinkle.mp3',    // (3.51) a core coming down onto its legendary, glowing
+  rumble:           'rumble.mp3',         // (3.51) the giant hand rising out of the rift (until the file is there: SFX_SYNTH)
+  roar:             'roar.mp3',           // (3.51) the ghost dragon's roar (likewise)
   // interface
   ui_click:         'ui_click.mp3',
   ui_back:          'ui_back.mp3',        // (3.40) the quieter tap: a way back, a conversation's Continue (clickSound)
+};
+/* (3.51) Played instead while an effect's own file is not there yet (a 404). */
+const SFX_STANDIN = { power_up:'level_up' };
+/* (3.51) …or, with nothing to stand in for it, made here, out of filtered
+   noise: a deep rumble for the giant hand rising out of the rift, and a
+   shorter, rougher one for the ghost dragon's roar. `ms` long, low-passed at
+   `hz` (gliding to `to`), swelling in over `in` seconds and away over `out`. */
+const SFX_SYNTH = {
+  rumble:{ ms:4600, hz:300, to:160, q:0.8, gain:1.0, in:0.9,  out:1.4 },             // (deep enough to rumble, high enough for an iPad's speakers)
+  roar:  { ms:1900, hz:900, to:220, q:1.6, gain:1.0, in:0.07, out:1.1, growl:95 },
 };
 
 /* music track name -> filename in assets/bgm/ */
@@ -68,7 +89,7 @@ const SFX_MAP = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.49';
+const GAME_VERSION = '3.52';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -278,8 +299,8 @@ function playBackSfx(){
    the cues that come long after a tap (a catch, an evolution and its
    fanfare); the long ones (the stone roll, the evolution, the defeat) last. */
 const SFX_PRELOAD_ORDER = ['answer_correct', 'answer_wrong', 'ui_click', 'ui_back', 'hit_dealt', 'hit_taken', 'victory', 'level_up',
-  'catch_success', 'catch_miss', 'stone_ultra', 'stone_veryhigh', 'stone_high', 'stone_mid', 'stone_low', 'recovery_heal',
-  'evolution', 'stone_roll', 'core_blast', 'defeat'];
+  'catch_success', 'catch_miss', 'power_up', 'stone_ultra', 'stone_veryhigh', 'stone_high', 'stone_mid', 'stone_low', 'recovery_heal',
+  'core_tinkle', 'evolution', 'stone_roll', 'core_blast', 'defeat'];
 const SFX_TRIES = 3;                                   // a decode that fails is tried again, up to three times
 /* Can this file still be fetched? (never asked, or failed with tries left) */
 function sfxWanted(file){
@@ -372,9 +393,44 @@ function sfxGainFor(event, opts){
   const g = (opts && opts.gain != null) ? opts.gain : lvl * ((opts && opts.vol != null) ? opts.vol : 1);
   return Math.max(0, Math.min(1, g));
 }
+/* (3.51) An effect with no file yet, made up as it plays (SFX_SYNTH). */
+function playSynthSfx(event, opts){
+  try{
+    const p = SFX_SYNTH[event], ctx = ensureAudioCtx();
+    if(!p || !ctx || !sfxGain) return null;
+    wakeAudio();
+    const dur = p.ms / 1000, n = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+    let last = 0;
+    for(let i = 0; i < n; i++){
+      last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;             // brown noise: deep
+      d[i] = last * 3.2 + (p.growl ? 0.22 * Math.sin(2 * Math.PI * p.growl * (1 - 0.35 * i / n) * i / ctx.sampleRate) * (0.6 + 0.4 * Math.random()) : 0);
+    }
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = p.q;
+    const t0 = ctx.currentTime;
+    lp.frequency.setValueAtTime(p.hz, t0);
+    lp.frequency.exponentialRampToValueAtTime(p.to, t0 + dur);
+    const g = ctx.createGain(), vol = Math.max(0.0002, sfxGainFor(event, opts) * p.gain);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + p.in);
+    g.gain.setValueAtTime(vol, t0 + Math.max(p.in, dur - p.out));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(lp); lp.connect(g); g.connect(sfxGain);
+    const key = 'synth:' + event, prev = audio.sfxNow[key];
+    if(prev){ try{ prev.src.stop(); }catch(e){} }
+    const voice = { src, gain:g, synth:true };
+    audio.sfxNow[key] = voice;
+    src.onended = ()=>{ if(audio.sfxNow[key] === voice) delete audio.sfxNow[key]; try{ g.disconnect(); }catch(e){} };
+    src.start(t0);
+    return voice;
+  }catch(e){ return null; }
+}
 function playSfx(event, opts){
   try{
     const file = SFX_MAP[event];
+    if(file && audio.unlocked && audio.missing[file] && SFX_STANDIN[event]) return playSfx(SFX_STANDIN[event], opts);   // (3.51)
+    if(file && audio.unlocked && audio.missing[file] && SFX_SYNTH[event]) return playSynthSfx(event, opts);            // (3.51)
     if(!file || !audio.unlocked || audio.missing[file]) return null;
     const vol = sfxGainFor(event, opts);
     wakeAudio();                                       // (3.49) stopped by the iPad? started again first
@@ -445,9 +501,11 @@ function fadeOutSfx(event, ms){
   try{
     const file = SFX_MAP[event];
     const dur = ms || 500;
-    /* (3.28) a voice from memory: ramp it down, then stop it */
+    /* (3.28) a voice from memory: ramp it down, then stop it — (3.51) or one made up as it played */
     const voice = file && audio.sfxNow[file];
     if(voice && actx) rampGain(voice.gain, 0.0001, dur, ()=>{ try{ voice.src.stop(); }catch(e){} });
+    const made = audio.sfxNow['synth:' + event];
+    if(made && actx) rampGain(made.gain, 0.0001, dur, ()=>{ try{ made.src.stop(); }catch(e){} });
     const entry = file && audio.sfxCache[file];
     if(!entry) return;
     if(entry.gain && actx){
@@ -707,6 +765,11 @@ function evolutionStage(species, level){
    per level gained until it catches up with its level. */
 function monStageOf(m){
   const full = evolutionStage(m.species, m.level);
+  /* (3.51) A crown asks for the final form (crownEligible: atFinalEvolution,
+     by level), so a crowned monster is in it. A Hydra caught in its middle
+     form at 98 was crowned and kept its middle picture until it gained a
+     level: crowned, it is its last form at once. */
+  if(m.crowned) return full;
   if(m.evoFloor == null) return full;
   const gained = Math.max(0, m.level - (m.evoFloorLevel || m.level));
   return Math.max(0, Math.min(full, m.evoFloor + gained));
@@ -2138,8 +2201,14 @@ const MASTERY_GROUP = 1;
    input anyway — so the gentlest setting is after a single miss. */
 const HINT_CURVE = [1, 1, 2, 2, 3];      // attempt 1..5 → misses needed before a hint
 function attemptsOf(text){ return (state && state.wordAttempts && state.wordAttempts[phraseKey(text)]) || 0; }
+/* (3.50) A phrase's mastery counts too. Its attempts on record can be fewer
+   than the times it was written right (older saves; two spellings folded
+   into one keep the larger count, not the sum), so a phrase at 🥈 or 🥇 could
+   get the first-time hints again — and a companion's summoning draws from
+   🥈/🥇 phrases. The designer: "there should not be any hints past bronze
+   (first 5 times)". Past 🥉, never a hint. */
 function hintScheduleFor(text){
-  const n = attemptsOf(text);
+  const n = Math.max(attemptsOf(text), state ? masteryOf(text) : 0);
   return n < HINT_CURVE.length ? HINT_CURVE[n] : false;   // false = no hint at all
 }
 function noteAttempt(text){

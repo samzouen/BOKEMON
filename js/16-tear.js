@@ -59,7 +59,7 @@ const TEAR = {
      turn if a round is too hard or too easy. */
   ai: ['power2', 'power2', 'power2', 'best', 'best', 'best'],
   supplements: 0,
-  rewindMs: 1800,       // the rewind between rounds
+  rewindPace: 0.8,      // (3.50) the rewind between rounds (cyborgRewind) a little quicker here than in the vault — it comes six times a run
 };
 /* (3.00) The Padrino's team, one at a time, in the order of his fight in the
    villa — and then Cyborg (tearWaves). Until 2.99 it was six pairs of the
@@ -238,14 +238,20 @@ function tearWaveLabel(i){
 function tearWaveCleared(next){
   const b = ui.battle;
   if((b.waveIndex + 1) % TEAR.wavesPerRound !== 0) return next();
+  if(b.rwWave === b.waveIndex) return;             // (3.50) one rewind — and one round's pay — however the round was ended
+  b.rwWave = b.waveIndex;
   /* Cyborg beaten: the round is won, and it rewinds them all (3.00) */
   const round = Math.floor(b.waveIndex / TEAR.wavesPerRound) + 1;
   const said = tearRoundWon(round);
   b.phase = 'resolving';
   renderBattle();
   battleMsg(said);
-  tearRewindFx();
-  setTimeout(()=> tearAfterBreak(b, next), TEAR.rewindMs);
+  /* (3.50) an eye break that fell due with the round first; then Cyborg
+     turns back time (cyborgRewind): itself, then the round's waves one by
+     one, the last first — back to its first, which stays */
+  const i = b.waveIndex;
+  const acts = Array.from({ length:TEAR.wavesPerRound }, (_, k)=> b.waves[i - k]).filter(Boolean);
+  tearAfterBreak(b, ()=> cyborgRewind(b, acts, next, { pace:TEAR.rewindPace }));
 }
 /* An eye break that fell due with the round is taken now, before the next. */
 function tearAfterBreak(b, next){
@@ -311,7 +317,7 @@ function tearEnded(kind){
   if(kind === 'lost'){
     /* a fall, as any: they come round with a little health — and nothing else
        is taken, not even a bar of XP */
-    battleParty().forEach(m=>{ m.currentHp = Math.max(1, Math.floor(monMaxHp(m) * 0.10)); });
+    battleParty().concat(bondedCompanions()).forEach(m=>{ m.currentHp = Math.max(1, Math.floor(monMaxHp(m) * 0.10)); });   // (3.52) companions too
     if(tallyBattleForEyeBreak()) brk = true;
   }
   stopMusic();
@@ -395,15 +401,320 @@ function tearGalaxy(){
     <circle cx="100" cy="100" r="25" fill="none" stroke="#c9a2ff" stroke-width="1.4" opacity=".8" class="tear-pulse"/>
   </svg>`;
 }
-/* Between rounds: time runs backwards, for a moment, over everything. */
-function tearRewindFx(){
+/* ============================================================
+   CYBORG TURNS BACK TIME (3.50)
+   The designer: "Each time cyborg rewinds, instead of blocking the screen
+   with the purple swirl and rewind emoticon, could you first do a purple
+   circle expansion similar to the time stop that nemesis does, then shimmer
+   the screen in a wave (different rows move left and right like a VCR
+   rewinding), reverse the health bars of each wave one by one? First cyborg
+   regains its health as its bar fills up, then the previous wave with raven
+   floats up in the reverse motion of fainting and their health bar fills,
+   then each preceding wave? The shimmering wavy effect then stops after the
+   first wave is healed and purple glow recedes."
+   rwSphere      the purple circle: out of a point (Cyborg) until the whole
+                 screen is purple, with a bright rim as it goes — Nemesis's
+                 time stop in the vault is its model; recede() draws it back
+                 in to where it came from.
+   rwTape        the screen as a tape rewinding: cut into thin rows, each row
+                 a copy of the whole screen showing only its own strip, the
+                 rows sliding left and right in a wave that runs down the
+                 screen (now and then a few of them jump, as a worn tape
+                 does), a tracking line rolling up it and faint scan lines
+                 over it. The copies are changed through apply(); settle()
+                 brings the rows back into line; remove() takes the tape away,
+                 and the real screen is there again.
+   cyborgRewind  in a fight (the vault's three rounds, the tear's seven):
+                 Cyborg rises out of its faint, its bar filling back up hit by
+                 hit; then the wave before it floats back up — the faint,
+                 backwards — its bars filling the same way; then the one
+                 before that, quicker, as a tape gathers speed… back to the
+                 round's first wave, which stays: there the rows settle, the
+                 real fight takes over (`landed` — the next wave, the same
+                 monsters) and the purple draws back in.
+   (In the vault before the fight, r5RewindRoom — 15-region5.js — uses the
+   circle and the tape for the Padrino's monsters getting back up.)
+   Every pause goes by SCENE_SPEED, as a scene's do.
+   ============================================================ */
+const RW = { grow:1100, ramp:350, settle:420, recede:900 };
+function rwTween(ms, f){
+  const dur = Math.max(1, ms * SCENE_SPEED), t0 = performance.now();
+  return new Promise(done=>{
+    const frame = now=>{
+      const t = Math.min(1, (now - t0) / dur);
+      f(t);
+      if(t < 1) requestAnimationFrame(frame); else done();
+    };
+    requestAnimationFrame(frame);
+  });
+}
+const rwFrames = n=> new Promise(done=>{ const f = ()=> (--n <= 0) ? done() : requestAnimationFrame(f); requestAnimationFrame(f); });
+/* The purple circle, centred on (cx, cy) — screen pixels. A layer the size
+   of the screen, its circle a gradient: never a layer bigger than the
+   screen, as a scaled-up ball would be. */
+function rwSphere(cx, cy){
   tearCss();
-  const fx = document.createElement('div');
-  fx.className = 'tear-rewind';
-  fx.setAttribute('aria-hidden', 'true');
-  fx.innerHTML = `<div class="tr-galaxy">${tearGalaxy()}</div><div class="tr-label">⏪</div>`;
-  document.body.appendChild(fx);
-  setTimeout(()=>{ if(fx.parentNode) fx.parentNode.removeChild(fx); }, 1700);
+  const W = window.innerWidth, H = window.innerHeight;
+  const far = Math.hypot(Math.max(cx, W - cx), Math.max(cy, H - cy)) + 40;
+  const el = document.createElement('div');
+  el.className = 'rw-sphere';
+  el.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(el);
+  const x = Math.round(cx), y = Math.round(cy);
+  /* inside, a purple wash; at the edge a thin bright rim (a fixed width, so
+     once the circle is past the corners the rim is off the screen) */
+  const paint = (r, a)=>{
+    el.style.opacity = String(a == null ? 1 : a);
+    if(r < 2){ el.style.background = 'transparent'; return; }
+    const rim = Math.min(r * 0.5, 30), at = q=> Math.max(0, Math.round(r - q)) + 'px';
+    el.style.background = `radial-gradient(circle at ${x}px ${y}px, rgba(150,80,235,.14) 0px, rgba(128,58,220,.24) ${at(rim)}, ` +
+      `rgba(236,206,255,.88) ${at(rim * 0.35)}, rgba(150,80,235,.45) ${at(rim * 0.12)}, rgba(150,80,235,0) ${Math.round(r)}px)`;
+  };
+  paint(0);
+  return {
+    el,
+    grow:()=> rwTween(RW.grow, t=> paint(far * (1 - Math.pow(1 - t, 3)))),
+    recede:()=> rwTween(RW.recede, t=> paint(far * (1 - t) * (1 - t), 1 - 0.5 * t)).then(()=> el.remove()),
+    gone:()=> el.remove(),
+  };
+}
+/* The tape. Nothing in the copies moves by itself (their animations are
+   off, the sparkles taken out): only what apply() changes. */
+function rwTape(){
+  tearCss();
+  const W = window.innerWidth, H = window.innerHeight;
+  const tpl = document.createElement('div');
+  tpl.className = 'rw-frame';
+  tpl.style.width = W + 'px'; tpl.style.height = H + 'px';
+  const bs = getComputedStyle(document.body);
+  tpl.style.backgroundColor = bs.backgroundColor;
+  tpl.style.backgroundImage = bs.backgroundImage;
+  /* the faded backdrop behind the screen, and its wash if it has one */
+  const sb = document.getElementById('screenBg');
+  if(sb && sb.classList.contains('on')){
+    const c = getComputedStyle(sb), d = document.createElement('div');
+    d.className = 'rw-bg';
+    ['backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'opacity'].forEach(k=>{ d.style[k] = c[k]; });
+    const wash = getComputedStyle(sb, '::after').backgroundColor;
+    if(wash && !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(wash)) d.style.boxShadow = `inset 0 0 0 ${W + H}px ${wash}`;
+    tpl.appendChild(d);
+  }
+  /* the screen and the bar along the top, each where it is now */
+  [screenEl, document.querySelector('.topbar')].forEach(el=>{
+    if(!el) return;
+    const r = el.getBoundingClientRect();
+    const c = el.cloneNode(true);
+    c.removeAttribute('id');
+    c.querySelectorAll('[id]').forEach(n=>{ n.setAttribute('data-rwid', n.id); n.removeAttribute('id'); });
+    c.querySelectorAll('.crown-fizz, .fizz, .evo-particles').forEach(n=> n.remove());
+    c.querySelectorAll('.log-body').forEach(lb=>{ while(lb.children.length > 30) lb.lastChild.remove(); });   // (a Test Arena's long log, thirty times over, is a lot of page)
+    Object.assign(c.style, { position:'absolute', left:r.left + 'px', top:r.top + 'px', width:r.width + 'px', margin:'0' });
+    tpl.appendChild(c);
+  });
+  const rowPx = Math.max(18, Math.round(H / 30));
+  const n = Math.ceil(H / rowPx);
+  const tape = document.createElement('div');
+  tape.className = 'rw-tape';
+  tape.setAttribute('aria-hidden', 'true');
+  const strips = [];
+  for(let k = 0; k < n; k++){
+    const s = document.createElement('div');
+    s.className = 'rw-strip';
+    s.style.top = (k * rowPx) + 'px'; s.style.height = rowPx + 'px';
+    const f = tpl.cloneNode(true);
+    f.style.top = (-k * rowPx) + 'px';
+    s.appendChild(f);
+    tape.appendChild(s);
+    strips.push({ el:s, frame:f, top:k * rowPx, y:(k + 0.5) * rowPx });
+  }
+  const bandH = Math.round(H * 0.07);
+  const track = document.createElement('div'); track.className = 'rw-track';
+  track.style.height = bandH + 'px';
+  track.style.backgroundImage = `linear-gradient(180deg, rgba(255,255,255,0), rgba(240,230,255,.45) 30%, rgba(255,255,255,.7) 50%, rgba(240,230,255,.45) 70%, rgba(255,255,255,0)), url(${rwNoise()})`;
+  const scan = document.createElement('div'); scan.className = 'rw-scan';
+  tape.appendChild(track); tape.appendChild(scan);
+  document.body.appendChild(tape);
+  /* the wave: a long one running down the screen, a short quick one over it;
+     the rows under the tracking line torn about at random */
+  const amp = Math.max(7, Math.min(20, W * 0.024)), lam = H * 0.42, lam2 = H * 0.11;
+  const speed = Math.max(0.05, SCENE_SPEED);
+  let from = 0, to = 1, rampAt = performance.now(), rampMs = RW.ramp, level = 0;
+  let glitch = null, nextGlitch = 280, alive = true;
+  const t0 = performance.now();
+  const frame = now=>{
+    if(!alive) return;
+    const u = Math.min(1, (now - rampAt) / Math.max(1, rampMs * SCENE_SPEED));
+    level = from + (to - from) * u * u * (3 - 2 * u);
+    const t = (now - t0) / speed;                               // the scene's own time, ms
+    if(t > nextGlitch){
+      const a = Math.floor(Math.random() * n);
+      glitch = { a, b:Math.min(n - 1, a + Math.floor(Math.random() * 3)), dx:(Math.random() < 0.5 ? -1 : 1) * amp * (1.6 + Math.random()), until:t + 70 + Math.random() * 60 };
+      nextGlitch = t + 260 + Math.random() * 420;
+    }
+    if(glitch && t > glitch.until) glitch = null;
+    const ty = Math.round(H - ((t / 1100) % 1) * (H + bandH));   // the tracking line, rolling up
+    for(let k = 0; k < n; k++){
+      const s = strips[k];
+      let dx = amp * Math.sin(2 * Math.PI * (s.y / lam - t / 720)) + amp * 0.35 * Math.sin(2 * Math.PI * (s.y / lam2 + t / 230));
+      if(glitch && k >= glitch.a && k <= glitch.b) dx += glitch.dx;
+      if(s.y > ty && s.y < ty + bandH) dx += (Math.random() * 2 - 1) * amp * 1.4;
+      s.el.style.transform = `translate3d(${(dx * level).toFixed(1)}px,0,0)`;
+    }
+    track.style.transform = `translate3d(0,${ty}px,0)`;
+    track.style.backgroundPosition = `0 0, ${Math.floor(Math.random() * 96)}px ${Math.floor(Math.random() * 12)}px`;
+    track.style.opacity = (level * 0.8).toFixed(2);
+    scan.style.opacity = (level * 0.55).toFixed(2);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  return {
+    el:tape, rowPx,
+    frames:strips.map(s=> s.frame),
+    apply(fn){ strips.forEach(s=> fn(s.frame)); },
+    /* the copies whose rows cross the screen between top and bottom — the
+       only ones that show what is there */
+    within(top, bottom){ return strips.filter(s=> s.top < bottom && s.top + rowPx > top).map(s=> s.frame); },
+    level:()=> level,
+    settle(){ from = level; to = 0; rampAt = performance.now(); rampMs = RW.settle; return sceneWait(RW.settle); },
+    remove(){ alive = false; tape.remove(); },
+    /* dissolved into the real screen under it, and gone */
+    fade(){
+      tape.style.transition = `opacity ${300 * SCENE_SPEED}ms ease`;
+      tape.style.opacity = '0';
+      return sceneWait(300).then(()=>{ alive = false; tape.remove(); });
+    },
+  };
+}
+/* Snow for the tracking line: a little tile of grey and white specks, made
+   once. */
+let _rwNoise = null;
+function rwNoise(){
+  if(_rwNoise) return _rwNoise;
+  try {
+    const c = document.createElement('canvas');
+    c.width = 96; c.height = 12;
+    const g = c.getContext('2d'), img = g.createImageData(96, 12);
+    for(let p = 0; p < img.data.length; p += 4){
+      const v = 150 + Math.floor(Math.random() * 105), a = Math.random() < 0.55 ? Math.floor(60 + Math.random() * 150) : 0;
+      img.data[p] = v; img.data[p + 1] = v; img.data[p + 2] = Math.min(255, v + 20); img.data[p + 3] = a;
+    }
+    g.putImageData(img, 0, 0);
+    _rwNoise = c.toDataURL();
+  } catch(e){ _rwNoise = 'data:,'; }
+  return _rwNoise;
+}
+/* A bar coming back the way it went down: in 3 to 5 pieces, as the hits
+   went in. `rwHits` makes the pieces (where each ends, 0..1, the last 1);
+   `rwLevel` reads the bar at u (0..1): each piece rises in the first 60% of
+   its share of the time, and holds. */
+function rwHits(n){
+  const w = Array.from({ length:n }, ()=> 0.5 + Math.random());
+  const sum = w.reduce((a, x)=> a + x, 0);
+  let acc = 0;
+  return w.map((x, i)=> i === n - 1 ? 1 : (acc += x / sum));
+}
+function rwLevel(steps, u){
+  if(u <= 0) return 0;
+  if(u >= 1) return 1;
+  const n = steps.length, j = Math.min(n - 1, Math.floor(u * n)), v = Math.min(1, (u * n - j) / 0.6);
+  const a = j ? steps[j - 1] : 0;
+  return a + (steps[j] - a) * (1 - (1 - v) * (1 - v));
+}
+/* In a fight: `acts` are what comes back, in order — each a wave's specs,
+   Cyborg's own first; the last stays. `landed` hands back to the fight (the
+   next wave loaded under the tape, the same monsters as the last act).
+   opts.pace: under 1, quicker. Resolves once the purple has gone. */
+async function cyborgRewind(b, acts, landed, opts){
+  opts = opts || {};
+  const pace = opts.pace || 1;
+  const live = ()=> ui.battle === b && ui.screen === 'battle' && !!document.getElementById('battleStage');
+  const card = document.getElementById('enemy-0');
+  const rc = card ? card.getBoundingClientRect() : null;
+  const cx = rc ? rc.left + rc.width / 2 : window.innerWidth / 2;
+  const cy = rc ? rc.top + rc.height * 0.4 : window.innerHeight * 0.25;
+  b.hold = (b.hold || 0) + 1;                    // nothing hands the buttons back meanwhile
+  const free = ()=>{ b.hold = Math.max(0, (b.hold || 1) - 1); };
+  /* the fight was just drawn again, and a fainted one sinks again when it is:
+     it is gone already, and stays gone */
+  document.querySelectorAll('.enemy-card.fainted .avatar-layer').forEach(el=>{ el.style.animation = 'none'; el.style.opacity = '0'; });
+  playSfx('rewind');
+  const sphere = rwSphere(cx, cy);
+  const grown = sphere.grow();
+  await sceneWait(RW.grow * 0.7);
+  if(!live()){ sphere.gone(); free(); return; }
+  let tape = null;
+  try {
+    tape = rwTape();
+    for(let k = 0; k < acts.length; k++){
+      if(!live()) break;
+      await rwAct(tape, acts[k], k, k === acts.length - 1, pace);
+    }
+    await tape.settle();
+  } catch(e){ /* a picture gone wrong must not hold up the fight */ }
+  const ok = live();
+  free();
+  if(ok) landed();
+  await rwFrames(2);                             // the real fight drawn under the tape first
+  if(tape) await tape.fade();                    // (a passive's badge can move a card a little: dissolved, not jumped)
+  await grown;
+  if(ok) await sphere.recede(); else sphere.gone();
+}
+/* One wave back, in every copy of the screen: in its faint at first (sunk
+   out of sight, its plate dim, its bars empty), it floats back up — the
+   faint, backwards — while its bars fill again; then, unless it is the last,
+   its coming-out is undone too and it is gone. */
+async function rwAct(tape, specs, k, last, pace){
+  const foes = (specs || []).map(s=> makeEnemy(s.species, s.level, { nerfed:s.nerfed, ai:s.ai, supplements:s.supplements, boss:s.boss,
+    crowned:s.crowned, forceStage:s.forceStage, anyLevel:s.anyLevel }));
+  if(!foes.length) return;
+  const slots = (foes.length === 1 && foes[0].species === 'cyborg') ? 3 : foes.length;    // as enemyFieldSlots
+  const px = enemySpriteSize(slots);
+  const html = foes.map(e=> `
+    <div class="enemy-card" style="width:${px + 16}px;">
+      <div class="enemy-status"></div>
+      <div class="bob avatar-layer" data-rw="av" style="transform:translateY(80px) rotate(14deg);opacity:0;">${monPortrait(e.species, px, { view:'front', bare:true, crowned:!!e.crowned, stage:e.stage || 0 })}</div>
+      <div class="info-layer name-plate" data-rw="pl" style="opacity:.45;">
+        <div class="mon-title">${SPECIES[e.species].name} <span>Lv ${e.level}</span></div>
+        <div class="blk-wrap" style="display:none;"></div>
+        <div class="hpbar2" style="height:${HPBAR.h}px;"><div class="hp-red" data-rw="r" style="width:0%;"></div><div class="hp-green" data-rw="g" style="width:0%;background:var(--cinnabar);"></div></div>
+        <div class="hp-num" data-rw="n" style="font-size:${HPBAR.num}px;">0/${e.maxHp}</div>
+      </div>
+    </div>`).join('');
+  tape.apply(f=>{
+    const row = f.querySelector('.enemy-row');
+    if(!row) return;
+    row.innerHTML = html;
+    row.classList.toggle('centred', slots > foes.length);
+    row.querySelectorAll('.crown-fizz').forEach(x=> x.remove());       // still sparkles would only be dots
+  });
+  const row0 = tape.frames[0] && tape.frames[0].querySelector('.enemy-row');
+  const rr = row0 ? row0.getBoundingClientRect() : { top:0, bottom:window.innerHeight };
+  const els = tape.within(rr.top - 4, rr.bottom + 4).map(f=> ['av', 'pl', 'r', 'g', 'n'].reduce((o, key)=>{ o[key] = [...f.querySelectorAll(`[data-rw="${key}"]`)]; return o; }, {}));
+  const steps = foes.map(()=> rwHits(3 + Math.floor(Math.random() * 3)));
+  const rise = (k === 0 ? 1000 : last ? 900 : Math.max(560, 880 - 80 * (k - 1))) * pace;
+  await rwTween(rise * 1.2, t=>{
+    const s = Math.pow(1 - Math.min(1, t * 1.2), 3);           // sinkAway is an ease-in cube: backwards, an ease-out
+    const tf = `translateY(${(80 * s).toFixed(1)}px) rotate(${(14 * s).toFixed(2)}deg)`, op = (1 - s).toFixed(3), plate = (0.45 + 0.55 * (1 - s)).toFixed(3);
+    const uf = Math.max(0, Math.min(1, t * 1.2 - 0.2));
+    foes.forEach((e, i)=>{
+      const lv = rwLevel(steps[i], uf), lead = rwLevel(steps[i], Math.min(1, uf + 0.12));
+      const g = (lv * 100).toFixed(1) + '%', red = (lead * 100).toFixed(1) + '%';
+      const col = lv < 0.3 ? 'var(--cinnabar)' : 'var(--jade)', num = Math.round(e.maxHp * lv) + '/' + e.maxHp;
+      els.forEach(x=>{
+        if(x.av[i]){ x.av[i].style.transform = tf; x.av[i].style.opacity = op; }
+        if(x.pl[i]) x.pl[i].style.opacity = plate;
+        if(x.g[i]){ x.g[i].style.width = g; x.g[i].style.background = col; }
+        if(x.r[i]) x.r[i].style.width = red;
+        if(x.n[i] && x.n[i].textContent !== num) x.n[i].textContent = num;
+      });
+    });
+  });
+  await sceneWait((k === 0 ? 380 : last ? 450 : Math.max(120, 260 - 40 * k)) * pace);
+  if(last) return;
+  await rwTween(180 * pace, t=>{
+    const o = (1 - t).toFixed(3);
+    els.forEach(x=> x.av.concat(x.pl).forEach(el=>{ el.style.opacity = o; }));
+  });
 }
 let _tearCssDone = false;
 function tearCss(){
@@ -438,13 +749,17 @@ function tearCss(){
     border-radius:50%; width:16px; height:16px; line-height:16px; }
   .tw-note{ font-size:12px; font-weight:600; color:#d8c8f4; line-height:1.45; margin-top:4px; }
   .tear-mini{ position:relative; width:54px; height:54px; flex:0 0 auto; display:inline-block; }
-  .tear-rewind{ position:fixed; inset:0; z-index:70; pointer-events:none; display:flex; align-items:center; justify-content:center;
-    background:radial-gradient(circle, rgba(70,25,120,.55), rgba(10,4,20,0) 70%); animation:tearRewind 1.6s ease-in-out forwards; }
-  .tear-rewind .tr-galaxy{ position:absolute; width:78vmin; height:78vmin; }
-  .tear-rewind .tear-spin{ animation:tearSpinBack .9s linear infinite; }
-  .tear-rewind .tear-spin-back{ animation:tearSpin .7s linear infinite; }
-  .tear-rewind .tr-label{ position:relative; font-size:60px; filter:drop-shadow(0 0 12px rgba(200,160,255,.9)); }
-  @keyframes tearRewind{ 0%{ opacity:0; } 25%{ opacity:1; } 75%{ opacity:1; } 100%{ opacity:0; } }
+  /* (3.50) Cyborg turning back time: the purple circle, and the tape (rwTape) */
+  .rw-sphere{ position:fixed; inset:0; pointer-events:none; z-index:27; }
+  .rw-tape{ position:fixed; inset:0; z-index:26; overflow:hidden; touch-action:none; }
+  .rw-strip{ position:absolute; left:0; right:0; overflow:hidden; will-change:transform; }
+  .rw-frame{ position:absolute; left:0; overflow:hidden; pointer-events:none; }
+  .rw-frame *{ animation:none !important; transition:none !important; will-change:auto !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+  .rw-bg{ position:absolute; inset:0; }
+  .rw-scan{ position:absolute; inset:0; pointer-events:none; opacity:0;
+    background:repeating-linear-gradient(0deg, rgba(30,0,60,.16) 0 1px, rgba(255,255,255,0) 1px 3px); }
+  .rw-track{ position:absolute; left:0; right:0; top:0; pointer-events:none; opacity:0;
+    background-repeat:no-repeat, repeat; background-size:100% 100%, 192px 24px; image-rendering:pixelated; }
   `;
   document.head.appendChild(st);
 }

@@ -240,7 +240,7 @@ function awardXpToParty(fightsWorth){
   const credit = Math.max(1, fightsWorth||1);
   const events = [];
   /* A bonded companion learns from every fight its leader's party wins, at the
-     party's rate, summoned or not (2.84, handover 07). */
+     party's rate, as one of the team (2.84; 3.52). */
   const learners = state.party.concat(typeof bondedCompanions === 'function' ? bondedCompanions() : []);
   learners.forEach(m=>{
     const sp = SPECIES[m.species];
@@ -461,14 +461,6 @@ function playEvolutions(list, done){
        (stone_veryhigh) still ringing, go as this one starts */
     stopSfx('stone_ultra', 120);
     stopSfx('stone_veryhigh', 120);
-    playSfxSoon('evolution', 2500);                       // (3.49) waits for it if still on its way
-    /* (3.28) The fanfare is made ready now, so it can start the instant the
-       new form shows (finish). A Very High stone's fanfare used to be timed
-       for EVO_FLASH_MS − 200 — but the flicker starts 500 ms in and runs a
-       little past EVO_FLASH_MS, so it went off while the forms were still
-       flickering, 0.7 s before the reveal, and the reveal's own fanfare came
-       after it. One fanfare now, on the reveal. */
-    preloadSfx(['stone_ultra'], true);
     const sp = SPECIES[ev.species];
     /* Explicit stages when the caller worked them out; otherwise derive them.
        The pair must always be CONSECUTIVE — the form you were, and the form you
@@ -569,7 +561,29 @@ function playEvolutions(list, done){
       });
     };
 
-    timer = setTimeout(tick, 500);
+    /* The evolution itself: its music, and the flicker half a second in. */
+    const begin = ()=>{
+      /* (3.51) a core's tinkle, and the power-up it was taken in with (the
+         flash that starts it), let go gently under the music */
+      fadeOutSfx('core_tinkle', 300);
+      fadeOutSfx('power_up', ev.core ? 1400 : 900);
+      playSfxSoon('evolution', 2500);                     // (3.49) waits for it if still on its way
+      /* (3.28) The fanfare is made ready now, so it can start the instant the
+         new form shows (finish). A Very High stone's fanfare used to be timed
+         for EVO_FLASH_MS − 200 — but the flicker starts 500 ms in and runs a
+         little past EVO_FLASH_MS, so it went off while the forms were still
+         flickering, 0.7 s before the reveal, and the reveal's own fanfare came
+         after it. One fanfare now, on the reveal. */
+      preloadSfx(['stone_ultra'], true);
+      const tx = ov.querySelector('#evoText');
+      if(tx) tx.textContent = "What's happening…?";
+      timer = setTimeout(tick, 500);
+    };
+    /* (3.52) A core coming home (`ev.core`, Region 5): on this page, first,
+       its core comes down onto the monster and is taken in with a flash —
+       and only then the evolution (evoCoreDescend, 15-region5.js). */
+    if(ev.core && typeof evoCoreDescend === 'function') evoCoreDescend(ov, spriteBox, ev.core, begin);
+    else begin();
   };
   next();
 }
@@ -780,8 +794,7 @@ function go(screen){
   if(ui.spellingUnlocked && screen !== 'spelling') ui.spellingUnlocked = false;
   if(ui.arenaUnlocked && screen !== 'arena' && screen !== 'battle') ui.arenaUnlocked = false;
   if(ui.xpUnlocked && screen !== 'sound') ui.xpUnlocked = false;
-  /* Out of a fight a companion is whole again: what it lost was the fight's. */
-  if(!['battle','quiz'].includes(screen) && typeof restCompanions === 'function' && state && state.party) restCompanions();
+  /* (A companion keeps its hurts out of a fight now, as the party does — 3.52.) */
   /* Training with the Monkey King ends when you walk away from it (2.87). */
   if(ui.coreSession && !['coreSpar','battle','quiz','spelling'].includes(screen) && typeof endCoreSession === 'function') endCoreSession();
   ui.screen = screen;

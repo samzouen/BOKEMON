@@ -240,6 +240,20 @@ function renderPasswordGate(){
   $('#pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
 }
 
+/* (3.52) The parents' choice of which words a fight's monsters write
+   (BATTLE_WORDS, 05-battle-flow.js): three buttons, the one in force lit. */
+function battleWordsSettingHtml(){
+  const mode = battleWordsMode();
+  const n = revisionWords().length;
+  return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);">
+        <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">Words in battle</div>
+        <div style="font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.4;">${escapeHtml(BATTLE_WORDS[mode].desc)}.
+          ${mode === 'new' ? '' : n ? `${n} word${n === 1 ? ' is' : 's are'} 🥈 silver or 🥇 gold so far, from every list.` : 'No word is 🥈 silver yet, so the checked words stand in for now.'}</div>
+        <div class="bw-seg" style="display:flex;gap:6px;margin-top:8px;">
+          ${Object.entries(BATTLE_WORDS).map(([k, d])=> `<button class="btn ${k === mode ? 'btn-primary' : 'btn-ghost'} pill" data-bw="${k}" style="flex:1;min-width:0;padding:8px 4px;" aria-pressed="${k === mode}">${d.label}</button>`).join('')}
+        </div>
+      </div>`;
+}
 function renderSpellingManage(){
   const rows = wordRows();
   const total = rows.length;
@@ -274,6 +288,7 @@ function renderSpellingManage(){
           <span class="slider-ui"></span>
         </label>
       </div>
+      ${battleWordsSettingHtml()}
     </div>
     ${overmasteryView()}
 
@@ -322,6 +337,14 @@ function renderSpellingManage(){
 
   $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
 
+  /* (3.52) which words a fight's monsters write */
+  screenEl.querySelectorAll('[data-bw]').forEach(b=> b.addEventListener('click', async ()=>{
+    if(battleWordsMode() === b.dataset.bw) return;
+    state.settings.battleWords = b.dataset.bw;
+    if(b.dataset.bw === 'default') delete state.settings.battleWords;
+    await saveProfile();
+    renderSpellingManage();
+  }));
   /* (3.49) auto-advance: on, every priority word already 🥇 moves on at once */
   $('#advanceToggle').addEventListener('change', async e=>{
     state.settings.priorityAdvance = e.target.checked;

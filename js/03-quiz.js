@@ -103,13 +103,21 @@ function noteDailyPhrase(){
    rhythm, resetting each time a cycle completes.
    The pool is capped at 30% of the player's gold-mastered phrases (rounded up)
    worth of cycles, so grinding one familiar phrase forever earns nothing —
-   breadth has to grow before the surplus keeps counting.
+   breadth has to grow before the surplus keeps counting. (3.52) Once the
+   companions are unlocked, 1.5 × — the designer: "In light of the default
+   [companions write the learned words], raise the cap for overmastery to
+   1.5x the total number of gold medals earned so far once the companion
+   system is unlocked." Each 🥇 phrase is one gold medal (MASTERY_GROUP_BY_TIER).
    Fully idempotent: it recomputes from scratch and grants only the difference,
    so previously-uncredited effort is picked up without ever paying twice.
    ============================================================ */
 const OVERMASTERY_CYCLE = 25;
 const OVERMASTERY_STEPS = { bronze:5, silver:15, gold:25 };
 const OVERMASTERY_CAP_RATIO = 0.30;
+const OVERMASTERY_COMPANION_RATIO = 1.5;
+function overmasteryRatio(){
+  return (typeof companionsUnlocked === 'function' && companionsUnlocked()) ? OVERMASTERY_COMPANION_RATIO : OVERMASTERY_CAP_RATIO;
+}
 
 function overmasteryStats(){
   const wm = (state && state.wordMastery) || {};
@@ -118,7 +126,7 @@ function overmasteryStats(){
   Object.values(wm).forEach(v=>{
     if(v >= gold){ goldWords++; excess += (v - gold); }
   });
-  const maxCycles = Math.ceil(goldWords * OVERMASTERY_CAP_RATIO);
+  const maxCycles = Math.ceil(goldWords * overmasteryRatio());
   const usable = Math.min(excess, maxCycles * OVERMASTERY_CYCLE);
   const cycles = Math.floor(usable / OVERMASTERY_CYCLE);
   const partial = usable % OVERMASTERY_CYCLE;
@@ -149,7 +157,8 @@ function overmasteryView(){
   const waiting = s.excess - s.usable;
   /* the next 25 of room: the fewest 🥇 phrases that make one more cycle */
   let g = s.goldWords + 1;
-  while(Math.ceil(g * OVERMASTERY_CAP_RATIO) <= s.maxCycles) g++;
+  const ratio = overmasteryRatio();
+  while(Math.ceil(g * ratio) <= s.maxCycles) g++;
   const nextRoom = `The next ${C} of room comes at <b>${g}</b> 🥇 phrases (${g - s.goldWords} more).`;
   let next;
   if(!s.goldWords) next = `No phrase is 🥇 yet: the pool starts with the first one.`;
@@ -166,7 +175,7 @@ function overmasteryView(){
       <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:16px;">✨ Overmastery</div>
       <div style="font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.45;margin:2px 0 8px;">
         Each time a 🥇 phrase (${MASTERY_CHECKPOINTS.gold}/${MASTERY_CHECKPOINTS.gold}) is written right again, it goes into one pool. Every ${C} in the pool pays 🥉 at ${St.bronze}, 🥈 at ${St.silver} and 🥇 at ${St.gold}.
-        The room is ${Math.round(OVERMASTERY_CAP_RATIO * 100)}% of your 🥇 phrases, rounded up, × ${C}. Nothing past the room is lost: it waits.</div>
+        The room is ${ratio >= 1 ? `${ratio} ×` : `${Math.round(ratio * 100)}% of`} your 🥇 phrases, rounded up, × ${C}${ratio >= 1 ? ' — raised since the companions joined (they write the learned words)' : ''}. Nothing past the room is lost: it waits.</div>
       <div class="hpbar" style="height:10px;"><div class="hpfill om-fill" style="width:${pct}%;background:var(--gold);"></div></div>
       <div class="om-lines" style="font-size:13px;font-weight:700;line-height:1.6;margin-top:8px;">
         <div>🥇 phrases (a gold medal each): <b class="om-gold">${s.goldWords}</b> → room for <b>${s.maxCycles}</b> × ${C} = <b class="om-room">${room}</b></div>

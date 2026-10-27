@@ -184,7 +184,7 @@ const SPECIES = {
   mime:            { name:'Mime',           tier:'elite', types:['Psychic'],          rate:11, nerfedRate:11, base:97, evo:[21,41], color:'#f0f0f0', glyph:'丑' },
   /* a fox mage */
   firefox:         { name:'Firefox',        tier:'wild',  types:['Psychic','Fire'],   rate:7,  nerfedRate:5,  base:97, evo:[11,25], color:'#e86a3a', glyph:'巫' },   // (3.36) wild, two evolutions
-  seadragon:       { name:'Seadragon',      tier:'elite', types:['Psychic','Water'],  rate:11, nerfedRate:11, base:96, evo:[41],    evoMult:1.5, color:'#3a7ab8', glyph:'蛟' },
+  seadragon:       { name:'Seadragon',      tier:'elite', types:['Psychic','Dragon'], rate:11, nerfedRate:11, base:96, evo:[41],    evoMult:1.5, color:'#3a7ab8', glyph:'蛟' },   // (3.51) Psychic/Dragon (it was Psychic/Water)
   plasma_manta:    { name:'Plasma Manta',   tier:'elite', types:['Psychic','Flying'], rate:11, nerfedRate:11, base:97, evo:[],      color:'#8a5ae8', glyph:'鲼' },
   sylph:           { name:'Sylph',          tier:'elite', types:['Psychic','Fairy'],  rate:11, nerfedRate:11, base:98, evo:[21,41], color:'#a8e0c8', glyph:'灵' },
   steelcrab:       { name:'Steelcrab',      tier:'elite', types:['Psychic','Steel'],  rate:11, nerfedRate:11, base:98, evo:[21,41], color:'#7a8aa0', glyph:'蟹' },
