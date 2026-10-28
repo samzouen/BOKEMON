@@ -4812,8 +4812,8 @@ async function r5SoldatoTalk(d, g){
   r5Challenge(d, g, def);
 }
 /* (3.52) A fight you asked for, after the story: his team, as on any day —
-   and nothing for it, win or lose (noPrize: no experience, no tokens, no
-   charm). He stays on his round. Where nobody ever stood and fought (the
+   and no prizes for it, win or lose (noPrize: no tokens, no charm; 3.53 —
+   the experience stays). He stays on his round. Where nobody ever stood and fought (the
    evade floors, the town's streets), a team for that place. */
 const R5_PEACE_SQUADS = {
   cata_bones:    r5Squad(86, ['ghost', 'crow', 'cyclops'], [R5_KNIGHT, 'ghost']),
@@ -4841,7 +4841,7 @@ function r5PeaceFight(d, g, def){
       noPrize:true,
       onWin: ()=>{
         storyModal(npcPortrait(who, '💂', 130, 'transparent'), roster.label,
-          `He dusts himself off.<br><br><b>"Happy now? You still get nothing. Go and beg somewhere else."</b><br><br><i>A fight after the story: no experience, no prizes.</i>`,
+          `He dusts himself off.<br><br><b>"Happy now? You still get nothing. Go and beg somewhere else."</b><br><br><i>A fight after the story: your team still gets experience, but there are no prizes.</i>`,
           ()=> go(id), { subtitle:d.title });
       } }));
   });

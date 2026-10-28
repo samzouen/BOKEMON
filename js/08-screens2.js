@@ -173,9 +173,10 @@ function onChallengeWon(){
   tallyBattleForEyeBreak();
   // NPC fights are worth 2 fights' XP per wave (e.g. the 5-wave Rival = 10)
   /* (3.52) …but a fight with nothing for it (a soldato's, after Region 5's
-     story — "No rewards though") gives no experience and no tokens */
+     story — "No rewards though") gives no tokens. (3.53) The experience
+     stays: you still fought him. */
   const waves = Array.isArray(b.waves) ? b.waves.length : 1;
-  const levelUps = b.noPrize ? [] : awardXpToParty(waves * 2);
+  const levelUps = awardXpToParty(waves * 2);
   const tokens = b.noPrize ? 0 : rollTokenDrop();
   saveProfile();
   if(tokens) toast(tokens > 1 ? `🎫 You found ${tokens} Skill Tokens!` : '🎫 You found a Skill Token!');
@@ -595,7 +596,7 @@ function renderArena(){
 
           <div class="ar-label">Buffs on the opponent</div>
           <div class="ar-buffs">
-            ${[['elusive','💨 Elusive'],['first','⚡ Goes first'],['guard','🛡 Guard (1 stack)'],
+            ${[['elusive','💨 Elusive'],['first','⚡ Goes first'],['guard','🛡️ Guard (1 stack)'],
                ['airborne','🕊 Airborne'],['invisible','👤 Unseen'],['counter','↩️ Counter stance'],
                ['block3','🛡 Block ×3'],['crowned','✦ Crowned'],['maxProtein','💪 Max protein']]
               .map(([k,lbl])=>`<button class="btn btn-ghost pill ar-buff ${c.buffs[k]?'sel':''}" data-buff="${k}">${lbl}</button>`).join('')}

@@ -364,15 +364,15 @@ function castIceBarrier(side, caster, def, name){
   const yours = side === 'player';
   const who = yours ? displayName(caster) : SPECIES[caster.species].name;
   const T = def.turns || 5, cut = def.cut || 0.30, nm = escapeHtml(name || 'Ice Barrier');
-  const head = `🧊 ${yours ? '' : escapeHtml(who) + ' uses '}<b>${nm}</b>`;
+  const head = `🏔️ ${yours ? '' : escapeHtml(who) + ' uses '}<b>${nm}</b>`;
   const st = { type:'iceBarrier', turnsLeft:T + 1, max:T + 1, cut, purge:def.purge || 1 };
   const held = yours ? setPStatus(0, Object.assign(st, { owner:caster.uid })) : setESide(Object.assign(st, { owner:caster }));
   if(!held){
-    logBattle(`🧊 ${who}: ${name || 'Ice Barrier'} — scattered by the dust`);
+    logBattle(`🏔️ ${who}: ${name || 'Ice Barrier'} — scattered by the dust`);
     return `${head} — but ${yours ? 'their' : 'your'} diamond dust will not let it form.`;
   }
   const burnt = purgeMarks(side, def.purge || 1);
-  logBattle(`🧊 ${who}: ${name || 'Ice Barrier'} — the other side deals ${Math.round(cut * 100)}% less for ${T} turns` +
+  logBattle(`🏔️ ${who}: ${name || 'Ice Barrier'} — the other side deals ${Math.round(cut * 100)}% less for ${T} turns` +
             (burnt.length ? `; melted: ${burnt.join(', ')}` : ''));
   return `${head} — for <b>${T} turns</b> ${yours ? 'their' : 'your'} attacks deal <b>${Math.round(cut * 100)}% less</b>` +
          (burnt.length ? `, and ${burnt.join(' and ')} melts off ${yours ? 'your side' : 'theirs'}` : '') + '.';
@@ -386,7 +386,7 @@ function iceBarrierPulse(){
     const st = side === 'player' ? getPStatus(0,'iceBarrier') : getESide('iceBarrier');
     if(!st) return;
     const burnt = purgeMarks(side, st.purge || 1);
-    if(burnt.length) lines.push(`🧊 ${side === 'player' ? 'Your' : 'Their'} Ice Barrier melts ${burnt.join(' and ')} off ${side === 'player' ? 'your side' : 'theirs'}.`);
+    if(burnt.length) lines.push(`🏔️ ${side === 'player' ? 'Your' : 'Their'} Ice Barrier melts ${burnt.join(' and ')} off ${side === 'player' ? 'your side' : 'theirs'}.`);
   });
   if(lines.length) renderStatusBadges();
   return lines.join(' ');
@@ -406,7 +406,7 @@ function tickStatuses(){
       drainHp('enemyHp-'+i, before, e.hp, e.maxHp);
       if(e.hp<=0){ const el=document.getElementById('enemy-'+i); if(el) el.classList.add('fainted'); }
     });
-    if(total) battleMsg(`🔥 ${dot.label} burns for ${total}!`);
+    if(total) battleMsg(`🥵 ${dot.label} burns for ${total}!`);
   }
   /* Diamond Dust holds its OWN side's effects open. This lives INSIDE the tick
      so every path honours it — clearing a wave ticks statuses without going
@@ -1418,18 +1418,18 @@ function applyStonePassives(mon){
       const T = d.turns || veryHighDef(st.type, plus).turns || 5;
       setPStatus(0, { type:'machDragon', turnsLeft:T + 1, tier:d.mach, mine:true });
       renderStatusBadges();
-      return setTimeout(()=> battleMsg(`🐉 ${escapeHtml(d.name)} — the air moves out of the way.`), 400);
+      return setTimeout(()=> battleMsg(`🐉 ${escapeHtml(d.name)}: Mach Dragon — the air moves out of the way.`), 400);
     }
     if(d.passiveBlock){
       grantBlock(mon, d.passiveBlock, monAtk(mon));
       renderStatusBadges();
-      return setTimeout(()=> battleMsg(`🛡 ${escapeHtml(d.name)} — ${d.passiveBlock} stack${d.passiveBlock>1?'s':''} already standing.`), 400);
+      return setTimeout(()=> battleMsg(`🔩 ${escapeHtml(d.name)} — ${d.passiveBlock} stack${d.passiveBlock>1?'s':''} already standing.`), 400);
     }
 
     if(getPStatus(0, veryHighStatusKey(st.type))) return;   // already running
     applyVeryHighEffect(st.type, mon, monAtk(mon), livingEnemies(), plus);
     renderStatusBadges();
-    setTimeout(()=> battleMsg(`💎 ${escapeHtml(d.name)} is already in the air.`), 400);
+    setTimeout(()=> battleMsg(`✨ ${escapeHtml(d.name)} is already in the air.`), 400);
   });
 }
 /* The party-status key a Very High type writes to. */
@@ -1852,8 +1852,8 @@ function sweepableBuffs(side){
       if(st.unsweepable || statusOwner(k, st, 'player') !== 'player') return;
       out.push({ label:label(k), take:()=>{ delete ps[k]; afterStatusGone(k, 'player'); } });
     });
-    if(partyCounters().length) out.push({ label:'↩️ Counter', take:()=>{ b.pCounter = []; } });
-    if(b.pCombo > 0) out.push({ label:`👊 Combo ×${b.pCombo}`, take:()=>{ b.pCombo = 0; } });
+    if(partyCounters().length) out.push({ label:'✋ Counter', take:()=>{ b.pCounter = []; } });
+    if(b.pCombo > 0) out.push({ label:`💪 Combo ×${b.pCombo}`, take:()=>{ b.pCombo = 0; } });
     livingField().forEach(m=> monGains(m, 'player').forEach(x=> out.push(x)));
   } else {
     const es = enemySideStatuses();
@@ -1862,8 +1862,8 @@ function sweepableBuffs(side){
       out.push({ label:label(k), take:()=>{ delete es[k]; afterStatusGone(k, 'enemy'); } });
     });
     /* (3.01) their side's Counter and Combo, as yours */
-    if(foeCounters().length) out.push({ label:'↩️ Counter', take:()=>{ b.eCounter = []; } });
-    if(b.eCombo > 0) out.push({ label:`👊 Combo ×${b.eCombo}`, take:()=>{ b.eCombo = 0; } });
+    if(foeCounters().length) out.push({ label:'✋ Counter', take:()=>{ b.eCounter = []; } });
+    if(b.eCombo > 0) out.push({ label:`💪 Combo ×${b.eCombo}`, take:()=>{ b.eCombo = 0; } });
     livingEnemies().forEach(e=>{
       eStatuses(e).slice().forEach(st=>{
         if(st.unsweepable || statusOwner(st.type, st, 'enemy') !== 'enemy') return;
@@ -1875,7 +1875,7 @@ function sweepableBuffs(side){
   /* an Overheat's burn goes with its Overheat; the rest are buffs of their own */
   (b.preHits || []).forEach(p=>{
     if((p.by || 'player') !== side || p.src === 'overheat') return;
-    const name = p.sacredFlame ? '🔥 Sacred Flame' : p.aftershock ? '💥 Aftershock' : (p.label || 'upkeep strike');
+    const name = p.sacredFlame ? '🐦‍🔥 Sacred Flame' : p.aftershock ? '💥 Aftershock' : (p.label || 'upkeep strike');
     out.push({ label:name, take:()=>{ b.preHits = (b.preHits || []).filter(x=> x !== p); } });
   });
   return out;
@@ -1886,11 +1886,11 @@ function monGains(m, side){
   const out = [];
   if(!m) return out;
   const add = (label, take)=> out.push({ label, take });
-  if(m.guard) add('🛡 Guard', ()=>{ m.guard = false; });
+  if(m.guard) add('🛡️ Guard', ()=>{ m.guard = false; });
   if(m.airborne > 0) add('🕊 Airborne', ()=>{ m.airborne = 0; });
   if(m.invisible > 0) add('👤 Unseen', ()=>{ m.invisible = 0; });
   if(m.prep > 0) add(`🎯 Prep ×${m.prep}`, ()=>{ m.prep = 0; });
-  if(m.evadeTurns > 0) add('🧘 Still', ()=>{ m.evadeTurns = 0; });
+  if(m.evadeTurns > 0) add('🗿 Still', ()=>{ m.evadeTurns = 0; });
   /* (3.13) The one difference from the dust's list: shields. Diamond Dust
      cannot touch them (Fairy is weak to Steel); a Nova — fire — still burns
      them off, all of one monster's at once, as before. */
@@ -1898,8 +1898,8 @@ function monGains(m, side){
   /* (a monster's own stacks and combo — both sides keep them as the side's
      since 3.01, in b.pCounter / b.eCounter, listed by sweepableBuffs) */
   if(Array.isArray(m.counterStack) ? m.counterStack.length : m.counterStack)
-    add('↩️ Counter', ()=>{ m.counterStack = Array.isArray(m.counterStack) ? [] : 0; });
-  if(m.comboStacks > 0) add(`👊 Combo ×${m.comboStacks}`, ()=>{ m.comboStacks = 0; });
+    add('✋ Counter', ()=>{ m.counterStack = Array.isArray(m.counterStack) ? [] : 0; });
+  if(m.comboStacks > 0) add(`💪 Combo ×${m.comboStacks}`, ()=>{ m.comboStacks = 0; });
   if(m.enrageStacks > 0) add(`😤 Enrage ×${m.enrageStacks}`, ()=>{ m.enrageStacks = 0; });
   if(m.lurk) add('🌑 Lurk', ()=>{ m.lurk = false; });
   if(m.cunning) add('🌘 Cunning', ()=>{ m.cunning = false; });
@@ -1908,13 +1908,13 @@ function monGains(m, side){
   if(m._rage && m._rage.forced) add('😤 Rage', ()=>{ m._rage.forced = false; });
   if(m._overpower && m._overpower.turnsLeft > 0) add('💪 Overpower', ()=>{ m._overpower = null; });
   if(m._windup) add('⏳ Wind-up', ()=>{ m._windup = null; });
-  if(m._omen) add('🌒 Ill Omen', ()=>{ m._omen = 0; });
+  if(m._omen) add('🐦‍⬛ Ill Omen', ()=>{ m._omen = 0; });
   if(side === 'enemy'){
     if(!m.enraged){
       if(m.dealMult && m.dealMult !== 1) add('💢 Power', ()=>{ m.dealMult = 1; });
       if(m.takeMult && m.takeMult !== 1) add('🛡 Toughness', ()=>{ m.takeMult = 1; });
     }
-    if(m.ddBreak) add('🐉 Shield-breaking', ()=>{ m.ddBreak = 0; });
+    if(m.ddBreak) add('🐲 Shield-breaking', ()=>{ m.ddBreak = 0; });
     if(m.elusive) add('💨 Elusive', ()=>{ m.elusive = false; m.gooed = true; });
     if(m._vita && m._vita.turnsLeft > 0) add('🕊 Vita', ()=>{ m._vita = null; });
   }
@@ -2047,11 +2047,11 @@ function stealableBuffs(victimSide, victims){
       const n = m.blockStacks, v = m.blockValue; m.blockStacks = 0;
       return (toSide, thief)=>{ grantBlock(thief, n, v); return true; };
     }});
-    if(m.guard) out.push({ label:'🛡 Guard', take:()=>{ m.guard = false; return (s, thief)=>{ thief.guard = true; return true; }; } });
+    if(m.guard) out.push({ label:'🛡️ Guard', take:()=>{ m.guard = false; return (s, thief)=>{ thief.guard = true; return true; }; } });
     if(m.airborne > 0)  moveField('airborne', '🕊 Airborne');
     if(m.invisible > 0) moveField('invisible', '👤 Unseen');
     if(m.prep > 0)      moveField('prep', `🎯 Prep ×${m.prep}`);
-    if(m.evadeTurns > 0) out.push({ label:'🧘 Still', take:()=>{
+    if(m.evadeTurns > 0) out.push({ label:'🗿 Still', take:()=>{
       const n = m.evadeTurns, c = m.evadeChance; m.evadeTurns = 0;
       return (s, thief)=>{ thief.evadeTurns = (thief.evadeTurns || 0) + n; thief.evadeChance = c || 1; return true; };
     }});
@@ -2064,20 +2064,20 @@ function stealableBuffs(victimSide, victims){
     }});
   });
   if(victimSide === 'player'){
-    if(partyCounters().length) out.push({ label:`↩️ Counter ×${partyCounters().length}`, take:()=>{
+    if(partyCounters().length) out.push({ label:`✋ Counter ×${partyCounters().length}`, take:()=>{
       const list = b.pCounter.splice(0);
       return (s, thief)=>{ list.forEach(c=> addCounterStack(thief, c.tier, 1)); return true; };
     }});
-    if(b.pCombo > 0) out.push({ label:`👊 Combo ×${b.pCombo}`, take:()=>{
+    if(b.pCombo > 0) out.push({ label:`💪 Combo ×${b.pCombo}`, take:()=>{
       const n = b.pCombo; b.pCombo = 0;
       return (s)=>{ b.eCombo = (b.eCombo || 0) + n; return true; };
     }});
   } else {
-    if(foeCounters().length) out.push({ label:`↩️ Counter ×${foeCounters().length}`, take:()=>{
+    if(foeCounters().length) out.push({ label:`✋ Counter ×${foeCounters().length}`, take:()=>{
       const list = b.eCounter.splice(0);
       return (s, thief)=>{ list.forEach(c=> addCounterStack(thief, c.tier, 1)); return true; };
     }});
-    if(b.eCombo > 0) out.push({ label:`👊 Combo ×${b.eCombo}`, take:()=>{
+    if(b.eCombo > 0) out.push({ label:`💪 Combo ×${b.eCombo}`, take:()=>{
       const n = b.eCombo; b.eCombo = 0;
       return (s)=>{ b.pCombo = (b.pCombo || 0) + n; return true; };
     }});
@@ -2156,7 +2156,7 @@ function castBorrowed(mon, atk, types, plus, done){
     const r = applyVeryHighEffect(types[i], mon, atk, livingEnemies(), plus);
     renderStatusBadges();
     const fd = veryHighDef(types[i], plus);
-    battleMsg(`💎 A facet catches the light — ${fd ? fd.name : types[i]}! ${r.msg}`);
+    battleMsg(`✨ A facet catches the light — ${fd ? fd.name : types[i]}! ${r.msg}`);
     setTimeout(()=> next(i+1), 1100);
   };
   next(0);
@@ -2181,7 +2181,7 @@ function stancePills(m, who){
   if(m && m.cunning)      pill('cunning', '🌘 Cunning');
   if(m && m._windup)      pill('windup', `⏳ ${escapeHtml(m._windup)}`);
   if(m && m._omen)        pill('omen', '🐦‍⬛ Ill Omen');
-  if(m && m.guard)        pill('guard', '🛡 Guard');
+  if(m && m.guard)        pill('guard', '🛡️ Guard');
   if(m && m.airborne>0)   pill('airborne', '🕊 Airborne');
   if(m && m.invisible>0)  pill('invisible', '👤 Invisible');
   if(m && m.prep>0)       pill('prep', `🎯 Prep ×${m.prep}`);
@@ -2272,7 +2272,7 @@ function counterPill(list, cls){
   if(!list || !list.length) return '';
   const best = Math.max(...list.map(s=> s.tier || 0));
   const mark = ['', '+', '✦'][best] || '';
-  return `<span class="status-pill${cls ? ' ' + cls : ''}"${pillAt('counterStack', cls === 'foe' ? 'fs' : 'ps')}>🛡 Counter ×${list.length}${mark ? ' ' + mark : ''}</span>`;
+  return `<span class="status-pill${cls ? ' ' + cls : ''}"${pillAt('counterStack', cls === 'foe' ? 'fs' : 'ps')}>✋ Counter ×${list.length}${mark ? ' ' + mark : ''}</span>`;
 }
 
 /* Called when an enemy attack is about to land during an ACTION phase. Returns
@@ -2287,7 +2287,7 @@ function spendCounterStack(mon){
   if(st.enrage) mon.enrageStacks = (mon.enrageStacks||0) + 1;
   renderStatusBadges();
   paintEnrage(mon);
-  battleMsg(`🛡 ${displayName(mon)} plants a foot and takes it on the guard — <b>80% turned away!</b>`
+  battleMsg(`✋ ${displayName(mon)} plants a foot and takes it on the guard — <b>80% turned away!</b>`
     + (st.enrage ? ` <b>Combo</b> and <b>Enrage</b> rise.` : ` <b>Combo</b> rises.`));
   return 1 - COUNTER_REDUCTION;
 }
@@ -2302,7 +2302,7 @@ function spendEnemyCounter(e){
   ui.battle.eCombo = (ui.battle.eCombo||0) + 1;
   if(st.enrage) e.enrageStacks = (e.enrageStacks||0) + 1;
   renderStatusBadges();
-  battleMsg(`🛡 ${SPECIES[e.species].name} takes it on the guard — <b>80% turned away!</b> Their next blow will be heavier.`);
+  battleMsg(`✋ ${SPECIES[e.species].name} takes it on the guard — <b>80% turned away!</b> Their next blow will be heavier.`);
   return 1 - COUNTER_REDUCTION;
 }
 /* Combo: additive, the side's, spent by its next attack. */
@@ -2517,7 +2517,7 @@ function applyEnemyVeryHigh(e, type, plus){
          nothing new of yours takes hold while it lasts. */
       const n = diamondDustCleanse('enemy');
       setESide({ type:'diamondDust', turnsLeft:T + 1 });
-      if(n) setTimeout(()=> battleMsg(`💎 Their diamond dust sweeps ${n} of your effects away.`), 900);
+      if(n) setTimeout(()=> battleMsg(`✨ Their diamond dust sweeps ${n} of your effects away.`), 900);
       break; }
     case 'Water': {
       /* Ice Tomb in enemy hands freezes YOU rather than them — every one of
@@ -2572,24 +2572,24 @@ function castEnemyVeryHigh(e, type, plus){
     }
     case 'Grass':
       setPStatus(0, { type:'leechSeed', turnsLeft:T + 1, heal:d.heal, bite:d.bite || 0, biteHeals:!!d.biteHeals, by:'enemy' });
-      return `🌿 ${who} casts <b>Leech Seed</b> on your side: every blow they land on you feeds their whole team.`;
+      return `🌱 ${who} casts <b>Leech Seed</b> on your side: every blow they land on you feeds their whole team.`;
     case 'Electric':
       setESide({ type:'overcharge', turnsLeft:T + 1, chance:d.after, firstChance:d.first, fresh:true, init:d.init || 0 });
       return `⚡ ${who} casts <b>Overcharge</b>: their attacks may strike twice${d.init ? `, and their side moves ${d.init} step${d.init > 1 ? 's' : ''} sooner` : ''}.`;
     case 'Ground':
       setESide({ type:'spikeArmour', turnsLeft:T + 1, reduce:d.reduce, thorns:d.thorns, spike:d.spike || 0 });
-      return `🛡️ ${who} casts <b>Spike Armour</b>: they take ${Math.round(d.reduce*100)}% less, and each one you hit pricks you back` +
+      return `🦔 ${who} casts <b>Spike Armour</b>: they take ${Math.round(d.reduce*100)}% less, and each one you hit pricks you back` +
              `${d.spike ? ` — and every hit of theirs strikes again for ${d.spike}× its ATK` : ''}.`;
     case 'Flying':
       setESide({ type:'mirage', turnsLeft:T + 1, window:(d.window || [1]).slice(), step:0, chance:d.after,
                  images:d.images || 0, imageDmg:d.imageDmg || 0, init:d.init || 0, owner:e, pending:0, atk });
-      return `✨ ${who} casts <b>Mirage</b>: their side cannot be touched this turn, is hard to hit after` +
+      return `🪽 ${who} casts <b>Mirage</b>: their side cannot be touched this turn, is hard to hit after` +
              `${d.init ? `, and moves ${d.init} step${d.init > 1 ? 's' : ''} sooner` : ''}.`;
     case 'Physical': {
       const tier = plus || 0;
       if(!dustBlocks('enemy')) addCounterStack(e, tier, d.stacks || 1);
       setESide({ type:'counter', turnsLeft:STATUS_TURNS + 1, tier, regain:d.regain || 0.10, combo:d.combo || 0.25, enrage:d.enrage || 0, owner:e });
-      return `↩️ ${who} casts <b>Counter</b>: their side is braced to take your next blow on the guard.`;
+      return `👊 ${who} casts <b>Counter</b>: their side is braced to take your next blow on the guard.`;
     }
     case 'Ghost':
       setPStatus(0, { type:'curse', turnsLeft:T + 1, extra:d.extra, mute:!!d.mute, by:'enemy' });
@@ -2610,16 +2610,16 @@ function castEnemyVeryHigh(e, type, plus){
     case 'Dragon':
       setESide({ type:'dragonDance', turnsLeft:T + 1, deal:d.deal, strip:d.strip || 0 });
       if(d.mach) setESide({ type:'machDragon', turnsLeft:T + 1, tier:d.mach });
-      return `🐉 ${who} casts <b>Dragon Dance</b>: their side deals ${d.deal}×${d.mach ? ' and moves first' : ''}` +
+      return `🐲 ${who} casts <b>Dragon Dance</b>: their side deals ${d.deal}×${d.mach ? ' and moves first' : ''}` +
              `${d.strip ? `, and each attack breaks ${d.strip} of your shields first` : ''}.`;
     case 'Steel':
       setESide({ type:'steelAegis', turnsLeft:T + 1, reduce:d.reduce, regenRolls:d.regenRolls || 0, owner:e });
       if(d.block) grantBlock(e, d.block, atk);     // (3.13) shields are beyond any dust
-      return `🛡 ${who} casts <b>Steel Aegis</b>: their side takes ${Math.round(d.reduce*100)}% less.`;
+      return `🔩 ${who} casts <b>Steel Aegis</b>: their side takes ${Math.round(d.reduce*100)}% less.`;
     case 'Fairy': {
       const n = diamondDustCleanse('enemy');
       setESide({ type:'diamondDust', turnsLeft:T + 1, owner:e });
-      let msg = `💎 ${who} casts <b>Diamond Dust</b>${n ? `: ${n} of your effect${n === 1 ? '' : 's'} swept away` : ''}.`;
+      let msg = `✨ ${who} casts <b>Diamond Dust</b>${n ? `: ${n} of your effect${n === 1 ? '' : 's'} swept away` : ''}.`;
       /* Refined, it borrows from the rest of the triangle: + one at random at
          + strength, ✦ two different ones at ✦ strength. */
       const count = (d.borrowPick || 0) + (d.borrowRandom || 0);
@@ -2659,16 +2659,16 @@ function enemyStonePassive(e){
   const who = SPECIES[e.species].name;
   if(d.passiveOnly === 'mach'){
     setESide({ type:'machDragon', turnsLeft:(d.turns || 5) + 1, tier:d.mach });
-    return setTimeout(()=> battleMsg(`🐉 ${who}'s ${escapeHtml(d.name)}: their side moves first.`), 700);
+    return setTimeout(()=> battleMsg(`🐉 ${who}'s ${escapeHtml(d.name)}: Mach Dragon — their side moves first.`), 700);
   }
   if(d.passiveBlock){
     grantBlock(e, d.passiveBlock, e.atk);          // (3.13) your dust cannot stop a shield
-    return setTimeout(()=> battleMsg(`🛡 ${who} arrives with ${d.passiveBlock} block already standing.`), 700);
+    return setTimeout(()=> battleMsg(`🔩 ${who} arrives with ${d.passiveBlock} block already standing.`), 700);
   }
   if(st.type === 'Fairy'){
     const n = diamondDustCleanse('enemy');
     setESide({ type:'diamondDust', turnsLeft:(d.turns || 5) + 1, owner:e });
-    return setTimeout(()=> battleMsg(`💎 ${who}'s Diamond Dust is already in the air${n ? `: ${n} of your effects swept away` : ''}.`), 700);
+    return setTimeout(()=> battleMsg(`✨ ${who}'s Diamond Dust is already in the air${n ? `: ${n} of your effects swept away` : ''}.`), 700);
   }
 }
 /* Their Discombobulate on YOU: a damaging move turns on your own side.
@@ -3669,9 +3669,9 @@ function breakShields(side, attacker, holder, key, barId, anchorId){
   const k = Math.min(n, had);
   holder.blockStacks = had - k;
   if(barId) drainBlock(barId, had, holder.blockStacks);
-  if(anchorId) floatMiss(anchorId, `🐉 −${k} 🛡`, 'blk-pop', 0.16);
+  if(anchorId) floatMiss(anchorId, `🐲 −${k} 🛡`, 'blk-pop', 0.16);
   setTimeout(refreshAllBlockBars, 0);
-  logBattle(`  🐉 Dragon Dance breaks ${k} shield${k > 1 ? 's' : ''} (${had} → ${holder.blockStacks})`);
+  logBattle(`  🐲 Dragon Dance breaks ${k} shield${k > 1 ? 's' : ''} (${had} → ${holder.blockStacks})`);
   return k;
 }
 /* Your strike's attack, for breakShields: what the caller says it is (a quick
@@ -3711,7 +3711,7 @@ function floatMiss(anchorId, text, cls, at){
   const hb = host.getBoundingClientRect(), lb = layer.getBoundingClientRect();
   const el = document.createElement('div');
   el.className = 'miss-pop' + (cls ? ' ' + cls : '');
-  el.textContent = text || 'MISS';
+  el.innerHTML = emoHtml(escapeHtml(text || 'MISS'));          // (3.53) as this iPad can draw it; the dragon drawn
   el.style.left = (hb.left - lb.left + hb.width/2) + 'px';
   el.style.top  = (hb.top  - lb.top  + hb.height*(at || 0.3)) + 'px';
   layer.appendChild(el);
@@ -4060,7 +4060,7 @@ function blindMark(t, def, how){
   const turns = (def && def.turns) || 2, miss = (def && def.miss) || BLIND_MISS;
   if(yours) setMStatus(t, { type:'blinded', turnsLeft:turns, miss, by:'enemy' });
   else addEStatus(t, { type:'blinded', until:roundNo() + turns - 1, miss, mine:true });
-  if(!blindOf(t)) return `💎 The diamond dust keeps ${escapeHtml(name)}'s eyes clear.`;
+  if(!blindOf(t)) return `✨ The diamond dust keeps ${escapeHtml(name)}'s eyes clear.`;
   return `🔆 ${how ? how + ' — ' : ''}${escapeHtml(name)} is <b>blinded</b>: ${Math.round(miss * 100)}% of its attacks will miss!`;   // `how`: the caller's, its names escaped
 }
 /* A word floating over a monster: yours or theirs. */
@@ -4141,7 +4141,7 @@ function putToSleep(t, how){
   if(yours) setMStatus(t, { type:'asleep', turnsLeft:2, by:'enemy' });
   else addEStatus(t, { type:'asleep', turnsLeft:1, mine:true });
   const slept = yours ? getMStatus(t,'asleep') : getEStatus(t,'asleep');
-  return slept ? `💤 ${how} — ${name} falls asleep!` : `💎 The diamond dust keeps ${name} awake.`;
+  return slept ? `💤 ${how} — ${name} falls asleep!` : `✨ The diamond dust keeps ${name} awake.`;
 }
 /* How many strikes a move makes: its own `hits`. (3.26) The designer:
    "crowning should not change the moves, even though they are based on the
@@ -4482,7 +4482,7 @@ function weakBackRoll(holder, attacker){
   const amount = p.weakBack.amount || 0.5, name = escapeHtml(monName(attacker));
   if(yours) setMStatus(attacker, { type:'softened', turnsLeft:2, amount, by:'enemy', fresh:true });
   else addEStatus(attacker, { type:'softened', turnsLeft:2, amount });
-  if(!has()) return `💎 The diamond dust keeps ${name}'s strength intact.`;
+  if(!has()) return `✨ The diamond dust keeps ${name}'s strength intact.`;
   return `🐞 ${escapeHtml(monName(holder))}'s Warning Colours — ${name} is <b>weakened</b>: its next attack deals ${Math.round((1 - amount) * 100)}%!`;
 }
 /* Hermit's Patience: what an attack that reached `holder` costs its attacker. */
@@ -4561,7 +4561,7 @@ function sylphCleanse(){
       if(!pool.length) break;
       const x = pool[Math.floor(Math.random() * pool.length)];
       x.take();
-      battleMsg(`🍃 ${side === 'player' ? 'Your' : 'Their'} Sylph's Grace — ${x.label} is lifted off ${side === 'player' ? 'your side' : 'theirs'}.`);
+      battleMsg(`🌬️ ${side === 'player' ? 'Your' : 'Their'} Sylph's Grace — ${x.label} is lifted off ${side === 'player' ? 'your side' : 'theirs'}.`);
     }
   });
   renderStatusBadges();
@@ -5396,7 +5396,7 @@ function endRound(){
     livingField().forEach(pm=>{                    // a side-wide buff: each of yours on the field
       let won = 0;
       for(let r = 0; r < rolls; r++) if(Math.random() < 0.5) won++;
-      if(won){ grantBlock(pm, won, monAtk(pm)); battleMsg(`🛡 The aegis thickens — +${won} block${both ? ` on ${displayName(pm)}` : ''}.`); }
+      if(won){ grantBlock(pm, won, monAtk(pm)); battleMsg(`🔩 The aegis thickens — +${won} block${both ? ` on ${displayName(pm)}` : ''}.`); }
     });
   }
   const tac0 = getPStatus(0,'tachy');
@@ -5411,14 +5411,14 @@ function endRound(){
     const holder = (aegE.owner && aegE.owner.hp > 0) ? aegE.owner : livingEnemies()[0];
     let won = 0;
     for(let r = 0; r < (aegE.regenRolls || 0); r++) if(Math.random() < 0.5) won++;
-    if(won && holder){ grantBlock(holder, won, holder.atk); battleMsg(`🛡 Their aegis thickens — +${won} block.`); }
+    if(won && holder){ grantBlock(holder, won, holder.atk); battleMsg(`🔩 Their aegis thickens — +${won} block.`); }
   }
   const ctrE = getESide('counter');
   if(ctrE && ctrE.regain && Math.random() < ctrE.regain){
     const holder = (ctrE.owner && ctrE.owner.hp > 0) ? ctrE.owner : livingEnemies()[0];
     if(holder){
       const n = addCounterStack(holder, ctrE.tier || 0, 1);      // their side's (3.01)
-      battleMsg(`🛡 They read you again — <b>${n}</b> Counter stack${n > 1 ? 's' : ''} on their side.`);
+      battleMsg(`✋ They read you again — <b>${n}</b> Counter stack${n > 1 ? 's' : ''} on their side.`);
     }
   }
   /* (their Mirage window and Overcharge rate: as yours, above) */
@@ -5428,7 +5428,7 @@ function endRound(){
   const ctr = getPStatus(0,'counter');
   if(ctr && ctr.regain && gm && Math.random() < ctr.regain){
     addCounterStack(gm, ctr.tier||0, 1);
-    battleMsg(`🛡 Another read — <b>${counterCountOf(gm)}</b> Counter stack${counterCountOf(gm)>1?'s':''} ready.`);
+    battleMsg(`✋ Another read — <b>${counterCountOf(gm)}</b> Counter stack${counterCountOf(gm)>1?'s':''} ready.`);
   }
 
   sylphCleanse();                                // (3.15) a Sylph lifts one of the other side's marks
@@ -5905,7 +5905,7 @@ function beginBattle(config){
     challenge: config.challenge || null, name: config.name || 'Battle',
     onWin: config.onWin || null, onWaveStart: config.onWaveStart || null, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
     onLose: config.onLose || null,    // (3.12) what a lost fight settles once the team has come round — Jax's wager (onPlayerDefeated)
-    noPrize: !!config.noPrize,        // (3.52) nothing for it: no experience, no tokens (onChallengeWon) — a soldato's, after Region 5's story
+    noPrize: !!config.noPrize,        // (3.52) no prizes for it: no tokens (onChallengeWon; 3.53 — experience still) — a soldato's, after Region 5's story
     guardianTrial: !!config.guardianTrial, leechSeed:false, bgKey: config.bgKey||null,
     alwaysFirst: !!config.alwaysFirst,
     scriptedOneTurn: !!config.scriptedOneTurn,
@@ -7613,22 +7613,124 @@ function renderBattle(){
 }
 
 /* (3.52) Every status has a symbol of its own on its side's rows — the pill
-   shows it alone — so where two shared one, one of them has a new one:
-   Overheat 🌡️ (a burn is 🔥), Enrage 😤, Kindled 🕯️, Held Fast ⛓️, Spike
-   Armour 🦔, Steel Soul ⚙️, Steel Aegis 🛡️ (Guard and your Counter stacks
-   keep 🛡), Haunting Aria 🎶, Warded 🧿, Dragon Dance 🐲, Weakened 📉,
-   Confused 😵, Tachypsychia ⏱️, Paralysed 💫, Still 🗿, Shell 🐚, Vita 💖,
-   a Spacetime Fracture 🕳️, Blinded 🙈. */
+   shows it alone — so where two shared one, one of them has a new one.
+   (3.53) The designer: "i'm hoping that the very high stones get priority
+   for straightforward emoticons like flame (fire), ice (water), leaf
+   (grass), rock (ground), lightning (electric), wing (air), ghost (ghost),
+   fist (physical), spiral (psychic), shield (steel), sparkle (fairy), and
+   for dragon i'd like a western dragon if possible." (3.54) And after
+   seeing them: "keep the eastern dragon for mach dragon, and leech seed is correct
+   [🌱], leaf can be used for overgrowth instead … the red and white shield
+   that was used for spike armor [🛡️, for Guard] … spike armor seems
+   strange, is there a spikeball emoji possible?" The twelve Very High
+   stones:
+     Overheat 🔥 · Ice Tomb 🧊 (its chill ❄️) · Leech Seed 🌱 · Overcharge ⚡
+     Spike Armour — a spiked ball, drawn · Mirage 🪽 · Counter 👊 · Curse 👻
+     Discombobulate 🌀 · Dragon Dance — a red western dragon, drawn
+     Steel Aegis — a steel shield, drawn · Diamond Dust ✨
+   …and the others that changed: a burn 🥵 (was 🔥), Sacred Flame 🐦‍🔥
+   (☄️ where an iPad has no phoenix), Counter stacks ✋ (were 🛡), Combo 💪
+   (was 👊), Guard 🛡️ (the red-and-white one), Overgrowth 🍃 (was 🌿), Ice
+   Barrier 🏔️ (was 🧊), the Monkey King's Clones 🐒 (were 👥, Mirage's
+   Afterimages), a passive 🌟 (was ✨). Mach Dragon keeps its 🐉. An Ill
+   Omen is a black bird 🐦‍⬛ where it can be drawn. */
 const STATUS_LABELS = {
-  overheat:'🌡️ Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🦔 Spike Armour',
-  counter:'↩️ Counter', combo:'👊 Combo', enrage:'😤 Enrage', mirageImages:'👥 Afterimages', iceTomb:'🧊 Frozen', chill:'❄️ Chilled', curse:'👻 Cursed', stunned:'💫 Stunned', machDragon:'🐉 Mach Dragon', softened:'📉 Weakened', evadeTurns:'🗿 Still', asleep:'💤 Asleep',
-  discombobulate:'😵 Confused', confusionField:'🌀 Discombobulate', leechSeed:'🌿 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', enraged:'🐋 Enraged', aria:'🎶 Haunting Aria', wrath:'💢 Gathering Wrath', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡 Guard', prep:'🎯 Prep', diamondDust:'💎 Diamond Dust', curseWard:'🧿 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'💫 Paralysed', tachy:'⏱️ Tachypsychia', steelSoul:'⚙️ Steel Soul', shell:'🐚 Shell', clones:'👥 Clones', dot:'🔥 Burning',
-  dragonDance:'🐲 Dragon Dance', steelAegis:'🛡️ Steel Aegis', mirage:'✨ Mirage',
+  overheat:'🔥 Overheat', overcharge:'⚡ Overcharge', spikeArmour:'🦔 Spike Armour',
+  counter:'👊 Counter', combo:'💪 Combo', enrage:'😤 Enrage', mirageImages:'👥 Afterimages', iceTomb:'🧊 Frozen', chill:'❄️ Chilled', curse:'👻 Cursed', stunned:'💫 Stunned', machDragon:'🐉 Mach Dragon', softened:'📉 Weakened', evadeTurns:'🗿 Still', asleep:'💤 Asleep',
+  discombobulate:'😵 Confused', confusionField:'🌀 Discombobulate', leechSeed:'🌱 Leeched', elusive:'💨 Elusive', gooed:'🌋 Pinned', enraged:'🐋 Enraged', aria:'🎶 Haunting Aria', wrath:'💢 Gathering Wrath', airborne:'🕊 Airborne', invisible:'👤 Unseen', guard:'🛡️ Guard', prep:'🎯 Prep', diamondDust:'✨ Diamond Dust', curseWard:'🧿 Warded', charm:'💗 Charmed', charmed:'💗 Charmed', disrupt:'📡 Disrupt', paralysed:'💫 Paralysed', tachy:'⏱️ Tachypsychia', steelSoul:'⚙️ Steel Soul', shell:'🐚 Shell', clones:'🐒 Clones', dot:'🥵 Burning',
+  dragonDance:'🐲 Dragon Dance', steelAegis:'🔩 Steel Aegis', mirage:'🪽 Mirage',
   vita:'💖 Vita', jaws:'⛓️ Held Fast', bogged:'🌫 Bogged', lurk:'🌑 Lurk', cunning:'🌘 Cunning',
-  forgot:'💭 Forgot', fracture:'🕳️ Spacetime Fracture', barrier:'🧱 Barrier', iceBarrier:'🧊 Ice Barrier',
+  forgot:'💭 Forgot', fracture:'🕳️ Spacetime Fracture', barrier:'🧱 Barrier', iceBarrier:'🏔️ Ice Barrier',
   kindle:'🕯️ Kindled', gallop:'🦄 Gallop', blinded:'🙈 Blinded', fleece:'🐑 Fleece', enchant:'🪄 Enchanted', stargaze:'🔭 Stargazer',
   taunted:'🥱 Taunted',
 };
+/* A Very High stone's own symbol, by its type: its status's. */
+function veryHighSymbol(type){ return ((STATUS_LABELS[veryHighStatusKey(type)] || '').split(' ')[0]) || '💎'; }
+/* ---------- (3.53) symbols an iPad may not have ----------
+   🪽 came with iPadOS 16.4, 🐦‍⬛ 16.4, 🐦‍🔥 17.4, 🪶 14.2. Where one can't be
+   drawn, the first of its stand-ins that can is shown instead — asked of
+   the iPad once, by drawing it: an emoji brings its own colours, a missing
+   one comes out as a box in the colour it was drawn with (a pair it cannot
+   join, as two pictures side by side). */
+const EMOJI_FALLBACK = { '🪽':['🪶', '🕊️'], '🪶':['🕊️'], '🐦‍🔥':['☄️'], '🐦‍⬛':['🐦'] };
+const EMOJI_FALLBACK_RE = new RegExp(Object.keys(EMOJI_FALLBACK).sort((a, b)=> b.length - a.length).join('|'), 'gu');
+const _emojiOk = {};
+function emojiShows(e){
+  if(e in _emojiOk) return _emojiOk[e];
+  let ok = true;
+  try{
+    const c = document.createElement('canvas');
+    c.width = 72; c.height = 36;
+    const x = c.getContext('2d', { willReadFrequently:true });
+    x.font = '26px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    x.textBaseline = 'top';
+    if(/‍/u.test(e) && x.measureText(e).width > x.measureText('😀').width * 1.5) ok = false;
+    else {
+      x.fillStyle = '#ff0000';
+      x.fillText(e, 2, 3);
+      const d = x.getImageData(0, 0, c.width, c.height).data;
+      ok = false;
+      for(let i = 0; i < d.length; i += 4) if(d[i + 3] > 60 && (d[i + 1] > 70 || d[i + 2] > 70)){ ok = true; break; }
+    }
+  }catch(err){ ok = true; }
+  return (_emojiOk[e] = ok);
+}
+/* The symbol as this iPad can draw it. */
+function emo(e){
+  const alts = EMOJI_FALLBACK[e];
+  if(!alts || emojiShows(e)) return e;
+  return alts.find(emojiShows) || alts[alts.length - 1];
+}
+/* Words with their symbols as this iPad can draw them. */
+function emoText(s){ return String(s == null ? '' : s).replace(EMOJI_FALLBACK_RE, m=> emo(m)); }
+/* ---------- (3.53–3.54) symbols the game draws itself ----------
+   Where no emoji will do, a small picture, as big as an emoji, drawn in the
+   pill, its card and its messages. In the words each is written as a
+   stand-in emoji — the battle log, plain text, shows that:
+     🐲 Dragon Dance: a red western dragon, bat-winged and horned. There is
+        no emoji of one (🐉 is a long eastern dragon — Mach Dragon's).
+     🦔 Spike Armour: a ball of earth, spiked. There is no spike-ball emoji.
+     🔩 Steel Aegis: a steel shield. The red-and-white 🛡️ is Guard's. */
+const drawnSvg = (name, body)=> `<svg class="emo-svg" data-drawn="${name}" viewBox="0 0 64 64" aria-hidden="true" ` +
+  `style="display:inline-block;width:1.3em;height:1.3em;vertical-align:-0.28em;overflow:visible">${body}</svg>`;
+const DRAWN_SYMBOLS = {
+  '🐲': drawnSvg('dragon',
+    '<path d="M19.5 37C12 37.5 6.5 42 4.5 48.5L8.5 50C10.5 45.5 14.5 43.5 20.5 43.5Z" fill="#c8453a"/>' +
+    '<path d="M1 54.5L4.5 45.5L11 52Z" fill="#8f2a22"/>' +
+    '<path d="M34 30L30 9L17 4Q19 10 14 14Q21 15 21 21Q26 21 28 27Z" fill="#8f2a22"/>' +
+    '<path d="M22 43L19 55L17 57.5L26 57.5L28.5 45ZM35.5 44L36.5 55L34.5 57.5L43.5 57.5L41.5 43Z" fill="#a8362c"/>' +
+    '<ellipse cx="31" cy="39" rx="14.5" ry="9" fill="#c8453a"/>' +
+    '<path d="M20.5 42C26 47.5 36.5 48.5 43 43C37.5 50 25.5 50 20.5 42Z" fill="#f2c14e"/>' +
+    '<path d="M35.5 36.5C39.5 31 42 25 43 19.5L50 23C48 29 46 34.5 43.5 39.5Z" fill="#c8453a"/>' +
+    '<path d="M42 21.5C42 14.5 46.5 9.5 53.5 10L62.5 12.8L62 17.2L55.5 17.8C53.5 20.5 51.5 23.5 50 25Z" fill="#c8453a"/>' +
+    '<path d="M46.5 11.5L41.5 2.5L50.5 10ZM51.5 10.3L50.5 3.5L55 10.6Z" fill="#f2c14e"/>' +
+    '<circle cx="54" cy="13.6" r="1.6" fill="#fff6d8"/><circle cx="54.4" cy="13.7" r="0.8" fill="#222"/>' +
+    '<path d="M30 31L25 8L8 3Q11 10 5 14Q13 15 12 22Q18 21 19 28Q25 26 30 31Z" fill="#e0614f" stroke="#8f2a22" stroke-width="1.3" stroke-linejoin="round"/>' +
+    '<path d="M25 8L5 14M25 8L12 22M25 8L19 28" stroke="#8f2a22" stroke-width="1.3" fill="none" stroke-linecap="round"/>'),
+  '🦔': drawnSvg('spikeball',
+    '<path d="M27.3 18.3L32 2L36.7 18.3ZM38.4 19L53.2 10.8L45 25.6ZM45.7 27.3L62 32L45.7 36.7ZM45 38.4L53.2 53.2L38.4 45Z' +
+    'M36.7 45.7L32 62L27.3 45.7ZM25.6 45L10.8 53.2L19 38.4ZM18.3 36.7L2 32L18.3 27.3ZM19 25.6L10.8 10.8L25.6 19Z" ' +
+    'fill="#d8c49c" stroke="#4a3826" stroke-width="2.4" stroke-linejoin="round"/>' +
+    '<circle cx="32" cy="32" r="16.5" fill="#8f6a41" stroke="#4a3826" stroke-width="2.4"/>' +
+    '<ellipse cx="26" cy="25.5" rx="6.5" ry="3.8" transform="rotate(-35 26 25.5)" fill="#b8915f"/>' +
+    '<circle cx="23.5" cy="24" r="1.8" fill="#fff6e2"/>'),
+  '🔩': drawnSvg('steelshield',
+    '<path d="M32 6L54 11V30C54 44 44.5 53.5 32 59C19.5 53.5 10 44 10 30V11Z" fill="#4d5862"/>' +
+    '<path d="M32 10.5L50.5 14.6V30C50.5 41.8 42.6 50 32 54.8Z" fill="#a3aeb8"/>' +
+    '<path d="M32 10.5L13.5 14.6V30C13.5 41.8 21.4 50 32 54.8Z" fill="#dce3e9"/>' +
+    '<path d="M17 17L27 15L18.5 33Z" fill="#ffffff" opacity=".55"/>' +
+    '<circle cx="32" cy="31" r="6.2" fill="#8d99a4" stroke="#4d5862" stroke-width="2"/>' +
+    '<circle cx="30.2" cy="29.2" r="1.8" fill="#eef2f5"/>'),
+};
+/* A pill's symbol as HTML. */
+function symHtml(sym){ return DRAWN_SYMBOLS[sym] || escapeHtml(emo(sym)); }
+/* A message's HTML with its symbols as this iPad can draw them, and the
+   game's own drawn. */
+function emoHtml(html){
+  let s = emoText(html);
+  for(const k in DRAWN_SYMBOLS) if(s.includes(k)) s = s.split(k).join(DRAWN_SYMBOLS[k]);
+  return s;
+}
 /* ============================================================
    STATUSES AS SYMBOLS (3.52)
    The designer: "Should we have symbols for each status that can be pressed
@@ -7642,8 +7744,8 @@ const STATUS_LABELS = {
    A row never wraps: it scrolls sideways if it ever has to.
    ============================================================ */
 /* Pills built outside the labels, by key: their symbol. */
-const PILL_SYMBOL = { counterStack:'🛡', sacredFlame:'🔥', aftershock:'💥', overgrowth:'🌿', wrathStacks:'💢',
-  windup:'⏳', omen:'🐦', meditate:'🧘', passive:'✨' };
+const PILL_SYMBOL = { counterStack:'✋', sacredFlame:'🐦‍🔥', aftershock:'💥', overgrowth:'🍃', wrathStacks:'💢',
+  windup:'⏳', meditate:'🧘', passive:'🌟' };
 /* The turns a pill says it has after this one (its label, then a number), or
    null — a freeze and a blinding count theirs with this one in. */
 function pillTurnsAfter(key, full){
@@ -7674,7 +7776,7 @@ function symbolizePills(root){
     el.setAttribute('aria-label', full);
     if(el.style && el.style.textDecoration) el.classList.add('muted');
     el.style.textDecoration = '';
-    el.textContent = sym;
+    el.innerHTML = symHtml(sym);                      // (3.53) as this iPad can draw it; Dragon Dance, the dragon
     if(sub){ const sb = document.createElement('sub'); sb.textContent = sub; el.appendChild(sb); }
     if(pillTurnsAfter(key, full) === 0) el.classList.add('last');
   });
@@ -7741,9 +7843,9 @@ function renderStatusBadges(){
     if(af) out.push(`<span class="status-pill mine"${pillAt('aftershock', 'ps')}>💥 Aftershock ×${af}</span>`);
     const sfl = sacredFlameCount();
     const phx = [mon, companionOnField()].find(m=> m && hasRebirth(m));    // (a companion phoenix rises too)
-    if(sfl) out.push(`<span class="status-pill mine"${pillAt('sacredFlame', 'ps')}>🔥 Sacred Flame ×${sfl}${(phx && !ui.battle.rebirthUsed) ? ' · Rebirth ready' : ''}</span>`);
+    if(sfl) out.push(`<span class="status-pill mine"${pillAt('sacredFlame', 'ps')}>🐦‍🔥 Sacred Flame ×${sfl}${(phx && !ui.battle.rebirthUsed) ? ' · Rebirth ready' : ''}</span>`);
     const ogs = overgrowthStacks();                                         // (3.19) the Forest Guardian's gift
-    if(ogs) out.push(`<span class="status-pill mine"${pillAt('overgrowth', 'ps')}>🌿 Overgrowth ×${ogs} · ATK +${Math.round(ogs * FOREST_GIFT.step * 100)}%</span>`);
+    if(ogs) out.push(`<span class="status-pill mine"${pillAt('overgrowth', 'ps')}>🍃 Overgrowth ×${ogs} · ATK +${Math.round(ogs * FOREST_GIFT.step * 100)}%</span>`);
     const wr = getPStatus(0,'wrath');
     if(wr && wr.stacks) out.push(`<span class="status-pill"${pillAt('wrathStacks', 'ps')}>💢 Wrath ×${wr.stacks}</span>`);
     /* the side's Counter stacks and Combo — one pill each (3.01: the stacks
@@ -7751,7 +7853,7 @@ function renderStatusBadges(){
     const pc = (ui.battle && ui.battle.pCombo) || 0;
     const cpill = counterPill(partyCounters(), '');
     if(cpill) out.push(cpill);
-    if(pc) out.push(`<span class="status-pill"${pillAt('combo', 'ps')}>👊 Combo ×${pc}</span>`);
+    if(pc) out.push(`<span class="status-pill"${pillAt('combo', 'ps')}>💪 Combo ×${pc}</span>`);
     const mir1 = getPStatus(0,'mirage');
     if(mir1 && mir1.pending) out.push(`<span class="status-pill"${pillAt('mirageImages', 'ps')}>👥 Afterimages ×${mir1.pending}</span>`);
     row.innerHTML = out.join('');
@@ -7773,7 +7875,7 @@ function renderStatusBadges(){
       /* (3.01) their Counter stacks and Combo are their side's, as yours are */
       + counterPill(foeCounters(), 'foe')
       + siphonPills()                                  // (3.43) the tower's siphons
-      + (ec ? `<span class="status-pill foe"${pillAt('combo', 'fs')}>👊 Combo ×${ec}</span>` : '');
+      + (ec ? `<span class="status-pill foe"${pillAt('combo', 'fs')}>💪 Combo ×${ec}</span>` : '');
     symbolizePills(fr);
   }
   // Enemy statuses render on their OWN card, above that enemy's HP bar, so it's
@@ -7801,7 +7903,7 @@ function renderStatusBadges(){
        statuses — stances, stacks, plain fields — belong in `extras`. */
     if(e.gooed)          extras.push(ep('gooed', '🌋 Pinned'));
     /* (their Counter stacks and Combo: the side's row above, since 3.01) */
-    if(e.guard)          extras.push(ep('guard', '🛡 Guard'));
+    if(e.guard)          extras.push(ep('guard', '🛡️ Guard'));
     if(e.airborne > 0)   extras.push(ep('airborne', '🕊 Airborne'));
     if(e.invisible > 0)  extras.push(ep('invisible', '👤 Unseen'));
     if(e.prep > 0)       extras.push(ep('prep', `🎯 Prep ×${e.prep}`));
@@ -7810,7 +7912,7 @@ function renderStatusBadges(){
     const pd = passiveDefOf(e);
     if(pd) (pd.names || [pd.name]).forEach(nm=> extras.push(passivesMuted(e)      // one pill a passive (2.97)
       ? ep('passive', `🔇 ${escapeHtml(nm)}`, 'opacity:.75;text-decoration:line-through;')
-      : ep('passive', `✨ ${escapeHtml(nm)}`)));
+      : ep('passive', `🌟 ${escapeHtml(nm)}`)));
     slot.innerHTML = eStatuses(e).filter(st=> (st.type !== 'forgot' || forgottenNames(e).length) && (st.type !== 'blinded' || blindOf(e)) && (st.type !== 'taunted' || tauntOf(e))).map(st=>{
       if(st.type === 'forgot') return ep('forgot', forgotPill(st));
       if(st.type === 'taunted') return ep('taunted', tauntPill(e));   // (3.38)
@@ -8034,7 +8136,7 @@ function statusTipText(key, st, c, pill){
       return `${c.W} is winding up${nm ? ` <b>${escapeHtml(nm)}</b>` : ''}: it lands next turn${c.yours ? ', with no words to write' : ''}.`; }
     case 'omen': return m ? `${c.W}'s next blow hits <b>${pc(m._omen)}%</b> harder.` : '';
     case 'passive': {
-      const nm = pillWords(pill).replace(/^\s*(✨|🔇)\s*/u, '').trim();
+      const nm = pillWords(pill).replace(/^\s*(🌟|🔇)\s*/u, '').trim();
       const row = m ? (MOVES[m.species] || []).find(r=> r[1] === nm && r[6] && r[6].passive) : null;
       const bits = row ? passiveBits(row[6].passive, tipAtk(m)) : [];
       if(!bits.length) return '';
@@ -8047,12 +8149,21 @@ function pillWords(el){ return el ? (((el.dataset && el.dataset.full) || el.text
 /* The card's title for a pill: its symbol and its words, without the number
    of turns — that is said under it, in a sentence. */
 function pillTitle(key, el){
+  const t = pillTitleParts(key, el);
+  return `${t.sym} ${t.rest}`.trim();
+}
+function pillTitleParts(key, el){
   const full = pillWords(el);
   const words = full.split(' ');
   const sym = (el.dataset && el.dataset.sym) || words[0];
   let rest = words.slice(1).join(' ');
   if(pillTurnsAfter(key, full) != null) rest = rest.replace(/ \d+((?: · .*)?)$/u, '$1');
-  return `${sym} ${rest}`.trim();
+  return { sym, rest };
+}
+/* (3.53) …as HTML: its symbol drawn as the pill draws it. */
+function pillTitleHtml(key, el){
+  const t = pillTitleParts(key, el);
+  return `${symHtml(t.sym)} ${escapeHtml(t.rest)}`.trim();
 }
 /* The turns a timed pill has after this one (its +1 grace taken off), said
    in words. A freeze and a blinding count their own way, and say so in their
@@ -8107,7 +8218,7 @@ function statusTipFor(el){
   /* (3.52) a symbol is all the pill shows now, so its card always opens —
      its name at least, even with nothing more to say */
   if(!text && t.key === 'block') return null;
-  const title = t.key === 'block' ? `🛡 Shields ×${blockStacksOf(c.mon)}` : escapeHtml(pillTitle(t.key, el));
+  const title = t.key === 'block' ? `🛡 Shields ×${blockStacksOf(c.mon)}` : pillTitleHtml(t.key, el);
   return { title, text, turns:tipTurnsLine(t.key, el), cls:el.classList.contains('foe') ? 'foe' : el.classList.contains('mine') ? 'mine' : '' };
 }
 function closeStatusTip(){

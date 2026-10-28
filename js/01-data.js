@@ -217,8 +217,12 @@ const SPECIES = {
   water_dragon:    { name:'Water Dragon',tier:'legendary', types:['Water','Dragon'],rate:13, nerfedRate:13, base:100, evo:[31],    evoMult:1.5, color:'#2f7fa8', glyph:'龙', bossOnly:true, oneLook:true },
   /* Hatched from the egg with its core still missing: legendary by nature,
      elite in practice until Region 5 returns what was taken. */
+  /* (3.53) The designer: "the crowned core returned water dragon should use
+     water_dragon_c_front and water_dragon_c_back sprites instead of the
+     nerfed ones." Its core home, it looks like the Water Dragon it is
+     (`crownedLook`, spriteKey). */
   water_dragon_nerfed:{ name:'Water Dragon', tier:'legendary', types:['Water','Dragon'],rate:13, nerfedRate:11, base:31, evo:[31], evoMult:1.5,
-                     color:'#5a92a8', glyph:'龙', weakened:true, nerfedUntilCrowned:true, storyCrownOnly:true, oneLook:true },
+                     color:'#5a92a8', glyph:'龙', weakened:true, nerfedUntilCrowned:true, storyCrownOnly:true, oneLook:true, crownedLook:'water_dragon' },
   dragon_egg:      { name:'Dragon Egg',  tier:'special',   types:['Water','Dragon'],rate:0,  nerfedRate:0,  base:1,   evo:[],      color:'#7fa8b8', glyph:'卵', isEgg:true, hatchesAt:31, hatchesInto:'water_dragon_nerfed' },
 
   phoenix:         { name:'Phoenix',     tier:'legendary', types:['Fire','Flying'], rate:13, nerfedRate:13, base:25,  evo:[],      evoMult:1.5, color:'#c8453a', glyph:'凤', frozenRegion1:true, bonusStages:1 },

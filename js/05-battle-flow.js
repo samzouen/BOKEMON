@@ -209,7 +209,7 @@ function playEffect(moveName, opts, done){
    With textContent the tags rendered as literal text on screen. Everything
    passed here is written by the game, never by the player — the one place a
    name could arrive is escaped at the call site. */
-function battleMsg(t){ ui._battleActivity = Date.now(); const el=$('#battleMsg'); if(el) el.innerHTML = t; }
+function battleMsg(t){ ui._battleActivity = Date.now(); const el=$('#battleMsg'); if(el) el.innerHTML = (typeof emoHtml === 'function') ? emoHtml(t) : t; }   // (3.53) symbols as this iPad can draw them; the dragon drawn
 
 /* ---------- battle animations (item 4 & 5) ---------- */
 /* ---------- BATTLE LOG (arena debugging) ---------- */
@@ -222,7 +222,7 @@ function logBattle(msg){
   if(box){
     const d = document.createElement('div');
     d.style.cssText='padding:3px 0;border-bottom:1px solid rgba(35,32,25,0.07);';
-    d.textContent = msg;
+    d.textContent = (typeof emoText === 'function') ? emoText(msg) : msg;
     box.appendChild(d);
     box.scrollTop = box.scrollHeight;
   }
@@ -949,7 +949,7 @@ function applyBonusWin(mv, won){
 function askBonusRound(mv, mon, cb){
   const isAftershock = !!(mv.bonus && mv.bonus.aftershock);
   const isSacredFlame = !!(mv.bonus && mv.bonus.sacredFlame);
-  const reward = isAftershock ? '💥 Aftershock' : isSacredFlame ? '🔥 Sacred Flame' : `×${mv.bonus.mult}`;
+  const reward = isAftershock ? '💥 Aftershock' : isSacredFlame ? '🐦‍🔥 Sacred Flame' : `×${mv.bonus.mult}`;
   const promise = isAftershock
     ? `to start an <b>Aftershock</b> — it strikes every enemy at the start of each of your next ${AFTERSHOCK.turns} turns.`
     : isSacredFlame
@@ -1061,10 +1061,10 @@ function sacredFlameCount(){
 function laySacredFlame(mon, fromOvercharge){
   const b = ui.battle;
   if(!b || !mon) return;
-  addPreHit({ label:'🔥 The Sacred Flame burns!', pct:SACRED_FLAME.pct, atk:monAtk(mon),
+  addPreHit({ label:'🐦‍🔥 The Sacred Flame burns!', pct:SACRED_FLAME.pct, atk:monAtk(mon),
               turnsLeft:SACRED_FLAME.turns, aoe:true, sacredFlame:true });
-  battleMsg(fromOvercharge ? '⚡🔥 The Overcharge feeds the fire — another Sacred Flame!'
-                           : `🔥 A Sacred Flame is laid — ${SACRED_FLAME.pct}× ATK for ${SACRED_FLAME.turns} turns.`);
+  battleMsg(fromOvercharge ? '⚡🐦‍🔥 The Overcharge feeds the fire — another Sacred Flame!'
+                           : `🐦‍🔥 A Sacred Flame is laid — ${SACRED_FLAME.pct}× ATK for ${SACRED_FLAME.turns} turns.`);
   if(!fromOvercharge) b._sacredFlameLaid = true;
   renderStatusBadges();
 }
@@ -1097,7 +1097,7 @@ function offerRebirth(rise, fall, who){
   const ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.6);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;';
   ov.innerHTML = `<div style="background:var(--paper);border-radius:18px;padding:22px;max-width:340px;width:100%;text-align:center;">
-    <div style="font-size:40px;">🔥</div>
+    <div style="font-size:40px;">${emo('🐦‍🔥')}</div>
     <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:19px;margin:6px 0;">Rebirth</div>
     <div style="font-size:13px;font-weight:600;line-height:1.55;color:var(--ink-soft);margin-bottom:16px;">
       ${escapeHtml(displayName(mon))} has fallen — but the Sacred Flame still burns.
@@ -1131,7 +1131,7 @@ function offerRebirth(rise, fall, who){
         renderBattle();
         drainHp(pid('playerHp', mon), 0, mon.currentHp, monMaxHp(mon));
         playEffect('Nova', { type:'Fire' });
-        battleMsg(`🔥 Rebirth! ${displayName(mon)} rises from the Sacred Flame with half its HP.`);
+        battleMsg(`🐦‍🔥 Rebirth! ${displayName(mon)} rises from the Sacred Flame with half its HP.`);
         setTimeout(rise, 900);
       },
       onExit:()=> failed(),
@@ -1218,7 +1218,7 @@ function overgrowthPhase(phase, done){
     drainHp(pid('playerHp', fairy), before, fairy.currentHp, max);
     showDamageNumber(pid('playerBob', fairy), healed, { heal:true });
   }
-  const regenSay = `🌿 Overgrowth — ${escapeHtml(displayName(fairy))} ${healed > 0 ? `heals <b>${healed} HP</b>` : 'is already whole'}.`;
+  const regenSay = `🍃 Overgrowth — ${escapeHtml(displayName(fairy))} ${healed > 0 ? `heals <b>${healed} HP</b>` : 'is already whole'}.`;
   if(og.stacks >= FOREST_GIFT.maxStacks){
     battleMsg(regenSay + ` Your team's ATK is at its full <b>+${Math.round(og.stacks * FOREST_GIFT.step * 100)}%</b>.`);
     return setTimeout(done, 900);
@@ -1232,11 +1232,11 @@ function overgrowthPhase(phase, done){
         og.stacks = Math.min(FOREST_GIFT.maxStacks, og.stacks + 1);
         playSfx('power_up');                             // (3.51) the Forest Fairy's ATK up: the power-up
         renderBattle();
-        battleMsg(`🌿 Overgrowth! Vines and blossom wind round your whole team — ATK <b>+${Math.round(og.stacks * FOREST_GIFT.step * 100)}%</b> ` +
+        battleMsg(`🍃 Overgrowth! Vines and blossom wind round your whole team — ATK <b>+${Math.round(og.stacks * FOREST_GIFT.step * 100)}%</b> ` +
           `for the rest of the battle (${og.stacks} of ${FOREST_GIFT.maxStacks}).`);
       } else {
         renderBattle();
-        battleMsg(`🌿 The vines settle. (Overgrowth: ${og.stacks} of ${FOREST_GIFT.maxStacks}.)`);
+        battleMsg(`🍃 The vines settle. (Overgrowth: ${og.stacks} of ${FOREST_GIFT.maxStacks}.)`);
       }
       setTimeout(done, 1100);
     });
@@ -1254,13 +1254,13 @@ function askOvergrowth(fairy, cb){
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;';
   ov.innerHTML = `<div style="background:var(--paper);border-radius:18px;padding:20px;max-width:340px;width:100%;text-align:center;">
     <div>${monPortrait('forest_fairy', 72, { view:'front', bare:true, stage:monStage(fairy), crowned:isCrowned(fairy) })}</div>
-    <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:19px;margin:4px 0;">🌿 Overgrowth</div>
+    <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:19px;margin:4px 0;">🍃 Overgrowth</div>
     <div style="font-size:13px;font-weight:600;line-height:1.55;color:var(--ink-soft);margin-bottom:14px;">
       Write <b>${FOREST_GIFT.words} words</b> ${revisionWords().length ? 'you have learned to 🥈 silver or 🥇 gold' : 'from your list'} —
       every one right, and your <b>whole team</b> hits <b>${step}% harder</b> for the rest of the battle
       (now <b>+${n * step}%</b>, ${n} of ${FOREST_GIFT.maxStacks}). Nothing of theirs can sweep it away.
     </div>
-    <button class="btn btn-primary" id="ogGo">🌿 Write ${FOREST_GIFT.words} words</button>
+    <button class="btn btn-primary" id="ogGo">🍃 Write ${FOREST_GIFT.words} words</button>
     <button class="btn btn-ghost" id="ogSkip" style="margin-top:8px;">Not now</button>
   </div>`;
   document.body.appendChild(ov);
@@ -1270,7 +1270,7 @@ function askOvergrowth(fairy, cb){
     close();
     const target = FOREST_GIFT.words;
     startQuiz({
-      title: '🌿 Overgrowth',
+      title: '🍃 Overgrowth',
       subtitle: `${target} words${revisionWords().length ? ' you have learned to silver or gold' : ''} — every one right for +${step}% ATK, your whole team.`,
       words: pickWords(target, true), stopAtFirstMiss:true, lockExit:true,
       wordTarget: target,
@@ -1410,7 +1410,7 @@ function resolveBattleMove(mv, target, results, opts){
                    mv.charm || mv.disrupt || mv.soul || mv.clones || mv.dot;
   if(castOnly && dustBlocks('player') && correct >= mv.words){
     playSfx('move_miss');
-    battleMsg(`💎 Their diamond dust scatters your ${mv.name} — nothing takes hold.`);
+    battleMsg(`✨ Their diamond dust scatters your ${mv.name} — nothing takes hold.`);
     if(mv.soul && ui.battle.usedSoul) ui.battle.usedSoul[mon.uid] = false;   // not spent, as a stone is not (2.93)
     if(mv.soul){ ui.battle.phase = 'player'; return renderBattle(); }
     return setTimeout(advanceTurn, 1100);
@@ -1461,8 +1461,8 @@ function resolveBattleMove(mv, target, results, opts){
     else if(mv.stargaze) line = castStargazer('player', mon, mv.stargaze, mv.name);  // (3.37) its Stargazer
     else if(mv.kindle){
       const ok = castSideBuff('player', mon, 'kindle', { deal:mv.kindle.deal }, mv.kindle.turns, mv.name);
-      line = ok ? `🔥 <b>${escapeHtml(mv.name)}</b> — for ${mv.kindle.turns} turns your side deals <b>${mv.kindle.deal}×</b>.`
-                : `🔥 ${escapeHtml(mv.name)} — but their diamond dust smothers the flame.`;
+      line = ok ? `🕯️ <b>${escapeHtml(mv.name)}</b> — for ${mv.kindle.turns} turns your side deals <b>${mv.kindle.deal}×</b>.`
+                : `🕯️ ${escapeHtml(mv.name)} — but their diamond dust smothers the flame.`;
     } else if(mv.gallop){
       const ok = castSideBuff('player', mon, 'gallop', { init:mv.gallop.init }, mv.gallop.turns, mv.name);
       line = ok ? `🦄 <b>${escapeHtml(mv.name)}</b> — for ${mv.gallop.turns} turns your side moves a step sooner.`
@@ -1642,7 +1642,7 @@ function resolveBattleMove(mv, target, results, opts){
     logBattle(`${displayName(mon)} used ${mv.name} (quick, once a battle)`);
     ui.battle.phase = 'player';
     renderBattle();
-    battleMsg(`🛡 ${mv.name}! This turn ${displayName(mon)} ${soulCastNote(monRef(mon), true, mv.soul.bonus)}. ` +
+    battleMsg(`⚙️ ${mv.name}! This turn ${displayName(mon)} ${soulCastNote(monRef(mon), true, mv.soul.bonus)}. ` +
       `It cost no turn — choose your move.`);
     return;
   }
@@ -1911,7 +1911,7 @@ function resolveBattleMove(mv, target, results, opts){
       const nm = a=> a.map(t=> SPECIES[t.species].name).join(' and '), many = got.length > 1;
       const said = (got.length ? `🥱 ${nm(got)} ${many ? 'are' : 'is'} taunted — next turn ${many ? 'they' : 'it'} must hit ` +
                                  `${escapeHtml(displayName(mon))} with ${many ? 'their' : 'its'} strongest move!` : '') +
-                   (kept.length ? ` 💎 The diamond dust keeps ${nm(kept)} calm.` : '');
+                   (kept.length ? ` ✨ The diamond dust keeps ${nm(kept)} calm.` : '');
       if(said){ renderStatusBadges(); setTimeout(()=> battleMsg(said.trim()), 850); }
     }
     /* (3.26) the Squid's Abyssal Gaze Max: a muddle on the one it hits — its
@@ -2162,7 +2162,7 @@ function applyHits(hits, opts){
     mon.currentHp = Math.min(max, mon.currentHp + healed);
     drainHp(pid('playerHp'), before, mon.currentHp, max);
     const others = battleParty().filter(m=>m.currentHp>0 && m!==mon).length;
-    battleMsg(`🌿 The seed drinks deep — <b>${mon.currentHp-before} HP</b> to ${displayName(mon)}` +
+    battleMsg(`🌱 The seed drinks deep — <b>${mon.currentHp-before} HP</b> to ${displayName(mon)}` +
       (others ? ` and every one of your other ${others} monster${others>1?'s':''}.` : '.'));
   }
   saveProfile();
@@ -2658,8 +2658,8 @@ function enemyPsySupport(e, move, next){
   else if(x.stargaze) line = castStargazer('enemy', e, x.stargaze, move[1]);     // (3.37)
   else if(x.kindle){
     const ok = castSideBuff('enemy', e, 'kindle', { deal:x.kindle.deal }, x.kindle.turns, move[1]);
-    line = ok ? `🔥 ${name} uses <b>${escapeHtml(move[1])}</b> — for ${x.kindle.turns} turns their side deals <b>${x.kindle.deal}×</b>.`
-              : `🔥 ${name} uses ${escapeHtml(move[1])} — your diamond dust smothers the flame.`;
+    line = ok ? `🕯️ ${name} uses <b>${escapeHtml(move[1])}</b> — for ${x.kindle.turns} turns their side deals <b>${x.kindle.deal}×</b>.`
+              : `🕯️ ${name} uses ${escapeHtml(move[1])} — your diamond dust smothers the flame.`;
   } else if(x.gallop){
     const ok = castSideBuff('enemy', e, 'gallop', { init:x.gallop.init }, x.gallop.turns, move[1]);
     line = ok ? `🦄 ${name} uses <b>${escapeHtml(move[1])}</b> — for ${x.gallop.turns} turns their side moves a step sooner.`
@@ -3239,7 +3239,7 @@ function playerThresholdPunish(mon, e){
         out += getEStatus(e,'paralysed')
           ? ` 💫 ${displayName(mon)} howls — ${SPECIES[e.species].name} is stunned!`
           : will ? ` 💪 ${displayName(mon)} howls — ${SPECIES[e.species].name}'s Iron Will does not flinch.`
-          : ' 💎 Their diamond dust turns the howl aside.';
+          : ' ✨ Their diamond dust turns the howl aside.';
       }
     }
   }
@@ -3255,7 +3255,7 @@ function playerThresholdPunish(mon, e){
         out += getEStatus(e,'asleep')
           ? ` 💤 ${displayName(mon)} sings — ${SPECIES[e.species].name} cannot keep its eyes open!`
           : will ? ` 💪 ${displayName(mon)} sings — ${SPECIES[e.species].name}'s Iron Will keeps it awake.`
-          : ' 💎 Their diamond dust turns the song aside.';
+          : ' ✨ Their diamond dust turns the song aside.';
       }
     }
   }
@@ -3275,7 +3275,7 @@ function checkThresholdStuns(){
         const mon = activeMon();
         if(mon && mon.currentHp > 0 && !getPStatus(0,'stunned')){
           if(ironWillHolds(mon, { type:'stunned' })){ floatOver(mon, 'IRON WILL'); setTimeout(()=> battleMsg(`💪 ${SPECIES[e.species].name} howls — ${displayName(mon)}'s Iron Will does not flinch.`), 500); return; }
-          if(enemyStatusBlocked('stunned')){ battleMsg('💎 The diamond dust turns the howl aside.'); return; }   // (it went on to say "stunned")
+          if(enemyStatusBlocked('stunned')){ battleMsg('✨ The diamond dust turns the howl aside.'); return; }   // (it went on to say "stunned")
           setPStatus(0, { type:'stunned', turnsLeft:2 });
           renderStatusBadges();
           setTimeout(()=> battleMsg(`💫 ${SPECIES[e.species].name} howls — ${displayName(mon)} is stunned!`), 500);
@@ -3311,7 +3311,7 @@ function playVolleys(volleys, i, done){
       ui.battle._leechTally = 0;
       const n = battleParty().filter(m=>m.currentHp>0).length;
       setTimeout(()=> battleMsg(
-        `🌿 The seeds drink deep — <b>${tally} HP</b> to each of your ${n} standing monster${n>1?'s':''}.`), 350);
+        `🌱 The seeds drink deep — <b>${tally} HP</b> to each of your ${n} standing monster${n>1?'s':''}.`), 350);
     }
     done(); return;
   }
@@ -3330,12 +3330,15 @@ function resolveStatusMove(mv, mon, target, correct){
     playSfx('move_miss');
     ui.battle.phase = 'player';
     renderBattle();
-    battleMsg(`💎 Their diamond dust scatters your ${mv.name} — nothing takes hold. It is still your turn.`);
+    battleMsg(`✨ Their diamond dust scatters your ${mv.name} — nothing takes hold. It is still your turn.`);
     return;
   }
   const atk=monAtk(mon);
   const targets = target ? [target] : [];
   const res = applyVeryHighEffect(mv.stoneType, mon, atk, targets, mv.stonePlus||0);
+  /* (3.53) said with its symbol, as its pill shows it: 🔥 Overheat… */
+  const vs = veryHighSymbol(mv.stoneType);
+  if(res.msg && !res.msg.startsWith(vs)) res.msg = `${vs} <b>${escapeHtml(VERY_HIGH[mv.stoneType] ? VERY_HIGH[mv.stoneType].name : mv.name)}</b>! ${res.msg}`;
   bob($('#' + pid('playerBob')), +1);
   playEffect(mv.name, { type: mv.stoneType, tier:'veryhigh', at: target ? 'enemy-'+ui.battle.enemies.indexOf(target) : null });
   setTimeout(()=>{
@@ -4047,7 +4050,7 @@ function enemyActs(i, e){
     const st = setESide({ type:'steelSoul', turnsLeft:turns, max:turns, noDust:true,
                           reduce:ex.soul.reduce, bonus:ex.soul.bonus, owner:e });
     renderStatusBadges();
-    battleMsg(st ? `🛡 ${name} uses <b>${move[1]}</b> — this turn it ${soulCastNote(e, false, ex.soul.bonus)}.`
+    battleMsg(st ? `⚙️ ${name} uses <b>${move[1]}</b> — this turn it ${soulCastNote(e, false, ex.soul.bonus)}.`
                  : `${name} uses ${move[1]} — the diamond dust scatters it.`);
     if(!st) e._soulUsed = false;                  // not spent, as your stone is not
     return setTimeout(()=> enemyActs(i, e), 1100);  // quick: now its move
@@ -4465,13 +4468,13 @@ function enemyStrikeOn(ctx, step, done){
        its strongest move, at their Sloth */
     if(ex.taunt && totalTaken > 0 && mon.currentHp > 0){
       if(tauntMark(mon, e, ex.taunt)) msg += ` 🥱 ${escapeHtml(displayName(mon))} is taunted — next turn it must hit ${name} with its strongest move!`;
-      else msg += ` 💎 The diamond dust keeps ${escapeHtml(displayName(mon))} calm.`;
+      else msg += ` ✨ The diamond dust keeps ${escapeHtml(displayName(mon))} calm.`;
       renderStatusBadges();
     }
     /* (3.26) a gaze that confuses (the Squid's Abyssal Gaze Max) */
     if(ex.confuseHit && totalTaken > 0 && mon.currentHp > 0 && !getMStatus(mon,'discombobulate') && Math.random() < (ex.confuseHit.chance || 0.25)){
       if(ironWillHolds(mon, { type:'discombobulate' })){ floatOver(mon, 'IRON WILL'); msg += ` 💪 ${displayName(mon)}'s Iron Will — it will not be muddled!`; }
-      else if(enemyStatusBlocked('discombobulate')){ msg += ' 💎 The diamond dust keeps your head clear.'; }
+      else if(enemyStatusBlocked('discombobulate')){ msg += ' ✨ The diamond dust keeps your head clear.'; }
       else {
         withFocus(mon, ()=> markPlayerConfused(ex.confuseHit.ffPower || 1.0, true));
         if(getMStatus(mon,'discombobulate')) msg += ` 🌀 ${displayName(mon)} is confused — its next swing turns on its own side!`;
@@ -4531,7 +4534,7 @@ function enemyStrikeWrap(ctx){
     setPStatus(0, { type:'jaws', turnsLeft:3 });
     livingEnemies().forEach(x=>{ if(x.elusive) pinDown(x); });   // dispel first
     renderStatusBadges();
-    setTimeout(()=> battleMsg(`🔥 ${name} has hold of you — no switching, no running.`), 600);
+    setTimeout(()=> battleMsg(`⛓️ ${name} has hold of you — no switching, no running.`), 600);
   }
   /* A quarter of its dives come up with something worth eating. */
   const fish = ex.fish;
@@ -4574,7 +4577,7 @@ function enemyStrikeWrap(ctx){
      set off your Goblin Knight's riposte, above.) */
   let extra = '';
   if(ctx.totalTaken > 0) extra = enemyLanded(e, ctx.totalTaken, ctx.victims);
-  if(ctx.seedsFed > 0) extra = `🌿 Their seeds drink deep — ${ctx.seedsFed} HP to each of them. ` + extra;
+  if(ctx.seedsFed > 0) extra = `🌱 Their seeds drink deep — ${ctx.seedsFed} HP to each of them. ` + extra;
   burnOut(e, ex);
 
   saveProfile();
@@ -4731,7 +4734,7 @@ function enemyFollowUps(i, e, move, ctx, next){
     if(before > me.currentHp) noteHurt(me, e._blow);      // (3.38) its repeat or echo: the same attack
     /* an Overcharge repeat that lands makes it forget one more (2.97) */
     const forgot = (repeatOf && before > me.currentHp) ? mindPassivesLanded(e, [me], true) : [];
-    battleMsg(`${label} — ${before - me.currentHp}!` + (fed > 0 ? ` 🌿 Their seeds drink deep — ${fed} HP to each of them.` : '') +
+    battleMsg(`${label} — ${before - me.currentHp}!` + (fed > 0 ? ` 🌱 Their seeds drink deep — ${fed} HP to each of them.` : '') +
               (forgot.length ? ' ' + forgot.join(' ') : '') + seen);
     setTimeout(then, forgot.length ? 1300 : 750);
   };

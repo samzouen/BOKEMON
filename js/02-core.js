@@ -89,7 +89,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.52';
+const GAME_VERSION = '3.54';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1697,10 +1697,14 @@ function crownSparkles(px){
      water_starter2       second evolution
    combined with the view suffix, e.g. water_starter1_front.png */
 function spriteKey(species, stage, crowned){
+  const sp = (typeof SPECIES !== 'undefined' && SPECIES[species]) || null;
+  /* (3.53) Crowned, some take another's look: the hatched Water Dragon, its
+     core home, is the Water Dragon's crowned picture (water_dragon_c). */
+  if(crowned && sp && sp.crownedLook && sp.crownedLook !== species) return spriteKey(sp.crownedLook, stage, true);
   /* (3.38) A legendary born from an egg, a seed or a stone (`oneLook`) is its
      base picture at every stage — its one evolution is the birth — and
      crowned, `<species>_c`. */
-  const st = (typeof SPECIES !== 'undefined' && SPECIES[species] && SPECIES[species].oneLook) ? 0 : stage;
+  const st = (sp && sp.oneLook) ? 0 : stage;
   return species + (st ? String(st) : '') + (crowned ? '_c' : '');
 }
 function spritePath(species, stage, view, crowned){
