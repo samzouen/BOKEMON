@@ -89,7 +89,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.54';
+const GAME_VERSION = '3.60';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -261,6 +261,7 @@ try{
               (r5Ask's no; its yes is an action, and clicks), a story page's
               Continue or "Leave it" (#sceneNext — "Dive" is an action);
               (3.42) and a battle pill or shield bar opening its card;
+              (3.55) and a passive's button opening its card;
      'click'  everything else.
    A button may say outright with data-sfx="none" / "back" / "click". */
 function clickSound(el){
@@ -268,7 +269,7 @@ function clickSound(el){
   const set = el.closest('[data-sfx]');
   if(set) return set.dataset.sfx;
   if(el.classList.contains('wkey')) return 'none';
-  if(el.matches('.status-pill, .blk-wrap')) return 'back';    // (3.42) a battle pill opening its card: the quiet one
+  if(el.matches('.status-pill, .blk-wrap, .passive-btn')) return 'back';    // (3.42) a battle pill opening its card: the quiet one; (3.55) a passive's button too
   const label = (el.textContent || '').trim();
   if(el.classList.contains('back-link') || el.id === 'backBtn' || /^←/.test(label)) return 'back';
   if(/^(cancel|close|back|not yet|✕|×)$/i.test(label)) return 'back';

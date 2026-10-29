@@ -141,7 +141,8 @@ function setPStatus(uid, status){
   /* Either side's dust stops the OTHER side's effects forming on this side —
      but not what a creature simply IS (a bog), which no dust would sweep. */
   if(!status.unsweepable && dustBlocks(statusOwner(status.type, status, 'player'))) return null;
-  const st = Object.assign({ turnsLeft: STATUS_TURNS }, status);
+  let st = Object.assign({ turnsLeft: STATUS_TURNS }, status);
+  if(st.type === 'overheat') st = overheatMerged(partyStatuses().overheat, st);   // (3.60) the stronger kept, its turns renewed
   partyStatuses()[status.type] = st;
   return st;
 }
@@ -515,6 +516,7 @@ function removeEStatus(e, type){
 /* `_blow` (2.97): which attack this blow belongs to — your action's number —
    so a Precognition halves every strike of the first attack that reaches it. */
 function monRef(m){ return { uid:m.uid, types:SPECIES[m.species].types, species:m.species, level:m.level, _ambush:m._ambush || 0, _omen:m._omen || 0,
+                             _overpower:overpowerOf(m),                     // (3.55) a Tricerarmor of yours, swollen
                              _blow:(ui.battle && ui.battle.actionSeq) ? 'p' + ui.battle.actionSeq : null }; }
 
 /* STEEL SOUL (2.93 — reworked; it had grown too strong)
@@ -671,6 +673,14 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     /* Their Firehound's Terrorize (2.87: it only ever reached the button's
        estimate and a few side-hits, never the blow itself). */
     dmg *= terrorizeFactor();
+    /* (3.55) Your Overpower — it was only ever theirs, and yours "missed"
+       with every word right: +25% for its turns, and a quarter again on
+       anything with less ATK than it (as theirs does to yours). */
+    const op = attacker && attacker._overpower;
+    if(op){
+      dmg *= 1 + (op.atk || 0.25);
+      if(defender && (defender.atk || 0) < attackerAtk) dmg *= (op.bully || 1.25);
+    }
   } else {
     /* Discombobulate used to ALSO shave 20% off everything a confused enemy
        threw. The rework replaced that with visible friendly fire, but this line
@@ -758,11 +768,12 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
   const d = veryHighDef(type, plus||0) || {};
   const T = d.turns || STATUS_TURNS;
   switch(type){
-    case 'Fire': // Overheat — whole party trades defence for offence
-      setPStatus(uid,{type:'overheat', turnsLeft:T+1, deal:d.deal, take:d.take, burn:d.burn||0, atk:casterAtk});
-      layOverheatBurn('player', { burn:d.burn || 0, atk:casterAtk }, T);
-      res.msg = d.text;
-      break;
+    case 'Fire': { // Overheat — whole party trades defence for offence
+      const had = !!getPStatus(0,'overheat');
+      const st = setPStatus(uid,{type:'overheat', turnsLeft:T+1, deal:d.deal, take:d.take, burn:d.burn||0, atk:casterAtk});
+      if(st) layOverheatBurn('player', st, T);            // (3.60) the burn as the Overheat now stands: the hotter one
+      res.msg = (had && st) ? `Renewed for <b>${T}</b> turns, as strong as ever: your team ${overheatSays(st, 'every enemy')}.` : d.text;
+      break; }
 
     case 'Water': { // Ice Tomb (3.16) — a freeze on each of them, and a chill on their side
       /* Every one of them on the field is frozen for its next `freeze` turns —
@@ -859,6 +870,7 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
                         borrowPick:d.borrowPick||0, borrowRandom:d.borrowRandom||0,
                         borrowTier:d.borrowTier||0, owner:uid });
       res.msg = d.text + (cleared ? ` ${cleared} enemy effect${cleared===1?'':'s'} swept away.` : '');
+      res.cleared = cleared;                    // (3.59) for the free cast's own line
       res.borrowPick   = d.borrowPick || 0;     // how many the player chooses
       res.borrowRandom = d.borrowRandom || 0;   // how many the stone chooses
       break; }
@@ -1239,8 +1251,8 @@ const VERY_HIGH = {
     { cleanse:true, passive:true, borrowPick:1, borrowRandom:1, borrowTier:2 },
   ], text:[
     'Sweeps away every enemy effect and stops new ones. Your own effects keep going. Shields are not touched.',
-    'Works upon taking the field. Active skill also casts one random other Very High skill at <b>+</b> strength.',
-    'Works upon taking the field. Active skill also casts a Very High skill of your choice at <b>✦</b> strength, and a second one at random.',
+    'Works upon taking the field, and again each time the recharge meter fills (renewing one already up). Active skill also casts one random other Very High skill at <b>+</b> strength.',
+    'Works upon taking the field, and again each time the recharge meter fills (renewing one already up). Active skill also casts a Very High skill of your choice at <b>✦</b> strength, and a second one at random.',
   ]},
 };
 function veryHighDef(type, plus){
@@ -1426,10 +1438,21 @@ function applyStonePassives(mon){
       return setTimeout(()=> battleMsg(`🔩 ${escapeHtml(d.name)} — ${d.passiveBlock} stack${d.passiveBlock>1?'s':''} already standing.`), 400);
     }
 
-    if(getPStatus(0, veryHighStatusKey(st.type))) return;   // already running
-    applyVeryHighEffect(st.type, mon, monAtk(mon), livingEnemies(), plus);
+    /* (3.59) Already in the air: it is RENEWED — swept again, its turns
+       started over. The designer: "diamond dust + and star don't
+       automatically recast diamond dust after a completed recharge meter.
+       Please enable them to do so as part of strategy (using switch in auto
+       cast to refresh once and manual cast to cast a second diamond dust)".
+       Until 3.59 a dust still up swallowed the free cast the meter had given
+       back: nothing happened, and it was spent. Once a meter, as before. */
+    const running = !!getPStatus(0, veryHighStatusKey(st.type));
+    const res = applyVeryHighEffect(st.type, mon, monAtk(mon), livingEnemies(), plus);
     renderStatusBadges();
-    setTimeout(()=> battleMsg(`✨ ${escapeHtml(d.name)} is already in the air.`), 400);
+    const swept = res.cleared ? ` ${res.cleared} of their effect${res.cleared === 1 ? '' : 's'} swept away.` : '';
+    const T = d.turns || 5;
+    setTimeout(()=> battleMsg(running
+      ? `✨ ${escapeHtml(d.name)} swirls up again — ${T} fresh turns!${swept}`
+      : `✨ ${escapeHtml(d.name)} is already in the air.${swept}`), 400);
   });
 }
 /* The party-status key a Very High type writes to. */
@@ -1672,9 +1695,36 @@ function getESide(type){ return ui.battle ? enemySideStatuses()[type] : undefine
 function setESide(status){
   if(!ui.battle || !status) return null;
   if(dustBlocks('enemy')) return null;                // your dust keeps it from forming
-  const st = Object.assign({ turnsLeft: STATUS_TURNS }, status, { by:'enemy' });
+  let st = Object.assign({ turnsLeft: STATUS_TURNS }, status, { by:'enemy' });
+  if(st.type === 'overheat') st = overheatMerged(enemySideStatuses().overheat, st);   // (3.60) as yours
   enemySideStatuses()[status.type] = st;
   return st;
+}
+/* (3.60) An Overheat landing on a side that has one already — cast again,
+   borrowed by a Diamond Dust, cast by another monster, or stolen across. The
+   designer: "it should get updated by a stronger damaging overheat, but not
+   by a weaker one such as when diamond dust + casts a + version or when a
+   weaker monster uses it. Its duration should be extended but the damage
+   should not change." Its turns start over (the longer of the two); each of
+   its strengths is the stronger of the two: the damage it adds (deal), the
+   lighter price (take), and the hotter burn (burn × the ATK it was cast
+   with, kept together). Until 3.60 the newer one simply replaced it: a + over
+   a ✦ put the price back up to 1.3×, and a weaker caster cooled the burn. */
+function overheatMerged(prev, next){
+  if(!prev) return next;
+  const out = Object.assign({}, next);
+  out.deal = Math.max(prev.deal || 1.5, next.deal || 1.5);
+  out.take = Math.min(prev.take || 1.5, next.take || 1.5);
+  const heat = s=> (s.burn || 0) * (s.atk || 0);
+  if(heat(prev) > heat(next)){ out.burn = prev.burn; out.atk = prev.atk; }
+  out.turnsLeft = Math.max(prev.turnsLeft || 0, next.turnsLeft || 0);
+  out.renewed = true;
+  return out;
+}
+/* What an Overheat does, as it now stands — for the line a cast says. */
+function overheatSays(st, foes){
+  return `deals <b>${st.deal || 1.5}×</b> damage and takes ${(st.take || 1.5) < 1.5 ? 'only ' : ''}<b>${st.take || 1.5}×</b>` +
+    (st.burn > 0 ? `, and ${foes} burn${foes === 'you' ? '' : 's'} for <b>${Math.ceil(st.burn * (st.atk || 0))}</b> each turn` : '');
 }
 function removeESide(type){ if(ui.battle) delete enemySideStatuses()[type]; }
 
@@ -1906,7 +1956,7 @@ function monGains(m, side){
   if(m.evadeAlways && !m.evadeUnsweepable) add('💨 Evasion', ()=>{ m.evadeAlways = 0; });
   if(m._stoop && m._stoop.charges) add('🦅 Climb', ()=>{ m._stoop.charges = 0; });
   if(m._rage && m._rage.forced) add('😤 Rage', ()=>{ m._rage.forced = false; });
-  if(m._overpower && m._overpower.turnsLeft > 0) add('💪 Overpower', ()=>{ m._overpower = null; });
+  if(m._overpower && m._overpower.turnsLeft > 0) add('🏋️ Overpower', ()=>{ m._overpower = null; });
   if(m._windup) add('⏳ Wind-up', ()=>{ m._windup = null; });
   if(m._omen) add('🐦‍⬛ Ill Omen', ()=>{ m._omen = 0; });
   if(side === 'enemy'){
@@ -2058,7 +2108,7 @@ function stealableBuffs(victimSide, victims){
     if(m.lurk) out.push({ label:'🌑 Lurk', take:()=>{ m.lurk = false; return (s, thief)=>{ thief.lurk = true; return true; }; } });
     if(m.cunning) out.push({ label:'🌘 Cunning', take:()=>{ m.cunning = false; return (s, thief)=>{ thief.cunning = true; return true; }; } });
     if(m.enrageStacks > 0) moveField('enrageStacks', `😤 Enrage ×${m.enrageStacks}`);
-    if(m._overpower && m._overpower.turnsLeft > 0) out.push({ label:'💪 Overpower', take:()=>{
+    if(m._overpower && m._overpower.turnsLeft > 0) out.push({ label:'🏋️ Overpower', take:()=>{
       const o = m._overpower; m._overpower = null;
       return (s, thief)=>{ thief._overpower = o; return true; };
     }});
@@ -2185,6 +2235,8 @@ function stancePills(m, who){
   if(m && m.airborne>0)   pill('airborne', '🕊 Airborne');
   if(m && m.invisible>0)  pill('invisible', '👤 Invisible');
   if(m && m.prep>0)       pill('prep', `🎯 Prep ×${m.prep}`);
+  const op = overpowerOf(m);                         // (3.55) Overpower, on both sides
+  if(op)                  pill('overpower', `${STATUS_LABELS.overpower} ${Math.max(0, op.turnsLeft - 1)}`);
   if(m){ const md = meditatePill(m, 'mine', w); if(md) out.push(md.replace('">', `">${mk}`)); }   // (3.26)
   return out.join('');
 }
@@ -2443,7 +2495,7 @@ function overpowerOf(holder){
 function castOverpower(holder, def){
   holder._overpower = { turnsLeft:(def.turns||2) + 1, atk:def.atk||0.25, bully:def.bully||1.25 };
   renderStatusBadges();
-  battleMsg(`💪 ${holder.uid ? displayName(holder) : SPECIES[holder.species].name} swells — <b>+${Math.round((def.atk||0.25)*100)}% attack</b>, and it means to use it.`);
+  battleMsg(`🏋️ ${holder.uid ? displayName(holder) : SPECIES[holder.species].name} swells — <b>+${Math.round((def.atk||0.25)*100)}% attack</b>, and it means to use it.`);
 }
 function tickOverpower(holder){
   const st = holder && holder._overpower;
@@ -2553,10 +2605,12 @@ function castEnemyVeryHigh(e, type, plus){
   const atk = enemyAtk(e);
   const who = SPECIES[e.species].name;
   switch(type){
-    case 'Fire':
-      setESide({ type:'overheat', turnsLeft:T + 1, deal:d.deal, take:d.take, burn:d.burn || 0, atk });
-      layOverheatBurn('enemy', { burn:d.burn || 0, atk }, T);
-      return `🔥 ${who} casts <b>Overheat</b>: their side deals ${d.deal}× and takes ${d.take}×${d.burn ? ', and the air will scorch you every turn' : ''}.`;
+    case 'Fire': {
+      const had = !!getESide('overheat');
+      const st = setESide({ type:'overheat', turnsLeft:T + 1, deal:d.deal, take:d.take, burn:d.burn || 0, atk });
+      if(st) layOverheatBurn('enemy', st, T);             // (3.60) the hotter burn, as yours
+      if(had && st) return `🔥 ${who} casts <b>Overheat</b>: theirs burns on for ${T} more turns — their side ${overheatSays(st, 'you')}.`;
+      return `🔥 ${who} casts <b>Overheat</b>: their side deals ${d.deal}× and takes ${d.take}×${d.burn ? ', and the air will scorch you every turn' : ''}.`; }
     case 'Water': {
       /* (3.16) The mirror of yours: each of yours on the field frozen for its
          next `freeze` turns — YOUR turns, each taken off as it is lost
@@ -3321,11 +3375,21 @@ const ELEMENTAL_STONES = [
   { id:'dragonStone',   name:'Dragon Stone',   icon:'dragon_stone',   emoji:'🐉', type:'Dragon' },
   { id:'steelStone',    name:'Steel Stone',    icon:'steel_stone',    emoji:'🛡', type:'Steel' },
   { id:'fairyStone',    name:'Fairy Stone',    icon:'fairy_stone',    emoji:'✨', type:'Fairy' },
-  /* the four very rare ones: one per triangle (names are placeholders) */
-  { id:'starterStone',  name:'Starter Stone',  icon:'starter_stone',  emoji:'🔺', triangle:'starter', types:TRIANGLES.starter },
-  { id:'skyStone',      name:'Sky Stone',      icon:'sky_stone',      emoji:'🌩', triangle:'sky',     types:TRIANGLES.sky },
-  { id:'mindStone',     name:'Mind Stone',     icon:'mind_stone',     emoji:'🌀', triangle:'mind',    types:TRIANGLES.mind },
-  { id:'fantasyStone',  name:'Fantasy Stone',  icon:'fantasy_stone',  emoji:'💫', triangle:'fantasy', types:TRIANGLES.fantasy },
+  /* the four very rare ones: one per triangle — the TRIUNE STONES.
+     (3.57) Their pictures, from the repo — the designer: "correct the image
+     of each triangle stone … Mind body stone, Heaven earth stone, Nature
+     element stone, Universal stone temporarily for fantasy triangle of
+     dragon fairy and steel". Until then they named pictures that were never
+     made (starter_stone…), so each showed its emoji. The Universal Stone's
+     is the Power Stone's too (Region 2), until the Legends' has its own.
+     (3.58) Their names — the designer: "Triune Stone of Elements, Triune
+     Stone of Spheres, Triune Stone of Being, Triune Stone of Legends" (they
+     were the Starter, Sky, Mind and Fantasy Stones) — and a silvery glow
+     behind each (stoneIcon). The ids stay: they are what a save holds. */
+  { id:'starterStone',  name:'Triune Stone of Elements', icon:'nature_element_stone', emoji:'🔺', triangle:'starter', types:TRIANGLES.starter },
+  { id:'skyStone',      name:'Triune Stone of Spheres',  icon:'heaven_earth_stone',   emoji:'🌩', triangle:'sky',     types:TRIANGLES.sky },
+  { id:'mindStone',     name:'Triune Stone of Being',    icon:'mind_body_stone',      emoji:'🌀', triangle:'mind',    types:TRIANGLES.mind },
+  { id:'fantasyStone',  name:'Triune Stone of Legends',  icon:'universal_stone',      emoji:'💫', triangle:'fantasy', types:TRIANGLES.fantasy },   // (its picture for now)
 ].map(s=>{
   s.types = (s.types || [s.type]).slice();
   s.typeText = s.types.length > 1 ? s.types.slice(0, -1).join(', ') + ' or ' + s.types[s.types.length - 1] : s.types[0];
@@ -3350,6 +3414,53 @@ function heldStones(){ return ELEMENTAL_STONES.filter(s=> ownsStone(s.id)); }
 function stoneOnKey(id){ return id + 'On'; }
 function stoneHolder(id){ return ownsStone(id) ? (state.inventory[stoneOnKey(id)] || null) : null; }
 function stoneDef(id){ return ELEMENTAL_STONES.find(st=> st.id === id) || null; }
+/* (3.58) A stone's picture, wherever one is shown — its emoji if the picture
+   will not load — and a Triune Stone's lit from behind with a silvery glow
+   (the designer: "backlight these stones with a noticeable silvery glow"). */
+function stoneIcon(st, px){
+  if(!st) return '';
+  px = px || 20;
+  const img = uiIcon(st.icon, px, st.emoji);
+  if(!st.triangle) return img;
+  triuneGlowCss();
+  return `<span class="triune-glow" style="--tg:${px}px;">${img}<i class="tg-spark" aria-hidden="true"></i></span>`;
+}
+/* (3.57) …by id, for a line of text. */
+function stonePic(id, px){ const st = stoneDef(id); return st ? stoneIcon(st, px || 18) : ''; }
+/* The glow: a bright silver halo behind the stone, breathing slowly; fine
+   silver rays turning behind that; and a silver edge round the stone itself.
+   (`closest-side`: each gradient ends at its own circle's edge, so the glow
+   stays where it is drawn.) Still, for anyone who asks for less motion. */
+let _triuneGlowCssDone = false;
+function triuneGlowCss(){
+  if(_triuneGlowCssDone || typeof document === 'undefined') return;
+  _triuneGlowCssDone = true;
+  const st = document.createElement('style');
+  st.id = 'triuneGlowCss';
+  st.textContent = `
+  .triune-glow{ position:relative; display:inline-block; line-height:1; vertical-align:-3px; isolation:isolate; }   /* sits on the line as a .ui-icon does */
+  .triune-glow::before, .triune-glow::after{ content:''; position:absolute; left:50%; top:50%; border-radius:50%; pointer-events:none; }
+  .triune-glow::before{ z-index:-1; width:calc(var(--tg, 20px) * 1.5); height:calc(var(--tg, 20px) * 1.5); margin:calc(var(--tg, 20px) * -0.75) 0 0 calc(var(--tg, 20px) * -0.75);
+    background:radial-gradient(circle closest-side, #fff 0%, rgba(255,255,255,.96) 36%, rgba(236,240,249,.86) 54%, rgba(190,201,223,.62) 76%, rgba(190,201,223,0) 100%);
+    animation:triuneGlow 2.6s ease-in-out infinite; }
+  .triune-glow::after{ z-index:-2; width:calc(var(--tg, 20px) * 1.62); height:calc(var(--tg, 20px) * 1.62); margin:calc(var(--tg, 20px) * -0.81) 0 0 calc(var(--tg, 20px) * -0.81);
+    background:repeating-conic-gradient(rgba(138,152,182,0) 0deg 7.5deg, rgba(138,152,182,.78) 11.25deg, rgba(138,152,182,0) 15deg 22.5deg);
+    -webkit-mask:radial-gradient(circle closest-side, transparent 0 34%, #000 52%, transparent 100%);
+    mask:radial-gradient(circle closest-side, transparent 0 34%, #000 52%, transparent 100%);
+    animation:triuneRays 16s linear infinite; }
+  .triune-glow img{ display:block; filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 3px #fff) drop-shadow(0 0 6px rgba(178,191,218,.95)); }
+  /* a twinkle at its shoulder: a four-point star (drawn, so its shine is not clipped) */
+  .triune-glow .tg-spark{ position:absolute; z-index:1; right:-4%; top:-6%; width:calc(var(--tg, 20px) * 0.3); height:calc(var(--tg, 20px) * 0.3);
+    pointer-events:none; filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 3px rgba(160,176,210,.95)); animation:triuneTwinkle 2.6s ease-in-out infinite; }
+  .triune-glow .tg-spark::before{ content:''; position:absolute; inset:0; background:#fff;
+    clip-path:polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); }
+  @keyframes triuneGlow{ 0%, 100%{ opacity:.8; transform:scale(.93); } 50%{ opacity:1; transform:scale(1.05); } }
+  @keyframes triuneRays{ to{ transform:rotate(360deg); } }
+  @keyframes triuneTwinkle{ 0%, 30%, 100%{ opacity:0; transform:scale(.3) rotate(0deg); } 50%{ opacity:1; transform:scale(1) rotate(45deg); } 70%{ opacity:0; transform:scale(.4) rotate(90deg); } }
+  @media (prefers-reduced-motion: reduce){ .triune-glow::before, .triune-glow::after, .triune-glow .tg-spark{ animation:none; } .triune-glow .tg-spark{ opacity:.9; } }
+  `;
+  document.head.appendChild(st);
+}
 function stoneFits(st, m){
   const t = (m && SPECIES[m.species] && SPECIES[m.species].types) || [];
   return st.types.some(x=> t.includes(x));
@@ -3407,11 +3518,15 @@ function layOverheatBurn(side, st, turns){
     ? { label:`🔥 The air itself scorches you!`,  pct:st.burn, atk:st.atk || 0, turnsLeft:turns, by:'enemy', src:'overheat' }
     : { label:`🔥 The air itself scorches them!`, pct:st.burn, atk:st.atk || 0, turnsLeft:turns, aoe:true, src:'overheat' });
 }
-/* How many more rounds a side's Overheat burn has to run (0: none). */
+/* How many more rounds a side's Overheat burn has to run (0: none) — (3.60)
+   as many as its Overheat has. */
 function overheatBurnTurns(side){
   const p = ((ui.battle && ui.battle.preHits) || []).find(x=> x.src === 'overheat' && (x.by || 'player') === side);
-  return p ? p.turnsLeft : 0;
+  const st = overheatOn(side);
+  return p ? Math.max(1, st ? st.turnsLeft : p.turnsLeft) : 0;
 }
+/* A side's Overheat, if it has one up. */
+function overheatOn(side){ return side === 'enemy' ? getESide('overheat') : getPStatus(0, 'overheat'); }
 /* Resolve everything queued, then hand control back. */
 function runPreHits(done){
   const b = ui.battle;
@@ -3420,14 +3535,21 @@ function runPreHits(done){
   let i = 0;
   const step = ()=>{
     if(i >= queue.length){
-      // tick lifetimes; each entry expires on its own schedule
-      b.preHits.forEach(p=>p.turnsLeft--);
-      b.preHits = b.preHits.filter(p=>p.turnsLeft > 0);
+      /* tick lifetimes; each entry expires on its own schedule — (3.60) but
+         an Overheat's burn has none of its own: it lasts as long as its
+         Overheat (afterStatusGone puts it out), so a Diamond Dust holding
+         the Overheat open keeps it burning. Until 3.60 it counted its own 5
+         turns down and went out while the dust held the Overheat open (the
+         designer: "Overheat star stops dishing out damage after a few turns
+         for some reason, even when diamond dust extends it"). */
+      b.preHits.forEach(p=>{ if(p.src !== 'overheat') p.turnsLeft--; });
+      b.preHits = b.preHits.filter(p=> p.src === 'overheat' ? !!overheatOn(p.by || 'player') : p.turnsLeft > 0);
       return done();
     }
     const p = queue[i++];
     const foes = livingEnemies();
     if(!foes.length) return step();
+    if(p.src === 'overheat' && !overheatOn(p.by || 'player')) return step();   // its Overheat is gone: so is it
     /* Theirs strike every one of yours on the field, as yours strike every one
        of them: no evasion, as yours take none, but a block layer eats it as one
        of theirs would eat yours. */
@@ -4966,9 +5088,10 @@ function beginRound(msg){
     const go = ()=>{
       if(!ui.battle || battleDone()) return;
       /* (3.19) The start of the turn, before anyone chooses: your Forest
-         Fairy's Overgrowth (the Forest Guardian's gift), then — beside you in
-         the vault — the Monkey King's casts, his pre-turn. */
-      overgrowthPhase('start', ()=> allyPreTurn(()=>{
+         Fairy's heal (3.56: Overgrowth's always-on part; the move itself is
+         a quick move since 3.55), then — beside you in the vault — the
+         Monkey King's casts, his pre-turn. */
+      forestGiftPhase('start', ()=> allyPreTurn(()=>{
         if(!ui.battle) return;
         if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
         order();
@@ -5024,9 +5147,13 @@ function sendOutOptions(exceptIdx){
   return state.party.map((m,i)=>({m,i})).filter(o=> o.i !== exceptIdx && canTakeField(o.m));
 }
 /* A newcomer out front arrives as any monster of yours does — its entry
-   passives, once a battle — if it is standing. */
+   passives, once a battle — if it is standing. (3.59) Back on the field
+   again, its stone's passive fires if the meter has re-armed it — after a
+   faint and a Revitalise as after a switch. */
 function enterLeader(nm){
-  if(nm && nm.currentHp > 0 && !nm._entered){ nm._entered = true; applyEntryPassives(nm, nm.species, nm.level, monAtk(nm)); }
+  if(!nm || nm.currentHp <= 0) return;
+  if(!nm._entered){ nm._entered = true; applyEntryPassives(nm, nm.species, nm.level, monAtk(nm)); }
+  else applyStonePassives(nm);
 }
 /* The monster out front fell outside anyone's turn: choose the next one, run
    its entry passives, then carry on. */
@@ -5042,6 +5169,7 @@ function replaceFallenThen(next){
     setFocus(null);
     enterLeader(state.party[i]);
     pairSwitched(fallen);               // its companion comes out with it
+    pairSettleOrder();                  // (3.60) the first of the two by initiative, then the left
     renderBattle();
     next();
   }, false);
@@ -5446,9 +5574,9 @@ function endRound(){
     if(ar && ar.fieldEvade > 0 && ar.coverUsed) ar.fieldEvade--;
     if(ar) ar.coverUsed = false;
     if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
-    /* (3.19) the end of the turn: your Forest Fairy's Overgrowth, if it has
-       not come round this turn yet (she came out after the start) */
-    const onward = ()=> overgrowthPhase('end', ()=>{
+    /* (3.19) the end of the turn: your Forest Fairy's heal, if it has not
+       come round this turn yet (she came out after the start) */
+    const onward = ()=> forestGiftPhase('end', ()=>{
       if(!ui.battle) return;
       const gone = tickStatuses();
       /* (3.16) Discombobulate's roll, now in the end phase: what it catches
@@ -5900,7 +6028,7 @@ function beginBattle(config){
     m._ambush = 0;  m._windup = null; m._omen = 0; m._seizedLast = false;
   });
   ui.battle = {
-    waves: config.waves, waveIndex:0,
+    waves: config.waves, waveIndex:Math.max(0, Math.min((config.waves || []).length - 1, config.startWave | 0)),   // (3.58) a run picked up where it was left: the tear's
     isNpc: !!config.isNpc, allowCatch: !!config.allowCatch,
     challenge: config.challenge || null, name: config.name || 'Battle',
     onWin: config.onWin || null, onWaveStart: config.onWaveStart || null, npcId: config.npcId || null, silentIntro: !!config.silentIntro,
@@ -5973,7 +6101,7 @@ function beginBattle(config){
   }
   // clear last battle's stances, then arm this battle's opening passives
   state.party.forEach(m=>{ m.guard=false; m.airborne=0; m.invisible=0; m.prep=0; m.blockStacks=0; m._entered=false; });
-  loadWave(0);
+  loadWave(ui.battle.waveIndex);
   const lead = leaderMon();
   if(lead){ lead._entered = true; if(lead.currentHp > 0) applyEntryPassives(lead, lead.species, lead.level, monAtk(lead)); }
   /* (3.52) its companion is out beside it from the start, arriving as it does */
@@ -6304,7 +6432,7 @@ function fieldOrder(){
 function standsLeft(m){ const f = fieldOrder(); return !f.length || f[0] === m; }
 /* A move that never spends the turn: a Very High stone's cast, the Aria, or
    (2.93) Steel Soul. */
-function isQuickMove(mv){ return !!(mv && ((mv.isStone && mv.stoneTier === 'veryhigh') || mv.aria || mv.soul || mv.iceBarrier)); }   // (3.16) Ice Barrier too
+function isQuickMove(mv){ return !!(mv && ((mv.isStone && mv.stoneTier === 'veryhigh') || mv.aria || mv.soul || mv.iceBarrier || mv.overgrowth)); }   // (3.16) Ice Barrier too; (3.55) Overgrowth
 /* The companion takes its place in this round's order — after whoever is
    acting now, where its initiative puts it among the rest. */
 function insertCompanionRow(c){
@@ -6341,6 +6469,51 @@ function pairSwitched(oldLeader){
     insertCompanionRow(c);
     if(nl && nl.currentHp <= 0) noteStandIn();
   }
+}
+/* ============================================================
+   (3.60) A PAIR ARRIVING MID-ROUND
+   The designer: "there's a bug when my whalelord and hydra are switched:
+   hydra on the left. Whalelord still goes first even though I don't think
+   whalelord has a higher initiative value." A pair switched in (or sent out)
+   mid-round gave the turn it inherited to the LEADER and put the companion
+   after it, whatever their initiative and whoever stood on the left. From
+   the next round on the order was right. Now the usual rule settles it
+   between the two at once (playerRow / orderCompare): higher initiative
+   first, and on a tie the one standing on the left.
+   ============================================================ */
+/* Of the pair out now, the one that goes first (null: no pair standing). */
+function pairFirst(){
+  const L = leaderMon(), C = companionOnField();
+  if(!L || !C || L.currentHp <= 0 || C.currentHp <= 0) return null;
+  return orderCompare(playerRow(C), playerRow(L)) < 0 ? C : L;
+}
+/* The place being played now goes to the companion, if it goes first of the
+   two; the leader keeps, or is given, a place of its own later this round.
+   Returns the companion when it has the turn, else null (nothing changed). */
+function pairHandOver(){
+  const b = ui.battle, L = leaderMon(), C = companionOnField();
+  if(!b || !b.order || !C || pairFirst() !== C) return null;
+  if((b.roundActed || []).includes(C.uid)) return null;
+  const step = b.orderStep || 0, cur = b.order[step];
+  const later = (m)=> b.order.findIndex((r, j)=> j > step && r.side === 'player' && r.mon === m && !r.acted);
+  const ci = later(C);
+  if(ci >= 0) b.order.splice(ci, 1);                     // it acts now: not again later
+  if(cur && cur.side === 'player' && cur.mon === L){ cur.mon = C; cur.role = 'companion'; }
+  if(!(b.roundActed || []).includes(L.uid) && later(L) < 0) insertCompanionRow(L);   // (any monster: the leader here)
+  return C;
+}
+/* Both of the pair still to come this round: the earlier place is the one
+   that goes first's. */
+function pairSettleOrder(){
+  const b = ui.battle, L = leaderMon(), C = companionOnField();
+  if(!b || !b.order || !C || pairFirst() !== C) return;
+  const step = b.orderStep || 0;
+  const later = (m)=> b.order.findIndex((r, j)=> j > step && r.side === 'player' && r.mon === m && !r.acted);
+  const iL = later(L), iC = later(C);
+  if(iL < 0 || iC < 0 || iC < iL) return;
+  const rL = b.order[iL], rC = b.order[iC];
+  rL.mon = C; rL.role = 'companion';
+  rC.mon = L; rC.role = 'leader';
 }
 /* A companion has fainted: off the field, its leader fighting on — until a
    Revitalise or a Conversio brings it back (3.52). */
@@ -6770,6 +6943,67 @@ function monAtk(m){
   const c = ui.battle ? getPStatus(0,'counter') : null;
   return base + og + Math.round(n * ((c && c.enrage) || 0.20) * base);
 }
+/* ============================================================
+   PASSIVES AS BUTTONS (3.55)
+   The designer: "Please make passives appear as an unpressable button that
+   reveals information about the passive when it is pressed." Every passive
+   it has unlocked sits after its moves as a button that is never a move:
+   dashed, quiet, and a tap opens a card saying what it does
+   (moveDescription, the moves page's own words). Silenced by their ✦ Curse,
+   it says so. (The Forest Fairy's heal had one in 3.55, "Guardian's Gift";
+   since 3.56 it is a part of her Overgrowth, which says so.)
+   ============================================================ */
+function passiveMovesOf(m){
+  const out = [];
+  if(!m || !MOVES[m.species]) return out;
+  MOVES[m.species].forEach(row=>{
+    if(row[3] !== 'Passive' || !row[1] || !moveUnlockedFor(m, row)) return;
+    out.push({ slot:row[0], name:row[1], mult:null, target:'Passive', words:0, unlock:row[5], ...(row[6] || {}) });
+  });
+  return out;
+}
+function passiveButtonsHtml(m){
+  const muted = ui.battle && typeof passivesMuted === 'function' && passivesMuted(m);
+  return passiveMovesOf(m).map((mv, j)=> `
+          <button class="move-btn passive-btn${muted ? ' muted' : ''}" data-passive="${j}" aria-label="${escapeHtml(mv.name)}: passive, tap to read">
+            <div class="mv-name">${symHtml(muted ? '🔇' : '🌟')} ${escapeHtml(mv.name)}</div>
+            <div class="mv-meta">${muted ? 'Passive · silenced' : 'Passive · always on'}</div>
+          </button>`).join('');
+}
+/* Its card: the passive's name, what it does, and — under their ✦ Curse —
+   that it is quiet for now. */
+function openPassiveTip(btn, m, j){
+  const mv = passiveMovesOf(m)[j];
+  if(!btn || !mv) return false;
+  closeStatusTip();
+  const muted = ui.battle && typeof passivesMuted === 'function' && passivesMuted(m);
+  passiveBtnCss();
+  return showTipCard(btn, {
+    title:`${symHtml(muted ? '🔇' : '🌟')} ${escapeHtml(mv.name)}`,
+    text:moveDescription(mv, m, monAtk(m)).replace(/<p><b>Passive:<\/b>\s*/g, '<p>'),   // (the card says it is one, under)
+    turns:muted ? '🔇 Silenced while their ✦ Curse lasts.' : 'Passive: always on, nothing to write.',
+    cls:'mine' });
+}
+let _passiveBtnCssDone = false;
+function passiveBtnCss(){
+  if(_passiveBtnCssDone || typeof document === 'undefined') return;
+  _passiveBtnCssDone = true;
+  const st = document.createElement('style');
+  st.id = 'passiveBtnCss';
+  st.textContent = `
+  .move-btn.passive-btn{ background:var(--paper-2); color:var(--ink); border:1.5px dashed var(--line); box-shadow:none; cursor:help; }
+  .move-btn.passive-btn:active{ transform:none; box-shadow:none; }
+  .move-btn.passive-btn .mv-name{ font-size:14px; }
+  .move-btn.passive-btn .mv-meta{ color:var(--ink-soft); opacity:1; }
+  .move-btn.passive-btn.muted .mv-name{ opacity:.65; }
+  .move-btn.passive-btn.tip-on{ outline:2px solid var(--gold); outline-offset:1px; }
+  #statusTip .tip-text p{ margin:0 0 6px; }
+  #statusTip .tip-text p:last-child{ margin-bottom:0; }
+  `;
+  document.head.appendChild(st);
+}
+try{ passiveBtnCss(); }catch(e){}
+
 function unlockedMoves(m){
   // While a Cataclysm charge is held, the whole kit is replaced.
   const c = chargeState();
@@ -6825,13 +7059,17 @@ function unlockedMoves(m){
   });
   /* The ghost phoenix's gift: Nova and Incinerate may leave a Sacred Flame. */
   base.forEach(mv=>{ const sf = sacredFlameBonus(m, mv); if(sf) mv.bonus = sf; });
-  /* (3.19) The Forest Guardian's gift: Giga Drain on every one of them, and
-     Overgrowth a passive — it comes round by itself, never a button. */
+  /* (3.19) The Forest Guardian's gift: Giga Drain on every one of them —
+     and (3.55) Overgrowth a quick move, once a turn, up to 5 stacks. Its
+     button keeps its name and says why it rests. */
   if(hasForestGift(m)){
-    for(let k = base.length - 1; k >= 0; k--){
-      const g = forestGiftMove(m, base[k]);
-      if(g && g.overgrowth) base.splice(k, 1); else base[k] = g;
-    }
+    for(let k = 0; k < base.length; k++) base[k] = forestGiftMove(m, base[k]);
+    base.forEach(mv=>{
+      if(!mv.overgrowth || !mv.available || !ui.battle) return;
+      const st = overgrowthOpen();
+      if(st === 'full'){ mv.available = false; mv.ogFull = true; }
+      else if(st === 'done'){ mv.available = false; mv.ogDone = true; }
+    });
   }
   /* Something wound up last turn comes down this turn, already paid for. */
   if(m._windup){
@@ -7060,7 +7298,7 @@ function moveShape(mv){
   if(mv.target === 'AOE') return 'AOE';
   if(mv.target === 'Multi2') return '2 targets';
   if(mv.revitalise) return 'Revive';
-  if(mv.soul || mv.iceBarrier) return 'Quick';   // costs no turn (2.93; Ice Barrier 3.16)
+  if(mv.soul || mv.iceBarrier || mv.overgrowth) return 'Quick';   // costs no turn (2.93; Ice Barrier 3.16; Overgrowth 3.55)
   return '';
 }
 /* ============================================================
@@ -7100,6 +7338,7 @@ function passiveBits(p, atk){
   if(p.evadeTurns)   bits.push(`Starts in <b>stillness</b>: dodges everything the first ${p.evadeTurns > 1 ? p.evadeTurns + ' turns' : 'turn'} it is attacked`);
   if(p.counterTurns || p.counterStack) bits.push(`Starts with a <b>Counter stack</b>: the next attack on its side does <b>80% less</b>`);
   if(p.first)        bits.push(`Always moves <b>first</b>`);
+  if(p.terrorize)    bits.push(`The other side deals <b>${pc(p.terrorize)}% less</b> damage while it stands. Nothing sweeps it away`);   // (3.55: it had no words)
   if(p.quick)        bits.push(`A free <b>quick attack</b> each round: <b>${Math.ceil(p.quick * atk)}</b> (${p.quick}× ATK) on a random enemy`);
   if(p.playerDouble) bits.push(`<b>${pc(p.playerDouble)}%</b> chance to strike twice`);
   if(p.thresholdStun) bits.push(`Stuns its attacker as it drops below <b>${p.thresholdStun.map(t=> pc(t) + '%').join(', ')}</b> health`);
@@ -7168,16 +7407,39 @@ function moveEffectText(mv, mon, atk){
   const maxHp = mon ? monMaxHp(mon) : 0;
   const ofHp = f => maxHp ? `<b>${Math.ceil(f * maxHp)} HP</b> (${pc(f)}%)` : `<b>${pc(f)}%</b> of its health`;
   /* Giga Drain's drink (PARTY_DRAIN, 05) — and (3.19) the Forest Guardian's
-     gift: a drink for every one it reaches, and Overgrowth a passive. */
+     gift: a drink for every one it reaches. */
   if(mv.drainEach) out.push(
     `<b>The Forest Guardian's gift.</b> Heals <b>${val(mv.drainEach)} HP</b> for each enemy it hits: her first, then whoever is worst off.`);
   else if(mv.name === 'Giga Drain' && mon && mon.uid && typeof PARTY_DRAIN !== 'undefined' && PARTY_DRAIN[mv.name]) out.push(
     `<b>Drain.</b> Heals <b>${val(PARTY_DRAIN[mv.name])} HP</b>: her first, then whoever is worst off.`);
+  /* (3.55) Overgrowth, a quick move now — and (3.56) her heal always on in
+     it (it was a passive of its own, "Guardian's Gift", in 3.55) */
   if(mv.overgrowth){
     const G = FOREST_GIFT, step = pc(G.step);
-    out.push(`<b>Passive — the Forest Guardian's gift.</b> Once a turn you may write <b>${G.words}</b> silver or gold words: ` +
-      `all right, and your team's ATK rises <b>${step}%</b> for the battle (up to <b>+${step * G.maxStacks}%</b>). ` +
-      `She also heals <b>${pc(G.regen)}%</b>${mon ? ` (${Math.ceil(monMaxHp(mon) * G.regen)} HP)` : ''} each turn.`);
+    out.push(`<b>The Forest Guardian's gift.</b> Quick: it doesn't use your turn. Once a turn, your whole team's ATK rises ` +
+      `<b>${step}%</b> for the rest of the battle (up to <b>+${step * G.maxStacks}%</b>). Nothing of theirs can sweep it away.`);
+  }
+  if(mv.giftHeal) out.push(
+    `<b>Always on:</b> at the start of every turn she heals <b>${mon ? Math.max(1, Math.ceil(monAtk(mon) * mv.giftHeal)) + ' HP' : pc(mv.giftHeal) + '% of her ATK'}</b>` +
+    `${mon ? ` (${pc(mv.giftHeal)}% of her ATK)` : ''}.`);
+  /* (3.55) Jax's three, and the throws: they had no words on the moves page */
+  if(mv.overpower){
+    const o = mv.overpower;
+    out.push(`<b>Overpower.</b> For <b>${o.turns || 2} turns</b> it deals <b>${pc(o.atk || 0.25)}% more</b> damage, ` +
+      `and <b>${pc((o.bully || 1.25) - 1)}% more</b> again on any enemy with less ATK than it.`);
+  }
+  if(mv.rage) out.push(
+    `<b>Rage.</b> Its attacks have a <b>${pc(mv.rage.chance || 0.2)}%</b> chance to be critical (<b>${mv.rage.crit || 1.5}×</b>). ` +
+    `Cast, its next attack is a certain critical, and then the free chance rests for <b>${mv.rage.mute || 5} turns</b>.`);
+  if(mv.reflect){
+    const took = mon && mon.lastDamageTaken > 0 ? Math.ceil(mon.lastDamageTaken * mv.reflect) : 0;
+    out.push(`<b>Throw.</b> Turns the last blow it took back on an enemy: ${mv.reflect === 1 ? 'as much damage as it took' : `<b>${mv.reflect}×</b> the damage it took`}` +
+      (took ? ` (<b>${took}</b> now)` : '') + `.`);
+  }
+  if(mv.stoop){
+    const sp = mv.stoop, n = sp.max || 3;
+    out.push(`<b>Piercing Stoop.</b> Climbs for up to <b>${n} turns</b>, dodging <b>${(sp.evade || []).map(pc).join(' / ')}%</b> as it goes, ` +
+      `then dives straight through shields for <b>${(sp.pierce || []).map(x=> x + '×').join(' / ')}</b>, by how high it climbed.`);
   }
   if(mv.fracture) out.push(
     `<b>Spacetime Fracture.</b> <b>${mv.fracture}×</b> stronger for each fracture on it, multiplying (5 fractures: <b>${Math.pow(mv.fracture, 5).toFixed(2)}×</b>).`);
@@ -7434,6 +7696,8 @@ function moveMeta(mv, mon){
     const n = Math.max(0, ariaState().turnsLeft - 1);   // rolls still to come — what the badge shows
     return `${mv.words}字 · Active · ${n} turn${n === 1 ? '' : 's'} left`;
   }
+  /* (3.55) Overgrowth: how far it has grown */
+  if(mv.overgrowth && ui.battle) return `${mv.words}字 · Quick · ${overgrowthStacks()}/${FOREST_GIFT.maxStacks}`;
   /* (3.16) Nor can an Ice Barrier be raised over itself. */
   const ibUp = (mv.iceBarrier && ui.battle) ? getPStatus(0,'iceBarrier') : null;
   if(ibUp){
@@ -7471,8 +7735,9 @@ function unstickBattle(){
      lost fight returned with the team on a tenth of its health. */
   if(!document.getElementById('battleStage')) return;
   if(b.phase === 'player') return;
-  /* (3.19) Something is waiting on the child, over the fight: an Overgrowth
-     to write or skip, the Monkey King's words, a scene in the vault. */
+  /* (3.19) Something is waiting on the child, over the fight: the Monkey
+     King's words, a scene in the vault. (Until 3.55, an Overgrowth to write
+     or skip too.) */
   if(b.hold > 0 || document.querySelector('.scene-say')) return;
   /* Only when nothing has happened for a while. A long sequence (a stone cast,
      a riposte, their afterimages) has quiet gaps with no attack queue, and
@@ -7563,13 +7828,14 @@ function renderBattle(){
           return `
           <button class="move-btn ${ok?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${ok?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
-            <div class="mv-name">${mv.available || mv.chargeMore || mv.spent || mv.forgotten || mv.taunted ? escapeHtml(mv.name) : '???'}</div>
-            <div class="mv-meta">${mv.available ? moveMeta(mv, ctlMon) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : 'Locked')}</div>
+            <div class="mv-name">${mv.available || mv.chargeMore || mv.spent || mv.forgotten || mv.taunted || mv.ogFull || mv.ogDone ? escapeHtml(mv.name) : '???'}</div>
+            <div class="mv-meta">${mv.available ? moveMeta(mv, ctlMon) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : mv.ogFull ? `Full · ATK +${Math.round(FOREST_GIFT.maxStacks * FOREST_GIFT.step * 100)}%` : mv.ogDone ? 'Grown this turn' : 'Locked')}</div>
           </button>`; }).join('')}
+        ${passiveButtonsHtml(ctlMon)}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
         <button class="side-btn" id="switchBtn" ${(b.switchedThisTurn || !canAct)?'disabled':''}>🔄 Switch</button>
-        <button class="side-btn" id="fleeBtn" ${((b.noFlee && !b.arenaChallenge) || !canAct)?'disabled':''}>${(b.arena || b.arenaChallenge)?'🚪 Exit':b.coreSpar?'🏳️ Give up':b.tear?'🚪 Leave':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
+        <button class="side-btn" id="fleeBtn" ${((b.noFlee && !b.arenaChallenge) || !canAct)?'disabled':''}>${(b.arena || b.arenaChallenge)?'🚪 Exit':b.coreSpar?'🏳️ Give up':b.tear?'🚪 Save & leave':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
         <button class="side-btn" id="skipBtn" ${canAct?'':'disabled'}>⏭️ Skip turn</button>
         ${(b.arena || b.arenaChallenge)?'<button class="side-btn" id="arenaMoveBtn" style="background:var(--gold);color:#fff;" '+(canAct?'':'disabled')+'>🧪 Test move</button>':''}
       </div>
@@ -7585,7 +7851,9 @@ function renderBattle(){
         <button class="mini-btn" id="logClear" style="margin-top:8px;">Clear log</button>
       </details>` : ''}
   `;
-  screenEl.querySelectorAll('.move-btn:not(.locked)').forEach(btn=> btn.addEventListener('click', ()=>onMoveChosen(+btn.dataset.move)));
+  screenEl.querySelectorAll('.move-btn:not(.locked):not(.passive-btn)').forEach(btn=> btn.addEventListener('click', ()=>onMoveChosen(+btn.dataset.move)));
+  /* (3.55) a passive's button is never a move: it says what the passive does */
+  screenEl.querySelectorAll('.passive-btn').forEach(btn=> btn.addEventListener('click', e=>{ e.stopPropagation(); openPassiveTip(btn, ctlMon, +btn.dataset.passive); }));
   $('#switchBtn').addEventListener('click', onSwitchPressed);
   const sk = $('#skipBtn');
   if(sk) sk.addEventListener('click', ()=>{
@@ -7642,7 +7910,7 @@ const STATUS_LABELS = {
   vita:'💖 Vita', jaws:'⛓️ Held Fast', bogged:'🌫 Bogged', lurk:'🌑 Lurk', cunning:'🌘 Cunning',
   forgot:'💭 Forgot', fracture:'🕳️ Spacetime Fracture', barrier:'🧱 Barrier', iceBarrier:'🏔️ Ice Barrier',
   kindle:'🕯️ Kindled', gallop:'🦄 Gallop', blinded:'🙈 Blinded', fleece:'🐑 Fleece', enchant:'🪄 Enchanted', stargaze:'🔭 Stargazer',
-  taunted:'🥱 Taunted',
+  taunted:'🥱 Taunted', overpower:'🏋️ Overpower',
 };
 /* A Very High stone's own symbol, by its type: its status's. */
 function veryHighSymbol(type){ return ((STATUS_LABELS[veryHighStatusKey(type)] || '').split(' ')[0]) || '💎'; }
@@ -7907,6 +8175,8 @@ function renderStatusBadges(){
     if(e.airborne > 0)   extras.push(ep('airborne', '🕊 Airborne'));
     if(e.invisible > 0)  extras.push(ep('invisible', '👤 Unseen'));
     if(e.prep > 0)       extras.push(ep('prep', `🎯 Prep ×${e.prep}`));
+    const opE = overpowerOf(e);                        // (3.55) its Overpower shows now
+    if(opE)              extras.push(ep('overpower', `${STATUS_LABELS.overpower} ${Math.max(0, opE.turnsLeft - 1)}`));
     const mdE = meditatePill(e, 'foe', ew);            // (3.26) Meditate
     if(mdE)              extras.push(mdE);
     const pd = passiveDefOf(e);
@@ -8066,6 +8336,8 @@ function statusTipText(key, st, c, pill){
     case 'airborne': return `${c.W} is in the air: it dodges <b>${pc(STANCE_EVASION.airborne)}%</b> of attacks.`;
     case 'invisible': return `${c.W} can't be seen: it dodges <b>${pc(STANCE_EVASION.invisible)}%</b> of attacks.`;
     case 'guard': return `${c.W} is on guard: it gains a shield each turn.`;
+    case 'overpower': { const o = m && overpowerOf(m);
+      return o ? `${c.W} deals <b>${pc(o.atk || 0.25)}% more</b> damage, and <b>${pc((o.bully || 1.25) - 1)}% more</b> again on anything with less ATK than it.` : ''; }
     case 'prep': return m ? `${c.W} has built <b>${m.prep || 0}</b> preparation${m.prep === 1 ? '' : 's'}. Its big move spends them for extra damage.` : '';
     case 'diamondDust': return `${c.yours ? 'Enemy' : 'Your'} effects were swept away, and new ones can't form while it lasts. ` +
       `${c.yours ? 'Your' : 'Their'} own effects don't run out. Shields stay.`;
@@ -8131,7 +8403,7 @@ function statusTipText(key, st, c, pill){
         ((phx && !b.rebirthUsed) ? ` <b>Rebirth ready:</b> if the phoenix faints while a flame burns, write <b>${REBIRTH.words}</b> words to bring it back with <b>${pc(REBIRTH.hp)}%</b> health.` : ''); }
     case 'overgrowth': { const n = overgrowthStacks(), G = FOREST_GIFT;
       return `The Forest Guardian's gift: your team's ATK is <b>+${pc(n * G.step)}%</b> for the battle. ` +
-        `Once a turn, write <b>${G.words}</b> silver or gold words to grow it by <b>${pc(G.step)}%</b> (up to <b>+${pc(G.step * G.maxStacks)}%</b>).`; }
+        `Once a turn, her Overgrowth (a quick move, <b>${G.words}</b> words) grows it by <b>${pc(G.step)}%</b> (up to <b>+${pc(G.step * G.maxStacks)}%</b>).`; }
     case 'windup': { const nm = m ? (m.uid ? m._windup : (m._windup && m._windup[1])) : '';
       return `${c.W} is winding up${nm ? ` <b>${escapeHtml(nm)}</b>` : ''}: it lands next turn${c.yours ? ', with no words to write' : ''}.`; }
     case 'omen': return m ? `${c.W}'s next blow hits <b>${pc(m._omen)}%</b> harder.` : '';
@@ -8224,12 +8496,17 @@ function statusTipFor(el){
 function closeStatusTip(){
   const sc = document.getElementById('statusTipScrim');
   if(sc) sc.remove();
-  document.querySelectorAll('.status-pill.tip-on, .blk-wrap.tip-on').forEach(x=> x.classList.remove('tip-on'));
+  document.querySelectorAll('.status-pill.tip-on, .blk-wrap.tip-on, .passive-btn.tip-on').forEach(x=> x.classList.remove('tip-on'));
 }
 function openStatusTip(el){
   closeStatusTip();
   const tip = statusTipFor(el);
   if(!tip) return false;
+  return showTipCard(el, tip);
+}
+/* (3.55) The card itself, beside what was tapped: a status's, or a
+   passive's button's (openPassiveTip). */
+function showTipCard(el, tip){
   statusTipCss();
   const sc = document.createElement('div');
   sc.id = 'statusTipScrim';

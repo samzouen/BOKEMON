@@ -7380,7 +7380,7 @@ async function r5StonesToMK(held){
     el.className = 'r5-stone-fly';
     el.style.width = el.style.height = (S * T) + 'px';
     el.style.left = ((from.x - S / 2) * T) + 'px'; el.style.top = ((from.y - S / 2) * T) + 'px';
-    el.innerHTML = uiIcon(st.icon, Math.round(S * T), st.emoji);
+    el.innerHTML = stoneIcon(st, Math.round(S * T));                // (3.58) a Triune Stone with its glow
     world.appendChild(el);
     return el;
   });
@@ -7622,6 +7622,7 @@ async function r5ClimaxBreak(done){
      crown; 3.50: only the crown.) */
   if(orb){ orb.style.transition = `opacity ${400 * SCENE_SPEED}ms ease`; orb.style.opacity = '0'; setTimeout(()=> orb.remove(), 450 * SCENE_SPEED); }
   await sceneWait(350);
+  if(orb) orb.remove();                           // (3.55) all but faded: gone before his page opens, whatever the timers do
   if(!live()) return;
   if(A){
     A.mon.crowned = true;
@@ -9290,10 +9291,11 @@ function r5GiftCard(f){
     `<p>🌿 <b>Giga Drain</b> now hits <b>every enemy</b> at <b>${G.drain}× her ATK</b>${giga ? ` (it hit one, at ${giga[2]}×)` : ''} — and drinks ` +
     `<b>${Math.ceil(G.drainEach * atk)} HP</b> (${G.drainEach}× her ATK) for <b>each</b> enemy it reaches: three of them, three drinks. ` +
     `Each drink goes to her first, then to whoever of yours is worst off.</p>` +
-    `<p>🌿 <b>Overgrowth</b> is now a <b>passive</b>${has || ogLv == null ? '' : ` (when she learns it, at Lv ${ogLv})`}: once a turn while she is on the field, ` +
-    `you may write <b>${G.words} words</b> you know to 🥈 silver or 🥇 gold — or skip. Both right: your <b>whole team's ATK +${step}%</b> for the rest ` +
-    `of the battle, up to <b>${G.maxStacks} times (+${step * G.maxStacks}%)</b>. Their Diamond Dust can't sweep it away. And every time it comes ` +
-    `round — written, missed or skipped — she heals <b>${Math.round(G.regen * 100)}%</b> (<b>${Math.ceil(monMaxHp(f) * G.regen)} HP</b>).</p>`, 'Continue');
+    /* (3.55) Overgrowth a quick move; (3.56) her heal always on in it, 10% of her ATK */
+    `<p>🍃 <b>Overgrowth</b> is now a <b>quick move</b>${has || ogLv == null ? '' : ` (when she learns it, at Lv ${ogLv})`}: <b>${G.words} words</b>, ` +
+    `once a turn, and it doesn't use your turn. Your <b>whole team's ATK +${step}%</b> for the rest of the battle, up to ` +
+    `<b>${G.maxStacks} times (+${step * G.maxStacks}%)</b>. Their Diamond Dust can't sweep it away. ` +
+    `And always, at the start of every turn, she heals <b>${Math.max(1, Math.ceil(atk * G.heal))} HP</b> (${Math.round(G.heal * 100)}% of her ATK).</p>`, 'Continue');
 }
 /* Falling leaves round someone (tiles); `away`, blown off to the right and up. */
 function r5LeavesFall(x, y, s, ms, n, away){
@@ -9517,7 +9519,7 @@ async function r5MKJoins(){
   await r5Card(monPortrait('monkey_king', 110, { view:'front', bare:true, stage:1, crowned:true }), 'The Monkey King joins your team!', r5JoinHtml(m, partner), 'Continue');
   await r5Card(`<span style="display:inline-block;width:96px;height:96px;">${(tearCss(), tearGalaxy())}</span>`, 'The end of Region 5',
     `<p>Cyborg is gone: Nemesis took it into the <b>space-time tear</b>, with every core it stole. The tear stays open in the vault, over the empty cradle, humming.</p>` +
-    `<p>🌀 There you can <b>Challenge the past</b> once a week — the Padrino's fight again, seven rounds, for medals and the Mind Stone. (It is on the Challenge page too.)</p>` +
+    `<p>🌀 There you can <b>Challenge the past</b> once a week — the Padrino's fight again, seven rounds, for medals and the Triune Stone of Being. (It is on the Challenge page too.)</p>` +
     `<p>Beyond the tear — and Nemesis — lies <b>Region 6</b>. It is still to come.</p>`, 'The end — for now');
 }
 /* Who he leads: one of your team (it goes to storage, as his companion). */

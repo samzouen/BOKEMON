@@ -316,7 +316,10 @@ function onSwitchPressed(){
        place in this round. The choice is still yours — the newcomer's, or
        (3.52) its companion's if the newcomer itself is down. */
     pairSwitched(outgoing);
-    const front = frontMon() || inc;
+    /* (3.60) the turn the switch hands over: to whichever of the pair goes
+       first — initiative, then the one on the left — not always the leader */
+    const first = pairHandOver();
+    const front = first || frontMon() || inc;
     setFocus(front === inc ? null : front);
     ui.battle.control = { mode:'solo', uid:front.uid, extra };
     renderBattle();
@@ -334,7 +337,7 @@ function onSwitchPressed(){
         battleMsg('Now choose a move.');
       });
     }
-    if(!ui.battle.legacyBonus) battleMsg('Switched! Now choose a move.');
+    if(!ui.battle.legacyBonus) battleMsg(first ? `Switched! ${escapeHtml(displayName(first))} goes first — choose its move.` : 'Switched! Now choose a move.');
   });
 }
 /* Revitalise's choice, made BEFORE the writing so ten right words always land.
@@ -816,7 +819,12 @@ function secondWindMsg(){
   const soul = battleParty().some(m=> m && (MOVES[m.species] || []).some(r=> r[6] && r[6].soul && (m.level || 1) >= r[5]));
   const reborn = battleParty().some(m=> m && hasRebirth(m));
   const extra = [soul ? 'Steel Soul' : '', reborn ? 'Rebirth' : ''].filter(Boolean);
-  return `⚡ Second wind! Very High and Ultra moves${extra.length ? ', and ' + extra.join(' and ') + ',' : ''} restored.`;
+  /* (3.59) …and a refined stone's free cast on taking the field (Diamond
+     Dust + / ✦ above all: bring its carrier in to renew the dust) */
+  const free = [...new Set(battleParty().concat(bondedCompanions()).flatMap(m=> m ? [m.equippedStone, m.power1Stone] : [])
+    .filter(st=> st && st.tier === 'veryhigh' && (veryHighDef(st.type, stonePlus(st)) || {}).passive).map(st=> stoneDisplayName(st)))];
+  const freeLine = free.length ? ` ${free.join(' and ')} work${free.length === 1 ? 's' : ''} again as ${free.length === 1 ? 'its carrier comes' : 'their carriers come'} in.` : '';
+  return `⚡ Second wind! Very High and Ultra moves${extra.length ? ', and ' + extra.join(' and ') + ',' : ''} restored.${freeLine}`;
 }
 
 function bankWordSpill(mv){
@@ -1149,27 +1157,34 @@ function offerRebirth(rise, fall, who){
      dodge gives nothing): three of them, three drinks. Each goes to her first
      and, once she is full, to whoever of yours is worst off (drainRecipient),
      as Giga Drain's always has.
-   - OVERGROWTH is no longer a move but a PASSIVE. Once a turn while she is on
-     the field — in the start phase, or in the end phase if she came out after
-     it — 2 words learned to silver or gold, which may be skipped: every one
-     right, and your WHOLE team's ATK rises 7% of its own for the rest of the
-     battle (overgrowthBonus, in monAtk), 5 stacks at most (35%). It is not a
-     status: no Diamond Dust of theirs sweeps it, no Greed steals it. And every
-     time it comes round — written, missed or skipped, and at 5 stacks too,
-     when there is nothing left to write for — she heals 5% of her health.
+   - (3.55) The designer: "Please change Forest Fairy's overgrowth to an
+     instant move instead of a passive that autotriggers. Passively, also
+     give it a small heal on Forest Fairy herself every turn (5% of her
+     attack value)." OVERGROWTH is a QUICK MOVE: 2 words, once a turn, and
+     written right it costs no turn — your WHOLE team's ATK rises 7% of its
+     own for the rest of the battle (overgrowthBonus, in monAtk), 5 stacks at
+     most (35%). It is not a status: no Diamond Dust of theirs sweeps it, no
+     Greed steals it. (Until 3.55 it came round by itself each turn, with a
+     card asking for the words, and she healed 5% of her health.)
+   - …and ALWAYS ON, as a part of Overgrowth (3.56 — the designer: "can you
+     fold in her guardian's gift passive into the improved overgrowth and
+     also increase it to 10% of her atk as well please?"): at the start of
+     every turn on the field she heals 10% of her ATK (forestGiftPhase). A ✦
+     Curse of theirs quiets it, as it quiets every passive. (3.55 had it as a
+     passive of its own, "Guardian's Gift", at 5%.)
    Only your own Forest Fairy has it (party or storage): never a borrowed one
    in a spar, never one of theirs. */
-const FOREST_GIFT = { drain:1.0, drainEach:0.5, words:2, step:0.07, maxStacks:5, regen:0.05 };
+const FOREST_GIFT = { drain:1.0, drainEach:0.5, words:2, step:0.07, maxStacks:5, heal:0.10 };   // (3.56) heal 10% of her ATK (5% in 3.55)
 function hasForestGift(m){
   if(!(state && state.forestBlessingGranted && m && m.species === 'forest_fairy' && m.uid)) return false;
   return (state.party || []).includes(m) || (state.storage || []).includes(m);
 }
 /* Her moves as the gift has them: Giga Drain on all of them, Overgrowth a
-   passive (no button in battle; on her Stats page, a passive). */
+   quick move (3.55) — and (3.56) her heal always on in it (`giftHeal`). */
 function forestGiftMove(m, mv){
   if(!mv || !hasForestGift(m)) return mv;
   if(mv.name === 'Giga Drain') return Object.assign({}, mv, { mult:FOREST_GIFT.drain, target:'AOE', drainEach:FOREST_GIFT.drainEach, forestGift:true });
-  if(mv.name === 'Overgrowth') return Object.assign({}, mv, { mult:null, target:'Passive', words:0, overgrowth:true, forestGift:true });
+  if(mv.name === 'Overgrowth') return Object.assign({}, mv, { mult:null, target:'Self', words:FOREST_GIFT.words, overgrowth:true, giftHeal:FOREST_GIFT.heal, forestGift:true });
   return mv;
 }
 /* Her Overgrowth works once she has reached its level (35). */
@@ -1192,101 +1207,63 @@ function overgrowthBonus(m, base){
   if(!n || !m || !m.uid) return 0;
   return Math.round(n * FOREST_GIFT.step * base);
 }
-/* The fairy out on the field whose Overgrowth can come round, if any. A
-   passive like any other: their ✦ Curse quiets it while it lasts (the stacks
-   already grown stay — they are not a buff to sweep). */
+/* The battle's record of it: its stacks, the turn she last healed, the turn
+   it was last grown. */
+function overgrowthState(){
+  const b = ui.battle;
+  if(!b) return null;
+  b.overgrowth = b.overgrowth || { stacks:0, round:-1, cast:-1 };
+  return b.overgrowth;
+}
+/* (3.55) Can it be grown now? Once a turn, up to 5 stacks. */
+function overgrowthOpen(){
+  const og = overgrowthState();
+  if(!og) return 'none';
+  if((og.stacks || 0) >= FOREST_GIFT.maxStacks) return 'full';
+  if(og.cast === (ui.battle.roundNo || 0)) return 'done';
+  return 'open';
+}
+/* Overgrowth cast (resolveBattleMove): a stack, and the turn is still yours. */
+function castOvergrowth(mon, mv){
+  const b = ui.battle, og = overgrowthState();
+  og.stacks = Math.min(FOREST_GIFT.maxStacks, (og.stacks || 0) + 1);
+  og.cast = b.roundNo || 0;
+  playSfx('power_up');                             // (3.51) the Forest Fairy's ATK up: the power-up
+  playEffect(mv.name, { type:'Grass' });
+  logBattle(`${displayName(mon)} used ${mv.name} (quick): ${og.stacks} of ${FOREST_GIFT.maxStacks}`);
+  b.phase = 'player';
+  renderBattle();
+  battleMsg(`🍃 Overgrowth! Vines and blossom wind round your whole team — ATK <b>+${Math.round(og.stacks * FOREST_GIFT.step * 100)}%</b> ` +
+    `for the rest of the battle (${og.stacks} of ${FOREST_GIFT.maxStacks}). It cost no turn — choose your move.`);
+}
+/* The fairy out on the field whose gift heals her, if any. A passive like
+   any other: their ✦ Curse quiets it while it lasts (the Overgrowth already
+   grown stays — it is not a buff to sweep). (3.55) In the Test Arena too, as
+   every passive is: it was kept out of it only for the card that asked. */
 function overgrowthFairy(){
   const b = ui.battle;
-  if(!b || b.scriptedAlly || b.scriptedOneTurn || b.scriptedLoss || b.arena) return null;
+  if(!b || b.scriptedAlly || b.scriptedOneTurn || b.scriptedLoss) return null;
   return livingField().find(m=> overgrowthLearned(m) && !passivesMuted(m)) || null;
 }
-/* The start phase (beginRound) or the end phase (endRound): once a turn. */
-function overgrowthPhase(phase, done){
+/* (3.55) The start phase (beginRound), or the end phase if she came out
+   after it: once a turn, Overgrowth heals her — (3.56) 10% of her ATK, its
+   always-on part. Quiet when she is already whole. */
+function forestGiftPhase(phase, done){
   const b = ui.battle;
   const fairy = overgrowthFairy();
   if(!b || !fairy || livingEnemies().length === 0) return done();
-  b.overgrowth = b.overgrowth || { stacks:0, round:0 };
-  const og = b.overgrowth;
+  const og = overgrowthState();
   if(og.round === (b.roundNo || 0)) return done();
   og.round = b.roundNo || 0;
-  /* the regen comes first, whatever she then writes */
   const max = monMaxHp(fairy), before = fairy.currentHp;
-  fairy.currentHp = Math.min(max, before + Math.ceil(max * FOREST_GIFT.regen));
+  if(before >= max) return done();
+  fairy.currentHp = Math.min(max, before + Math.max(1, Math.ceil(monAtk(fairy) * FOREST_GIFT.heal)));
   const healed = fairy.currentHp - before;
   renderBattle();
-  if(healed > 0){
-    drainHp(pid('playerHp', fairy), before, fairy.currentHp, max);
-    showDamageNumber(pid('playerBob', fairy), healed, { heal:true });
-  }
-  const regenSay = `🍃 Overgrowth — ${escapeHtml(displayName(fairy))} ${healed > 0 ? `heals <b>${healed} HP</b>` : 'is already whole'}.`;
-  if(og.stacks >= FOREST_GIFT.maxStacks){
-    battleMsg(regenSay + ` Your team's ATK is at its full <b>+${Math.round(og.stacks * FOREST_GIFT.step * 100)}%</b>.`);
-    return setTimeout(done, 900);
-  }
-  battleMsg(regenSay);
-  setTimeout(()=>{
-    if(ui.battle !== b) return;
-    askOvergrowth(fairy, won=>{
-      if(ui.battle !== b) return;
-      if(won){
-        og.stacks = Math.min(FOREST_GIFT.maxStacks, og.stacks + 1);
-        playSfx('power_up');                             // (3.51) the Forest Fairy's ATK up: the power-up
-        renderBattle();
-        battleMsg(`🍃 Overgrowth! Vines and blossom wind round your whole team — ATK <b>+${Math.round(og.stacks * FOREST_GIFT.step * 100)}%</b> ` +
-          `for the rest of the battle (${og.stacks} of ${FOREST_GIFT.maxStacks}).`);
-      } else {
-        renderBattle();
-        battleMsg(`🍃 The vines settle. (Overgrowth: ${og.stacks} of ${FOREST_GIFT.maxStacks}.)`);
-      }
-      setTimeout(done, 1100);
-    });
-  }, 700);
-}
-/* The offer, and the 2 words: calls back with whether they were all written.
-   The battle is held while it waits, so the watchdog leaves it alone. */
-function askOvergrowth(fairy, cb){
-  const b = ui.battle;
-  b.hold = (b.hold || 0) + 1;
-  const done = won=>{ if(ui.battle === b) b.hold = Math.max(0, (b.hold || 1) - 1); cb(won); };
-  const n = overgrowthStacks(), step = Math.round(FOREST_GIFT.step * 100);
-  const ov = document.createElement('div');
-  ov.className = 'overgrowth-ask';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;';
-  ov.innerHTML = `<div style="background:var(--paper);border-radius:18px;padding:20px;max-width:340px;width:100%;text-align:center;">
-    <div>${monPortrait('forest_fairy', 72, { view:'front', bare:true, stage:monStage(fairy), crowned:isCrowned(fairy) })}</div>
-    <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:19px;margin:4px 0;">🍃 Overgrowth</div>
-    <div style="font-size:13px;font-weight:600;line-height:1.55;color:var(--ink-soft);margin-bottom:14px;">
-      Write <b>${FOREST_GIFT.words} words</b> ${revisionWords().length ? 'you have learned to 🥈 silver or 🥇 gold' : 'from your list'} —
-      every one right, and your <b>whole team</b> hits <b>${step}% harder</b> for the rest of the battle
-      (now <b>+${n * step}%</b>, ${n} of ${FOREST_GIFT.maxStacks}). Nothing of theirs can sweep it away.
-    </div>
-    <button class="btn btn-primary" id="ogGo">🍃 Write ${FOREST_GIFT.words} words</button>
-    <button class="btn btn-ghost" id="ogSkip" style="margin-top:8px;">Not now</button>
-  </div>`;
-  document.body.appendChild(ov);
-  const close = ()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
-  ov.querySelector('#ogSkip').addEventListener('click', ()=>{ close(); done(false); });
-  ov.querySelector('#ogGo').addEventListener('click', ()=>{
-    close();
-    const target = FOREST_GIFT.words;
-    startQuiz({
-      title: '🍃 Overgrowth',
-      subtitle: `${target} words${revisionWords().length ? ' you have learned to silver or gold' : ''} — every one right for +${step}% ATK, your whole team.`,
-      words: pickWords(target, true), stopAtFirstMiss:true, lockExit:true,
-      wordTarget: target,
-      onComplete:(res)=>{
-        const got = res.filter(r=> r.passed).reduce((k, r)=> k + (r.words || countWords(r.text)), 0);
-        if(ui.battle === b){
-          res.filter(r=> !r.passed).forEach(r=>{ if(!b.fightMistakes.includes(r.text)) b.fightMistakes.push(r.text); });
-          if(feedRecharge(res.reduce((k, r)=> k + (r.words || countWords(r.text)), 0)))
-            setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
-        }
-        go('battle');
-        done(got >= target);
-      },
-      onExit:()=>{ go('battle'); done(false); },
-    });
-  });
+  drainHp(pid('playerHp', fairy), before, fairy.currentHp, max);
+  showDamageNumber(pid('playerBob', fairy), healed, { heal:true });
+  battleMsg(`🍃 Overgrowth — ${escapeHtml(displayName(fairy))} heals <b>${healed} HP</b>.`);
+  setTimeout(done, 700);
 }
 
 /* Aftershocks are ordinary pre-hits now; these remain so older call sites and
@@ -1407,7 +1384,7 @@ function resolveBattleMove(mv, target, results, opts){
      turn is still yours; anything else spends it, as it would have anyway.
      (3.09) Not the Haunting Aria: a state he goes into, which no dust stops. */
   const castOnly = (mv.shell && mv.mult == null) || mv.tachy || mv.grant ||
-                   mv.charm || mv.disrupt || mv.soul || mv.clones || mv.dot;
+                   mv.charm || mv.disrupt || mv.soul || mv.clones || mv.dot || mv.overpower;   // (3.55) Overpower too
   if(castOnly && dustBlocks('player') && correct >= mv.words){
     playSfx('move_miss');
     battleMsg(`✨ Their diamond dust scatters your ${mv.name} — nothing takes hold.`);
@@ -1422,6 +1399,21 @@ function resolveBattleMove(mv, target, results, opts){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
     castVita(mon, mv.vita);
     playEffect(mv.name, { type:'Water' });
+    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+  }
+  /* (3.55) Overgrowth, the Forest Guardian's gift — a quick move: once a
+     turn, and written right it costs no turn. */
+  if(mv.overgrowth){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
+    return castOvergrowth(mon, mv);
+  }
+  /* (3.55) Overpower — a Tricerarmor of yours: two turns of +25%, and a
+     quarter again on anything with less ATK. Until now only theirs worked;
+     yours "missed" with every word right. It takes the turn, as a buff does. */
+  if(mv.overpower){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
+    castOverpower(mon, mv.overpower);
+    playEffect(mv.name, { type:SPECIES[mon.species].types[0] });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
   /* Ice Barrier (3.16) — a quick move: for 5 turns their attacks deal 30%
@@ -2532,6 +2524,7 @@ function offerVengeanceSwap(mon, hits){
     setFocus(null);
     const nm = leaderMon();
     if(nm && !nm._entered){ nm._entered = true; applyEntryPassives(nm, nm.species, nm.level, monAtk(nm)); }
+    else if(nm && nm.currentHp > 0) applyStonePassives(nm);    // (3.59) a stone's passive the meter re-armed
     // the successor inherits the Whalelord's slot — no free extra action; his
     // companion (if out) goes back with him, the successor's comes back out
     pairSwitched(mon);
@@ -4891,14 +4884,28 @@ function onMonFainted(noRebirth){
     const row = leaderRow();
     if(row){ row.mon = nm; }
     if(row && row.acted){
+      pairSettleOrder();                 // (3.60) the pair's places to come: the first of the two takes the earlier
       b2.phase = 'resolving';
       renderBattle();
       return setTimeout(advanceTurn, 700);
     }
-    b2.control = { mode:'solo', uid:nm.uid };
+    /* (3.60) of the pair, whoever goes first (initiative, then the left)
+       takes the turn; the leader keeps its own place later */
+    let who = nm;
+    if(nm === leaderMon()){
+      const C = companionOnField();
+      if(C && pairFirst() === C && !(b2.roundActed || []).includes(C.uid)){
+        const step = b2.orderStep || 0;
+        const ci = b2.order.findIndex((r, j)=> j > step && r.side === 'player' && r.mon === C && !r.acted);
+        if(ci >= 0) b2.order.splice(ci, 1);
+        who = C;
+        setFocus(C);
+      }
+    }
+    b2.control = { mode:'solo', uid:who.uid };
     ui.battle.phase='player';
     renderBattle();
-    battleMsg('Choose a move.');
+    battleMsg(who !== nm ? `${escapeHtml(displayName(who))} goes first — choose its move.` : 'Choose a move.');
   }, false);
 }
 /* After a companion's fall, or a leader's that its companion stands in for:

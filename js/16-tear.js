@@ -35,8 +35,9 @@
    - XP: each round won, its six waves' worth (2 a wave, as any trainer's
      fight), to the whole party and bonded companions, with no region cap —
      only a monster's own Crown and ceilings stop it (levelCap, ui.xpNoCap).
-   - All seven in one run: the first time ever, the Mind Stone; every time
-     after that, 18 fights' worth more for the whole party.
+   - All seven in one run: the first time ever, the Triune Stone of Being
+     (3.58; the Mind Stone until then); every time after that, 18 fights'
+     worth more for the whole party.
    - Every quiz in it asks for the silver and gold words (pickWords).
    - A loss costs nothing but the fall (10% health, as any): no XP is lost —
      the designer (3.01): "No XP penalty for losses in the rift, let the
@@ -44,13 +45,31 @@
      challenge and the tear's page say so.
      Each round won counts as a battle for the eye break and the day's count;
      a break that falls due is taken between rounds.
+   - (3.58) THE RUN IS KEPT. The designer: "can we have an autosave function
+     for when a weekly tear fight is exited at any time via the exit
+     function along with autosaves after each rewind? This prevents a crash
+     or disruption from wasting effort and also allows my sons to attempt it
+     slowly across a few days." Where a run stands is saved (t.saved):
+       · as every wave begins — after each rewind too (tearRoundWon keeps
+         the next round's start the moment Cyborg falls, so a crash in the
+         rewind loses nothing);
+       · at "Save & leave", to the blow: the wave they were in, and how much
+         health it had left.
+     The team's health (and who had fallen), the stones spent and the
+     recharge meter are kept with it, and put back when the run is picked
+     up again (tearResume) — healing elsewhere in between does not carry
+     in: the past is as it was left. Statuses, stacks and Cyborg's shields
+     start afresh. A run kept goes on into a new week. Losing ends the run,
+     as before (a new one starts at round 1); so does winning all seven.
+     The tear's page offers "Carry on" (and "Start again from round 1", which
+     asks first).
    ========================================================== */
 const TEAR = {
   rounds: 7,
   wavesPerRound: 6,
   /* round by round, paid once a week */
   pay: [ { bronze:15 }, { bronze:30 }, { silver:10 }, { silver:20 }, { gold:5 }, { gold:10 }, { gold:15 } ],
-  bonusFights: 18,      // a full clear once the Mind Stone is yours
+  bonusFights: 18,      // a full clear once the Triune Stone of Being is yours
   cyborgLevel: 200,     // the one monster of theirs past 100 (SPECIES.cyborg.noLevelCap)
   floor: 110,           // (3.00) his five: your best monster's level, or this — no cap
   /* How hard his monsters fight, wave by wave within a round (the Rhino, Fox
@@ -82,8 +101,9 @@ function tearWeekStart(d){
 }
 function tearWeekKey(d){ const w = tearWeekStart(d); return w.getFullYear() + '-' + (w.getMonth() + 1) + '-' + w.getDate(); }
 function tearNextWeek(){ const w = tearWeekStart(); w.setDate(w.getDate() + 7); return w; }
-/* The save's record: this week's paid rounds, the Mind Stone, clears. A new
-   week clears the paid rounds and nothing else. */
+/* The save's record: this week's paid rounds, the Triune Stone of Being,
+   clears — and (3.58) `saved`, where a run stands (tearSnapshot). A new week
+   clears the paid rounds and nothing else. */
 function tearState(){
   const p = state.progress;
   if(!p.tear || typeof p.tear !== 'object') p.tear = { week:'', paid:[], stone:false, clears:0, best:0, runs:0 };
@@ -113,7 +133,7 @@ function tearChallengeCard(){
       <span class="tear-mini" aria-hidden="true">${tearGalaxy()}</span>
       <div style="flex:1;">
         <div class="cc-title">The space-time tear</div>
-        <div class="cc-desc">Where Nemesis went, in Cyborg's body. <b>Challenge the past</b> once a week — ${n} of ${TEAR.rounds} rounds won this week.</div>
+        <div class="cc-desc">Where Nemesis went, in Cyborg's body. <b>Challenge the past</b> once a week — ${n} of ${TEAR.rounds} rounds won this week.${(()=>{ const pl = tearPlace(); return pl ? ` 💾 Your run is saved at <b>round ${pl.round}, wave ${pl.wave}</b>.` : ''; })()}</div>
       </div>
     </div>`;
 }
@@ -124,6 +144,7 @@ function renderTear(){
   $('#brandSub').textContent = 'The space-time tear';
   const t = tearState();
   const all = tearAllPaid();
+  const place = tearPlace();                       // (3.58) a run kept, to carry on
   const day = tearDayName(tearNextWeek());
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← ${ui.tearBack === 'cata_vault' ? 'The vault' : 'Challenge'}</button>
@@ -132,7 +153,10 @@ function renderTear(){
       <div class="tear-wrap" aria-hidden="true">${tearGalaxy()}</div>
       <div class="tear-say">Nemesis went through here, in Cyborg's body. It hums like a held breath.</div>
       <button class="btn btn-primary tear-btn" id="tearEnter">Enter the space-time tear</button>
-      <button class="btn btn-primary tear-btn" id="tearPast" ${all ? 'disabled' : ''}>Challenge the past</button>
+      ${place ? `<button class="btn btn-primary tear-btn" id="tearGoOn">Carry on — round ${place.round}, wave ${place.wave}</button>
+      <div class="tear-saved">💾 Your run is saved: <b>round ${place.round} of ${TEAR.rounds}, wave ${place.wave} of ${TEAR.wavesPerRound}</b>, against ${place.foe === 'Cyborg' ? '<b>Cyborg</b>' : `the <b>${escapeHtml(place.foe)}</b>`}${place.part ? ' (already hurt)' : ''}. Your team will be just as you left it.</div>
+      <button class="btn btn-ghost tear-btn tear-ghost" id="tearAnew">Start again from round 1</button>`
+      : `<button class="btn btn-primary tear-btn" id="tearPast" ${all ? 'disabled' : ''}>Challenge the past</button>`}
       <div class="tear-week">
         <div class="tw-title">This week's rounds</div>
         <div class="tw-rounds">${TEAR.pay.map((p, i)=>{
@@ -141,10 +165,10 @@ function renderTear(){
         }).join('')}</div>
         <div class="tw-note">${all
           ? `All ${tearWord(TEAR.rounds)} won this week. The past opens again on <b>${escapeHtml(day)}</b>.`
-          : `Each round pays once a week; the next week starts on <b>${escapeHtml(day)}</b>. Lose, and you keep what you won, and no XP is taken — a new try starts again at round 1.`}</div>
+          : `Each round pays once a week; the next week starts on <b>${escapeHtml(day)}</b>. <b>Save & leave</b> keeps your place, to carry on another day. Lose, and you keep what you won, and no XP is taken — but a new try starts again at round 1.`}</div>
         <div class="tw-note">${t.stone
-          ? `🌀 You hold the Mind Stone. All ${tearWord(TEAR.rounds)} in one go: <b>+${TEAR.bonusFights} fights' worth</b> of XP for the whole team.`
-          : `All ${tearWord(TEAR.rounds)} in one go: <b>🌀 the Mind Stone</b>.`}</div>
+          ? `${stonePic('mindStone')} You hold the Triune Stone of Being. All ${tearWord(TEAR.rounds)} in one run: <b>+${TEAR.bonusFights} fights' worth</b> of XP for the whole team.`
+          : `All ${tearWord(TEAR.rounds)} in one run: <b>${stonePic('mindStone')} the Triune Stone of Being</b>.`}</div>
         <div class="tw-note">Every move here asks for your <b>silver and gold words</b>.</div>
       </div>
     </div>`;
@@ -153,7 +177,9 @@ function renderTear(){
     go('challenge');
   });
   $('#tearEnter').addEventListener('click', ()=> toast('Beyond the tear: coming soon.'));
-  $('#tearPast').addEventListener('click', ()=> tearChallenge());
+  const past = $('#tearPast'); if(past) past.addEventListener('click', ()=> tearChallenge());
+  const on = $('#tearGoOn'); if(on) on.addEventListener('click', ()=> tearResume());           // (3.58)
+  const anew = $('#tearAnew'); if(anew) anew.addEventListener('click', ()=> tearStartAgain());
 }
 
 /* ---------- Challenge the past ---------- */
@@ -166,8 +192,8 @@ function tearFoeLevel(){
 /* All seven rounds' waves: in each, his monsters one at a time (as many as
    wavesPerRound leaves room for — six: all five) and then Cyborg, always the
    round's last. */
-function tearWaves(){
-  const L = tearFoeLevel();
+function tearWaves(level){
+  const L = level || tearFoeLevel();             // (3.58) a kept run keeps the level it began at
   const n = Math.max(1, Math.min(TEAR_TEAM.length + 1, TEAR.wavesPerRound));
   const waves = [];
   for(let r = 0; r < TEAR.rounds; r++){
@@ -206,10 +232,105 @@ function tearCyborgShield(){
 function tearBegin(){
   const t = tearState();
   t.runs = (t.runs || 0) + 1;
-  saveProfile();
-  beginBattle({ waves:tearWaves(), isNpc:true, npcId:'padrino2', tear:true, bgKey:'battle_tear',
+  delete t.saved;                                 // (3.58) a new run: a run kept from before is given up
+  const L = tearFoeLevel();
+  beginBattle({ waves:tearWaves(L), isNpc:true, npcId:'padrino2', tear:true, bgKey:'battle_tear',
                 name:`Don Padrino · Round 1 of ${TEAR.rounds}`, onWaveStart:(i)=> tearWaveStart(i) });
-  ui.battle.tearRun = { rounds:0, medals:{}, xp:0, events:[], stone:false, bonus:0 };
+  const b = ui.battle;
+  b.tearLevel = L;
+  b.tearRun = { rounds:0, medals:{}, xp:0, events:[], stone:false, bonus:0 };
+  tearKeep(b);                                    // its first wave, kept
+  saveProfile();
+}
+
+/* ---------- (3.58) the run, kept ---------- */
+/* Where a run stands: the wave (`at`, from 0), the level his five fight at,
+   how much health the wave's foes have left (`foes`, if it is left part-
+   fought), the team's health by uid (fallen at 0), the stones spent, the
+   recharge meter, Rebirth, and the run's tally so far. */
+function tearSnapshot(b, opts){
+  opts = opts || {};
+  const at = opts.at != null ? opts.at : b.waveIndex;
+  const run = b.tearRun || {};
+  const hp = {};
+  battleParty().concat(bondedCompanions()).forEach(m=>{ if(m && m.uid) hp[m.uid] = Math.max(0, Math.round(m.currentHp || 0)); });
+  const foes = (opts.foes && at === b.waveIndex && livingEnemies().length) ? b.enemies.map(e=> Math.max(0, Math.round(e.hp || 0))) : null;
+  return { at, level:b.tearLevel || tearFoeLevel(), foes, hp,
+    used:{ vh:Object.assign({}, b.usedVeryHigh), ultra:Object.assign({}, b.usedUltra), soul:Object.assign({}, b.usedSoul) },
+    recharge:b.rechargeWords || 0, rebirth:!!b.rebirthUsed,
+    run:{ rounds:run.rounds || 0, medals:Object.assign({}, run.medals || {}), xp:run.xp || 0 },
+    when:Date.now() };
+}
+/* Keep it (saved with the profile by whoever saves next — loadWave does, as
+   every wave begins). Not once the run is over. */
+function tearKeep(b, opts){
+  if(!b || !b.tear || b.tearDone || !b.tearRun) return;
+  tearState().saved = tearSnapshot(b, opts);
+}
+/* The run kept, for the page: its round, wave, foe — and whether that foe
+   is already hurt. */
+function tearPlace(){
+  const sv = state && state.progress && state.progress.tear && state.progress.tear.saved;
+  if(!sv || !Number.isFinite(sv.at)) return null;
+  const at = Math.max(0, Math.min(TEAR.rounds * TEAR.wavesPerRound - 1, sv.at | 0));
+  const w = at % TEAR.wavesPerRound;
+  const sp = w === TEAR.wavesPerRound - 1 ? 'cyborg' : TEAR_TEAM[w];
+  return { at, round:Math.floor(at / TEAR.wavesPerRound) + 1, wave:w + 1, foe:(SPECIES[sp] || {}).name || sp, part:Array.isArray(sv.foes) };
+}
+/* Carry on: the team put back as it was, the fight begun at that wave, the
+   foe as hurt as it was left, the stones and meter as they stood. */
+function tearResume(){
+  const t = tearState(), sv = t.saved;
+  if(!sv || !Number.isFinite(sv.at)) return tearChallenge();
+  if(!ensurePool()) return;
+  const all = (state.party || []).concat(state.storage || []);
+  Object.entries(sv.hp || {}).forEach(([uid, hp])=>{
+    const m = all.find(x=> x && x.uid === uid);
+    if(m && Number.isFinite(hp)) m.currentHp = Math.max(0, Math.min(monMaxHp(m), Math.round(hp)));
+  });
+  const waves = tearWaves(sv.level);
+  const at = Math.max(0, Math.min(waves.length - 1, sv.at | 0));
+  beginBattle({ waves, startWave:at, isNpc:true, npcId:'padrino2', tear:true, bgKey:'battle_tear',
+                name:`Don Padrino · Round ${Math.floor(at / TEAR.wavesPerRound) + 1} of ${TEAR.rounds}`, onWaveStart:(i)=> tearWaveStart(i) });
+  const b = ui.battle;
+  b.tearLevel = sv.level || tearFoeLevel();
+  const r = sv.run || {};
+  b.tearRun = { rounds:r.rounds || 0, medals:Object.assign({}, r.medals || {}), xp:r.xp || 0, events:[], stone:false, bonus:0, resumed:true };
+  const u = sv.used || {};
+  Object.assign(b.usedVeryHigh, u.vh || {});
+  Object.assign(b.usedUltra, u.ultra || {});
+  Object.assign(b.usedSoul, u.soul || {});
+  b.rechargeWords = sv.recharge || 0;
+  if(sv.rebirth) b.rebirthUsed = true;
+  if(Array.isArray(sv.foes)) b.enemies.forEach((e, i)=>{
+    const h = sv.foes[i];
+    if(Number.isFinite(h)) e.hp = Math.max(0, Math.min(e.maxHp, h));
+  });
+  tearKeep(b, { foes:true });
+  saveProfile();
+  renderBattle();
+}
+/* Start again from round 1 — asked first, keeping the run the easy choice:
+   a kept run can be days of work. */
+function tearStartAgain(){
+  const pl = tearPlace();
+  if(!pl) return tearChallenge();
+  const ov = document.createElement('div');
+  ov.className = 'refine-scrim tear-ask';
+  ov.innerHTML = `<div class="refine-card">
+      <div class="refine-name">Start again?</div>
+      <div class="move-info-body"><p>Your run is saved at <b>round ${pl.round}, wave ${pl.wave}</b>. If you start again from <b>round 1</b>, that saved place is gone.</p>
+        <p>Rounds already won this week keep their medals.</p></div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+        <button class="btn btn-primary" id="taKeep">Keep my run</button>
+        <button class="btn btn-ghost" id="taAnew">Start again from round 1</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = ()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.addEventListener('click', e=>{ if(e.target === ov) close(); });
+  ov.querySelector('#taKeep').addEventListener('click', close);
+  ov.querySelector('#taAnew').addEventListener('click', ()=>{ close(); tearChallenge(); });
 }
 
 /* Cyborg can be struck, but never brought below 1 HP — every path that
@@ -228,6 +349,7 @@ function tearWaveStart(i){
   const round = Math.floor(i / TEAR.wavesPerRound) + 1;
   b.tearRound = round;
   b.name = `Don Padrino · Round ${round} of ${TEAR.rounds}`;
+  tearKeep(b, { at:i });                           // (3.58) kept as every wave begins (loadWave saves it)
 }
 function tearWaveLabel(i){
   const round = Math.floor(i / TEAR.wavesPerRound) + 1, wave = i % TEAR.wavesPerRound + 1;
@@ -282,6 +404,7 @@ function tearRoundWon(round){
   run.xp += fights;
   run.events.push(...tearXp(fights));
   if(tallyBattleForEyeBreak({ round:true })) b.tearBreak = true;     // a round is a battle for the day's count; a break fallen due in its waves is taken before the next (3.23)
+  if(round < TEAR.rounds) tearKeep(b, { at:round * TEAR.wavesPerRound });   // (3.58) the next round's start, kept before the rewind plays
   saveProfile();
   if(round < TEAR.rounds)
     line += ` ⏳ Cyborg rewinds time — the Padrino's team stands again. Round ${round + 1} of ${TEAR.rounds}!`;
@@ -301,11 +424,14 @@ function tearEnded(kind){
   b.tearDone = true;
   b.phase = 'resolving';
   const t = tearState();
+  /* (3.58) Left: the place is kept, to the blow. Won or lost: the run is over. */
+  if(kind === 'left' && b.tearRun) t.saved = tearSnapshot(b, { foes:true });
+  else delete t.saved;
   if(kind === 'won'){
     tearRoundWon(TEAR.rounds);                       // the seventh round's own
     const run = b.tearRun;
     t.clears = (t.clears || 0) + 1;
-    if(!t.stone){ t.stone = true; addStone('mindStone', 1); run.stone = true; }
+    if(!t.stone){ t.stone = true; addStone('mindStone', 1); run.stone = true; }      // the Triune Stone of Being (3.58)
     else {
       run.bonus = TEAR.bonusFights;
       run.xp += TEAR.bonusFights;
@@ -327,6 +453,13 @@ function tearEnded(kind){
   tearResults(kind, b.tearRun || { rounds:0, medals:{}, xp:0, events:[] });
   if(brk) showEyeBreak();
 }
+/* (3.58) What "Save & leave" kept, for its results. */
+function tearSavedLine(){
+  const pl = tearPlace();
+  if(!pl) return '';
+  return `<div style="color:#3b6ea1;font-weight:800;margin-bottom:6px;">💾 Your run is saved at round ${pl.round} of ${TEAR.rounds}, wave ${pl.wave} of ${TEAR.wavesPerRound}. ` +
+    `Carry on from there whenever you like — your team will be just as you left it.</div>`;
+}
 function tearResults(kind, run){
   const all = tearAllPaid();
   const title = kind === 'won' ? 'The past is beaten' : kind === 'lost' ? 'The past won this time' : 'You stepped out of the past';
@@ -343,15 +476,16 @@ function tearResults(kind, run){
   });
   const ups = Object.values(grown);
   const lines = [
-    `<div>Rounds won this time: <b>${run.rounds} of ${TEAR.rounds}</b>.</div>`,
-    `<div>${medals ? `Medals: <b>${medals}</b>`
-                   : run.rounds ? 'No new medals — those rounds were paid earlier this week.' : 'No rounds won this time.'}</div>`,
+    kind === 'left' ? tearSavedLine() : '',
+    `<div>Rounds won in this run: <b>${run.rounds} of ${TEAR.rounds}</b>.</div>`,
+    `<div>${medals ? `Medals in this run: <b>${medals}</b>`
+                   : run.rounds ? 'No new medals — those rounds were paid earlier this week.' : 'No rounds won yet in this run.'}</div>`,
     run.xp ? `<div>XP: <b>${run.xp} fights' worth</b> for the whole team${run.bonus ? ` (with <b>+${run.bonus}</b> for winning all ${tearWord(TEAR.rounds)})` : ''}.</div>` : '',
-    run.stone ? `<div style="color:#6a4ab0;font-weight:800;">🌀 The Mind Stone! The stone of the mind — Psychic, Ghost and Physical.</div>` : '',
+    run.stone ? `<div style="color:#6a4ab0;font-weight:800;">${stonePic('mindStone', 22)} The Triune Stone of Being! The stone of mind and body — Psychic, Ghost and Physical.</div>` : '',   // (3.57) its picture; (3.58) its name
     ...ups.filter(g=> g.to > g.from).map(g=> `<div>⬆️ ${escapeHtml(g.name)} grew to Lv ${g.to}!</div>`),
     ...ups.filter(g=> g.ready).map(g=> `<div style="color:#6a4ab0;">⚡ ${escapeHtml(g.name)} is ready to break through to Lv ${g.ready} — see your Party.</div>`),
-    `<div style="margin-top:6px;">This week: <b>${tearPaidCount()} of ${TEAR.rounds}</b> rounds paid. ${all
-      ? 'The past opens again next Monday.' : 'Try again: a new run starts at round 1, and pays the rounds still unpaid.'}</div>`,
+    `<div style="margin-top:6px;">This week: <b>${tearPaidCount()} of ${TEAR.rounds}</b> rounds paid. ${kind === 'left' ? ''
+      : all ? 'The past opens again next Monday.' : 'Try again: a new run starts at round 1, and pays the rounds still unpaid.'}</div>`,
     kind === 'lost' ? `<div>Your team fainted and recovered a little. Nothing else is lost.</div>` : '',
   ];
   challengeResult(emoji, title, lines.filter(Boolean).join(''), 'tear');
@@ -737,6 +871,9 @@ function tearCss(){
   .tear-say{ text-align:center; font-size:13px; font-weight:700; color:#cdb8f0; margin:0 0 12px; }
   .tear-btn{ margin-bottom:10px; background:linear-gradient(180deg, #7a45c8, #4f2690); border-color:#3a1b6c; color:#fff; }
   .tear-btn:disabled{ opacity:.5; }
+  .tear-btn.tear-ghost{ background:transparent; border:1.5px solid rgba(200,170,255,.45); color:#e6d8ff; box-shadow:none; }   /* (3.58) Start again */
+  .tear-saved{ text-align:center; font-size:13px; font-weight:700; color:#e9dcff; line-height:1.45; margin:-2px 6px 12px; }
+  .tear-saved b{ color:#fff; }
   .tear-week{ margin-top:6px; background:rgba(255,255,255,.06); border:1px solid rgba(200,170,255,.25); border-radius:14px; padding:10px 10px 8px; }
   .tw-title{ font-weight:800; font-size:13px; color:#e6d8ff; margin-bottom:8px; }
   .tw-rounds{ display:grid; grid-template-columns:repeat(7, 1fr); gap:5px; margin-bottom:8px; }

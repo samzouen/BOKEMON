@@ -703,7 +703,7 @@ function stonePanel(m){
   const atCeiling = chargesStone(m);             // at a ceiling, or at the region's cap on one (2.82)
   const storing = !atCeiling && storesAtHundred(m);   // stopped at 100, its bar full (3.01)
   return `<div class="crown-panel wide" style="border-color:rgba(59,126,161,.55);background:rgba(59,126,161,.14);">
-    <div class="cp-art">${st ? uiIcon(st.icon, 62, st.emoji) : '<span style="font-size:44px;">💠</span>'}</div>
+    <div class="cp-art">${st ? stoneIcon(st, 62) : '<span style="font-size:44px;">💠</span>'}</div>
     <div class="cp-text">
       <div class="crown-title">${st ? escapeHtml(st.name) : 'Element Stones'}${st && charge ? ` <span>⚡ ${charge} charge</span>` : ''}</div>
       <div class="crown-sub">${st
@@ -728,7 +728,7 @@ function stoneChooser(title, stones, onPick){
     ${stones.map(st=>{
       const who = stoneOwnerName(st.id), ch = stoneCharge(st.id);
       return `<button class="btn btn-ghost st-opt" data-id="${st.id}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;">
-        ${uiIcon(st.icon, 30, st.emoji)}<span><b>${escapeHtml(st.name)}</b>${ch ? ` · ⚡ ${ch}` : ''}<br>
+        ${stoneIcon(st, 30)}<span><b>${escapeHtml(st.name)}</b>${ch ? ` · ⚡ ${ch}` : ''}<br>
         <span style="font-size:11px;color:var(--ink-soft);">${who ? `carried by ${escapeHtml(who)}` : 'free'}</span></span></button>`;
     }).join('')}
     <button class="btn btn-ghost" id="stCancel" style="margin-top:4px;">Cancel</button>
@@ -804,7 +804,7 @@ function openMoveInfo(mv, mon){
   ov.innerHTML = `
     <div class="refine-card">
       <div class="refine-name">${escapeHtml(mv.name)}${st&&stonePlus(st)?`<span class="plus-mark big">${UPGRADE_MARKS[stonePlus(st)].trim()}</span>`:''}</div>
-      <div class="refine-sub">${mv.slot} · ${mv.words} words</div>
+      <div class="refine-sub">${mv.target === 'Passive' ? `${mv.slot === 'Passive' ? '' : mv.slot + ' · '}Passive · always on` : `${mv.slot} · ${mv.words} words`}</div>
       <div class="move-info-body">${moveDescription(mv, mon, atk)}</div>
       <div style="display:flex;gap:10px;margin-top:14px;">
         <button class="btn btn-ghost" id="miBack" style="flex:1;">Back</button>
@@ -1560,7 +1560,7 @@ function renderStats(){
     return out;
   });
   moves.forEach(mv=>{ const sf = sacredFlameBonus(m, mv); if(sf) mv.bonus = sf; });   // the ghost phoenix's gift
-  moves.forEach((mv, i)=>{ moves[i] = forestGiftMove(m, mv); });                      // (3.19) the Forest Guardian's
+  moves.forEach((mv, i)=>{ moves[i] = forestGiftMove(m, mv); });                      // (3.19) the Forest Guardian's (3.56: her heal in Overgrowth)
   [[m.equippedStone,'Basic'], [m.power1Stone,'Power1']].forEach(([st, slot])=>{
     if(!st) return;
     const t = stoneTierDef(st.tier);
@@ -1939,7 +1939,7 @@ function renderElementStones(){
     <div class="stone-intro">
       <b>Carry one.</b> A stone attaches to a monster of its type and gives it
       <b>1.5× experience</b> from every fight — a stone helps a monster that is
-      falling behind far more than one already grown. The four triangle stones fit
+      falling behind far more than one already grown. The four Triune Stones fit
       any monster of their triangle's three types. Each stone is carried by one
       monster at a time, and a monster carries one stone.
       ${levelCap() > CROWN_GATE ? `<br><br><b>Break through.</b> Past level ${CROWN_GATE}, a crowned monster stops at a
@@ -1963,7 +1963,7 @@ function renderElementStones(){
       const charging = mon && chargesStone(mon);
       const storing = mon && !charging && storesAtHundred(mon);      // (3.01) stopped at 100
       return `<div class="es-row">
-        <div class="es-icon">${uiIcon(st.icon, 54, st.emoji)}</div>
+        <div class="es-icon">${stoneIcon(st, 54)}</div>
         <div class="es-body">
           <div class="es-name">${escapeHtml(st.name)}${ch || charging ? ` <span style="font-size:12px;color:#6a4ab0;">⚡ ${ch}${charging ? ` / ${breakthroughNeed(monCeiling(mon))}` : ''}</span>` : ''}</div>
           ${st.triangle ? `<div class="es-sub">Fits ${escapeHtml(st.typeText)}</div>` : ''}
