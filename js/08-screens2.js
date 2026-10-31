@@ -29,7 +29,7 @@ function healParty(pct){
 
 function startRecovery(){
   const pool = activePool().map(w=>w.text);
-  if(pool.length===0){ ui.prevScreen='recover'; toast('No words selected, please select to proceed.'); go('spelling'); return; }
+  if(pool.length===0){ toast('No words selected, please select to proceed.'); goForward('spelling', 'recover'); return; }
   const inPool = new Set(pool);
   const recent = (state.recentWrong||[]).filter(w=>inPool.has(w));
   ui.recovery = {
@@ -161,7 +161,7 @@ function renderRecover(){
 
 
 function ensurePool(){
-  if(activePool().length===0){ ui.prevScreen='challenge'; toast('No words selected, please select to proceed.'); go('spelling'); return false; }
+  if(activePool().length===0){ toast('No words selected, please select to proceed.'); goForward('spelling', 'challenge'); return false; }
   if(!battleParty().some(m=>m.currentHp>0)){ toast('Your team needs healing first.'); return false; }
   return true;
 }
@@ -469,7 +469,7 @@ function renderArenaGate(){
       <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;"></div>
       <button class="btn btn-primary" id="pwSubmit" style="margin-top:14px;">Unlock</button>
     </div>`;
-  $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
+  $('#backBtn').addEventListener('click', ()=> goBack());   // (3.65)
   const submit=()=>{
     const v=$('#pwInput').value.trim();
     if(passOk(v)){ ui.arenaUnlocked=true; render(); }
@@ -607,7 +607,7 @@ function renderArena(){
     <button class="btn btn-primary" id="arenaStart">⚔️ Enter Arena</button>
     <div class="phase-flag">Your party enters as it stands. Statuses, stones and levels are real.</div>
   `;
-  $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
+  $('#backBtn').addEventListener('click', ()=> goBack());
   wireArenaTabs(c);
   $('#arType').addEventListener('change', e=>{ c.type = e.target.value; c.species = null; renderArena(); });
   $('#arSpecies').addEventListener('change', e=>{ c.species = e.target.value; renderArena(); });
@@ -957,7 +957,7 @@ function arenaStoneLine(s){
       ? `, and from the moment it arrives their side has <b>Mach Dragon${d.mach > 1 ? ' ✦' : ''}</b> for <b>${(d.turns || 5) + 1} rounds</b>: they move before you ` +
         `unless a monster of yours on the field carries Dragon Dance ${d.mach > 1 ? '✦' : '+ or ✦'} — or a Diamond Dust of yours sweeps it away`
       : ''),
-    Steel:  ()=> `it takes <b>${Math.round(d.reduce * 100)}% less</b>` + (((d.block || 0) + (d.passiveBlock || 0)) ? ` and starts with <b>${(d.block || 0) + (d.passiveBlock || 0)} block</b>` : ''),
+    Steel:  ()=> `it takes <b>${Math.round(d.reduce * 100)}% less</b>` + (((d.block || 0) + (d.passiveBlock || 0)) ? ` and its side starts with <b>${(d.block || 0) + (d.passiveBlock || 0)} shields</b>, shared by them all` : ''),   // (3.64) the wave's
     Flying: ()=> `nothing touches it on its first turn, and it dodges <b>${Math.round((d.after || 0.15) * 100)}%</b> after`,
     Fairy:  ()=> `Diamond Dust: your effects are swept away, and nothing of yours takes hold for ${d.turns || 5} turns — but your shields stand, and still form`,
   }[vh.type];
@@ -1038,7 +1038,7 @@ function renderArenaChallengers(){
         </div>
       </div>`;
     }).join('')}`;
-  $('#backBtn').addEventListener('click', ()=> go(ui.prevScreen || 'home'));
+  $('#backBtn').addEventListener('click', ()=> goBack());
   wireArenaTabs(c);
   screenEl.querySelectorAll('.arc-reg').forEach(b=> b.addEventListener('click', ()=>{ c.region = +b.dataset.reg; renderArena(); window.scrollTo(0, 0); }));
   screenEl.querySelectorAll('[data-arc]').forEach(el=> el.addEventListener('click', ()=>{
@@ -1078,7 +1078,7 @@ function openArenaChallenger(x, vi){
 
 /* In: the party healed for the fight, and written down as it was. */
 function startArenaChallenge(x, v, cfg){
-  if(activePool().length === 0){ ui.prevScreen = 'arena'; toast('No words selected, please select to proceed.'); return go('spelling'); }
+  if(activePool().length === 0){ toast('No words selected, please select to proceed.'); return goForward('spelling', 'arena'); }
   cfg = Object.assign({}, cfg || v.build());
   /* Nothing that hands the fight back to the story: what happens after it, a
      loss the story needs (the Padrino), the Grove's trial, the tear's rounds,

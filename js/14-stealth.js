@@ -666,8 +666,8 @@ function caughtFight(id, d, g, def, shout){
   if(activePool().length === 0){
     stealthHold(false);
     walkTeardown();
-    ui.prevScreen = id; toast('No words selected, please select to proceed.');
-    return go('spelling');
+    toast('No words selected, please select to proceed.');
+    return goForward('spelling', id);
   }
   sceneSay([face], roster.label, shout || roster.shout || `<b>"Hey! You — in the light!"</b>`, 'Fight').then(()=>{
     stealthHold(false);

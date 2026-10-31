@@ -4827,7 +4827,7 @@ function r5PeaceFight(d, g, def){
   if(!st || st.caught || !roster) return;
   if(!battleParty().some(m=> m.currentHp > 0)) return sceneSay([faceNpc(guardSprite(def), '💂')], 'Soldato',
     `<b>"Look at the state of you. Go and get patched up first. Then we'll talk."</b>`);
-  if(activePool().length === 0){ ui.prevScreen = id; toast('No words selected, please select to proceed.'); return go('spelling'); }
+  if(activePool().length === 0){ toast('No words selected, please select to proceed.'); return goForward('spelling', id); }
   st.caught = true;
   stealthHold(true);
   stopStealth();

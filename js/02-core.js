@@ -89,7 +89,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.60';
+const GAME_VERSION = '3.66';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -708,7 +708,51 @@ const STONE_TIERS = [
   { id:'veryhigh', label:'Very High', odds:0.06, words:4,  mult:null, kind:'status' },
   { id:'ultra',    label:'Ultra',     odds:0.02, words:10, mult:0.5,  kind:'multihit' },
 ];
-const RECYCLE_RETURN = { low:1, mid:2, high:4, veryhigh:7, ultra:15 };
+const RECYCLE_RETURN = { low:1, mid:2, high:4, veryhigh:7, ultra:15 };   // Skill Tokens — since 3.65 only Low and Mid are paid this way
+/* (3.65) SELECTION TOKENS. A High, Very High or Ultra stone recycles into one
+   Selection Token of its own tier instead of Skill Tokens, and 3 of a tier
+   buy a skill of that tier you choose yourself at the shop, beside its gold
+   price (the designer: "1 token per refund, 3 tokens for a selection draw";
+   High: "3:1 for a specific high skill stone"). Low and Mid still recycle
+   into Skill Tokens. They are kept in state.inventory.selTokens = { high,
+   veryhigh, ultra }. (3.66: the element passives are not bought with these
+   after all — 5 High stones of one element are to make one for the Very
+   High slot, 7 one for the Ultra slot; details to come.) */
+const SELECTION_TIERS = ['high', 'veryhigh', 'ultra'];
+const SELECTION_PER_PICK = 3;
+function selTokens(tier){
+  const s = state && state.inventory && state.inventory.selTokens;
+  return (s && s[tier]) || 0;
+}
+function addSelTokens(tier, n){
+  if(!state || !state.inventory || !SELECTION_TIERS.includes(tier)) return;
+  const s = state.inventory.selTokens || (state.inventory.selTokens = { high:0, veryhigh:0, ultra:0 });
+  s[tier] = Math.max(0, (s[tier] || 0) + (n || 0));
+}
+function selTokenName(tier, n){
+  const t = STONE_TIERS.find(x=> x.id === tier);
+  return `${t ? t.label : tier} Token${n === 1 ? '' : 's'}`;
+}
+/* Its look: a coin with its tier's gem on its face (the gem's colours,
+   index.html .gem.tier-*). */
+function selTokenIcon(tier, px){
+  px = px || 18;
+  return `<span class="sel-token tier-${tier}" style="width:${px}px;height:${px}px;"><span class="gem tier-${tier}"></span></span>`;
+}
+/* What recycling a stone pays: Skill Tokens for Low and Mid; one Selection
+   Token of its tier for the rest. */
+function recycleReward(tier){
+  return SELECTION_TIERS.includes(tier) ? { sel:tier, n:1 } : { sel:null, n:RECYCLE_RETURN[tier] || 0 };
+}
+function recycleRewardHtml(tier, px){
+  const r = recycleReward(tier);
+  return r.sel ? `${selTokenIcon(r.sel, px || 15)} ${r.n} ${selTokenName(r.sel, r.n)}` : `${tokenIcon(px || 15)} ${r.n} Skill Token${r.n === 1 ? '' : 's'}`;
+}
+function payRecycle(tier, sign){
+  const r = recycleReward(tier), k = sign == null ? 1 : sign;
+  if(r.sel) addSelTokens(r.sel, k * r.n);
+  else state.inventory.tokens = Math.max(0, (state.inventory.tokens || 0) + k * r.n);
+}
 
 const STONE_NAMES = {
   Fire:     { low:'Fireball',    mid:'Flame Wheel',  high:'Twin Blaze',   veryhigh:'Overheat',        ultra:'Fusion Flare' },
@@ -1125,7 +1169,7 @@ function blankProfile(name, starterSpecies){
     storage:[],
     caughtSpecies:[starterSpecies],
     encounteredSpecies:[starterSpecies],
-    inventory:{ protein:0, strangeKey:false, tokens:0, eliteTokens:0 },
+    inventory:{ protein:0, strangeKey:false, tokens:0, eliteTokens:0, selTokens:{ high:0, veryhigh:0, ultra:0 } },
     moveStones:[],
     /* Mastery: how many times each phrase has been completed in a SCORED
        context (battle / catch / recovery). Practice never counts. */
@@ -1387,6 +1431,9 @@ function normalizeProfile(p){
   if(p.inventory.strangeKey===undefined) p.inventory.strangeKey = false;
   if(p.inventory.tokens===undefined) p.inventory.tokens = 0;
   if(p.inventory.eliteTokens===undefined) p.inventory.eliteTokens = 0;
+  /* (3.65) Selection Tokens, one pot a tier */
+  if(!p.inventory.selTokens || typeof p.inventory.selTokens !== 'object') p.inventory.selTokens = {};
+  ['high', 'veryhigh', 'ultra'].forEach(t=>{ p.inventory.selTokens[t] = Math.max(0, Math.floor(Number(p.inventory.selTokens[t]) || 0)); });
   p.wordMastery = p.wordMastery || {};
   p.wordAttempts = p.wordAttempts || {};
   p.daily = p.daily || { day:null, count:0, step:0, done:false };

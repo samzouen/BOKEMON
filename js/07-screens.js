@@ -132,14 +132,14 @@ function renderAvatarPick(){
     ${avatarPickerHtml(chosen)}
     <button class="btn btn-primary" id="avSave" style="margin-top:18px;" ${chosen?'':'disabled'}>Save</button>
   `;
-  $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
+  $('#backBtn').addEventListener('click', ()=> goBack());   // (3.65)
   wireAvatarPicker(id=>{ chosen = id; $('#avSave').disabled = false; });
   $('#avSave').addEventListener('click', async ()=>{
     if(!chosen) return;
     state.avatar = chosen;
     await saveProfile();
     toast('Looking good!');
-    go(ui.prevScreen||'home');
+    goBack();
   });
 }
 
@@ -429,7 +429,7 @@ function renderPartyStub(){
     <div id="partyList" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;"></div>
   `;
   $('#backBtn').addEventListener('click', ()=> go(backFromMenu()));
-  $('#storageBtn').addEventListener('click', ()=>{ ui.storageFrom='party'; go('storage'); });
+  $('#storageBtn').addEventListener('click', ()=>{ ui.storageFrom='party'; ui.storageTab='mons'; go('storage'); });   // (3.65) its Monsters page
   const cpb = $('#compBtn');
   if(cpb) cpb.addEventListener('click', ()=> go('companions'));
   renderPartyList();
@@ -978,6 +978,8 @@ function companionsCss(){
   .cc-opt .cc-txt{ flex:1;min-width:0; }
   .cc-opt small{ display:block;font-size:11px;font-weight:700;color:var(--ink-soft); }
   .cc-opt:disabled{ opacity:.5; }
+  .cc-opt .cc-types{ white-space:nowrap; }
+  .cc-opt .cc-types .type-badge{ font-size:9px; padding:1px 6px; vertical-align:1px; }   /* (3.65) what the filter goes by */
   .core-price{ margin-top:12px;font-weight:800;font-size:14px; }
   .core-short{ margin-top:6px;font-size:12px;font-weight:800;color:var(--cinnabar-dark); }
   .core-choice{ display:flex;flex-direction:column;gap:8px;margin-top:14px; }
@@ -1081,23 +1083,24 @@ function companionOptions(L){
     return { c, lead:(lead && lead !== L) ? lead : null, mine:lead === L, why };
   }).sort((a, b)=> (!!a.why - !!b.why) || (b.c.level - a.c.level));
 }
+/* (3.65) with filters, as storage has: by element type and by rarity (the
+   designer: "The companion selection menu does not have filters yet").
+   ui.compFilter keeps the choice while the game is open. */
 function chooseCompanionFor(L){
   if(!canLead(L) || !L.coreSlot) return;
   companionsCss();
+  storFilterCss();
   const opts = companionOptions(L);
   const any = opts.some(o=> !o.why && !o.mine);
+  const f = ui.compFilter || (ui.compFilter = { type:'', tier:'' });
   const scrim = document.createElement('div');
   scrim.className = 'comp-chooser';
   scrim.style.cssText = 'position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:70;display:flex;align-items:flex-end;justify-content:center;';
   scrim.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;max-height:82vh;overflow-y:auto;">
     <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;">A companion for ${escapeHtml(displayName(L))}</div>
     <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:2px 0 12px;">${CORE_SLOT_DEF[L.coreSlot].label} slot · holds ${CORE_SLOT_DEF[L.coreSlot].holds}</div>
-    ${opts.length ? opts.map((o, i)=> `<button class="btn btn-ghost cc-opt" data-i="${i}" ${(o.why || o.mine) ? 'disabled' : ''}>
-        ${monPortrait(o.c.species, 36, { stage:monStage(o.c), crowned:isCrowned(o.c) })}
-        <span class="cc-txt">${escapeHtml(displayName(o.c))} · Lv ${o.c.level}
-          <small>${o.mine ? 'its companion now' : o.why ? escapeHtml(o.why) : o.lead ? `with ${escapeHtml(displayName(o.lead))} now — it would move` : `${CORE_SLOT_DEF[coreTierOf(o.c)].label} core`}</small></span>
-      </button>`).join('')
-      : `<div class="comp-note" style="margin-bottom:10px;">Nobody is in storage. A companion comes from your storage, never the party.</div>`}
+    <div id="ccFilter"></div>
+    <div id="ccList"></div>
     ${opts.length && !any ? `<div class="comp-note" style="margin-bottom:10px;">Nobody in storage can join yet.</div>` : ''}
     <button class="btn btn-ghost" id="ccCancel" style="margin-top:4px;">Cancel</button>
   </div>`;
@@ -1105,14 +1108,30 @@ function chooseCompanionFor(L){
   const close = ()=>{ if(scrim.parentNode) document.body.removeChild(scrim); };
   scrim.querySelector('#ccCancel').addEventListener('click', close);
   scrim.addEventListener('click', e=>{ if(e.target === scrim) close(); });
-  scrim.querySelectorAll('.cc-opt:not([disabled])').forEach(b=> b.addEventListener('click', ()=>{
-    const o = opts[+b.dataset.i];
+  const pick = o=>{
     close();
     if(o.lead) return confirmDialogHtml(
       `<b>${escapeHtml(displayName(o.c))}</b> is <b>${escapeHtml(displayName(o.lead))}</b>'s companion. ` +
       `Move it to <b>${escapeHtml(displayName(L))}</b>?`, ()=> bondCompanion(L, o.c), 'Move it');
     bondCompanion(L, o.c);
-  }));
+  };
+  const draw = ()=>{
+    const shown = opts.filter(o=> storageMatches(o.c, f));
+    const fb = scrim.querySelector('#ccFilter'), lb = scrim.querySelector('#ccList');
+    fb.innerHTML = opts.length > 1 || f.type || f.tier
+      ? `<div class="sm-filter-row">${storageFilterHtml(opts.map(o=> o.c), f, 'cf')}${shown.length !== opts.length ? `<div class="stor-count">${shown.length} of ${opts.length}</div>` : ''}</div>` : '';
+    lb.innerHTML = !opts.length
+      ? `<div class="comp-note" style="margin-bottom:10px;">Nobody is in storage. A companion comes from your storage, never the party.</div>`
+      : !shown.length ? `<div class="comp-note" style="margin-bottom:10px;">Nobody in storage like that.</div>`
+      : shown.map(o=>{ const i = opts.indexOf(o); return `<button class="btn btn-ghost cc-opt" data-i="${i}" ${(o.why || o.mine) ? 'disabled' : ''}>
+        ${monPortrait(o.c.species, 36, { stage:monStage(o.c), crowned:isCrowned(o.c) })}
+        <span class="cc-txt">${escapeHtml(displayName(o.c))} · Lv ${o.c.level} <span class="cc-types">${typeBadges(o.c.species)}</span>
+          <small>${o.mine ? 'its companion now' : o.why ? escapeHtml(o.why) : o.lead ? `with ${escapeHtml(displayName(o.lead))} now — it would move` : `${CORE_SLOT_DEF[coreTierOf(o.c)].label} core`}</small></span>
+      </button>`; }).join('');
+    wireMonFilter(f, 'cf', draw, scrim);
+    lb.querySelectorAll('.cc-opt:not([disabled])').forEach(b=> b.addEventListener('click', ()=> pick(opts[+b.dataset.i])));
+  };
+  draw();
 }
 /* Bonding costs nothing and can be changed any time, so it saves as ordinary
    play does; only the slot's medals wait on the cloud. */
@@ -1191,7 +1210,7 @@ const SPAR_POOLS = {
     ['lizardape',     'Scaled Stance: starts with 1 block and a Counter stack. Primal Rend Max: 4 strikes, doubled at full health.'],
   ],
   legendary: [
-    ['newt',          'Tachypsychia: for 3 turns it dodges 80% at first (30% after) and may act again (30%) — and all the while, cast or not, each turn nothing touches it, it hits 15% harder (up to 60%). Volt Concussion: 3 strikes of 0.5, 20% paralysis each. Volt Wave: 0.6× on both.'],
+    ['newt',          'It never misses, and each turn nothing touches it, it hits 15% harder (up to 60%). Volt Concussion: 3 strikes of 0.5, 15% paralysis each. Volt Wave: 0.6× on both.'],   // (3.63) what it does in a spar: it never casts its Tachypsychia
     ['water_dragon',  'Cataclysm: gathers charges, then spends them all in one huge blow. Tsunami: 0.8× on both.'],
     ['ankylosaurus',  'Steel Soul: it always takes 20% less. Once a fight, a quick cast before it swings: that turn it hits 1.2× — more for every other shield its side has up — and +0.1× a blow. Rampage Max: 5 strikes on both, then an Aftershock.'],
     ['phoenix',       'Incinerate Max: 1.5×, growing to 2.75× with up to 7 more words (15 in all). Nova: 1× on both — and it sweeps away one of your buffs and burns one of your marks off its side.'],
@@ -1274,7 +1293,7 @@ function openCoreTraining(L){
   if(bg) bg.addEventListener('click', ()=>{ if(!canAffordPrice(def.price)) return; leave(); beginCoreSession(L, tier); });
 }
 function beginCoreSession(L, tier){
-  if(revisionPool().length === 0){ ui.prevScreen = 'companions'; toast('No words selected, please select to proceed.'); go('spelling'); return; }
+  if(revisionPool().length === 0){ toast('No words selected, please select to proceed.'); goForward('spelling', 'companions'); return; }
   ui.coreSession = { uid:L.uid, tier, n:1, wins:0, hp:L.currentHp, draw:null, mine:null, his:null };
   go('coreSpar');
 }
@@ -1346,7 +1365,7 @@ function coreSparFight(){
   if(!s || !s.mine || !s.his) return;
   const L = coreFind(s.uid);
   if(!L || !state.party.includes(L)){ endCoreSession(); return go('companions'); }
-  if(revisionPool().length === 0){ ui.prevScreen = 'coreSpar'; toast('No words selected, please select to proceed.'); go('spelling'); return; }
+  if(revisionPool().length === 0){ toast('No words selected, please select to proceed.'); goForward('spelling', 'coreSpar'); return; }
   const lv = L.level;
   const comp = newMonster(s.mine, lv);
   comp.uid = 'spar_' + s.mine + '_' + Date.now();
@@ -1819,108 +1838,235 @@ function storageSorted(list){
   list.forEach(m=>{ if(!put.has(m.uid)){ out.push(m); put.add(m.uid); } });
   return out;
 }
-function storageFilterHtml(stored, f){
+/* (3.65) the same filter serves the companion chooser too: `pre` names its
+   controls (sf — storage, cf — the chooser) */
+function storageFilterHtml(stored, f, pre){
+  pre = pre || 'sf';
   const types = Object.keys(TYPE_COLORS);
   const nType = t=> stored.filter(m=> ((SPECIES[m.species] || {}).types || []).includes(t)).length;
   const nTier = t=> stored.filter(m=> (SPECIES[m.species] || {}).tier === t).length;
   const opt = (v, label, n, on)=> `<option value="${v}" ${on ? 'selected' : ''} ${n === 0 && !on ? 'disabled' : ''}>${label}${n != null ? ` (${n})` : ''}</option>`;
   return `<div class="stor-filter">
       <label class="sf-pick${f.type ? ' on' : ''}" ${f.type ? `style="--tc:${TYPE_COLORS[f.type] || '#888'}"` : ''}><span>Type</span>
-        <select id="sfType">${opt('', 'All types', null, !f.type)}${types.map(t=> opt(t, t, nType(t), f.type === t)).join('')}</select></label>
+        <select id="${pre}Type">${opt('', 'All types', null, !f.type)}${types.map(t=> opt(t, t, nType(t), f.type === t)).join('')}</select></label>
       <label class="sf-pick${f.tier ? ' on' : ''}"><span>Rarity</span>
-        <select id="sfTier">${opt('', 'All', null, !f.tier)}${STORAGE_TIERS.map(([t, l])=> opt(t, l, nTier(t), f.tier === t)).join('')}</select></label>
-      ${(f.type || f.tier) ? `<button class="sf-clear" id="sfClear" title="Show them all">✕</button>` : ''}
+        <select id="${pre}Tier">${opt('', 'All', null, !f.tier)}${STORAGE_TIERS.map(([t, l])=> opt(t, l, nTier(t), f.tier === t)).join('')}</select></label>
+      ${(f.type || f.tier) ? `<button class="sf-clear" id="${pre}Clear" title="Show them all">✕</button>` : ''}
     </div>`;
 }
-function wireStorageFilter(){
-  if(!document.getElementById('storFilterCss')){
-    const st = document.createElement('style');
-    st.id = 'storFilterCss';
-    st.textContent = `
+function storFilterCss(){
+  if(document.getElementById('storFilterCss')) return;
+  const st = document.createElement('style');
+  st.id = 'storFilterCss';
+  st.textContent = `
     .stor-filter{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:-2px 0 10px; }
     .sf-pick{ display:flex; align-items:center; gap:5px; flex:1 1 120px; min-width:0; padding:4px 6px 4px 9px; border-radius:20px;
       background:var(--paper); border:1.5px solid var(--line); font-size:11px; font-weight:800; color:var(--ink-soft); }
     .sf-pick.on{ border-color:var(--tc, var(--gold)); background:rgba(201,154,63,.12); color:var(--ink); }
     .sf-pick select{ flex:1; min-width:0; border:none; background:transparent; font:inherit; font-size:12px; font-weight:800; color:var(--ink); padding:2px 0; }
     .sf-clear{ flex:0 0 auto; width:28px; height:28px; border-radius:50%; border:1.5px solid var(--line); background:var(--paper); font-weight:900; cursor:pointer; }`;
-    document.head.appendChild(st);
-  }
-  const f = ui.storageFilter || (ui.storageFilter = { type:'', tier:'' });
-  const ty = $('#sfType'), ti = $('#sfTier'), cl = $('#sfClear');
-  if(ty) ty.addEventListener('change', ()=>{ f.type = ty.value; renderStorage(); });
-  if(ti) ti.addEventListener('change', ()=>{ f.tier = ti.value; renderStorage(); });
-  if(cl) cl.addEventListener('click', ()=>{ f.type = ''; f.tier = ''; renderStorage(); });
+  document.head.appendChild(st);
 }
+/* Wires a filter drawn by storageFilterHtml: `redraw` after each change. */
+function wireMonFilter(f, pre, redraw, root){
+  const q = id=> (root || document).querySelector('#' + id);
+  const ty = q(pre + 'Type'), ti = q(pre + 'Tier'), cl = q(pre + 'Clear');
+  if(ty) ty.addEventListener('change', ()=>{ f.type = ty.value; redraw(); });
+  if(ti) ti.addEventListener('change', ()=>{ f.tier = ti.value; redraw(); });
+  if(cl) cl.addEventListener('click', ()=>{ f.type = ''; f.tier = ''; redraw(); });
+}
+function wireStorageFilter(){
+  storFilterCss();
+  const f = ui.storageFilter || (ui.storageFilter = { type:'', tier:'' });
+  wireMonFilter(f, 'sf', renderStorage);
+}
+/* ---------- STORAGE (3.65: two pages, not two columns) ----------
+   The designer: "Have two tabs at the top, monsters on the left, items on
+   the right. Toggling to either now shows a full page UI … instead of shared
+   space. Skill stones in particular are messy." Monsters: the filters, and a
+   card each across the page. Items: what you hold to spend (medals, Skill,
+   Elite and Selection Tokens, the rest), the Element Stones, then the skill
+   stones — by tier, rarest first, one tile for each kind with ×N for its
+   copies, and a type filter of their own. ui.storageTab keeps the page while
+   the game is open; the shop opens Items, the Party page Monsters. */
 function renderStorage(){
   setScreenBg('home');
   $('#brandSub').textContent = 'Storage';
   if(!Array.isArray(state.storage)) state.storage = [];
   if(!Array.isArray(state.moveStones)) state.moveStones = [];
   if(!state.inventory) state.inventory = { protein:0, strangeKey:false, tokens:0, eliteTokens:0 };
-
+  storageCss();
+  storFilterCss();
+  companionsCss();
   /* (3.52) a companion whose leader is in the party is with the party now —
      the Party page shows them side by side — so it is not listed here */
   const stored = storedMonsters();
-  const f = ui.storageFilter || (ui.storageFilter = { type:'', tier:'' });
-  const shown = storageSorted(stored.filter(m=> storageMatches(m, f)));
+  const tab = ui.storageTab === 'items' ? 'items' : 'mons';
   screenEl.innerHTML = `
     <div class="party-head-row">
       <button class="back-link" id="backBtn" style="margin:0;">← ${ui.storageFrom==='shop'?'Shop':'Party'}</button>
       <button class="btn btn-ghost storage-corner" id="toShopBtn">🏪 Shop</button>
     </div>
     <div class="screen-title" style="margin-top:6px;">Storage</div>
-
-    <div class="storage-cols">
-      <div class="storage-col col-mons">
-        <div class="col-head">🐾 Monsters <span>${shown.length === stored.length ? stored.length : `${shown.length} of ${stored.length}`}</span></div>
-        ${stored.length ? storageFilterHtml(stored, f) : ''}
-        <div id="storageList"></div>
-      </div>
-      <div class="storage-col col-stones">
-        ${heldStones().length ? `<button class="btn btn-ghost stone-page-btn" id="openStones">
-        💠 Element Stones <span>${totalStones()} held</span></button>` : ''}
-      ${recycleAllBar()}
-      <div class="col-head">💎 Skills <span>${tokenIcon(16)} ${state.inventory.tokens||0}</span></div>
-        <div id="stoneList"></div>
-      </div>
+    <div class="stor-tabs" role="tablist">
+      <button class="stor-tab${tab === 'mons' ? ' on' : ''}" data-tab="mons" role="tab" aria-selected="${tab === 'mons'}">🐾 Monsters <span>${stored.length}</span></button>
+      <button class="stor-tab${tab === 'items' ? ' on' : ''}" data-tab="items" role="tab" aria-selected="${tab === 'items'}">🎒 Items <span>${state.moveStones.length ? `💎 ${state.moveStones.length}` : ''}</span></button>
     </div>
+    <div class="stor-page" id="storPage">${tab === 'mons' ? storageMonsPageHtml(stored) : storageItemsPageHtml()}</div>
   `;
   $('#backBtn').addEventListener('click', ()=>{ const t = ui.storageFrom==='shop'?'shop':'party'; ui.storageFrom=null; go(t); });
   $('#toShopBtn').addEventListener('click', ()=>{ ui.storageFrom='storage'; go('shop'); });
-
-  const list = $('#storageList');
-  companionsCss();
-  wireStorageFilter();
-  if(stored.length===0){
-    list.innerHTML = `<div class="col-empty">No stored monsters.</div>`;
-  } else if(!shown.length){
-    list.innerHTML = `<div class="col-empty">No stored monsters like that.</div>`;
+  screenEl.querySelectorAll('.stor-tab').forEach(b=> b.addEventListener('click', ()=>{
+    if(ui.storageTab === b.dataset.tab) return;
+    ui.storageTab = b.dataset.tab;
+    renderStorage();
+    window.scrollTo(0, 0);
+  }));
+  if(tab === 'mons'){
+    wireStorageFilter();
+    const list = $('#storageList');
+    list.querySelectorAll('[data-stats]').forEach(b=>b.addEventListener('click', ()=>{ ui.statsUid=b.dataset.stats; go('stats'); }));
+    list.querySelectorAll('[data-party]').forEach(b=>b.addEventListener('click', ()=> moveToParty(b.dataset.party)));
   } else {
-    list.innerHTML = shown.map(m=>`
-      <div class="party-card" style="padding:10px;margin-bottom:8px;">
+    renderStoneList();
+    wireRecycleAll();
+    const os = $('#openStones');
+    if(os) os.addEventListener('click', ()=>go('elementStones'));
+    const sf = ui.stoneFilter || (ui.stoneFilter = { type:'' });
+    const ty = $('#stType'), cl = $('#stClear');
+    if(ty) ty.addEventListener('change', ()=>{ sf.type = ty.value; renderStorage(); });
+    if(cl) cl.addEventListener('click', ()=>{ sf.type = ''; renderStorage(); });
+  }
+}
+function storageMonsPageHtml(stored){
+  const f = ui.storageFilter || (ui.storageFilter = { type:'', tier:'' });
+  const shown = storageSorted(stored.filter(m=> storageMatches(m, f)));
+  const cards = shown.map(m=> `
+      <div class="party-card stor-mon">
         <div class="party-head" style="gap:9px;">
-          ${monPortrait(m.species,44,{stage:monStage(m),crowned:isCrowned(m)})}
+          ${monPortrait(m.species, 48, { stage:monStage(m), crowned:isCrowned(m) })}
           <div style="flex:1;min-width:0;">
-            <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:14px;">${escapeHtml(displayName(m))}</div>
-            <div style="font-size:12px;color:var(--ink-soft);font-weight:800;">Lv ${m.level}</div>
-            <div style="font-size:10px;margin-top:2px;">${typeBadges(m.species)}</div>
+            <div class="sm-name">${escapeHtml(displayName(m))}</div>
+            <div class="sm-lv">Lv ${m.level}</div>
+            <div class="sm-types">${typeBadges(m.species)}</div>
             ${storageCompanionLine(m)}
           </div>
         </div>
-        <div class="party-actions" style="margin-top:8px;padding-top:8px;">
-          <button class="mini-btn" style="font-size:11px;padding:7px 6px;" data-stats="${m.uid}">📊</button>
-          <button class="mini-btn" style="font-size:11px;padding:7px 6px;" data-party="${m.uid}">➕ Party</button>
+        <div class="party-actions sm-actions">
+          <button class="mini-btn" data-stats="${m.uid}">📊 Stats</button>
+          <button class="mini-btn" data-party="${m.uid}">➕ Party</button>
         </div>
-      </div>
-    `).join('');
-    list.querySelectorAll('[data-stats]').forEach(b=>b.addEventListener('click', ()=>{ ui.statsUid=b.dataset.stats; go('stats'); }));
-    list.querySelectorAll('[data-party]').forEach(b=>b.addEventListener('click', ()=> moveToParty(b.dataset.party)));
-  }
-  renderStoneList();
-  wireRecycleAll();
-  const os = $('#openStones');
-  if(os) os.addEventListener('click', ()=>go('elementStones'));
+      </div>`).join('');
+  return `
+    ${stored.length ? `<div class="sm-filter-row">${storageFilterHtml(stored, f)}${shown.length !== stored.length ? `<div class="stor-count">${shown.length} of ${stored.length}</div>` : ''}</div>` : ''}
+    <div id="storageList" class="stor-mon-grid">${!stored.length ? `<div class="col-empty">No stored monsters.</div>`
+      : !shown.length ? `<div class="col-empty">No stored monsters like that.</div>` : cards}</div>`;
 }
+/* What you hold to spend, then the stones. */
+function storageItemsPageHtml(){
+  const inv = state.inventory || {}, med = state.medals || {};
+  const sf = ui.stoneFilter || (ui.stoneFilter = { type:'' });
+  const chip = (icon, n, label, always)=> (n || always) ? `<div class="wal-chip${n ? '' : ' none'}"><span class="wal-ic">${icon}</span><b>${n || 0}</b><small>${label}</small></div>` : '';
+  const others = [
+    chip('💪', inv.protein || 0, 'Protein'),
+    chip(typeof voidIcon === 'function' ? voidIcon(22) : '🕳️', inv.voidStones || 0, 'Void Stones'),
+    chip(crownIcon(22), inv.crowns || 0, 'Crowns'),
+  ].join('');
+  const types = Object.keys(TYPE_COLORS);
+  const nType = t=> state.moveStones.filter(st=> st.type === t).length;
+  return `
+    <div class="stor-wallet">
+      <div class="wal-row">
+        ${chip(medalIcon('bronze'), med.bronze || 0, 'Bronze', true)}
+        ${chip(medalIcon('silver'), med.silver || 0, 'Silver', true)}
+        ${chip(medalIcon('gold'), med.gold || 0, 'Gold', true)}
+      </div>
+      <div class="wal-row">
+        ${chip(tokenIcon(22), inv.tokens || 0, 'Skill Tokens', true)}
+        ${chip('⭐', inv.eliteTokens || 0, 'Elite Tokens')}
+      </div>
+      <div class="wal-head">Selection Tokens <span>${SELECTION_PER_PICK} of a kind buy a skill of its tier you choose, at the shop</span></div>
+      <div class="wal-row">
+        ${SELECTION_TIERS.map(t=> chip(selTokenIcon(t, 22), selTokens(t), stoneTierDef(t).label, true)).join('')}
+      </div>
+      ${others ? `<div class="wal-row">${others}</div>` : ''}
+    </div>
+    ${heldStones().length ? `<button class="btn btn-ghost stone-page-btn" id="openStones">💠 Element Stones <span>${totalStones()} held</span></button>` : ''}
+    <div class="stor-sec-head">💎 Skill Stones <span>${state.moveStones.length}</span></div>
+    ${state.moveStones.length ? `<div class="stor-filter">
+        <label class="sf-pick${sf.type ? ' on' : ''}" ${sf.type ? `style="--tc:${TYPE_COLORS[sf.type] || '#888'}"` : ''}><span>Type</span>
+          <select id="stType"><option value="" ${sf.type ? '' : 'selected'}>All types</option>${types.map(t=> `<option value="${t}" ${sf.type === t ? 'selected' : ''} ${nType(t) || sf.type === t ? '' : 'disabled'}>${t} (${nType(t)})</option>`).join('')}</select></label>
+        ${sf.type ? `<button class="sf-clear" id="stClear" title="Show them all">✕</button>` : ''}
+      </div>` : ''}
+    ${recycleAllBar()}
+    <div id="stoneList"></div>`;
+}
+let _storageCssDone = false;
+function storageCss(){
+  if(_storageCssDone || typeof document === 'undefined') return;
+  _storageCssDone = true;
+  const st = document.createElement('style');
+  st.id = 'storageCss';
+  st.textContent = `
+  .stor-tabs{ display:flex; gap:6px; margin:8px 0 12px; padding:4px; border-radius:16px; background:var(--paper-3); }
+  .stor-tab{ flex:1; display:flex; align-items:center; justify-content:center; gap:7px; padding:10px 8px; border:none; border-radius:12px;
+    background:transparent; font-family:'Baloo 2',cursive; font-weight:800; font-size:15px; color:var(--ink-soft); cursor:pointer; }
+  .stor-tab span{ font-family:'Nunito',sans-serif; font-size:12px; font-weight:900; opacity:.8; }
+  .stor-tab.on{ background:var(--paper); color:var(--ink); box-shadow:0 2px 0 var(--line); }
+  body.has-bg .stor-tabs{ background:rgba(35,32,25,.16); backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
+  body.has-bg .stor-tab.on{ background:rgba(250,244,228,.92); }
+  .sm-filter-row{ display:flex; align-items:center; gap:8px; }
+  .sm-filter-row .stor-filter{ flex:1; }
+  .stor-count{ flex:0 0 auto; font-size:12px; font-weight:800; color:var(--ink-soft); margin:-2px 0 10px; }
+  .stor-mon-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(168px, 1fr)); gap:8px; }
+  .stor-mon-grid .col-empty{ grid-column:1/-1; }
+  .party-card.stor-mon{ padding:10px; margin:0; display:flex; flex-direction:column; }
+  .stor-mon .party-head{ flex:1; align-items:flex-start; }
+  .stor-mon .sm-name{ font-family:'Baloo 2',cursive; font-weight:800; font-size:14px; line-height:1.15; }
+  .stor-mon .sm-lv{ font-size:12px; color:var(--ink-soft); font-weight:800; }
+  .stor-mon .sm-types{ font-size:10px; margin-top:3px; }
+  .stor-mon .sm-actions{ margin-top:8px; padding-top:8px; }
+  .stor-mon .sm-actions .mini-btn{ font-size:11.5px; padding:7px 6px; }
+  .stor-wallet{ background:var(--paper-2); border:1px solid var(--line); border-radius:14px; padding:10px; margin-bottom:10px; }
+  body.has-bg .stor-wallet{ background:rgba(244,236,216,.34); border-color:rgba(35,32,25,.22); backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
+  .wal-row{ display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:6px; }
+  .wal-row + .wal-row, .wal-row + .wal-head{ margin-top:6px; }
+  .wal-head{ font-family:'Baloo 2',cursive; font-weight:800; font-size:13px; margin:10px 2px 5px; }
+  .wal-head span{ display:block; font-family:'Nunito',sans-serif; font-size:11px; font-weight:700; color:var(--ink-soft); }
+  .wal-chip{ display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:11px; background:var(--paper); border:1px solid var(--line); min-width:0; }
+  .wal-chip.none{ opacity:.55; }
+  .wal-chip .wal-ic{ flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; font-size:18px; line-height:1; }
+  .wal-chip .wal-ic img{ width:22px; height:22px; object-fit:contain; }
+  .wal-chip b{ font-family:'Baloo 2',cursive; font-size:16px; line-height:1; }
+  .wal-chip small{ flex:1; min-width:0; font-size:10.5px; font-weight:800; color:var(--ink-soft); line-height:1.1; }
+  .stor-sec-head{ display:flex; justify-content:space-between; align-items:center; font-family:'Baloo 2',cursive; font-weight:800; font-size:15px; margin:4px 2px 8px; }
+  .stor-sec-head span{ font-size:12px; color:var(--ink-soft); font-weight:800; }
+  body.has-bg .stor-sec-head{ text-shadow:0 1px 2px rgba(255,255,255,.9); }
+  .stone-group-head{ align-items:center; justify-content:flex-start; font-size:11px; padding:4px 8px; }
+  .stone-group-head .gem-wrap{ margin-right:5px; vertical-align:middle; }
+  .stone-group-head > span:last-child{ margin-left:auto; }
+  .stone-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(132px, 1fr)); gap:6px; }
+  .stone-tile{ position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:0; padding:8px 9px 8px 10px;
+    border-radius:11px; border:1px solid var(--line); border-left:5px solid var(--tc, var(--line)); background:var(--paper); text-align:left;
+    cursor:pointer; font:inherit; color:var(--ink); }
+  .stone-tile:active{ transform:translateY(1px); }
+  .stone-tile .type-badge{ font-size:9px; padding:2px 6px; }
+  .stone-tile .st-name{ font-family:'Baloo 2',cursive; font-weight:700; font-size:13px; line-height:1.15; padding-right:22px; }
+  .stone-tile .st-count{ position:absolute; top:6px; right:7px; min-width:22px; padding:1px 5px; border-radius:9px; background:var(--ink); color:#fff;
+    font-size:11px; font-weight:900; text-align:center; }
+  .stone-tile.tier-ultra{ box-shadow:0 0 0 1px rgba(224,85,63,.35), 0 0 10px rgba(224,85,63,.25); }
+  .stone-tile.tier-veryhigh{ box-shadow:0 0 0 1px rgba(224,168,60,.3), 0 0 8px rgba(224,168,60,.22); }
+  .sel-token{ position:relative; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; border-radius:50%; vertical-align:middle;
+    background:radial-gradient(circle at 35% 30%, #fffdf3, #e8dcbc 55%, #b9a77c); box-shadow:inset 0 0 0 1.5px rgba(120,96,48,.75), 0 1px 1px rgba(0,0,0,.2); }
+  .sel-token .gem{ width:62%; height:62%; }
+  .ware-price .ware-or{ display:block; font-size:11px; font-weight:800; color:var(--ink-soft); }
+  .sel-token.tier-ultra{ box-shadow:inset 0 0 0 1.5px rgba(143,42,28,.8), 0 0 5px rgba(224,85,63,.6); }
+  .sel-token.tier-veryhigh{ box-shadow:inset 0 0 0 1.5px rgba(169,118,29,.85), 0 0 4px rgba(224,168,60,.6); }
+  .sel-token.tier-high{ box-shadow:inset 0 0 0 1.5px rgba(31,92,140,.8), 0 1px 1px rgba(0,0,0,.2); }
+  `;
+  document.head.appendChild(st);
+}
+try{ storageCss(); }catch(e){}
 
 /* Low and Mid stones pile up fast, so they can be cleared in one go. */
 /* A shelf of the elemental stones you hold, showing who carries each and
@@ -1979,7 +2125,7 @@ function renderElementStones(){
       </div>`;
     }).join('') : `<div class="phase-flag">You haven't found any Element Stones yet.</div>`}
   `;
-  $('#backBtn').addEventListener('click', ()=>go('storage'));
+  $('#backBtn').addEventListener('click', ()=>{ ui.storageTab = 'items'; go('storage'); });   // (3.65) back to its Items page
   screenEl.querySelectorAll('[data-detach]').forEach(b=>b.addEventListener('click', async ()=>{
     const st = stoneDef(b.dataset.detach);
     detachStone(st.id);
@@ -2031,6 +2177,10 @@ function wireRecycleAll(){
   });
 }
 
+/* (3.65) The stones by tier, rarest first; within a tier one tile for each
+   kind — its type, its name, its refinement — with ×N for the copies, in
+   the types' order. A tile opens one of them (they are alike). */
+function stoneKindKey(st){ return st.tier + '|' + st.type + '|' + st.name + '|' + stonePlus(st); }
 function renderStoneList(){
   const el = $('#stoneList');
   if(!el) return;
@@ -2038,20 +2188,35 @@ function renderStoneList(){
     el.innerHTML = `<div class="col-empty">No skill stones yet.</div>`;
     return;
   }
-  // rarest first, so the good stuff is never buried
+  const f = ui.stoneFilter || { type:'' };
+  const list = state.moveStones.filter(st=> !f.type || st.type === f.type);
+  if(!list.length){
+    el.innerHTML = `<div class="col-empty">No ${escapeHtml(f.type)} skill stones.</div>`;
+    return;
+  }
   const order = ['ultra','veryhigh','high','mid','low'];
-  const groups = {};
-  state.moveStones.forEach(st=>{ (groups[st.tier] = groups[st.tier] || []).push(st); });
-  el.innerHTML = order.filter(t=>groups[t]).map(t=>{
+  const types = Object.keys(TYPE_COLORS);
+  el.innerHTML = order.map(t=>{
+    const of = list.filter(st=> st.tier === t);
+    if(!of.length) return '';
+    const kinds = [];
+    of.forEach(st=>{
+      const k = stoneKindKey(st);
+      let g = kinds.find(x=> x.k === k);
+      if(!g) kinds.push(g = { k, st, n:0 });
+      g.n++;
+    });
+    kinds.sort((a, b)=> (types.indexOf(a.st.type) - types.indexOf(b.st.type)) || (stonePlus(b.st) - stonePlus(a.st)) || String(a.st.name).localeCompare(String(b.st.name)));
     const def = stoneTierDef(t);
     return `<div class="stone-group">
-      <div class="stone-group-head tier-${t}">${def.label}<span>${groups[t].length}</span></div>
-      ${groups[t].map(st=>`
-        <div class="stone-card tier-${st.tier}" data-stone="${st.uid}">
-          <span class="type-badge" style="background:${TYPE_COLORS[st.type]};font-size:9px;padding:2px 6px;">${st.type}</span>
-          <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:12.5px;margin-top:3px;line-height:1.2;">
-            ${escapeHtml(st.name)}${stonePlus(st) ? `<span class="plus-mark">${UPGRADE_MARKS[stonePlus(st)].trim()}</span>` : ''}</div>
-        </div>`).join('')}
+      <div class="stone-group-head tier-${t}">${gemIcon(t, 18)}${def.label}<span>${of.length}</span></div>
+      <div class="stone-grid">
+        ${kinds.map(g=> `<button class="stone-tile tier-${t}" data-stone="${g.st.uid}" style="--tc:${TYPE_COLORS[g.st.type] || '#888'};">
+            <span class="type-badge" style="background:${TYPE_COLORS[g.st.type] || '#888'};">${escapeHtml(g.st.type)}</span>
+            <span class="st-name">${escapeHtml(g.st.name)}${stonePlus(g.st) ? `<span class="plus-mark">${UPGRADE_MARKS[stonePlus(g.st)].trim()}</span>` : ''}</span>
+            ${g.n > 1 ? `<span class="st-count">×${g.n}</span>` : ''}
+          </button>`).join('')}
+      </div>
     </div>`;
   }).join('');
   el.querySelectorAll('[data-stone]').forEach(c=> c.addEventListener('click', ()=> openStoneDetail(c.dataset.stone)));
@@ -2118,8 +2283,10 @@ function showStoneReveal(stone, spinLabel, thenScreen){
     ov.querySelector('#rollOk').addEventListener('click', ()=>{
       if(ov.parentNode) document.body.removeChild(ov);
       if(thenScreen==='shop'){ ui.shopNote = 'Sent to Storage — open it to equip.'; renderShop(); }
-      else if(thenScreen==='storage'){ ui.storageFrom='shop'; go('storage'); }
-      else renderStorage();
+      else if(thenScreen==='storage'){ ui.storageFrom='shop'; ui.storageTab='items'; go('storage'); }
+      /* (3.65) the new stone, on storage's Items page — gone to properly: it
+         used to be drawn over the shop with the screen still the shop's */
+      else { ui.storageTab='items'; if(ui.screen === 'shop') ui.storageFrom='shop'; if(ui.screen === 'storage') renderStorage(); else go('storage'); }
     });
   }, 1100);
 }
@@ -2271,6 +2438,7 @@ function openStoneDetail(uid){
   if(!s) return;
   const t = stoneTierDef(s.tier);
   const isUltra = s.tier==='ultra';
+  const held = state.moveStones.filter(x=> stoneKindKey(x) === stoneKindKey(s)).length;   // (3.65) a tile stands for them all
   const ov = document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:75;display:flex;align-items:center;justify-content:center;padding:22px;';
   ov.innerHTML = `<div style="background:var(--paper);border-radius:18px;padding:20px;max-width:340px;width:100%;box-shadow:0 12px 40px var(--shadow);">
@@ -2288,11 +2456,12 @@ function openStoneDetail(uid){
       </div>
       <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:8px;">
         Teachable to <b>${s.type}</b>-type monsters${isUltra?' · adds a 5th move button':' · replaces the '+(s.tier==='high'?'Power1':'Basic')+' move'}
+        ${held > 1 ? `<br>You hold <b>${held}</b> of these.` : ''}
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
       <button class="btn btn-primary" id="stUse">Use</button>
-      <button class="btn btn-ghost" id="stRecycle">Recycle (+${RECYCLE_RETURN[s.tier]} tokens)</button>
+      <button class="btn btn-ghost" id="stRecycle">Recycle → ${recycleRewardHtml(s.tier)}</button>
       <button class="btn btn-ghost" id="stBack">Back</button>
     </div>
   </div>`;
@@ -2302,25 +2471,30 @@ function openStoneDetail(uid){
   ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
   ov.querySelector('#stRecycle').addEventListener('click', ()=>{
     close();
-    confirmDialog(`Recycle ${s.name} for ${RECYCLE_RETURN[s.tier]} tokens? This destroys the stone.`, async ()=>{
-      const beforeTokens = state.inventory.tokens||0;
+    /* (3.65) High, Very High and Ultra: one Selection Token of the tier
+       (recycleReward); Low and Mid: Skill Tokens, as before */
+    const got = recycleRewardHtml(s.tier);
+    confirmDialogHtml(`Recycle <b>${escapeHtml(s.name)}</b> for ${got}? This destroys the stone.` +
+      (recycleReward(s.tier).sel ? `<br><br><span style="font-size:12px;color:var(--ink-soft);">${SELECTION_PER_PICK} ${escapeHtml(selTokenName(s.tier, 2))} buy any ${escapeHtml(t.label)} skill you choose, at the shop.</span>` : ''),
+      async ()=>{
       const i = state.moveStones.findIndex(x=>x.uid===uid);
       if(i<0) return;
       const removed = state.moveStones.splice(i,1)[0];
-      state.inventory.tokens = beforeTokens + RECYCLE_RETURN[s.tier];
+      payRecycle(s.tier);
 
       const sov = showSyncingOverlay('Syncing…');
       const ok = await saveProfile({ awaitCloud:true });
       hideSyncingOverlay(sov);
       if(!ok){
         state.moveStones.splice(i,0,removed);
-        state.inventory.tokens = beforeTokens;
+        payRecycle(s.tier, -1);
         showSyncFailure();
         return;
       }
-      toast(`Recycled for ${RECYCLE_RETURN[s.tier]} tokens.`);
+      const r = recycleReward(s.tier);
+      toast(r.sel ? `Recycled for ${r.n} ${selTokenName(r.sel, r.n)} (${selTokens(r.sel)} held).` : `Recycled for ${r.n} tokens.`);
       renderStorage();
-    });
+    }, 'Recycle');
   });
   ov.querySelector('#stUse').addEventListener('click', ()=>{ close(); chooseStoneRecipient(s); });
 }

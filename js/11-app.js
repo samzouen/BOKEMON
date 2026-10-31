@@ -179,7 +179,7 @@ function renderExplore(){
   `;
   $('#backBtn').addEventListener('click', ()=>go('region'));
   const pah = $('#pickAvatarHere');
-  if(pah) pah.addEventListener('click', ()=>{ ui.prevScreen='explore'; go('avatarPick'); });
+  if(pah) pah.addEventListener('click', ()=> goForward('avatarPick', 'explore'));   // (3.65) the trail, not one shared note
   screenEl.querySelectorAll('[data-zone]').forEach(b=>b.addEventListener('click', ()=>{
     ui.currentZone = zones[+b.dataset.zone];
     go('zone');
@@ -226,7 +226,7 @@ function renderPasswordGate(){
       <button class="btn btn-primary" id="pwSubmit" style="margin-top:14px;">Unlock</button>
     </div>
   `;
-  $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
+  $('#backBtn').addEventListener('click', ()=> goBack());   // (3.65) it could lead back to itself
   const submit = ()=>{
     const val = $('#pwInput').value.trim();
     if(passOk(val)){
@@ -335,7 +335,7 @@ function renderSpellingManage(){
     <div id="wordRows"></div>
   `;
 
-  $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen||'home'));
+  $('#backBtn').addEventListener('click', ()=> goBack());
 
   /* (3.52) which words a fight's monsters write */
   screenEl.querySelectorAll('[data-bw]').forEach(b=> b.addEventListener('click', async ()=>{
@@ -648,7 +648,7 @@ function renderSound(){
       <div id="parentArea"></div>
     </div>
   `;
-  $('#backBtn').addEventListener('click', ()=>go(ui.prevScreen || 'home'));
+  $('#backBtn').addEventListener('click', ()=> goBack());
   const slider = $('#volSlider');
   slider.addEventListener('input', ()=>{ $('#volLabel').textContent = slider.value+'%'; });
   slider.addEventListener('change', async ()=>{ state.settings.volume = slider.value/100; await saveProfile(); });
@@ -681,7 +681,7 @@ function renderSound(){
     }catch(e){ toast('Voice not available here.'); }
   });
   const cav = $('#changeAvatarBtn');
-  if(cav) cav.addEventListener('click', ()=>{ ui.prevScreen='sound'; go('avatarPick'); });
+  if(cav) cav.addEventListener('click', ()=> goForward('avatarPick', 'sound'));
   $('#lhToggle').addEventListener('change', async e=>{
     state.settings.leftHanded = e.target.checked;
     await saveProfile();
@@ -930,11 +930,11 @@ document.querySelectorAll('.drawer-item').forEach(item=>{
   item.addEventListener('click', ()=>{
     const action = item.dataset.action;
     closeDrawer();
-    if(action==='spelling'){ ui.prevScreen = ui.screen; go('spelling'); }
+    if(action==='spelling') goForward('spelling');   // (3.65) Back retraces the steps
     else if(action==='changeProfile'){ loadProfileIndex().then(idx=>{ ui.profileList = idx; go('profileSelect'); }); }
     else if(action==='backup'){ doBackup(); }
-    else if(action==='sound'){ ui.prevScreen = ui.screen; go('sound'); }
-    else if(action==='arena'){ ui.prevScreen = ui.screen; go('arena'); }
+    else if(action==='sound') goForward('sound');
+    else if(action==='arena') goForward('arena');
   });
 });
 

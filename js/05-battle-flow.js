@@ -293,13 +293,16 @@ function onSwitchPressed(){
   if(b.switchedThisTurn) return;
   const options = sendOutOptions(b.activeIndex);        // (3.52) a pair whose companion can still fight, too
   if(options.length===0){ toast('No other monster can fight.'); return; }
-  monsterChooser('Switch to…', options, (i)=>{
+  monsterChooser('Switch to…', options, (i)=> switchInPair(i));
+}
+/* The switch itself: party monster `i` (and its companion) out, the pair on
+   the field back. Free: the turn is kept, and no other switch this round.
+   (3.66) Dragon Legacy switches by this road too, with what it says
+   (`note`). A Water Dragon switched out keeps his charges now — nothing
+   passes on (it used to set off Dragon Legacy). */
+function switchInPair(i, note){
+  {
     enterLeader(state.party[i]);
-    const c = chargeState();
-    const outComp = companionOnField();
-    /* stored power passes on — the dragon's own, or a companion dragon's that
-       goes back into its core with its leader */
-    if(c && (c.uid === leaderMon().uid || (outComp && c.uid === outComp.uid))) triggerDragonLegacy();
     const outgoing = leaderMon();
     const extra = !!(ui.battle.control && ui.battle.control.extra);
     ui.battle.activeIndex=i; ui.battle.switchedThisTurn=true;
@@ -307,7 +310,7 @@ function onSwitchPressed(){
     ui.battle.phase = 'player';        // a free switch never hands the turn over
     /* Entry passives fire on a swap as well as on the opening monster — a
        Dragon Dance + carrier brought in mid-fight takes the initiative at once,
-       and a Steel Aegis carrier arrives already holding block. */
+       and a Steel Aegis carrier arrives with shields for the team (3.64). */
     const inc = leaderMon();
     if(inc && inc.currentHp > 0 && !inc._entered){ inc._entered = true; applyEntryPassives(inc, inc.species, inc.level, monAtk(inc)); }
     else if(inc && inc.currentHp > 0) applyStonePassives(inc);
@@ -337,8 +340,31 @@ function onSwitchPressed(){
         battleMsg('Now choose a move.');
       });
     }
-    if(!ui.battle.legacyBonus) battleMsg(first ? `Switched! ${escapeHtml(displayName(first))} goes first — choose its move.` : 'Switched! Now choose a move.');
-  });
+    battleMsg((note ? note + ' ' : '') + (first ? `Switched! ${escapeHtml(displayName(first))} goes first — choose its move.` : 'Switched! Now choose a move.'));
+  }
+}
+/* (3.66) Dragon Legacy, the button: one charge to the monster you choose,
+   which comes in by a switch — the turn kept, no other switch this round. */
+function useDragonLegacy(mon){
+  const b = ui.battle, c = chargeState();
+  const why = legacyClosedWhy();
+  if(!c || c.uid !== mon.uid || c.charges <= 0 || why){ b.phase = 'player'; renderBattle(); if(why) toast(`Dragon Legacy: ${why.toLowerCase()}.`); return; }
+  const takers = legacyTakers();
+  const keeps = c.charges - 1;
+  legacyChooser(`🐉 Dragon Legacy — one charge to…`, `It comes in now, and its next attack deals ×${LEGACY_AMP}. ` +
+      (keeps > 0 ? `${keeps} charge${keeps === 1 ? ' stays' : 's stay'} with ${displayName(mon)}.` : `It is ${displayName(mon)}'s last one.`),
+    takers, o=>{
+      const cs = chargeState();
+      if(!cs || cs.uid !== mon.uid || cs.charges <= 0){ b.phase = 'player'; return renderBattle(); }
+      cs.charges--;
+      giveLegacy(o.m, 1);
+      const left = cs.charges;
+      if(left <= 0) clearCharge();
+      logBattle(`Dragon Legacy: ${displayName(mon)} gave a charge to ${displayName(o.m)} (${left} left) and switched`);
+      playEffect('Dragon Legacy', { type:'Water', duration:600 });
+      switchInPair(o.i, `🐉 Dragon Legacy! ${escapeHtml(displayName(o.m))} takes a charge — its next attack deals <b>×${LEGACY_AMP}</b>` +
+        (left ? `; ${escapeHtml(displayName(mon))} keeps ${left}.` : '.'));
+    }, true, ()=>{ b.phase = 'player'; renderBattle(); });
 }
 /* Revitalise's choice, made BEFORE the writing so ten right words always land.
    Nobody down: a toast, no words spent, and it is still your turn. One down:
@@ -428,7 +454,10 @@ function chooseRevival(mv, mon, onPick){
 function monsterChooser(title, options, onPick, dismissable=true, onCancel=null, bare=false){
   const scrim=document.createElement('div');
   scrim.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:70;display:flex;align-items:flex-end;justify-content:center;';
-  const line = m=> `${escapeHtml(displayName(m))} · Lv ${m.level} · ${Math.max(0, m.currentHp)}/${monMaxHp(m)} HP`;
+  /* (3.66) and what it holds of the Water Dragon's: his charges, or Dragon Legacy's */
+  const held = m=>{ const cs = (typeof chargeState === 'function') ? chargeState() : null;
+    return (cs && cs.uid === m.uid && cs.charges > 0 ? ` · 🌊 ×${cs.charges}` : '') + (typeof legacyOf === 'function' && legacyOf(m) ? ` · 🐉 ×${legacyOf(m)}` : ''); };
+  const line = m=> `${escapeHtml(displayName(m))} · Lv ${m.level} · ${Math.max(0, m.currentHp)}/${monMaxHp(m)} HP${held(m)}`;
   const opt = o=>{
     const c = (!bare && ui.screen === 'battle' && ui.battle && companionsAllowed()) ? companionOf(o.m) : null;
     const face = m=> monPortrait(m.species,36,{stage:monStage(m),crowned:isCrowned(m)});
@@ -529,7 +558,6 @@ function onMoveChosen(moveIdx){
   ui.battle.phase = 'resolving';
   /* Whatever opened this turn, with no one left to fight it is the wave's end. */
   if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 300);
-  if(ui.battle.legacyBonus) ui.battle.legacyUsed = true;   // this is Dragon Legacy's turn
   const mon = controlMon();                  // whose buttons these are
   setFocus(mon);
   const mv=unlockedMoves(mon)[moveIdx];
@@ -540,6 +568,8 @@ function onMoveChosen(moveIdx){
   ui.battle.actionSeq = (ui.battle.actionSeq || 0) + 1;
   ui.battle.actionMon = mon;
   ui.battle.actionDodges = [];
+  armLegacy(mon, mv);                        // (3.66) an attack made with a Dragon Legacy charge
+  if(mv && mv.legacyGive) return useDragonLegacy(mon);
   /* A wound-up move comes down for free; choosing anything else lets it go. */
   if(mon && mon._windup && !(mv && mv.windupReady)) mon._windup = null;
   /* (3.52) A companion's move is any monster's now: its own words, by the
@@ -803,7 +833,7 @@ function feedRecharge(words){
   b.rechargeWords -= RECHARGE_TARGET;
   b.usedVeryHigh = {};
   b.usedUltra = {};
-  b.usedSoul = {};                     // and Steel Soul's once-a-battle cast (2.93)…
+  b.usedSoul = {};                     // and Steel Soul's once-a-battle cast (2.93), Tachypsychia's too (3.63)…
   b.rebirthUsed = false;               // …and the phoenix's Rebirth (3.00, the designer's call)…
   (b.enemies || []).forEach(e=>{ e._soulUsed = false; });   // …theirs too: one meter, both sides
   /* A refined stone's free passive re-arms with the same bar that restores a
@@ -817,8 +847,9 @@ function feedRecharge(words){
    monster of yours knows it; 3.00: Rebirth, if a phoenix of yours has it). */
 function secondWindMsg(){
   const soul = battleParty().some(m=> m && (MOVES[m.species] || []).some(r=> r[6] && r[6].soul && (m.level || 1) >= r[5]));
+  const tachy = battleParty().some(m=> m && (MOVES[m.species] || []).some(r=> r[6] && r[6].tachy && (m.level || 1) >= r[5]));   // (3.63)
   const reborn = battleParty().some(m=> m && hasRebirth(m));
-  const extra = [soul ? 'Steel Soul' : '', reborn ? 'Rebirth' : ''].filter(Boolean);
+  const extra = [soul ? 'Steel Soul' : '', tachy ? 'Tachypsychia' : '', reborn ? 'Rebirth' : ''].filter(Boolean);
   /* (3.59) …and a refined stone's free cast on taking the field (Diamond
      Dust + / ✦ above all: bring its carrier in to renew the dust) */
   const free = [...new Set(battleParty().concat(bondedCompanions()).flatMap(m=> m ? [m.equippedStone, m.power1Stone] : [])
@@ -1322,6 +1353,19 @@ function restoreRealParty(){
   if(ui.realParty){ state.party = ui.realParty; ui.realParty = null; saveProfile(); }
 }
 
+/* (3.66) An instant move whose words fell short (the designer: "Instant
+   moves that fail should not cost the turn"): nothing happens, and the turn
+   is still this monster's — choose again. A stone is spent as before; what
+   nothing spends rests until the next turn (markQuickTried). */
+function quickMissed(mv, mon, correct, verb){
+  playSfx('move_miss');
+  markQuickTried(mon, mv);
+  logBattle(`${displayName(mon)}'s ${mv.name} ${verb || 'failed'} (${wordsTag(correct, mv)} words) — instant, so the turn is kept`);
+  if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 600);
+  ui.battle.phase = 'player';
+  renderBattle();
+  battleMsg(`${mv.name} ${verb || 'failed'}! (${wordsTag(correct, mv)} words) It was instant, so it cost no turn — choose your move.`);
+}
 function resolveBattleMove(mv, target, results, opts){
   const mon=activeMon();
   /* (3.38) Taunted (their Hermit Sloth's Mocking Yawn): a blow aimed at one
@@ -1363,13 +1407,13 @@ function resolveBattleMove(mv, target, results, opts){
   if(ui.battle){ ui.battle.lastMove = mv; ui.battle.lastFactor = null; }   // (3.00) the clones' half of the blow, set as it lands
   go('battle');
   if(recharged) setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
-  /* A quick move that failed spends the turn, as always — and so it is this
-     monster's action this round. */
-  if(isQuickMove(mv) && correct < mv.words) markActed(mon);
+  /* (3.66) A quick move that failed no longer spends the turn (quickMissed):
+     it used to be this monster's action for the round. */
 
   if(mv.slot==='UltraStone') ui.battle.usedUltra[mon.uid]=true;
   if(mv.isStone && mv.stoneTier==='veryhigh') ui.battle.usedVeryHigh[mon.uid]=true;
   if(mv.soul){ ui.battle.usedSoul = ui.battle.usedSoul || {}; ui.battle.usedSoul[mon.uid] = true; }   // once a battle (2.93)
+  if(mv.tachy) spendTachy(mon, true);                                                                     // (3.63) the same, until the meter fills
 
   /* Their Discombobulate on you: once the words are written, a blow turns on
      yourself instead. Wind-ups, casts and heals are not blows. */
@@ -1389,7 +1433,8 @@ function resolveBattleMove(mv, target, results, opts){
     playSfx('move_miss');
     battleMsg(`✨ Their diamond dust scatters your ${mv.name} — nothing takes hold.`);
     if(mv.soul && ui.battle.usedSoul) ui.battle.usedSoul[mon.uid] = false;   // not spent, as a stone is not (2.93)
-    if(mv.soul){ ui.battle.phase = 'player'; return renderBattle(); }
+    if(mv.tachy) spendTachy(mon, false);                                      // (3.63) nor Tachypsychia
+    if(mv.soul || mv.tachy){ ui.battle.phase = 'player'; return renderBattle(); }
     return setTimeout(advanceTurn, 1100);
   }
 
@@ -1404,7 +1449,7 @@ function resolveBattleMove(mv, target, results, opts){
   /* (3.55) Overgrowth, the Forest Guardian's gift — a quick move: once a
      turn, and written right it costs no turn. */
   if(mv.overgrowth){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
+    if(correct < mv.words) return quickMissed(mv, mon, correct);   // (3.66) no turn spent
     return castOvergrowth(mon, mv);
   }
   /* (3.55) Overpower — a Tricerarmor of yours: two turns of +25%, and a
@@ -1421,7 +1466,7 @@ function resolveBattleMove(mv, target, results, opts){
      every turn (castIceBarrier). Written right, it costs no turn: choose
      your move. (Its button rests while it stands.) */
   if(mv.iceBarrier){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
+    if(correct < mv.words) return quickMissed(mv, mon, correct);   // (3.66) no turn spent
     const line = castIceBarrier('player', mon, mv.iceBarrier, mv.name);
     renderStatusBadges();
     playEffect(mv.name, { type:'Water' });
@@ -1477,7 +1522,7 @@ function resolveBattleMove(mv, target, results, opts){
   }
   /* Haunting Aria — instant, does not spend the turn. */
   if(mv.aria){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
+    if(correct < mv.words) return quickMissed(mv, mon, correct);   // (3.66) no turn spent
     /* Never reached through the button, which is shut while an Aria runs —
        but if it ever is, hand the turn back rather than spend it. */
     if(!ariaActive()) castAria(mon, mv.aria, false);
@@ -1495,7 +1540,7 @@ function resolveBattleMove(mv, target, results, opts){
     /* It cannot be dodged (your call) — but a Counter guard reads it, as
        yours reads their Grudge, and their block soaks it. */
     const hits = foes.map(t=>{ const g = enemyGuard(t, dmg);
-      return { t, idx:ui.battle.enemies.indexOf(t), dmg:g, oldHp:t.hp, newHp:Math.max(0, t.hp - g) }; });
+      return { t, idx:ui.battle.enemies.indexOf(t), dmg:g, oldHp:t.hp, newHp:Math.max(0, t.hp - g), sure:true }; });   // (3.61) nor its Overcharge repeat
     battleMsg(`${mv.name}! Everything he has lost, given back at once.`);
     bob($('#' + pid('playerBob')), +1);
     return setTimeout(()=>{ applyHits(hits); reportHits(hits);
@@ -1570,20 +1615,27 @@ function resolveBattleMove(mv, target, results, opts){
     playEffect(mv.name, { type:SPECIES[mon.species].types[0] });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
+  /* (3.63) Tachypsychia, "to match steel soul": a quick move — written right
+     it costs no turn (choose its move), and it is spent until the recharge
+     meter fills. It puts both ladders back at their top; a recast keeps this
+     round's count of extra actions and any it has saved. No clock
+     (`permanent`): it lasts until it is cast again, swept away or stolen. A
+     quick move earns no extra action (tachyExtraAction comes only after a
+     move that costs the turn). */
   if(mv.tachy){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
-    /* `max`: your Diamond Dust holds it at its own length, not the Very High
-       stones' five turns (2.81). A recast keeps this round's count of extra
-       actions and any it has saved. */
+    if(correct < mv.words) return quickMissed(mv, mon, correct);   // (3.66) no turn spent (it is spent, as before)
     const prevTac = getPStatus(0,'tachy');
     const keepTac = (prevTac && prevTac.owner === mon.uid) ? { extras:prevTac.extras || 0, banked:prevTac.banked || 0 } : {};
-    setPStatus(0, Object.assign({ type:'tachy', turnsLeft:mv.tachy.turns+1, max:mv.tachy.turns+1,
-                    bonusAction:mv.tachy.bonusAction, owner:mon.uid,
-                    evadeFirst:mv.tachy.evadeFirst, evadeAfter:mv.tachy.evadeAfter, fresh:true }, keepTac));
+    setPStatus(0, Object.assign({ type:'tachy', turnsLeft:999, permanent:true, owner:mon.uid,
+                    extra:(mv.tachy.extra || [1]).slice(), dodge:(mv.tachy.dodge || [1]).slice(), xi:0, di:0 }, keepTac));
     renderStatusBadges();
-    battleMsg(`${mv.name}! Time slows — ${Math.round(mv.tachy.bonusAction*100)}% chance of an extra action each time ${displayName(mon)} acts (${TACHY_MAX_EXTRAS} a round at most), and much harder to hit.`);
     playEffect(mv.name, { type:'Psychic' });
-    return setTimeout(()=> afterPlayerAttack(mon, []), 900);
+    logBattle(`${displayName(mon)} used ${mv.name} (quick, once until the meter fills)`);
+    ui.battle.phase = 'player';
+    renderBattle();
+    battleMsg(`⏱️ ${mv.name}! Time slows: ${displayName(mon)}'s next move that uses its turn earns another, and the next attack at it misses. ` +
+      `It cost no turn — choose your move.`);
+    return;
   }
   if(mv.grant){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
@@ -1625,7 +1677,7 @@ function resolveBattleMove(mv, target, results, opts){
      damage reduction its side has up (its own passive 20% too) turns into
      damage. Written right, it costs no turn: choose its move. */
   if(mv.soul){
-    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
+    if(correct < mv.words) return quickMissed(mv, mon, correct);   // (3.66) no turn spent (it is spent, as before)
     const turns = mv.soul.turns || 1;
     setPStatus(0, { type:'steelSoul', turnsLeft:turns, max:turns, noDust:true,
                     reduce:mv.soul.reduce, bonus:mv.soul.bonus, owner:mon.uid });
@@ -1849,7 +1901,7 @@ function resolveBattleMove(mv, target, results, opts){
     return offerBonusRound(mv, mon, hits, effMsg, results);
   }
   battleMsg(`${mv.name}! ${effMsg}` + (dreamFed ? ' It feeds on the dream — twice as hard!' : '') +
-            (mv.pierce && hits.some(h=> !h.dodged && blockStacksOf(h.t)) ? ' The purple flame passes straight through their block!' : '') +
+            (mv.pierce && hits.some(h=> !h.dodged && shieldsOn(h.t)) ? ' The purple flame passes straight through their block!' : '') +
             takePsyNote());
   bob($('#' + pid('playerBob')), +1);
   playEffect(mv.name, { type: mv.stoneType || SPECIES[mon.species].types[0], tier: mv.stoneTier,
@@ -1857,23 +1909,8 @@ function resolveBattleMove(mv, target, results, opts){
   setTimeout(()=>{
     applyHits(hits);
     reportHits(hits);
-    // Paralysis rolls per hit, so a multi-hit move gets several chances — but
-    // only on a blow that got through: one that was dodged, or that their block
-    // soaked entirely, stuns nobody (as theirs cannot stun you through yours)
-    const stunPct = mv.paralyse || mv.stunHit;
-    if(stunPct){
-      const zapped = [];
-      hits.forEach(h=>{
-        if(h.t && h.t.hp>0 && h.dmg > 0 && !h.dodged && Math.random() < stunPct && !getEStatus(h.t,'paralysed')){
-          addEStatus(h.t, { type:'paralysed', turnsLeft:1 });
-          if(getEStatus(h.t,'paralysed')) zapped.push(SPECIES[h.t.species].name);   // (not through Iron Will or their dust, 2.97)
-        }
-      });
-      if(zapped.length){
-        renderStatusBadges();
-        setTimeout(()=> battleMsg(`⚡ ${[...new Set(zapped)].join(' and ')} can't move!`), 650);
-      }
-    }
+    const zap = stunRiders(mv, hits);
+    if(zap) setTimeout(()=> battleMsg(zap), 650);
     /* (3.15) a blow that may send to sleep (Lullaby Cloud, Riptide, Counting
        Sheep, Abyssal Tide Max) — each one it hit, on its own roll */
     if(mv.sleepHit){
@@ -1993,6 +2030,37 @@ function resolveBattleMove(mv, target, results, opts){
   }, 330);
 }
 
+/* A blow of yours that may stun (Psyshock, Volt Wave, Volt Concussion, Tesla
+   Bolt…). Every strike of it that got through rolls its own chance; one that
+   was dodged, or that their block soaked entirely, stuns nobody (as theirs
+   cannot stun you through yours). (3.62) The designer: "Make both roll every
+   hit, with a 15% chance to stun instead of 20%. Mirror for enemies." A
+   barrage of yours never rolled at all: its strikes are played by
+   resolveSplitHits, resolveAoeHits and resolveMultiHit, and only the single
+   blow's path asked. All four ask here now. Their Iron Will and their dust
+   keep it out (addEStatus). An Overcharge repeat rolls nothing, as before.
+   Returns the line to say ('' if nobody was stunned). */
+function stunRiders(mv, hits){
+  const pct = mv && (mv.paralyse || mv.stunHit || mv.stun);   // (3.63) `stun` too, as theirs reads it
+  if(!pct) return '';
+  const zapped = [];
+  (hits || []).forEach(h=>{
+    if(!(h && h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged) || getEStatus(h.t,'paralysed')) return;
+    if(!(Math.random() < pct)) return;
+    addEStatus(h.t, { type:'paralysed', turnsLeft:1 });
+    if(getEStatus(h.t,'paralysed')) zapped.push(SPECIES[h.t.species].name);   // (not through Iron Will or their dust, 2.97)
+  });
+  if(!zapped.length) return '';
+  renderStatusBadges();
+  return `⚡ ${[...new Set(zapped)].join(' and ')} can't move!`;
+}
+/* (3.62) Does any of `n` rolls at `pct` come up? Their barrage's stun, a
+   roll for each strike that got through (enemyStrikeOn). */
+function rollAny(pct, n){
+  for(let k = 0; k < n; k++) if(Math.random() < pct) return true;
+  return false;
+}
+
 /* Does this move swing at them? (Status casts, heals, songs and stances do not.) */
 function movesToStrike(mv){
   if(!mv || mv.target === 'Status' || mv.vita || mv.aria || mv.revitalise || mv.tachy || mv.grant ||
@@ -2060,7 +2128,7 @@ function landStrike(h, opts){
   /* (3.13) Your Dragon Dance breaks some of their shields first — once an
      attack, as its first strike on this one lands (breakShields). */
   if(raw > 0) breakShields('player', null, t, yourStrikeKey(opts), 'enemyBlk-' + h.idx, 'enemy-' + h.idx);
-  const soaked = (raw > 0 && !h.pierce && blockStacksOf(t)) ? applyBlock(t, raw, 'enemyBlk-' + h.idx) : raw;
+  const soaked = (raw > 0 && !h.pierce && shieldsOn(t)) ? applyBlock(t, raw, 'enemyBlk-' + h.idx) : raw;   // (3.64) its own, then its team's
   const through = capHit(t, soaked);            // (3.15) their Steelcrab's Carapace: a third of its health at most
   h.blocked = raw - soaked;
   h.dmg = through;
@@ -2101,20 +2169,36 @@ function landStrike(h, opts){
    target's stacks, in the order the real ones will go. */
 function blockPlanner(){
   const left = new Map();
+  /* (3.64) …and then the team's shields their Steel Aegis raised, shared by
+     every one of them this action strikes (applyBlock): one count for the
+     side, and a Dragon Dance's leftover break taken from it once */
+  const team = new Map(), teamBroke = new Set();
+  const teamLeft = side=> team.has(side) ? team.get(side) : teamStacks(side);
   /* (3.13) …after your Dragon Dance has broken what it breaks, at this
      action's first strike on each (as landStrike will) */
   const key = yourStrikeKey(null), brk = key ? shieldBreakOf('player') : 0;
   return (t, dmg)=>{
     if(!t || !(dmg > 0)) return dmg || 0;
+    const side = sideOfMon(t);
     let n;
     if(left.has(t)) n = left.get(t);
     else {
       n = blockStacksOf(t);
-      if(brk && !shieldBreakDone(key, t)) n = Math.max(0, n - brk);
+      if(brk && !shieldBreakDone(key, t)){
+        const rest = Math.max(0, brk - n);
+        n = Math.max(0, n - brk);
+        if(rest && !teamBroke.has(side) && !shieldBreakDone(key, 'team:' + side)){
+          teamBroke.add(side);
+          team.set(side, Math.max(0, teamLeft(side) - rest));
+        }
+      }
     }
-    if(n <= 0){ left.set(t, 0); return dmg; }
-    left.set(t, n - 1);
-    return Math.max(0, dmg - (t.blockValue || 0));
+    if(n > 0){ left.set(t, n - 1); return Math.max(0, dmg - (t.blockValue || 0)); }
+    left.set(t, 0);
+    const tn = teamLeft(side);
+    if(tn <= 0) return dmg;
+    team.set(side, tn - 1);
+    return Math.max(0, dmg - teamValue(side));
   };
 }
 /* What a planned strike leaves the enemy on: through their block — and in the
@@ -2170,6 +2254,8 @@ function afterPlayerAttack(mon, hits){
      spikes prick you, their Goblin Knights riposte. */
   if(b && b.actionSeq && b._postSeq !== b.actionSeq){
     b._postSeq = b.actionSeq;
+    const lg = spendLegacyBlow();                 // (3.66) a Dragon Legacy charge, used by this attack
+    if(lg){ const el = $('#battleMsg'); if(el) el.innerHTML += ' ' + (typeof emoHtml === 'function' ? emoHtml(lg) : lg); logBattle(lg.replace(/<[^>]+>/g, '')); }
     const wait = postPlayerAction(b.actionMon || mon, hits || []);
     if(wait > 0) return setTimeout(()=>{
       if(!ui.battle) return;
@@ -2188,16 +2274,10 @@ function afterPlayerAttackBody(mon, hits){
     return setTimeout(()=>{ if(ui.battle) resolveBattleMove(nx.mv, copyTargetFor(nx.mv, nx.t), [], { pre:{ correct:nx.mv.words } }); }, 700);
   }
   if(ui.battle) ui.battle.copyQueue = null;
-  /* (Dragon Legacy is no longer spent here: it lasts the whole turn and ends
-     with the round — endDragonLegacy().) A weakened attack has now been made,
-     so the weakening is used up. */
+  /* ((3.66) a Dragon Legacy charge is used once an action, above:
+     spendLegacyBlow.) A weakened attack has now been made, so the weakening
+     is used up. */
   if(hits && hits.length) spendYourWeaken();
-  /* Tachypsychia grants a whole EXTRA ACTION rather than a hidden second hit,
-     re-rolled after every action — so a lucky streak can chain several. */
-  /* Tachypsychia grants a whole EXTRA ACTION, re-rolled after every action so a
-     lucky streak chains. It is also guaranteed to land at least once across its
-     lifetime — a buff that can roll nothing at all feels broken rather than
-     unlucky, so the last turn forces it if it hasn't happened yet. */
   /* Livewire (and Thundercat's passive in the player's hands) can fire again,
      and a repeat can itself repeat. */
   const lastMv = ui.battle && ui.battle.lastMove;
@@ -2213,44 +2293,10 @@ function afterPlayerAttackBody(mon, hits){
   if(repeatPct && hits && hits.length && Math.random() < repeatPct){
     return runRepeatStrike(mon, lastMv, hits, ()=> afterPlayerAttack(mon, hits));
   }
-
-  const tac = getPStatus(0,'tachy');
-  /* It is the CASTER'S: a monster that came in after the Thunder Newt used to
-     act again on its Tachypsychia too, with no limit — theirs was always its
-     caster's alone, three extra actions a round at most (2.80: yours the
-     same). With nobody left standing there is no extra action to take now —
-     one there once opened a turn with no enemies, and the battle hung (2.79)
-     — so one that comes up then is SAVED (2.81): `banked`, spent after a later
-     action of the newt's whose own roll comes up empty — next turn, or the one
-     after if that turn is full — and more pile on the same way, until
-     Tachypsychia ends or the battle does. Saved or rolled, each is one of the
-     round's three. */
-  if(tac && tac.owner === mon.uid && mon.currentHp > 0 && (tac.extras || 0) < TACHY_MAX_EXTRAS){
-    const lastChance = (tac.turnsLeft||0) <= 1 && !tac.procced;
-    const rolled = lastChance || Math.random() < (tac.bonusAction||0);
-    if(rolled) tac.procced = true;
-    if(livingEnemies().length === 0){
-      if(rolled){
-        tac.banked = (tac.banked || 0) + 1;
-        renderStatusBadges();
-        battleMsg(`⚡ Lightning reflexes — with nobody left to strike, ${displayName(mon)} saves the extra action for its next turn` +
-                  (tac.banked > 1 ? ` (${tac.banked} saved).` : '.'));
-      }
-    } else if(rolled || (tac.banked || 0) > 0){
-      const saved = !rolled;
-      if(saved) tac.banked--;
-      tac.extras = (tac.extras || 0) + 1;
-      /* the extra action is the newt's own — chosen from its own moves, even
-         when it is the companion (2.84) */
-      ui.battle.control = { mode:'solo', uid:mon.uid, extra:true };
-      setFocus(mon);
-      ui.battle.phase = 'player';
-      renderBattle();
-      battleMsg(saved ? `⚡ A saved extra action — ${displayName(mon)} acts again!` : '⚡ Lightning reflexes — you act again!');
-      playSfx('answer_correct');
-      return;                    // the turn does NOT pass to the enemy
-    }
-  }
+  /* (3.61) Tachypsychia's extra action is no longer looked at here: it used
+     to hand the turn back before the clones' echoes and the Overcharge
+     repeat had come, so an action that won an extra one lost both. It comes
+     last now, once all of them have run (endPlayerAction). */
   const cl = ui.battle && ui.battle.clones;
   if(cl && cl.turnsLeft>0 && !ui.battle._cloneEchoing && hits && hits.length && ui.battle.lastMove){
     return runCloneEchoes(mon, ui.battle.lastMove, ()=> afterPlayerAttackReal(mon, hits));
@@ -2352,7 +2398,7 @@ function postPlayerAction(mon, hits){
       lines.push(`⚔️ ${who} ripostes — 🔆 blinded, it misses.`);
       return;
     }
-    if(!seesThrough(k) && Math.random() < playerEvasionFrom(k)){
+    if(!seesThrough(k) && rollPlayerDodge(k)){        // (3.63) Tachypsychia's dodge last
       floatMiss(pid('playerBob'), dodgeWord(mon)); dodgePlayer();
       lines.push(`⚔️ ${who} ripostes — and finds nothing.`);
       return;
@@ -2461,38 +2507,118 @@ function afterPlayerAttackReal(mon, hits){
          filter dropped the dead and the echo fizzled. It now falls on somebody
          else who is still standing. Every strike is repeated at the figure it
          was planned at, so their block soaks the repeat strike by strike as it
-         soaked the first time — as your block does their Overcharge. A strike
-         they dodged had nothing planned, so there is nothing of it to repeat. */
+         soaked the first time — as your block does their Overcharge.
+         (3.61) The designer: "does overcharge work properly with multihit
+         moves? The damage seems less than it should be". It did not. Every
+         strike of the repeat rolled their dodge again, even from a monster
+         whose strikes cannot be dodged (the Thunder Newt in its own
+         Tachypsychia, a mind-read, a Grudge); and the strikes of a barrage
+         they had dodged were left out of it, so against anything that dodges
+         the repeat came out smaller than the attack every time — half of it,
+         on average, against the Cyborg's Futuresight. Now it is the attack
+         again: at each one it reached, every strike it threw there, the
+         dodged ones too (at the figure planned for the others), each rolling
+         the dodge the attack's own strikes rolled — or none. One it never
+         reached is not repeated, as a single blow they dodged is not. */
       const alive = livingEnemies();
-      const again = hits.map(h=>{
-        if(!h || !h.t || h.dodged) return null;
-        const amount = h.raw != null ? h.raw : h.dmg;
-        if(!(amount > 0)) return null;
-        if(h.t.hp > 0 && rollDodge(h.t, h.idx, 300)) return { t:h.t, idx:h.idx, oldHp:h.t.hp, newHp:h.t.hp, dmg:0, dodged:true };
-        if(h.t.hp > 0) return { t:h.t, idx:h.idx, oldHp:h.t.hp, newHp:Math.max(0,h.t.hp-amount), dmg:amount, pierce:!!h.pierce };
+      const sure = ignoresEvasion(b0 && b0.lastMove, mon);
+      const planned = h=> h.raw != null ? h.raw : h.dmg;
+      const strikeAgain = (t0, idx0, amount, pierce, sureOne)=>{
+        if(t0.hp > 0 && rollDodge(t0, idx0, 300, sure || sureOne)) return { t:t0, idx:idx0, oldHp:t0.hp, newHp:t0.hp, dmg:0, dodged:true };
+        if(t0.hp > 0) return { t:t0, idx:idx0, oldHp:t0.hp, newHp:Math.max(0, t0.hp - amount), dmg:amount, pierce };
         const t = soulGuardian('enemy') || alive[Math.floor(Math.random()*alive.length)];   // their Steel Soul draws it (2.90)
         if(!t) return null;
         return { t, idx:ui.battle.enemies.indexOf(t), oldHp:t.hp,
-                 newHp:Math.max(0, t.hp - amount), dmg:amount, redirected:true, pierce:!!h.pierce };
-      }).filter(Boolean);
-      if(again.length===0){ finishPlayerTurn(); return; }
+                 newHp:Math.max(0, t.hp - amount), dmg:amount, redirected:true, pierce };
+      };
+      const again = hits.map(h=>{
+        if(!h || !h.t || h.dodged || !(planned(h) > 0)) return null;
+        return strikeAgain(h.t, h.idx, planned(h), !!h.pierce, !!h.sure);
+      });
+      /* the strikes they dodged — a barrage's (`hits.missed`), a Vengeance's
+         blow on one its others reached — at one it reached: the smallest
+         figure planned for it there (a critical is its own) */
+      [...(hits.missed || []), ...hits.filter(h=> h && h.t && h.dodged)].forEach(m=>{
+        const there = reached.filter(h=> h.t === m.t);
+        if(there.length) again.push(strikeAgain(m.t, m.idx, Math.min(...there.map(planned)), there.some(h=> h.pierce), false));
+      });
+      const list = again.filter(Boolean);
+      if(list.length===0){ endPlayerAction(mon); return; }
       battleMsg('⚡ Overcharge triggers — the attack repeats!');
-      if(again.some(h=>h.redirected)) battleMsg('…and finds somebody else.');
+      if(list.some(h=>h.redirected)) battleMsg('…and finds somebody else.');
       if(flame) setTimeout(()=> laySacredFlame(mon, true), 450);
       if(shock) setTimeout(()=> layAftershock(mon, shock.pct, true), 450);   // a Rampage's Aftershock, the same (2.81)
       bob($('#' + pid('playerBob')), +1);
       setTimeout(()=>{
-        applyHits(again);
-        reportHits(again);
+        if(!ui.battle) return;
+        applyHits(list);
+        reportHits(list);
         /* Amnesia (2.97): a repeat that lands makes them forget one more */
-        const forgot = mindPassivesLanded(mon, [...new Set(again.filter(h=> h.dmg > 0 && !h.dodged).map(h=> h.t))], true);
+        const forgot = mindPassivesLanded(mon, [...new Set(list.filter(h=> h.dmg > 0 && !h.dodged).map(h=> h.t))], true);
         if(forgot.length) setTimeout(()=> battleMsg(forgot.join(' ')), 450);
-        setTimeout(finishPlayerTurn, forgot.length ? 1500 : 850);
+        setTimeout(()=> endPlayerAction(mon), forgot.length ? 1500 : 850);
       }, 300);
       return;
     }
-    finishPlayerTurn();
+    endPlayerAction(mon);
   }, 850);
+}
+/* (3.61) An action of yours is over once everything it set off has run —
+   its repeats, the clones' echoes, its Overcharge. Only then may
+   Tachypsychia hand its caster another (the designer: "tachypsychia is
+   interrupting overcharge, when both should coexist" — it was looked at
+   first, and an action that won an extra one lost its echoes and its
+   repeat); if not, the turn moves on. */
+function endPlayerAction(mon){
+  if(!ui.battle) return;
+  if(tachyExtraAction(mon)) return;
+  finishPlayerTurn();
+}
+/* Tachypsychia in your hands: another action for the Thunder Newt after a
+   move of its that costs its turn (2.79), so a lucky streak chains — never
+   after a quick one: those return to you before reaching here (3.63, the
+   designer: "extra turn does not get procced by using instant moves, only
+   moves that cost the turn"). It is the CASTER'S: a monster that came in
+   after the newt used to act again on it too (2.80). (3.63) Its chance is
+   its ladder's step — 100%, 75%, 50%, 25%, then 12.5% for good — and each
+   extra action it earns takes it a step down. (It was a flat 30% for 3 turns,
+   capped at 3 a round until 3.62, with a last-turn guarantee; the first step
+   is certain now.) `extras` still counts the round's. With nobody left
+   standing there is no extra action to take now — one there once opened a
+   turn with no enemies, and the battle hung (2.79) — so one that comes up
+   then is SAVED (2.81): `banked`, spent after a later action of the newt's
+   whose own roll comes up empty, and more pile on the same way, until the
+   battle ends. Saved or rolled, each is (3.61) a turn for its Meditate
+   (meditateExtra). True when the newt is to act again. */
+function tachyExtraAction(mon){
+  const tac = tachyOf(mon);
+  if(!(tac && mon.currentHp > 0)) return false;
+  const rolled = Math.random() < tachyExtraChance(tac);
+  if(rolled) tac.xi = (tac.xi || 0) + 1;          // a step down for each one it earns, saved or taken
+  if(livingEnemies().length === 0){
+    if(rolled){
+      tac.banked = (tac.banked || 0) + 1;
+      renderStatusBadges();
+      battleMsg(`⚡ Lightning reflexes — with nobody left to strike, ${displayName(mon)} saves the extra action for its next turn` +
+                (tac.banked > 1 ? ` (${tac.banked} saved).` : '.'));
+    }
+    return false;
+  }
+  if(!rolled && !((tac.banked || 0) > 0)) return false;
+  const saved = !rolled;
+  if(saved) tac.banked--;
+  tac.extras = (tac.extras || 0) + 1;
+  const md = meditateExtra(mon);
+  /* the extra action is the newt's own — chosen from its own moves, even
+     when it is the companion (2.84) */
+  ui.battle.control = { mode:'solo', uid:mon.uid, extra:true };
+  setFocus(mon);
+  ui.battle.phase = 'player';
+  renderBattle();
+  battleMsg((saved ? `⚡ A saved extra action — ${displayName(mon)} acts again!` : '⚡ Lightning reflexes — you act again!') +
+            ` (Next: ${tachyPct(tachyExtraChance(tac))}.)` + (md ? ` 🧘 Meditate +${md}%.` : ''));
+  playSfx('answer_correct');
+  return true;                   // the turn does NOT pass to the enemy
 }
 /* Vengeance pushes him off the field — but it is your choice, so the button is
    there to refuse. */
@@ -2517,9 +2643,7 @@ function offerVengeanceSwap(mon, hits){
   ov.querySelectorAll('[data-vsw]').forEach(b=>b.addEventListener('click', ()=>{
     close();
     const i = +b.dataset.vsw;
-    const outComp = companionOnField();
-    const cs = chargeState();
-    if(cs && outComp && cs.uid === outComp.uid) triggerDragonLegacy();   // a companion dragon's power passes on
+    /* ((3.66) a companion dragon going back keeps his charges) */
     ui.battle.activeIndex = i;
     setFocus(null);
     const nm = leaderMon();
@@ -2629,7 +2753,7 @@ function foeSupportPick(e){
     if(e._lastCast === r[1] || x.copy) continue;
     if(x.barrier && x.barrier.on === 'partner'){
       const p = partnerOf('enemy', e);
-      if(p && hurt(p) < 0.75 && !blockStacksOf(p)) return r;
+      if(p && hurt(p) < 0.75 && !shieldsOn(p)) return r;
       continue;
     }
     if(x.mend && livingEnemies().some(m=> hurt(m) < 0.6)) return r;
@@ -2825,13 +2949,14 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
   const sim = new Map(targets.map(t=>[t, t.hp]));
   const soak = blockPlanner();                 // their block, strike by strike
   const all = [], volleys = [];
+  all.missed = [];                             // (3.61) the strikes they dodged, for an Overcharge repeat to throw again
   let dodged = 0;
   for(let k=0;k<totalHits;k++){
     const volley = [];
     targets.forEach(t=>{
       if(sim.get(t) <= 0) return;
       const idx = b.enemies.indexOf(t);
-      if(rollDodge(t, idx, 330 + k*350, ignoresEvasion(mv, mon))){ dodged++; return; }
+      if(rollDodge(t, idx, 330 + k*350, ignoresEvasion(mv, mon))){ dodged++; all.missed.push({ t, idx }); return; }
       let dmg = computeDamage(per, atk, monRef(mon), t, true);
       dmg = enemyGuard(t, dmg);
       const oldHp = sim.get(t), newHp = plannedHp(soak, t, oldHp, dmg);
@@ -2849,10 +2974,11 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
   setTimeout(()=> playVolleys(volleys, 0, ()=>{
     reportHits(all);
     saveProfile();
+    const zap = stunRiders(mv, all);              // (3.62) each strike that got through rolls
     applySelfDamage(mv, mon);
     battleMsg(`${mv.name} struck ${all.length} time${all.length===1?'':'s'}!`
       + (extra ? ` (+${extra} from Aftershock)` : '')
-      + (dodged ? ` (${dodged} dodged)` : ''));
+      + (dodged ? ` (${dodged} dodged)` : '') + (zap ? ' ' + zap : ''));
     if(mon.currentHp<=0){
       if(livingEnemies().length===0){ setTimeout(()=>onWaveCleared(), 900); return; }
       setTimeout(()=>onMonFainted(), 900); return;
@@ -3002,8 +3128,11 @@ function rollDodge(t, idx, delay, sure, reflex, striker){
     if(ui.battle && !reflex) (ui.battle.actionDodges = ui.battle.actionDodges || []).push(t);
     return true;
   }
-  const ev = sure ? 0 : enemyEvasion(t);
-  if(ev <= 0 || Math.random() >= ev) return false;
+  /* (3.63) A Tachypsychia it holds (one stolen from you) is rolled last, as
+     yours is: only a blow nothing else of its slipped meets it, and one it
+     slips takes it a step down its ladder. */
+  const ev = sure ? 0 : enemyEvasion(t, true);
+  if(!(ev > 0 && Math.random() < ev) && (sure || !tachyDodgeRoll(t, sightFactor('player')))) return false;
   const word = dodgeWord(t);
   setTimeout(()=>{ dodgeEnemy(idx); floatMiss('enemy-'+idx, word); }, delay||0);
   noteFutureDodge(t, delay);                                  // Cyborg's Futuresight (3.00)
@@ -3045,12 +3174,13 @@ function resolveSplitHits(mv, mon, factor, atk, target){
   const per = mv.split ? factor / n : factor;   // split shares the total; others hit full each time
   const tIdx = ui.battle.enemies.indexOf(target);
   const hits = [];
+  hits.missed = [];                            // (3.61) the strikes they dodged, for an Overcharge repeat to throw again
   let simHp = target.hp;
   const soak = blockPlanner();                 // their block, strike by strike
   let dodged = 0;
   for(let i=0;i<n;i++){
     if(simHp<=0) break;
-    if(rollDodge(target, tIdx, 330 + i*350, ignoresEvasion(mv, mon))){ dodged++; continue; }   // each strike rolls
+    if(rollDodge(target, tIdx, 330 + i*350, ignoresEvasion(mv, mon))){ dodged++; hits.missed.push({ t:target, idx:tIdx }); continue; }   // each strike rolls
     let dmg = computeDamage(per, atk, monRef(mon), target, true);
     dmg = enemyGuard(target, dmg);
     const oldHp = simHp, newHp = plannedHp(soak, target, simHp, dmg);
@@ -3068,8 +3198,9 @@ function resolveSplitHits(mv, mon, factor, atk, target){
   setTimeout(()=> playSuccessiveHits(hits, 0, ()=>{
     reportHits(hits);                   // the red number: one total for the barrage
     saveProfile();
+    const zap = stunRiders(mv, hits);   // (3.62) each strike that got through rolls
     battleMsg(hits.length
-      ? `${mv.name} struck ${hits.length} time${hits.length===1?'':'s'}!` + (dodged ? ` (${dodged} dodged)` : '')
+      ? `${mv.name} struck ${hits.length} time${hits.length===1?'':'s'}!` + (dodged ? ` (${dodged} dodged)` : '') + (zap ? ' ' + zap : '')
       : `${mv.name} — every strike dodged!`);
     afterPlayerAttack(mon, hits);
   }, true), 330);
@@ -3126,6 +3257,7 @@ function resolveMultiHit(mv, mon, correct, driveTarget){
   const sim = new Map(ui.battle.enemies.map(e=>[e, e.hp]));
   const soak = blockPlanner();                 // their block, strike by strike
   const hits=[];
+  hits.missed = [];                            // (3.61) the strikes they dodged, for an Overcharge repeat to throw again
   let dodged = 0;
   for(let i=0;i<n;i++){
     const alive = ui.battle.enemies.filter(e=>sim.get(e)>0);
@@ -3139,7 +3271,7 @@ function resolveMultiHit(mv, mon, correct, driveTarget){
       ? driveTarget
       : alive[Math.floor(Math.random()*alive.length)];
     const idx = ui.battle.enemies.indexOf(t);
-    if(rollDodge(t, idx, 330 + i*350, ignoresEvasion(mv, mon))){ dodged++; continue; }   // an unseen foe slips the blow
+    if(rollDodge(t, idx, 330 + i*350, ignoresEvasion(mv, mon))){ dodged++; hits.missed.push({ t, idx }); continue; }   // an unseen foe slips the blow
     let dmg = computeDamage(mv.mult, atk, monRef(mon), t, true);
     dmg = enemyGuard(t, dmg);
     const oldHp = sim.get(t);
@@ -3158,8 +3290,9 @@ function resolveMultiHit(mv, mon, correct, driveTarget){
     releaseInvert();                      // only once every strike has landed
     saveProfile();
     reportHits(hits);
+    const zap = stunRiders(mv, hits);     // (3.62) each strike that got through rolls
     applySelfDamage(mv, mon);
-    battleMsg(`${mv.name} hit ${hits.length} time${hits.length===1?'':'s'}!`);
+    battleMsg(`${mv.name} hit ${hits.length} time${hits.length===1?'':'s'}!` + (zap ? ' ' + zap : ''));
     if(mon.currentHp<=0){
       /* Recoil can knock the attacker out on the same turn the wave falls.
          Clearing the wave has to win, or the fight stalls after the swap. */
@@ -3314,7 +3447,7 @@ function playVolleys(volleys, i, done){
 
 /* Very High tier: single status application, per-type effect (see applyVeryHighEffect) */
 function resolveStatusMove(mv, mon, target, correct){
-  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${wordsTag(correct, mv)} words)`); setTimeout(advanceTurn,900); return; }
+  if(correct<mv.words) return quickMissed(mv, mon, correct, 'missed');   // (3.66) an instant cast: no turn spent
   /* Their Diamond Dust scatters any stone of yours — except your own dust,
      which sweeps theirs away first. The stone is not spent, and a cast is
      instant, so the turn is still yours. */
@@ -3554,7 +3687,7 @@ function smartValue(e, r, mine){
     if(ex.fullHpDouble && e.hp >= e.maxHp) one *= 2;
     const dodge = (ex.mindRead || seesThrough(e)) ? 0 : Math.min(0.95, playerEvasionFrom(e, m));
     one *= 1 - dodge;
-    const left = m.currentHp + blockStacksOf(m) * (m.blockValue || 0);
+    const left = m.currentHp + shieldSoak(m);                // (3.64) its own shields and its team's
     let gain = Math.min(one, left);
     if(one >= left) gain += 0.25 * left;                     // a knock-out is worth more than the health it takes
     /* what rides on it, where it would land on something new */
@@ -3566,7 +3699,7 @@ function smartValue(e, r, mine){
     ride(ex.confuseHit ? (ex.confuseHit.chance || 0.25) : 0, getMStatus(m,'discombobulate') || ironWillHolds(m, { type:'discombobulate' }), 0.6);   // (3.26)
     v += gain;
   });
-  if(ex.shieldGain) v += ex.shieldGain * atk * (blockStacksOf(e) ? 0.3 : 1);   // a shield matters most to one with none
+  if(ex.shieldGain) v += ex.shieldGain * atk * (shieldsOn(e) ? 0.3 : 1);   // a shield matters most to one with none
   if(ex.glitch) v += 0.15 * atk;                                                // and a Glitch on top
   if(ex.windup && e._windup !== r){
     /* two turns for one blow — and halved (focusBreak) if anything of yours
@@ -4139,8 +4272,7 @@ function enemyStrikeOn(ctx, step, done){
      their stolen Tachypsychia's own blows) or a Third Eye — sees straight
      through the haunting too ("evasion piercing moves should hit through the
      evasion"): it lands, and a reflex it wakes is the Aria alone. */
-  const tacE = getESide('tachy');
-  const sure = !!ex.mindRead || !!(tacE && tacE.owner === e) || seesThrough(e);   // a Third Eye reads you (2.97)
+  const sure = !!ex.mindRead || seesThrough(e);   // a Third Eye reads you (2.97); (3.63) a Thunder Newt never misses
   const ariaCover = ariaFieldEvasion() > 0;
   if(ariaPassesThrough(mon, sure)){          // (the untouchable turn has done its work this round)
     dodgePlayer(); floatMiss(pid('playerBob'), 'MISS');
@@ -4157,19 +4289,16 @@ function enemyStrikeOn(ctx, step, done){
   const seen = (seen0 && seen0 !== ctx.seenSaid) ? seen0 : '';
   if(seen) ctx.seenSaid = seen;
   /* Every evasion source rolls separately and stacks multiplicatively — unless
-     the blow is a mind-read (their Abyssal Gaze, their stolen Tachypsychia). */
-  const tacAny = getPStatus(0,'tachy');
-  const tac = (tacAny && tacAny.owner === mon.uid) ? tacAny : null;   // its caster's alone (2.80)
-  /* (3.25) Blinded: its own strike goes wide — rolled before any dodge of
-     yours, so nothing of yours dodged it (below). */
+     the blow is a mind-read (their Abyssal Gaze) or a Third Eye's. (3.25)
+     Blinded: its own strike goes wide — rolled before any dodge of yours, so
+     nothing of yours dodged it (below). (3.63) Tachypsychia's dodge is rolled
+     last of all, so it is spent only on a blow nothing else slipped
+     (rollPlayerDodge). Its last-turn guarantee went with its clock: its first
+     dodge is certain. (The Mirage's window advances once per ROUND, at the
+     round's end.) */
   const blindMissed = !sure && rollBlind(e);
-  const evadeChance = (sure || blindMissed) ? 0 : playerEvasionFrom(e);
-  /* Same reasoning as the bonus action: if Tachypsychia is about to expire and
-     has never once caused a miss, make this one miss. */
-  const tacLast = !sure && !blindMissed && tac && (tac.turnsLeft||0) <= 1 && !tac.evadedOnce;
-  const evaded = tacLast || (evadeChance > 0 && Math.random() < evadeChance);
-  // the window advances once per ROUND, handled at round end
-  if(evaded && tac) tac.evadedOnce = true;
+  const slip = (sure || blindMissed) ? false : rollPlayerDodge(e);
+  const evaded = !!slip;
 
   if(!ctx.told){
     ctx.told = true;
@@ -4200,7 +4329,7 @@ function enemyStrikeOn(ctx, step, done){
       noteMirageDodge();          // every evaded blow leaves a copy standing
       battleMsg(pm && pm.lurk ? `🌑 ${name} can't find ${displayName(pm)} in the dark!`
              : pm && pm.cunning ? `🌘 ${displayName(pm)} is already somewhere else — ${name} missed!`
-             : tac ? `⚡ Lightning reflexes — ${name} missed!`
+             : slip === 'tachy' ? `⚡ Lightning reflexes — ${name} missed! (Next dodge: ${tachyPct(tachyDodgeChance(tachyOf(pm)))}.)`
              : getPStatus(0,'mirage') ? `💨 The mirage shimmers — ${name} missed!`
              : pair ? `💨 ${name} missed ${displayName(pm)}!`
              : `💨 ${name} missed!`);
@@ -4327,6 +4456,7 @@ function enemyStrikeOn(ctx, step, done){
     let zzz = '';                             // (3.15) a Lullaby Reflex's line, said after the blow
     let ink = '', warn = '';                  // (3.27) an Ink Cloud's, a Warning Colours' — the same
     let crits = 0;                            // (3.26) Feeding Frenzy's criticals
+    let gotThrough = 0;                       // (3.62) its strikes that got through, for a stun to roll on each
     {
       const oldHp = mon.currentHp;
       let totalBlocked = 0;
@@ -4358,6 +4488,7 @@ function enemyStrikeOn(ctx, step, done){
            yours drinks from every strike of yours on a seeded enemy — and
            (3.16) their ✦ Spike Armour strikes again on the same terms. */
         if(thisHit > 0){
+          gotThrough++;
           const sp = spikeRiderTheirs(e, mon);
           spiked += sp; totalTaken += sp;
           seedsFed += theirSeedsDrink(e);
@@ -4386,7 +4517,7 @@ function enemyStrikeOn(ctx, step, done){
       if(warn){ msg += ' ' + warn; renderStatusBadges(); }
       if(totalBlocked > 0) msg = `🛡 Blocked ${totalBlocked}! ` + msg;
       if(dreamFed) msg += ' It feeds on the dream — twice as hard!';
-      if(ex.pierce && blockStacksOf(mon)) msg += ' The purple flame passes straight through your block!';
+      if(ex.pierce && shieldsOn(mon)) msg += ' The purple flame passes straight through your block!';
 
       const shell = getPStatus(0,'shell');
       if(shell && shell.thorns && mon.currentHp>0){
@@ -4438,9 +4569,11 @@ function enemyStrikeOn(ctx, step, done){
       renderStatusBadges();
     }
     /* A blow that stuns (Evil Eye, Shield Bash, Tesla Bolt…) — these never
-       stunned anyone when an enemy threw them. */
+       stunned anyone when an enemy threw them. (3.62) "Mirror for enemies":
+       every strike of it that got through rolls its own chance, as yours do
+       (stunRiders) — a barrage of theirs rolled once for the whole attack. */
     const stunPct = ex.stunHit || ex.paralyse || ex.stun;
-    if(stunPct && totalTaken > 0 && mon.currentHp > 0 && !getPStatus(0,'stunned') && Math.random() < stunPct){
+    if(stunPct && totalTaken > 0 && mon.currentHp > 0 && !getPStatus(0,'stunned') && rollAny(stunPct, gotThrough)){
       if(ironWillHolds(mon, { type:'stunned' })){ floatOver(mon, 'IRON WILL'); msg += ` ${displayName(mon)}'s Iron Will — it will not be stunned!`; }
       else if(enemyStatusBlocked('stunned')){ msg += ' The diamond dust keeps you steady.'; }
       else { setPStatus(0, { type:'stunned', turnsLeft:2 }); msg += ` ${displayName(mon)} is stunned!`; }
@@ -4662,10 +4795,12 @@ function enemyFollowUps(i, e, move, ctx, next){
     if(!ui.battle) return;
     /* Tachypsychia in their hands: another action, re-rolled each time — and,
        as with yours, one that comes up with nobody in front of it (your
-       monster is down) is saved for its next turn (2.81). */
-    const tac = getESide('tachy');
-    const theirs = !!(tac && tac.owner === e && e.hp > 0 && (tac.extras || 0) < TACHY_MAX_EXTRAS);
-    const rolled = theirs && Math.random() < (tac.bonusAction || 0);
+       monster is down) is saved for its next turn (2.81). (3.63) At its
+       ladder's step, a step down for each one it earns, as yours. */
+    const tac = tachyOf(e);
+    const theirs = !!(tac && e.hp > 0);                      // (3.62) no cap of three a round, as yours
+    const rolled = theirs && Math.random() < tachyExtraChance(tac);
+    if(rolled) tac.xi = (tac.xi || 0) + 1;
     if(fieldNeedsFaint()){
       if(rolled){
         tac.banked = (tac.banked || 0) + 1;
@@ -4677,7 +4812,10 @@ function enemyFollowUps(i, e, move, ctx, next){
     if(theirs && (rolled || (tac.banked || 0) > 0)){
       if(!rolled) tac.banked--;
       tac.extras = (tac.extras || 0) + 1;
-      battleMsg(rolled ? `⚡ ${name} moves again before you can blink!` : `⚡ ${name} spends a saved extra action!`);
+      const md = meditateExtra(e);             // (3.61) a turn for its Meditate, as yours
+      battleMsg((rolled ? `⚡ ${name} moves again before you can blink!` : `⚡ ${name} spends a saved extra action!`) +
+                (md ? ` 🧘 Meditate +${md}%.` : ''));
+      if(md) renderStatusBadges();
       return setTimeout(()=> enemyActs(i, e), 800);
     }
     setFocus(null);
@@ -4693,20 +4831,27 @@ function enemyFollowUps(i, e, move, ctx, next){
        untouchable turn (or the Whalelord's reflex) lets it through */
     noteAriaAttack();
     const covered = ariaFieldEvasion() > 0;
-    if(ariaPassesThrough(me, seesThrough(e))){          // (3.09: a Third Eye sees straight through it)
+    /* (3.61) Their Overcharge repeat cannot be dodged when the attack could
+       not — a mind-read, a Third Eye, (3.63) their Thunder Newt that never
+       misses (seesThrough) — as yours cannot (afterPlayerAttackReal). Their
+       copies' echoes are the copies'. (A stolen Tachypsychia no longer makes
+       its thief's blows sure: that was the newt's passive all along.) */
+    const sure = seesThrough(e) || !!(repeatOf && move && move[6] && move[6].mindRead);
+    if(ariaPassesThrough(me, sure)){          // (3.09: a Third Eye sees straight through it)
       dodgePlayer(); floatMiss(pid('playerBob'), 'MISS');
       if(covered) battleMsg(`${label} — and passes harmlessly through.`);
       return setTimeout(then, 650);
     }
     const seen = ariaPiercedNote();
-    if(!seesThrough(e) && rollBlind(e)){                       // (3.25) blinded: it goes wide — no dodge of yours
+    if(!sure && rollBlind(e)){                       // (3.25) blinded: it goes wide — no dodge of yours
       floatMiss(pid('playerBob'), 'MISS');
       battleMsg(`${label} — 🔆 blinded, it misses.`);
       return setTimeout(then, 650);
     }
-    if(!seesThrough(e) && Math.random() < playerEvasionFrom(e)){   // (a Third Eye cannot miss, 2.97)
+    const slip = sure ? false : rollPlayerDodge(e);   // (a Third Eye cannot miss, 2.97; 3.63 Tachypsychia's dodge last)
+    if(slip){
       dodgePlayer(); floatMiss(pid('playerBob'), dodgeWord(me));
-      battleMsg(`${label} — and misses.`);
+      battleMsg(`${label} — ${slip === 'tachy' ? '⚡ lightning reflexes — it ' : 'and '}misses.`);
       return setTimeout(then, 650);
     }
     const before = me.currentHp;
@@ -4833,6 +4978,9 @@ function endEnemyRound(){
 function onMonFainted(noRebirth){
   const b = ui.battle;
   if(!b) return;
+  /* (3.66) A Water Dragon fallen with charges: they go to the one you choose,
+     before anything else is settled */
+  if(legacyFallPending()) return legacyOnFall(()=> onMonFainted(noRebirth));
   const comp = companionOnField();
   if(comp && comp.currentHp <= 0){
     if(!noRebirth && rebirthDue(comp)) return offerRebirth(()=> onMonFainted(true), ()=> onMonFainted(true), comp);
@@ -4855,8 +5003,6 @@ function onMonFainted(noRebirth){
     if(row && row.acted){ b2.phase = 'resolving'; renderBattle(); return setTimeout(advanceTurn, 700); }
     b2.phase = 'player'; renderBattle(); battleMsg('Choose a move.');
   }, ()=> onMonFainted(true), lead);
-  const c = chargeState();
-  if(c && lead && c.uid === lead.uid) triggerDragonLegacy();
   if(sideDefeated()){ return onPlayerDefeated(); }
   battleMsg(`${displayName(lead)} fainted!`);
   const options = sendOutOptions(-1);          // (3.52) a pair whose companion can still fight, too

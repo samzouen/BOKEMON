@@ -329,7 +329,9 @@ const MOVES = {
                     ['Ultimate','Slag Eruption',0.8,'AOE',8,41,{shell:{reduce:0, thorns:0.3, turns:1}}],
                     ['Max','Slag Eruption Max',1.0,'AOE',8,51,{shell:{reduce:0, thorns:0.5, turns:1}}]],
   monkey_king:     [['Basic','Jingu Thrust',0.3,'Single',2,1],
-                    ['Power1','Cloud Step',0.8,'Single',4,1,{stun:0.5}],
+                    /* (3.63) "have it on both sides with the same stun chance. it's meant to be a
+                       controlling move as the damage is not high": `stun` was read by theirs only */
+                    ['Power1','Cloud Step',0.8,'Single',4,1,{stunHit:0.5}],
                     ['Power2','72 Transformations',null,'Self',4,35,{clones:{turns:3, mult:0.5, evade:0.20, full:true}}],
                     ['Ultimate','Heavensplitter',1.25,'Single',7,45,{bonus:{words:4, mult:2}}],
                     ['Max','Heavensplitter Max',1.5,'Single',7,999,{bonus:{words:4, mult:2}, coreOnly:true}]],
@@ -356,12 +358,23 @@ const MOVES = {
   newt:            [['Basic','Psyshock',0.2,'Single',4,31,{paralyse:0.20}],
                     ['Power1','Volt Wave',0.6,'AOE',8,31,{paralyse:0.20}],   // (3.26) "Psywave" was the Fox's too; 0.5 until then
                     /* (3.27) "let's go with tachypsychia's upgrade": it Meditates, cast or
-                       not (`always` — passiveDefOf; a ✦ Curse mutes it); the cast is as it was */
-                    ['Power2','Tachypsychia',null,'Self',4,35,{tachy:{turns:3, bonusAction:0.30, evadeFirst:0.80, evadeAfter:0.30}, always:{meditate:0.15, meditateMax:4}}],
+                       not (`always` — passiveDefOf; a ✦ Curse mutes it).
+                       (3.63) "please change tachypsychia's mechanism to match steel soul:
+                       passive - meditate, never misses. active - instant move. extra turn
+                       buff that decays with each extra turn taken, dodge buff that decays
+                       with each hit that is dodged … extra turn: 100%->75%->50%->25%->12.5%.
+                       stays at 12.5% until recast (the move resets only when the recharge
+                       meter is full). dodge: 100%->75%->50%->25%. stays at 25% until
+                       recast." `extra` and `dodge` are the two ladders, one step down for
+                       each extra action it takes and each blow it dodges; the last step
+                       holds. (It was 3 turns of a 30% extra action, dodging 80% then 30%.) */
+                    ['Power2','Tachypsychia',null,'Self',4,35,{tachy:{extra:[1, 0.75, 0.5, 0.25, 0.125], dodge:[1, 0.75, 0.5, 0.25]}, always:{meditate:0.15, meditateMax:4, neverMiss:true}}],
                     /* (3.27) "thunder newt's ultimate should hit for 1.5 (3 hits times 0.5)
-                       and [its Max] for 1.8 (3 hits times 0.6)" — 3 × 0.4, and 4 × 0.4 at Max, until then */
-                    ['Ultimate','Volt Concussion',0.5,'Single',8,45,{hits:3, paralyse:0.20}],
-                    ['Max','Volt Concussion Max',0.6,'Single',8,999,{hits:3, paralyse:0.20, coreOnly:true}]],
+                       and [its Max] for 1.8 (3 hits times 0.6)" — 3 × 0.4, and 4 × 0.4 at Max, until then.
+                       (3.62) "Make both roll every hit, with a 15% chance to stun instead of 20%":
+                       its stun was 20%, and in your hands never rolled at all (stunRiders) */
+                    ['Ultimate','Volt Concussion',0.5,'Single',8,45,{hits:3, paralyse:0.15}],
+                    ['Max','Volt Concussion Max',0.6,'Single',8,999,{hits:3, paralyse:0.15, coreOnly:true}]],
   ankylosaurus:    [['Basic','Hammertail',0.1,'Single',4,1,{hits:3}],
                     ['Power1','Seismic Shock',0.2,'AOE',8,1,{hits:2}],
                     ['Power2','Steel Soul',null,'Self',4,35,{soul:{turns:1, reduce:0.2, bonus:0.1}}],   // a passive 20% always; a quick cast once a battle (2.93)

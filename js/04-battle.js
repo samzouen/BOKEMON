@@ -464,6 +464,7 @@ function tickStatuses(){
   const es = enemySideStatuses();
   Object.keys(es).forEach(k=>{
     const st = es[k];
+    if(st.permanent) return;                               // (3.63) a Tachypsychia stolen from you: no clock, as yours
     if(held('enemy', k, st, 'enemy')){ st.turnsLeft = st.max ? st.max : STATUS_TURNS + 1; return; }
     st.turnsLeft--;
     if(st.turnsLeft <= 0){ delete es[k]; afterStatusGone(k, 'enemy'); expired.push('their ' + (STATUS_LABELS[k]||k)); }
@@ -657,8 +658,9 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     const en = getPStatus(0,'enchant');
     if(en) dmg *= (en.deal || 1.3);                // (3.36) the Firefox's Enchant, Grand Enchantment
     dmg *= 1 + sideAura('player', 'empower');      // (3.36) its Stargazer's Cheer: +10% while it stands
-    // Dragon Legacy stacks multiplicatively with the above
-    if(ui.battle && ui.battle.legacyBonus) dmg *= (1 + ui.battle.legacyBonus);
+    /* (3.66) Dragon Legacy: an attack made with one of its charges, ×1.5 —
+       multiplying with the above */
+    dmg *= legacyAmp(attacker, peek);
     /* (Steel Soul's bonus is added above, before these buffs.) Steel Soul's
        reduction works both ways (2.90): its caster also hits that much harder
        — and harder again for every other shield its side has up (2.91) —
@@ -859,8 +861,10 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       break;
 
     case 'Steel': // Steel Aegis — flat mitigation
-      setPStatus(uid,{type:'steelAegis', turnsLeft:T+1, reduce:d.reduce, regen:d.regen||0, regenRolls:d.regenRolls||0});
-      if(d.block) grantBlock(casterMon, d.block, casterAtk);
+      /* (3.64) its shields are the team's (grantTeamBlock); `atk`, what its
+         top-up shields are minted at */
+      setPStatus(uid,{type:'steelAegis', turnsLeft:T+1, reduce:d.reduce, regen:d.regen||0, regenRolls:d.regenRolls||0, atk:casterAtk, owner:uid});
+      if(d.block) grantTeamBlock('player', d.block, casterAtk);
       res.msg = d.text;
       break;
 
@@ -889,8 +893,10 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
    Ultimate are replaced by Charge / Unleash / Hyperbeam, and Basic is locked
    out. Unleash and Hyperbeam need no words at all — the cost was paid up front.
    The window lasts (charges + 1) turns; spending the finale ends it.
-   Leaving the field with charges banked triggers Dragon Legacy, handing the
-   next monster a damage bonus that multiplies with Overheat and Dragon Dance.
+   (3.66) The charges are his, shown on his card; switched out he keeps them
+   (the window waits while he is off the field), and Dragon Legacy hands them
+   on one at a time by hand — or all at once when he falls (DRAGON LEGACY,
+   below).
    ============================================================ */
 function chargeState(){ return ui.battle && ui.battle.charge; }
 function chargeDef(m){
@@ -942,22 +948,142 @@ function startCharge(mon, def, double){
 }
 function clearCharge(){ if(ui.battle) ui.battle.charge = null; }
 
-/* Dragon Legacy: the stored power passes to whoever comes next — for every
-   action of its next turn (a Tachypsychia chain, an Overcharge repeat), not
-   one move. legacyUsed is set when that turn begins (onMoveChosen) and the
-   bonus clears when that round ends; if the dragon fell in the enemy's turn,
-   it waits for the newcomer's own turn. */
-function triggerDragonLegacy(){
-  const c = chargeState();
-  if(!c || c.charges<=0) return;
-  ui.battle.legacyBonus = c.charges * 0.25;
-  ui.battle.legacyUsed = false;
-  clearCharge();
-  battleMsg(`🐉 Dragon Legacy! Your next monster is empowered by +${Math.round(ui.battle.legacyBonus*100)}% for its whole turn.`);
-}
-function endDragonLegacy(){
+/* ============================================================
+   DRAGON LEGACY (3.66, reworked — the designer: "Charges now show on water
+   dragon. When water dragon dies, the charges transfer, allowing a
+   selection of which monster it should transfer to. Each charge increases
+   damage by that monster by a 50% multiplier and one is consumed per
+   attack. However, switching no longer triggers this … Charges are now
+   manually transferred by the dragon legacy button, which takes the
+   previously empty basic move space … an instant move that transfers one
+   charge to a monster of the player's choice and immediately switches to
+   that monster/companion while preserving the turn … but cannot switch
+   again that round.")
+   - His charges are drawn on his card (🌊 Cataclysm ×N).
+   - Switched out, he keeps them, and the window to spend them waits while
+     he is off the field. Nothing passes on.
+   - Dragon Legacy, the Basic button of his charge kit: quick, no words. One
+     charge to a monster of yours you choose — one that can come in, or its
+     companion — and the switch that brings it in. The turn is kept (the
+     pair that comes in can act); no other switch that round.
+   - He falls holding charges: every one goes to the monster you choose (one
+     beside him, or any that can still come out).
+   - A monster's Legacy charges (🐉 ×N): its next attack deals ×1.5
+     (LEGACY_AMP), every strike of it, and uses one up — one an attack.
+   It used to be one bonus, +25% a charge, for whoever came next's whole
+   turn, set off by any switch or fall.
+   ui.battle.legacy = { uid: charges }; ui.battle.legacyBlow the attack
+   being made with one.
+   ============================================================ */
+const LEGACY_AMP = 1.5;
+function legacyOf(m){ const L = ui.battle && ui.battle.legacy; return (m && L && L[m.uid]) || 0; }
+function giveLegacy(m, n){
   const b = ui.battle;
-  if(b && b.legacyBonus && b.legacyUsed){ b.legacyBonus = 0; b.legacyUsed = false; }
+  if(!b || !m || !(n > 0)) return;
+  const L = b.legacy || (b.legacy = {});
+  L[m.uid] = (L[m.uid] || 0) + n;
+}
+/* The one holding the Cataclysm's charges, wherever he stands — on the
+   field, on the bench, or in storage as a companion off with its leader. */
+function chargeHolder(){
+  const c = chargeState();
+  return c ? ((state.party || []).concat(state.storage || []).find(m=> m.uid === c.uid) || null) : null;
+}
+function holderOnField(){ const h = chargeHolder(); return !!(h && livingField().includes(h)); }
+/* Who can take one by hand: each monster that can come in by a switch —
+   a party monster standing, or its companion (they come in together). */
+function legacyTakers(){
+  const b = ui.battle, out = [];
+  if(!b) return out;
+  sendOutOptions(b.activeIndex).forEach(o=>{
+    if(o.m.currentHp > 0) out.push({ m:o.m, i:o.i });
+    const c = companionsAllowed() ? companionOf(o.m) : null;
+    if(c && c.currentHp > 0) out.push({ m:c, i:o.i, with:o.m });
+  });
+  return out;
+}
+/* Why the button rests, or '' when it is open. */
+function legacyClosedWhy(){
+  const b = ui.battle;
+  if(!b) return 'Not now';
+  if(b.switchedThisTurn) return 'Switched this turn';
+  if(!legacyTakers().length) return 'Nobody to switch in';
+  return '';
+}
+/* An attack begins (onMoveChosen): a monster holding a Legacy charge strikes
+   at ×1.5 — every strike of this action, an Overcharge repeat too — and the
+   charge is used up once the attack has landed something (spendLegacyBlow).
+   Words that fall short keep it. */
+function armLegacy(mon, mv){
+  const b = ui.battle;
+  if(!b) return;
+  b.legacyBlow = (mon && legacyOf(mon) > 0 && typeof movesToStrike === 'function' && movesToStrike(mv))
+    ? { uid:mon.uid, seq:b.actionSeq, hit:false, spent:false } : null;
+}
+function legacyAmp(attacker, peek){
+  const b = ui.battle, lb = b && b.legacyBlow;
+  if(!lb || !attacker || attacker.uid !== lb.uid || lb.seq !== b.actionSeq) return 1;
+  if(!peek) lb.hit = true;
+  return LEGACY_AMP;
+}
+/* Once an action, as it ends: the charge it used. Returns what to say. */
+function spendLegacyBlow(){
+  const b = ui.battle, lb = b && b.legacyBlow;
+  if(!lb || !lb.hit || lb.spent || lb.seq !== b.actionSeq) return '';
+  lb.spent = true;
+  const n = Math.max(0, legacyOf({ uid:lb.uid }) - 1);
+  if(n) b.legacy[lb.uid] = n; else delete b.legacy[lb.uid];
+  renderStatusBadges();
+  return `🐉 Dragon Legacy: <b>×${LEGACY_AMP}</b>` + (n ? ` — ${n} charge${n === 1 ? '' : 's'} left.` : ' — its last charge.');
+}
+/* He has fallen holding charges: they go to the one you choose. */
+function legacyFallPending(){
+  const c = chargeState(), h = chargeHolder();
+  return !!(c && c.charges > 0 && h && h.currentHp <= 0);
+}
+function legacyHeirs(h){
+  const pool = battleParty().concat(companionsAllowed() ? bondedCompanions() : []);
+  return pool.filter((m, k)=> m && m !== h && m.currentHp > 0 && !isPassenger(m) && pool.indexOf(m) === k);
+}
+function legacyOnFall(next){
+  if(!legacyFallPending()) return next();
+  const c = chargeState(), h = chargeHolder(), n = c.charges;
+  clearCharge();
+  const heirs = legacyHeirs(h);
+  if(!heirs.length) return next();
+  const give = m=>{
+    giveLegacy(m, n);
+    renderStatusBadges();
+    battleMsg(`🐉 Dragon Legacy! ${escapeHtml(displayName(h))} falls, and ${escapeHtml(displayName(m))} takes his ${n} charge${n === 1 ? '' : 's'}: ` +
+      `${n === 1 ? 'its next attack deals' : `each of its next ${n} attacks deals`} <b>×${LEGACY_AMP}</b>.`);
+    logBattle(`Dragon Legacy: ${displayName(h)} fell — ${n} charge(s) to ${displayName(m)}`);
+    setTimeout(next, 900);
+  };
+  if(heirs.length === 1) return give(heirs[0]);
+  legacyChooser(`🐉 ${displayName(h)} falls. Who takes his ${n} charge${n === 1 ? '' : 's'}?`,
+    `Each is one attack at ×${LEGACY_AMP}.`, heirs.map(m=> ({ m })), o=> give(o.m), false);
+}
+/* A chooser of single monsters (a pair's two are each a choice). */
+function legacyChooser(title, sub, entries, onPick, dismissable, onCancel){
+  const scrim = document.createElement('div');
+  scrim.className = 'legacy-chooser';
+  scrim.style.cssText = 'position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:70;display:flex;align-items:flex-end;justify-content:center;';
+  const line = m=> `${escapeHtml(displayName(m))} · Lv ${m.level} · ${Math.max(0, m.currentHp)}/${monMaxHp(m)} HP`;
+  scrim.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;max-height:86vh;overflow-y:auto;">
+    <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;">${escapeHtml(title)}</div>
+    <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:2px 0 12px;">${escapeHtml(sub || '')}</div>
+    ${entries.map((o, k)=> `<button class="btn btn-ghost sw-opt" data-k="${k}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;">
+        ${monPortrait(o.m.species, 36, { stage:monStage(o.m), crowned:isCrowned(o.m) })}
+        <span style="flex:1;min-width:0;">${line(o.m)}${legacyOf(o.m) ? ` · 🐉 ×${legacyOf(o.m)}` : ''}
+          ${o.with ? `<br><span style="font-size:11px;color:var(--ink-soft);">comes in with ${escapeHtml(displayName(o.with))}</span>` : ''}</span>
+      </button>`).join('')}
+    ${dismissable ? '<button class="btn btn-ghost" id="lgCancel" style="margin-top:4px;">Cancel</button>' : ''}
+  </div>`;
+  document.body.appendChild(scrim);
+  const close = ()=>{ if(scrim.parentNode) scrim.parentNode.removeChild(scrim); };
+  const cancel = ()=>{ close(); if(onCancel) onCancel(); };
+  if(dismissable){ scrim.querySelector('#lgCancel').addEventListener('click', cancel); scrim.addEventListener('click', e=>{ if(e.target === scrim) cancel(); }); }
+  scrim.querySelectorAll('.sw-opt').forEach(b=> b.addEventListener('click', ()=>{ close(); onPick(entries[+b.dataset.k]); }));
 }
 
 /* In battle a Max move takes over the Ultimate's slot, so its slot reads
@@ -985,8 +1111,9 @@ function chargeMoves(m){
   /* No charging at the usual cap. From one below it, an Overcharge double is
      what carries it one past (startCharge caps a double at caps.lucky). */
   const atCap = c.charges >= chargeCaps(def).normal;
+  const why = legacyClosedWhy();                   // (3.66) Dragon Legacy, in the slot that stood empty
   return [
-    { slot:'Basic', name:'—', mult:null, target:'Single', words:0, unlock:0, available:false, isStone:false, locked:true },
+    { slot:'Basic', name:'Dragon Legacy', mult:null, target:'Legacy', words:0, unlock:0, available:!why, legacyWhy:why, isStone:false, legacyGive:true },
     { slot:'Power1', name:'Charge', mult:null, target:'Charge', words:10, unlock:0,
       available:!atCap, isStone:false, chargeMore:true },
     { slot:'Power2', name:'Unleash', mult:chargeMult(def, 'unleash', c.charges), target:'AOE', words:0, unlock:0,
@@ -1242,8 +1369,9 @@ const VERY_HIGH = {
     { reduce:0.40, block:4, passive:true, passiveBlock:3, regenRolls:2 },
   ], text:[
     'Take <b>30% less</b> damage.',
-    'Gives <b>1 shield</b> upon taking the field. Active skill: take <b>35% less</b> damage and gain <b>2 shields</b>, with a <b>50%</b> chance of another each turn.',
-    'Gives <b>3 shields</b> upon taking the field. Active skill: take <b>40% less</b> damage and gain <b>4 shields</b>, with two <b>50%</b> chances of another each turn.',
+    /* (3.64) its shields are the team's: whichever of yours is struck */
+    'Gives your team <b>1 shield</b> upon taking the field. Active skill: take <b>35% less</b> damage and your team gains <b>2 shields</b>, with a <b>50%</b> chance of another each turn. Its shields guard whichever of your team is struck.',
+    'Gives your team <b>3 shields</b> upon taking the field. Active skill: take <b>40% less</b> damage and your team gains <b>4 shields</b>, with two <b>50%</b> chances of another each turn. Its shields guard whichever of your team is struck.',
   ]},
   Fairy: { name:'Diamond Dust', turns:5, tiers:[
     { cleanse:true },
@@ -1433,9 +1561,9 @@ function applyStonePassives(mon){
       return setTimeout(()=> battleMsg(`🐉 ${escapeHtml(d.name)}: Mach Dragon — the air moves out of the way.`), 400);
     }
     if(d.passiveBlock){
-      grantBlock(mon, d.passiveBlock, monAtk(mon));
+      grantTeamBlock('player', d.passiveBlock, monAtk(mon));   // (3.64) the team's
       renderStatusBadges();
-      return setTimeout(()=> battleMsg(`🔩 ${escapeHtml(d.name)} — ${d.passiveBlock} stack${d.passiveBlock>1?'s':''} already standing.`), 400);
+      return setTimeout(()=> battleMsg(`🔩 ${escapeHtml(d.name)} — ${d.passiveBlock} shield${d.passiveBlock>1?'s':''} already standing, for your whole team.`), 400);
     }
 
     /* (3.59) Already in the air: it is RENEWED — swept again, its turns
@@ -1463,12 +1591,12 @@ function veryHighStatusKey(type){
             Fairy:'diamondDust' })[type] || type;
 }
 /* Psychic answers evasion by reading minds: the Squid's Abyssal Gaze (and
-   Max) cannot be dodged, and nor can anything the Thunder Newt does while its
-   own Tachypsychia runs. A hit that ignores evasion simply lands. */
+   Max) cannot be dodged. A hit that ignores evasion simply lands. (Nor could
+   anything the Thunder Newt did while its own Tachypsychia ran — until 3.63,
+   when "never misses" became its passive: `neverMiss`, read by seesThrough,
+   always on, muted by a ✦ Curse as a passive is.) */
 function ignoresEvasion(mv, mon){
-  if(mv && mv.mindRead) return true;
-  const tac = ui.battle ? getPStatus(0,'tachy') : null;
-  return !!(tac && mon && tac.owner === mon.uid);
+  return !!(mv && mv.mindRead);
 }
 function stanceEvasion(holder){
   if(holder && (holder.lurk || holder.cunning)) return 1;        // there is nothing there to hit
@@ -1570,9 +1698,11 @@ function paintConcealment(){
 function dodgeWord(t){ return t && t.lurk ? 'LURKING' : (t && t.cunning ? 'CUNNING' : 'MISS'); }
 
 /* How likely an enemy is to slip one of your blows: its own stance or
-   concealment, and whatever its side has cast — a Mirage, clones, a
-   Tachypsychia of its own. Independent sources stack the way yours do. */
-function enemyEvasion(t){
+   concealment, and whatever its side has cast — a Mirage, clones. Independent
+   sources stack the way yours do. (3.63) A Tachypsychia it holds (stolen from
+   you) is rolled on its own, last (rollDodge, tachyDodgeRoll): `noTachy`
+   leaves it out; without it, it is in, at its ladder's step, for an estimate. */
+function enemyEvasion(t, noTachy){
   noteCertainDodge(t);
   const own = stanceEvasion(t);
   if(own >= 1) return sightFactor('player');      // (3.15) your Firefox's Arcane Sight halves even a certain dodge
@@ -1582,9 +1712,8 @@ function enemyEvasion(t){
   if(mir) src.push((mir.window && mir.step < mir.window.length) ? mir.window[mir.step] : (mir.chance || 0.20));
   const cl = getESide('clones');
   if(cl) src.push(cl.evade || 0);
-  const tac = getESide('tachy');
-  if(tac && tac.owner === t && tac.fresh) tac.tested = true;             // its first-turn rate met a real blow
-  if(tac && tac.owner === t) src.push(tac.fresh ? (tac.evadeFirst || 0) : (tac.evadeAfter || 0));
+  const tac = noTachy ? null : tachyOf(t);
+  if(tac) src.push(tachyDodgeChance(tac));
   /* Futuresight (Cyborg, 3.00): it saw the blow coming. What it IS — no dust
      sweeps it — but a ✦ Curse quiets it (passiveOf). */
   const fs = passiveOf(t);
@@ -1922,6 +2051,9 @@ function sweepableBuffs(side){
       monGains(e, 'enemy').forEach(x=> out.push(x));
     });
   }
+  /* (3.64) the team's shields — fire burns them off, as it burns a monster's */
+  const tbS = teamBlock(side);
+  if(tbS && tbS.stacks > 0) out.push({ label:`🔩 Team shields ×${tbS.stacks}`, take:()=>{ tbS.stacks = 0; } });
   /* an Overheat's burn goes with its Overheat; the rest are buffs of their own */
   (b.preHits || []).forEach(p=>{
     if((p.by || 'player') !== side || p.src === 'overheat') return;
@@ -2113,6 +2245,13 @@ function stealableBuffs(victimSide, victims){
       return (s, thief)=>{ thief._overpower = o; return true; };
     }});
   });
+  /* (3.64) the team's shields (Steel Aegis's) — the side's, as its Counter
+     stacks are: taken whole, to the thief's team, standing even under dust */
+  const tbV = teamBlock(victimSide);
+  if(tbV && tbV.stacks > 0) out.push({ label:`🔩 Team shields ×${tbV.stacks}`, shield:true, take:()=>{
+    const n = tbV.stacks, v = tbV.value; tbV.stacks = 0;
+    return (toSide)=>{ grantTeamBlock(toSide, n, v); return true; };
+  }});
   if(victimSide === 'player'){
     if(partyCounters().length) out.push({ label:`✋ Counter ×${partyCounters().length}`, take:()=>{
       const list = b.pCounter.splice(0);
@@ -2557,8 +2696,8 @@ function applyEnemyVeryHigh(e, type, plus){
       break;
     case 'Steel':
       e.takeMult = (e.takeMult || 1) * (1 - (d.reduce || 0.30));
-      if(d.block) grantBlock(e, d.block, e.atk);
-      if(d.passiveBlock) grantBlock(e, d.passiveBlock, e.atk);
+      if(d.block) grantTeamBlock('enemy', d.block, e.atk);               // (3.64) their wave's, as yours are your team's
+      if(d.passiveBlock) grantTeamBlock('enemy', d.passiveBlock, e.atk);
       break;
     case 'Flying':
       e.evadeAlways = Math.max(e.evadeAlways || 0, d.after || 0.15);
@@ -2667,9 +2806,10 @@ function castEnemyVeryHigh(e, type, plus){
       return `🐲 ${who} casts <b>Dragon Dance</b>: their side deals ${d.deal}×${d.mach ? ' and moves first' : ''}` +
              `${d.strip ? `, and each attack breaks ${d.strip} of your shields first` : ''}.`;
     case 'Steel':
-      setESide({ type:'steelAegis', turnsLeft:T + 1, reduce:d.reduce, regenRolls:d.regenRolls || 0, owner:e });
-      if(d.block) grantBlock(e, d.block, atk);     // (3.13) shields are beyond any dust
-      return `🔩 ${who} casts <b>Steel Aegis</b>: their side takes ${Math.round(d.reduce*100)}% less.`;
+      setESide({ type:'steelAegis', turnsLeft:T + 1, reduce:d.reduce, regenRolls:d.regenRolls || 0, owner:e, atk });
+      if(d.block) grantTeamBlock('enemy', d.block, atk);     // (3.13) shields are beyond any dust; (3.64) their wave's
+      return `🔩 ${who} casts <b>Steel Aegis</b>: their side takes ${Math.round(d.reduce*100)}% less` +
+             (d.block ? `, and ${d.block} shields rise for all of them.` : '.');
     case 'Fairy': {
       const n = diamondDustCleanse('enemy');
       setESide({ type:'diamondDust', turnsLeft:T + 1, owner:e });
@@ -2716,8 +2856,8 @@ function enemyStonePassive(e){
     return setTimeout(()=> battleMsg(`🐉 ${who}'s ${escapeHtml(d.name)}: Mach Dragon — their side moves first.`), 700);
   }
   if(d.passiveBlock){
-    grantBlock(e, d.passiveBlock, e.atk);          // (3.13) your dust cannot stop a shield
-    return setTimeout(()=> battleMsg(`🔩 ${who} arrives with ${d.passiveBlock} block already standing.`), 700);
+    grantTeamBlock('enemy', d.passiveBlock, e.atk);          // (3.13) your dust cannot stop a shield; (3.64) their wave's
+    return setTimeout(()=> battleMsg(`🔩 ${who} arrives with ${d.passiveBlock} shield${d.passiveBlock > 1 ? 's' : ''} standing for its whole side.`), 700);
   }
   if(st.type === 'Fairy'){
     const n = diamondDustCleanse('enemy');
@@ -2788,7 +2928,7 @@ function resolveEnemyAfterimages(done){
       if(covered) battleMsg(`👥 One of their afterimages strikes — and passes harmlessly through.`);
       return setTimeout(step, 620);
     }
-    if(Math.random() < playerEvasionFrom(null)){
+    if(rollPlayerDodge(null)){                      // (3.63) Tachypsychia's dodge last
       floatMiss(pid('playerBob'), dodgeWord(me)); dodgePlayer();
       battleMsg(`👥 One of their afterimages strikes — and finds nothing.`);
       return setTimeout(step, 620);
@@ -2808,12 +2948,17 @@ function resolveEnemyAfterimages(done){
 /* How likely your monster out front is to slip a blow of theirs: its own
    stance or concealment, your Mirage, your clones, Tachypsychia, a Scorching
    Ash on the attacker. `e` may be null for a blow with no attacker. */
-/* Tachypsychia's extra actions: at most this many a round, on either side
-   (theirs always had the cap; yours has it from 2.80). */
-const TACHY_MAX_EXTRAS = 3;
+/* (Tachypsychia's extra actions were at most 3 a round on either side —
+   theirs always, yours from 2.80. 3.62, the designer: "Uncap tachypsychia's
+   extra rolls, so that there is a very small chance it can keep rolling more
+   than 3 turns": no cap. At 30% a roll, a 4th in one round comes about 1 time
+   in 120, a 5th 1 in 400.) */
 /* `peek` (a monster of yours): only asking — an enemy weighing up which of
-   your pair to go for — so nothing is marked as having met a blow. */
-function playerEvasionFrom(e, peek){
+   your pair to go for — so nothing is marked as having met a blow.
+   `noTachy` (3.63): leave Tachypsychia out — it is rolled on its own, after
+   everything else (rollPlayerDodge). Without it, it is in, at its ladder's
+   step: what an estimate wants. */
+function playerEvasionFrom(e, peek, noTachy){
   const mon = peek || activeMon();
   if(!mon) return 0;
   if(!peek) noteCertainDodge(mon);
@@ -2823,21 +2968,93 @@ function playerEvasionFrom(e, peek){
   if(!peek && mir && mir.window && mir.step < mir.window.length) mir.tested = true;   // its window met a real blow
   const cl  = getPStatus(0,'clones');
   /* Tachypsychia hides its caster only — as theirs does (2.80). */
-  const tacAny = getPStatus(0,'tachy');
-  const tac = (tacAny && tacAny.owner === mon.uid) ? tacAny : null;
-  if(!peek && tac && tac.fresh) tac.tested = true;                         // its first-turn rate met a real blow
+  const tac = noTachy ? null : tachyOf(mon);
   const dotMiss = e ? getEStatus(e,'dot') : null;
   const src = [
     own,
     mir ? ((mir.window && mir.step < mir.window.length) ? mir.window[mir.step] : (mir.chance || 0.20)) : 0,
     cl ? (cl.evade || 0) : 0,
     (dotMiss && dotMiss.rider === 'miss') ? (dotMiss.miss || 0) : 0,
-    tac ? (tac.fresh ? tac.evadeFirst : tac.evadeAfter) : 0,
+    tac ? tachyDodgeChance(tac) : 0,
   ];
   let hit = 1;
   src.forEach(x=>{ if(x > 0) hit *= (1 - x); });
   return (1 - hit) * sightFactor('enemy');       // (3.15) Arcane Sight
 }
+/* ============================================================
+   TACHYPSYCHIA (3.63) — the designer: "please change tachypsychia's
+   mechanism to match steel soul: passive - meditate, never misses. active -
+   instant move. extra turn buff that decays with each extra turn taken,
+   dodge buff that decays with each hit that is dodged. extra turn does not
+   get procced by using instant moves, only moves that cost the turn. extra
+   turn: 100%->75%->50%->25%->12.5%. stays at 12.5% until recast (the move
+   resets only when the recharge meter is full). dodge: 100%->75%->50%->25%.
+   stays at 25% until recast. tachypsychia dodge should take lowest priority
+   after whalelord aria (top priority to start gathering procs) and mirage.
+   this ensures that the buff is not unnecessarily spent when another dodge
+   would have covered it."
+     passive   Meditate and `neverMiss` (the move's `always`; a ✦ Curse mutes
+               them as any passive).
+     the cast  quick, as Steel Soul's: it costs no turn, and is spent until
+               the recharge meter fills (usedSoul['tachy:' + uid]). It puts
+               both ladders back at their top.
+     `extra`   after each move of the newt's that costs its turn (an extra
+               action is one), a roll at `extra[xi]`; each extra action it
+               earns takes `xi` a step down — the last step holds.
+     `dodge`   a blow of theirs that nothing else of yours slipped meets
+               `dodge[di]`; each one it slips takes `di` a step down.
+   The status is `permanent`: no clock, only a recast resets it — or their
+   dust sweeping it, or a thief stealing it (it keeps its steps, and works
+   for the thief).
+   ============================================================ */
+const TACHY_KEY = uid=> 'tachy:' + uid;
+/* The Tachypsychia `m` holds: yours, or theirs (a stolen one), or null. */
+function tachyOf(m){
+  if(!m || !ui.battle) return null;
+  const st = m.uid ? getPStatus(0, 'tachy') : getESide('tachy');
+  return (st && st.owner === (m.uid ? m.uid : m)) ? st : null;
+}
+const tachyStep = (list, i)=> (list && list.length) ? list[Math.min(i || 0, list.length - 1)] : 0;
+function tachyExtraChance(st){ return st ? tachyStep(st.extra, st.xi) : 0; }
+function tachyDodgeChance(st){ return st ? tachyStep(st.dodge, st.di) : 0; }
+/* Spent until the meter fills (feedRecharge empties usedSoul). */
+function tachySpent(m){ return !!(m && ui.battle && ui.battle.usedSoul && ui.battle.usedSoul[TACHY_KEY(m.uid)]); }
+function spendTachy(m, on){
+  if(!m || !ui.battle) return;
+  ui.battle.usedSoul = ui.battle.usedSoul || {};
+  ui.battle.usedSoul[TACHY_KEY(m.uid)] = !!on;
+}
+/* Tachypsychia's own dodge, last of all (after the Aria — each caller asks
+   ariaPassesThrough first — and every other dodge): true if it slipped the
+   blow, and then a step down its ladder. `m`: the one the blow is aimed at,
+   either side's. */
+function tachyDodgeRoll(m, sight){
+  const st = tachyOf(m);
+  if(!st) return false;
+  if(!(Math.random() < tachyDodgeChance(st) * (sight == null ? 1 : sight))) return false;
+  st.di = (st.di || 0) + 1;
+  return true;
+}
+/* One blow of theirs at the one of yours out front, rolled for real: every
+   other way of slipping it first, then Tachypsychia's. Returns 'tachy' when
+   Tachypsychia took it, true for another dodge, false when it lands. */
+function rollPlayerDodge(e){
+  if(Math.random() < playerEvasionFrom(e, null, true)) return true;
+  return tachyDodgeRoll(activeMon(), sightFactor('enemy')) ? 'tachy' : false;
+}
+/* Its words: 12.5% as 12.5%, the rest whole. */
+const tachyPct = x=> `${Math.round((x || 0) * 1000) / 10}%`;
+/* A ladder from the step it is on, in two parts: the chance now ("<b>75%</b>")
+   and what follows ("then 50%, 25%, 12.5%, and 12.5% from then on" — or, on
+   its last step, "until it is cast again"). */
+function tachyLadderWords(list, i){
+  list = (list && list.length) ? list : [0];
+  const k = Math.min(i || 0, list.length - 1), after = list.slice(k + 1);
+  return [`<b>${tachyPct(list[k])}</b>`,
+          after.length ? `then ${after.map(tachyPct).join(', ')}, and ${tachyPct(list[list.length - 1])} from then on` : 'until it is cast again'];
+}
+/* What its pill holds for the card a tap opens (the pill itself is ⏱️). */
+function tachyPillTail(st){ return ` · ⚡${tachyPct(tachyExtraChance(st))} · 💨${tachyPct(tachyDodgeChance(st))}`; }
 
 /* ============================================================
    PIERCING STOOP
@@ -3057,9 +3274,11 @@ function ariaActive(){ const a = ariaState(); return !!(a && a.turnsLeft > 0); }
 /* `pierced`: woken by an attack that cannot be dodged — he goes into the
    Aria all the same, but that blow lands (3.09), and its line is said with
    the blow (ariaPiercedNote), not here. */
-function castAria(mon, def, byReflex, pierced){
+function castAria(mon, def, byReflex, pierced, forMon){
   const b = ui.battle;
   if(!b || ariaActive()) return false;
+  /* (3.64) woken by a blow at the one beside him: said with its name */
+  const forOther = !!(byReflex && forMon && forMon !== mon);
   /* Five turns of it, each with its pre-action phase — the same phase as
      Overheat's burn, so it comes whether the last round ended with the
      enemy's attacks or with a wave you knocked out. Stored with the usual +1
@@ -3082,10 +3301,12 @@ function castAria(mon, def, byReflex, pierced){
   });
   if(!st) return false;
   renderStatusBadges();
-  if(pierced) b._ariaPierced = ` The ghostly whalelord begins to sing — but this blow sees straight through him. Prepare for vengeance.`;
-  else battleMsg(byReflex
-    ? `Attacks pass harmlessly through the ghostly whalelord. Prepare for vengeance.`
-    : `Ominous whalesong fills the air.`);
+  if(pierced) b._ariaPierced = forOther
+    ? ` The ghostly whalelord begins to sing for ${escapeHtml(displayName(forMon))} — but this blow sees straight through the haunting. Prepare for vengeance.`
+    : ` The ghostly whalelord begins to sing — but this blow sees straight through him. Prepare for vengeance.`;
+  else battleMsg(!byReflex ? `Ominous whalesong fills the air.`
+    : forOther ? `🎶 The ghostly whalelord sings for ${escapeHtml(displayName(forMon))} — the attack passes harmlessly through. Prepare for vengeance.`
+    : `Attacks pass harmlessly through the ghostly whalelord. Prepare for vengeance.`);
   return true;
 }
 /* (3.08) An enemy attack on your side, while the Aria runs: one more for his
@@ -3114,16 +3335,25 @@ function noteAriaAttack(){
    and a reflex it wakes is the Aria alone (he still goes into it; the blow
    still lands). The caller adds ariaPiercedNote() to the blow's line. */
 function ariaPassesThrough(mon, pierce){
-  const canReflex = mon && !ariaActive() && !passivesMuted(mon)            // a ✦ Curse quiets the reflex (2.97)
-                 && (MOVES[mon.species] || []).some(m=> m[6] && m[6].aria);
+  const singer = ariaSingerFor(mon);                                      // (3.64) he, or the Whalelord beside it
   if(pierce){
     if(ariaFieldEvasion() > 0 && ui.battle) ui.battle._ariaPierced = ` It sees straight through the haunting.`;
-    else if(canReflex) ariaReflex(mon, true);
+    else if(singer) ariaReflex(singer, true, mon);
     return false;
   }
   if(ariaFieldEvasion() > 0){ noteAriaCover(); return true; }
-  if(canReflex && ariaReflex(mon)){ noteAriaCover(); return true; }
+  if(singer && ariaReflex(singer, false, mon)){ noteAriaCover(); return true; }
   return false;
+}
+/* Who sings by reflex when `mon` is struck with no Aria running: the
+   Whalelord himself — or (3.64, the designer: "I want whalelord aria to auto
+   trigger on companions in his wave too") a Whalelord standing beside it on
+   your field. A ✦ Curse quiets his reflex (2.97), as any passive. */
+function ariaSingerFor(mon){
+  if(!mon || !ui.battle || ariaActive()) return null;
+  const sings = m=> !!m && hpOfMon(m) > 0 && !passivesMuted(m) && (MOVES[m.species] || []).some(r=> r[6] && r[6].aria);
+  if(sings(mon)) return mon;
+  return livingField().find(m=> m !== mon && sings(m)) || null;
 }
 /* (3.09) What a blow that saw straight through the haunting says with its
    own line — once: read and cleared. */
@@ -3149,11 +3379,11 @@ function ariaFieldEvasion(){
 function noteAriaCover(){ const a = ariaState(); if(a && a.fieldEvade > 0) a.coverUsed = true; }
 /* The passive: struck while the Aria is not running, it sings by reflex and the
    blow misses. Costs no turn and no words. */
-function ariaReflex(mon, pierced){
+function ariaReflex(mon, pierced, forMon){
   if(ariaActive()) return false;
   const mv = (MOVES[mon.species]||[]).find(m=>m[6] && m[6].aria);
   if(!mv) return false;
-  return castAria(mon, mv[6].aria, true, pierced);
+  return castAria(mon, mv[6].aria, true, pierced, forMon);   // (3.64) `forMon`: the one of his side it was aimed at
 }
 /* The pre-action phase (called from beginRound, beside Overheat's burn):
    every round the Aria lasts, his vengeance grows by a random 0.35–0.7 —
@@ -3680,7 +3910,7 @@ function quickStrikeYours(e, mon, done){
     battleMsg(`⚡ ${name}'s quick attack — 🔆 blinded, it misses!`);
     return setTimeout(done, 650);
   }
-  if(!seesThrough(e) && Math.random() < playerEvasionFrom(e)){   // (a Third Eye cannot miss, 2.97)
+  if(!seesThrough(e) && rollPlayerDodge(e)){   // (a Third Eye cannot miss, 2.97; 3.63 Tachypsychia's dodge last)
     dodgePlayer(); floatMiss(pid('playerBob'), dodgeWord(mon));
     battleMsg(`⚡ ${name}'s quick attack finds nothing.`);
     return setTimeout(done, 650);
@@ -3733,14 +3963,83 @@ function grantBlock(holder, n, atkAt){
   holder.blockValue = atkAt || holder.blockValue || 0;
   setTimeout(refreshAllBlockBars, 0);      // show it at once, not next render
 }
-/* Consume one stack against `dmg`; returns what actually gets through. */
+/* Consume one stack against `dmg`; returns what actually gets through. Its
+   own shields first — they can only ever help it — then (3.64) its team's. */
 function applyBlock(holder, dmg, barId){
-  if(!holder || !holder.blockStacks || holder.blockStacks <= 0) return dmg;
-  const before = holder.blockStacks;
-  holder.blockStacks--;
-  if(barId) drainBlock(barId, before, holder.blockStacks);
-  const absorbed = holder.blockValue || 0;
-  return Math.max(0, dmg - absorbed);
+  if(!holder) return dmg;
+  if(holder.blockStacks > 0){
+    const before = holder.blockStacks;
+    holder.blockStacks--;
+    if(barId) drainBlock(barId, before, holder.blockStacks);
+    const absorbed = holder.blockValue || 0;
+    return Math.max(0, dmg - absorbed);
+  }
+  const side = sideOfMon(holder), tb = teamBlock(side);
+  if(!tb || !(tb.stacks > 0)) return dmg;
+  const before = tb.stacks;
+  tb.stacks--;
+  drainBlock('teamBlk-' + side, before, tb.stacks);
+  return Math.max(0, dmg - (tb.value || 0));
+}
+
+/* ============================================================
+   THE TEAM'S SHIELDS — STEEL AEGIS (3.64)
+   The designer: "for steel aegis block stacks to be shared by the wave, not
+   just the caster's slot. Maybe steel aegis shields can be slightly
+   differently coloured or have a silver-metal backlight?" Every shield a
+   Steel Aegis gives — its cast, its + / ✦ passive as its carrier takes the
+   field, its top-up each turn, carried or cast, yours or theirs — goes to
+   its SIDE's pool (`b.teamBlock[side]`), not to one monster. Whichever of
+   that side is struck, a pool shield soaks for it, after its own shields
+   run out (applyBlock). A monster's own shields — a guard, a shell,
+   Organosteel Body, a Strongman's — stay its own, on its card in blue; the
+   team's are drawn once, in silver, on that side's row (teamBlockBarHtml).
+   Each soaks up to the ATK it was minted at, as a monster's do. Their pool
+   goes with the wave it was raised for (loadWave); yours lasts the fight.
+   A Dragon Dance breaks a struck monster's own shields first and the rest
+   from the pool, once an attack (breakShields); a Nova burns the pool off,
+   Greed steals it, and no Diamond Dust touches it — as any shield.
+   ============================================================ */
+function sideOfMon(m){ return m && m.uid ? 'player' : 'enemy'; }
+function teamBlock(side){
+  const b = ui.battle;
+  if(!b || !side) return null;
+  b.teamBlock = b.teamBlock || {};
+  return b.teamBlock[side] || (b.teamBlock[side] = { stacks:0, value:0 });
+}
+function teamStacks(side){ const tb = teamBlock(side); return tb ? tb.stacks : 0; }
+function teamValue(side){ const tb = teamBlock(side); return tb ? (tb.value || 0) : 0; }
+/* Every shield between `holder` and a blow: its own and its team's. */
+function shieldsOn(holder){ return holder ? blockStacksOf(holder) + teamStacks(sideOfMon(holder)) : 0; }
+/* What its shields would take off a run of blows, for an estimate: its own at
+   their value, then the team's at theirs. */
+function shieldSoak(holder){ return holder ? blockStacksOf(holder) * (holder.blockValue || 0) + teamStacks(sideOfMon(holder)) * teamValue(sideOfMon(holder)) : 0; }
+function grantTeamBlock(side, n, atkAt){
+  const tb = teamBlock(side);
+  if(!tb || !(n > 0)) return;
+  tb.stacks += n;
+  tb.value = atkAt || tb.value || 0;             // minted at its caster's ATK, as a monster's are
+  setTimeout(()=>{ if(ui.battle) renderStatusBadges(); }, 0);   // its bar, on the side's row
+}
+/* The team's bar: the block bar's shape, in silver (.team-blk, companionCss). */
+function teamBlockBarHtml(side){
+  const tb = teamBlock(side), n = tb ? tb.stacks : 0;
+  if(!n) return '';
+  return `<div class="blk-wrap team-blk" id="teamBlk-${side}" data-max="${n}" title="The team's shields: Steel Aegis">` +   // (its silver: companionCss)
+         `<span class="blk-shield">🔩</span><span class="blk-count">×${n}</span>` +
+         `<span class="blk-track">${Array.from({ length:n }, ()=> '<i></i>').join('')}</span>` +
+         `<span class="blk-val">${tb.value || 0}</span></div>`;
+}
+function refreshTeamBar(side){
+  const el = document.getElementById('teamBlk-' + side);
+  if(!el) return;
+  const tb = teamBlock(side), n = tb ? tb.stacks : 0;
+  if(!n){ el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.dataset.max = n;
+  el.innerHTML = `<span class="blk-shield">🔩</span><span class="blk-count">×${n}</span>` +
+                 `<span class="blk-track">${Array.from({ length:n }, ()=> '<i></i>').join('')}</span>` +
+                 `<span class="blk-val">${tb.value || 0}</span>`;
 }
 
 /* ============================================================
@@ -3785,16 +4084,31 @@ function breakShields(side, attacker, holder, key, barId, anchorId){
   if(!(n > 0) || shieldBreakDone(key, holder)) return 0;
   b._shieldBroke = b._shieldBroke || new Map();
   if(!b._shieldBroke.has(key)) b._shieldBroke.set(key, new Set());
-  b._shieldBroke.get(key).add(holder);
+  const done = b._shieldBroke.get(key);
+  done.add(holder);
   const had = blockStacksOf(holder);
-  if(!had) return 0;
   const k = Math.min(n, had);
-  holder.blockStacks = had - k;
-  if(barId) drainBlock(barId, had, holder.blockStacks);
-  if(anchorId) floatMiss(anchorId, `🐲 −${k} 🛡`, 'blk-pop', 0.16);
+  if(k){
+    holder.blockStacks = had - k;
+    if(barId) drainBlock(barId, had, holder.blockStacks);
+    logBattle(`  🐲 Dragon Dance breaks ${k} shield${k > 1 ? 's' : ''} (${had} → ${holder.blockStacks})`);
+  }
+  /* (3.64) what is left of the break falls on its team's shields — once an
+     attack, however many of that side it reaches */
+  const ts = sideOfMon(holder), tb = teamBlock(ts), tkey = 'team:' + ts;
+  let kt = 0;
+  if(n - k > 0 && tb && tb.stacks > 0 && !done.has(tkey)){
+    done.add(tkey);
+    kt = Math.min(n - k, tb.stacks);
+    const before = tb.stacks;
+    tb.stacks -= kt;
+    drainBlock('teamBlk-' + ts, before, tb.stacks);
+    logBattle(`  🐲 Dragon Dance breaks ${kt} of the team's shield${kt > 1 ? 's' : ''} (${before} → ${tb.stacks})`);
+  }
+  if(!k && !kt) return 0;
+  if(anchorId) floatMiss(anchorId, `🐲 −${k + kt} 🛡`, 'blk-pop', 0.16);
   setTimeout(refreshAllBlockBars, 0);
-  logBattle(`  🐲 Dragon Dance breaks ${k} shield${k > 1 ? 's' : ''} (${had} → ${holder.blockStacks})`);
-  return k;
+  return k + kt;
 }
 /* Your strike's attack, for breakShields: what the caller says it is (a quick
    attack, a riposte), else — not an upkeep strike or a copy's (`noLeech`) —
@@ -3955,6 +4269,7 @@ function refreshAllBlockBars(){
   if(!b) return;
   playerField().forEach(m=> refreshBlockBar(pid('playerBlk', m), m));
   (b.enemies||[]).forEach((e,i)=> refreshBlockBar('enemyBlk-'+i, e));
+  refreshTeamBar('player'); refreshTeamBar('enemy');   // (3.64) the team's, in silver
 }
 
 /* Deplete segments with the same weight as an HP drain. */
@@ -4122,12 +4437,14 @@ function revengeFactor(m, rv){
    actions use the action's number (monRef); a quick attack, a riposte and
    each attack of theirs take a fresh one. */
 function newBlowId(kind){ const b = ui.battle; if(!b) return null; b.blowN = (b.blowN || 0) + 1; return kind + b.blowN; }
-/* Nothing it throws can be dodged: its own Third Eye — or (3.26) a Plasma
-   Manta of its side standing, whose Lock-On (`lockOn`) is an aura. */
+/* Nothing it throws can be dodged: its own Third Eye — or (3.63) the
+   Thunder Newt's "never misses" (`neverMiss`, the always-on half of its
+   Tachypsychia) — or (3.26) a Plasma Manta of its side standing, whose
+   Lock-On (`lockOn`) is an aura. */
 function seesThrough(m){
   if(!m) return false;
   const p = passiveOf(m);
-  if(p && p.thirdEye) return true;
+  if(p && (p.thirdEye || p.neverMiss)) return true;
   /* (3.37) a Firefox's Stargazer: for its turns, nothing its side throws
      can be dodged — as a Lock-On, for a while */
   if(ui.battle && (m.uid ? getPStatus(0, 'stargaze') : getESide('stargaze'))) return true;
@@ -4549,6 +4866,22 @@ function meditateTurn(m){
   const s = bState(m);
   if(hurtThisRound(m)) s.meditate = 0;
   else s.meditate = Math.min(p.meditateMax || 4, (s.meditate || 0) + 1);
+}
+/* (3.61) The designer: "Let meditate also proc when the extra turn does" — a
+   Tachypsychia extra action is a turn of its own, so it Meditates once more,
+   as the round's end does: a stack, unless it has been hit this round (the
+   round's end would take it away again). Its count goes on under a ✦ Curse,
+   as ever, but nothing is said of a bonus the curse is muting. Returns the
+   bonus now in whole per cent, for the message — 0 if it did not grow. */
+function meditateExtra(m){
+  if(!m || hpOfMon(m) <= 0) return 0;
+  const p = passiveDefOf(m);
+  if(!p || !p.meditate || hurtThisRound(m)) return 0;
+  const s = bState(m), max = p.meditateMax || 4;
+  if((s.meditate || 0) >= max) return 0;
+  s.meditate = (s.meditate || 0) + 1;
+  const on = passiveOf(m);
+  return (on && on.meditate) ? Math.round(on.meditate * meditateStacks(m) * 100) : 0;
 }
 function meditatePill(m, cls, who){
   const n = meditateStacks(m), p = n ? passiveOf(m) : null;
@@ -5021,14 +5354,10 @@ function advanceMirageWindows(){
     if(m.tested && m.window && m.step < m.window.length) m.step++;
     m.tested = false;
   });
-  /* The same for Tachypsychia's first-turn dodge (80%) and a Stillness (every
-     attack misses): spent by a round in which an attack actually met them, not
-     by the clock (2.75). */
-  [getPStatus(0,'tachy'), getESide('tachy')].forEach(t=>{
-    if(!t) return;
-    if(t.tested) t.fresh = false;
-    t.tested = false;
-  });
+  /* The same for a Stillness (every attack misses): spent by a round in which
+     an attack actually met it, not by the clock (2.75). (Tachypsychia's
+     first-turn dodge was too, until 3.63: its dodge steps down with each blow
+     it slips now — tachyDodgeRoll.) */
   [...playerField(), ...livingEnemies()].forEach(m=>{
     if(!m) return;
     if(m.evadeTurns > 0 && certainDodge(m) && m._stillTested) m.evadeTurns--;
@@ -5098,6 +5427,7 @@ function beginRound(msg){
       }));
     };
     const fallen = ()=>{
+      if(legacyFallPending()) return legacyOnFall(fallen);   // (3.66) a fallen dragon's charges, to the one you choose
       /* A companion that fell in the upkeep leaves the field — the phoenix
          may rise first — and then the leader is looked at. */
       const c = companionOnField();
@@ -5158,9 +5488,8 @@ function enterLeader(nm){
 /* The monster out front fell outside anyone's turn: choose the next one, run
    its entry passives, then carry on. */
 function replaceFallenThen(next){
+  if(legacyFallPending()) return legacyOnFall(()=> replaceFallenThen(next));   // (3.66) his charges, to the one you choose
   const fallen = leaderMon();
-  const c = chargeState();
-  if(c && fallen && c.uid === fallen.uid) triggerDragonLegacy();
   battleMsg(`${displayName(fallen)} fainted!`);
   const options = sendOutOptions(-1);
   if(!options.length) return onPlayerDefeated();
@@ -5477,7 +5806,7 @@ function endRound(){
   b.switchedThisTurn = false;
 
   const c = chargeState();
-  if(c){
+  if(c && holderOnField()){                  // (3.66) switched out, he keeps them: the window waits
     if(c.fresh){ c.fresh = false; }          // the round it was gathered doesn't count
     else {
       c.turnsLeft--;
@@ -5519,13 +5848,12 @@ function endRound(){
      chance of at least one stack and a 25% chance of two. */
   const aeg = getPStatus(0,'steelAegis');
   if(aeg && gm){
+    /* (3.64) one top-up for the team, into its shared pool — it was rolled
+       for each of yours on the field, onto each one's own card */
     const rolls = aeg.regenRolls || (aeg.regen ? 1 : 0);
-    const both = livingField().length > 1;
-    livingField().forEach(pm=>{                    // a side-wide buff: each of yours on the field
-      let won = 0;
-      for(let r = 0; r < rolls; r++) if(Math.random() < 0.5) won++;
-      if(won){ grantBlock(pm, won, monAtk(pm)); battleMsg(`🔩 The aegis thickens — +${won} block${both ? ` on ${displayName(pm)}` : ''}.`); }
-    });
+    let won = 0;
+    for(let r = 0; r < rolls; r++) if(Math.random() < 0.5) won++;
+    if(won){ grantTeamBlock('player', won, aeg.atk || monAtk(gm)); battleMsg(`🔩 The aegis thickens — +${won} shield${won > 1 ? 's' : ''} for your team.`); }
   }
   const tac0 = getPStatus(0,'tachy');
   if(tac0){ tac0.extras = 0; }                   // (its first-turn dodge waits for an attack: advanceMirageWindows)
@@ -5539,7 +5867,7 @@ function endRound(){
     const holder = (aegE.owner && aegE.owner.hp > 0) ? aegE.owner : livingEnemies()[0];
     let won = 0;
     for(let r = 0; r < (aegE.regenRolls || 0); r++) if(Math.random() < 0.5) won++;
-    if(won && holder){ grantBlock(holder, won, holder.atk); battleMsg(`🔩 Their aegis thickens — +${won} block.`); }
+    if(won && holder){ grantTeamBlock('enemy', won, aegE.atk || holder.atk); battleMsg(`🔩 Their aegis thickens — +${won} shield${won > 1 ? 's' : ''} for all of them.`); }   // (3.64) their wave's
   }
   const ctrE = getESide('counter');
   if(ctrE && ctrE.regain && Math.random() < ctrE.regain){
@@ -5561,7 +5889,6 @@ function endRound(){
 
   sylphCleanse();                                // (3.15) a Sylph lifts one of the other side's marks
   shakeOffMarks();                               // (3.37) a Hermit Sloth shakes one off itself
-  endDragonLegacy();                             // a Legacy spent this turn is over
 
   /* (The Haunting Aria no longer rolls here: it rolls in the next round's
      pre-action phase, in beginRound.) */
@@ -5966,7 +6293,7 @@ function startWildEncounter(encOpts){
     return startGuardianTrial();
   }
   const pool = activePool();
-  if(pool.length===0){ ui.prevScreen='region'; toast('No words selected, please select to proceed.'); go('spelling'); return; }
+  if(pool.length===0){ toast('No words selected, please select to proceed.'); goForward('spelling', 'region'); return; }
   const L = starterLevel();
   let special = null;
   const region1Only = state.progress.currentRegion === 1;
@@ -6065,7 +6392,7 @@ function beginBattle(config){
     doneWhen: config.doneWhen || null, onDone: config.onDone || null,
     waveLabel: config.waveLabel || null,
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
-    charge:null, legacyBonus:0,
+    charge:null, legacy:{}, legacyBlow:null,   // (3.66) Dragon Legacy's charges, a monster's own
     aftershock:[], aftershockPending:false, bonusMult:0, _bonusResolved:false,
     _passiveUsed:false,
     turnStep:0,          // turnOrder retired with the per-monster initiative
@@ -6117,6 +6444,8 @@ function beginBattle(config){
 function loadWave(i){
   const b = ui.battle;
   tallyWave();                     // (3.22) one more wave for the day — the daily limit counts waves
+  /* (3.64) their team's shields were the last wave's: a new wave raises its own */
+  if(b.teamBlock) b.teamBlock.enemy = { stacks:0, value:0 };
   b.enemies = b.waves[i].map(spec => makeEnemy(spec.species, spec.level, { nerfed:spec.nerfed, ai:spec.ai, supplements:spec.supplements, boss:spec.boss, wildRoll:spec.wildRoll, crowned:spec.crowned, forceStage:spec.forceStage, elusive:spec.elusive, enraged:spec.enraged, anyLevel:spec.anyLevel, catchable:!!b.allowCatch }));
   if(foesFierce()) b.enemies.forEach(fierceUp);   // (3.48) from Region 5 on: their Ultimate and Max
   // Leech Seed is a FIELD effect: it re-roots on every new wave.
@@ -6191,10 +6520,10 @@ function onWaveCleared(){
          Without this, one-shotting each wave meant statuses NEVER aged — a
          turn-one Overheat was still running six waves later. */
       const gone = tickStatuses();
-      endDragonLegacy();                 // the turn that used it is over
       setFocus(null);
-      /* A new round for Tachypsychia's three extra actions, as endRound gives —
-         the ones that cleared the wave used to count against the next. */
+      /* A new round for Tachypsychia's count of extra actions, as endRound
+         gives — the ones that cleared the wave used to count against the next
+         (when there was a cap of three, until 3.62). */
       [getPStatus(0,'tachy'), getESide('tachy')].forEach(t=>{ if(t) t.extras = 0; });
       b.waveIndex++;
       loadWave(b.waveIndex);
@@ -6432,7 +6761,16 @@ function fieldOrder(){
 function standsLeft(m){ const f = fieldOrder(); return !f.length || f[0] === m; }
 /* A move that never spends the turn: a Very High stone's cast, the Aria, or
    (2.93) Steel Soul. */
-function isQuickMove(mv){ return !!(mv && ((mv.isStone && mv.stoneTier === 'veryhigh') || mv.aria || mv.soul || mv.iceBarrier || mv.overgrowth)); }   // (3.16) Ice Barrier too; (3.55) Overgrowth
+function isQuickMove(mv){ return !!(mv && ((mv.isStone && mv.stoneTier === 'veryhigh') || mv.aria || mv.soul || mv.iceBarrier || mv.overgrowth || mv.tachy || mv.legacyGive)); }   // (3.66) Dragon Legacy   // (3.63) Tachypsychia   // (3.16) Ice Barrier too; (3.55) Overgrowth
+/* (3.66) An instant move that fails costs no turn (the designer: "Instant
+   moves that fail should not cost the turn"): the words fell short, nothing
+   happens, and it is still that monster's turn. It is spent as a cast would
+   have spent it (a stone, Steel Soul, Tachypsychia: until the meter fills);
+   one that nothing spends (Ice Barrier, the Aria, Overgrowth) rests until
+   the next turn, so it can't be written at again and again for the meter. */
+function quickTriedKey(mon, mv){ return (mon && mon.uid) + '|' + (mv && mv.name); }
+function quickTried(mon, mv){ const t = ui.battle && ui.battle.quickTried; return !!(t && t[quickTriedKey(mon, mv)] === roundNo()); }
+function markQuickTried(mon, mv){ const b = ui.battle; if(b) (b.quickTried || (b.quickTried = {}))[quickTriedKey(mon, mv)] = roundNo(); }
 /* The companion takes its place in this round's order — after whoever is
    acting now, where its initiative puts it among the rest. */
 function insertCompanionRow(c){
@@ -6521,8 +6859,7 @@ function companionFalls(c){
   const b = ui.battle, l = leaderMon();
   const p = l && b && b.pairs && b.pairs[l.uid];
   if(!p || p.uid !== c.uid) return;
-  const cs = chargeState();
-  if(cs && cs.uid === c.uid) triggerDragonLegacy();     // its stored power passes on
+  /* ((3.66) a companion dragon's charges are handed on before this: legacyOnFall) */
   p.fallen = true;
   if(b.focusUid === c.uid) b.focusUid = null;
   if(b.foeFocus === c.uid) b.foeFocus = null;
@@ -6665,8 +7002,9 @@ async function allyCastOne(type){
   }
   A.spent[type] = true;
   if(type === 'Water') A.tombWave = b.waveIndex;
-  /* Steel Aegis's block goes on the one of yours out front — nothing is aimed
-     at him, so on him it would soak nothing */
+  /* Steel Aegis's block went on the one of yours out front — nothing is aimed
+     at him, so on him it would soak nothing. (3.64: its shields are your
+     team's now, minted at the ATK of the one out front.) */
   const caster = type === 'Steel' ? (frontMon() || mk) : mk;
   const res = applyVeryHighEffect(type, caster, type === 'Steel' ? monAtk(caster) : atk, livingEnemies(), 2);
   renderStatusBadges();
@@ -6847,7 +7185,7 @@ function blowsToFinish(e, m, move){
   const per = (n > 1 && ex.split) ? mult / n : mult;
   let one = Math.max(1, computeDamage(per, enemyAtk(e), e, monRef(m), false, true));   // an estimate (peek)
   if(ex.sleeperMult && getMStatus(m, 'asleep')) one *= ex.sleeperMult;          // (3.16) a Dream Eater goes for the sleeper
-  const soak = blockStacksOf(m) * (m.blockValue || 0);
+  const soak = shieldSoak(m);                                   // (3.64) its own shields and its team's
   const need = Math.ceil((m.currentHp + soak) / Math.max(1, one * hits));
   const dodge = seesThrough(e) ? 0 : Math.min(0.95, playerEvasionFrom(e, m));   // a Third Eye cannot miss (2.97)
   return need / (1 - dodge);
@@ -6946,9 +7284,10 @@ function monAtk(m){
 /* ============================================================
    PASSIVES AS BUTTONS (3.55)
    The designer: "Please make passives appear as an unpressable button that
-   reveals information about the passive when it is pressed." Every passive
-   it has unlocked sits after its moves as a button that is never a move:
-   dashed, quiet, and a tap opens a card saying what it does
+   reveals information about the passive when it is pressed." A passive it
+   has unlocked is a button that is never a move — since 3.65 in the slot it
+   takes the place of (slotPassivesOf): dashed, quiet, and a tap opens a
+   card saying what it does
    (moveDescription, the moves page's own words). Silenced by their ✦ Curse,
    it says so. (The Forest Fairy's heal had one in 3.55, "Guardian's Gift";
    since 3.56 it is a part of her Overgrowth, which says so.)
@@ -6962,13 +7301,52 @@ function passiveMovesOf(m){
   });
   return out;
 }
-function passiveButtonsHtml(m){
+/* (3.65) A passive's button stands where the move it takes the place of
+   would have stood: the Firehound's Terrorize, its Power 2, between Power 1
+   and the Ultimate, not after them all (the designer: "move the passive
+   button … to where the skill slot it replaces would have been"). A passive
+   that is extra to the kit, in no slot of its own (Caladrius's Pacificus,
+   the Nurse's Selfless Heart, the Cyborg's Futuresight and Organosteel
+   Body), has no button in battle: it only left a half-empty row to scroll
+   past. Its page in the dex still says what it does. One not learned yet
+   keeps its slot, locked and ???, as a move does.
+   Each: { at — the move button it comes before, j — its place in
+   passiveMovesOf, or -1 while locked }. */
+function slotPassivesOf(m){
+  const out = [];
+  if(!m || !MOVES[m.species]) return out;
+  const all = passiveMovesOf(m);
+  let at = 0;
+  MOVES[m.species].forEach(row=>{
+    if(row[0] === 'Max') return;                       // an upgrade of the Ultimate — or extra (Pacificus)
+    if(row[3] !== 'Passive'){ at++; return; }          // a move: a button of its own
+    if(row[0] === 'Passive' || !row[1]) return;        // extra to the kit
+    out.push({ at, j:all.findIndex(p=> p.slot === row[0] && p.name === row[1]) });
+  });
+  return out;
+}
+function passiveButtonHtml(m, j){
+  const mv = j >= 0 ? passiveMovesOf(m)[j] : null;
+  if(!mv) return `
+          <button class="move-btn passive-btn locked" disabled aria-label="A passive, not learned yet">
+            <div class="mv-name">???</div>
+            <div class="mv-meta">Locked</div>
+          </button>`;
   const muted = ui.battle && typeof passivesMuted === 'function' && passivesMuted(m);
-  return passiveMovesOf(m).map((mv, j)=> `
+  return `
           <button class="move-btn passive-btn${muted ? ' muted' : ''}" data-passive="${j}" aria-label="${escapeHtml(mv.name)}: passive, tap to read">
             <div class="mv-name">${symHtml(muted ? '🔇' : '🌟')} ${escapeHtml(mv.name)}</div>
             <div class="mv-meta">${muted ? 'Passive · silenced' : 'Passive · always on'}</div>
-          </button>`).join('');
+          </button>`;
+}
+/* The move buttons with the passives in their slots. A kit that is not its
+   own (a Cataclysm charge held, a borrowed story monster's one button) has
+   no slot for a passive. */
+function moveGridHtml(m, moves, btnOf){
+  const own = !moves.some(mv=> mv.scripted || mv.chargeMore || mv.chargeSpend);
+  const ps = own ? slotPassivesOf(m) : [];
+  const before = i=> ps.filter(p=> i < 0 ? p.at >= moves.length : p.at === i).map(p=> passiveButtonHtml(m, p.j)).join('');
+  return moves.map((mv, i)=> before(i) + btnOf(mv, i)).join('') + before(-1);
 }
 /* Its card: the passive's name, what it does, and — under their ✦ Curse —
    that it is quiet for now. */
@@ -6997,6 +7375,8 @@ function passiveBtnCss(){
   .move-btn.passive-btn .mv-meta{ color:var(--ink-soft); opacity:1; }
   .move-btn.passive-btn.muted .mv-name{ opacity:.65; }
   .move-btn.passive-btn.tip-on{ outline:2px solid var(--gold); outline-offset:1px; }
+  .move-btn.passive-btn.locked{ background:var(--paper-3); color:var(--ink-soft); border:none; cursor:not-allowed; }
+  .move-btn.passive-btn.locked .mv-name{ font-size:15px; }
   #statusTip .tip-text p{ margin:0 0 6px; }
   #statusTip .tip-text p:last-child{ margin-bottom:0; }
   `;
@@ -7050,12 +7430,13 @@ function unlockedMoves(m){
     const used = t.id==='veryhigh' && ui.battle && ui.battle.usedVeryHigh[m.uid];
     if(bi>=0) base[bi] = { slot, name:stoneDisplayName(st), mult:stoneMult(st), stonePlus:stonePlus(st),
       target: t.kind==='multi2'?'Multi2':(t.kind==='status'?'Status':'Single'),
-      words:t.words, unlock:0, available:!used, isStone:true, stoneTier:t.id, stoneType:st.type };
+      words:t.words, unlock:0, available:!used, spent:!!used, isStone:true, stoneTier:t.id, stoneType:st.type };   // (3.66) used: it says so, not ???
   });
   /* Steel Soul, once cast, is spent until the 100-word meter fills (2.93).
      Its button keeps its name and says so, rather than going dark as ???. */
   base.forEach(mv=>{
     if(mv.soul && mv.available && ui.battle && ui.battle.usedSoul && ui.battle.usedSoul[m.uid]){ mv.available = false; mv.spent = true; }
+    if(mv.tachy && mv.available && tachySpent(m)){ mv.available = false; mv.spent = true; }   // (3.63) the same, Tachypsychia
   });
   /* The ghost phoenix's gift: Nova and Incinerate may leave a Sacred Flame. */
   base.forEach(mv=>{ const sf = sacredFlameBonus(m, mv); if(sf) mv.bonus = sf; });
@@ -7082,8 +7463,10 @@ function unlockedMoves(m){
     const used = ui.battle && ui.battle.usedUltra[m.uid];
     base.push({ slot:'UltraStone', name:stoneDisplayName(m.ultraStone), mult:stoneMult(m.ultraStone),
       stonePlus:stonePlus(m.ultraStone), ultraStone:m.ultraStone, target:'MultiHit', words:t.words,
-      unlock:0, available:!used, isStone:true, stoneTier:'ultra', stoneType:m.ultraStone.type });
+      unlock:0, available:!used, spent:!!used, isStone:true, stoneTier:'ultra', stoneType:m.ultraStone.type });
   }
+  /* (3.66) an instant move whose words fell short this turn rests until the next */
+  base.forEach(mv=>{ if(mv.available && isQuickMove(mv) && quickTried(m, mv)){ mv.available = false; mv.tried = true; } });
   /* Amnesia (2.97): what their Mindcat made it forget is shut for its next
      turn — the button keeps its name and says so. */
   const fg = forgottenNames(m);
@@ -7173,6 +7556,24 @@ function companionCss(){
   const st = document.createElement('style');
   st.id = 'companionCss';
   st.textContent = `
+  /* (3.64) the team's shields — Steel Aegis's, shared by the side — drawn
+     once on its row: the block bar in silver, backlit ("a silver-metal
+     backlight"). A monster's own shields stay blue, on its card. */
+  .blk-wrap.team-blk{ display:inline-flex; flex:0 0 auto; width:112px; box-sizing:border-box; margin-top:0; margin-bottom:0; margin-right:0; padding:3px 7px;
+    border-radius:10px; background:linear-gradient(180deg,#fdfeff,#e2e8ef 60%,#c6cfda);
+    box-shadow:0 0 0 1px rgba(92,104,121,.8), 0 0 10px 3px rgba(238,244,251,.95), 0 0 20px 6px rgba(168,188,214,.55); }
+  .blk-wrap.team-blk .blk-shield{ font-size:11px; filter:drop-shadow(0 0 2px rgba(255,255,255,.95)); }
+  .blk-wrap.team-blk .blk-count, .blk-wrap.team-blk .blk-val{ color:#3d4654; }
+  .blk-wrap.team-blk .blk-track{ height:8px; }
+  .blk-wrap.team-blk .blk-track i{ background:linear-gradient(180deg,#ffffff 0%,#c3cbd5 38%,#76828f 100%);
+    box-shadow:inset 0 0 0 1px rgba(64,76,92,.65), inset 0 1px 0 rgba(255,255,255,.95), 0 0 3px rgba(255,255,255,.9); }
+  .blk-wrap.team-blk .blk-track i.spent{ background:rgba(120,130,140,.3); box-shadow:none; opacity:.5; }
+  .foe-side .blk-wrap.team-blk{ width:104px; padding:2px 6px; }
+  /* (3.65) pinned: the bar stands in a slot of its own at the row's left —
+     the slot draws no box (contents), so with no shields there is no gap */
+  .team-slot{ display:contents; }
+  .foe-side{ display:flex; align-items:center; gap:6px; position:relative; z-index:10; padding-left:4px; }
+  .foe-side .foe-side-row{ flex:1; min-width:0; }
   /* (3.52) your side, as theirs: a row of cards */
   .player-card.my-row{ display:flex; align-items:flex-end; justify-content:flex-start; gap:10px; padding:2px 0 0; margin:0; }
   .my-card{ position:relative; text-align:center; flex:0 0 auto; border-radius:14px; transition:box-shadow .25s, background .25s; }
@@ -7272,8 +7673,7 @@ function ownBuffMultiplier(){
   m *= wrathDamageBonus();                 // every grudge held makes you hit harder
   m *= comboMultiplier(activeMon());       // a blow you read makes the next one bigger
   m *= terrorizeFactor();                  // something on the field is frightening
-  if(ui.battle && ui.battle.legacyBonus) m *= (1 + ui.battle.legacyBonus);
-  m *= attackCut('player');                // (3.16) their Ice Barrier, their chill on you
+  m *= attackCut('player');                // (3.16) their Ice Barrier, their chill on you   ((3.66) Dragon Legacy is a monster's own now: estimateHit)
   return m;
 }
 function estimateHit(mv, mon){
@@ -7286,7 +7686,8 @@ function estimateHit(mv, mon){
   /* Steel Soul's bonus rides the same buffs as the strike (2.81) */
   const soul = getPStatus(0,'steelSoul');
   const bonus = (soul && soul.owner === mon.uid) ? (soul.bonus || 0) : 0;
-  const dmg = (per + bonus) * atk * ownBuffMultiplier() * steelSoulAmp(monRef(mon), true);
+  const lg = (legacyOf(mon) > 0 && typeof movesToStrike === 'function' && movesToStrike(mv)) ? LEGACY_AMP : 1;   // (3.66) its next attack
+  const dmg = (per + bonus) * atk * ownBuffMultiplier() * steelSoulAmp(monRef(mon), true) * lg;
   return Math.ceil(dmg);
 }
 function moveShape(mv){
@@ -7298,7 +7699,8 @@ function moveShape(mv){
   if(mv.target === 'AOE') return 'AOE';
   if(mv.target === 'Multi2') return '2 targets';
   if(mv.revitalise) return 'Revive';
-  if(mv.soul || mv.iceBarrier || mv.overgrowth) return 'Quick';   // costs no turn (2.93; Ice Barrier 3.16; Overgrowth 3.55)
+  if(mv.soul || mv.iceBarrier || mv.overgrowth || mv.tachy) return 'Quick';   // costs no turn (2.93; Ice Barrier 3.16; Overgrowth 3.55; Tachypsychia 3.63)
+  if(mv.legacyGive) return 'Quick · 1 charge';                                 // (3.66)
   return '';
 }
 /* ============================================================
@@ -7359,6 +7761,7 @@ function passiveBits(p, atk){
   /* the psychics' (2.97; handover/05 §9) */
   if(p.focus)        bits.push(`<b>Focus</b>: <b>+${pc(p.focus - 1)}%</b> damage if nothing has hit it this round`);
   if(p.thirdEye)     bits.push(`<b>Third Eye</b>: its attacks can't be dodged`);
+  if(p.neverMiss)    bits.push(`<b>Never misses</b>: its attacks can't be dodged`);   // (3.63) the Thunder Newt's
   if(p.composure)    bits.push(`<b>Composure</b>: <b>+${pc(p.composure - 1)}%</b> damage at full health`);
   if(p.exploit)      bits.push(`<b>Exploit</b>: <b>+${pc(p.exploit - 1)}%</b> damage on a monster that is asleep, confused, blinded, charmed or forgetting, or under a Discombobulate`);
   if(p.precog)       bits.push(`<b>Precognition</b>: the first attack on it each round does <b>${pc(1 - p.precog)}% less</b>`);
@@ -7566,9 +7969,11 @@ function moveEffectText(mv, mon, atk){
   if(mv.purge) out.push(
     `<b>Purge.</b> Removes <b>${mv.purge.enemyBuffs || 0}</b> enemy buff${(mv.purge.enemyBuffs || 0) === 1 ? '' : 's'} ` +
     `and <b>${mv.purge.playerDebuffs || 0}</b> debuff${(mv.purge.playerDebuffs || 0) === 1 ? '' : 's'} on your side.`);
-  if(mv.tachy) out.push(
-    `<b>Tachypsychia.</b> For <b>${mv.tachy.turns} turns</b>: a <b>${pc(mv.tachy.bonusAction)}%</b> chance to act again (up to ${TACHY_MAX_EXTRAS} times a round), ` +
-    `dodges <b>${pc(mv.tachy.evadeFirst)}%</b> the first turn it is attacked (then <b>${pc(mv.tachy.evadeAfter)}%</b>), and its attacks can't be dodged.`);
+  if(mv.tachy) out.push(   // (3.63) quick, as Steel Soul; two ladders that step down
+    `<b>Tachypsychia.</b> Quick: it doesn't use your turn. Once, until the recharge meter fills — casting it again starts both from the top. ` +
+    `⚡ After each move of its that uses its turn, a chance to act again: ${tachyLadderWords(mv.tachy.extra, 0).join(', ')} — a step down each time it does. ` +
+    `💨 A chance to dodge each attack nothing else stops: ${tachyLadderWords(mv.tachy.dodge, 0).join(', ')} — a step down each time it does.` +
+    (mv.always && mv.always.meditate ? ' Each extra action is a turn for its Meditate.' : ''));   // (3.61)
   if(mv.mindRead) out.push(`<b>Mind-read:</b> can't be dodged.`);
   /* (2.97) Dream Eater, Wraithblade */
   if(mv.sleeperMult) out.push(
@@ -7597,8 +8002,8 @@ function moveEffectText(mv, mon, atk){
     out.push(`While <b>${what}</b>, it spends that to deal <b>${val(sp.mult)}</b>` +
       (sp.perStack ? ` +<b>${val(sp.perStack)}</b> per shield` : '') + (sp.perPrep ? ` +<b>${val(sp.perPrep)}</b> per preparation` : '') + ` instead.`);
   }
-  if(mv.paralyse || mv.stunHit) out.push(
-    `<b>${pc(mv.paralyse || mv.stunHit)}%</b> chance a hit <b>stuns</b> (the enemy skips its next turn).`);
+  if(mv.paralyse || mv.stunHit || mv.stun) out.push(
+    `<b>${pc(mv.paralyse || mv.stunHit || mv.stun)}%</b> chance ${mv.hits > 1 ? 'each hit' : 'a hit'} <b>stuns</b> (the enemy skips its next turn).`);   // (3.62) a barrage's every hit rolls
   if(mv.softenHit) out.push(mv.softenHit.chance >= 1
     ? `<b>Weakens</b> every enemy it hits: its next attack does <b>${pc(1 - (mv.softenHit.amount || 0.5))}%</b>.`
     : `<b>${pc(mv.softenHit.chance)}%</b> chance to <b>weaken</b> each one it hits: its next attack does <b>${pc(1 - (mv.softenHit.amount || 0.5))}%</b>.`);
@@ -7645,7 +8050,9 @@ function moveEffectText(mv, mon, atk){
     const row = kind=> ns.map(n=> `<b>${chargeMult(d, kind, n)}×</b>`).join(' / ');
     out.push(`<b>Charge</b> costs the turn and stores 1 charge (up to <b>${d.max}</b>). With charges, <b>Unleash</b> (all enemies, ` +
       `${row('unleash')}) or <b>Hyperbeam</b> (one enemy, ${row('hyper')}) costs no words.`);
-    out.push(`Overcharge can double a charge. Switch out with charges and the next monster deals <b>+25%</b> per charge for a turn.`);
+    /* (3.66) Dragon Legacy, reworked */
+    out.push(`Overcharge can double a charge. Switched out, he keeps his charges. <b>Dragon Legacy</b> (quick) gives one to a monster you switch in: ` +
+      `its next attack deals <b>×${LEGACY_AMP}</b>. If he falls, all his charges go to the monster you choose, one ×${LEGACY_AMP} attack each.`);
   }
   /* Passives describe their payload, not just their existence. */
   if(mv.passive){
@@ -7683,6 +8090,8 @@ function moveDescription(mv, mon, atk){
 }
 
 function moveMeta(mv, mon){
+  /* (3.66) Dragon Legacy: no words; one of the charges he holds */
+  if(mv.legacyGive){ const cs = chargeState(); return `Quick · gives 1 of ${cs ? cs.charges : 0}`; }
   /* Revitalise says up front whether there is anyone to bring back. */
   if(mv.revitalise && ui.battle && !revivableFallen(mon).length) return `${mv.words}字 · Nobody fainted`;
   /* (3.15) Transfusion says up front when there is nobody beside it to give to */
@@ -7789,7 +8198,7 @@ function renderBattle(){
       <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
 
       ${b.npcId ? `<div class="npc-banner">${npcPortrait(b.npcId, '🧑', 44, 'var(--paper-3)')}<span>${escapeHtml(b.name)}</span></div>` : ''}
-      <div class="foe-side-row" id="foeSideRow"></div>
+      <div class="foe-side"><div class="team-slot" id="teamSlot-enemy"></div><div class="foe-side-row" id="foeSideRow"></div></div>
       <div class="enemy-row${enemyFieldSlots(b) > (b.enemies || []).length ? ' centred' : ''}">
         ${b.enemies.map((e,i)=>`
           <div class="enemy-card ${e.hp<=0?'fainted':''}${e.shattered?' shattered':''}" data-enemy="${i}" id="enemy-${i}" style="width:${enemySpriteSize(enemyFieldSlots(b))+16}px;">
@@ -7810,6 +8219,7 @@ function renderBattle(){
         ${allyAvatarHtml()}
       </div>
       <div class="my-side">
+        <div class="team-slot" id="teamSlot-player"></div>
         <div id="statusRow" class="status-row"></div>
         <div class="recharge" title="The recharge meter: every word you write fills it">
           <span style="width:${Math.min(100,(b.rechargeWords||0)/RECHARGE_TARGET*100)}%"></span>
@@ -7821,17 +8231,16 @@ function renderBattle(){
     ${pairLineHtml(mon, comp, ctlMon, canAct)}
     <div style="display:flex;gap:12px;">
       <div style="flex:2;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        ${moves.map((mv,i)=>{
+        ${moveGridHtml(ctlMon, moves, (mv,i)=>{
           /* A Haunting Aria already singing shuts its own button, so ten words
              can never be spent on nothing. */
           const ok = mv.available && canAct && !(mv.aria && ariaActive()) && !(mv.iceBarrier && getPStatus(0,'iceBarrier'));   // (3.16) nor an Ice Barrier that stands
           return `
           <button class="move-btn ${ok?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${ok?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
-            <div class="mv-name">${mv.available || mv.chargeMore || mv.spent || mv.forgotten || mv.taunted || mv.ogFull || mv.ogDone ? escapeHtml(mv.name) : '???'}</div>
-            <div class="mv-meta">${mv.available ? moveMeta(mv, ctlMon) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : mv.ogFull ? `Full · ATK +${Math.round(FOREST_GIFT.maxStacks * FOREST_GIFT.step * 100)}%` : mv.ogDone ? 'Grown this turn' : 'Locked')}</div>
-          </button>`; }).join('')}
-        ${passiveButtonsHtml(ctlMon)}
+            <div class="mv-name">${mv.available || mv.chargeMore || mv.spent || mv.forgotten || mv.taunted || mv.ogFull || mv.ogDone || mv.tried || mv.legacyGive ? escapeHtml(mv.name) : '???'}</div>
+            <div class="mv-meta">${mv.available ? moveMeta(mv, ctlMon) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : mv.ogFull ? `Full · ATK +${Math.round(FOREST_GIFT.maxStacks * FOREST_GIFT.step * 100)}%` : mv.ogDone ? 'Grown this turn' : mv.tried ? 'Missed · next turn' : mv.legacyGive ? (mv.legacyWhy || 'Nobody to give to') : 'Locked')}</div>
+          </button>`; })}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
         <button class="side-btn" id="switchBtn" ${(b.switchedThisTurn || !canAct)?'disabled':''}>🔄 Switch</button>
@@ -7853,7 +8262,7 @@ function renderBattle(){
   `;
   screenEl.querySelectorAll('.move-btn:not(.locked):not(.passive-btn)').forEach(btn=> btn.addEventListener('click', ()=>onMoveChosen(+btn.dataset.move)));
   /* (3.55) a passive's button is never a move: it says what the passive does */
-  screenEl.querySelectorAll('.passive-btn').forEach(btn=> btn.addEventListener('click', e=>{ e.stopPropagation(); openPassiveTip(btn, ctlMon, +btn.dataset.passive); }));
+  screenEl.querySelectorAll('.passive-btn:not(.locked)').forEach(btn=> btn.addEventListener('click', e=>{ e.stopPropagation(); openPassiveTip(btn, ctlMon, +btn.dataset.passive); }));
   $('#switchBtn').addEventListener('click', onSwitchPressed);
   const sk = $('#skipBtn');
   if(sk) sk.addEventListener('click', ()=>{
@@ -8078,6 +8487,7 @@ function statusPillHtml(st, who, m){
   if(st.type === 'taunted'){ const tp = m ? tauntPill(m) : ''; return tp ? `<span class="status-pill ${cls}"${at}>${tp}</span>` : ''; }   // (3.38)
   const tail = m ? monPillTail(st, m) : null;                             // (3.16) a nap, a freeze, a confusion
   const n = tail != null ? tail : (st.unsweepable && !st.state) ? '' : st.type === 'steelSoul' ? ' · this turn'
+          : st.type === 'tachy' ? tachyPillTail(st)                                                            // (3.63) no clock: its two chances
           : st.type === 'barrier' ? ` · −${Math.round((st.reduce || 0.5) * 100)}%` : ` ${shown}`;   // a quick buff (2.93); (3.09) a state still counts down; (3.14) a barrier lasts to its caster's next turn
   const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved`
               : st.type === 'aria' ? ` · vengeance ${ariaVengeanceShown(st)}` : '';   // (3.08) his revenge counter
@@ -8101,6 +8511,12 @@ function renderStatusBadges(){
     if(m.enrageStacks) out.push(`<span class="status-pill"${pillAt('enrage', who)}>😤 Enrage ×${m.enrageStacks} (+${enrageBonus(m)} ATK)</span>`);
     const sp = stancePills(m, who);
     if(sp) out.push(sp);
+    /* (3.66) the Cataclysm's charges, on the dragon who holds them; Dragon
+       Legacy's, on the one they were given to */
+    const cs = chargeState();
+    if(cs && cs.uid === m.uid && cs.charges > 0) out.push(`<span class="status-pill mine"${pillAt('cataclysm', who)}>🌊 Cataclysm ×${cs.charges}</span>`);
+    const lg = legacyOf(m);
+    if(lg) out.push(`<span class="status-pill mine"${pillAt('legacy', who)}>🐉 Dragon Legacy ×${lg}</span>`);
     slot.innerHTML = out.join('');
     symbolizePills(slot);
   });
@@ -8124,6 +8540,11 @@ function renderStatusBadges(){
     if(pc) out.push(`<span class="status-pill"${pillAt('combo', 'ps')}>💪 Combo ×${pc}</span>`);
     const mir1 = getPStatus(0,'mirage');
     if(mir1 && mir1.pending) out.push(`<span class="status-pill"${pillAt('mirageImages', 'ps')}>👥 Afterimages ×${mir1.pending}</span>`);
+    /* (3.64) the team's shields, in silver — (3.65) pinned at the row's left,
+       outside its scroll, so they are always in sight (the designer: "Pin
+       steel aegis shields to the leftmost side of the bar") */
+    const tsp = $('#teamSlot-player');
+    if(tsp) tsp.innerHTML = teamBlockBarHtml('player');
     row.innerHTML = out.join('');
     symbolizePills(row);
   }
@@ -8133,10 +8554,13 @@ function renderStatusBadges(){
   const fr = $('#foeSideRow');
   if(fr){
     const ec = (ui.battle && ui.battle.eCombo) || 0;
+    const tse = $('#teamSlot-enemy');                   // (3.64) their wave's shields — (3.65) pinned, as yours
+    if(tse) tse.innerHTML = teamBlockBarHtml('enemy');
     fr.innerHTML = Object.values(enemySideStatuses()).map(st=>{
       const shown = Math.max(0, st.turnsLeft - 1);
       const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved` : '';
       const n = st.unsweepable ? '' : st.type === 'steelSoul' ? ' · this turn'
+              : st.type === 'tachy' ? tachyPillTail(st)                                                // (3.63) a stolen one: its two chances
               : st.type === 'barrier' ? ` · −${Math.round((st.reduce || 0.5) * 100)}%` : ' ' + shown;   // a quick buff (2.93); a barrier (3.14)
       return `<span class="status-pill foe"${pillAt(st.type, 'fs')}>${(st.type === 'barrier' && st.label) || STATUS_LABELS[st.type] || st.type}${n}${saved}</span>`;
     }).join('')
@@ -8343,10 +8767,11 @@ function statusTipText(key, st, c, pill){
       `${c.yours ? 'Your' : 'Their'} own effects don't run out. Shields stay.`;
     case 'charm': case 'charmed': return `Charmed: each turn, ${c.one ? c.w : c.yours ? 'each of your monsters' : 'each of them'} has a <b>${pc(s.chance || 0.2)}%</b> chance to lose its turn.`;
     case 'disrupt': return `${c.W} moves <b>1 step later</b>, and ${c.one ? 'each turn it has' : `each of ${c.its} monsters has, each turn,`} a <b>${pc(s.stun || 0.15)}%</b> chance to lose its turn.`;
-    case 'tachy': { const o = tipOwner(s.owner), nm = tipName(o) || c.W;
-      return `${nm} has a <b>${pc(s.bonusAction)}%</b> chance to act again each time it acts (up to <b>${TACHY_MAX_EXTRAS}</b> extra a round), ` +
-        (s.fresh ? `dodges <b>${pc(s.evadeFirst)}%</b> the first turn it is attacked (then <b>${pc(s.evadeAfter)}%</b>)` : `dodges <b>${pc(s.evadeAfter)}%</b> of attacks`) +
-        `, and its attacks can't be dodged.` + (s.banked ? ` <b>${s.banked}</b> extra action${s.banked > 1 ? 's' : ''} saved for later.` : ''); }
+    case 'tachy': { const o = tipOwner(s.owner), nm = tipName(o) || c.W;   // (3.63) its two ladders, where they stand
+      const [xNow, xNext] = tachyLadderWords(s.extra, s.xi), [dNow, dNext] = tachyLadderWords(s.dodge, s.di);
+      return `⚡ ${xNow} chance ${nm} acts again after its next move that uses its turn (${xNext}). ` +
+        `💨 ${dNow} chance it dodges the next attack nothing else stops (${dNext}).` +
+        (s.banked ? ` <b>${s.banked}</b> extra action${s.banked > 1 ? 's' : ''} saved for later.` : ''); }
     case 'steelSoul': { const o = tipOwner(s.owner), nm = tipName(o) || c.W;
       const bonus = Math.ceil((s.bonus || 0) * tipAtk(o)), amp = o ? steelSoulAmp(o, c.yours) : 1;
       return `This turn every hit ${nm} lands deals <b>+${bonus}</b> more` +
@@ -8389,6 +8814,9 @@ function statusTipText(key, st, c, pill){
       return tn ? `${c.W} is taunted by ${tn}: on its next turn it must use its strongest attack on ${tn}.` : ''; }
     case 'block': { const n = m ? blockStacksOf(m) : 0;
       return n ? `Each shield takes up to <b>${m.blockValue || 0}</b> off one hit. Any hit it blocks uses one up, so a flurry uses one a strike.` : ''; }
+    case 'teamBlock': { const side = c.yours ? 'player' : 'enemy', n = teamStacks(side);   // (3.64) Steel Aegis's, the team's
+      return n ? `${c.yours ? 'Your' : 'Their'} Steel Aegis's shields belong to ${c.yours ? 'your' : 'their'} whole team. Whichever of ${c.yours ? 'yours' : 'theirs'} is struck, ` +
+        `one takes up to <b>${teamValue(side)}</b> off the hit — once that one's own shields are gone. A flurry uses one a strike.` : ''; }
     case 'meditate': { const p = m ? passiveOf(m) : null, n = m ? meditateStacks(m) : 0;
       return (p && p.meditate) ? `${c.W} deals <b>+${pc(p.meditate * n)}%</b> damage. It grows <b>${pc(p.meditate)}%</b> each turn nothing hits it ` +
         `(up to <b>+${pc(p.meditate * (p.meditateMax || 4))}%</b>), and starts again when it is hit.` : ''; }
@@ -8407,6 +8835,14 @@ function statusTipText(key, st, c, pill){
     case 'windup': { const nm = m ? (m.uid ? m._windup : (m._windup && m._windup[1])) : '';
       return `${c.W} is winding up${nm ? ` <b>${escapeHtml(nm)}</b>` : ''}: it lands next turn${c.yours ? ', with no words to write' : ''}.`; }
     case 'omen': return m ? `${c.W}'s next blow hits <b>${pc(m._omen)}%</b> harder.` : '';
+    /* (3.66) the Cataclysm's charges, and Dragon Legacy's */
+    case 'cataclysm': { const cs = chargeState();
+      if(!cs || !m || cs.uid !== m.uid) return '';
+      const n = cs.charges, t = Math.max(0, cs.turnsLeft || 0);
+      return `<b>${n}</b> charge${n === 1 ? '' : 's'} held: Unleash hits every enemy for <b>${chargeMult(cs.def, 'unleash', n)}×</b>, Hyperbeam one for <b>${chargeMult(cs.def, 'hyper', n)}×</b>` +
+        ` — for <b>${t}</b> more turn${t === 1 ? '' : 's'} on the field. Switched out, he keeps them. Dragon Legacy (quick) gives one to a monster you switch in; if he falls, they all go to the one you choose.`; }
+    case 'legacy': { const n = m ? legacyOf(m) : 0;
+      return n ? `${c.W}'s ${n === 1 ? 'next attack deals' : `next ${n} attacks each deal`} <b>×${LEGACY_AMP}</b> damage, one charge an attack.` : ''; }
     case 'passive': {
       const nm = pillWords(pill).replace(/^\s*(🌟|🔇)\s*/u, '').trim();
       const row = m ? (MOVES[m.species] || []).find(r=> r[1] === nm && r[6] && r[6].passive) : null;
@@ -8442,6 +8878,7 @@ function pillTitleHtml(key, el){
    text. */
 function tipTurnsLine(key, pill){
   if(['barrier', 'iceTomb', 'blinded'].includes(key)) return '';
+  if(key === 'tachy') return '⏳ No clock: it lasts until it is cast again.';   // (3.63)
   const n = pillTurnsAfter(key, pillWords(pill));
   if(n == null) return '';
   return n === 0 ? '⏳ Last turn! It wears off after this one.' : `⏳ This turn and ${n} more.`;
@@ -8475,6 +8912,7 @@ function tipTarget(el){
   if(!el) return null;
   if(el.classList.contains('blk-wrap')){
     const id = el.id || '';
+    if(id === 'teamBlk-player' || id === 'teamBlk-enemy') return { key:'teamBlock', who:id === 'teamBlk-player' ? 'ps' : 'fs' };   // (3.64)
     const who = id === 'playerBlk' ? 'p' : id === 'companionBlk' ? 'c' : (/^enemyBlk-(\d+)$/.exec(id) || [])[1] != null ? 'e' + /^enemyBlk-(\d+)$/.exec(id)[1] : null;
     return who ? { key:'block', who } : null;
   }
@@ -8489,8 +8927,9 @@ function statusTipFor(el){
   const text = statusTipText(t.key, tipStatus(t.key, t.who, c), c, el);
   /* (3.52) a symbol is all the pill shows now, so its card always opens —
      its name at least, even with nothing more to say */
-  if(!text && t.key === 'block') return null;
-  const title = t.key === 'block' ? `🛡 Shields ×${blockStacksOf(c.mon)}` : pillTitleHtml(t.key, el);
+  if(!text && (t.key === 'block' || t.key === 'teamBlock')) return null;
+  const title = t.key === 'block' ? `🛡 Shields ×${blockStacksOf(c.mon)}`
+              : t.key === 'teamBlock' ? `🔩 Team shields ×${teamStacks(c.yours ? 'player' : 'enemy')}` : pillTitleHtml(t.key, el);
   return { title, text, turns:tipTurnsLine(t.key, el), cls:el.classList.contains('foe') ? 'foe' : el.classList.contains('mine') ? 'mine' : '' };
 }
 function closeStatusTip(){

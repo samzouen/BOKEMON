@@ -89,6 +89,7 @@ function renderShop(){
 
     <div class="medal-bar">
       <span>🥉 ${m.bronze||0}</span><span>🥈 ${m.silver||0}</span><span>🥇 ${m.gold||0}</span><span>${tokenIcon(15)} ${state.inventory.tokens||0}</span><span>${crownIcon(16)} ${state.inventory.crowns||0}</span>
+      ${SELECTION_TIERS.filter(t=> selTokens(t) > 0).map(t=> `<span title="${escapeHtml(selTokenName(t, 2))}">${selTokenIcon(t, 15)} ${selTokens(t)}</span>`).join('')}
     </div>
 
     <div id="shopWares" class="ware-grid"></div>
@@ -98,7 +99,7 @@ function renderShop(){
   `;
   $('#backBtn').addEventListener('click', ()=>{ ui.shopGreeting=null; ui.shopNote=null; go(backFromMenu()); });
   if(ui.shopNote) setTimeout(()=>{ ui.shopNote=null; }, 6000);
-  $('#shopStorage').addEventListener('click', ()=>{ ui.storageFrom='shop'; go('storage'); });
+  $('#shopStorage').addEventListener('click', ()=>{ ui.storageFrom='shop'; ui.storageTab='items'; go('storage'); });   // (3.65) its Items page
 
   /* Stock arrives with the regions, so the shop grows as the story does.
      `from` is the earliest region that carries the item. */
@@ -127,12 +128,13 @@ function renderShop(){
     /* `only` pins a ware to a single region, and a one-off vanishes once taken. */
     const stocked = region >= w.from && (!w.only || region === w.only)
                   && !(w.id === 'waterStone' && state.inventory.waterStone);
-    const afford = stocked && medalCount(pr.cur) >= pr.cost;
+    const sel = w.pick && SELECTION_TIERS.includes(w.pick) ? w.pick : null;     // (3.65) or 3 Selection Tokens
+    const afford = stocked && (medalCount(pr.cur) >= pr.cost || (sel && selTokens(sel) >= SELECTION_PER_PICK));
     return `<div class="ware ${stocked?(afford?'':'cant'):'oos'}" ${stocked?`data-ware="${w.id}"`:''}>
       <div class="ware-icon">${w.icon}</div>
       <div class="ware-name">${escapeHtml(w.name)}</div>
       ${stocked
-        ? `<div class="ware-price">${curIcon(pr.cur)} ${pr.cost}</div>`
+        ? `<div class="ware-price">${curIcon(pr.cur)} ${pr.cost}${sel ? ` <span class="ware-or">or ${selTokenIcon(sel, 14)} ${SELECTION_PER_PICK}</span>` : ''}</div>`
         : `<div class="ware-oos">Out of stock</div>`}
     </div>`;
   }).join('');
@@ -145,11 +147,11 @@ function renderShop(){
 }
 
 /* Overlay header showing the relevant currency, per spec. */
-function shopOverlay(cur, inner){
+function shopOverlay(cur, inner, selTier){
   const ov = document.createElement('div');
   ov.className = 'shop-overlay';
   ov.innerHTML = `
-    <div class="shop-ov-top">${curIcon(cur)} <b id="ovCount">${medalCount(cur)}</b></div>
+    <div class="shop-ov-top">${curIcon(cur)} <b id="ovCount">${medalCount(cur)}</b>${selTier ? ` &nbsp; ${selTokenIcon(selTier, 18)} <b id="ovSel">${selTokens(selTier)}</b>` : ''}</div>
     <div class="shop-ov-body">${inner}</div>`;
   document.body.appendChild(ov);
   return ov;
@@ -260,15 +262,19 @@ function openSinglePurchase(w){
   });
 }
 
-/* Browse-and-choose picker for the three hand-picked skill tiers. */
+/* Browse-and-choose picker for the three hand-picked skill tiers.
+   (3.65) Paid in gold — or with 3 Selection Tokens of its tier, from
+   recycling (the designer: "3 tokens for a selection draw"). */
 function openSkillPicker(w){
   const pr = SHOP_PRICES[w.id];
   const tier = w.pick;
   const t = stoneTierDef(tier);
+  const sel = SELECTION_TIERS.includes(tier) ? tier : null;
+  const tokPrice = sel ? `${selTokenIcon(sel, 15)} ${SELECTION_PER_PICK} ${escapeHtml(selTokenName(sel, SELECTION_PER_PICK))}` : '';
   const ov = shopOverlay(pr.cur, `
     <div class="pick-card">
       <div class="ware-name" style="font-size:19px;">${escapeHtml(w.name)}</div>
-      <div class="ware-desc" style="margin:4px 0 12px;">${curIcon(pr.cur)} ${pr.cost} ${curName(pr.cur)} · tap a skill to read what it does</div>
+      <div class="ware-desc" style="margin:4px 0 12px;">${curIcon(pr.cur)} ${pr.cost} ${curName(pr.cur)}${sel ? ` or ${tokPrice}` : ''} · tap a skill to read what it does</div>
       <div class="pick-list">
         ${stoneTypePool().map(tp=>`
           <button class="pick-opt" data-type="${tp}">
@@ -277,27 +283,60 @@ function openSkillPicker(w){
           </button>`).join('')}
       </div>
       <button class="btn btn-ghost" id="pkCancel" style="margin-top:12px;">Cancel</button>
-    </div>`);
+    </div>`, sel);
   const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
   ov.querySelector('#pkCancel').addEventListener('click', close);
   ov.querySelectorAll('.pick-opt').forEach(b=>b.addEventListener('click', ()=>{
     const type = b.dataset.type;
     const name = stoneName(type, tier);
-    const detail = `<b>${escapeHtml(name)}</b> (${type})<br><br>${t.mult!=null?t.mult+'× ATK':'Status move'} · ${t.words} words<br>${stoneDescription({tier,type})}<br><br>Buy for ${curIcon(pr.cur)} ${pr.cost}?`;
-    confirmDialogHtml(detail, async ()=>{
-      if(medalCount(pr.cur) < pr.cost){ toast('Not enough medals.'); return; }
-      const snapshot = Object.assign({}, state.medals);
-      await spend(pr.cur, pr.cost);
+    const gold = medalCount(pr.cur) >= pr.cost, toks = !!sel && selTokens(sel) >= SELECTION_PER_PICK;
+    const detail = `<b>${escapeHtml(name)}</b> (${type})<br><br>${t.mult!=null?t.mult+'× ATK':'Status move'} · ${t.words} words<br>${stoneDescription({tier,type})}` +
+      `<br><br>Buy for ${curIcon(pr.cur)} ${pr.cost}${sel ? ` or ${tokPrice}` : ''}?` +
+      (sel ? `<br><span style="font-size:12px;color:var(--ink-soft);">You hold ${curIcon(pr.cur)} ${medalCount(pr.cur)} · ${selTokenIcon(sel, 14)} ${selTokens(sel)}</span>` : '');
+    const buy = async how=>{
+      if(how === 'sel' ? selTokens(sel) < SELECTION_PER_PICK : medalCount(pr.cur) < pr.cost){ toast(how === 'sel' ? 'Not enough tokens.' : 'Not enough medals.'); return; }
+      const snapshot = { medals:Object.assign({}, state.medals), sel:sel ? selTokens(sel) : 0 };
+      if(how === 'sel') addSelTokens(sel, -SELECTION_PER_PICK);
+      else await spend(pr.cur, pr.cost);
       const stone = { uid:'s'+Date.now()+Math.floor(Math.random()*1000), tier, type, name };
       state.moveStones.push(stone);
       const sv = showSyncingOverlay('Syncing…');
       const ok = await saveProfile({ awaitCloud:true });
       hideSyncingOverlay(sv);
-      if(!ok){ state.medals = snapshot; state.moveStones.pop(); showSyncFailure(); return; }
+      if(!ok){
+        state.medals = snapshot.medals;
+        if(sel) state.inventory.selTokens[sel] = snapshot.sel;
+        state.moveStones.pop(); showSyncFailure(); return;
+      }
       close();
       showStoneReveal(stone, 'Purchased!');
-    });
+    };
+    if(!sel) return confirmDialogHtml(detail, ()=> buy('gold'));
+    payChoiceDialog(detail, [
+      { label:`${SELECTION_PER_PICK} tokens`, icon:selTokenIcon(sel, 16), ok:toks, fn:()=> buy('sel') },
+      { label:`${pr.cost} gold`, icon:curIcon(pr.cur), ok:gold, fn:()=> buy('gold') },
+    ]);
   }));
+}
+/* (3.65) A purchase that can be paid two ways: a button for each, greyed
+   when it can't be afforded. */
+function payChoiceDialog(html, ways){
+  const scrim = document.createElement('div');
+  scrim.className = 'pay-choice';
+  scrim.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.6);z-index:95;display:flex;align-items:center;justify-content:center;padding:24px;';
+  scrim.innerHTML = `
+    <div style="background:var(--paper);border-radius:18px;padding:22px;max-width:340px;width:100%;box-shadow:0 12px 40px var(--shadow);">
+      <div style="font-size:14px;font-weight:600;line-height:1.55;margin-bottom:16px;">${html}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${ways.map((w, i)=> `<button class="btn ${w.ok ? 'btn-primary' : 'btn-ghost'}" data-way="${i}" ${w.ok ? '' : 'disabled'}>Pay ${w.icon || ''} ${escapeHtml(w.label)}</button>`).join('')}
+        <button class="btn btn-ghost" id="chNo">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(scrim);
+  const close=()=>{ if(scrim.parentNode) document.body.removeChild(scrim); };
+  scrim.querySelector('#chNo').addEventListener('click', close);
+  scrim.addEventListener('click', e=>{ if(e.target===scrim) close(); });
+  scrim.querySelectorAll('[data-way]').forEach(b=> b.addEventListener('click', ()=>{ const w = ways[+b.dataset.way]; if(!w || !w.ok) return; close(); w.fn(); }));
 }
 
 /* confirmDialog variant that allows rich content. */

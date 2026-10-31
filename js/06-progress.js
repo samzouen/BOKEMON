@@ -801,6 +801,39 @@ function go(screen){
   render();
 }
 
+/* (3.65) WHERE "BACK" GOES. Every page whose Back returns to where you came
+   from (the Spelling List and its password, Settings, the avatar, the
+   arena) read one shared `ui.prevScreen`. A second such page opened from
+   the first overwrote it: Spelling List → ☰ → Settings set it to the
+   Spelling List; Settings' Back went there, the list locked again behind
+   its password — and that page's Back now went to the Spelling List, which
+   was itself. The same with Settings → avatar → Back: Settings' Back then
+   led to Settings. Nothing was frozen (the ☰ still worked), but Back could
+   not leave. Now each step forward keeps a note of where the page it left
+   would itself have gone back to, a trail; Back takes the last step off it,
+   and never leads to the page it is on. */
+function goForward(to, from){
+  from = from || ui.screen;
+  if(from && from !== to){
+    const t = ui.backTrail || (ui.backTrail = []);
+    t.push({ screen:from, prev:ui.prevScreen || null });
+    if(t.length > 10) t.splice(0, t.length - 10);
+    ui.prevScreen = from;
+  }
+  go(to);
+}
+function goBack(fallback){
+  let to = ui.prevScreen;
+  if(!to || to === ui.screen) to = fallback || 'home';
+  const t = ui.backTrail || (ui.backTrail = []);
+  let k = t.length - 1;
+  while(k >= 0 && t[k].screen !== to) k--;
+  ui.prevScreen = k >= 0 ? t[k].prev : null;
+  if(k >= 0) t.length = k;                        // the steps beyond it are walked back too
+  if(ui.prevScreen === to) ui.prevScreen = null;
+  go(to);
+}
+
 function render(){
   try{ renderInner(); }
   catch(err){
