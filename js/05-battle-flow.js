@@ -351,7 +351,7 @@ function useDragonLegacy(mon){
   if(!c || c.uid !== mon.uid || c.charges <= 0 || why){ b.phase = 'player'; renderBattle(); if(why) toast(`Dragon Legacy: ${why.toLowerCase()}.`); return; }
   const takers = legacyTakers();
   const keeps = c.charges - 1;
-  legacyChooser(`🐉 Dragon Legacy — one charge to…`, `It comes in now, and its next attack deals ×${LEGACY_AMP}. ` +
+  legacyChooser(`🐉 Dragon Legacy — one charge to…`, `Its next attack deals ×${LEGACY_AMP}; one from the bench comes in now. ` +
       (keeps > 0 ? `${keeps} charge${keeps === 1 ? ' stays' : 's stay'} with ${displayName(mon)}.` : `It is ${displayName(mon)}'s last one.`),
     takers, o=>{
       const cs = chargeState();
@@ -360,10 +360,19 @@ function useDragonLegacy(mon){
       giveLegacy(o.m, 1);
       const left = cs.charges;
       if(left <= 0) clearCharge();
-      logBattle(`Dragon Legacy: ${displayName(mon)} gave a charge to ${displayName(o.m)} (${left} left) and switched`);
       playEffect('Dragon Legacy', { type:'Water', duration:600 });
-      switchInPair(o.i, `🐉 Dragon Legacy! ${escapeHtml(displayName(o.m))} takes a charge — its next attack deals <b>×${LEGACY_AMP}</b>` +
-        (left ? `; ${escapeHtml(displayName(mon))} keeps ${left}.` : '.'));
+      const said = `🐉 Dragon Legacy! ${escapeHtml(displayName(o.m))} takes a charge — its next attack deals <b>×${LEGACY_AMP}</b>` +
+        (left ? `; ${escapeHtml(displayName(mon))} keeps ${left}.` : '.');
+      /* (3.67) the one beside him: no switch — it is still his turn, as after
+         any quick move */
+      if(o.beside){
+        logBattle(`Dragon Legacy: ${displayName(mon)} gave a charge to ${displayName(o.m)} beside him (${left} left)`);
+        b.phase = 'player';
+        renderBattle();
+        return battleMsg(said + ' It cost no turn — choose a move.');
+      }
+      logBattle(`Dragon Legacy: ${displayName(mon)} gave a charge to ${displayName(o.m)} (${left} left) and switched`);
+      switchInPair(o.i, said);
     }, true, ()=>{ b.phase = 'player'; renderBattle(); });
 }
 /* Revitalise's choice, made BEFORE the writing so ten right words always land.
@@ -456,7 +465,7 @@ function monsterChooser(title, options, onPick, dismissable=true, onCancel=null,
   scrim.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:70;display:flex;align-items:flex-end;justify-content:center;';
   /* (3.66) and what it holds of the Water Dragon's: his charges, or Dragon Legacy's */
   const held = m=>{ const cs = (typeof chargeState === 'function') ? chargeState() : null;
-    return (cs && cs.uid === m.uid && cs.charges > 0 ? ` · 🌊 ×${cs.charges}` : '') + (typeof legacyOf === 'function' && legacyOf(m) ? ` · 🐉 ×${legacyOf(m)}` : ''); };
+    return (cs && cs.uid === m.uid && cs.charges > 0 ? ` · 🌅 ×${cs.charges}` : '') + (typeof legacyOf === 'function' && legacyOf(m) ? ` · 🐉 ×${legacyOf(m)}` : ''); };
   const line = m=> `${escapeHtml(displayName(m))} · Lv ${m.level} · ${Math.max(0, m.currentHp)}/${monMaxHp(m)} HP${held(m)}`;
   const opt = o=>{
     const c = (!bare && ui.screen === 'battle' && ui.battle && companionsAllowed()) ? companionOf(o.m) : null;
@@ -780,7 +789,7 @@ function applySelfDamage(mv, mon){
   if(oh) dmg *= (oh.take || 1.5);
   dmg = Math.ceil(dmg);
   const before = mon.currentHp;
-  mon.currentHp = Math.max(0, mon.currentHp - dmg);
+  dropHp(mon, dmg);                                // (3.69) Tempering, and the floors
   flashHit($('#' + pid('playerBob')));
   drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon));
   logBattle(`${mv.name} recoil: ${displayName(mon)} took ${dmg} self-damage`);
@@ -1891,7 +1900,7 @@ function resolveBattleMove(mv, target, results, opts){
     enemyCounter(t, idx, dmg, 520);      // Silk Reeling / Scaled Stance
     return { t, idx, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg), dmg, pierce:!!mv.pierce };   // Wraithblade: through any block (2.97)
   });
-  let effMsg=''; hits.forEach(h=>{ const m=typeMultiplier(SPECIES[mon.species].types, h.t.types); if(m!==1) effMsg=effectivenessLabel(m); });
+  let effMsg=''; hits.forEach(h=>{ const m=typeMultFor(monRef(mon), h.t); if(m!==1) effMsg=effectivenessLabel(m); });   // (3.69) Destruction too
   logBattle(`${displayName(mon)} used ${mv.name} (${correct}/${mv.words} words${spill?`, +${spill} spill`:''}) — factor ${factor.toFixed(2)}x ATK ${atk}`);
   hits.forEach(h=>logBattle(`  → ${SPECIES[h.t.species].name} took ${h.dmg} (${h.oldHp}→${h.newHp})`));
   /* A bonus move offers a second, optional quiz drawn from the WHOLE word bank
@@ -2089,7 +2098,7 @@ function muddledSelfStrike(mv, mon, factor){
   bob($('#' + pid('playerBob')), -1);
   setTimeout(()=>{
     const before = victim.currentHp;
-    victim.currentHp = Math.max(ui.battle && ui.battle.allyUnkillable ? 1 : 0, victim.currentHp - dmg);
+    dropHp(victim, dmg);   // (3.68) Bedrock's endurance too
     flashHit($('#' + pid('playerBob', victim)));
     drainHp(pid('playerHp', victim), before, victim.currentHp, monMaxHp(victim));
     showDamageNumber(pid('playerBob', victim), before - victim.currentHp);
@@ -2135,6 +2144,7 @@ function landStrike(h, opts){
   h.oldHp = before;
   h.newHp = Math.max(0, before - through);
   if(raw > 0) t.lastDamageTaken = raw;          // a reflection returns the full figure, as yours does
+  { const dealer = dealerOf(opts); if(raw > 0 && dealer) hexHit(dealer, t); }   // (3.68) Vicious Hex: its holder's damage marks it (3.70: whoever dealt it)
   if(through > 0) noteHurt(t, yourStrikeKey(opts));   // a hit: its Focus is broken this round (2.97); which attack (3.38)
   /* Arena immortality: a knock-out becomes a full heal, so a test runs as
      long as the tester wants without anything respawning. */
@@ -2220,6 +2230,9 @@ function applyHits(hits, opts){
   if(hits.length) playSfx('hit_dealt');
   let healed = 0;
   hits.forEach(h=>{ healed += landStrike(h, opts); });
+  capacitorStore(mon, hits, opts);                // (3.67) a Capacitor's share, while your Overcharge is up
+  deadlyComboCount(dealerOf(opts), hits, opts);   // (3.68) Deadly Combo: the hits it landed (3.70: whoever dealt them)
+  hexSweep();                                     // (3.68) a marked one that fell passes its marks on
   const ls = ui.battle && ui.battle.pendingLifesteal;
   if(ls){ healed += ls; ui.battle.pendingLifesteal = 0; }
   // Leech Seed feeds the WHOLE team, not only the monster that swung — a
@@ -2341,7 +2354,7 @@ function postPlayerAction(mon, hits){
       let back = 0;
       touched.forEach(t=>{ back += Math.ceil(per * enemyAtk(t)); });
       const before = mon.currentHp;
-      mon.currentHp = Math.max(0, mon.currentHp - back);
+      dropHp(mon, back);                           // (3.69) Tempering, and the floors
       flashHit($('#' + pid('playerBob')));
       drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon));
       showDamageNumber(pid('playerBob'), before - mon.currentHp);
@@ -2352,7 +2365,7 @@ function postPlayerAction(mon, hits){
     const fire = touched.filter(t=> t.hp > 0).reduce((n, t)=> n + soulfireBack(t), 0);
     if(fire > 0 && mon.currentHp > 0){
       const before = mon.currentHp;
-      mon.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, mon.currentHp - fire);
+      dropHp(mon, fire);
       flashHit($('#' + pid('playerBob')));
       drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon));
       showDamageNumber(pid('playerBob'), before - mon.currentHp);
@@ -2364,7 +2377,7 @@ function postPlayerAction(mon, hits){
       const rb = retaliateBack(t);
       if(!(rb > 0) || mon.currentHp <= 0) return;
       const before = mon.currentHp;
-      mon.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, mon.currentHp - rb);
+      dropHp(mon, rb);
       flashHit($('#' + pid('playerBob')));
       drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon));
       showDamageNumber(pid('playerBob'), before - mon.currentHp);
@@ -2408,7 +2421,7 @@ function postPlayerAction(mon, hits){
     const before = mon.currentHp;
     breakShields('enemy', k, mon, k._blow, pid('playerBlk'), pid('playerBob'));   // their Dragon Dance first (3.13)
     const through = capHit(mon, applyBlock(mon, dmg, pid('playerBlk')));   // (3.15) a Carapace
-    mon.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, mon.currentHp - through);
+    dropHp(mon, through);
     if(through > 0) noteHurt(mon, k._blow);                     // (3.38) a riposte: an attack of its own
     counterDrift(document.getElementById('enemyBob-' + b.enemies.indexOf(k)), document.getElementById(pid('playerBob')));
     flashHit($('#' + pid('playerBob')));
@@ -2853,7 +2866,7 @@ function enemyConversio(e, def, next){
   const seen = ariaPiercedNote();
   const dmg = Math.ceil((def.direct || 0.33) * e.maxHp);
   const before = mon.currentHp;
-  mon.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, mon.currentHp - dmg);   // (3.14) a fight where yours cannot fall, as every other blow
+  dropHp(mon, dmg);   // (3.14) a fight where yours cannot fall, as every other blow
   drainHp(pid('playerHp', mon), before, mon.currentHp, monMaxHp(mon));
   battleMsg(`🕊 ${name} uses <b>Conversio</b> — with nobody to raise, the light turns outward and takes ` +
             `<b>${before - mon.currentHp}</b>.` + seen);
@@ -3055,6 +3068,14 @@ function confusedStrike(e, done){
   { const f = getPStatus(0,'confusionField'); if(f && f.sure) f.sureUsed = true; }   // your field's certain turn has worked
   /* A muddled swing is still an attempt: its own cover is gone. */
   if(e.lurk || e.cunning){ breakCover(e); e._ambush = 0; renderStatusBadges(); }
+  return confusedStrikeOwn(e, done, true);
+}
+function confusedStrikeOwn(e, done, mayControl){
+  const b = ui.battle;
+  /* (3.68) Mind Control: a confusion of your Discombobulate's, with the one
+     who holds it on your field — its swing is yours to aim */
+  { const cf = getEStatus(e, 'discombobulate');
+    if(mayControl && cf && cf.self && typeof mindControlHolder === 'function' && mindControlHolder() && mindControlMoves(e).length) return mindControl(e, done); }
   const mates = livingEnemies().filter(x=>x !== e);
   const victim = mates.length ? mates[Math.floor(Math.random()*mates.length)] : e;
   if(victim !== e && (victim.lurk || victim.cunning)){
@@ -3077,6 +3098,7 @@ function confusedStrike(e, done){
     dmg = Math.max(1, Math.ceil(mult * e.atk * ((conf && conf.ffPower) || 0.60)));
   }
   if(conf && conf.once) removeEStatus(e,'discombobulate');     // a Lunacy is one swing
+  dmg = Math.ceil(dmg * hexAmp(victim));                         // (3.68) Vicious Hex: all damage it takes
   const idx = b.enemies.indexOf(victim);
   const from = b.enemies.indexOf(e);
   battleMsg(victim === e
@@ -3099,6 +3121,86 @@ function confusedStrike(e, done){
       done();
     }, 800);
   }, 420);
+}
+
+/* (3.68) MIND CONTROL — the designer: "when discombobulate hits a confuse,
+   you may use the monster's skills against their own party instead of the
+   usual selfhit. No words needed." Its moves that strike, as it knows them;
+   one chosen turns on its own side — a single blow on the one you pick (or
+   on itself, alone), the rest on all of its side but it. Its ATK, the types
+   as they meet, and the marks your side has laid on the one struck (Curse,
+   Vicious Hex). Or you let it swing on its own, as before. */
+function mindControlMoves(e){
+  return (MOVES[e.species] || []).filter(r=> r[1] && r[2] != null && r[3] !== 'Passive' && r[3] !== 'Charge' && (e.level || 1) >= (r[5] || 1));
+}
+function mindControl(e, done){
+  const b = ui.battle;
+  const holder = mindControlHolder();
+  const name = SPECIES[e.species].name;
+  const moves = mindControlMoves(e);
+  /* (3.70) the designer: "enemy's moves can target themselves, including
+     AOE. move damage is multiplied by the self-hit value as well" — the
+     roll its confusion was given (0.5–0.8 / 0.8–1.1 / 1.1–1.4) */
+  const cf = getEStatus(e, 'discombobulate');
+  const selfX = (cf && cf.self) || 1;
+  const shape = r=> r[3] === 'AOE' ? 'all of them, itself too' : r[3] === 'Multi2' ? 'two of them' : 'one of them';
+  const total = r=>{ const x = r[6] || {}; const h = x.hits > 1 ? x.hits : 1; return (x.split ? r[2] : r[2] * h) * selfX; };
+  const entries = moves.map(r=> ({ r, label:`${r[1]} · ${+total(r).toFixed(2)}× its ATK · ${shape(r)}` }));
+  const own = { own:true, label:'Let it swing on its own' };
+  const pickFrom = (title, sub, list, onPick)=>{
+    const scrim = document.createElement('div');
+    scrim.className = 'mind-control';
+    scrim.style.cssText = 'position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:70;display:flex;align-items:flex-end;justify-content:center;';
+    scrim.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;max-height:86vh;overflow-y:auto;">
+      <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;">${escapeHtml(title)}</div>
+      <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:2px 0 12px;">${escapeHtml(sub)}</div>
+      ${list.map((o, k)=> `<button class="btn btn-ghost sw-opt" data-k="${k}" style="margin-bottom:8px;text-align:left;">${o.face || ''}${escapeHtml(o.label)}</button>`).join('')}
+    </div>`;
+    document.body.appendChild(scrim);
+    scrim.querySelectorAll('.sw-opt').forEach(btn=> btn.addEventListener('click', ()=>{ if(scrim.parentNode) scrim.parentNode.removeChild(scrim); onPick(list[+btn.dataset.k]); }));
+  };
+  pickFrom(`🧠 Mind Control — ${name} is confused`, `${displayName(holder)} takes hold of it: choose one of its moves to turn on its own side, itself too. Its confusion's ×${+selfX.toFixed(2)} counts. No words to write.`,
+    entries.concat([own]), pick=>{
+      if(!ui.battle || ui.battle !== b) return;
+      if(pick.own) return confusedStrikeOwn(e, done);
+      const side = livingEnemies();                    // (3.70) itself among them
+      const strike = victims=>{
+        const from = b.enemies.indexOf(e);
+        bob(document.getElementById('enemyBob-' + from), -1);
+        const said = victims.filter(v=> v !== e).map(v=> escapeHtml(SPECIES[v.species].name)).concat(victims.includes(e) ? ['itself'] : []);
+        battleMsg(`🧠 Mind Control! ${escapeHtml(name)} uses <b>${escapeHtml(pick.r[1])}</b> on ${said.length > 1 ? said.slice(0, -1).join(', ') + ' and ' + said[said.length - 1] : said[0]}!`);
+        setTimeout(()=>{
+          victims.forEach(v=>{
+            const idx = b.enemies.indexOf(v);
+            let dmg = total(pick.r) * enemyAtk(e) * typeMultiplier(e.types, v.types) * hexAmp(v);
+            const cur = getEStatus(v, 'curse');
+            if(cur) dmg *= 1 + (cur.extra != null ? cur.extra : 0.25);
+            dmg = Math.max(1, Math.ceil(dmg));
+            const before = v.hp;
+            v.hp = Math.max(0, v.hp - dmg);
+            flashHit(document.getElementById('enemy-' + idx));
+            drainHp('enemyHp-' + idx, before, v.hp, v.maxHp);
+            showDamageNumber('enemy-' + idx, before - v.hp);
+            if(v.hp <= 0){ const el = document.getElementById('enemy-' + idx); if(el) el.classList.add('fainted'); }
+          });
+          logBattle(`Mind Control: ${name} used ${pick.r[1]} on its own side`);
+          hexSweep();
+          renderStatusBadges();
+          setTimeout(()=>{
+            if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
+            done();
+          }, 800);
+        }, 420);
+      };
+      if(pick.r[3] === 'AOE') return strike(side);
+      if(pick.r[3] === 'Multi2') return strike(side.slice().sort(()=> Math.random() - 0.5).slice(0, 2));
+      if(side.length === 1) return strike(side);
+      pickFrom(`🧠 ${pick.r[1]} — on which of them?`, 'One of its own side — itself too.',
+        side.map(v=>{
+          const nm = SPECIES[v.species].name, twin = side.filter(x=> SPECIES[x.species].name === nm).length > 1;
+          const at = b.enemies.indexOf(v);                // two of a name: which one, by where it stands
+          return { v, label:`${nm}${v === e ? ' (itself)' : twin ? ` (${['1st', '2nd', '3rd', '4th', '5th'][at] || (at + 1) + 'th'} from the left)` : ''} · ${v.hp}/${v.maxHp} HP` + (v.hex > 0 ? ` · Hex ×${v.hex}` : '') }; }), o=> strike([o.v]));
+    });
 }
 
 /* Does this one blow of yours slip this enemy? EVERY damage path asks here —
@@ -3474,6 +3576,7 @@ function resolveStatusMove(mv, mon, target, correct){
       applyHits(hits);
       reportHits(hits);
     }
+    { const det = detonateNow(); if(det) res.msg += ' ' + det; }   // (3.69) Detonate: what the dust swept goes off now
     renderStatusBadges();
     logBattle(`${displayName(mon)} used ${mv.name} (Very High, instant) — ${res.msg}`);
     battleMsg(res.msg);
@@ -4351,7 +4454,7 @@ function enemyStrikeOn(ctx, step, done){
       e._ambush = 0;
       const rel = stoopRelease(e, ex.stoop);
       const before = mon.currentHp;
-      mon.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, mon.currentHp - (rel.hits || 0));
+      dropHp(mon, (rel.hits || 0));
       flashHit($('#' + pid('playerBob')));          // (its attack was counted at the attempt — 3.08)
       showDamageNumber(pid('playerBob'), before - mon.currentHp);
       drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon));
@@ -4473,6 +4576,7 @@ function enemyStrikeOn(ctx, step, done){
         if(!ex.pierce) thisHit = applyBlock(mon, thisHit, pid('playerBlk'));   // one stack per strike (Wraithblade passes through, 2.97)
         totalBlocked += beforeBlock - thisHit;
         thisHit = capHit(mon, thisHit);                                         // (3.15) your Steelcrab's Carapace
+        thisHit = temperCap(mon, thisHit);                                      // (3.69) Tempering: no more than its share this turn
         /* (3.15) your Nurse's Lullaby Reflex: a strike reached it */
         if(beforeBlock > 0 && mon.currentHp - thisHit > 0){
           if(!zzz) zzz = sleepBackRoll(mon, e);
@@ -4480,9 +4584,11 @@ function enemyStrikeOn(ctx, step, done){
           if(!warn) warn = weakBackRoll(mon, e);          // (3.27) your Ladybird's Warning Colours
         }
         mon.lastDamageTaken = beforeBlock;   // reflection returns the FULL figure
-        const floor = ui.battle.allyUnkillable ? 1 : 0;
         const was = mon.currentHp;
-        mon.currentHp = Math.max(floor, mon.currentHp - thisHit);
+        /* (3.67) Bedrock: a blow that would knock it out leaves it on 1 HP,
+           with a shield — once until the meter fills */
+        if(thisHit >= was && was > 0 && !endureActive(mon) && bedrockReady(mon)){ thisHit = was - 1; bedrockSave(mon); ctx.bedrock = true; }
+        mon.currentHp = Math.max(hpFloorOf(mon), mon.currentHp - thisHit);   // (3.68) …and holding on, the turn it did and the next
         totalTaken += was - mon.currentHp;
         /* Their Leech Seed drinks from every strike that gets through, as
            yours drinks from every strike of yours on a seeded enemy — and
@@ -4496,6 +4602,7 @@ function enemyStrikeOn(ctx, step, done){
       }
       if(totalBlocked > 0) floatBlocked(pid('playerBob'), totalBlocked);
       if(totalTaken > 0) noteHurt(mon, e._blow);   // a hit: its Focus is broken this round (2.97); which attack (3.38)
+      const elu = elusiveImages(mon);              // (3.67) Elusive: afterimages, struck or not
       /* (the dead whale took note at the attempt: one attack, counted once — 3.08) */
       if(ui.battle.arenaImmortal && mon.currentHp <= 0){
         mon.currentHp = monMaxHp(mon);          // back to full, test continues
@@ -4509,6 +4616,8 @@ function enemyStrikeOn(ctx, step, done){
       msg += hitCount > 1
         ? `${name} struck ${hitCount} times for ${totalTaken} damage${who}!`
         : `${name} dealt ${totalTaken} damage${who}!`;
+      if(ctx.bedrock){ ctx.bedrock = false; msg += ` 🪨 <b>Bedrock!</b> ${escapeHtml(displayName(mon))} holds on at 1 HP — a shield forms, and it holds on through the next turn.`; }
+      if(elu) msg += ` 🪶 The mirage leaves afterimages all the same.`;
       if(spiked > 0) msg += ` (${spiked} of it from their Spike Armour ✦.)`;
       if(crits) msg += ` 💥 ${crits === 1 ? 'A critical strike' : crits + ' critical strikes'}!`;
       msg += seen;                            // (3.09) …straight through the haunting
@@ -4748,7 +4857,7 @@ function theirSeedsDrink(e){
   if(ls.bite && me && me.currentHp > 0){
     /* (3.16) the bite rides on the hit, as yours does (riderDamage) */
     const bite = capHit(me, riderDamage(ls.bite, atk, e, monRef(me), false)), before = me.currentHp;
-    me.currentHp = Math.max(ui.battle && ui.battle.allyUnkillable ? 1 : 0, me.currentHp - bite);
+    dropHp(me, bite);
     if(before > me.currentHp) noteHurt(me);
     drainHp(pid('playerHp'), before, me.currentHp, monMaxHp(me));
     if(ls.biteHeals) heal += Math.ceil((ls.heal || 0.15) * atk);
@@ -4862,7 +4971,7 @@ function enemyFollowUps(i, e, move, ctx, next){
       if(me.currentHp <= 0 && !ui.battle.allyUnkillable) break;
       const through = capHit(me, pierce ? amount : applyBlock(me, amount, pid('playerBlk')));   // (3.15) a Carapace
       soaked += amount - through;
-      me.currentHp = Math.max(ui.battle.allyUnkillable ? 1 : 0, me.currentHp - through);
+      dropHp(me, through);
       if(through > 0){ spikeRiderTheirs(e, me); fed += theirSeedsDrink(e); }   // their ✦ spikes (3.16) and seeds ride on these too
     }
     flashHit($('#' + pid('playerBob')));

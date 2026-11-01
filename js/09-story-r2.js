@@ -114,6 +114,9 @@ function renderShop(){
     { id:'crown',         from:4, icon:crownIcon(50), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
     { id:'voidStone',     from:3, icon:voidIcon(44), name:'Void Stone', desc:'Draws a learned skill back out of a monster.' },
     { id:'goldMedal',     from:5, icon:'🥇', name:'Gold Medal', desc:'Trade tickets for gold.', qty:true },
+    /* (3.67) element passives, forged from High stones of one element — here
+       from Region 5 for now; Region 6's shop is to have it when it is built */
+    { id:'passiveForge',  from:ELEM_FORGE_FROM, icon:'🌟', name:'Passive Upgrades', desc:'Forge an element passive from its High stones.', forge:true },
     /* Salvage out of the Vane Shear's hold: the last thing on the shelf, sold
        only aboard, and only ever one. */
     { id:'waterStone',    from:4, only:4, icon:uiIcon('water_stone',44,'💧'), name:'Water Stone',
@@ -124,6 +127,15 @@ function renderShop(){
   /* A ware pinned to one region is not merely out of stock elsewhere — it is
      not on the shelf at all, and should not be shown greyed out. */
   box.innerHTML = wares.filter(w=> !w.only || region === w.only).map(w=>{
+    if(w.forge){                                    // (3.67) paid in High stones, not medals
+      const stocked = region >= w.from;
+      const can = stocked && Object.keys(ELEMENT_PASSIVES).some(el=> highStonesOf(el).length >= ELEM_PASSIVE_COST.vh);
+      return `<div class="ware ${stocked ? (can ? '' : 'cant') : 'oos'}" ${stocked ? `data-ware="${w.id}"` : ''}>
+        <div class="ware-icon">${w.icon}</div>
+        <div class="ware-name">${escapeHtml(w.name)}</div>
+        ${stocked ? `<div class="ware-price">${gemIcon('high', 16)} ${ELEM_PASSIVE_COST.vh} / ${ELEM_PASSIVE_COST.ultra}</div>` : `<div class="ware-oos">Out of stock</div>`}
+      </div>`;
+    }
     const pr = SHOP_PRICES[w.id];
     /* `only` pins a ware to a single region, and a one-off vanishes once taken. */
     const stocked = region >= w.from && (!w.only || region === w.only)
@@ -140,6 +152,7 @@ function renderShop(){
   }).join('');
   box.querySelectorAll('[data-ware]').forEach(el=>el.addEventListener('click', ()=>{
     const w = wares.find(x=>x.id===el.dataset.ware);
+    if(w.forge) return openPassiveForge();         // (3.67)
     if(w.qty) return openQtyPurchase(w);
     if(w.pick) return openSkillPicker(w);
     return openSinglePurchase(w);

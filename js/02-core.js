@@ -89,7 +89,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.66';
+const GAME_VERSION = '3.74';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -752,6 +752,116 @@ function payRecycle(tier, sign){
   const r = recycleReward(tier), k = sign == null ? 1 : sign;
   if(r.sel) addSelTokens(r.sel, k * r.n);
   else state.inventory.tokens = Math.max(0, (state.inventory.tokens || 0) + k * r.n);
+}
+
+/* ============================================================
+   ELEMENT PASSIVES (3.67) — the designer: "something that attaches to very
+   high move and ultra moves slot … 5 high stones of the same element
+   convert into a passive upgrade for the very high move and 7 convert into
+   an upgrade for the ultra moves. It does not have to accompany the same
+   type of very high or ultra stone, as long as the monster possesses the
+   element type of the passive."
+   - Each element has one for a monster's Very High slot and one for its
+     Ultra slot. A monster holds one of each, of any of its own elements.
+   - Forged from High stones of that element in storage (the plain ones go
+     first): 5 for a Very High slot passive, 7 for an Ultra slot one. It
+     waits in the bag until it is put on.
+   - Taken off with a Void Stone and silver ("removing these with a void
+     stone also costs silver medals"); it goes back to the bag.
+   m.vhPassive / m.ultraPassive: the element it holds there.
+   state.inventory.elemPassives = { 'Fire:vh': n, … }.
+   All twelve elements since 3.69; the battle side is in 04-battle.js.
+   ============================================================ */
+const ELEMENT_PASSIVES = {
+  Fire:  { vh:   { name:'Wildfire', sym:'🔥',
+                   text:'While your Overheat is up, each turn it scorches every enemy for <b>0.25× its ATK</b>, and itself too, never below half its health. The one beside it is spared. Damage buffs count, as on Overheat ✦\'s burn.' },
+           ultra:{ name:'Consume', sym:'🕯️',
+                   text:'It deals <b>1% more</b> damage for every 1% of health it has lost, up to <b>+50%</b> at half health or below.' } },
+  Water: { vh:   { name:'Frost Armour', sym:'❄️',
+                   text:'While your Ice Tomb\'s chill holds, it gains a shield at the start and the end of each turn it is on the field, up to one at a time.' },
+           ultra:{ name:'Shatter', sym:'🧊',
+                   text:'It deals <b>25% more</b> damage to anything chilled or frozen.' } },
+  Grass: { vh:   { name:'Blossom', sym:'🌸',
+                   text:'At full health, each hit of its that sets off Leech Seed strikes again for <b>0.1× its ATK</b>. Every damage buff counts, but it is not a hit: it sets off no more Leech Seed and no riders.' },
+           ultra:{ name:'Burgeon', sym:'🌳',
+                   text:'At full health it deals <b>25% more</b> damage.' } },
+  Electric: { vh:   { name:'Catalyse', sym:'⚗️',
+                      text:'When it casts Overcharge + or ✦, the high first chance (75%, or certain) covers your next <b>two</b> moves that land, not one.' },
+              ultra:{ name:'Capacitor', sym:'🔋',
+                      text:'While your Overcharge is up, <b>25%</b> of the damage it deals is stored, and strikes a random enemy at the end of the round (or, with none left, one of the next wave as its first turn begins). Each attack stores its own, repeats and extra actions too.' } },
+  Flying:   { vh:   { name:'Elusive', sym:'🪶',
+                      text:'While your Mirage is up, it takes less damage: as much as its best dodge chance, up to <b>30%</b>. And every attack on it leaves afterimages, dodged or not.' },
+              ultra:{ name:'Momentum', sym:'🌪️',
+                      text:'It deals <b>+10%</b> damage for every step of initiative it has, its own passives\' too, up to <b>+30%</b>.' } },
+  Ground:   { vh:   { name:'Bedrock', sym:'🪨',
+                      text:'While your Spike Armour is up, it takes <b>15% less</b> damage, and once each time the meter fills, a blow that would knock it out leaves it on 1 HP with a shield. Then nothing takes it below 1 HP for the rest of that turn and the next. A Curse of theirs on your side ends that, and stops it starting.' },
+              ultra:{ name:'Metamorph', sym:'🦋',
+                      text:'While your Spike Armour is up, its ATK grows <b>5%</b> each turn, up to <b>+25%</b>, and keeps it for the rest of the battle.' } },
+  Psychic:  { vh:   { name:'Mind Control', sym:'🧠',
+                      text:'With it on the field, when your Discombobulate confuses an enemy, its confused swing is yours to aim: choose one of its own moves to turn on its own side, itself included (an AOE strikes all of them), with no words to write. The damage is multiplied by its confusion\'s own self-hit roll. Or let it swing as usual.' },
+              ultra:{ name:'Foresight', sym:'👁️',
+                      text:'While your Discombobulate is up, it dodges <b>20%</b> of attacks, and each of its strikes has a <b>20%</b> chance to be critical (<b>2×</b>). Rolled apart from a Hydra\'s own: if both land, they add up to <b>3×</b>.' } },
+  Physical: { vh:   { name:'Deadly Combo', sym:'🤜',
+                      text:'While your Counter is up, each hit it lands (its quick attacks and afterimages too) makes its attacks <b>10%</b> stronger, up to <b>+30%</b>, for as long as the Counter lasts.' },
+              ultra:{ name:'Focused Fury', sym:'😡',
+                      text:'While your Counter is up, it gains an Enrage stack at the end of every turn, hit or not.' } },
+  Ghost:    { vh:   { name:'Deadly Curse', sym:'☠️',
+                      text:'With it on the field, your Curse becomes a <b>Deadly Curse</b>: at the start of each turn it strikes one enemy for <b>0.16× / 0.33× / 0.66×</b> its ATK (the Curse\'s base, + or ✦), every damage buff counted. A Curse cast while it holds renews it instead, and a ✦ one makes it ✦.' },
+              ultra:{ name:'Vicious Hex', sym:'🕸️',
+                      text:'While your Curse is up, all the damage it deals marks the enemy struck (its afterimages too, and a Whalelord\'s Haunting Aria even from the bench), and so does every Deadly Curse strike: <b>+6%</b> damage taken, up to <b>+66%</b> (11 marks). When a marked enemy falls, two thirds of its marks (rounded up) pass to another of its wave, or to the next wave.' } },
+  Dragon:   { vh:   { name:'Violent Dance', sym:'🐲',
+                      text:'While your Dragon Dance is up, at the start of each turn it strikes <b>1 / 2 / 3</b> times (the Dance\'s base, + or ✦), each at one enemy at random, for <b>0.25× its ATK</b>, as Overheat ✦\'s burn does: every damage buff counts. And it deals <b>+20%</b> damage to anything slower than it (Mach Dragon counts).' },
+              ultra:{ name:'Destruction', sym:'☄️',
+                      text:'Its attacks are super effective (<b>1.5×</b>) against every element except Fairy.' } },
+  Steel:    { vh:   { name:'Tempering', sym:'🔨',
+                      text:'While your Steel Aegis is up, it takes <b>10% less</b> damage and deals <b>10% more</b>, and it cannot lose more than <b>66% / 50% / 33%</b> of its health in one turn (the Aegis\'s base, + or ✦; rounded down). While it is on the field, nothing of theirs (Diamond Dust, a Nova, Greed, the tower\'s theft) can sweep or steal any of your side\'s buffs; off the field, your Steel Aegis still can\'t be.' },
+              ultra:{ name:'Fortress', sym:'🏰',
+                      text:'It resists every element except Dragon: attacks on it deal <b>⅔</b>.' } },
+  Fairy:    { vh:   { name:'Coruscate', sym:'🎇',
+                      text:'While your Diamond Dust is up, it deals <b>5% more</b> damage for each buff your side has up (Diamond Dust counts), up to <b>+50%</b>.' },
+              ultra:{ name:'Detonate', sym:'💥',
+                      text:'While your Diamond Dust is up, every effect of theirs it sweeps away or stops explodes: <b>0.5× its ATK</b> to every enemy for each one, after the sweep (a lurking one is out in the open by then). Damage buffs and cuts count. The dust running out or being renewed sets off one more.' } },
+};
+const ELEM_PASSIVE_COST = { vh:5, ultra:7 };                  // High stones of its element
+const ELEM_FORGE_FROM = 5;   // the shop's forge opens here for now (meant for Region 6's shop, when it is built)
+const ELEM_PASSIVE_REMOVE = { voidStones:1, silver:10 };
+const ELEM_PASSIVE_SLOTS = { vh:'Very High', ultra:'Ultra' };
+function elemPassiveDef(el, slot){ return (ELEMENT_PASSIVES[el] || {})[slot] || null; }
+function elemPassiveKey(el, slot){ return el + ':' + slot; }
+function elemPassiveCount(el, slot){
+  const b = state && state.inventory && state.inventory.elemPassives;
+  return (b && b[elemPassiveKey(el, slot)]) || 0;
+}
+function addElemPassive(el, slot, n){
+  if(!state || !state.inventory || !elemPassiveDef(el, slot)) return;
+  const b = state.inventory.elemPassives || (state.inventory.elemPassives = {});
+  const k = elemPassiveKey(el, slot), v = Math.max(0, (b[k] || 0) + (n || 0));
+  if(v) b[k] = v; else delete b[k];
+}
+/* The bag, as a list: [{ el, slot, n }]. */
+function elemPassivesHeld(){
+  const b = (state && state.inventory && state.inventory.elemPassives) || {};
+  return Object.keys(b).filter(k=> b[k] > 0).map(k=>{ const [el, slot] = k.split(':'); return { el, slot, n:b[k] }; })
+    .filter(x=> elemPassiveDef(x.el, x.slot));
+}
+/* Whether a monster can hold an element's passive: one of its own elements —
+   or (3.71) any at all, for a Fairy ("As an additional perk to fairy, also
+   allow them to learn any ultra or very high passive they wish to,
+   regardless of type") — (3.72) but Steel's ("please remove steel passives
+   from the list of fairy-learnable moves"): only a Steel monster holds those. */
+const FAIRY_CANNOT = ['Steel'];
+function elemPassiveFits(m, el){
+  const types = (m && (SPECIES[m.species] || {}).types) || [];
+  return !!ELEMENT_PASSIVES[el] && (types.includes(el) || (types.includes('Fairy') && !FAIRY_CANNOT.includes(el)));
+}
+/* The elements it can hold passives of. */
+function elemPassiveElements(m){
+  return Object.keys(ELEMENT_PASSIVES).filter(el=> elemPassiveFits(m, el));
+}
+/* What a monster holds in a slot, working: an element it can hold. */
+function elemPassiveAt(m, slot){
+  const el = m && m[slot + 'Passive'];
+  return (el && elemPassiveDef(el, slot) && elemPassiveFits(m, el)) ? el : null;
 }
 
 const STONE_NAMES = {
@@ -1434,6 +1544,8 @@ function normalizeProfile(p){
   /* (3.65) Selection Tokens, one pot a tier */
   if(!p.inventory.selTokens || typeof p.inventory.selTokens !== 'object') p.inventory.selTokens = {};
   ['high', 'veryhigh', 'ultra'].forEach(t=>{ p.inventory.selTokens[t] = Math.max(0, Math.floor(Number(p.inventory.selTokens[t]) || 0)); });
+  /* (3.67) element passives in the bag */
+  if(!p.inventory.elemPassives || typeof p.inventory.elemPassives !== 'object') p.inventory.elemPassives = {};
   p.wordMastery = p.wordMastery || {};
   p.wordAttempts = p.wordAttempts || {};
   p.daily = p.daily || { day:null, count:0, step:0, done:false };
