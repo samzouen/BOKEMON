@@ -457,7 +457,7 @@ function partyHeadHtml(m, opts){
         ${ready ? `<span class="bt-ready" title="Ready to break through">${portrait}</span>` : portrait}
         <div style="flex:1;min-width:0;">
           <div class="ph-name">${opts.comp ? '<span class="ph-comp" title="Companion">🤝</span> ' : ''}${escapeHtml(displayName(m))}${crownMark(m)} <span>Lv ${m.level}</span></div>
-          <div>${typeBadges(m.species)}</div>
+          <div>${typeIcons(m.species, 20)}</div>
           ${isSeed(m)
             ? `<div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:5px;font-style:italic;">In your care — cannot battle.</div>`
             : `<div class="hpbar" style="margin-top:5px;"><div class="hpfill" style="width:${Math.max(0,m.currentHp/maxHp*100)}%;background:${m.currentHp/maxHp<0.3?'var(--cinnabar)':'var(--jade)'};"></div></div>
@@ -1131,7 +1131,7 @@ function chooseCompanionFor(L){
       : !shown.length ? `<div class="comp-note" style="margin-bottom:10px;">Nobody in storage like that.</div>`
       : shown.map(o=>{ const i = opts.indexOf(o); return `<button class="btn btn-ghost cc-opt" data-i="${i}" ${(o.why || o.mine) ? 'disabled' : ''}>
         ${monPortrait(o.c.species, 36, { stage:monStage(o.c), crowned:isCrowned(o.c) })}
-        <span class="cc-txt">${escapeHtml(displayName(o.c))} · Lv ${o.c.level} <span class="cc-types">${typeBadges(o.c.species)}</span>
+        <span class="cc-txt">${escapeHtml(displayName(o.c))} · Lv ${o.c.level} <span class="cc-types">${typeIcons(o.c.species, 17)}</span>
           <small>${o.mine ? 'its companion now' : o.why ? escapeHtml(o.why) : o.lead ? `with ${escapeHtml(displayName(o.lead))} now — it would move` : `${CORE_SLOT_DEF[coreTierOf(o.c)].label} core`}</small></span>
       </button>`; }).join('');
     wireMonFilter(f, 'cf', draw, scrim);
@@ -1614,7 +1614,7 @@ function renderStats(){
       <div style="flex:1;">
         <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;">${escapeHtml(displayName(m))}</div>
         <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-bottom:4px;">${sp.name}${m.nickname?'':' '}</div>
-        <div>${typeBadges(m.species)}</div>
+        <div>${typeIcons(m.species, 22)} ${typeBadges(m.species)}</div>
       </div>
     </div>
     <div id="nameArea" style="margin-bottom:12px;"></div>
@@ -1855,7 +1855,7 @@ function storageFilterHtml(stored, f, pre){
   const nTier = t=> stored.filter(m=> (SPECIES[m.species] || {}).tier === t).length;
   const opt = (v, label, n, on)=> `<option value="${v}" ${on ? 'selected' : ''} ${n === 0 && !on ? 'disabled' : ''}>${label}${n != null ? ` (${n})` : ''}</option>`;
   return `<div class="stor-filter">
-      <label class="sf-pick${f.type ? ' on' : ''}" ${f.type ? `style="--tc:${TYPE_COLORS[f.type] || '#888'}"` : ''}><span>Type</span>
+      <label class="sf-pick${f.type ? ' on' : ''}" ${f.type ? `style="--tc:${TYPE_COLORS[f.type] || '#888'}"` : ''}>${elemIcon(f.type || 'Universal', 18, { title:false })}<span>Type</span>
         <select id="${pre}Type">${opt('', 'All types', null, !f.type)}${types.map(t=> opt(t, t, nType(t), f.type === t)).join('')}</select></label>
       <label class="sf-pick${f.tier ? ' on' : ''}"><span>Rarity</span>
         <select id="${pre}Tier">${opt('', 'All', null, !f.tier)}${STORAGE_TIERS.map(([t, l])=> opt(t, l, nTier(t), f.tier === t)).join('')}</select></label>
@@ -1890,22 +1890,34 @@ function wireStorageFilter(){
 }
 /* ---------- ELEMENT PASSIVES: the forge, the bag, a monster's slots (3.67) ----------
    The data is in 02-core.js (ELEMENT_PASSIVES); what they do in battle, in
-   04-battle.js. Forged at the shop (Passive Upgrades) from High stones of
-   one element in storage: 5 for its Very High slot passive, 7 for its
-   Ultra slot one — the plain stones go first, refined ones last. Put on any
+   04-battle.js. Forged at the shop (Passive Upgrades) from stones of one
+   element in storage — (3.78) 2 Very High ones for its Very High slot
+   passive, 1 Ultra one for its Ultra slot one (5 and 7 High stones until
+   3.77) — the plain stones go first, refined ones last. Put on any
    monster of that element, one in each slot, from its Stats page or straight
    after forging; taken off again for a Void Stone and silver, back into the
    bag. */
 function highStonesOf(el){ return (state.moveStones || []).filter(st=> st.tier === 'high' && st.type === el); }
+/* (3.78) What forges a slot's passive: its element's stones of that slot's tier. */
+function forgeStonesOf(el, slot){ const tier = ELEM_PASSIVE_COST[slot][0]; return (state.moveStones || []).filter(st=> st.tier === tier && st.type === el); }
+function forgeCanAny(){
+  return Object.keys(ELEMENT_PASSIVES).some(el=> ['vh', 'ultra'].some(s=> forgeStonesOf(el, s).length >= ELEM_PASSIVE_COST[s][1])) ||
+         ['vh', 'ultra'].some(s=> selTokens(ELEM_PASSIVE_TOKENS[s][0]) >= ELEM_PASSIVE_TOKENS[s][1]);
+}
+/* "2 Very High stones" — its price in stones, in words (`el`: of that element's names). */
+function forgeStonePrice(slot, el){
+  const [tier, n] = ELEM_PASSIVE_COST[slot];
+  return el ? `${n} ${escapeHtml(stoneName(el, tier))}` : `${n} ${stoneTierDef(tier).label} stone${n === 1 ? '' : 's'}`;
+}
 function elemPassivesAnywhere(){
   return elemPassivesHeld().length > 0 || (state.party || []).concat(state.storage || []).some(m=> m.vhPassive || m.ultraPassive || m.vhPassive2 || m.ultraPassive2);
 }
 function elemForgeOpen(){ return (state.progress.currentRegion || 1) >= ELEM_FORGE_FROM || elemPassivesAnywhere() || (typeof r6Met === 'function' && r6Met()); }   // (3.75) or Selene met
 function elemPassiveLabel(el, slot){ const d = elemPassiveDef(el, slot); return d ? d.name : ''; }   // (3.70) no icons: "they are just passives"
-/* (3.76) What a slot passive costs: its element's High stones, or Selection
+/* (3.76) What a slot passive costs: its element's stones, or Selection
    Tokens ("allow very high passives to be bought for 2 very high tokens,
    and ultra passives to be bought for 1 ultra token, in addition to the
-   current cost"). */
+   current cost") — (3.78) 6 and 3, the shop's rate for the stones. */
 function elemPassiveTokenHtml(slot, px){
   const [t, n] = ELEM_PASSIVE_TOKENS[slot];
   return `${selTokenIcon(t, px || 13)} ${n} ${selTokenName(t, n)}`;
@@ -1989,8 +2001,8 @@ function chooseElemPassiveHolder(el, slot, after){
   ov.addEventListener('click', e=>{ if(e.target === ov){ close(); if(after) after(); } });
   ov.querySelectorAll('.ep-opt').forEach(b=> b.addEventListener('click', ()=>{ close(); attachElemPassive(takers[+b.dataset.i], el, slot); if(after) after(); }));
 }
-/* Forging one: from its element's High stones in storage (the plain ones
-   first), or (3.76, `withTokens`) from Selection Tokens. */
+/* Forging one: from its element's stones of the slot's tier in storage (the
+   plain ones first), or (3.76, `withTokens`) from Selection Tokens. */
 async function forgeElemPassive(el, slot, after, withTokens){
   let undo;
   if(withTokens){
@@ -1999,9 +2011,9 @@ async function forgeElemPassive(el, slot, after, withTokens){
     addSelTokens(t, -n);
     undo = ()=> addSelTokens(t, n);
   } else {
-    const need = ELEM_PASSIVE_COST[slot];
-    const pool = highStonesOf(el).slice().sort((a, b)=> stonePlus(a) - stonePlus(b));   // the plain ones first
-    if(pool.length < need) return toast(`Needs ${need} ${stoneName(el, 'high')} in storage.`);
+    const [tier, need] = ELEM_PASSIVE_COST[slot];
+    const pool = forgeStonesOf(el, slot).slice().sort((a, b)=> stonePlus(a) - stonePlus(b));   // the plain ones first
+    if(pool.length < need) return toast(`Needs ${need} ${stoneName(el, tier)} in storage.`);
     const used = new Set(pool.slice(0, need));
     const snapshot = state.moveStones.slice();
     state.moveStones = state.moveStones.filter(st=> !used.has(st));
@@ -2029,21 +2041,20 @@ function openPassiveForge(){
     ov.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:560px;width:100%;max-height:86vh;overflow-y:auto;">
       <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:19px;">🌟 Passive Upgrades</div>
       <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:3px 0 12px;line-height:1.45;">
-        Forge an element's passive from its High stones in storage — <b>${ELEM_PASSIVE_COST.vh}</b> for its Very High slot passive, <b>${ELEM_PASSIVE_COST.ultra}</b> for its Ultra slot one — or from Selection Tokens: ${elemPassiveTokenHtml('vh')}, or ${elemPassiveTokenHtml('ultra')}.
+        Forge an element's passive from its stones in storage — <b>${forgeStonePrice('vh')}</b> of its element for its Very High slot passive, <b>${forgeStonePrice('ultra')}</b> for its Ultra slot one — or from Selection Tokens: ${elemPassiveTokenHtml('vh')}, or ${elemPassiveTokenHtml('ultra')}.
         It goes on any monster of that element, one in each slot. A Fairy holds its Fairy one first, and then one more of any element's but Steel's on top of it: both work.
         <div style="margin-top:5px;">You have ${selTokenIcon('veryhigh', 13)} <b>${selTokens('veryhigh')}</b> · ${selTokenIcon('ultra', 13)} <b>${selTokens('ultra')}</b>.</div></div>
       ${els.map(el=>{
-        const have = highStonesOf(el).length;
         return `<div class="ep-el" style="--tc:${TYPE_COLORS[el] || '#888'};">
-          <div class="ep-el-head"><span class="type-badge" style="background:${TYPE_COLORS[el] || '#888'};">${escapeHtml(el)}</span>
-            <span>${escapeHtml(stoneName(el, 'high'))} ×${have} held</span></div>
+          <div class="ep-el-head">${elemIcon(el, 22)}<span class="type-badge" style="background:${TYPE_COLORS[el] || '#888'};">${escapeHtml(el)}</span>
+            <span>${['vh', 'ultra'].map(s=> `${escapeHtml(stoneName(el, ELEM_PASSIVE_COST[s][0]))} ×${forgeStonesOf(el, s).length}`).join(' · ')} held</span></div>
           ${['vh', 'ultra'].map(slot=>{
-            const d = elemPassiveDef(el, slot), need = ELEM_PASSIVE_COST[slot], inBag = elemPassiveCount(el, slot);
+            const d = elemPassiveDef(el, slot), [ct, need] = ELEM_PASSIVE_COST[slot], have = forgeStonesOf(el, slot).length, inBag = elemPassiveCount(el, slot);
             const [tt, tn] = ELEM_PASSIVE_TOKENS[slot], tok = selTokens(tt) >= tn;
             return `<div class="ep-opt-row">
               <div class="ep-txt"><b>${escapeHtml(d.name)}</b> <small>${ELEM_PASSIVE_SLOTS[slot]} slot${inBag ? ` · ${inBag} in your bag` : ''}</small><div>${d.text}</div></div>
               <div class="ep-buy">
-                <button class="btn ${have >= need ? 'btn-primary' : 'btn-ghost'} ep-forge-btn" data-el="${el}" data-slot="${slot}" ${have >= need ? '' : 'disabled'}>Forge<br><small>${need} stones</small></button>
+                <button class="btn ${have >= need ? 'btn-primary' : 'btn-ghost'} ep-forge-btn" data-el="${el}" data-slot="${slot}" ${have >= need ? '' : 'disabled'}>Forge<br><small>${gemIcon(ct, 12)} ${need}</small></button>
                 <button class="btn ${tok ? 'btn-primary' : 'btn-ghost'} ep-forge-btn" data-el="${el}" data-slot="${slot}" data-tok="1" ${tok ? '' : 'disabled'}>Forge<br><small>${selTokenIcon(tt, 11)} ${tn}</small></button>
               </div>
             </div>`; }).join('')}
@@ -2052,9 +2063,9 @@ function openPassiveForge(){
     </div>`;
     ov.querySelector('#epClose').addEventListener('click', close);
     ov.querySelectorAll('.ep-forge-btn:not([disabled])').forEach(b=> b.addEventListener('click', ()=>{
-      const el = b.dataset.el, slot = b.dataset.slot, d = elemPassiveDef(el, slot), need = ELEM_PASSIVE_COST[slot], tok = !!b.dataset.tok;
+      const el = b.dataset.el, slot = b.dataset.slot, d = elemPassiveDef(el, slot), tok = !!b.dataset.tok;
       confirmDialogHtml(tok ? `Forge <b>${escapeHtml(d.name)}</b> for ${elemPassiveTokenHtml(slot, 14)}?`
-        : `Forge <b>${escapeHtml(d.name)}</b> from <b>${need}</b> ${escapeHtml(stoneName(el, 'high'))}? The plain ones go first.`,
+        : `Forge <b>${escapeHtml(d.name)}</b> from <b>${forgeStonePrice(slot, el)}</b>?${ELEM_PASSIVE_COST[slot][1] > 1 ? ' The plain ones go first.' : ' A plain one goes first.'}`,
         ()=> forgeElemPassive(el, slot, draw, tok), 'Forge');
     }));
   };
@@ -2075,7 +2086,7 @@ function elemPassivePanel(m){
   const R = ELEM_PASSIVE_REMOVE;
   const own = monTypes(m).filter(t=> t !== 'Fairy' && ELEMENT_PASSIVES[t]);
   const canPut = slot=> elemPassivesHeld().filter(x=> x.slot === slot && elemPassivePlace(m, x.el, slot)).map(x=> x.el);
-  const price = slot=> `${ELEM_PASSIVE_COST[slot]} High stones of its element, or ${elemPassiveTokenHtml(slot, 12)}`;
+  const price = slot=> `${forgeStonePrice(slot)} of its element, or ${elemPassiveTokenHtml(slot, 12)}`;
   const held = (slot, el, second)=>{
     const d = elemPassiveDef(el, slot), on = elemPassivesIn(m, slot).includes(el);
     const why = on ? '' : (fairy && !second && el !== 'Fairy' && !monTypes(m).includes(el)) ? ' <small>(it rests until its Fairy one goes in under it)</small>' : ' <small>(not its element now: it rests)</small>';
@@ -2090,7 +2101,7 @@ function elemPassivePanel(m){
     if(!a){
       const msg = can.length ? 'You have one for it in your bag.'
         : fairy ? `Its Fairy one goes in first — forge it at the shop from ${price(slot)}. Then one more of any element but Steel stacks on top of it, and both work.${own.length ? ` Its ${own.map(escapeHtml).join(' or ')} one may also stand alone.` : ''}`
-        : `Forge one at the shop from ${ELEM_PASSIVE_COST[slot]} High stones of ${mine.length > 1 ? 'one of its elements' : 'its element'} (${mine.map(escapeHtml).join(' or ')}), or from ${elemPassiveTokenHtml(slot, 12)}.`;
+        : `Forge one at the shop from ${forgeStonePrice(slot)} of ${mine.length > 1 ? 'one of its elements' : 'its element'} (${mine.map(escapeHtml).join(' or ')}), or from ${elemPassiveTokenHtml(slot, 12)}.`;
       html += `<div class="ep-slot"><div class="ep-slot-k">${ELEM_PASSIVE_SLOTS[slot]} slot</div>
         <div class="ep-slot-v"><span style="color:var(--ink-soft);">Empty</span><div>${msg}</div></div>${put}</div>`;
     } else if(fairy && !b && (a === 'Fairy' || can.includes('Fairy'))){
@@ -2200,7 +2211,7 @@ function storageMonsPageHtml(stored){
           <div style="flex:1;min-width:0;">
             <div class="sm-name">${escapeHtml(displayName(m))}</div>
             <div class="sm-lv">Lv ${m.level}</div>
-            <div class="sm-types">${typeBadges(m.species)}</div>
+            <div class="sm-types">${typeIcons(m.species, 18)}</div>
             ${storageCompanionLine(m)}
           </div>
         </div>
@@ -2243,12 +2254,12 @@ function storageItemsPageHtml(){
       </div>
       ${others ? `<div class="wal-row">${others}</div>` : ''}
       ${elemPassivesHeld().length ? `<div class="wal-head">Passive upgrades <span>put one on from a monster's Stats page</span></div>
-        <div class="wal-row">${elemPassivesHeld().map(x=> chip(`<span class="ep-dot" style="background:${TYPE_COLORS[x.el] || '#888'}"></span>`, x.n, `${elemPassiveDef(x.el, x.slot).name} · ${ELEM_PASSIVE_SLOTS[x.slot]}`, true)).join('')}</div>` : ''}
+        <div class="wal-row">${elemPassivesHeld().map(x=> chip(elemIcon(x.el, 20), x.n, `${elemPassiveDef(x.el, x.slot).name} · ${ELEM_PASSIVE_SLOTS[x.slot]}`, true)).join('')}</div>` : ''}
     </div>
     ${heldStones().length ? `<button class="btn btn-ghost stone-page-btn" id="openStones">💠 Element Stones <span>${totalStones()} held</span></button>` : ''}
     <div class="stor-sec-head">💎 Skill Stones <span>${state.moveStones.length}</span></div>
     ${state.moveStones.length ? `<div class="stor-filter">
-        <label class="sf-pick${sf.type ? ' on' : ''}" ${sf.type ? `style="--tc:${TYPE_COLORS[sf.type] || '#888'}"` : ''}><span>Type</span>
+        <label class="sf-pick${sf.type ? ' on' : ''}" ${sf.type ? `style="--tc:${TYPE_COLORS[sf.type] || '#888'}"` : ''}>${elemIcon(sf.type || 'Universal', 18, { title:false })}<span>Type</span>
           <select id="stType"><option value="" ${sf.type ? '' : 'selected'}>All types</option>${types.map(t=> `<option value="${t}" ${sf.type === t ? 'selected' : ''} ${nType(t) || sf.type === t ? '' : 'disabled'}>${t} (${nType(t)})</option>`).join('')}</select></label>
         ${sf.type ? `<button class="sf-clear" id="stClear" title="Show them all">✕</button>` : ''}
       </div>` : ''}
@@ -2305,6 +2316,7 @@ function storageCss(){
     cursor:pointer; font:inherit; color:var(--ink); }
   .stone-tile:active{ transform:translateY(1px); }
   .stone-tile .type-badge{ font-size:9px; padding:2px 6px; }
+  .stone-tile .st-top{ display:flex; align-items:center; gap:4px; }
   .stone-tile .st-name{ font-family:'Baloo 2',cursive; font-weight:700; font-size:13px; line-height:1.15; padding-right:22px; }
   .stone-tile .st-count{ position:absolute; top:6px; right:7px; min-width:22px; padding:1px 5px; border-radius:9px; background:var(--ink); color:#fff;
     font-size:11px; font-weight:900; text-align:center; }
@@ -2485,7 +2497,7 @@ function renderStoneList(){
       <div class="stone-group-head tier-${t}">${gemIcon(t, 18)}${def.label}<span>${of.length}</span></div>
       <div class="stone-grid">
         ${kinds.map(g=> `<button class="stone-tile tier-${t}" data-stone="${g.st.uid}" style="--tc:${TYPE_COLORS[g.st.type] || '#888'};">
-            <span class="type-badge" style="background:${TYPE_COLORS[g.st.type] || '#888'};">${escapeHtml(g.st.type)}</span>
+            <span class="st-top">${elemIcon(g.st.type, 18)}<span class="type-badge" style="background:${TYPE_COLORS[g.st.type] || '#888'};">${escapeHtml(g.st.type)}</span></span>
             <span class="st-name">${escapeHtml(g.st.name)}${stonePlus(g.st) ? `<span class="plus-mark">${UPGRADE_MARKS[stonePlus(g.st)].trim()}</span>` : ''}</span>
             ${g.n > 1 ? `<span class="st-count">×${g.n}</span>` : ''}
           </button>`).join('')}
@@ -2518,50 +2530,237 @@ async function doStoneRoll(){
   state.inventory.tokens -= TOKENS_PER_ROLL;
   const stone = newMoveStone();
   state.moveStones.push(stone);
-
-  const ov = showSyncingOverlay('Syncing…');
-  const ok = await saveProfile({ awaitCloud:true });
-  hideSyncingOverlay(ov);
-  if(!ok){
-    state.inventory.tokens = beforeTokens;
-    state.moveStones.pop();
-    showSyncFailure();
-    return;
-  }
-  showStoneReveal(stone, 'Rolling…');
+  await stoneSaveReveal([stone], 'Rolling…', ()=>{ state.inventory.tokens = beforeTokens; state.moveStones.pop(); });
 }
 
-/* Shared reveal animation for every way a stone can be obtained. */
-function showStoneReveal(stone, spinLabel, thenScreen){
+/* ============================================================
+   (3.78) THE STONE REVEAL — the designer: "remove the jackpot emoticon, and
+   instead show a banner with the different elemental symbols … cycling in
+   a circle in the centre of the screen while the random skills load and the
+   file is saved. then, when the save and loading is ready, flash from the
+   centre of the screen in the middle of the ring of cycling element
+   symbols, into whiteout, into the glowing element with the stone name.
+   give the glow according to the tier of the stone. When multi-select … of
+   10 or more is purchased, organise and present the stones in tiers
+   starting from the bottom of the page. play the appropriate fanfare once
+   per tier, and flash the stones one by one from left to right, going past
+   the edge of the screen if too many belong in the tier. allow the tier
+   row to be scrolled left and right … progress from bottom to top of the
+   page, with ultra tier at the top."
+   stoneRing: the twelve symbols turning round the middle of the screen,
+   each brightening in turn, while the save is made (stoneSaveReveal).
+   revealStones: the flash out of its middle into white, then the stones as
+   their elements' symbols, glowing in their tier's colour (TIER_GLOW).
+   One: its name and what it does. Two to nine: one row, lowest tier first,
+   flashing in one by one — each tier's fanfare as its first stone comes.
+   Ten or more: a row for each tier from the bottom of the screen up, Ultra
+   at the top; its fanfare once as the row begins, its stones flashing in
+   from left to right, the row scrolling on past the edge (and sideways by
+   hand). Skip shows them all at once.
+   ============================================================ */
+const REVEAL = { ringMs:1100, flashMs:520, whiteMs:650, cardMs:150, rowGap:420, many:10 };
+const REVEAL_TIERS = ['low', 'mid', 'high', 'veryhigh', 'ultra'];
+const revealWait = ms=> new Promise(r=> setTimeout(r, ms));
+function stoneRevealCss(){
+  if(document.getElementById('stoneRevealCss')) return;
+  const st = document.createElement('style');
+  st.id = 'stoneRevealCss';
+  st.textContent = `
+  .sr-ov{ position:fixed; inset:0; z-index:85; overflow:hidden; background:radial-gradient(circle at center,#fff7e0,#d9cdae); }
+  .sr-stage{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; transition:opacity .2s; }
+  .sr-ov.shown .sr-stage{ opacity:0; pointer-events:none; }
+  .sr-ring{ position:absolute; left:50%; top:50%; width:0; height:0; --r:min(34vw, 132px); animation:srTurn 3.6s linear infinite; }
+  .sr-sym{ position:absolute; left:0; top:0; width:0; height:0; transform:rotate(var(--a)) translateY(calc(-1 * var(--r))); }
+  .sr-up{ position:absolute; left:-23px; top:-23px; width:46px; height:46px; animation:srTurnBack 3.6s linear infinite; }
+  .sr-up .elem-ic{ display:block; animation:srPulse 1.2s ease-in-out infinite; animation-delay:var(--d); }
+  .sr-label{ position:relative; z-index:1; font-family:'Baloo 2',cursive; font-weight:800; font-size:20px; color:var(--ink-soft); text-align:center; max-width:46vw; }
+  @keyframes srTurn{ to{ transform:rotate(360deg); } }
+  @keyframes srTurnBack{ from{ transform:rotate(calc(-1 * var(--a))); } to{ transform:rotate(calc(-1 * var(--a) - 360deg)); } }
+  @keyframes srPulse{ 0%,100%{ transform:scale(.9); filter:brightness(.92); } 50%{ transform:scale(1.32); filter:brightness(1.15) drop-shadow(0 0 8px rgba(255,255,255,.95)); } }
+  .sr-flash{ position:absolute; left:50%; top:50%; width:24px; height:24px; margin:-12px 0 0 -12px; border-radius:50%; background:#fff;
+    opacity:0; transform:scale(0); pointer-events:none; z-index:5; }
+  .sr-ov.flash .sr-flash{ animation:srFlash .52s cubic-bezier(.5,0,.9,.45) forwards; }
+  .sr-ov.white-out .sr-flash{ animation:srWhite .65s ease-out forwards; }
+  @keyframes srFlash{ 0%{ opacity:.95; transform:scale(0); } 100%{ opacity:1; transform:scale(150); } }
+  @keyframes srWhite{ from{ opacity:1; transform:scale(150); } to{ opacity:0; transform:scale(150); } }
+  .sr-out{ position:absolute; inset:0; z-index:3; display:none; flex-direction:column; align-items:center; justify-content:center; padding:18px 12px; box-sizing:border-box; }
+  .sr-ov.shown .sr-out{ display:flex; }
+  .sr-gem{ position:relative; display:inline-flex; align-items:center; justify-content:center; isolation:isolate; }
+  .sr-gem.tier-low{ --glow:${TIER_GLOW.low}; } .sr-gem.tier-mid{ --glow:${TIER_GLOW.mid}; } .sr-gem.tier-high{ --glow:${TIER_GLOW.high}; }
+  .sr-gem.tier-veryhigh{ --glow:${TIER_GLOW.veryhigh}; } .sr-gem.tier-ultra{ --glow:${TIER_GLOW.ultra}; }
+  .sr-gem::before{ content:''; position:absolute; inset:-34%; border-radius:50%; z-index:-1; background:radial-gradient(circle closest-side, var(--glow), transparent);
+    animation:srHalo 2.4s ease-in-out infinite; }
+  .sr-gem.tier-low::before, .sr-gem.tier-mid::before{ opacity:.55; animation:none; }
+  .sr-gem > .elem-ic{ filter:drop-shadow(0 0 6px var(--glow)) drop-shadow(0 0 16px var(--glow)); }
+  .sr-gem.tier-low > .elem-ic, .sr-gem.tier-mid > .elem-ic{ filter:drop-shadow(0 0 4px var(--glow)); }
+  .sr-gem.tier-veryhigh::after, .sr-gem.tier-ultra::after{ content:''; position:absolute; inset:-62%; border-radius:50%; z-index:-2;
+    background:repeating-conic-gradient(from 0deg, var(--glow) 0deg 5deg, transparent 5deg 20deg);
+    -webkit-mask:radial-gradient(circle, #000 24%, transparent 68%); mask:radial-gradient(circle, #000 24%, transparent 68%);
+    opacity:.5; animation:srRays 10s linear infinite; }
+  .sr-gem.tier-ultra::after{ opacity:.75; animation-duration:5.5s; }
+  @keyframes srHalo{ 0%,100%{ transform:scale(.92); opacity:.78; } 50%{ transform:scale(1.08); opacity:1; } }
+  @keyframes srRays{ to{ transform:rotate(360deg); } }
+  .sr-one{ display:flex; flex-direction:column; align-items:center; text-align:center; gap:2px; }
+  .sr-one .sr-gem{ margin:34px 0 30px; }
+  .sr-name{ font-family:'Baloo 2',cursive; font-weight:800; font-size:24px; margin-top:6px; }
+  .sr-meta{ font-size:12px; color:var(--ink-soft); font-weight:700; margin-top:8px; }
+  .sr-one .btn, .sr-actions .btn{ width:auto; padding:12px 30px; }
+  .sr-one .btn{ margin-top:14px; }
+  .sr-many{ width:100%; max-width:760px; height:100%; display:flex; flex-direction:column; gap:6px; }
+  .sr-many.few{ height:auto; }
+  .sr-title{ font-family:'Baloo 2',cursive; font-weight:800; font-size:20px; text-align:center; color:var(--ink); }
+  .sr-rows{ flex:1; min-height:0; display:flex; flex-direction:column-reverse; justify-content:flex-start; gap:4px; overflow-y:auto; }
+  .sr-row{ opacity:0; transition:opacity .25s; }
+  .sr-row.lit{ opacity:1; }
+  .sr-row-head{ display:flex; align-items:center; gap:6px; font-family:'Baloo 2',cursive; font-weight:800; font-size:14px; color:var(--ink); padding:0 6px; }
+  .sr-row-head span{ color:var(--ink-soft); font-size:12px; }
+  .sr-strip{ display:flex; gap:8px; overflow-x:auto; overflow-y:hidden; padding:10px 8px 12px; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
+  .sr-strip.wrap{ flex-wrap:wrap; justify-content:center; overflow:visible; }
+  .sr-card{ position:relative; flex:0 0 auto; width:88px; display:flex; flex-direction:column; align-items:center; gap:7px; padding:9px 4px 7px; box-sizing:border-box;
+    border-radius:14px; background:rgba(255,253,246,.78); box-shadow:0 2px 8px rgba(60,40,10,.14); opacity:0; transform:scale(.4); }
+  .sr-card.on{ animation:srCardIn .45s cubic-bezier(.2,1.4,.4,1) forwards; }
+  .sr-card.on::after{ content:''; position:absolute; inset:0; border-radius:14px; background:#fff; pointer-events:none; animation:srCardFlash .45s ease-out forwards; }
+  .sr-card.now{ opacity:1; transform:none; animation:none; }
+  .sr-card.now::after{ display:none; }
+  .sr-card .sr-gem::before{ inset:-28%; }
+  .sr-cname{ font-family:'Baloo 2',cursive; font-weight:800; font-size:11px; line-height:1.15; text-align:center; color:var(--ink); min-height:25px; }
+  .sr-cname small{ display:block; font-family:'Nunito',sans-serif; font-size:9px; font-weight:800; color:var(--ink-soft); }
+  @keyframes srCardIn{ from{ opacity:0; transform:scale(.4); } to{ opacity:1; transform:scale(1); } }
+  @keyframes srCardFlash{ from{ opacity:1; } to{ opacity:0; } }
+  .sr-actions{ display:flex; gap:10px; justify-content:center; padding:6px 0 4px; }
+  @media (prefers-reduced-motion: reduce){
+    .sr-ring, .sr-up, .sr-up .elem-ic, .sr-gem::before, .sr-gem::after{ animation:none !important; }
+  }`;
+  document.head.appendChild(st);
+}
+function stoneRing(label){
+  stoneRevealCss();
   playSfx('stone_roll');
-  const t = stoneTierDef(stone.tier);
   const ov = document.createElement('div');
-  ov.style.cssText='position:fixed;inset:0;z-index:85;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at center,#fff7e0,#d9cdae);gap:14px;';
-  ov.innerHTML = `<div id="rollSpin" style="font-size:64px;">🎰</div>
-    <div id="rollText" style="font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;color:var(--ink-soft);">${escapeHtml(spinLabel||'Rolling…')}</div>`;
+  ov.className = 'sr-ov';
+  const types = Object.keys(TYPE_COLORS).filter(t=> ELEMENT_SYMBOLS[t]);    // the twelve
+  const n = types.length;
+  ov.innerHTML = `<div class="sr-stage">
+      <div class="sr-ring">${types.map((t, i)=> `<span class="sr-sym" style="--a:${(360 / n * i).toFixed(2)}deg;"><span class="sr-up" style="--d:${(-(n - i) * 1.2 / n).toFixed(2)}s;">${elemIcon(t, 46, { title:false })}</span></span>`).join('')}</div>
+      <div class="sr-label">${escapeHtml(label || 'Rolling…')}</div>
+    </div>
+    <div class="sr-out"></div>
+    <div class="sr-flash"></div>`;
   document.body.appendChild(ov);
-  setTimeout(()=>{
-    fadeOutSfx('stone_roll', 500);      // spin sound eases out as the result lands
-    playStoneSfx(stone.tier);
-    ov.querySelector('#rollSpin').textContent = '💎';
-    ov.querySelector('#rollSpin').style.filter = `drop-shadow(0 0 18px ${TYPE_COLORS[stone.type]})`;
-    ov.querySelector('#rollText').outerHTML = `
-      <div style="text-align:center;">
-        <div class="stone-tier-big tier-${stone.tier}">${t.label}</div>
-        <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:24px;margin-top:6px;">${escapeHtml(stone.name)}</div>
-        <div style="margin-top:6px;"><span class="type-badge" style="background:${TYPE_COLORS[stone.type]}">${stone.type}</span></div>
-        <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;">${t.mult!=null?t.mult+'× ATK':'Status move'} · ${t.words} words</div>
-      </div>
-      <button class="btn btn-primary" id="rollOk" style="width:auto;padding:12px 30px;margin-top:14px;">Nice!</button>`;
-    ov.querySelector('#rollOk').addEventListener('click', ()=>{
-      if(ov.parentNode) document.body.removeChild(ov);
-      if(thenScreen==='shop'){ ui.shopNote = 'Sent to Storage — open it to equip.'; renderShop(); }
-      else if(thenScreen==='storage'){ ui.storageFrom='shop'; ui.storageTab='items'; go('storage'); }
-      /* (3.65) the new stone, on storage's Items page — gone to properly: it
-         used to be drawn over the shop with the screen still the shop's */
-      else { ui.storageTab='items'; if(ui.screen === 'shop') ui.storageFrom='shop'; if(ui.screen === 'storage') renderStorage(); else go('storage'); }
-    });
-  }, 1100);
+  return { el:ov, t0:Date.now() };
+}
+function closeRing(ring){
+  if(ring && ring.el && ring.el.parentNode) ring.el.parentNode.removeChild(ring.el);
+  fadeOutSfx('stone_roll', 250);
+}
+/* The stones are in state; the ring turns while the save is made. A save
+   that fails takes them back (`rollback`). */
+async function stoneSaveReveal(stones, label, rollback, thenScreen){
+  const ring = stoneRing(label);
+  const ok = await saveProfile({ awaitCloud:true });
+  if(!ok){ closeRing(ring); if(rollback) rollback(); showSyncFailure(); return false; }
+  revealStones(stones, { ring, thenScreen });
+  return true;
+}
+/* Shared reveal for every way a stone can be obtained (already saved). */
+function showStoneReveal(stone, spinLabel, thenScreen){ return revealStones([stone], { label:spinLabel, thenScreen }); }
+function srPlus(st){ return stonePlus(st) ? `<span class="plus-mark">${UPGRADE_MARKS[stonePlus(st)].trim()}</span>` : ''; }
+function srOneHtml(stone){
+  const t = stoneTierDef(stone.tier);
+  return `<div class="sr-one">
+      <div class="sr-gem tier-${stone.tier}">${elemIcon(stone.type, 128, { title:false })}</div>
+      <div class="stone-tier-big tier-${stone.tier}">${t.label}</div>
+      <div class="sr-name">${escapeHtml(stone.name)}${srPlus(stone)}</div>
+      <div><span class="type-badge" style="background:${TYPE_COLORS[stone.type] || '#888'}">${escapeHtml(stone.type)}</span></div>
+      <div class="sr-meta">${t.mult != null ? t.mult + '× ATK' : 'Status move'} · ${t.words} words</div>
+      <button class="btn btn-primary" id="rollOk">Nice!</button>
+    </div>`;
+}
+function srCardHtml(st){
+  return `<div class="sr-card" data-tier="${st.tier}"><span class="sr-gem tier-${st.tier}">${elemIcon(st.type, 54, { title:false })}</span>
+    <span class="sr-cname">${escapeHtml(st.name)}${srPlus(st)}<small>${escapeHtml(st.type)}</small></span></div>`;
+}
+function srSort(stones){
+  const types = Object.keys(TYPE_COLORS);
+  return stones.slice().sort((a, b)=> (REVEAL_TIERS.indexOf(a.tier) - REVEAL_TIERS.indexOf(b.tier)) || (types.indexOf(a.type) - types.indexOf(b.type)));
+}
+function srManyHtml(sorted, many){
+  const actions = `<div class="sr-actions"><button class="btn btn-ghost" id="srSkip">Skip</button><button class="btn btn-primary" id="rollOk" style="display:none;">Nice!</button></div>`;
+  const title = `<div class="sr-title">${sorted.length} skill stones!</div>`;
+  if(!many) return `<div class="sr-many few">${title}<div class="sr-strip wrap">${sorted.map(srCardHtml).join('')}</div>${actions}</div>`;
+  const rows = REVEAL_TIERS.map(t=>{
+    const of = sorted.filter(st=> st.tier === t);
+    if(!of.length) return '';
+    return `<div class="sr-row" data-tier="${t}"><div class="sr-row-head">${gemIcon(t, 16)} ${escapeHtml(stoneTierDef(t).label)} <span>×${of.length}</span></div>
+      <div class="sr-strip">${of.map(srCardHtml).join('')}</div></div>`;
+  }).join('');
+  return `<div class="sr-many">${title}<div class="sr-rows">${rows}</div>${actions}</div>`;
+}
+async function revealStones(stones, opts){
+  opts = opts || {};
+  stones = (stones || []).filter(Boolean);
+  if(!stones.length) return;
+  const ring = opts.ring || stoneRing(opts.label);
+  const ov = ring.el;
+  await revealWait(Math.max(0, REVEAL.ringMs - (Date.now() - ring.t0)));
+  fadeOutSfx('stone_roll', 500);                   // the spin eases out as the flash comes
+  ov.classList.add('flash');                         // out of the ring's middle, into white
+  await revealWait(REVEAL.flashMs);
+  const out = ov.querySelector('.sr-out');
+  const finish = ()=>{
+    if(ov.parentNode) ov.parentNode.removeChild(ov);
+    const then = opts.thenScreen;
+    if(then === 'shop'){ ui.shopNote = stones.length > 1 ? `${stones.length} stones sent to Storage — open it to equip.` : 'Sent to Storage — open it to equip.'; renderShop(); }
+    else if(then === 'storage'){ ui.storageFrom = 'shop'; ui.storageTab = 'items'; go('storage'); }
+    /* (3.65) the new stone, on storage's Items page */
+    else { ui.storageTab = 'items'; if(ui.screen === 'shop') ui.storageFrom = 'shop'; if(ui.screen === 'storage') renderStorage(); else go('storage'); }
+  };
+  if(stones.length === 1){
+    out.innerHTML = srOneHtml(stones[0]);
+    ov.classList.add('shown', 'white-out');          // the white fades, the stone glowing in it
+    playStoneSfx(stones[0].tier);
+    out.querySelector('#rollOk').addEventListener('click', finish);
+    return;
+  }
+  const sorted = srSort(stones), many = stones.length >= REVEAL.many;
+  out.innerHTML = srManyHtml(sorted, many);
+  ov.classList.add('shown', 'white-out');
+  const skip = out.querySelector('#srSkip'), okBtn = out.querySelector('#rollOk');
+  okBtn.addEventListener('click', finish);
+  let skipped = false;
+  skip.addEventListener('click', ()=>{ skipped = true; });
+  const show = (card, strip)=>{
+    card.classList.add(skipped ? 'now' : 'on');
+    if(strip && strip.scrollWidth > strip.clientWidth){
+      const want = card.offsetLeft + card.offsetWidth + 12 - strip.clientWidth;
+      if(want > strip.scrollLeft) strip.scrollLeft = want;     // on past the edge
+    }
+  };
+  await revealWait(Math.round(REVEAL.whiteMs * 0.6));
+  if(many){
+    for(const row of out.querySelectorAll('.sr-row')){              // low first: the bottom row
+      if(!ov.parentNode) return;
+      row.classList.add('lit');
+      if(!skipped) playStoneSfx(row.dataset.tier);                    // its fanfare, once
+      const strip = row.querySelector('.sr-strip');
+      for(const card of strip.querySelectorAll('.sr-card')){
+        if(!skipped) await revealWait(REVEAL.cardMs);
+        show(card, strip);
+      }
+      if(!skipped) await revealWait(REVEAL.rowGap);
+    }
+  } else {
+    const strip = out.querySelector('.sr-strip');
+    let tier = null;
+    for(const card of strip.querySelectorAll('.sr-card')){
+      if(!ov.parentNode) return;
+      if(card.dataset.tier !== tier){ tier = card.dataset.tier; if(!skipped){ playStoneSfx(tier); await revealWait(220); } }
+      if(!skipped) await revealWait(REVEAL.cardMs + 90);
+      show(card, null);
+    }
+  }
+  skip.style.display = 'none';
+  okBtn.style.display = '';
 }
 
 /* Elite spin: 5 Elite Skill Tokens, guaranteed High or better. */
@@ -2571,17 +2770,7 @@ async function doEliteRoll(){
   state.inventory.eliteTokens -= ELITE_ROLL_COST;
   const stone = newEliteStone();
   state.moveStones.push(stone);
-
-  const ov = showSyncingOverlay('Syncing…');
-  const ok = await saveProfile({ awaitCloud:true });
-  hideSyncingOverlay(ov);
-  if(!ok){
-    state.inventory.eliteTokens = beforeElite;
-    state.moveStones.pop();
-    showSyncFailure();
-    return;
-  }
-  showStoneReveal(stone, 'Elite spin!');
+  await stoneSaveReveal([stone], 'Elite spin!', ()=>{ state.inventory.eliteTokens = beforeElite; state.moveStones.pop(); });   // (3.78) the ring turns while it saves
 }
 
 /* Shop: spend Elite Skill Tokens on a guaranteed, self-chosen stone. */
@@ -2625,7 +2814,7 @@ function pickShopStone(tierId, cost){
     <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:3px 0 12px;">Costs ${cost} Elite Skill Tokens.</div>
     ${stoneTypePool().map(tp=>`
       <button class="btn btn-ghost shop-opt" data-type="${tp}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;">
-        <span class="type-badge" style="background:${TYPE_COLORS[tp]};">${tp}</span>
+        ${elemIcon(tp, 24)}<span class="type-badge" style="background:${TYPE_COLORS[tp]};">${tp}</span>
         <span style="flex:1;font-weight:700;">${escapeHtml(stoneName(tp,tierId))}</span>
       </button>`).join('')}
     <button class="btn btn-ghost" id="pickCancel">Cancel</button>
@@ -2642,17 +2831,7 @@ function pickShopStone(tierId, cost){
     state.inventory.eliteTokens -= cost;
     const stone = { uid:'s'+Date.now()+Math.floor(Math.random()*1000), tier:tierId, type, name:stoneName(type,tierId) };
     state.moveStones.push(stone);
-
-    const sov = showSyncingOverlay('Syncing…');
-    const ok = await saveProfile({ awaitCloud:true });
-    hideSyncingOverlay(sov);
-    if(!ok){
-      state.inventory.eliteTokens = beforeElite;
-      state.moveStones.pop();
-      showSyncFailure();
-      return;
-    }
-    showStoneReveal(stone, 'Purchased!');
+    await stoneSaveReveal([stone], 'Purchased!', ()=>{ state.inventory.eliteTokens = beforeElite; state.moveStones.pop(); });   // (3.78)
   }));
 }
 

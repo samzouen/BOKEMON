@@ -89,7 +89,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.77';
+const GAME_VERSION = '3.78';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -763,11 +763,12 @@ function payRecycle(tier, sign){
    element type of the passive."
    - Each element has one for a monster's Very High slot and one for its
      Ultra slot. A monster holds one of each, of any of its own elements.
-   - Forged from High stones of that element in storage (the plain ones go
-     first): 5 for a Very High slot passive, 7 for an Ultra slot one. It
-     waits in the bag until it is put on.
-   - (3.76) Or bought for Selection Tokens: 2 Very High Tokens for a Very
-     High slot one, 1 Ultra Token for an Ultra slot one (ELEM_PASSIVE_TOKENS).
+   - Forged from stones of that element in storage (the plain ones go
+     first) — (3.78) of its own tier: 2 Very High stones for a Very High
+     slot passive, 1 Ultra stone for an Ultra slot one (5 and 7 High stones
+     until 3.77). It waits in the bag until it is put on.
+   - (3.76) Or bought for Selection Tokens — (3.78) at the shop's own rate,
+     3 a stone: 6 Very High Tokens, or 3 Ultra Tokens (ELEM_PASSIVE_TOKENS).
    - Taken off with a Void Stone and silver ("removing these with a void
      stone also costs silver medals"); it goes back to the bag.
    - (3.76) A Fairy's slot holds two: its Fairy one first, and one more of
@@ -837,8 +838,10 @@ const ELEMENT_PASSIVES = {
               ultra:{ name:'Unstable Magic', sym:'🔮',
                       text:'Every buff or debuff — either side\'s — swept away (a Diamond Dust, a Nova), kept from forming by a Diamond Dust, or running out makes its magic burst: <b>0.2× its ATK</b> to every enemy for each one. So their dust sweeping your effects pays them back, and a buff of yours their dust stops still bursts. On the field or off it; no Diamond Dust needed. Damage buffs and cuts count.' } },
 };
-const ELEM_PASSIVE_COST = { vh:5, ultra:7 };                  // High stones of its element
-const ELEM_PASSIVE_TOKENS = { vh:['veryhigh', 2], ultra:['ultra', 1] };   // (3.76) …or Selection Tokens: "2 very high tokens", "1 ultra token"
+/* (3.78) the designer: "change the cost to 2 same-element very high and 1
+   same element ultra" — [tier, how many] of its element's stones */
+const ELEM_PASSIVE_COST = { vh:['veryhigh', 2], ultra:['ultra', 1] };
+const ELEM_PASSIVE_TOKENS = { vh:['veryhigh', 6], ultra:['ultra', 3] };   // …or Selection Tokens of that tier, 3 a stone (3.76: 2 and 1)
 const ELEM_FORGE_FROM = 6;   // (3.75) Selene's shop, in the Time Rift (it was Region 5's for now, 3.67–3.74)
 const ELEM_PASSIVE_REMOVE = { voidStones:1, silver:10 };
 const ELEM_PASSIVE_SLOTS = { vh:'Very High', ultra:'Ultra' };
@@ -2080,6 +2083,68 @@ function typeBadges(species){
     `<span class="type-badge" style="background:${TYPE_COLORS[t]||'#888'}">${t}</span>`
   ).join(' ');
 }
+/* ============================================================
+   (3.78) THE ELEMENT SYMBOLS — the designer's chart of every element's
+   symbol (assets/ui/stone elements.png: 1500 × 1328, five across, four
+   down; each a circle about 201 px wide). ELEMENT_SYMBOLS: each one's top
+   left corner in the picture, measured. Beyond the twelve elements:
+   Universal (for talents, and NPC-only monsters with no type, later; the
+   chosen-skill wares, tinted by their tier), Mystery (the random stones),
+   and five waiting unused (Chaos, Insect, Eye, Mountain, Poison, Ice).
+   ============================================================ */
+const ELEMENT_SHEET = { src:'assets/ui/stone%20elements.png', w:1500, h:1328, cell:201 };
+const ELEMENT_SYMBOLS = {
+  Grass:[60, 52],     Fire:[344, 54],    Water:[660, 54],   Electric:[956, 54], Universal:[1246, 53],
+  Physical:[59, 383], Chaos:[348, 381],  Steel:[658, 382],  Dragon:[956, 382],  Fairy:[1245, 382],
+  Insect:[55, 707],   Flying:[346, 706], Ghost:[659, 705],  Psychic:[957, 707], Eye:[1246, 710],
+  Mountain:[50, 1030], Ground:[345, 1027], Poison:[665, 1029], Ice:[962, 1029], Mystery:[1245, 1029],
+};
+/* Each tier's colour (the gems', index.html .gem.tier-*), and its glow. */
+const TIER_TINT = { low:'#9aa8b0', mid:'#3fae86', high:'#3b8ec9', veryhigh:'#e0a83c', ultra:'#e0553f' };
+const TIER_GLOW = { low:'rgba(154,168,176,.8)', mid:'rgba(63,174,134,.9)', high:'rgba(59,142,201,.95)', veryhigh:'rgba(224,168,60,1)', ultra:'rgba(224,85,63,1)' };
+let _elemCssDone = false;
+function elemCss(){
+  if(_elemCssDone || typeof document === 'undefined' || !document.head) return;
+  _elemCssDone = true;
+  const st = document.createElement('style');
+  st.id = 'elemCss';
+  st.textContent = `
+    .elem-ic{ display:inline-block; vertical-align:middle; background-repeat:no-repeat; border-radius:50%; flex:0 0 auto; }
+    .elem-tint{ position:relative; overflow:hidden; isolation:isolate; background:var(--tint); }
+    .elem-tint > i{ position:absolute; inset:0; background-repeat:no-repeat; mix-blend-mode:multiply; }
+    .type-icons{ display:inline-flex; align-items:center; gap:3px; vertical-align:middle; }
+    .elem-elite{ animation:elemElite 2.6s ease-in-out infinite; }
+    @keyframes elemElite{ 0%,100%{ filter:drop-shadow(0 0 4px rgba(224,168,60,.95)) drop-shadow(0 0 9px rgba(224,168,60,.6)); }
+      50%{ filter:drop-shadow(0 0 5px rgba(224,85,63,1)) drop-shadow(0 0 12px rgba(224,85,63,.7)); } }
+    @media (prefers-reduced-motion: reduce){ .elem-elite{ animation:none; filter:drop-shadow(0 0 5px rgba(224,120,60,.95)); } }`;
+  document.head.appendChild(st);
+}
+/* One symbol, `px` wide. opts: tint (a colour for its disc — the Universal
+   one is a black star on a pale disc, so it takes any tier's colour), glow
+   (a colour), cls, title (false for none). */
+function elemIcon(type, px, opts){
+  opts = opts || {};
+  elemCss();
+  const p = ELEMENT_SYMBOLS[type] || ELEMENT_SYMBOLS.Mystery;
+  const S = ELEMENT_SHEET, size = px || 20, k = size / S.cell;
+  const bg = `background-image:url('${S.src}');background-size:${(S.w * k).toFixed(2)}px ${(S.h * k).toFixed(2)}px;background-position:${(-p[0] * k).toFixed(2)}px ${(-p[1] * k).toFixed(2)}px;`;
+  const glow = opts.glow ? `filter:drop-shadow(0 0 ${Math.max(2, Math.round(size * 0.12))}px ${opts.glow});` : '';
+  const title = opts.title === false ? '' : ` title="${escapeHtml(opts.title || type)}"`;
+  const cls = 'elem-ic' + (opts.tint ? ' elem-tint' : '') + (opts.cls ? ' ' + opts.cls : '');
+  if(opts.tint) return `<span class="${cls}" style="width:${size}px;height:${size}px;--tint:${opts.tint};${glow}"${title}><i style="${bg}"></i></span>`;
+  return `<span class="${cls}" style="width:${size}px;height:${size}px;${bg}${glow}"${title}></span>`;
+}
+/* A monster's elements as their symbols (the party, storage). */
+function typeIcons(species, px){
+  const sp = SPECIES[species];
+  return sp ? `<span class="type-icons">${sp.types.map(t=> elemIcon(t, px || 20)).join('')}</span>` : '';
+}
+/* The chosen-skill wares' symbol: the Universal one, in its tier's colour. */
+function tierSelectIcon(tier, px){
+  return elemIcon('Universal', px || 44, { tint:TIER_TINT[tier] || TIER_TINT.high, glow:(tier === 'veryhigh' || tier === 'ultra') ? TIER_GLOW[tier] : null, title:false });
+}
+/* The random stones' symbol: the Mystery one; an elite one glows gold and red. */
+function mysteryIcon(px, elite){ return elemIcon('Mystery', px || 44, { cls:elite ? 'elem-elite' : '', title:false }); }
 /* The ✦ marks a crowned monster without ever touching its nickname. */
 function crownMark(m){ return isCrowned(m) ? crownIcon(15, 'crown-mark') : ''; }
 /* assets/ui/crown.png, glowing; falls back to the emoji until art exists. */

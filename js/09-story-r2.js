@@ -15,8 +15,8 @@ const SHOP_PRICES = {
   protein:      { cur:'silver', cost:10 },
   eliteStone:   { cur:'gold',   cost:25 },
   highSkill:    { cur:'gold',   cost:10 },
-  veryHighSkill:{ cur:'gold',   cost:50 },
-  ultraSkill:   { cur:'gold',   cost:100 },
+  veryHighSkill:{ cur:'gold',   cost:25 },    // (3.78) "reduce the cost of very high quality select to 25 gold" (50 before)
+  ultraSkill:   { cur:'gold',   cost:70 },    // (3.78) "…and ultra select to 70" (100 before)
   crown:        { cur:'gold',   cost:100 },
   goldMedal:    { cur:'tokens', cost:15 },   // Region 5+: buy gold with tokens
   waterStone:   { cur:'tokens', cost:100 },  // Region 4 only, once ever
@@ -106,18 +106,21 @@ function renderShop(){
      `from` is the earliest region that carries the item. */
   const wares = [
     { id:'skillToken',    from:1, icon:tokenIcon(44), name:'Skill Tokens ×2',        desc:'Each Bronze Medal buys TWO tokens. Spins cost 5.', qty:true },
-    { id:'randomStone',   from:1, icon:gemIcon('mid'), name:'Random Skill Stone', desc:'One spin, right now. Any tier, any type.' },
+    /* (3.78) the element symbols (02-core.js): Mystery for the random stones —
+       the elite one glowing gold and red — and the Universal one, in its
+       tier's colour, for the skills you choose */
+    { id:'randomStone',   from:1, icon:mysteryIcon(44), name:'Random Skill Stone', desc:'Any tier, any type — one, or many at once.' },
     { id:'protein',       from:2, icon:'💪', name:'Protein Supplement',     desc:'Permanently raises one monster\'s stats.' },
-    { id:'eliteStone',    from:2, icon:gemIcon('veryhigh'), name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
-    { id:'highSkill',     from:2, icon:gemIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
-    { id:'veryHighSkill', from:3, icon:gemIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
-    { id:'ultraSkill',    from:4, icon:gemIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
+    { id:'eliteStone',    from:2, icon:mysteryIcon(44, true), name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
+    { id:'highSkill',     from:2, icon:tierSelectIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
+    { id:'veryHighSkill', from:3, icon:tierSelectIcon('veryhigh'), name:'Very High Quality Skill', desc:'Pick any Very High skill yourself.', pick:'veryhigh' },
+    { id:'ultraSkill',    from:4, icon:tierSelectIcon('ultra'), name:'Ultra Quality Skill', desc:'Pick any Ultra skill yourself.', pick:'ultra' },
     { id:'crown',         from:4, icon:crownIcon(50), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
     { id:'voidStone',     from:3, icon:voidIcon(44), name:'Void Stone', desc:'Draws a learned skill back out of a monster.' },
     { id:'goldMedal',     from:5, icon:'🥇', name:'Gold Medal', desc:'Trade tickets for gold.', qty:true },
     /* (3.67) element passives, forged from High stones of one element — (3.75)
        Selene's, in the Time Rift (Region 5's for now, 3.67–3.74) */
-    { id:'passiveForge',  from:ELEM_FORGE_FROM, icon:'🌟', name:'Passive Upgrades', desc:'Forge an element passive from its High stones.', forge:true },
+    { id:'passiveForge',  from:ELEM_FORGE_FROM, icon:'🌟', name:'Passive Upgrades', desc:'Forge an element passive from its Very High or Ultra stones.', forge:true },
     /* Salvage out of the Vane Shear's hold: the last thing on the shelf, sold
        only aboard, and only ever one. */
     { id:'waterStone',    from:4, only:4, icon:uiIcon('water_stone',44,'💧'), name:'Water Stone',
@@ -128,13 +131,13 @@ function renderShop(){
   /* A ware pinned to one region is not merely out of stock elsewhere — it is
      not on the shelf at all, and should not be shown greyed out. */
   box.innerHTML = wares.filter(w=> !w.only || region === w.only).map(w=>{
-    if(w.forge){                                    // (3.67) paid in High stones, not medals
+    if(w.forge){                                    // (3.67) paid in stones, not medals — (3.78) Very High and Ultra ones, or tokens
       const stocked = region >= w.from;
-      const can = stocked && Object.keys(ELEMENT_PASSIVES).some(el=> highStonesOf(el).length >= ELEM_PASSIVE_COST.vh);
+      const can = stocked && forgeCanAny();
       return `<div class="ware ${stocked ? (can ? '' : 'cant') : 'oos'}" ${stocked ? `data-ware="${w.id}"` : ''}>
         <div class="ware-icon">${w.icon}</div>
         <div class="ware-name">${escapeHtml(w.name)}</div>
-        ${stocked ? `<div class="ware-price">${gemIcon('high', 16)} ${ELEM_PASSIVE_COST.vh} / ${ELEM_PASSIVE_COST.ultra}</div>` : `<div class="ware-oos">Out of stock</div>`}
+        ${stocked ? `<div class="ware-price">${gemIcon(ELEM_PASSIVE_COST.vh[0], 16)} ${ELEM_PASSIVE_COST.vh[1]} / ${gemIcon(ELEM_PASSIVE_COST.ultra[0], 16)} ${ELEM_PASSIVE_COST.ultra[1]}</div>` : `<div class="ware-oos">Out of stock</div>`}
       </div>`;
     }
     const pr = SHOP_PRICES[w.id];
@@ -154,6 +157,7 @@ function renderShop(){
   box.querySelectorAll('[data-ware]').forEach(el=>el.addEventListener('click', ()=>{
     const w = wares.find(x=>x.id===el.dataset.ware);
     if(w.forge) return openPassiveForge();         // (3.67)
+    if(w.id === 'randomStone') return openStoneQtyPurchase(w);   // (3.78) one or many
     if(w.qty) return openQtyPurchase(w);
     if(w.pick) return openSkillPicker(w);
     return openSinglePurchase(w);
@@ -232,7 +236,66 @@ function openQtyPurchase(w){
   });
 }
 
-/* One-tap purchases: random stone, protein, elite stone. */
+/* (3.78) Random Skill Stones, one or many at once — the designer: "please
+   now include a multi-purchase of random skill stone which allows the
+   player to buy multiple copies at once". All are rolled and saved behind
+   the ring of the elements (stoneSaveReveal, 07-screens.js), then shown. */
+function openStoneQtyPurchase(w){
+  const pr = SHOP_PRICES[w.id];
+  const max = Math.floor(medalCount(pr.cur) / pr.cost);
+  let qty = max > 0 ? 1 : 0;
+  const ov = shopOverlay(pr.cur, `
+    <div class="qty-card">
+      <div class="ware-icon big">${w.icon}</div>
+      <div class="ware-name" style="font-size:19px;">${escapeHtml(w.name)}</div>
+      <div class="ware-desc" style="margin:6px 0 10px;">${escapeHtml(w.desc)}<br><b>${curIcon(pr.cur)} ${pr.cost} ${curName(pr.cur)}</b> each</div>
+      ${oddsTable()}
+      <div class="qty-row" style="margin-top:12px;">
+        <button class="qty-btn" id="qMinus">−</button>
+        <div class="qty-val" id="qVal">${qty}</div>
+        <button class="qty-btn" id="qPlus">+</button>
+        <button class="qty-btn wide" id="q10">10</button>
+        <button class="qty-btn wide" id="qMax">Max</button>
+      </div>
+      <div class="ware-desc" id="qTotal" style="margin-top:10px;"></div>
+      <button class="btn btn-primary" id="qBuy" style="margin-top:14px;" ${qty ? '' : 'disabled'}>Buy</button>
+      <button class="btn btn-ghost" id="qCancel" style="margin-top:8px;">Cancel</button>
+    </div>`);
+  const refresh = ()=>{
+    ov.querySelector('#qVal').textContent = qty;
+    ov.querySelector('#qTotal').innerHTML = qty
+      ? `Pay ${curIcon(pr.cur)} <b>${qty * pr.cost}</b> &nbsp;·&nbsp; <b>${qty}</b> stone${qty > 1 ? 's' : ''}`
+      : `Not enough ${escapeHtml(curName(pr.cur))}.`;
+    ov.querySelector('#qPlus').disabled = qty >= max;
+    ov.querySelector('#qMinus').disabled = qty <= 1;
+    ov.querySelector('#q10').disabled = max < 2;
+    ov.querySelector('#qMax').disabled = max < 2;
+    ov.querySelector('#qBuy').disabled = qty < 1;
+    ov.querySelector('#qBuy').textContent = qty > 1 ? `Buy ${qty}` : 'Buy';
+  };
+  refresh();
+  const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+  ov.querySelector('#qCancel').addEventListener('click', close);
+  ov.querySelector('#qMinus').addEventListener('click', ()=>{ if(qty > 1){ qty--; refresh(); } });
+  ov.querySelector('#qPlus').addEventListener('click', ()=>{ if(qty < max){ qty++; refresh(); } });
+  ov.querySelector('#q10').addEventListener('click', ()=>{ qty = Math.min(max, 10); refresh(); });
+  ov.querySelector('#qMax').addEventListener('click', ()=>{ qty = max; refresh(); });
+  ov.querySelector('#qBuy').addEventListener('click', async ()=>{
+    if(qty < 1 || medalCount(pr.cur) < qty * pr.cost) return;
+    const n = qty, snapshot = { inv:Object.assign({}, state.inventory), medals:Object.assign({}, state.medals), stones:state.moveStones.length };
+    if(!await spend(pr.cur, n * pr.cost)) return;
+    const stones = [];
+    for(let k = 0; k < n; k++) stones.push(newMoveStone());
+    state.moveStones.push(...stones);
+    close();
+    await stoneSaveReveal(stones, n > 1 ? `Rolling ${n}…` : 'Rolling…', ()=>{
+      state.inventory = snapshot.inv; state.medals = snapshot.medals; state.moveStones.length = snapshot.stones;
+    }, 'shop');
+  });
+}
+
+/* One-tap purchases: protein, elite stone, a crown… — (3.78) a stone's saved
+   behind the ring of the elements, as a random one's is. */
 function openSinglePurchase(w){
   const pr = SHOP_PRICES[w.id];
   const ov = shopOverlay(pr.cur, `
@@ -259,6 +322,10 @@ function openSinglePurchase(w){
     /* It came through here and nothing handed it over (before 2.76): the
        tokens went and no stone came. */
     else if(w.id==='waterStone'){ addStone('waterStone', 1); }
+    if(stone){
+      close();
+      return stoneSaveReveal([stone], 'Rolling…', ()=>{ state.inventory = snapshot.inv; state.medals = snapshot.medals; state.moveStones.length = snapshot.stones; }, 'shop');
+    }
     const sv = showSyncingOverlay('Syncing…');
     const ok = await saveProfile({ awaitCloud:true });
     hideSyncingOverlay(sv);
@@ -268,8 +335,7 @@ function openSinglePurchase(w){
       showSyncFailure(); return;
     }
     close();
-    if(stone) showStoneReveal(stone, 'Purchased!', 'shop');
-    else if(w.id==='crown'){ playSfx('evolution'); ui.shopNote='A Crown is yours. Use it from a monster\'s Stats page.'; renderShop(); }
+    if(w.id==='crown'){ playSfx('evolution'); ui.shopNote='A Crown is yours. Use it from a monster\'s Stats page.'; renderShop(); }
     else if(w.id==='waterStone'){ playSfx('stone_low'); ui.shopNote='The Water Stone is yours. Attach it from a Water monster\'s Stats page.'; renderShop(); }
     else if(w.id==='voidStone'){ playSfx('stone_low'); toast('Void Stone purchased!'); renderShop(); }
     else { playSfx('protein_use'); toast('Protein Supplement purchased!'); renderShop(); }
@@ -292,7 +358,7 @@ function openSkillPicker(w){
       <div class="pick-list">
         ${stoneTypePool().map(tp=>`
           <button class="pick-opt" data-type="${tp}">
-            <span class="type-badge" style="background:${TYPE_COLORS[tp]};">${tp}</span>
+            ${elemIcon(tp, 24)}<span class="type-badge" style="background:${TYPE_COLORS[tp]};">${tp}</span>
             <span class="pick-name">${escapeHtml(stoneName(tp,tier))}</span>
           </button>`).join('')}
       </div>
@@ -314,16 +380,12 @@ function openSkillPicker(w){
       else await spend(pr.cur, pr.cost);
       const stone = { uid:'s'+Date.now()+Math.floor(Math.random()*1000), tier, type, name };
       state.moveStones.push(stone);
-      const sv = showSyncingOverlay('Syncing…');
-      const ok = await saveProfile({ awaitCloud:true });
-      hideSyncingOverlay(sv);
-      if(!ok){
+      close();
+      await stoneSaveReveal([stone], 'Purchased!', ()=>{      // (3.78) behind the ring of the elements
         state.medals = snapshot.medals;
         if(sel) state.inventory.selTokens[sel] = snapshot.sel;
-        state.moveStones.pop(); showSyncFailure(); return;
-      }
-      close();
-      showStoneReveal(stone, 'Purchased!');
+        state.moveStones.pop();
+      });
     };
     if(!sel) return confirmDialogHtml(detail, ()=> buy('gold'));
     payChoiceDialog(detail, [

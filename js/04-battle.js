@@ -3321,7 +3321,7 @@ function openBorrowPicker(mon, plus, count, done){
           const d = veryHighDef(t, plus);
           const picked = chosen.includes(t);
           return `<button class="borrow-cell ${picked?'picked':''}" data-borrow="${t}">
-            <span class="gem tier-veryhigh" style="--g1:${TYPE_COLORS[t]};--g2:${TYPE_COLORS[t]};--g3:${TYPE_COLORS[t]};"></span>
+            ${elemIcon(t, 30, { title:false })}
             <span class="borrow-name">${escapeHtml(d?d.name:t)}</span>
           </button>`;
         }).join('')}
@@ -9392,7 +9392,7 @@ function renderBattle(){
           return `
           <button class="move-btn ${ok?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${ok?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
-            <div class="mv-name">${mv.available || mv.chargeMore || mv.spent || mv.forgotten || mv.taunted || mv.ogFull || mv.ogDone || mv.tried || mv.legacyGive ? escapeHtml(mv.name) : '???'}</div>
+            <div class="mv-name">${mv.isStone && mv.stoneType && ELEMENT_SYMBOLS[mv.stoneType] ? elemIcon(mv.stoneType, 16, { title:false }) + ' ' : ''}${mv.available || mv.chargeMore || mv.spent || mv.forgotten || mv.taunted || mv.ogFull || mv.ogDone || mv.tried || mv.legacyGive ? escapeHtml(mv.name) : '???'}</div>
             <div class="mv-meta">${mv.available ? moveMeta(mv, ctlMon) : (mv.chargeMore ? 'Full' : mv.silenced ? '🔇 Sealed by the distortion' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : mv.ogFull ? `Full · ATK +${Math.round(FOREST_GIFT.maxStacks * FOREST_GIFT.step * 100)}%` : mv.ogDone ? 'Grown this turn' : mv.tried ? 'Missed · next turn' : mv.legacyGive ? (mv.legacyWhy || 'Nobody to give to') : 'Locked')}</div>
           </button>`; })}
       </div>
@@ -9604,6 +9604,14 @@ function emoHtml(html){
 /* Pills built outside the labels, by key: their symbol. */
 const PILL_SYMBOL = { counterStack:'✋', sacredFlame:'🐦‍🔥', aftershock:'💥', overgrowth:'🍃', wrathStacks:'💢',
   windup:'⏳', meditate:'🧘', passive:'🌟' };
+/* (3.78) A Very High stone's own effect, drawn as its element's symbol (the
+   designer: "find other places to attach these element symbols to, such as
+   very high move buffs"): the buff it puts up, either side's, and the mark
+   it leaves (a chill, a seed, a Curse). A freeze, a stun, the Counter's
+   stacks keep their own, and so does a Deadly Curse (its voodoo doll, 3.70). Its card's
+   title too (pillTitleHtml, data-elem). */
+const PILL_ELEMENT = { overheat:'Fire', chill:'Water', leechSeed:'Grass', overcharge:'Electric', spikeArmour:'Ground', mirage:'Flying',
+  counter:'Physical', confusionField:'Psychic', curse:'Ghost', dragonDance:'Dragon', steelAegis:'Steel', diamondDust:'Fairy' };
 /* The turns a pill says it has after this one (its label, then a number), or
    null — a freeze and a blinding count theirs with this one in. */
 function pillTurnsAfter(key, full){
@@ -9634,7 +9642,9 @@ function symbolizePills(root){
     el.setAttribute('aria-label', full);
     if(el.style && el.style.textDecoration) el.classList.add('muted');
     el.style.textDecoration = '';
-    el.innerHTML = symHtml(sym);                      // (3.53) as this iPad can draw it; Dragon Dance, the dragon
+    const elx = PILL_ELEMENT[key] && sym !== '🪆' ? PILL_ELEMENT[key] : null;
+    if(elx){ el.classList.add('elem-pill'); el.dataset.elem = elx; }
+    el.innerHTML = elx ? elemIcon(elx, 18, { title:false }) : symHtml(sym);   // (3.53) as this iPad can draw it — (3.78) a Very High one, its element's symbol
     if(sub){ const sb = document.createElement('sub'); sb.textContent = sub; el.appendChild(sb); }
     if(pillTurnsAfter(key, full) === 0) el.classList.add('last');
   });
@@ -10106,8 +10116,8 @@ function pillTitleParts(key, el){
 }
 /* (3.53) …as HTML: its symbol drawn as the pill draws it. */
 function pillTitleHtml(key, el){
-  const t = pillTitleParts(key, el);
-  return `${symHtml(t.sym)} ${escapeHtml(t.rest)}`.trim();
+  const t = pillTitleParts(key, el), ex = el && el.dataset && el.dataset.elem;
+  return `${ex && ELEMENT_SYMBOLS[ex] ? elemIcon(ex, 18, { title:false }) : symHtml(t.sym)} ${escapeHtml(t.rest)}`.trim();   // (3.78) a Very High one's element
 }
 /* The turns a timed pill has after this one (its +1 grace taken off), said
    in words. A freeze and a blinding count their own way, and say so in their
