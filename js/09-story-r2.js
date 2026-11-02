@@ -77,13 +77,14 @@ function renderShop(){
   // aboard the Vane Shear the shop is the shipkeeper's corner of the chart room
   setScreenBg((state.progress.currentRegion === 4) ? 'battle_cabin_deck' : 'shop');
   $('#brandSub').textContent = 'Shop';
-  if(!ui.shopGreeting) ui.shopGreeting = shopGreeting();
+  const rift = state.progress.currentRegion === 6 && typeof r6ShopGreeting === 'function';   // (3.75) Selene's shop, in the Time Rift
+  if(!ui.shopGreeting) ui.shopGreeting = rift ? r6ShopGreeting() : shopGreeting();
   const m = state.medals || {bronze:0,silver:0,gold:0};
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← ${ui.walkBack ? 'Back' : 'Region'}</button>
 
     <div class="shop-keeper">
-      ${npcPortrait(state.progress.currentRegion===4 ? 'shipkeeper' : 'shopkeeper'+(state.progress.currentRegion||1),'🧑‍🌾',110,'transparent')}
+      ${npcPortrait(state.progress.currentRegion===4 ? 'shipkeeper' : 'shopkeeper'+(state.progress.currentRegion||1), rift ? '🧙‍♀️' : '🧑‍🌾',110,'transparent')}${rift ? vesperFace(56) : ''}
       <div class="shop-bubble">${escapeHtml(ui.shopGreeting)}</div>
     </div>
 
@@ -114,8 +115,8 @@ function renderShop(){
     { id:'crown',         from:4, icon:crownIcon(50), name:'Crown', desc:'Raises one beloved monster to legendary strength.' },
     { id:'voidStone',     from:3, icon:voidIcon(44), name:'Void Stone', desc:'Draws a learned skill back out of a monster.' },
     { id:'goldMedal',     from:5, icon:'🥇', name:'Gold Medal', desc:'Trade tickets for gold.', qty:true },
-    /* (3.67) element passives, forged from High stones of one element — here
-       from Region 5 for now; Region 6's shop is to have it when it is built */
+    /* (3.67) element passives, forged from High stones of one element — (3.75)
+       Selene's, in the Time Rift (Region 5's for now, 3.67–3.74) */
     { id:'passiveForge',  from:ELEM_FORGE_FROM, icon:'🌟', name:'Passive Upgrades', desc:'Forge an element passive from its High stones.', forge:true },
     /* Salvage out of the Vane Shear's hold: the last thing on the shelf, sold
        only aboard, and only ever one. */
@@ -396,7 +397,7 @@ async function onGuardianTrialResolved(){
   setScreenBg('explore');
   screenEl.innerHTML = `
     <div class="scene">
-      <div class="scene-portrait cutout">${monPortrait('forest_fairy', 170, { view:'front', bare:true, stage:1, crowned:true })}</div>
+      <div class="scene-portrait cutout">${monPortrait('forest_fairy', 170, { view:'front', bare:true, stage:1, crowned:true, plain:true })}</div>
       <div class="scene-title">The Forest Guardian</div>
       <div class="scene-body">
         ${wasBeaten

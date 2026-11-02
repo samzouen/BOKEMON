@@ -3852,6 +3852,7 @@ async function r5PhoenixGift(mine, at){
   await r5GiftFlow({ x:at.GX, y:at.GY }, el);     // (2.95) its glow, across to yours
   const had = ownsStone('fireStone');
   state.sacredFlameGranted = true;
+  if(el && crowned && el._o){ const sin = el.querySelector('.sa-in'); if(sin) sin.innerHTML = monPortrait('phoenix', Math.round(WALK_T * el._o.w), { view:'front', bare:true, crowned:true }); }   // (3.77) crowned: its exalted look, at once
   if(!had) addStone('fireStone', 1);
   r.phoenixGift = true;
   await saveProfile();
@@ -6832,7 +6833,7 @@ function r5MKFace(){ return faceMon('monkey_king', { stage:1, crowned:r5MKCrowne
 function r5MKFaceBare(){ return faceMon('monkey_king', { stage:1 }); }
 /* …and (3.50) once his crown comes down onto his head in it */
 function r5MKFaceCrowned(){ return faceMon('monkey_king', { stage:1, crowned:true }); }
-const r5GuardianFace = ()=> faceMon('forest_fairy', { stage:1, crowned:true });
+const r5GuardianFace = ()=> faceMon('forest_fairy', { stage:1, crowned:true, plain:true });   // (3.77) her own look, never your fairy's exalted one
 const R5_PADRINO = 'Don Padrino', R5_MK = 'Monkey King', R5_GUARDIAN = 'The Forest Guardian';
 
 /* ---------- the door ---------- */
@@ -6936,7 +6937,7 @@ function r5VaultSet(st){
   /* the Forest Guardian, in her cage — (3.20) or the cage open, and empty */
   if(!at('promised')){
     r5MonActor('guardian', 'forest_fairy', P.guardian.x, P.guardian.y, P.guardian.s,
-      { html:monPortrait('forest_fairy', Math.round(WALK_T * P.guardian.s), { view:'front', bare:true, stage:1, crowned:true }), z:16 });
+      { html:monPortrait('forest_fairy', Math.round(WALK_T * P.guardian.s), { view:'front', bare:true, stage:1, crowned:true, plain:true }), z:16 });
     r5CageActor(false);
   } else { sceneActorGone('guardian'); r5CageActor(true); }
   /* the table: the little box — or, once Cyborg has made it, Nino's body —
@@ -9253,6 +9254,7 @@ async function r5GuardianGift(){
     sceneSparkles(E.fairy.x, E.fairy.y, s, s, 1600);
     playSfx('power_up');                                 // (3.51) not the fanfare
     state.forestBlessingGranted = true;
+    if(el && isCrowned(f)){ const sin = el.querySelector('.sa-in'); if(sin) sin.innerHTML = monPortrait('forest_fairy', px, { view:'front', bare:true, stage:monStage(f), crowned:true }); }   // (3.77) crowned: her exalted look, at once
     await saveProfile();
     await sceneWait(1500);
     r5BeamGone('gift');
@@ -9520,7 +9522,7 @@ async function r5MKJoins(){
   await r5Card(`<span style="display:inline-block;width:96px;height:96px;">${(tearCss(), tearGalaxy())}</span>`, 'The end of Region 5',
     `<p>Cyborg is gone: Nemesis took it into the <b>space-time tear</b>, with every core it stole. The tear stays open in the vault, over the empty cradle, humming.</p>` +
     `<p>🌀 There you can <b>Challenge the past</b> once a week — the Padrino's fight again, seven rounds, for medals and the Triune Stone of Being. (It is on the Challenge page too.)</p>` +
-    `<p>Beyond the tear — and Nemesis — lies <b>Region 6</b>. It is still to come.</p>`, 'The end — for now');
+    `<p>Beyond the tear — and Nemesis — lies <b>Region 6</b>, the Time Rift: <b>Enter the space-time tear</b> when you are ready.</p>`, 'The end of Region 5');   // (3.75) it is built
 }
 /* Who he leads: one of your team (it goes to storage, as his companion). */
 function r5ChoosePartner(){

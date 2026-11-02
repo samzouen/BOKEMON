@@ -89,7 +89,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.74';
+const GAME_VERSION = '3.77';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -766,64 +766,80 @@ function payRecycle(tier, sign){
    - Forged from High stones of that element in storage (the plain ones go
      first): 5 for a Very High slot passive, 7 for an Ultra slot one. It
      waits in the bag until it is put on.
+   - (3.76) Or bought for Selection Tokens: 2 Very High Tokens for a Very
+     High slot one, 1 Ultra Token for an Ultra slot one (ELEM_PASSIVE_TOKENS).
    - Taken off with a Void Stone and silver ("removing these with a void
      stone also costs silver medals"); it goes back to the bag.
-   m.vhPassive / m.ultraPassive: the element it holds there.
+   - (3.76) A Fairy's slot holds two: its Fairy one first, and one more of
+     any element but Steel on top of it (elemPassivesIn, elemPassivePlace).
+   m.vhPassive / m.ultraPassive: the element it holds there (a Fairy's own
+   first); m.vhPassive2 / m.ultraPassive2: the one on top of a Fairy's.
    state.inventory.elemPassives = { 'Fire:vh': n, … }.
-   All twelve elements since 3.69; the battle side is in 04-battle.js.
+   All twelve elements since 3.69; the battle side is in 04-battle.js (a
+   future monster's, 3.76, in 17-region6.js).
    ============================================================ */
 const ELEMENT_PASSIVES = {
+  /* (3.76) "change wildfire to work when the holder is off-field too. it also damages the holder from
+     off-field when overheat is active. set values to 0.08/0.16/0.25 for Overheat base/+/star." */
   Fire:  { vh:   { name:'Wildfire', sym:'🔥',
-                   text:'While your Overheat is up, each turn it scorches every enemy for <b>0.25× its ATK</b>, and itself too, never below half its health. The one beside it is spared. Damage buffs count, as on Overheat ✦\'s burn.' },
+                   text:'While your Overheat is up, each turn it scorches every enemy for <b>0.08× / 0.16× / 0.25×</b> its ATK (by the Overheat\'s tier: base, + or ✦), and itself too, never below half its health — on the field or off it. Damage buffs count, as on Overheat ✦\'s burn.' },
            ultra:{ name:'Consume', sym:'🕯️',
                    text:'It deals <b>1% more</b> damage for every 1% of health it has lost, up to <b>+50%</b> at half health or below.' } },
-  Water: { vh:   { name:'Frost Armour', sym:'❄️',
-                   text:'While your Ice Tomb\'s chill holds, it gains a shield at the start and the end of each turn it is on the field, up to one at a time.' },
+  /* (3.76) the designer's two new ones */
+  Water: { vh:   { name:'Cleansing Springs', sym:'⛲',
+                   text:'While your Ice Tomb\'s chill is up, at the end of each turn it heals every one of your team for <b>1% / 2% / 2%</b> of its own max HP — <b>5% / 10% / 10%</b> instead to one below half health (by the Ice Tomb\'s tier) — and lifts one of their marks off your side, a freeze, sleep, stun or muddle first. A Fire monster above half health is not healed. At base and + it must be on the field; at ✦ it works from the bench too. Their ✦ Curse (a Deadly one too) stops it.' },
            ultra:{ name:'Shatter', sym:'🧊',
-                   text:'It deals <b>25% more</b> damage to anything chilled or frozen.' } },
-  Grass: { vh:   { name:'Blossom', sym:'🌸',
-                   text:'At full health, each hit of its that sets off Leech Seed strikes again for <b>0.1× its ATK</b>. Every damage buff counts, but it is not a hit: it sets off no more Leech Seed and no riders.' },
+                   text:'Anything chilled takes <b>15% more</b> damage, and anything frozen <b>15% more</b> (both: <b>30%</b>) — from every one of your side, while it is in your team, on the field or off it.' } },
+  Grass: { vh:   { name:'Nourish', sym:'🌱',
+                   text:'Every time your Leech Seed drinks (on the field or off it), your team gains <b>+3% / +4% / +5% ATK</b> for a turn (by the Leech Seed\'s tier), up to 5 stacks (<b>+15% / +20% / +25%</b>). Each new stack starts the turn again for all of them. It adds to every other ATK bonus, never multiplies.' },
            ultra:{ name:'Burgeon', sym:'🌳',
                    text:'At full health it deals <b>25% more</b> damage.' } },
   Electric: { vh:   { name:'Catalyse', sym:'⚗️',
-                      text:'When it casts Overcharge + or ✦, the high first chance (75%, or certain) covers your next <b>two</b> moves that land, not one.' },
+                      text:'When your Overcharge is cast while it is in your team, your next move that lands after the Overcharge\'s first gets one more chance to repeat: <b>50% / 75% / 100%</b> (by the Overcharge\'s tier: base, + or ✦).' },
               ultra:{ name:'Capacitor', sym:'🔋',
-                      text:'While your Overcharge is up, <b>25%</b> of the damage it deals is stored, and strikes a random enemy at the end of the round (or, with none left, one of the next wave as its first turn begins). Each attack stores its own, repeats and extra actions too.' } },
+                      text:'<b>25%</b> of the damage it deals is stored, and strikes a random enemy at the end of the round (or, with none left, one of the next wave as its first turn begins). Each attack stores its own, repeats and extra actions too. No Overcharge needed.' } },
   Flying:   { vh:   { name:'Elusive', sym:'🪶',
-                      text:'While your Mirage is up, it takes less damage: as much as its best dodge chance, up to <b>30%</b>. And every attack on it leaves afterimages, dodged or not.' },
+                      text:'While your Mirage is up, it takes less damage: as much as its best dodge chance, up to <b>30%</b> — and the rest of your team a third as much, while it is in your team. Every attack on it leaves afterimages, dodged or not.' },
               ultra:{ name:'Momentum', sym:'🌪️',
                       text:'It deals <b>+10%</b> damage for every step of initiative it has, its own passives\' too, up to <b>+30%</b>.' } },
-  Ground:   { vh:   { name:'Bedrock', sym:'🪨',
-                      text:'While your Spike Armour is up, it takes <b>15% less</b> damage, and once each time the meter fills, a blow that would knock it out leaves it on 1 HP with a shield. Then nothing takes it below 1 HP for the rest of that turn and the next. A Curse of theirs on your side ends that, and stops it starting.' },
+  /* (3.76) "change spike armour very high passive to spike formation … shift the 1HP endurance
+     mechanic to the ultra passive instead" */
+  Ground:   { vh:   { name:'Spike Formation', sym:'🪨',
+                      text:'While your Spike Armour is up, a spike forms at the start of each turn, worth <b>0.2× / 0.3× / 0.4×</b> its ATK (by the Spike Armour\'s tier), on the field or off it. On the field, it is driven straight into a random enemy. Off it, up to <b>3</b> wait, and all are driven into the enemy (each at one at random) once it is on the field.' },
               ultra:{ name:'Metamorph', sym:'🦋',
-                      text:'While your Spike Armour is up, its ATK grows <b>5%</b> each turn, up to <b>+25%</b>, and keeps it for the rest of the battle.' } },
+                      text:'Its damage grows <b>5%</b> at the end of each turn, on the field or off it, up to <b>+20%</b> (5 / 10 / 15 / 20%), and it keeps it for the rest of the battle. And once each time the meter fills, a blow that would knock it out leaves it on 1 HP with a shield; then nothing takes it below 1 HP for the rest of that turn and the next. A Curse of theirs on your side ends that, and stops it starting.' } },
   Psychic:  { vh:   { name:'Mind Control', sym:'🧠',
                       text:'With it on the field, when your Discombobulate confuses an enemy, its confused swing is yours to aim: choose one of its own moves to turn on its own side, itself included (an AOE strikes all of them), with no words to write. The damage is multiplied by its confusion\'s own self-hit roll. Or let it swing as usual.' },
               ultra:{ name:'Foresight', sym:'👁️',
-                      text:'While your Discombobulate is up, it dodges <b>20%</b> of attacks, and each of its strikes has a <b>20%</b> chance to be critical (<b>2×</b>). Rolled apart from a Hydra\'s own: if both land, they add up to <b>3×</b>.' } },
-  Physical: { vh:   { name:'Deadly Combo', sym:'🤜',
-                      text:'While your Counter is up, each hit it lands (its quick attacks and afterimages too) makes its attacks <b>10%</b> stronger, up to <b>+30%</b>, for as long as the Counter lasts.' },
-              ultra:{ name:'Focused Fury', sym:'😡',
-                      text:'While your Counter is up, it gains an Enrage stack at the end of every turn, hit or not.' } },
+                      text:'It dodges <b>20%</b> of attacks, and each of its strikes has a <b>20%</b> chance to be critical (<b>2×</b>). Rolled apart from a Hydra\'s own: if both land, they add up to <b>3×</b>. No Discombobulate needed.' } },
+  /* (3.76) "deadly combo (previously very high) is now the ultra passive effect. focused fury is now
+     the very high passive …" */
+  Physical: { vh:   { name:'Focused Fury', sym:'😡',
+                      text:'While it is on the field, your Counter stacks become <b>Deflect</b> stacks: each turns away <b>90%</b> of an attack, not 80%. If your Counter is + or ✦, each one\'s Combo and Enrage come at once, as it turns (✦: 2 stacks → 2 Deflect, 2 Combo, and +40% ATK to the one who cast it). Stacks that come while it is off the field stay Counter stacks until it is back.' },
+              ultra:{ name:'Deadly Combo', sym:'🤜',
+                      text:'Each hit it lands (its quick attacks and afterimages too) makes its attacks <b>10%</b> stronger, up to <b>+30%</b>, for the rest of the battle. No Counter needed.' } },
   Ghost:    { vh:   { name:'Deadly Curse', sym:'☠️',
-                      text:'With it on the field, your Curse becomes a <b>Deadly Curse</b>: at the start of each turn it strikes one enemy for <b>0.16× / 0.33× / 0.66×</b> its ATK (the Curse\'s base, + or ✦), every damage buff counted. A Curse cast while it holds renews it instead, and a ✦ one makes it ✦.' },
+                      text:'With it on the field, your Curse becomes a <b>Deadly Curse</b>: at the start of each turn it strikes one enemy, building up over five turns to <b>0.16× / 0.33× / 0.66×</b> its ATK (the Curse\'s base, + or ✦) — a fifth more each turn — every damage buff counted. A Curse cast while it holds renews it instead (the build-up kept), and a ✦ one makes it ✦.' },
               ultra:{ name:'Vicious Hex', sym:'🕸️',
-                      text:'While your Curse is up, all the damage it deals marks the enemy struck (its afterimages too, and a Whalelord\'s Haunting Aria even from the bench), and so does every Deadly Curse strike: <b>+6%</b> damage taken, up to <b>+66%</b> (11 marks). When a marked enemy falls, two thirds of its marks (rounded up) pass to another of its wave, or to the next wave.' } },
+                      text:'All the damage it deals marks the enemy struck (its afterimages too, and a Whalelord\'s Haunting Aria even from the bench), and so does every Deadly Curse strike: <b>+6%</b> damage taken, up to <b>+66%</b> (11 marks). When a marked enemy falls, two thirds of its marks (rounded up) pass to another of its wave, or to the next wave. No Curse needed.' } },
   Dragon:   { vh:   { name:'Violent Dance', sym:'🐲',
-                      text:'While your Dragon Dance is up, at the start of each turn it strikes <b>1 / 2 / 3</b> times (the Dance\'s base, + or ✦), each at one enemy at random, for <b>0.25× its ATK</b>, as Overheat ✦\'s burn does: every damage buff counts. And it deals <b>+20%</b> damage to anything slower than it (Mach Dragon counts).' },
+                      text:'While your Dragon Dance is up and it is on the field, at the start of each turn it strikes <b>1 / 2 / 3</b> times (the Dance\'s base, + or ✦), each at one enemy at random, for <b>0.25× its ATK</b>, as Overheat ✦\'s burn does: every damage buff counts — and before each strike it breaks <b>1 / 2 / 3</b> of that enemy\'s shields, as the Dance does. And it deals <b>+20%</b> damage to anything slower than it (Mach Dragon counts).' },
               ultra:{ name:'Destruction', sym:'☄️',
                       text:'Its attacks are super effective (<b>1.5×</b>) against every element except Fairy.' } },
   Steel:    { vh:   { name:'Tempering', sym:'🔨',
                       text:'While your Steel Aegis is up, it takes <b>10% less</b> damage and deals <b>10% more</b>, and it cannot lose more than <b>66% / 50% / 33%</b> of its health in one turn (the Aegis\'s base, + or ✦; rounded down). While it is on the field, nothing of theirs (Diamond Dust, a Nova, Greed, the tower\'s theft) can sweep or steal any of your side\'s buffs; off the field, your Steel Aegis still can\'t be.' },
               ultra:{ name:'Fortress', sym:'🏰',
                       text:'It resists every element except Dragon: attacks on it deal <b>⅔</b>.' } },
+  /* (3.76) "reduce the damage gain per buff to 1.5% per active buff … reduce the damage caused by
+     detonate to 0.2*atk" */
   Fairy:    { vh:   { name:'Coruscate', sym:'🎇',
-                      text:'While your Diamond Dust is up, it deals <b>5% more</b> damage for each buff your side has up (Diamond Dust counts), up to <b>+50%</b>.' },
-              ultra:{ name:'Detonate', sym:'💥',
-                      text:'While your Diamond Dust is up, every effect of theirs it sweeps away or stops explodes: <b>0.5× its ATK</b> to every enemy for each one, after the sweep (a lurking one is out in the open by then). Damage buffs and cuts count. The dust running out or being renewed sets off one more.' } },
+                      text:'While your Diamond Dust is up and it is in your team (on the field or off it), every one of your team deals <b>1.5% more</b> damage for each buff your side has up (Diamond Dust counts), up to <b>+15%</b>.' },
+              ultra:{ name:'Unstable Magic', sym:'🔮',
+                      text:'Every buff or debuff — either side\'s — swept away (a Diamond Dust, a Nova), kept from forming by a Diamond Dust, or running out makes its magic burst: <b>0.2× its ATK</b> to every enemy for each one. So their dust sweeping your effects pays them back, and a buff of yours their dust stops still bursts. On the field or off it; no Diamond Dust needed. Damage buffs and cuts count.' } },
 };
 const ELEM_PASSIVE_COST = { vh:5, ultra:7 };                  // High stones of its element
-const ELEM_FORGE_FROM = 5;   // the shop's forge opens here for now (meant for Region 6's shop, when it is built)
+const ELEM_PASSIVE_TOKENS = { vh:['veryhigh', 2], ultra:['ultra', 1] };   // (3.76) …or Selection Tokens: "2 very high tokens", "1 ultra token"
+const ELEM_FORGE_FROM = 6;   // (3.75) Selene's shop, in the Time Rift (it was Region 5's for now, 3.67–3.74)
 const ELEM_PASSIVE_REMOVE = { voidStones:1, silver:10 };
 const ELEM_PASSIVE_SLOTS = { vh:'Very High', ultra:'Ultra' };
 function elemPassiveDef(el, slot){ return (ELEMENT_PASSIVES[el] || {})[slot] || null; }
@@ -858,10 +874,41 @@ function elemPassiveFits(m, el){
 function elemPassiveElements(m){
   return Object.keys(ELEMENT_PASSIVES).filter(el=> elemPassiveFits(m, el));
 }
-/* What a monster holds in a slot, working: an element it can hold. */
-function elemPassiveAt(m, slot){
-  const el = m && m[slot + 'Passive'];
-  return (el && elemPassiveDef(el, slot) && elemPassiveFits(m, el)) ? el : null;
+/* (3.76) A FAIRY'S SLOTS — the designer: "the fairy passives must be learned
+   first before any other element can be learned (except for steel), and the
+   other passive stacks together with the underlying fairy passive (2
+   passives in the same slot)". In a Fairy monster's slot its Fairy passive
+   goes first (m.vhPassive / m.ultraPassive); on top of it, one more of any
+   element but Steel (m.vhPassive2 / m.ultraPassive2), and both work. An
+   element it can only hold as a Fairy's perk works only on top of the Fairy
+   one; its own other element's (a Sylph's Psychic) may stand alone, as any
+   monster of that element's can — or stack on its Fairy one. A perk passive
+   left alone in a slot (put on before 3.76) rests until the Fairy one goes
+   in under it. */
+function monTypes(m){ return (m && (SPECIES[m.species] || {}).types) || []; }
+function isFairyMon(m){ return monTypes(m).includes('Fairy'); }
+function elemPassivesIn(m, slot){
+  if(!m) return [];
+  const a = m[slot + 'Passive'], b = m[slot + 'Passive2'];
+  const ok = el=> !!el && !!elemPassiveDef(el, slot) && elemPassiveFits(m, el);
+  const out = [];
+  const mainWorks = ok(a) && (monTypes(m).includes(a));
+  if(mainWorks) out.push(a);
+  if(a === 'Fairy' && mainWorks && ok(b) && b !== 'Fairy' && !FAIRY_CANNOT.includes(b)) out.push(b);
+  return out;
+}
+/* What a monster holds in a slot, working — its first (see elemPassivesIn). */
+function elemPassiveAt(m, slot){ return elemPassivesIn(m, slot)[0] || null; }
+/* Where `el` would go in its slot, or null: 'main' (the slot empty, or a
+   Fairy's going in under what is there), or 'second' (on top of its Fairy). */
+function elemPassivePlace(m, el, slot){
+  if(!m || !elemPassiveDef(el, slot) || !elemPassiveFits(m, el)) return null;
+  const a = m[slot + 'Passive'], b = m[slot + 'Passive2'];
+  const own = monTypes(m).includes(el);
+  if(!isFairyMon(m)) return (!a && own) ? 'main' : null;
+  if(el === 'Fairy') return (!a || (a !== 'Fairy' && !b && !FAIRY_CANNOT.includes(a))) ? 'main' : null;
+  if(a === 'Fairy') return (!b && !FAIRY_CANNOT.includes(el)) ? 'second' : null;
+  return (!a && own) ? 'main' : null;
 }
 
 const STONE_NAMES = {
@@ -1054,15 +1101,18 @@ function atkScale(level){
   const t = (Math.min(level, top) - c.from) / c.span;
   return 1 + c.k * (Math.pow(c.r, t) - 1);
 }
-/* A monster's ATK: its stat, scaled past 100. */
+/* A monster's ATK: its stat, scaled past 100 — and (3.75) its talents'
+   share, the constellations it has switched on (17-region6.js). */
 function computeAtk(species, level, supplements, mon){
-  return Math.ceil(computeMaxStat(species, level, supplements, mon) * atkScale(level));
+  const tm = (mon && typeof talentStatMult === 'function') ? talentStatMult(mon, 'atk') : 1;
+  return Math.ceil(computeMaxStat(species, level, supplements, mon) * atkScale(level) * tm);
 }
 /* HP is the stat with its own level scaling applied (hpScale). */
 function computeMaxHp(species, level, supplements, mon){
   const sp = SPECIES[species];
   if(sp && (sp.isSeed || sp.isEgg || sp.isBaby)) return 1;   // passengers are always 1 HP
-  return Math.ceil(computeMaxStat(species, level, supplements, mon, true) * hpScale(level));
+  const tm = (mon && typeof talentStatMult === 'function') ? talentStatMult(mon, 'hp') : 1;   // (3.75) its talents' share
+  return Math.ceil(computeMaxStat(species, level, supplements, mon, true) * hpScale(level) * tm);
 }
 
 /* `forHp` asks for the health figure rather than the attack one. They are the
@@ -1809,21 +1859,22 @@ function monPortrait(species, size, opts){
     + (opts.breathe ? ' breathe-'+opts.breathe : '')
     + (opts.crowned ? ' crowned-aura' : '');
   const crowned = !!opts.crowned;
+  const exalted = !opts.plain && exaltedLook(species, crowned);     // (3.77) the Region 5 gift's look, crowned
   const override = (typeof ASSETS!=='undefined' && ASSETS.sprites)
-    ? (ASSETS.sprites[spriteKey(species,stage,crowned)+'_'+view] || ASSETS.sprites[spriteKey(species,stage,crowned)]) : null;
+    ? (ASSETS.sprites[spriteKey(species,stage,crowned,exalted)+'_'+view] || ASSETS.sprites[spriteKey(species,stage,crowned,exalted)]) : null;
   // the icon view starts at _front, so only _front and _back need supplying
-  const cacheKey = spriteCacheKey(species, stage, view, crowned);
+  const cacheKey = spriteCacheKey(species, stage, view, crowned, exalted);
   const cached = spriteResolved[cacheKey];
   const primary = override
     || (cached !== undefined && cached !== null ? cached
-        : spritePath(species, stage, view==='icon' ? 'front' : view, crowned));
+        : spritePath(species, stage, view==='icon' ? 'front' : view, crowned, exalted));
   // hidden until it actually loads, so a 404 never flashes a broken image
   const startHidden = (cached === undefined);
   const bg = opts.bare ? 'transparent' : s.color;
   const wrapOpen  = opts.crowned ? `<span class="crowned-wrap" style="width:${px}px;height:${px}px;">${crownSparkles(px)}` : '';
   const wrapClose = opts.crowned ? '</span>' : '';
   return wrapOpen + `<img src="${primary}" alt="${escapeHtml(s.name)}" class="${cls}"
-    data-species="${species}" data-px="${px}" data-view="${view}" data-stage-n="${stage}" data-crowned="${crowned?1:0}" data-try="0"
+    data-species="${species}" data-px="${px}" data-view="${view}" data-stage-n="${stage}" data-crowned="${crowned?1:0}" data-exalted="${exalted?1:0}" data-try="0"
     style="width:${px}px;height:${px}px;border-radius:${radius}px;object-fit:contain;background:${bg};${startHidden?'visibility:hidden;':''}"
     onload="spriteLoaded(this)" onerror="spriteFallback(this)">` + wrapClose;
 }
@@ -1856,20 +1907,33 @@ function crownSparkles(px){
      water_starter1       first evolution
      water_starter2       second evolution
    combined with the view suffix, e.g. water_starter1_front.png */
-function spriteKey(species, stage, crowned){
+function spriteKey(species, stage, crowned, exalted){
   const sp = (typeof SPECIES !== 'undefined' && SPECIES[species]) || null;
   /* (3.53) Crowned, some take another's look: the hatched Water Dragon, its
      core home, is the Water Dragon's crowned picture (water_dragon_c). */
-  if(crowned && sp && sp.crownedLook && sp.crownedLook !== species) return spriteKey(sp.crownedLook, stage, true);
+  if(crowned && sp && sp.crownedLook && sp.crownedLook !== species) return spriteKey(sp.crownedLook, stage, true, exalted);
   /* (3.38) A legendary born from an egg, a seed or a stone (`oneLook`) is its
      base picture at every stage — its one evolution is the birth — and
-     crowned, `<species>_c`. */
+     crowned, `<species>_c`. (3.77) Exalted too: `<species>_c_exalted`. */
   const st = (sp && sp.oneLook) ? 0 : stage;
-  return species + (st ? String(st) : '') + (crowned ? '_c' : '');
+  return species + (st ? String(st) : '') + (crowned ? '_c' : '') + (crowned && exalted ? '_exalted' : '');
 }
-function spritePath(species, stage, view, crowned){
-  const key = spriteKey(species, stage, crowned);
+function spritePath(species, stage, view, crowned, exalted){
+  const key = spriteKey(species, stage, crowned, exalted);
   return 'assets/mon/' + key + (view && view!=='icon' ? '_'+view : '') + '.png';
+}
+/* (3.77) THE EXALTED LOOK — the designer: "when phoenix and forest fairy get
+   upgraded in region 5, if they are crowned, upgrade their appearance to
+   phoenix_c_exalted_front/back and forest_fairy_c_exalted_front/back
+   sprites". A crowned phoenix once the ghost phoenix's gift is given
+   (state.sacredFlameGranted, its Sacred Flame), a crowned forest fairy once
+   the Forest Guardian's is (state.forestBlessingGranted) — yours: a picture
+   of anyone else's (an enemy, the Guardian herself) passes `plain`. Until
+   the pictures are there, the crowned one stands in (spriteFallback). */
+const EXALTED_LOOK = { phoenix:'sacredFlameGranted', forest_fairy:'forestBlessingGranted' };
+function exaltedLook(species, crowned){
+  const k = EXALTED_LOOK[species];
+  return !!(crowned && k && typeof state !== 'undefined' && state && state[k]);
 }
 /* Convenience: the sprite stage a given owned monster is currently at. */
 function monStage(m){ return monStageOf(m); }
@@ -1946,14 +2010,14 @@ function grantSacredSeed(){
    walked the 404 ladder again — and each failed attempt flashed the browser's
    broken-image placeholder. Caching plus hide-until-loaded removes both. */
 const spriteResolved = {};
-function spriteCacheKey(species, stage, view, crowned){
-  return species+'|'+stage+'|'+view+'|'+(crowned?1:0);
+function spriteCacheKey(species, stage, view, crowned, exalted){
+  return species+'|'+stage+'|'+view+'|'+(crowned?1:0)+(crowned && exalted ? 'x' : '');
 }
 
 function spriteLoaded(img){
   try{
     const key = spriteCacheKey(img.dataset.species, +(img.dataset.stageN||0),
-                               img.dataset.view||'icon', img.dataset.crowned==='1');
+                               img.dataset.view||'icon', img.dataset.crowned==='1', img.dataset.exalted==='1');
     spriteResolved[key] = img.getAttribute('src');
     img.style.visibility = 'visible';
   }catch(e){}
@@ -1969,12 +2033,14 @@ function spriteFallback(img){
     /* Fallback ladder. Note the icon view tries <species>_front FIRST, so you
        only ever need to supply _front and _back — a separate <species>.png is
        an optional override, not a requirement. */
-    const crowned = img.dataset.crowned === '1';
+    const crowned = img.dataset.crowned === '1', exalted = crowned && img.dataset.exalted === '1';
     const chain = [];
     const views = view === 'icon' ? ['front','icon'] : [view, 'front', 'icon'];
-    for(const cr of (crowned ? [true,false] : [false])){
+    /* (3.77) exalted first, then crowned, then plain */
+    const looks = exalted ? [[true, true], [true, false], [false, false]] : crowned ? [[true, false], [false, false]] : [[false, false]];
+    for(const [cr, ex] of looks){
       for(let st = stage; st >= 0; st--){
-        for(const v of views) chain.push(spritePath(species, st, v==='icon'?'icon':v, cr));
+        for(const v of views) chain.push(spritePath(species, st, v==='icon'?'icon':v, cr, ex));
       }
     }
     const ladder = [...new Set(chain)];          // (3.38) a one-look legendary's stages are one picture: tried once
@@ -1982,7 +2048,7 @@ function spriteFallback(img){
     img.dataset.try = String(attempt);
     if(attempt < ladder.length){ img.src = ladder[attempt]; return; }
     // nothing in the ladder exists — remember that too, and draw the tile
-    spriteResolved[spriteCacheKey(species, stage, view, crowned)] = null;
+    spriteResolved[spriteCacheKey(species, stage, view, crowned, exalted)] = null;
     img.outerHTML = monPortraitFallback(species, +img.dataset.px);
   }catch(e){}
 }

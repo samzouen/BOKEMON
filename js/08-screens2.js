@@ -786,7 +786,7 @@ function arenaFire(mv){
    (3.16) The Psychic Disciples and the Psychic Master are finished — "please
    finish the psychic disciples and master. Give them good AI" — and in.
    ============================================================ */
-const ARENA_REGIONS = ['Riverside Meadow', 'Emerald March', 'Port Akrotiri', 'The North Sea', 'Cosa Nostia'];
+const ARENA_REGIONS = ['Riverside Meadow', 'Emerald March', 'Port Akrotiri', 'The North Sea', 'Cosa Nostia', 'The Time Rift'];   // (3.75) the sixth
 /* The catacomb floors and rooms whose men fight you, in the order you come to them. */
 const ARENA_R5_DECKS = ['cata_landing', 'cata_cistern', 'cata_stair',
   'cata_landing_r1', 'cata_landing_r2', 'cata_cistern_r1', 'cata_cistern_r2',
@@ -917,6 +917,9 @@ function arenaChallengers(){
          `Cyborg's Futuresight dodges half of every attack, and each dodge is a Spacetime Fracture: its Spacetime Rift Max hits 1.1× harder for every one. ` +
          `Its Organosteel Body arrives behind 3 shields and raises 1 more every turn, each soaking up to <b>${tearCyborgShield()}</b> of a strike: no Diamond Dust touches them; a Dragon Dance breaks 1 / 2 / 3 with each attack. ` +
          `In the tear it rewinds them and the round begins again, and every quiz asks for silver and gold words; here the one round is the fight, with your usual words.`);
+  /* ---- 6. The Time Rift (3.75): this week's future, at any distortion ---- */
+  if(typeof futureArenaVariants === 'function')
+    add(6, 'r6_future', 'The future — this week', M(futureWeek().picks[0].species, true), '🌀', futureArenaVariants(V), ()=> futureArenaNote());
   return L;
 }
 
@@ -982,11 +985,11 @@ function arenaConditions(cfg){
 /* One of theirs, as the wave list shows it. */
 function arenaSpecChip(s){
   const e = makeEnemy(s.species, s.level, { nerfed:s.nerfed, crowned:s.crowned, forceStage:s.forceStage, anyLevel:s.anyLevel, supplements:s.supplements });
-  return `<span class="arc-mon">${monPortrait(s.species, 26, { stage:e.stage, crowned:!!s.crowned })}<span>${escapeHtml(SPECIES[s.species].name)} ` +
+  return `<span class="arc-mon">${monPortrait(s.species, 26, { stage:e.stage, crowned:!!s.crowned, plain:true })}<span>${escapeHtml(SPECIES[s.species].name)} ` +
     `<small>Lv ${e.level}</small>${s.crowned ? ' ✦' : ''}${s.veryHigh ? ' 💎' : ''}${s.enraged ? ' 🐋' : ''}</span></span>`;
 }
 function arenaPicture(x, v, px){
-  if(x.mon) return monPortrait(x.mon, px, { view:'front', bare:true, crowned:!!x.crowned });
+  if(x.mon) return monPortrait(x.mon, px, { view:'front', bare:true, crowned:!!x.crowned, plain:true });
   return npcPortrait((v && v.npc) || x.npc, x.icon, px, 'transparent');
 }
 function arenaNote(x, v){ return typeof x.note === 'function' ? x.note(v) : x.note; }

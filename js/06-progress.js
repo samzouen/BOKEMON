@@ -13,7 +13,7 @@
    of its own as well — see PAST 100 below. At 110 in Region 5 a crowned
    monster carrying a stone charges it, as at any ceiling; the breakthrough
    waits for a region that lets it grow (capAtCeiling). */
-const REGION_CAPS = { 1:21, 2:41, 3:61, 4:85, 5:110 };
+const REGION_CAPS = { 1:21, 2:41, 3:61, 4:85, 5:110, 6:150 };   // (3.75) the Time Rift: 150
 /* A zone's `cap` is how far a monster may grow there, when that differs from
    the top of its wild band (`max`). */
 function zoneCap(id){ const z = ZONE_LEVELS[id]; return z ? (z.cap || z.max) : 0; }
@@ -27,9 +27,12 @@ function levelCap(){
   /* Region 3 has ONE rule: the Power Stone opens it to 71, everywhere.
      The old 66-in-the-concert override kept snapping it back down. */
   if((state.progress||{}).currentRegion === 3 && r3.powerStone) return 71;
-  const z = ui.currentZone && ui.currentZone.id;
-  if(z && ZONE_LEVELS[z]) return zoneCap(z);
+  /* (3.75) a zone counts only in its own region: the vault's catacombs (110)
+     stayed the zone on the way through the tear, and held the Time Rift's
+     150 down to 110 */
   const rid = (state.progress && state.progress.currentRegion) || 1;
+  const z = ui.currentZone && ui.currentZone.id;
+  if(z && ZONE_LEVELS[z] && (REGION_ZONES[rid] || []).some(x=> x.id === z)) return zoneCap(z);
   const zones = (REGION_ZONES[rid]||[]).map(x=> zoneCap(x.id));
   return Math.max(REGION_CAPS[rid]||21, ...zones, 0) || 21;
 }
@@ -850,7 +853,7 @@ function render(){
 }
 function renderInner(){
   enforceEyeBreak();
-  if(!['home','region','battle','recover','challenge','explore','shop','storage','party','companions','coreSpar','stats','monsterIndex','indexDetail','spellingIndex','profileSelect'].includes(ui.screen)) setScreenBg(null);
+  if(!['home','region','battle','recover','challenge','explore','shop','storage','party','companions','coreSpar','stats','monsterIndex','indexDetail','spellingIndex','profileSelect','talents','future'].includes(ui.screen)) setScreenBg(null);
   const hb = $('#hamburgerBtn');
   // hamburger available everywhere except profile setup + (future) fights
   const noMenu = ['boot','profileSelect','starterSelect','battle','quiz'].includes(ui.screen);
@@ -864,8 +867,11 @@ function renderInner(){
     case 'region':        return renderRegion();
     case 'explore':       return renderExplore();
     case 'battle':        return renderBattle();
-    case 'challenge':     return (state.progress.currentRegion === 5) ? renderChallengeR5()
+    case 'challenge':     return (state.progress.currentRegion === 6) ? renderChallengeR6()       // (3.75) the Time Rift (17-region6.js)
+                               : (state.progress.currentRegion === 5) ? renderChallengeR5()
                                : (state.progress.currentRegion === 4) ? renderChallengeR4() : renderChallenge();
+    case 'future':        return renderFuture();           // (3.75) Challenge the future
+    case 'talents':       return renderTalents();          // (3.75) the Talents page
     case 'tear':          return renderTear();             // the space-time tear (2.94, 16-tear.js)
     case 'party':         return renderPartyStub();
     case 'companions':    return renderCompanions();

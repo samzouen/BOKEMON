@@ -42,8 +42,10 @@ function typeMultFor(attacker, defender){
   const at = (attacker && attacker.types) || [], dt = (defender && defender.types) || [];
   let m = typeMultiplier(at, dt);
   if(typeof elemPassiveOn !== 'function' || !ui.battle) return m;
-  const a = attacker && attacker.uid ? realMon(attacker) : null;
-  const d = defender && defender.uid ? realMon(defender) : null;
+  /* (3.76) one of theirs too: a future monster holds both of its element's */
+  const foe = x=> (x && !x.uid && x.species && (x.vhPassive || x.ultraPassive) && (ui.battle.enemies || []).includes(x)) ? x : null;
+  const a = attacker && attacker.uid ? realMon(attacker) : foe(attacker);
+  const d = defender && defender.uid ? realMon(defender) : foe(defender);
   if(a && elemPassiveOn(a, 'Dragon', 'ultra') && !dt.includes('Fairy')) m = DESTRUCTION_MULT;
   if(d && elemPassiveOn(d, 'Steel', 'ultra') && !at.includes('Dragon')) m = FORTRESS_TAKE;
   return m;
@@ -167,7 +169,7 @@ function clearPStatus(uid, type){ removePStatus(uid, type); }
 /* Stamp a field status on every enemy, and remember it so later waves inherit it. */
 function applyFieldStatus(status){
   const b = ui.battle;
-  if(dustBlocks('player')) return null;              // their dust: your fields cannot take hold
+  if(dustBlocks('player')){ dustStopped('player'); return null; }   // their dust: your fields cannot take hold — (3.77) Unstable Magic counts it
   b.fieldStatus = b.fieldStatus || {};
   b.fieldStatus[status.type] = Object.assign({ turnsLeft: STATUS_TURNS }, status);
   livingEnemies().forEach(e=> addEStatus(e, Object.assign({}, b.fieldStatus[status.type])));
@@ -411,6 +413,7 @@ function iceBarrierPulse(){
 function tickStatuses(){
   const b = ui.battle;
   const expired = [];
+  let ranOut = 0;                                          // (3.77) every buff or debuff that runs out: Unstable Magic
   // damage-over-time burns the enemy side at the end of each round
   const dot = b.fieldStatus && b.fieldStatus.dot;
   if(dot){
@@ -449,7 +452,7 @@ function tickStatuses(){
       return;
     }
     st.turnsLeft--;
-    if(st.turnsLeft <= 0){ delete ps[k]; afterStatusGone(k, 'player'); expired.push(STATUS_LABELS[k]||k); }
+    if(st.turnsLeft <= 0){ delete ps[k]; afterStatusGone(k, 'player'); expired.push(STATUS_LABELS[k]||k); ranOut++; }
   });
   /* Each of your monsters' own debuffs ages the same way (2.83). */
   Object.values(b.monStatus || {}).forEach(list=>{
@@ -459,7 +462,7 @@ function tickStatuses(){
          turn: it goes now if it has cost it (`spent`), never by the clock. A
          freeze counts its own turns (`byTurn`), not the rounds. */
       if(st.type === 'asleep'){
-        if(st.spent){ list.splice(list.indexOf(st), 1); afterStatusGone('asleep', 'player'); expired.push(STATUS_LABELS.asleep); }
+        if(st.spent){ list.splice(list.indexOf(st), 1); afterStatusGone('asleep', 'player'); expired.push(STATUS_LABELS.asleep); ranOut++; }
         return;
       }
       if(st.byTurn) return;
@@ -469,13 +472,14 @@ function tickStatuses(){
       }
       st.turnsLeft--;
       if(st.turnsLeft <= 0){
+        ranOut++;
         list.splice(list.indexOf(st), 1); afterStatusGone(st.type, 'player');
         if(st.type !== 'forgot' && st.type !== 'taunted') expired.push(STATUS_LABELS[st.type]||st.type);   // a forgotten move simply comes back (2.97); a taunt simply ends (3.38)
       }
     });
   });
   /* (3.16) Their naps likewise: one that has cost its turn ends here. */
-  (b.enemies || []).forEach(e=>{ const z = getEStatus(e,'asleep'); if(z && z.spent) removeEStatus(e,'asleep'); });
+  (b.enemies || []).forEach(e=>{ const z = getEStatus(e,'asleep'); if(z && z.spent){ removeEStatus(e,'asleep'); ranOut++; } });
   /* Their side's own buffs age exactly as yours do. */
   const es = enemySideStatuses();
   Object.keys(es).forEach(k=>{
@@ -483,7 +487,7 @@ function tickStatuses(){
     if(st.permanent) return;                               // (3.63) a Tachypsychia stolen from you: no clock, as yours
     if(held('enemy', k, st, 'enemy')){ st.turnsLeft = st.max ? st.max : STATUS_TURNS + 1; return; }
     st.turnsLeft--;
-    if(st.turnsLeft <= 0){ delete es[k]; afterStatusGone(k, 'enemy'); expired.push('their ' + (STATUS_LABELS[k]||k)); }
+    if(st.turnsLeft <= 0){ delete es[k]; afterStatusGone(k, 'enemy'); expired.push('their ' + (STATUS_LABELS[k]||k)); ranOut++; }
   });
   if(b.fieldStatus){
     Object.keys(b.fieldStatus).forEach(k=>{
@@ -495,6 +499,7 @@ function tickStatuses(){
       }
       b.fieldStatus[k].turnsLeft--;
       if(b.fieldStatus[k].turnsLeft <= 0){
+        ranOut++;
         delete b.fieldStatus[k];
         b.enemies.forEach(e=> removeEStatus(e, k));
         expired.push(STATUS_LABELS[k]||k);
@@ -503,6 +508,7 @@ function tickStatuses(){
       }
     });
   }
+  magicBurst(ranOut);
   return expired;
 }
 
@@ -514,6 +520,8 @@ function addEStatus(e, status){
   if(!status) return;
   /* Iron Will (2.97): it cannot be put to sleep, stunned or muddled. */
   if(ironWillHolds(e, status)){ floatOver(e, 'IRON WILL'); return; }
+  /* (3.76) the distortion Untouchable: no debuff of yours takes hold */
+  if(e && e.debuffImmune && STATUS_KIND[status.type] === 'debuff' && statusOwner(status.type, status, 'enemy') === 'player'){ floatOver(e, 'IMMUNE'); return; }
   /* An enemy's own buff can't form under your dust; your mark on it can't
      form under theirs. Polarity decides which is which. */
   { const ow = statusOwner(status.type, status, 'enemy');
@@ -727,6 +735,18 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     const softE = getEStatus(attacker,'softened');          // your weaken on it
     if(softE) dmg *= (1 - (softE.amount || 0.5));
     dmg *= playerTerrorizeFactor();                          // yours frightens them (2.87)
+    /* (3.76) a future monster's element passives, as yours above (17-region6.js) */
+    if(typeof foeAttackAmp === 'function'){
+      dmg *= foeAttackAmp(attacker, defender);
+      if(!peek && !(opts && opts.rider)){ fc = foeForesightCrit(attacker, defender); dmg *= fc; }
+    }
+  }
+  /* (3.75) Talents, either side's (17-region6.js): its damage bonuses, all
+     added up — and a critical of its own, on a blow no other critical has
+     made one already (the two would add, as Foresight's and a Hydra's do). */
+  if(typeof talentDealMult === 'function'){
+    dmg *= talentDealMult(attacker, defender, isPlayerAttacking, peek, opts);
+    if(!peek && !(opts && opts.rider) && fc === 1){ const tc = talentCrit(attacker, defender); if(tc > 1){ dmg *= tc; fc = tc; } }
   }
 
   // defender-side modifiers
@@ -757,6 +777,7 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(flE) dmg *= (1 - (flE.reduce || 0.15));
     dmg *= (1 - soulPassive(defender));                  // their Ankylosaurus's Steel Soul passive (2.93)
     if(siphonUp(1)) dmg *= (1 - SIPHON.cut);             // (3.43) the tower's first siphon: no dust takes it
+    if(typeof foeDefendMult === 'function') dmg *= foeDefendMult(defender);   // (3.76) their Elusive, their Tempering
   } else { // defender is a player monster
     const ohD = getPStatus(0,'overheat');
     if(ohD) dmg *= (ohD.take || 1.5);              // the cost of Overheat
@@ -777,11 +798,12 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     dmg *= (1 - soulPassive(defender));                  // Steel Soul's passive: its alone (2.93)
     /* (3.67) Elusive and Bedrock, its alone */
     { const dm = defender && defender.uid ? realMon(defender) : null;
-      if(dm){ dmg *= (1 - elusiveReduce(dm)); dmg *= bedrockFactor(dm); dmg *= temperingOn(dm) ? TEMPER.take : 1; } }   // (3.69) Tempering
+      if(dm){ dmg *= (1 - elusiveReduce(dm)); dmg *= temperingOn(dm) ? TEMPER.take : 1; } }   // (3.69) Tempering; (3.76) Bedrock's cut gone
     /* What their side has put on yours: a Curse makes you softer. */
     const curP = getPStatus(0,'curse');
     if(curP && isEnemyOwned('curse', curP)) dmg *= (1 + (curP.extra != null ? curP.extra : 0.25));
   }
+  if(typeof talentTakeMult === 'function') dmg *= talentTakeMult(defender, attacker);   // (3.75) its talents' cuts, either side's
   /* The passives (2.97): Composure, Exploit and Focus on the attacker's side;
      Knight's Oath's armour and a Precognition on the defender's. */
   if(ui.battle) ui.battle._foresightMult = fc;    // (3.70) critStrike reads it: the two criticals add
@@ -795,11 +817,11 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
   const uid = casterMon.uid;
   const res = { msg:'', hits:[] };
   const d = veryHighDef(type, plus||0) || {};
-  const T = d.turns || STATUS_TURNS;
+  const T = (d.turns || STATUS_TURNS) + (typeof talentLinger === 'function' ? talentLinger(casterMon) : 0);   // (3.75) a Lingering constellation
   switch(type){
     case 'Fire': { // Overheat — whole party trades defence for offence
       const had = !!getPStatus(0,'overheat');
-      const st = setPStatus(uid,{type:'overheat', turnsLeft:T+1, deal:d.deal, take:d.take, burn:d.burn||0, atk:casterAtk});
+      const st = setPStatus(uid,{type:'overheat', turnsLeft:T+1, deal:d.deal, take:d.take, burn:d.burn||0, atk:casterAtk, tier:plus || 0});   // (3.76) its tier, for Wildfire
       if(st) layOverheatBurn('player', st, T);            // (3.60) the burn as the Overheat now stands: the hotter one
       res.msg = (had && st) ? `Renewed for <b>${T}</b> turns, as strong as ever: your team ${overheatSays(st, 'every enemy')}.` : d.text;
       break; }
@@ -815,34 +837,38 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       const n = d.freeze || 1;
       let frozen = 0;
       livingEnemies().forEach(e=>{ if(freezeFoe(e, n)) frozen++; });
-      applyFieldStatus({ type:'chill', turnsLeft:T + 1, slow:d.slow || 0, cut:d.cut || 0, refreeze:d.refreeze || 0, mine:true });
+      applyFieldStatus({ type:'chill', turnsLeft:T + 1, slow:d.slow || 0, cut:d.cut || 0, refreeze:d.refreeze || 0, mine:true, tier:plus || 0 });
       res.msg = `🧊 Ice Tomb! ${frozen ? `${frozen === 1 ? 'It is' : `All ${frozen} are`} frozen for ${n === 1 ? 'the next turn' : `the next ${n} turns`}` : 'Nothing freezes'}` +
                 ` — and the chill stays for ${T} turns: ${d.slow} step${d.slow > 1 ? 's' : ''} slower, ${Math.round((d.cut || 0) * 100)}% less damage` +
                 (d.refreeze ? `, and a ${Math.round(d.refreeze * 100)}% chance each turn to freeze again` : '') + '.';
       break; }
 
     case 'Grass': // Leech Seed — field-wide; every hit feeds the WHOLE party
-      applyFieldStatus({ type:'leechSeed', turnsLeft:T, heal:d.heal, bite:d.bite||0, biteHeals:!!d.biteHeals });
+      applyFieldStatus({ type:'leechSeed', turnsLeft:T, heal:d.heal, bite:d.bite||0, biteHeals:!!d.biteHeals, tier:plus || 0 });
       res.msg = d.text;
       break;
 
     case 'Electric': { // Overcharge — party-wide repeat chance, and (3.16) the whole side a step or more sooner
-      /* (3.67) Catalyse: cast by a monster that holds it, a + or ✦ Overcharge's
-         first chance covers two moves that land, not one */
-      const cat = !!(casterMon && casterMon.uid && typeof elemPassiveOn === 'function' && elemPassiveOn(casterMon, 'Electric', 'vh') && (d.first || 0) > (d.after || 0));
-      setPStatus(uid,{type:'overcharge', turnsLeft:T+1, chance:d.after, firstChance:d.first, fresh:true, freshLeft:cat ? 2 : 1, init:d.init || 0});
-      res.msg = d.text + (cat ? ' ⚗️ <b>Catalyse:</b> that first chance covers your next two moves that land.' : '');
+      /* (3.76) Catalyse — the designer: "overcharge passive now instead adds
+         an additional 50/70/100 chance of extra hit stack to the team when
+         overcharge is cast, as long as the holder is in the team". Its
+         first chances (`firsts`) are a queue: the Overcharge's own, then
+         Catalyse's, each spent by a move that lands (spendOverchargeFirst). */
+      const cat = catalyseChance('player', plus || 0);
+      const firsts = [d.first].concat(cat ? [cat] : []);
+      setPStatus(uid,{type:'overcharge', turnsLeft:T+1, chance:d.after, firstChance:firsts[0], firsts, fresh:true, init:d.init || 0, tier:plus || 0});
+      res.msg = d.text + (cat ? ` ⚗️ <b>Catalyse:</b> and the move after that one, a <b>${Math.round(cat * 100)}%</b> chance.` : '');
       break; }
 
     case 'Ground': // Spike Armour — party-wide, softer than before; (3.16) ✦ a strike riding on every hit
-      setPStatus(uid,{type:'spikeArmour', turnsLeft:T+1, reduce:d.reduce, thorns:d.thorns, spike:d.spike || 0});
+      setPStatus(uid,{type:'spikeArmour', turnsLeft:T+1, reduce:d.reduce, thorns:d.thorns, spike:d.spike || 0, tier:plus || 0});
       res.msg = d.text;
       break;
 
     case 'Flying': // Mirage — one untouchable turn, then dodges make copies
       setPStatus(uid,{type:'mirage', turnsLeft:T+1, window:(d.window||[1]).slice(), step:0,
                       chance:d.after, images:d.images||0, imageDmg:d.imageDmg||0,
-                      init:d.init||0, owner:uid, pending:0});
+                      init:d.init||0, owner:uid, pending:0, tier:plus || 0});
       res.msg = d.text;
       break;
 
@@ -851,12 +877,11 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
          because the cast is wrapped the whole effect vanished silently — which
          is why nothing appeared when Diamond Dust borrowed it. */
       const tier = plus || 0;                  // 0 / 1 / 2 by refinement
-      if(!getPStatus(0, 'counter') && ui.battle && ui.battle.deadlyCombo) ui.battle.deadlyCombo = {};   // (3.68) a new Counter: Deadly Combo starts again
-      addCounterStack(casterMon, tier, d.stacks || 1);
       setPStatus(uid, { type:'counter', turnsLeft:STATUS_TURNS + 1, tier,
                         regain:d.regain||0.10, combo:d.combo||0.25,
                         enrage:d.enrage||0, owner:uid });
-      res.msg = d.text;
+      addCounterStack(casterMon, tier, d.stacks || 1);     // (3.76) after the status: Focused Fury's Enrage goes to its caster
+      res.msg = d.text + takeDeflectSaid();
       break;
     }
 
@@ -873,8 +898,9 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       const holder = keep ? battleMonByUid(was.deadly) : deadlyCurseCaster(casterMon);
       const tier = keep ? Math.max(was.tier || 0, plus || 0) : (plus || 0);
       const dd = keep ? veryHighDef('Ghost', tier) : d;
-      applyFieldStatus({ type:'curse', turnsLeft:T, extra:dd.extra, mute:!!dd.mute, tier, deadly:holder ? holder.uid : null });   // (3.68) its tier
-      if(dd.reduce) setPStatus(uid,{type:'curseWard', turnsLeft:T+1, reduce:dd.reduce});
+      applyFieldStatus({ type:'curse', turnsLeft:T, extra:dd.extra, mute:!!dd.mute, tier, deadly:holder ? holder.uid : null,
+                         stage:keep ? (was.stage || 0) : 0 });   // (3.68) its tier; (3.76) a Deadly one's build-up, kept on a renewal
+      if(dd.reduce) setPStatus(uid,{type:'curseWard', turnsLeft:T+1, reduce:dd.reduce, tier});
       res.msg = keep ? `🪆 The Deadly Curse is renewed: ${T} more turns${tier > (was.tier || 0) ? `, and it is ${['', '+', '✦'][tier]} now` : ''}.`
               : holder ? `🪆 It becomes a <b>Deadly Curse</b>: ${d.text} And at the start of each turn it strikes one of them.`
               : d.text;
@@ -888,7 +914,7 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       const self = d.self || [0.5, 0.8];
       setPStatus(uid, { type:'confusionField', turnsLeft:T, mine:true,
                         after:d.confuseAfter || 0.20, self:self.slice(),
-                        sleep:d.sleep || 0, sure:true, sureUsed:false });
+                        sleep:d.sleep || 0, sure:true, sureUsed:false, tier:plus || 0 });
       let n = 0;
       livingEnemies().forEach(e=>{ markConfused(e, null, false, rollSelf(self)); if(getEStatus(e,'discombobulate')) n++; });
       res.msg = `🌀 Discombobulate! ` + (n ? `${n === 1 ? 'It is' : `All ${n} are`} confused — when ${n === 1 ? 'it acts' : 'one acts'}, it hits its own side for ` +
@@ -914,12 +940,10 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       break;
 
     case 'Fairy': { // Diamond Dust — cleanse, ward, and (when refined) borrow
-      const renewing = !!getPStatus(0, 'diamondDust');
       const cleared = diamondDustCleanse();
       setPStatus(uid, { type:'diamondDust', turnsLeft:T+1,
                         borrowPick:d.borrowPick||0, borrowRandom:d.borrowRandom||0,
-                        borrowTier:d.borrowTier||0, owner:uid });
-      queueDetonate(cleared + (renewing ? 1 : 0));   // (3.69) Detonate: each thing it swept, and one for a dust renewed
+                        borrowTier:d.borrowTier||0, owner:uid, tier:plus || 0 });
       res.msg = d.text + (cleared ? ` ${cleared} enemy effect${cleared===1?'':'s'} swept away.` : '');
       res.cleared = cleared;                    // (3.59) for the free cast's own line
       res.borrowPick   = d.borrowPick || 0;     // how many the player chooses
@@ -968,15 +992,32 @@ function moveUnlockedFor(m, mv){
    its later rate after that; 0 without it. A turn with nothing to repeat (the
    words went wrong, or every strike was dodged) keeps the first rate (2.74; it
    used to lapse at the end of the round it was cast in). */
-function overchargeChance(){
-  const oc = getPStatus(0,'overcharge');
+function overchargeChance(){ return ocChance(getPStatus(0,'overcharge')); }
+/* Either side's Overcharge's chance now: the head of its first chances while
+   any are left (3.76: `firsts`, Catalyse's after its own), else its later
+   rate. */
+function ocChance(oc){
   if(!oc) return 0;
-  return (oc.fresh && oc.firstChance != null) ? oc.firstChance : (oc.chance || 0.25);
+  if(oc.fresh){
+    if(Array.isArray(oc.firsts) && oc.firsts.length) return oc.firsts[0];
+    if(oc.firstChance != null) return oc.firstChance;
+  }
+  return oc.chance || 0.25;
 }
 function spendOverchargeFirst(oc){
   if(!oc) return;
-  if((oc.freshLeft || 1) > 1){ oc.freshLeft--; return; }   // (3.67) Catalyse: a second move at the first chance
+  if(Array.isArray(oc.firsts) && oc.firsts.length > 1){ oc.firsts.shift(); oc.firstChance = oc.firsts[0]; return; }   // (3.76) Catalyse's comes next
+  oc.firsts = [];
   oc.fresh = false;
+}
+/* (3.76) Catalyse's extra first chance for an Overcharge `side` casts now:
+   50 / 70 / 100% by its tier, with a holder standing in that side's team
+   (on the field or off it), its passive working. */
+const CATALYSE = [0.50, 0.75, 1.00];   // (3.77) "overcharge should be 50/75/100%"
+function catalyseChance(side, tier){
+  const has = side === 'player' ? yourHolders('Electric', 'vh').length > 0
+                                : (typeof foeHolders === 'function' && foeHolders('Electric', 'vh').length > 0);
+  return has ? (CATALYSE[Math.max(0, Math.min(2, tier || 0))] || CATALYSE[0]) : 0;
 }
 /* The usual cap, and the one a lucky Overcharge double can reach (one more). */
 function chargeCaps(def){ return { normal:def.max, lucky:def.max + 1 }; }
@@ -1054,7 +1095,7 @@ function legacyTakers(){
   const h = chargeHolder();
   const beside = h ? livingField().find(m=> m !== h) : null;
   if(beside) out.push({ m:beside, beside:true });
-  if(b.switchedThisTurn) return out;
+  if(switchShut()) return out;                     // (3.76) nor after a move this turn
   sendOutOptions(b.activeIndex).forEach(o=>{
     if(o.m.currentHp > 0) out.push({ m:o.m, i:o.i });
     const c = companionsAllowed() ? companionOf(o.m) : null;
@@ -1066,7 +1107,7 @@ function legacyTakers(){
 function legacyClosedWhy(){
   const b = ui.battle;
   if(!b) return 'Not now';
-  if(!legacyTakers().length) return b.switchedThisTurn ? 'Switched this turn' : 'Nobody to give to';
+  if(!legacyTakers().length) return b.switchedThisTurn ? 'Switched this turn' : b.movedThisRound ? 'No switching after a move this turn' : 'Nobody to give to';
   return '';
 }
 /* An attack begins (onMoveChosen): a monster holding a Legacy charge strikes
@@ -1149,26 +1190,52 @@ function legacyChooser(title, sub, entries, onPick, dismissable, onCancel){
 /* ============================================================
    ELEMENT PASSIVES IN BATTLE (3.67; the data and the bag: 02-core.js)
    - Wildfire (Fire, Very High slot): while your Overheat is up, each turn's
-     pre-action, 0.25× its ATK to every enemy and to itself — as Overheat ✦'s
-     burn: your damage buffs, their Curse, its ATK as it is now. The one
-     beside it is not touched; its own burn never takes it below half its
+     pre-action, 0.08 / 0.16 / 0.25× its ATK by the Overheat's tier (3.76) to
+     every enemy and to itself — as Overheat ✦'s burn: your damage buffs,
+     their Curse, its ATK as it is now. (3.76) On the field or off it ("change
+     wildfire to work when the holder is off-field too. it also damages the
+     holder from off-field"); its own burn never takes it below half its
      health, and goes on scorching them all the same.
    - Consume (Fire, Ultra slot): +1% damage for every 1% of health lost, up
      to +50% at half or below.
-   - Frost Armour (Water, Very High slot): while your Ice Tomb's chill holds,
-     a shield at the start and the end of each turn on the field — up to one.
-   - Shatter (Water, Ultra slot): +25% damage on anything chilled or frozen.
-   - Blossom (Grass, Very High slot): at full health, each hit that sets off
-     Leech Seed strikes again for 0.1× ATK — a rider (every buff counts, no
-     shield is touched, no more Leech Seed, no other riders).
+   - (3.76) Cleansing Springs (Water, Very High slot; Frost Armour's place):
+     with it on the field, at the end of each round your team is healed 2%
+     of its max HP — 10% to one below half its health; a Fire monster above
+     half gets nothing — and one of their marks on your side is washed off,
+     a disabling one first (CLEANSE_FIRST).
+   - (3.76) Shatter (Water, Ultra slot): anything chilled takes 15% more from
+     your side, anything frozen 15% more (both: 30%), while a holder of it
+     stands in your team, on the field or off it.
+   - (3.76) Nourish (Grass, Very High slot; Blossom's place): each drink of
+     your Leech Seed, with a holder of it standing in your team (on the field
+     or off it), is a stack of +5% ATK for the team (party status
+     `nourish`), up to 5, all of them lasting the next turn too; added to its
+     base ATK as Enrage is (monAtk), never multiplied.
    - Burgeon (Grass, Ultra slot): +25% damage at full health.
    A ✦ Curse of theirs quiets them, as it does any passive.
    ============================================================ */
-const WILDFIRE = { pct:0.25, floor:0.5 };
+const WILDFIRE = { pct:[0.08, 0.16, 0.25], floor:0.5 };
 const CONSUME_CAP = 0.5;
-const SHATTER_AMP = 1.25, BURGEON_AMP = 1.25, BLOSSOM_PCT = 0.1;
+const BURGEON_AMP = 1.25;
+const SHATTER = { chill:0.15, freeze:0.15 };
+/* (3.77) by the tier of your Ice Tomb's chill / your Leech Seed — the designer:
+   "cleansing springs heals 1/2/2% and below half 5/10/10%. star tier has the
+   same numbers as plus tier but has the added effect of healing and
+   cleansing from the bench"; Nourish "3/4/5%" */
+const SPRINGS = { team:[0.01, 0.02, 0.02], low:[0.05, 0.10, 0.10], under:0.5, benchAt:2 };
+const NOURISH = { per:[0.03, 0.04, 0.05], max:5 };
 function elemPassiveOn(m, el, slot){
-  return !!m && elemPassiveAt(m, slot) === el && !(ui.battle && typeof passivesMuted === 'function' && passivesMuted(m));
+  return !!m && elemPassivesIn(m, slot).includes(el) && !(ui.battle && typeof passivesMuted === 'function' && passivesMuted(m));
+}
+/* (3.76) Yours standing anywhere — on the field or off it — whose passive
+   `el`/`slot` works. */
+function yourHolders(el, slot){
+  if(!ui.battle) return [];
+  const seen = new Set(), out = [];
+  playerField().concat(battleParty(), companionsAllowed() ? bondedCompanions() : []).forEach(m=>{   // a companion off the field too
+    if(m && m.uid && !seen.has(m.uid) && m.currentHp > 0 && elemPassiveOn(m, el, slot)){ seen.add(m.uid); out.push(m); }
+  });
+  return out;
 }
 /* Consume's share: the part of its health it has lost, up to half. */
 function consumeBonus(m){
@@ -1182,49 +1249,116 @@ function burgeonUp(m){ return elemPassiveOn(m, 'Grass', 'ultra') && m.currentHp 
 function elemSelfAmp(m){
   if(!m || !m.uid) return 1;
   return (1 + consumeBonus(m)) * (burgeonUp(m) ? BURGEON_AMP : 1) * (1 + momentumBonus(m)) * (1 + deadlyComboBonus(m))   // (3.67) Momentum; (3.68) Deadly Combo
-    * (temperingOn(m) ? TEMPER.deal : 1) * (1 + coruscateBonus(m));                     // (3.69) Tempering, Coruscate
+    * (temperingOn(m) ? TEMPER.deal : 1) * (1 + coruscateBonus(m)) * metamorphAmp(m);   // (3.69) Tempering, Coruscate; (3.77) Metamorph
+}
+/* (3.76) Shatter, on one of theirs: what it takes more from your side. */
+function shatterAmp(defender){
+  if(!defender || defender.uid || !ui.battle) return 1;
+  const chill = !!getEStatus(defender, 'chill'), ice = !!getEStatus(defender, 'iceTomb');
+  if(!(chill || ice) || !yourHolders('Water', 'ultra').length) return 1;
+  return 1 + (chill ? SHATTER.chill : 0) + (ice ? SHATTER.freeze : 0);
 }
 /* …and, in the blow, what the target's state adds (Shatter). */
 function elemAttackAmp(attacker, defender){
   const m = attacker && attacker.uid ? realMon(attacker) : null;
   if(!m) return 1;
   let amp = elemSelfAmp(m);
-  if(defender && !defender.uid && elemPassiveOn(m, 'Water', 'ultra') && (getEStatus(defender, 'iceTomb') || getEStatus(defender, 'chill'))) amp *= SHATTER_AMP;
+  amp *= shatterAmp(defender);                                       // (3.76) anyone of yours, its holder anywhere
   if(violentFaster(m, defender)) amp *= 1 + VIOLENT_DANCE.faster;   // (3.69) Violent Dance: on anything slower
   return amp;
 }
-/* Frost Armour: up to one shield, while your chill holds. Returns who got one. */
-function frostArmourTop(m){
+/* (3.76) Cleansing Springs, at the end of the round (endRound) — (3.77) while
+   your Ice Tomb's chill is up, by its tier: the team healed 1 / 2 / 2% of
+   the holder's max HP each, 5 / 10 / 10% to one below half its health,
+   nothing to a Fire monster above half — and one of their marks on your side
+   washed off, a disabling one first. Base and +: holders on the field; ✦:
+   holders anywhere in your team. Returns its line. */
+const CLEANSE_FIRST = ['iceTomb', 'asleep', 'stunned', 'paralysed', 'charmed', 'charm', 'discombobulate', 'taunted', 'blinded', 'jaws', 'disrupt', 'forgot'];
+function springsHeal(h, team, hpOf, setHp, maxOf, typesOf, tier){
+  const hmax = maxOf(h), out = [], t = Math.max(0, Math.min(2, tier || 0));
+  team.forEach(m=>{
+    const cur = hpOf(m), max = maxOf(m);
+    if(cur <= 0 || cur >= max) return;
+    const low = cur < max * SPRINGS.under;
+    if(!low && typesOf(m).includes('Fire')) return;      // "does not heal fire monsters above 50% HP"
+    const got = Math.min(max - cur, Math.ceil(hmax * (low ? SPRINGS.low[t] : SPRINGS.team[t])));
+    if(got > 0){ setHp(m, cur + got); out.push([m, got]); }
+  });
+  return out;
+}
+/* The Ice Tomb chill a side has laid: yours on them (b.fieldStatus.chill),
+   theirs on you — its tier, or -1. */
+function springsTier(side){
   const b = ui.battle;
-  if(!b || !m || m.currentHp <= 0 || !(b.fieldStatus && b.fieldStatus.chill)) return false;
-  if(!elemPassiveOn(m, 'Water', 'vh') || (m.blockStacks || 0) >= 1) return false;
-  grantBlock(m, 1, monAtk(m));
-  return true;
+  if(!b) return -1;
+  if(side === 'player'){ const c = b.fieldStatus && b.fieldStatus.chill; return c ? vhTier(c) : -1; }
+  const c = getPStatus(0, 'chill');
+  return (c && isEnemyOwned('chill', c)) ? vhTier(c) : -1;
 }
-function frostArmourTick(){
-  const got = livingField().filter(frostArmourTop).map(m=> displayName(m));
-  return got.length ? `❄️ Frost Armour — ${got.join(' and ')} ${got.length > 1 ? 'gain' : 'gains'} a shield.` : '';
+function springsWash(side){
+  const pool = marksOnSide(side);
+  if(!pool.length) return null;
+  const x = CLEANSE_FIRST.map(t=> pool.find(p=> p.type === t)).find(Boolean) || pool[0];
+  x.take();
+  return x;
 }
-/* Blossom, inside Leech Seed: the hit's rider. Returns what it took. */
-function blossomRider(t, mon){
-  if(!t || t.hp <= 0 || !mon || mon.currentHp < monMaxHp(mon) || !elemPassiveOn(mon, 'Grass', 'vh')) return 0;
-  return riderOnFoe(t, riderDamage(BLOSSOM_PCT, monAtk(mon), monRef(mon), t, true));
+function cleansingSprings(){
+  const b = ui.battle, tier = springsTier('player');
+  if(!b || tier < 0) return '';
+  const holders = tier >= SPRINGS.benchAt ? yourHolders('Water', 'vh') : livingField().filter(m=> elemPassiveOn(m, 'Water', 'vh'));
+  if(!holders.length) return '';
+  const said = [];
+  holders.forEach(h=>{
+    const healed = springsHeal(h, healableAllies(), m=> m.currentHp, (m, v)=>{
+      const was = m.currentHp;
+      m.currentHp = v;
+      if(playerField().includes(m)) drainHp(pid('playerHp', m), was, v, monMaxHp(m));
+    }, monMaxHp, monTypes, tier);
+    const x = springsWash('player');
+    if(!healed.length && !x) return;
+    said.push(`⛲ Cleansing Springs (${escapeHtml(displayName(h))})` +
+      (healed.length ? ` — ${healed.map(([m, n])=> `${escapeHtml(displayName(m))} +${n}`).join(', ')}` : '') +
+      (x ? `${healed.length ? ';' : ' —'} ${escapeHtml(x.label)} is washed away` : '') + '.');
+  });
+  if(said.length) renderStatusBadges();
+  return said.join(' ');
+}
+/* (3.76) Nourish: a drink of your Leech Seed (resolveLeech), with a holder of
+   it standing in your team. Returns whether a stack came. (3.77) Each stack
+   is 3 / 4 / 5% by the Leech Seed's tier (`per`, the latest drink's). */
+function nourishPer(tier){ return NOURISH.per[Math.max(0, Math.min(2, tier))] || NOURISH.per[0]; }
+function nourishProc(){
+  if(!ui.battle || !yourHolders('Grass', 'vh').length) return false;
+  const was = getPStatus(0, 'nourish'), ls = ui.battle.fieldStatus && ui.battle.fieldStatus.leechSeed;
+  const n = Math.min(NOURISH.max, ((was && was.stacks) || 0) + 1);
+  const per = nourishPer(ls ? vhTier(ls) : ((was && was.tier) || 0));
+  const st = setPStatus(0, { type:'nourish', turnsLeft:2, stacks:n, per, tier:ls ? vhTier(ls) : ((was && was.tier) || 0) });   // this turn and the next — every stack's, started again
+  if(st) renderStatusBadges();
+  return !!st;
+}
+/* Its share of a monster's base ATK (monAtk: added, as Enrage is). */
+function nourishBonus(m, base){
+  if(!ui.battle || !m || !m.uid) return 0;
+  const st = getPStatus(0, 'nourish');
+  return (st && st.stacks > 0) ? Math.round(base * (st.per || NOURISH.per[2]) * Math.min(NOURISH.max, st.stacks)) : 0;
 }
 /* Wildfire, in the pre-action phase beside Overheat ✦'s burn. */
+function wildfirePct(st){ return WILDFIRE.pct[Math.max(0, vhTier(st))] || WILDFIRE.pct[0]; }
 function runWildfire(done){
   const b = ui.battle;
   if(!b || !getPStatus(0, 'overheat')) return done();
-  const holders = livingField().filter(m=> elemPassiveOn(m, 'Fire', 'vh'));
+  const holders = yourHolders('Fire', 'vh');                 // (3.76) on the field or off it
   if(!holders.length) return done();
   let k = 0;
   const step = ()=>{
     if(!ui.battle || k >= holders.length) return done();
     const me = holders[k++];
-    const foes = livingEnemies();
-    if(!foes.length || me.currentHp <= 0 || !getPStatus(0, 'overheat')) return step();
+    const foes = livingEnemies(), oh = getPStatus(0, 'overheat');
+    if(!foes.length || me.currentHp <= 0 || !oh) return step();
+    const out = playerField().includes(me);
     /* its own multipliers count too (Consume, Burgeon — and Shatter on a
        chilled one), as they do on any blow of its */
-    const base = WILDFIRE.pct * monAtk(me) * ownBuffMultiplier();
+    const base = wildfirePct(oh) * monAtk(me) * ownBuffMultiplier();
     const hits = foes.map(t=>{
       let dmg = Math.ceil(base * elemAttackAmp(monRef(me), t) * hexAmp(t));
       const cur = getEStatus(t, 'curse');
@@ -1234,7 +1368,7 @@ function runWildfire(done){
     applyHits(hits, { noLeech:true, by:me });   // upkeep damage never feeds Leech Seed — its own, for Vicious Hex (3.70)
     reportHits(hits);
     /* itself: straight to its health (its shields are not spent on its own
-       fire), never below half */
+       fire), never below half — off the field too (3.76) */
     let self = Math.ceil(base * elemSelfAmp(me));
     const curP = getPStatus(0, 'curse');
     if(curP && isEnemyOwned('curse', curP)) self = Math.ceil(self * (1 + (curP.extra != null ? curP.extra : 0.25)));
@@ -1243,56 +1377,77 @@ function runWildfire(done){
     if(took > 0){
       const before = me.currentHp;
       me.currentHp -= took;
-      flashHit(document.getElementById(pid('playerBob', me)));
-      drainHp(pid('playerHp', me), before, me.currentHp, monMaxHp(me));
-      showDamageNumber(pid('playerBob', me), took);
+      if(out){
+        flashHit(document.getElementById(pid('playerBob', me)));
+        drainHp(pid('playerHp', me), before, me.currentHp, monMaxHp(me));
+        showDamageNumber(pid('playerBob', me), took);
+      }
     }
-    logBattle(`Wildfire (${displayName(me)}): ${hits.map(h=> h.dmg).join('/')} to them, ${took} to itself`);
-    battleMsg(`🔥 Wildfire! ${escapeHtml(displayName(me))}'s flames scorch them` + (took > 0 ? ' — and itself.' : '.'));
+    logBattle(`Wildfire (${displayName(me)}${out ? '' : ', off the field'}): ${hits.map(h=> h.dmg).join('/')} to them, ${took} to itself`);
+    battleMsg(`🔥 Wildfire! ${escapeHtml(displayName(me))}'s flames${out ? '' : ', from the bench,'} scorch them` + (took > 0 ? ' — and itself.' : '.'));
     renderStatusBadges();
     setTimeout(step, 850);
   };
   step();
 }
 /* ---- (3.67) Electric, Flying, Ground ----
-   - Catalyse (Electric, VH): in the Overcharge cast (applyVeryHighEffect)
-     and spendOverchargeFirst — a second move at the first chance.
-   - Capacitor (Electric, Ultra): while your Overcharge is up, 25% of the
+   - Catalyse (Electric, VH): (3.76) an Overcharge cast while a holder stands
+     in its team gets one more first chance, 50 / 75 / 100% by its tier (3.77),
+     after its own (catalyseChance; the queue `firsts`, spendOverchargeFirst).
+   - Capacitor (Electric, Ultra): (3.77: no Overcharge needed) 25% of the
      damage it deals (each attack, repeat and extra action its own stack)
      strikes a random enemy at the end of the round; with none left, it
      waits, and strikes one of the next wave as its first turn begins.
    - Elusive (Flying, VH): while your Mirage is up, damage it takes is cut by
      its best dodge chance (Mirage's own, a stance's, a passive's, its
-     clones', its Tachypsychia's), up to 30%; and an attack on it leaves the
-     Mirage's afterimages even when it lands.
+     clones', its Tachypsychia's), up to 30% — (3.76) and the rest of your
+     team's by a third of that, while it stands in your team; and an attack
+     on it leaves the Mirage's afterimages even when it lands.
    - Momentum (Flying, Ultra): +10% damage a step of initiative above its
      own (what its own passives give it), up to +30%.
-   - Bedrock (Ground, VH): while your Spike Armour is up, ×0.85 damage taken,
-     and once a meter (usedSoul 'bedrock:' + uid) a blow that would knock it
-     out leaves it on 1 HP with a shield.
-   - Metamorph (Ground, Ultra): while your Spike Armour is up, +5% ATK at
-     each turn's end, up to +25%, kept for the battle (monAtk). */
-const CAPACITOR_PCT = 0.25, ELUSIVE_CAP = 0.30, BEDROCK_TAKE = 0.85;
-const MOMENTUM = { per:0.10, cap:0.30 }, METAMORPH = { per:0.05, max:5 };
+   - (3.76) Spike Formation (Ground, VH; Bedrock's place): while your Spike
+     Armour is up, a spike of 0.2 / 0.3 / 0.4× its ATK (3.77: by the Spike
+     Armour's tier, kept with each spike) forms in each turn's pre-action.
+     On the field, it is driven at once into one of them at random; off it,
+     up to 3 wait (b.spikes), and all are driven in, each at one at random,
+     once it is on the field (runSpikeDrive, at the next step of the turn).
+   - Metamorph (Ground, Ultra): (3.77) +5% damage at each turn's end, on the
+     field or off it, up to +20% (4 turns), kept for the battle (elemSelfAmp)
+     — no Spike Armour needed, and no longer ATK. (3.76) And Bedrock's last
+     stand: once a meter (usedSoul 'bedrock:' + uid) a blow that would knock
+     it out leaves it on 1 HP with a shield, holding on that turn and the
+     next. Bedrock's 15% cut is gone. */
+const CAPACITOR_PCT = 0.25, ELUSIVE_CAP = 0.30, ELUSIVE_SHARE = 1 / 3;
+const MOMENTUM = { per:0.10, cap:0.30 }, METAMORPH = { per:0.05, max:4 };   // (3.77) damage, 5/10/15/20%
+const SPIKE_FORM = { pct:[0.2, 0.3, 0.4], max:3 };                            // (3.77) by the Spike Armour's tier
 /* (3.68) every step counts, its own passives' too (the designer: "Momentum
    should count passives too") — it counted only what came from outside */
 function momentumBonus(m){
   if(!elemPassiveOn(m, 'Flying', 'ultra')) return 0;
   return Math.min(MOMENTUM.cap, MOMENTUM.per * Math.max(0, initiativeOf('player', m)));
 }
-function elusiveReduce(m){
-  const mir = ui.battle ? getPStatus(0, 'mirage') : null;
-  if(!mir || !elemPassiveOn(m, 'Flying', 'vh')) return 0;
+/* A holder's own cut: its best dodge chance, up to 30%. */
+function elusiveOwn(m, mir){
   const cl = getPStatus(0, 'clones'), tac = tachyOf(m);
   const best = Math.max(stanceEvasion(m),
     (mir.window && mir.step < mir.window.length) ? mir.window[mir.step] : (mir.chance || 0.20),
     (cl && cl.evade) || 0, tac ? tachyDodgeChance(tac) : 0);
   return Math.min(ELUSIVE_CAP, best);
 }
-function bedrockFactor(m){ return (ui.battle && getPStatus(0, 'spikeArmour') && elemPassiveOn(m, 'Ground', 'vh')) ? BEDROCK_TAKE : 1; }
+function elusiveReduce(m){
+  const mir = ui.battle ? getPStatus(0, 'mirage') : null;
+  if(!mir || !m) return 0;
+  if(elemPassiveOn(m, 'Flying', 'vh')) return elusiveOwn(m, mir);
+  /* (3.76) "allow mirage very high passive to work for non-holders at 1/3
+     the damage reduction value" — the best holder's, standing anywhere */
+  const hs = yourHolders('Flying', 'vh');
+  return hs.length ? Math.max(...hs.map(h=> elusiveOwn(h, mir))) * ELUSIVE_SHARE : 0;
+}
+/* Metamorph's last stand (Bedrock's, before 3.76): once a meter — (3.77)
+   with or without your Spike Armour. */
 function bedrockReady(m){
   const b = ui.battle;
-  return !!(b && m && getPStatus(0, 'spikeArmour') && elemPassiveOn(m, 'Ground', 'vh') && !(b.usedSoul && b.usedSoul['bedrock:' + m.uid]) && !theirCurseOnYou());
+  return !!(b && m && elemPassiveOn(m, 'Ground', 'ultra') && !(b.usedSoul && b.usedSoul['bedrock:' + m.uid]) && !theirCurseOnYou());
 }
 function bedrockSave(m){
   const b = ui.battle;
@@ -1301,19 +1456,100 @@ function bedrockSave(m){
   (b.endure || (b.endure = {}))[m.uid] = roundNo() + 1;     // (3.68) this turn and the next
 }
 function metamorphStacks(m){ return (m && ui.battle && ui.battle.metamorph && ui.battle.metamorph[m.uid]) || 0; }
-function metamorphBonus(m, base){ const n = metamorphStacks(m); return n ? Math.round(base * METAMORPH.per * n) : 0; }
+/* (3.77) its damage, ×1.05 a turn to ×1.20 (it was ATK) */
+function metamorphAmp(m){ return elemPassiveOn(m, 'Ground', 'ultra') ? 1 + METAMORPH.per * Math.min(METAMORPH.max, metamorphStacks(m)) : 1; }
 function metamorphTurn(m){
   const b = ui.battle;
-  if(!b || !m || m.currentHp <= 0 || !getPStatus(0, 'spikeArmour') || !elemPassiveOn(m, 'Ground', 'ultra')) return false;
+  if(!b || !m || m.currentHp <= 0 || !elemPassiveOn(m, 'Ground', 'ultra')) return false;
   const M = b.metamorph || (b.metamorph = {});
   if((M[m.uid] || 0) >= METAMORPH.max) return false;
   M[m.uid] = (M[m.uid] || 0) + 1;
   return true;
 }
+/* (3.76) Spike Formation. One spike's strike: `pct` (0.2 / 0.3 / 0.4) × its
+   ATK at one of them at random, every damage buff counted, as Violent Dance's. */
+function spikePct(st){ return SPIKE_FORM.pct[Math.max(0, vhTier(st))] || SPIKE_FORM.pct[0]; }
+function spikeStrike(me, pct){
+  const b = ui.battle, foes = livingEnemies();
+  if(!b || !foes.length) return null;
+  const t = foes[Math.floor(Math.random() * foes.length)];
+  let dmg = Math.ceil((pct || SPIKE_FORM.pct[0]) * monAtk(me) * ownBuffMultiplier() * elemAttackAmp(monRef(me), t) * hexAmp(t));
+  const cur = getEStatus(t, 'curse');
+  if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
+  const hits = [{ t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }];
+  applyHits(hits, { noLeech:true, by:me });
+  reportHits(hits);
+  return { t, dmg };
+}
+/* Off the field they wait, each with its own figure (b.spikes[uid]: a list). */
+function spikesHeld(m){ const S = m && ui.battle && ui.battle.spikes && ui.battle.spikes[m.uid]; return Array.isArray(S) ? S : []; }
+function spikesWaiting(m){ return spikesHeld(m).length; }
+/* In the pre-action phase (runUpkeepPassives): one spike for each holder of
+   yours — struck at once on the field, kept off it (up to 3). */
+function runSpikeFormation(done){
+  const b = ui.battle, sa = b ? getPStatus(0, 'spikeArmour') : null;
+  if(!b || !sa) return done();
+  const holders = yourHolders('Ground', 'vh');
+  if(!holders.length) return done();
+  const pct = spikePct(sa), field = livingField(), now = [], kept = [];
+  holders.forEach(h=>{
+    if(field.includes(h)){ now.push(h); return; }
+    const S = b.spikes || (b.spikes = {});
+    if(!Array.isArray(S[h.uid])) S[h.uid] = [];
+    if(S[h.uid].length < SPIKE_FORM.max){ S[h.uid].push(pct); kept.push(h); }
+  });
+  if(kept.length){
+    logBattle('Spike Formation (off the field): ' + kept.map(h=> `${displayName(h)} ${spikesWaiting(h)}/${SPIKE_FORM.max}`).join(', '));
+    renderStatusBadges();
+  }
+  let k = 0;
+  const step = ()=>{
+    if(!ui.battle || k >= now.length){
+      if(kept.length && ui.battle) battleMsg(`🪨 Spike Formation — ${kept.map(h=> `${escapeHtml(displayName(h))}'s spikes wait, ${spikesWaiting(h)} of ${SPIKE_FORM.max}`).join('; ')}.`);
+      return kept.length ? setTimeout(()=>{ if(ui.battle) done(); }, 600) : done();
+    }
+    const me = now[k++];
+    if(me.currentHp <= 0 || !livingEnemies().length) return step();
+    const r = spikeStrike(me, pct);
+    if(r){
+      logBattle(`Spike Formation (${displayName(me)}): ${r.dmg} to ${SPECIES[r.t.species].name}`);
+      battleMsg(`🪨 Spike Formation! A spike of ${escapeHtml(displayName(me))}'s strikes ${escapeHtml(SPECIES[r.t.species].name)}.`);
+    }
+    setTimeout(step, 700);
+  };
+  step();
+}
+/* It is on the field with spikes waiting — it has taken the field since they
+   formed: all are driven in, at the next step of the turn (runTurnStep). */
+function spikeDriveDue(){ return !!ui.battle && livingField().some(m=> spikesWaiting(m) > 0); }
+function runSpikeDrive(done){
+  const b = ui.battle;
+  if(!spikeDriveDue()) return done();
+  const jobs = [];
+  livingField().forEach(me=>{
+    const held = spikesHeld(me).slice(), n = held.length;
+    if(!n) return;
+    b.spikes[me.uid] = [];
+    held.forEach((pct, i)=> jobs.push([me, i + 1, n, pct]));
+  });
+  let j = 0;
+  const step = ()=>{
+    if(!ui.battle || j >= jobs.length){ if(ui.battle) renderStatusBadges(); return done(); }
+    const [me, k, n, pct] = jobs[j++];
+    if(!livingEnemies().length) return step();
+    const r = spikeStrike(me, pct);
+    if(r){
+      logBattle(`Spike Formation (${displayName(me)}) driven ${k}/${n}: ${r.dmg} to ${SPECIES[r.t.species].name}`);
+      battleMsg(`🪨 ${escapeHtml(displayName(me))} is on the field — its spikes are driven in${n > 1 ? ` (${k}/${n})` : ''}: ${escapeHtml(SPECIES[r.t.species].name)}!`);
+    }
+    setTimeout(step, 650);
+  };
+  step();
+}
 /* Capacitor: what an attack of its stores (applyHits). */
 function capacitorStore(mon, hits, opts){
   const b = ui.battle;
-  if(!b || !mon || (opts && (opts.noLeech || opts.noStore)) || !getPStatus(0, 'overcharge') || !elemPassiveOn(mon, 'Electric', 'ultra')) return;
+  if(!b || !mon || (opts && (opts.noLeech || opts.noStore)) || !elemPassiveOn(mon, 'Electric', 'ultra')) return;   // (3.77) no Overcharge needed
   const dealt = (hits || []).reduce((n, h)=> n + Math.max(0, (h.oldHp || 0) - (h.newHp || 0)) + (h.rider || 0), 0);
   const v = Math.round(dealt * CAPACITOR_PCT);
   if(v > 0){ (b.capacitor || (b.capacitor = [])).push({ uid:mon.uid, dmg:v, round:roundNo() }); renderStatusBadges(); }
@@ -1351,7 +1587,8 @@ function releaseCapacitor(done, carried){
 }
 /* The start-of-turn upkeep the element passives bring: Wildfire, then a
    Capacitor's stacks left over from a wave that fell. */
-function runUpkeepPassives(done){ runWildfire(()=> runDeadlyCurse(()=> runViolentDance(()=> releaseCapacitor(done, true)))); }   // (3.69) Violent Dance   // (3.68) Deadly Curse
+function runUpkeepPassives(done){ runWildfire(()=> runDeadlyCurse(()=> runViolentDance(()=> runSpikeFormation(()=> releaseCapacitor(()=> runFoeUpkeep(done), true))))); }   // (3.69) Violent Dance   // (3.68) Deadly Curse   // (3.76) Spike Formation, and theirs (17-region6.js)
+function runFoeUpkeep(done){ return (typeof foeUpkeepPassives === 'function') ? foeUpkeepPassives(done) : done(); }
 /* Elusive: an attack that lands on it still leaves the Mirage's afterimages. */
 function elusiveImages(mon){
   const mir = ui.battle ? getPStatus(0, 'mirage') : null;
@@ -1365,17 +1602,23 @@ function elusiveImages(mon){
    - Mind Control (Psychic, VH): a confused swing of theirs (your
      Discombobulate's) is yours to aim — one of its own moves on its own
      side, no words (confusedStrike, mindControl in 05).
-   - Foresight (Psychic, Ultra): while your Discombobulate is up, 20% dodge
+   - Foresight (Psychic, Ultra): (3.77: no Discombobulate needed) 20% dodge
      (playerEvasionFrom) and a 20% critical at 2× on each of its strikes,
-     rolled apart from a Hydra's (so both: 4×).
-   - Deadly Combo (Physical, VH): while your Counter is up, each hit it lands
-     +10% to its attacks, up to +30%; gone with the Counter.
-   - Focused Fury (Physical, Ultra): while your Counter is up, an Enrage stack
-     at the end of each turn.
+     rolled apart from a Hydra's (3.70: the two add, 3×).
+   - (3.76) Focused Fury (Physical, VH; Ultra before): with it on the field,
+     your Counter stacks become Deflect stacks — 90% of an attack turned
+     away, not 80%; a + or ✦ one's Combo and Enrage come as it turns (the
+     Enrage to the Counter's caster), not when it is spent (deflectSweep).
+     Its old Enrage at each turn's end is gone.
+   - (3.76) Deadly Combo (Physical, Ultra; VH before): each hit it lands +10%
+     to its attacks, up to +30% — (3.77) no Counter needed, kept for the
+     battle.
    - Deadly Curse (Ghost, VH): while your Curse is up, a single strike at the
      start of each turn, 0.16 / 0.33 / 0.66× its ATK by the Curse's tier, as
-     Overheat ✦'s burn — a hit for Vicious Hex.
-   - Vicious Hex (Ghost, Ultra): while your Curse is up, each hit of its on
+     Overheat ✦'s burn — a hit for Vicious Hex. (3.76) Built up over five
+     turns, a fifth each (c.stage): "make deadly curse take 5 turns to ramp
+     up to full value".
+   - Vicious Hex (Ghost, Ultra): (3.77: no Curse needed) each hit of its on
      one of them: +6% damage taken, to +66% (e.hex, 11). A marked one that
      falls passes ceil(2/3) of its marks to another of its wave, or to the
      next wave (b.hexCarry). The Whalelord's Aria marks too, from the bench. */
@@ -1384,10 +1627,10 @@ const DEADLY_COMBO = { per:0.10, max:3 };
 const DEADLY_CURSE = [0.16, 0.33, 0.66];
 const HEX = { per:0.06, max:11, pass:2 / 3 };
 function yourDiscombobulate(){ return !!(ui.battle && getPStatus(0, 'confusionField')); }
-function foresightDodge(m){ return (yourDiscombobulate() && elemPassiveOn(m, 'Psychic', 'ultra')) ? FORESIGHT.dodge : 0; }
+function foresightDodge(m){ return elemPassiveOn(m, 'Psychic', 'ultra') ? FORESIGHT.dodge : 0; }   // (3.77) no Discombobulate needed
 function foresightCrit(attacker, defender){
   const m = attacker && attacker.uid ? realMon(attacker) : null;
-  if(!m || !yourDiscombobulate() || !elemPassiveOn(m, 'Psychic', 'ultra') || !(Math.random() < FORESIGHT.crit)) return 1;
+  if(!m || !elemPassiveOn(m, 'Psychic', 'ultra') || !(Math.random() < FORESIGHT.crit)) return 1;
   if(defender && !defender.uid) floatOver(defender, 'CRITICAL');
   const b = ui.battle;
   if(b._critAt !== b.actionSeq){ b._critAt = b.actionSeq; b._crits = 0; }
@@ -1397,7 +1640,7 @@ function foresightCrit(attacker, defender){
 function mindControlHolder(){ return ui.battle ? (livingField().find(m=> elemPassiveOn(m, 'Psychic', 'vh')) || null) : null; }
 function yourCounter(){ return !!(ui.battle && getPStatus(0, 'counter')); }
 function deadlyComboStacks(m){ return (m && ui.battle && ui.battle.deadlyCombo && ui.battle.deadlyCombo[m.uid]) || 0; }
-function deadlyComboBonus(m){ return (yourCounter() && elemPassiveOn(m, 'Physical', 'vh')) ? DEADLY_COMBO.per * deadlyComboStacks(m) : 0; }
+function deadlyComboBonus(m){ return elemPassiveOn(m, 'Physical', 'ultra') ? DEADLY_COMBO.per * deadlyComboStacks(m) : 0; }   // (3.76) the Ultra slot's; (3.77) no Counter needed, kept for the battle
 /* A hit of the one in focus's own: its moves, their repeats and echoes, its
    quick attack and riposte (an attack of its own carries `blow`) — not a
    burn, an afterimage, a Capacitor's release or the Monkey King's blows. */
@@ -1418,17 +1661,11 @@ function dealerOf(opts){
 /* Each hit of its that landed (applyHits). */
 function deadlyComboCount(mon, hits, opts){
   const b = ui.battle;
-  if(!b || !mon || !yourCounter() || !elemPassiveOn(mon, 'Physical', 'vh')) return;
+  if(!b || !mon || !elemPassiveOn(mon, 'Physical', 'ultra')) return;
   const n = (hits || []).filter(h=> h && !h.dodged && (h.raw || 0) > 0 && (h.oldHp || 0) > 0).length;
   if(!n) return;
   const D = b.deadlyCombo || (b.deadlyCombo = {});
   D[mon.uid] = Math.min(DEADLY_COMBO.max, (D[mon.uid] || 0) + n);
-}
-function focusedFuryTurn(m){
-  if(!m || m.currentHp <= 0 || !yourCounter() || !elemPassiveOn(m, 'Physical', 'ultra')) return false;
-  m.enrageStacks = (m.enrageStacks || 0) + 1;
-  paintEnrage(m);
-  return true;
 }
 /* Your Curse's tier (its field): 0 base, 1 +, 2 ✦; -1 with none up. */
 function yourCurseTier(){
@@ -1437,17 +1674,23 @@ function yourCurseTier(){
   if(c.tier != null) return c.tier;
   return c.mute ? 2 : (getPStatus(0, 'curseWard') ? 1 : 0);
 }
+/* (3.76) A Deadly Curse's strike as it builds: its stage (1–5) of five. */
+const DEADLY_CURSE_STAGES = 5;
+function deadlyCurseNow(c, tier){
+  const full = DEADLY_CURSE[tier] != null ? DEADLY_CURSE[tier] : DEADLY_CURSE[0];
+  return full * Math.max(1, Math.min(DEADLY_CURSE_STAGES, (c && c.stage) || 1)) / DEADLY_CURSE_STAGES;
+}
 function hexOf(e){ return (e && e.hex) || 0; }
 function hexAmp(t){ return (t && !t.uid && t.hex > 0) ? 1 + HEX.per * Math.min(HEX.max, t.hex) : 1; }
 function addHex(t, n){
-  if(!t || t.uid || !(n > 0)) return 0;
+  if(!t || t.uid || !(n > 0) || t.debuffImmune) return 0;   // (3.76) Untouchable: no mark
   const was = t.hex || 0;
   t.hex = Math.min(HEX.max, was + n);
   return t.hex - was;
 }
 /* A hit of `mon`'s on one of theirs, while your Curse is up. */
 function hexHit(mon, t){
-  if(!mon || !t || t.hp <= 0 || yourCurseTier() < 0 || !elemPassiveOn(mon, 'Ghost', 'ultra')) return false;
+  if(!mon || !t || t.hp <= 0 || !elemPassiveOn(mon, 'Ghost', 'ultra')) return false;   // (3.77) no Curse needed
   if(dustBlocks('player')) return false;           // (3.69) their dust: no mark of yours takes hold
   return addHex(t, 1) > 0;
 }
@@ -1506,7 +1749,7 @@ function hexHolders(){
 }
 /* A Deadly Curse's strike marks what it struck, for whoever holds Vicious Hex. */
 function hexFromDeadly(t){
-  if(!t || t.hp <= 0 || yourCurseTier() < 0 || dustBlocks('player') || !hexHolders().length) return false;
+  if(!t || t.hp <= 0 || dustBlocks('player') || !hexHolders().length) return false;
   return addHex(t, 1) > 0;
 }
 /* Deadly Curse, at the start of each turn (runUpkeepPassives): one of them,
@@ -1519,15 +1762,16 @@ function runDeadlyCurse(done){
   const me = battleMonByUid(c.deadly), foes = livingEnemies();
   if(!me || !foes.length) return done();
   const t = foes[Math.floor(Math.random() * foes.length)];
-  let dmg = Math.ceil((DEADLY_CURSE[c.tier || 0] || DEADLY_CURSE[0]) * monAtk(me) * ownBuffMultiplier() * elemAttackAmp(monRef(me), t) * hexAmp(t));
+  c.stage = Math.min(DEADLY_CURSE_STAGES, (c.stage || 0) + 1);          // (3.76) a fifth more each turn
+  let dmg = Math.ceil(deadlyCurseNow(c, c.tier || 0) * monAtk(me) * ownBuffMultiplier() * elemAttackAmp(monRef(me), t) * hexAmp(t));
   const cur = getEStatus(t, 'curse');
   if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
   const hits = [{ t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }];
   applyHits(hits, { noLeech:true, by:null });     // its mark comes from hexFromDeadly: once, whoever holds Vicious Hex
   reportHits(hits);
   const hexed = hexFromDeadly(t);
-  logBattle(`Deadly Curse (${displayName(me)}): ${hits[0].dmg} to ${SPECIES[t.species].name}`);
-  battleMsg(`🪆 Deadly Curse! It strikes ${escapeHtml(SPECIES[t.species].name)}` + (hexed ? ' — and marks it.' : '.'));
+  logBattle(`Deadly Curse (${displayName(me)}) ${c.stage}/${DEADLY_CURSE_STAGES}: ${hits[0].dmg} to ${SPECIES[t.species].name}`);
+  battleMsg(`🪆 Deadly Curse${c.stage < DEADLY_CURSE_STAGES ? ` (${c.stage}/${DEADLY_CURSE_STAGES})` : ''}! It strikes ${escapeHtml(SPECIES[t.species].name)}` + (hexed ? ' — and marks it.' : '.'));
   hexSweep();
   setTimeout(()=>{ if(ui.battle) done(); }, 850);
 }
@@ -1560,28 +1804,25 @@ function hpFloorOf(m){ return (ui.battle && (ui.battle.allyUnkillable || endureA
      in one turn, by the Aegis's tier (temperCap — every blow of theirs on
      yours lands through dropHp).
    - Fortress (Steel, Ultra): ⅔ from anything not Dragon (typeMultFor).
-   - Coruscate (Fairy, VH): while your Diamond Dust is up, +5% for each buff
-     your side has up, to +50%.
-   - Detonate (Fairy, Ultra): while your Diamond Dust is up, every effect of
-     theirs it sweeps or stops: 0.5× its ATK on every enemy, after the sweep
-     (a Lurk is gone by then); one more when the dust runs out or is renewed.
-     Counted where it happens (queueDetonate: b.detonate = { uid: n }), set
-     off at the next step of the turn (runTurnStep) — or straight after your
-     own cast of it (resolveStatusMove). */
+   - Coruscate (Fairy, VH): while your Diamond Dust is up, +1.5% for each
+     buff your side has up, to +15% (3.76; it was 5%, to +50%) — (3.77) for
+     every one of yours, with a holder anywhere in your team.
+   - Unstable Magic (Fairy, Ultra; Detonate until 3.77): every buff or debuff
+     of either side's swept (a Diamond Dust, a Nova), stopped by a dust, or
+     running out: 0.2× its ATK (3.76; it was 0.5×) on every enemy — on the
+     field or off it, no Diamond Dust needed (magicBurst). Counted where it
+     happens (queueDetonate: b.detonate = { uid: n }), set off at the next
+     step of the turn (runTurnStep) — or straight after your own cast of a
+     dust (resolveStatusMove). */
 const VIOLENT_DANCE = { pct:0.25, faster:0.20 };
 const DESTRUCTION_MULT = 1.5;
 const FORTRESS_TAKE = 0.67;
 const TEMPER = { take:0.90, deal:1.10, cap:[0.66, 0.50, 0.33] };
-const CORUSCATE = { per:0.05, cap:0.50 };
-const DETONATE_PCT = 0.5;
+const CORUSCATE = { per:0.015, cap:0.15 };   // (3.76) "1.5% per active buff instead of 5%" (the cap: still 10 buffs)
+const DETONATE_PCT = 0.2;                     // (3.76) "0.2*atk per detonated buff/debuff"
 function yourDragonDance(){ return ui.battle ? getPStatus(0, 'dragonDance') : null; }
 /* Your Dragon Dance's tier: 0 base, 1 +, 2 ✦; -1 with none up. */
-function danceTier(){
-  const d = yourDragonDance();
-  if(!d) return -1;
-  if(d.tier != null) return d.tier;
-  return Math.max(0, Math.min(2, (d.strip || 1) - 1));
-}
+function danceTier(){ return vhTier(yourDragonDance()); }   // (3.76) one reading for every tier
 /* Where a monster stands in the order: Mach Dragon's tier first, then its
    initiative — as orderCompare reads them. */
 function initKey(side, mon){ return machTier(side) * 1000 + initiativeOf(side, mon, true); }
@@ -1607,14 +1848,21 @@ function runViolentDance(done){
     /* (3.70) the designer: "violent dance should not strike every enemy,
        just one" — each strike its own at random */
     const t = foes[Math.floor(Math.random() * foes.length)];
+    /* (3.77) the designer: "violent dance hits should destroy extra shields
+       before each hit" — your Dragon Dance's own break (1 / 2 / 3), each strike */
+    const idx = b.enemies.indexOf(t), sh0 = shieldsOn(t);
+    b._vdSeq = (b._vdSeq || 0) + 1;                 // a break of its own, every strike
+    breakShields('player', null, t, 'vd:' + b._vdSeq, 'enemyBlk-' + idx, 'enemy-' + idx);
+    const broke = sh0 - shieldsOn(t);
     let dmg = Math.ceil(VIOLENT_DANCE.pct * monAtk(me) * ownBuffMultiplier() * elemAttackAmp(monRef(me), t) * hexAmp(t));
     const cur = getEStatus(t, 'curse');
     if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
-    const hits = [{ t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }];
+    const hits = [{ t, idx, dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }];
     applyHits(hits, { noLeech:true, by:me });       // an upkeep strike: no Leech Seed — its own (3.70)
     reportHits(hits);
-    logBattle(`Violent Dance (${displayName(me)}) ${k}/${n}: ${dmg} to ${SPECIES[t.species].name}`);
-    battleMsg(`🐲 Violent Dance${n > 1 ? ` (${k}/${n})` : ''}! ${escapeHtml(displayName(me))} strikes ${escapeHtml(SPECIES[t.species].name)}.`);   // (3.71) the Dragon Dance's own drawn dragon
+    logBattle(`Violent Dance (${displayName(me)}) ${k}/${n}: ${dmg} to ${SPECIES[t.species].name}` + (broke ? `, ${broke} shield${broke > 1 ? 's' : ''} broken first` : ''));
+    battleMsg(`🐲 Violent Dance${n > 1 ? ` (${k}/${n})` : ''}! ${escapeHtml(displayName(me))} strikes ${escapeHtml(SPECIES[t.species].name)}` +
+      (broke ? ` — ${broke} shield${broke > 1 ? 's' : ''} shattered first.` : '.'));   // (3.71) the Dragon Dance's own drawn dragon
     setTimeout(step, 700);
   };
   step();
@@ -1648,12 +1896,7 @@ function sweepSpares(k){
 /* Tempering: your Steel Aegis up, and it holds it. */
 function yourAegis(){ return ui.battle ? getPStatus(0, 'steelAegis') : null; }
 function temperingOn(m){ return !!(m && m.uid && yourAegis() && elemPassiveOn(m, 'Steel', 'vh')); }
-function aegisTier(){
-  const a = yourAegis();
-  if(!a) return -1;
-  if(a.tier != null) return a.tier;
-  return Math.max(0, Math.min(2, Math.round(((a.reduce || 0.30) - 0.30) / 0.05)));
-}
+function aegisTier(){ return vhTier(yourAegis()); }
 /* The most it may lose in one turn (rounded down), and what is left of it. */
 function temperMax(m){ return temperingOn(m) ? Math.floor((TEMPER.cap[aegisTier()] || TEMPER.cap[0]) * monMaxHp(m)) : Infinity; }
 function temperLeft(m){
@@ -1683,12 +1926,29 @@ function yourBuffCount(){
   const ps = partyStatuses();
   return Object.keys(ps).filter(k=> STATUS_KIND[k] === 'buff' && statusOwner(k, ps[k], 'player') === 'player').length;
 }
+/* (3.77) "make coruscate … work off-field now": while your Diamond Dust is up
+   and a holder stands in your team (on the field or off it), every one of
+   yours deals it. */
 function coruscateBonus(m){
-  if(!m || !m.uid || !ui.battle || !playerDust() || !elemPassiveOn(m, 'Fairy', 'vh')) return 0;
+  if(!m || !m.uid || !ui.battle || !playerDust() || !yourHolders('Fairy', 'vh').length) return 0;
   return Math.min(CORUSCATE.cap, CORUSCATE.per * yourBuffCount());
 }
-/* Detonate. */
-function detonateHolders(){ return ui.battle ? livingField().filter(m=> elemPassiveOn(m, 'Fairy', 'ultra')) : []; }
+/* Unstable Magic — Detonate until 3.77. The designer: "change detonate's name
+   to unstable magic and allow the holder to trigger damage against all
+   enemies whenever any buff or debuff is swept or expires. this means an
+   enemy diamond dust sweeping a player's buffs and debuffs receives
+   retribution damage from detonate as well. in addition, buffs/debuffs that
+   are prevented by an enemy's diamond dust can still be deliberately
+   triggered for damage" — and off the field too, no Diamond Dust needed.
+   Every buff or debuff, either side's, swept (a Diamond Dust, a Nova),
+   stopped by a dust, or running out is a count (magicBurst) for each holder
+   on BOTH sides (queueFoeDetonate, 17-region6.js). */
+function detonateHolders(){ return yourHolders('Fairy', 'ultra'); }
+function magicBurst(n){
+  if(!ui.battle || !(n > 0)) return;
+  queueDetonate(n);
+  if(typeof queueFoeDetonate === 'function') queueFoeDetonate(n);
+}
 function queueDetonate(n){
   const b = ui.battle;
   if(!b || !(n > 0)) return;
@@ -1697,8 +1957,9 @@ function queueDetonate(n){
   const D = b.detonate || (b.detonate = {});
   hs.forEach(m=>{ D[m.uid] = (D[m.uid] || 0) + n; });
 }
-/* Your dust kept one of theirs from taking hold. */
-function dustStopped(owner, n){ if(owner === 'enemy' && ui.battle && playerDust()) queueDetonate(n == null ? 1 : n); }
+/* A dust kept something from taking hold — either side's dust, either
+   side's effect (3.77: yours stopped by theirs counts for you too). */
+function dustStopped(owner, n){ if(ui.battle) magicBurst(n == null ? 1 : n); }
 const STOPPABLE_GRANTS = ['guard', 'airborne', 'invisible', 'prep', 'evadeTurns', 'evadeAlways', 'lurk'];
 function grantsStopped(was, now){
   if(!was) return 0;
@@ -1707,7 +1968,7 @@ function grantsStopped(was, now){
   return n;
 }
 function detonatePending(){ const D = ui.battle && ui.battle.detonate; return !!(D && Object.keys(D).some(k=> D[k] > 0)); }
-/* All that is waiting goes off now: 0.5× ATK a count, on every enemy, as one
+/* All that is waiting goes off now: 0.2× ATK a count, on every enemy, as one
    strike each — every damage buff and cut of yours counted. Returns its line. */
 function detonateNow(){
   const b = ui.battle;
@@ -1727,8 +1988,8 @@ function detonateNow(){
     });
     applyHits(hits, { noLeech:true, by:me });
     reportHits(hits);
-    logBattle(`Detonate (${displayName(me)}) ×${n}: ` + hits.map(h=> h.dmg).join(', '));
-    said.push(`💥 <b>Detonate${n > 1 ? ` ×${n}` : ''}!</b> ${escapeHtml(displayName(me))}'s dust bursts over every enemy.`);
+    logBattle(`Unstable Magic (${displayName(me)}) ×${n}: ` + hits.map(h=> h.dmg).join(', '));
+    said.push(`💥 <b>Unstable Magic${n > 1 ? ` ×${n}` : ''}!</b> ${escapeHtml(displayName(me))}'s magic bursts over every enemy.`);
   });
   return said.join(' ');
 }
@@ -1743,7 +2004,10 @@ function runDetonate(done){
 function elemPassivePills(m, who){
   if(!ui.battle || !m || m.currentHp <= 0) return '';
   const out = [];
-  if(getPStatus(0, 'overheat') && elemPassiveOn(m, 'Fire', 'vh')) out.push(`<span class="status-pill mine"${pillAt('wildfire', who)}>🔥 Wildfire</span>`);
+  if(getPStatus(0, 'overheat') && elemPassiveOn(m, 'Fire', 'vh')) out.push(`<span class="status-pill mine"${pillAt('wildfire', who)}>🔥 Wildfire · ${wildfirePct(getPStatus(0, 'overheat'))}×</span>`);
+  if(springsTier('player') >= 0 && elemPassiveOn(m, 'Water', 'vh')) out.push(`<span class="status-pill mine"${pillAt('springs', who)}>⛲ Cleansing Springs</span>`);   // (3.77) your Ice Tomb's chill up
+  if(elemPassiveOn(m, 'Water', 'ultra')) out.push(`<span class="status-pill mine"${pillAt('shatter', who)}>🧊 Shatter</span>`);
+  if(ui.battle.fieldStatus && ui.battle.fieldStatus.leechSeed && elemPassiveOn(m, 'Grass', 'vh')) out.push(`<span class="status-pill mine"${pillAt('nourishP', who)}>🌱 Nourish</span>`);
   const cb = consumeBonus(m);
   if(cb > 0) out.push(`<span class="status-pill mine"${pillAt('consume', who)}>🕯️ Consume · +${Math.round(cb * 100)}%</span>`);
   if(burgeonUp(m)) out.push(`<span class="status-pill mine"${pillAt('burgeon', who)}>🌳 Burgeon</span>`);
@@ -1753,16 +2017,18 @@ function elemPassivePills(m, who){
   if(el > 0) out.push(`<span class="status-pill mine"${pillAt('elusiveP', who)}>🪶 Elusive · −${Math.round(el * 100)}%</span>`);
   const mo = momentumBonus(m);
   if(mo > 0) out.push(`<span class="status-pill mine"${pillAt('momentum', who)}>🌪️ Momentum · +${Math.round(mo * 100)}%</span>`);
-  if(bedrockFactor(m) < 1 || endureActive(m)) out.push(`<span class="status-pill mine"${pillAt('bedrock', who)}>🪨 Bedrock${endureActive(m) ? ' · holding on' : bedrockReady(m) ? ' · ready' : ''}</span>`);
+  { const sw = spikesWaiting(m);                                   // (3.76) Spike Formation
+    if((getPStatus(0, 'spikeArmour') && elemPassiveOn(m, 'Ground', 'vh')) || sw) out.push(`<span class="status-pill mine"${pillAt('spikeForm', who)}>🪨 Spike Formation${sw ? ` · ${sw} waiting` : ''}</span>`); }
   if(yourDiscombobulate() && elemPassiveOn(m, 'Psychic', 'vh')) out.push(`<span class="status-pill mine"${pillAt('mindControl', who)}>🧠 Mind Control</span>`);
   if(foresightDodge(m) > 0) out.push(`<span class="status-pill mine"${pillAt('foresight', who)}>👁️ Foresight</span>`);
   const dc = deadlyComboBonus(m);
   if(dc > 0) out.push(`<span class="status-pill mine"${pillAt('deadlyCombo', who)}>🤜 Deadly Combo · +${Math.round(dc * 100)}%</span>`);
-  if(yourCounter() && elemPassiveOn(m, 'Physical', 'ultra')) out.push(`<span class="status-pill mine"${pillAt('focusedFury', who)}>😡 Focused Fury</span>`);
-  if(yourCurseTier() >= 0 && elemPassiveOn(m, 'Ghost', 'vh')) out.push(`<span class="status-pill mine"${pillAt('deadlyCurse', who)}>☠️ Deadly Curse</span>`);
-  if(yourCurseTier() >= 0 && elemPassiveOn(m, 'Ghost', 'ultra')) out.push(`<span class="status-pill mine"${pillAt('viciousHex', who)}>🕸️ Vicious Hex</span>`);
-  const mm = metamorphStacks(m);
-  if(mm) out.push(`<span class="status-pill mine"${pillAt('metamorph', who)}>🦋 Metamorph · +${Math.round(mm * METAMORPH.per * 100)}%</span>`);
+  if(elemPassiveOn(m, 'Physical', 'vh')) out.push(`<span class="status-pill mine"${pillAt('focusedFury', who)}>😡 Focused Fury</span>`);   // (3.76) the VH slot's: Deflect
+  if(yourCurseTier() >= 0 && elemPassiveOn(m, 'Ghost', 'vh')){ const dc0 = yourDeadlyCurse();
+    out.push(`<span class="status-pill mine"${pillAt('deadlyCurse', who)}>☠️ Deadly Curse${dc0 && (dc0.stage || 0) < DEADLY_CURSE_STAGES ? ` · ${dc0.stage || 0}/${DEADLY_CURSE_STAGES}` : ''}</span>`); }
+  if(elemPassiveOn(m, 'Ghost', 'ultra')) out.push(`<span class="status-pill mine"${pillAt('viciousHex', who)}>🕸️ Vicious Hex</span>`);
+  { const mm = metamorphStacks(m), hold = endureActive(m), ready = !hold && bedrockReady(m);   // (3.76) its last stand too
+    if(mm || hold || ready) out.push(`<span class="status-pill mine"${pillAt('metamorph', who)}>🦋 Metamorph${mm ? ` · +${Math.round(mm * METAMORPH.per * 100)}%` : ''}${hold ? ' · holding on' : ready ? ' · last stand ready' : ''}</span>`); }
   /* (3.69) the last six */
   if(yourDragonDance() && elemPassiveOn(m, 'Dragon', 'vh')) out.push(`<span class="status-pill mine"${pillAt('violentDance', who)}>💃 Violent Dance</span>`);
   if(elemPassiveOn(m, 'Dragon', 'ultra')) out.push(`<span class="status-pill mine"${pillAt('destruction', who)}>☄️ Destruction</span>`);
@@ -1770,7 +2036,7 @@ function elemPassivePills(m, who){
   if(elemPassiveOn(m, 'Steel', 'ultra')) out.push(`<span class="status-pill mine"${pillAt('fortress', who)}>🏰 Fortress</span>`);
   const co = coruscateBonus(m);
   if(co > 0) out.push(`<span class="status-pill mine"${pillAt('coruscate', who)}>🎇 Coruscate · +${Math.round(co * 100)}%</span>`);
-  if(playerDust() && elemPassiveOn(m, 'Fairy', 'ultra')) out.push(`<span class="status-pill mine"${pillAt('detonate', who)}>💥 Detonate</span>`);
+  if(elemPassiveOn(m, 'Fairy', 'ultra')) out.push(`<span class="status-pill mine"${pillAt('detonate', who)}>🔮 Unstable Magic</span>`);   // (3.77) Detonate's new name
   return out.join('');
 }
 
@@ -2077,6 +2343,30 @@ function veryHighDef(type, plus){
   const t = Math.max(0, Math.min(2, plus||0));
   return { name:v.name, turns:v.turns, text:v.text[t], ...v.tiers[t] };
 }
+/* (3.76) A Very High status's tier — 0 base, 1 +, 2 ✦; -1 for none. Every
+   cast stores it (either side's) since 3.76; before, only the Curse, the
+   Dragon Dance, the Steel Aegis and the Counter did, and the rest were
+   read from their figures — which is still how one without it is read. */
+function vhTier(st){
+  if(!st) return -1;
+  if(st.tier != null) return Math.max(0, Math.min(2, st.tier));
+  const at = (x, a, b)=> x >= b ? 2 : x >= a ? 1 : 0;
+  switch(st.type){
+    case 'overheat':       return 2 - at(st.take || 1.5, 1.2, 1.4);           // 1.5 / 1.3 / 1.1
+    case 'overcharge':     return at(st.firstChance != null ? st.firstChance : (st.chance || 0.25), 0.5, 0.9);
+    case 'spikeArmour':    return at(st.reduce || 0.2, 0.23, 0.28);
+    case 'mirage':         return at(st.images || 0, 1, 2);
+    case 'chill':          return at(st.slow || 1, 2, 3);
+    case 'leechSeed':      return st.biteHeals ? 2 : ((st.bite || 0) > 0 ? 1 : 0);
+    case 'curse':          return st.mute ? 2 : 0;                            // a + is told apart only by its ward
+    case 'curseWard':      return at(st.reduce || 0, 0.10, 0.15);
+    case 'confusionField': return at((st.self || [0.5])[0], 0.8, 1.1);
+    case 'dragonDance':    return Math.max(0, Math.min(2, (st.strip || 1) - 1));
+    case 'steelAegis':     return Math.max(0, Math.min(2, Math.round(((st.reduce || 0.30) - 0.30) / 0.05)));
+    case 'diamondDust':    return Math.max(0, Math.min(2, st.borrowTier || 0));
+  }
+  return 0;
+}
 
 /* ============================================================
    STANCES — Guard, Airborne, Invisible, Preparation
@@ -2096,7 +2386,7 @@ function applyPassiveGrant(holder, grant, atk){
   if(ui.battle && dustBlocks(isFoe ? 'enemy' : 'player')){
     const was = grant;
     grant = dustProofTraits(grant);
-    if(isFoe) dustStopped('enemy', grantsStopped(was, grant));   // (3.69) Detonate: each stance it kept from forming
+    dustStopped(isFoe ? 'enemy' : 'player', grantsStopped(was, grant));   // (3.69) each stance it kept from forming — (3.77) either side's, for Unstable Magic
   }
   if(grant.block)     grantBlock(holder, grant.block, atk);
   if(grant.guard)     holder.guard = true;
@@ -2222,6 +2512,7 @@ function applyEntryPassives(holder, species, level, atk){
      meant to be working the moment their carrier takes the field, not waiting
      to be cast. This only ever applies to the player's own monsters. */
   if(holder && holder.uid) applyStonePassives(holder);
+  if(typeof talentEntry === 'function') talentEntry(holder, atk);   // (3.75) a Bastion constellation's shields; the distortion's
 }
 
 /* Stone passives, fired on entry. Currently only Diamond Dust has one, but the
@@ -2411,6 +2702,8 @@ function enemyEvasion(t, noTachy){
   const fs = passiveOf(t);
   if(fs && fs.futuresight) src.push(fs.futuresight);
   if(siphonUp(1)) src.push(SIPHON.dodge);           // (3.43) the tower's first siphon: no dust takes it
+  if(typeof talentDodge === 'function') src.push(talentDodge(t));   // (3.75) a future monster's sky
+  if(typeof foeForesightDodge === 'function') src.push(foeForesightDodge(t));   // (3.76) its Foresight
   let hit = 1;
   src.forEach(x=>{ if(x > 0) hit *= (1 - x); });
   return (1 - hit) * sightFactor('player');      // (3.15) Arcane Sight
@@ -2462,6 +2755,7 @@ const STATUS_KIND = {
   diamondDust:'buff', aria:'buff', wrath:'buff', tachy:'buff', steelSoul:'buff',
   shell:'buff', clones:'buff', vita:'buff', fracture:'buff', barrier:'buff',
   kindle:'buff', gallop:'buff', iceBarrier:'buff', fleece:'buff', enchant:'buff', stargaze:'buff',
+  nourish:'buff',                                     // (3.76) Nourish's ATK
   /* debuffs: the side that put them there benefits */
   stunned:'debuff', paralysed:'debuff', softened:'debuff', charmed:'debuff', forgot:'debuff', taunted:'debuff',   // (3.38) a taunt
   charm:'debuff', disrupt:'debuff', disruptField:'debuff', asleep:'debuff',
@@ -2539,6 +2833,7 @@ function overheatMerged(prev, next){
   const heat = s=> (s.burn || 0) * (s.atk || 0);
   if(heat(prev) > heat(next)){ out.burn = prev.burn; out.atk = prev.atk; }
   out.turnsLeft = Math.max(prev.turnsLeft || 0, next.turnsLeft || 0);
+  out.tier = Math.max(vhTier(prev), vhTier(next));      // (3.76) the hotter tier, for Wildfire
   out.renewed = true;
   return out;
 }
@@ -2591,8 +2886,10 @@ function diamondDustCleanse(caster){
       list.splice(list.indexOf(st), 1); afterStatusGone(st.type, 'player'); cleared++;
     });
   });
+  /* (3.76) a future monster's Tempering on their field: none of their buffs go */
+  const foeKept = victim === 'enemy' && typeof foeTemperingGuards === 'function' && foeTemperingGuards();
   /* 2. Their side bag — only ever their own buffs. */
-  if(victim === 'enemy'){
+  if(victim === 'enemy' && !foeKept){
     const es = enemySideStatuses();
     Object.keys(es).forEach(k=>{
       if(es[k].unsweepable) return;
@@ -2611,31 +2908,32 @@ function diamondDustCleanse(caster){
   }
   (b.enemies || []).forEach(e=>{
     eStatuses(e).slice().forEach(st=>{
-      if(!st.unsweepable && statusOwner(st.type, st, 'enemy') === victim){ removeEStatus(e, st.type); cleared++; }
+      if(!st.unsweepable && statusOwner(st.type, st, 'enemy') === victim && !foeKept){ removeEStatus(e, st.type); cleared++; }
     });
     if(victim === 'player' && e.hex > 0){ e.hex = 0; cleared++; }   // (3.69) your Vicious Hex marks on them, too
   });
   /* 4. What each monster has gained during the fight. (3.72) Tempering on
         your field keeps all of yours. */
   const kept = victim === 'player' && temperingGuards();
-  const holders = victim === 'enemy' ? (b.enemies || []) : kept ? [] : battleParty();
+  const holders = victim === 'enemy' ? (foeKept ? [] : (b.enemies || [])) : kept ? [] : battleParty();
   holders.forEach(m=>{ cleared += sweepMonsterBuffs(m, victim); });
   if(victim === 'player'){
     if(!kept && partyCounters().length){ b.pCounter = []; cleared++; }
     if(!kept && b.pCombo){ b.pCombo = 0; cleared++; }
   } else {
     /* (3.01) theirs are their side's too */
-    if(foeCounters().length){ b.eCounter = []; cleared++; }
-    if(b.eCombo){ b.eCombo = 0; cleared++; }
+    if(!foeKept && foeCounters().length){ b.eCounter = []; cleared++; }
+    if(!foeKept && b.eCombo){ b.eCombo = 0; cleared++; }
   }
   /* 5. Their queued upkeep strikes: an Overheat's burn, an Aftershock. (Yours
         stay with Tempering on your field, 3.72.) */
-  if(b.preHits && b.preHits.length && !kept){
+  if(b.preHits && b.preHits.length && !kept && !foeKept){
     const keep = b.preHits.filter(p=> (p.by || 'player') !== victim);
     cleared += b.preHits.length - keep.length;
     b.preHits = keep;
   }
   setTimeout(refreshAllBlockBars, 0);
+  magicBurst(cleared);                       // (3.77) Unstable Magic: every thing swept, either side's holders
   return cleared;
 }
 /* One monster's gains, gone. Resets to ONE rather than zero where a figure
@@ -2674,7 +2972,6 @@ function afterStatusGone(type, side){
     if(type === 'jaws') b.noFlee = !!b.noFleeBase;       // it lets go
   }
   if(type === 'mirage') clearAfterimages();
-  if(type === 'diamondDust' && side === 'player') queueDetonate(1);   // (3.69) Detonate: the dust gone, one more
   /* An Overheat's burn goes out with the Overheat, whoever holds it now. */
   if(type === 'overheat' && b.preHits) b.preHits = b.preHits.filter(p=> !(p.src === 'overheat' && (p.by || 'player') === side));
 }
@@ -2708,6 +3005,7 @@ function novaPurge(casterSide, purge){
     burnt.push(pickOut(pool));
   }
   if(!swept.length && !burnt.length) return '';
+  magicBurst(swept.length + burnt.length);   // (3.77) Unstable Magic: what a Nova sweeps
   setTimeout(refreshAllBlockBars, 0);
   const yours = (casterSide || 'player') === 'player';
   const a = swept.length ? `sweeps away ${yours ? 'their' : 'your'} ${swept.join(' and ')}` : '';
@@ -2758,6 +3056,7 @@ function sweepableBuffs(side){
     const name = p.sacredFlame ? '🐦‍🔥 Sacred Flame' : p.aftershock ? '💥 Aftershock' : (p.label || 'upkeep strike');
     out.push({ label:name, take:()=>{ b.preHits = (b.preHits || []).filter(x=> x !== p); } });
   });
+  if(side === 'enemy' && typeof foeTemperingGuards === 'function' && foeTemperingGuards()) return [];   // (3.76) …and theirs keeps theirs
   return side === 'player' ? out.filter(x=> !sweepSpares(x.key)) : out;   // (3.72) Tempering keeps yours
 }
 /* One monster's gains, one entry each — what sweepMonsterBuffs takes all at
@@ -2813,11 +3112,11 @@ function marksOnSide(side){
     Object.keys(ps).forEach(k=>{
       const st = ps[k];
       if(st.unsweepable || statusOwner(k, st, 'player') !== 'enemy') return;
-      out.push({ label:label(k), take:()=>{ delete ps[k]; afterStatusGone(k, 'player'); } });
+      out.push({ type:k, label:label(k), take:()=>{ delete ps[k]; afterStatusGone(k, 'player'); } });   // (3.76) its type, for Cleansing Springs
     });
     livingField().forEach(m=> monStatuses(m).slice().forEach(st=>{
       if(st.unsweepable || statusOwner(st.type, st, 'player') !== 'enemy') return;
-      out.push({ label:label(st.type), take:()=>{
+      out.push({ type:st.type, label:label(st.type), take:()=>{
         const list = monStatuses(m), i = list.indexOf(st);
         if(i >= 0) list.splice(i, 1);
         afterStatusGone(st.type, 'player');
@@ -2827,11 +3126,11 @@ function marksOnSide(side){
     const fs = b.fieldStatus || {};
     Object.keys(fs).forEach(k=>{
       if(fs[k].unsweepable) return;
-      out.push({ label:label(k), take:()=>{ delete fs[k]; (b.enemies || []).forEach(e=> removeEStatus(e, k)); } });
+      out.push({ type:k, label:label(k), take:()=>{ delete fs[k]; (b.enemies || []).forEach(e=> removeEStatus(e, k)); } });
     });
     livingEnemies().forEach(e=> eStatuses(e).slice().forEach(st=>{
       if(st.unsweepable || fs[st.type] || statusOwner(st.type, st, 'enemy') !== 'player') return;
-      out.push({ label:label(st.type), take:()=> removeEStatus(e, st.type) });
+      out.push({ type:st.type, label:label(st.type), take:()=> removeEStatus(e, st.type) });
     }));
   }
   return out;
@@ -3005,7 +3304,11 @@ function enemyStatusBlocked(type){
 
 /* The borrow grid: three across, four down, every OTHER element. The last row
    holds Dragon and Steel only — Fairy cannot borrow itself. */
-const BORROW_GRID = ['Fire','Water','Grass','Electric','Ground','Flying','Physical','Ghost','Psychic','Dragon','Steel'];
+/* (3.77) the nine elements — no Dragon, Steel or Fairy (the designer: "change
+   diamond dust's selection and random cast to operate only on the 9
+   elements excluding dragon, fairy and steel for consistency. it also makes
+   the grid nicer (3x3)") */
+const BORROW_GRID = ['Fire','Water','Grass','Electric','Ground','Flying','Physical','Ghost','Psychic'];
 function openBorrowPicker(mon, plus, count, done){
   const chosen = [];
   const paint = ()=>{
@@ -3152,54 +3455,133 @@ function counterList(holder){
 function addCounterStack(holder, tier, n){
   const list = counterList(holder);
   for(let k = 0; k < (n||1); k++) list.push(COUNTER_TIERS[tier||0]);
+  if(ui.battle) ui.battle._deflectSaid = '';               // (3.76) only this turning's words, for the line that made them (takeDeflectSaid)
+  deflectSweep(isOurs(holder) ? 'player' : 'enemy');      // (3.76) Focused Fury on the field: they turn at once
   return list.length;
 }
-/* Always spend the best one first. */
+/* ------------------------------------------------------------
+   (3.76) FOCUSED FURY'S DEFLECT — the designer: "when the holder is active
+   on the field, all counter stacks are transformed into deflect stacks.
+   deflect reduces incoming damage by 90%, and if +/star tier counter is
+   active, the combo and enrage stacks are immediately gained i.e. a star
+   tier counter which creates 2 counter stacks instantly becomes 2 deflect
+   stacks + 2 combo stacks + 2x enrage=40% atk boost to the holder of the
+   counter skill. when the holder is off-field and more counter stacks proc,
+   they stay as counter stacks until the holder comes back on." A stack
+   turned is a copy (`deflect`; `paid` when its Combo and Enrage came as it
+   turned — a + or ✦ one's), spent first and spent for 90%. A base one (or
+   a brawler's own stance) pays its Combo when it is spent, as before. The
+   Enrage goes to the Counter's caster (its status's owner) — or, gone, to
+   the holder.
+   ------------------------------------------------------------ */
+const DEFLECT_REDUCTION = 0.90;
+function furyHolderOn(side){
+  if(!ui.battle) return null;
+  if(side === 'player') return livingField().find(m=> elemPassiveOn(m, 'Physical', 'vh')) || null;
+  return (typeof foeFuryHolder === 'function') ? foeFuryHolder() : null;
+}
+function deflectSweep(side){
+  const b = ui.battle;
+  if(!b) return '';
+  const h = furyHolderOn(side);
+  if(!h) return '';
+  const list = side === 'player' ? partyCounters() : foeCounters();
+  let n = 0, paid = 0;
+  list.forEach((st, i)=>{
+    if(st.deflect) return;
+    const pay = (st.tier || 0) >= 1;
+    list[i] = Object.assign({}, st, { deflect:true, paid:pay });
+    n++;
+    if(pay) paid++;
+  });
+  if(!n) return '';
+  let who = null;
+  if(paid){
+    if(side === 'player') b.pCombo = (b.pCombo || 0) + paid; else b.eCombo = (b.eCombo || 0) + paid;
+    const c = side === 'player' ? getPStatus(0, 'counter') : getESide('counter');
+    who = side === 'player' ? (c && c.owner ? battleMonByUid(c.owner) : null) : (c && c.owner && c.owner.hp > 0 ? c.owner : null);
+    if(!who || hpOfMon(who) <= 0) who = h;
+    who.enrageStacks = (who.enrageStacks || 0) + paid;
+    paintEnrage(who);
+  }
+  renderStatusBadges();
+  const nm = x=> escapeHtml(x.uid ? displayName(x) : SPECIES[x.species].name);
+  const said = ` 😡 ${side === 'player' ? '' : 'Their '}${nm(h)}'s Focused Fury: ${n === 1 ? 'the Counter stack is a Deflect stack' : `${n} Counter stacks are Deflect stacks`}` +
+    (paid ? ` — <b>Combo +${paid}</b>, and <b>Enrage +${paid}</b> for ${nm(who)}, at once.` : '.');
+  b._deflectSaid = said;
+  return said;
+}
+/* What the last turning said, for the line that made the stacks (once). */
+function takeDeflectSaid(){
+  const b = ui.battle;
+  if(!b || !b._deflectSaid) return '';
+  const s = b._deflectSaid;
+  b._deflectSaid = '';
+  return s;
+}
+/* Always spend the best one first — (3.76) a Deflect before any Counter. */
 function takeBestCounter(holder){
   const list = counterList(holder);
   if(!list.length) return null;
+  const score = x=> (x.deflect ? 10 : 0) + (x.tier || 0);
   let bi = 0;
-  list.forEach((s,i)=>{ if(s.tier > list[bi].tier) bi = i; });
+  list.forEach((s,i)=>{ if(score(s) > score(list[bi])) bi = i; });
   return list.splice(bi, 1)[0];
 }
 function counterCountOf(holder){ return counterList(holder).length; }
-/* A side's stacks as one pill, marked with the best of them (+ or ✦). */
+/* A side's stacks as one pill, marked with the best of them (+ or ✦) —
+   (3.76) its Deflect stacks a pill of their own. */
 function counterPill(list, cls){
   if(!list || !list.length) return '';
-  const best = Math.max(...list.map(s=> s.tier || 0));
-  const mark = ['', '+', '✦'][best] || '';
-  return `<span class="status-pill${cls ? ' ' + cls : ''}"${pillAt('counterStack', cls === 'foe' ? 'fs' : 'ps')}>✋ Counter ×${list.length}${mark ? ' ' + mark : ''}</span>`;
+  const one = (xs, icon, word)=>{
+    if(!xs.length) return '';
+    const best = Math.max(...xs.map(s=> s.tier || 0));
+    const mark = ['', '+', '✦'][best] || '';
+    return `<span class="status-pill${cls ? ' ' + cls : ''}"${pillAt('counterStack', cls === 'foe' ? 'fs' : 'ps')}>${icon} ${word} ×${xs.length}${mark ? ' ' + mark : ''}</span>`;
+  };
+  return one(list.filter(s=> !s.deflect), '✋', 'Counter') + one(list.filter(s=> s.deflect), '🛡️', 'Deflect');
 }
 
 /* Called when an enemy attack is about to land during an ACTION phase. Returns
    the damage multiplier to apply — 1 if no stack was spent. A stack covers the
    ENTIRE attack, single or twin or barrage alike, and is then gone. */
 function spendCounterStack(mon){
+  const turned = deflectSweep(isOurs(mon) ? 'player' : 'enemy');      // (3.76) the holder came on since: they turn now
   const st = takeBestCounter(mon);
   if(!st) return 1;
-  /* the combo travels with the side; the enrage stays with the animal */
-  if(isOurs(mon)) ui.battle.pCombo = (ui.battle.pCombo||0) + 1;
-  else            ui.battle.eCombo = (ui.battle.eCombo||0) + 1;
-  if(st.enrage) mon.enrageStacks = (mon.enrageStacks||0) + 1;
+  /* the combo travels with the side; the enrage stays with the animal —
+     (3.76) unless a Deflect's came already, as it turned */
+  if(!st.paid){
+    if(isOurs(mon)) ui.battle.pCombo = (ui.battle.pCombo||0) + 1;
+    else            ui.battle.eCombo = (ui.battle.eCombo||0) + 1;
+    if(st.enrage) mon.enrageStacks = (mon.enrageStacks||0) + 1;
+  }
   renderStatusBadges();
   paintEnrage(mon);
-  battleMsg(`✋ ${displayName(mon)} plants a foot and takes it on the guard — <b>80% turned away!</b>`
-    + (st.enrage ? ` <b>Combo</b> and <b>Enrage</b> rise.` : ` <b>Combo</b> rises.`));
-  return 1 - COUNTER_REDUCTION;
+  const cut = st.deflect ? DEFLECT_REDUCTION : COUNTER_REDUCTION;
+  battleMsg((st.deflect ? `🛡️ ${displayName(mon)} deflects it — <b>${Math.round(cut * 100)}% turned away!</b>`
+                        : `✋ ${displayName(mon)} plants a foot and takes it on the guard — <b>80% turned away!</b>`)
+    + (st.paid ? '' : st.enrage ? ` <b>Combo</b> and <b>Enrage</b> rise.` : ` <b>Combo</b> rises.`) + turned);
+  return 1 - cut;
 }
 /* The same guard, in enemy hands: their side's stack, on whichever of them
    you reached; the Combo is their side's next attack (3.01), the Enrage this
    one's. */
 function spendEnemyCounter(e){
+  const turned = deflectSweep('enemy');                 // (3.76) a future Physical's Focused Fury
   const st = takeBestCounter(e);
   if(!st) return 1;
   { const i = ui.battle ? ui.battle.enemies.indexOf(e) : -1;           // the same GUARD you see on yours
-    if(i >= 0) floatMiss('enemy-' + i, 'GUARD'); }
-  ui.battle.eCombo = (ui.battle.eCombo||0) + 1;
-  if(st.enrage) e.enrageStacks = (e.enrageStacks||0) + 1;
+    if(i >= 0) floatMiss('enemy-' + i, st.deflect ? 'DEFLECT' : 'GUARD'); }
+  if(!st.paid){
+    ui.battle.eCombo = (ui.battle.eCombo||0) + 1;
+    if(st.enrage) e.enrageStacks = (e.enrageStacks||0) + 1;
+  }
   renderStatusBadges();
-  battleMsg(`✋ ${SPECIES[e.species].name} takes it on the guard — <b>80% turned away!</b> Their next blow will be heavier.`);
-  return 1 - COUNTER_REDUCTION;
+  const cut = st.deflect ? DEFLECT_REDUCTION : COUNTER_REDUCTION;
+  battleMsg((st.deflect ? `🛡️ ${SPECIES[e.species].name} deflects it — <b>${Math.round(cut * 100)}% turned away!</b>`
+                        : `✋ ${SPECIES[e.species].name} takes it on the guard — <b>80% turned away!</b> Their next blow will be heavier.`) + turned);
+  return 1 - cut;
 }
 /* Combo: additive, the side's, spent by its next attack. */
 function comboMultiplier(mon){
@@ -3447,13 +3829,13 @@ function applyEnemyVeryHigh(e, type, plus){
 function castEnemyVeryHigh(e, type, plus){
   const d = veryHighDef(type, plus||0);
   if(!d || !e) return '';
-  const T = d.turns || STATUS_TURNS;
+  const T = (d.turns || STATUS_TURNS) + (typeof talentLinger === 'function' ? talentLinger(e) : 0);   // (3.75) a future monster's Lingering
   const atk = enemyAtk(e);
   const who = SPECIES[e.species].name;
   switch(type){
     case 'Fire': {
       const had = !!getESide('overheat');
-      const st = setESide({ type:'overheat', turnsLeft:T + 1, deal:d.deal, take:d.take, burn:d.burn || 0, atk });
+      const st = setESide({ type:'overheat', turnsLeft:T + 1, deal:d.deal, take:d.take, burn:d.burn || 0, atk, tier:plus || 0 });   // (3.76) every cast's tier
       if(st) layOverheatBurn('enemy', st, T);             // (3.60) the hotter burn, as yours
       if(had && st) return `🔥 ${who} casts <b>Overheat</b>: theirs burns on for ${T} more turns — their side ${overheatSays(st, 'you')}.`;
       return `🔥 ${who} casts <b>Overheat</b>: their side deals ${d.deal}× and takes ${d.take}×${d.burn ? ', and the air will scorch you every turn' : ''}.`; }
@@ -3464,37 +3846,48 @@ function castEnemyVeryHigh(e, type, plus){
       const n = d.freeze || 1;
       let frozen = 0;
       livingField().forEach(pm=>{ if(freezeMine(pm, n)) frozen++; });
-      setPStatus(0, { type:'chill', turnsLeft:T + 1, slow:d.slow || 0, cut:d.cut || 0, refreeze:d.refreeze || 0, by:'enemy' });
+      setPStatus(0, { type:'chill', turnsLeft:T + 1, slow:d.slow || 0, cut:d.cut || 0, refreeze:d.refreeze || 0, by:'enemy', tier:plus || 0 });
       return `🧊 ${who} casts <b>Ice Tomb</b>: ` +
              (frozen ? `your side is frozen solid for ${n === 1 ? 'its next turn' : `its next ${n} turns`}` : 'nothing of yours freezes') +
              ` — and the chill stays for ${T} turns: ${d.slow} step${d.slow > 1 ? 's' : ''} slower, ${Math.round((d.cut || 0) * 100)}% less damage` +
              (d.refreeze ? `, and a ${Math.round(d.refreeze * 100)}% chance each turn to freeze again` : '') + '!';
     }
     case 'Grass':
-      setPStatus(0, { type:'leechSeed', turnsLeft:T + 1, heal:d.heal, bite:d.bite || 0, biteHeals:!!d.biteHeals, by:'enemy' });
+      setPStatus(0, { type:'leechSeed', turnsLeft:T + 1, heal:d.heal, bite:d.bite || 0, biteHeals:!!d.biteHeals, by:'enemy', tier:plus || 0 });
       return `🌱 ${who} casts <b>Leech Seed</b> on your side: every blow they land on you feeds their whole team.`;
-    case 'Electric':
-      setESide({ type:'overcharge', turnsLeft:T + 1, chance:d.after, firstChance:d.first, fresh:true, init:d.init || 0 });
-      return `⚡ ${who} casts <b>Overcharge</b>: their attacks may strike twice${d.init ? `, and their side moves ${d.init} step${d.init > 1 ? 's' : ''} sooner` : ''}.`;
+    case 'Electric': {
+      const cat = catalyseChance('enemy', plus || 0), firsts = [d.first].concat(cat ? [cat] : []);   // (3.76) a future monster's Catalyse
+      setESide({ type:'overcharge', turnsLeft:T + 1, chance:d.after, firstChance:firsts[0], firsts, fresh:true, init:d.init || 0, tier:plus || 0 });
+      return `⚡ ${who} casts <b>Overcharge</b>: their attacks may strike twice${d.init ? `, and their side moves ${d.init} step${d.init > 1 ? 's' : ''} sooner` : ''}` +
+             (cat ? ` — and ⚗️ Catalyse gives them one more chance (${Math.round(cat * 100)}%)` : '') + '.'; }
     case 'Ground':
-      setESide({ type:'spikeArmour', turnsLeft:T + 1, reduce:d.reduce, thorns:d.thorns, spike:d.spike || 0 });
+      setESide({ type:'spikeArmour', turnsLeft:T + 1, reduce:d.reduce, thorns:d.thorns, spike:d.spike || 0, tier:plus || 0 });
       return `🦔 ${who} casts <b>Spike Armour</b>: they take ${Math.round(d.reduce*100)}% less, and each one you hit pricks you back` +
              `${d.spike ? ` — and every hit of theirs strikes again for ${d.spike}× its ATK` : ''}.`;
     case 'Flying':
       setESide({ type:'mirage', turnsLeft:T + 1, window:(d.window || [1]).slice(), step:0, chance:d.after,
-                 images:d.images || 0, imageDmg:d.imageDmg || 0, init:d.init || 0, owner:e, pending:0, atk });
+                 images:d.images || 0, imageDmg:d.imageDmg || 0, init:d.init || 0, owner:e, pending:0, atk, tier:plus || 0 });
       return `🪽 ${who} casts <b>Mirage</b>: their side cannot be touched this turn, is hard to hit after` +
              `${d.init ? `, and moves ${d.init} step${d.init > 1 ? 's' : ''} sooner` : ''}.`;
     case 'Physical': {
       const tier = plus || 0;
-      if(!dustBlocks('enemy')) addCounterStack(e, tier, d.stacks || 1);
       setESide({ type:'counter', turnsLeft:STATUS_TURNS + 1, tier, regain:d.regain || 0.10, combo:d.combo || 0.25, enrage:d.enrage || 0, owner:e });
-      return `👊 ${who} casts <b>Counter</b>: their side is braced to take your next blow on the guard.`;
+      let ff = '';
+      if(!dustBlocks('enemy')){ addCounterStack(e, tier, d.stacks || 1); ff = takeDeflectSaid(); }     // (3.76) after the status: Focused Fury's Enrage goes to its caster
+      return `👊 ${who} casts <b>Counter</b>: their side is braced to take your next blow on the guard.` + ff;
     }
-    case 'Ghost':
-      setPStatus(0, { type:'curse', turnsLeft:T + 1, extra:d.extra, mute:!!d.mute, by:'enemy' });
-      if(d.reduce) setESide({ type:'curseWard', turnsLeft:T + 1, reduce:d.reduce });
-      return `👻 ${who} casts <b>Curse</b>: your side takes ${Math.round(d.extra*100)}% more damage${d.mute ? ', and your passives fall silent' : ''}.`;
+    case 'Ghost': {
+      /* (3.76) a future Ghost's Deadly Curse, as yours: cast with a holder
+         standing, a Deadly Curse; cast while one holds, it renews it — its
+         build-up kept, its tier the higher */
+      const was = getPStatus(0, 'curse'), holds = typeof foeHolders === 'function' && foeHolders('Ghost', 'vh').length > 0;
+      const keep = !!(holds && was && isEnemyOwned('curse', was) && was.deadly);
+      const tier = keep ? Math.max(vhTier(was), plus || 0) : (plus || 0), dd = keep ? veryHighDef('Ghost', tier) : d;
+      setPStatus(0, { type:'curse', turnsLeft:T + 1, extra:dd.extra, mute:!!dd.mute, by:'enemy', tier, deadly:holds, stage:keep ? (was.stage || 0) : 0 });
+      if(dd.reduce) setESide({ type:'curseWard', turnsLeft:T + 1, reduce:dd.reduce, tier });
+      if(keep) return `🪆 ${who} renews their <b>Deadly Curse</b>: ${T} more turns.`;
+      return `👻 ${who} casts <b>${holds ? 'a Deadly Curse' : 'Curse'}</b>: your side takes ${Math.round(dd.extra*100)}% more damage${dd.mute ? ', and your passives fall silent' : ''}` +
+             (holds ? ' — and at the start of each turn it will strike one of you' : '') + '.'; }
     case 'Psychic': {
       /* (3.16) Each of yours on the field confused at once, its self-hit
          rolled now; the field rolls again at every end phase. No `fresh`
@@ -3502,24 +3895,24 @@ function castEnemyVeryHigh(e, type, plus){
          `sure` rule keeps every one of you confused for the next turn. */
       const self = d.self || [0.5, 0.8];
       setESide({ type:'confusionField', turnsLeft:T, after:d.confuseAfter || 0.20, self:self.slice(),
-                 sleep:d.sleep || 0, sure:true, sureUsed:false });
+                 sleep:d.sleep || 0, sure:true, sureUsed:false, tier:plus || 0 });
       livingField().forEach(pm=> withFocus(pm, ()=> markPlayerConfused(null, false, rollSelf(self))));
       return `🌀 ${who} casts <b>Discombobulate</b>: your side is confused — a damaging move of yours turns on your own side ` +
              `for ${self[0]}–${self[1]}× its ATK — and for ${T} turns, at the end of every turn, you may be confused again${d.sleep ? ' or fall asleep' : ''}!`;
     }
     case 'Dragon':
-      setESide({ type:'dragonDance', turnsLeft:T + 1, deal:d.deal, strip:d.strip || 0 });
+      setESide({ type:'dragonDance', turnsLeft:T + 1, deal:d.deal, strip:d.strip || 0, tier:plus || 0 });
       if(d.mach) setESide({ type:'machDragon', turnsLeft:T + 1, tier:d.mach });
       return `🐲 ${who} casts <b>Dragon Dance</b>: their side deals ${d.deal}×${d.mach ? ' and moves first' : ''}` +
              `${d.strip ? `, and each attack breaks ${d.strip} of your shields first` : ''}.`;
     case 'Steel':
-      setESide({ type:'steelAegis', turnsLeft:T + 1, reduce:d.reduce, regenRolls:d.regenRolls || 0, owner:e, atk });
+      setESide({ type:'steelAegis', turnsLeft:T + 1, reduce:d.reduce, regenRolls:d.regenRolls || 0, owner:e, atk, tier:plus || 0 });
       if(d.block) grantTeamBlock('enemy', d.block, atk);     // (3.13) shields are beyond any dust; (3.64) their wave's
       return `🔩 ${who} casts <b>Steel Aegis</b>: their side takes ${Math.round(d.reduce*100)}% less` +
              (d.block ? `, and ${d.block} shields rise for all of them.` : '.');
     case 'Fairy': {
       const n = diamondDustCleanse('enemy');
-      setESide({ type:'diamondDust', turnsLeft:T + 1, owner:e });
+      setESide({ type:'diamondDust', turnsLeft:T + 1, owner:e, tier:plus || 0, borrowTier:d.borrowTier || 0 });
       let msg = `✨ ${who} casts <b>Diamond Dust</b>${n ? `: ${n} of your effect${n === 1 ? '' : 's'} swept away` : ''}.`;
       /* Refined, it borrows from the rest of the triangle: + one at random at
          + strength, ✦ two different ones at ✦ strength. */
@@ -3684,6 +4077,7 @@ function playerEvasionFrom(e, peek, noTachy){
     (dotMiss && dotMiss.rider === 'miss') ? (dotMiss.miss || 0) : 0,
     tac ? tachyDodgeChance(tac) : 0,
     foresightDodge(mon),                          // (3.68) Foresight, while your Discombobulate is up
+    (typeof talentDodge === 'function') ? talentDodge(mon) : 0,   // (3.75) its talents' Evasion
   ];
   let hit = 1;
   src.forEach(x=>{ if(x > 0) hit *= (1 - x); });
@@ -3834,10 +4228,17 @@ function revivableFallen(caster){
 
 /* Vita: an immediate pulse, then a field that tends whoever is worst off. */
 /* Everyone of yours a heal can reach: the party, and the companion on the
-   field (2.84; since 3.52 the revivals reach every companion too). */
+   field (2.84; since 3.52 the revivals reach every companion too) — (3.76)
+   and every companion of the party's, on the field or off it. The designer:
+   "Companions don't seem to be healed by leech seed, giga drain and maybe
+   vita" — a heal for the whole team reached a leader on the bench but not
+   the companion that comes out with it (the one on the field was healed). */
 function healableAllies(){
-  const c = companionOnField();
-  return c ? battleParty().concat([c]) : battleParty();
+  const out = battleParty().slice(), seen = new Set(out.map(m=> m.uid));
+  const add = m=>{ if(m && m.uid && !seen.has(m.uid)){ seen.add(m.uid); out.push(m); } };
+  add(companionOnField());
+  if(companionsAllowed()) bondedCompanions().forEach(add);
+  return out;
 }
 function castVita(mon, def){
   const heal = Math.ceil((def.pulse || 0.2) * monMaxHp(mon));
@@ -4925,9 +5326,7 @@ function resolveLeech(target, mon){
   if(!ls) return 0;
   const atk = monAtk(mon);
   let healed = Math.ceil((ls.heal || 0.15) * atk);
-  /* (3.67) Blossom: at full health, before the heal comes */
-  const bl = blossomRider(target, mon);
-  if(bl > 0) showDamageNumber('enemy-' + ui.battle.enemies.indexOf(target), bl);
+  nourishProc();                                   // (3.76) Nourish: a drink, a stack (Blossom's rider is gone)
   const bite = ls.bite || 0;
   if(bite && target.hp > 0){
     const took = riderOnFoe(target, riderDamage(bite, atk, monRef(mon), target, true));
@@ -5108,7 +5507,8 @@ function bState(m){
    the party. */
 function battleMonByUid(uid){
   if(!uid || !ui.battle) return null;
-  return playerField().find(m=> m.uid === uid) || battleParty().find(m=> m.uid === uid) || null;
+  return playerField().find(m=> m.uid === uid) || battleParty().find(m=> m.uid === uid)
+      || (companionsAllowed() ? bondedCompanions().find(m=> m.uid === uid) : null) || null;   // (3.76) a companion off the field too
 }
 /* The real monster behind a blow's reference: yours by uid, theirs itself. */
 function realMon(ref){ return (ref && ref.uid) ? battleMonByUid(ref.uid) : (ref || null); }
@@ -6118,7 +6518,7 @@ function beginRound(msg){
      then each side's Ice Barrier melts one of the other side's marks off it.
      (Who is confused was settled in the end phase — discombobulateEndPhase.
      Frost Armour is gone.) Said with a pause, so it is seen. */
-  const iced = [chillRefreeze(), frostArmourTick(), iceBarrierPulse(), siphonRoundStart()].filter(Boolean).join(' ');   // (3.43) and the tower's siphons; (3.67) Frost Armour
+  const iced = [chillRefreeze(), iceBarrierPulse(), siphonRoundStart()].filter(Boolean).join(' ');   // (3.43) and the tower's siphons; (3.76) Frost Armour is gone
   if(iced) battleMsg(iced);
   /* The pre-action phase: Overheat's burn and the other pre-hits, then the
      Haunting Aria's roll — here, not at the end of the round, so it still
@@ -6225,6 +6625,7 @@ function replaceFallenThen(next){
    free by the passive. It runs its five turns and does not care who is standing
    on the field when it does. */
 function machTier(side){
+  if(side === 'enemy' && typeof futureAhead === 'function' && futureAhead()) return 3;   // (3.76) Ahead of Time: above any Mach Dragon ✦
   const st = (side === 'player')
     ? getPStatus(0,'machDragon')
     : (getESide('machDragon') || livingEnemies().map(e=>getEStatus(e,'machDragon')).find(Boolean));
@@ -6252,6 +6653,7 @@ function initiativeOf(side, mon, noPlan){         // noPlan (3.69): only asking 
   if(p && p.first) v += 1;                                   // Lightning Cat, either side
   if(p && p.slow) v -= p.slow;                               // (3.15) Carapace a step later; (3.37) the Hermit Sloth three
   if(p && p.speed) v += p.speed;                             // (3.37) the Firefox's Blazing Speed: three steps sooner
+  if(typeof talentInit === 'function') v += talentInit(mon);   // (3.75) a Swiftness constellation; the distortion's Haste
   v += sideAura(side, 'slipstream');                         // (3.15) a Plasma Manta on its side: all a step sooner
   v -= sideAura(side === 'player' ? 'enemy' : 'player', 'undertow');   // (3.27) a Seadragon on the other side: all a step later
   const gal = side === 'player' ? getPStatus(0,'gallop') : getESide('gallop');
@@ -6334,6 +6736,8 @@ function runTurnStep(){
     return onPlayerDefeated();
   }
   if(detonatePending()) return runDetonate(()=> runTurnStep());   // (3.69) Detonate: what your dust swept or stopped since
+  if(spikeDriveDue()) return runSpikeDrive(()=> runTurnStep());   // (3.76) Spike Formation: it has taken the field
+  if(typeof foeDetonatePending === 'function' && foeDetonatePending()) return runFoeDetonate(()=> runTurnStep());   // …their Detonate
 
   while(b.orderStep < b.order.length){
     const row = b.order[b.orderStep];
@@ -6391,7 +6795,16 @@ function settleControl(){
   if(!ctl) return;
   const owner = playerField().find(m=> m.uid === ctl.uid);
   if(owner) markActed(owner);
+  /* (3.76) a move that cost its turn (not a skip; a quick move never gets
+     here): no switching for the rest of the round. The designer: "switch
+     for companion pairs should be disabled if a turn-ending move is used by
+     the first companion even if the second doesn't do so (i.e. instant
+     moves and skip turn still allow the switch)". */
+  if(owner && !ctl.skipped) b.movedThisRound = true;
 }
+/* Whether the Switch button (and Dragon Legacy's switch) is shut this round:
+   switched already, or one of yours has made a move that cost its turn. */
+function switchShut(){ const b = ui.battle; return !!(b && (b.switchedThisTurn || b.movedThisRound)); }
 /* The Skip button: the one whose turn it is passes. */
 function noteSkip(){
   const b = ui.battle, ctl = b && b.control;
@@ -6529,6 +6942,7 @@ function endRound(){
   const b = ui.battle;
   if(!b) return;
   b.switchedThisTurn = false;
+  b.movedThisRound = false;                    // (3.76) a new round: the switch opens again
 
   const c = chargeState();
   if(c && holderOnField()){                  // (3.66) switched out, he keeps them: the window waits
@@ -6551,20 +6965,17 @@ function endRound(){
     meditateTurn(pm);                                 // (3.26) a turn ended untouched, or not
     if(pm.guard) grantBlock(pm, 1, monAtk(pm));
     organosteelTurn(pm, monAtk(pm));                  // (3.13) a shield a turn, as Cyborg's
-    if(frostArmourTop(pm)) frost.push(displayName(pm));   // (3.67) Frost Armour, as its turn ends
-    if(metamorphTurn(pm)) frost.push(`🦋 ${displayName(pm)}'s Metamorph`);   // (3.67) Metamorph grows
-    if(focusedFuryTurn(pm)) frost.push(`😡 ${displayName(pm)}'s Focused Fury`);   // (3.68) an Enrage stack
     if(pm.airborne  > 0) pm.airborne--;
     if(pm.invisible > 0) pm.invisible--;
     // Counter stacks never expire — nothing to tick
     if(pm.evadeTurns   > 0 && !certainDodge(pm)) pm.evadeTurns--;   // a Stillness waits (advanceMirageWindows)
   });
-  { const fa = frost.filter(x=> !/Metamorph|Focused Fury/.test(x)), mm = frost.filter(x=> /Metamorph/.test(x)), ff = frost.filter(x=> /Focused Fury/.test(x));
-    const said = [fa.length ? `❄️ Frost Armour — ${fa.join(' and ')} ${fa.length > 1 ? 'gain' : 'gains'} a shield.` : '',
-                  mm.length ? `${mm.join(' and ')} grows: <b>+${Math.round(METAMORPH.per * 100)}%</b> ATK.` : '',
-                  ff.length ? `${ff.join(' and ')}: another Enrage stack.` : ''].filter(Boolean).join(' ');
+  yourHolders('Ground', 'ultra').forEach(m=>{ if(metamorphTurn(m)) frost.push(`🦋 ${displayName(m)}'s Metamorph`); });   // (3.77) on the field or off it
+  { const mm = frost;
+    const said = [mm.length ? `${mm.join(' and ')} grows: <b>+${Math.round(METAMORPH.per * 100)}%</b> damage.` : '',
+                  (typeof foeMetamorphTurn === 'function') ? foeMetamorphTurn() : '',             // (3.76) theirs
+                  (typeof talentRoundEnd === 'function') ? talentRoundEnd() : ''].filter(Boolean).join(' ');   // (3.75) what heals itself: a constellation, the distortion's Echo
     if(said) battleMsg(said); }
-  if(!yourCounter() && b.deadlyCombo) b.deadlyCombo = {};   // (3.68) Deadly Combo goes with the Counter
   livingEnemies().forEach(e=>{
     tickRage(e); tickOverpower(e);
     meditateTurn(e);                                  // (3.26)
@@ -6593,7 +7004,7 @@ function endRound(){
   const tac0 = getPStatus(0,'tachy');
   if(tac0){ tac0.extras = 0; }                   // (its first-turn dodge waits for an attack: advanceMirageWindows)
   const dd0 = getPStatus(0,'diamondDust');
-  if(dd0) queueDetonate(diamondDustCleanse());   // (3.69) Detonate: what this sweep takes
+  if(dd0) diamondDustCleanse();                 // ((3.77) the sweep counts itself for Unstable Magic)
   /* Their side's upkeep, the mirror of yours: their dust sweeps you, their
      aegis thickens, their counter reads you again, their windows move on. */
   if(getESide('diamondDust')) diamondDustCleanse('enemy');
@@ -6609,7 +7020,7 @@ function endRound(){
     const holder = (ctrE.owner && ctrE.owner.hp > 0) ? ctrE.owner : livingEnemies()[0];
     if(holder){
       const n = addCounterStack(holder, ctrE.tier || 0, 1);      // their side's (3.01)
-      battleMsg(`✋ They read you again — <b>${n}</b> Counter stack${n > 1 ? 's' : ''} on their side.`);
+      battleMsg(`✋ They read you again — <b>${n}</b> Counter stack${n > 1 ? 's' : ''} on their side.` + takeDeflectSaid());
     }
   }
   /* (their Mirage window and Overcharge rate: as yours, above) */
@@ -6619,11 +7030,13 @@ function endRound(){
   const ctr = getPStatus(0,'counter');
   if(ctr && ctr.regain && gm && Math.random() < ctr.regain){
     addCounterStack(gm, ctr.tier||0, 1);
-    battleMsg(`✋ Another read — <b>${counterCountOf(gm)}</b> Counter stack${counterCountOf(gm)>1?'s':''} ready.`);
+    battleMsg(`✋ Another read — <b>${counterCountOf(gm)}</b> Counter stack${counterCountOf(gm)>1?'s':''} ready.` + takeDeflectSaid());
   }
 
   sylphCleanse();                                // (3.15) a Sylph lifts one of the other side's marks
   shakeOffMarks();                               // (3.37) a Hermit Sloth shakes one off itself
+  { const cs = [cleansingSprings(), (typeof foeCleansingSprings === 'function') ? foeCleansingSprings() : ''].filter(Boolean).join(' ');   // (3.76) Cleansing Springs, yours and theirs
+    if(cs) battleMsg(cs); }
 
   /* (The Haunting Aria no longer rolls here: it rolls in the next round's
      pre-action phase, in beginRound.) */
@@ -6676,7 +7089,7 @@ function playerHeldDown(){
   if(ice){
     ice.turnsLeft = (ice.turnsLeft || 1) - 1;
     const left = ice.turnsLeft;
-    if(left <= 0) removePStatus(0,'iceTomb');
+    if(left <= 0){ removePStatus(0,'iceTomb'); magicBurst(1); }   // (3.77) a debuff run out: Unstable Magic
     return say(`🧊 ${displayName(me)} is frozen solid!` + (left > 0 ? ` (${left} more turn${left > 1 ? 's' : ''})` : ' The ice is cracking…'));
   }
   // a jammed monster may seize up before acting — never two turns running
@@ -7101,8 +7514,9 @@ function beginBattle(config){
     scriptedOneTurn: !!config.scriptedOneTurn,
     /* From Emerald March onward a trainer fight is a commitment: no fleeing.
        Region 1 keeps its gentler rules so the early game stays forgiving. */
-    noFlee: !config.coreSpar && !config.tear && (!!config.noFlee || (!!config.isNpc && (state.progress.currentRegion||1) >= 2)),   // a spar can be given up, and the tear left (2.94)
+    noFlee: !config.coreSpar && !config.tear && !config.future && (!!config.noFlee || (!!config.isNpc && (state.progress.currentRegion||1) >= 2)),   // a spar can be given up, and the tear left (2.94) — and the future (3.75)
     tear: !!config.tear,              // the space-time tear's weekly challenge (2.94, 16-tear.js)
+    future: !!config.future,          // (3.75) Challenge the future, the Time Rift's weekly fight (17-region6.js)
     concertFight: !!config.concertFight,
     figlio: !!config.figlio,          // he leads every round
     catacomb: !!config.catacomb,      // their ghosts arrive lurking
@@ -7230,7 +7644,7 @@ function loadWave(i){
     : state.party.findIndex(m=>m.currentHp>0 && !isPassenger(m));
   if(ai<0) ai = state.party.findIndex(m=> canTakeField(m));
   if(ai<0) ai=0;
-  b.activeIndex = ai; b.switchedThisTurn=false;
+  b.activeIndex = ai; b.switchedThisTurn=false; b.movedThisRound = false;
   /* A fresh wave starts a fresh round: reset who has acted so the new arrivals
      can take the initiative, and let beginRound run upkeep on them. */
   b.acted = [];
@@ -7281,6 +7695,7 @@ function onWaveCleared(){
     if(b.arenaChallenge) return arenaChallengeOver('won');   // (3.11) no XP, no prizes, no story
     if(b.coreSpar) return coreSparWon();       // a spar with the Monkey King (2.87)
     if(b.tear) return tearEnded('won');        // the seventh round (2.94)
+    if(b.future) return futureWon();           // (3.75) the future beaten: Starlight, and a legacy
     if(b.isNpc) onChallengeWon();
     else onBattleWon();
   }
@@ -7291,9 +7706,10 @@ function onWaveCleared(){
 function enemyAtk(e){
   if(!e) return 0;
   const n = e.enrageStacks || 0;
-  if(!n) return e.atk;
+  const add = (typeof foeAtkBonus === 'function') ? foeAtkBonus(e) : 0;   // (3.76) a future monster's Nourish and Metamorph
+  if(!n) return e.atk + add;
   const c = getESide('counter');
-  return e.atk + Math.round(n * ((c && c.enrage) || 0.20) * e.atk);
+  return e.atk + add + Math.round(n * ((c && c.enrage) || 0.20) * e.atk);
 }
 
 /* ============================================================
@@ -8012,7 +8428,7 @@ function monAtk(m){
   const base = rawMonAtk(m);
   /* (3.19) your Forest Fairy's Overgrowth: 7% of its own a stack, for the
      whole team, for the rest of the battle — added as Enrage is */
-  const og = (ui.battle ? overgrowthBonus(m, base) : 0) + (ui.battle ? metamorphBonus(m, base) : 0);   // (3.67) and Metamorph
+  const og = (ui.battle ? overgrowthBonus(m, base) + nourishBonus(m, base) : 0);   // (3.76) and Nourish ((3.77) Metamorph is damage now: elemSelfAmp)
   const n = (m && m.enrageStacks) || 0;
   if(!n) return base + og;
   const c = ui.battle ? getPStatus(0,'counter') : null;
@@ -8164,10 +8580,11 @@ function unlockedMoves(m){
     if(!st) return;
     const t = stoneTierDef(st.tier);
     const bi = base.findIndex(mv=>mv.slot===slot);
-    const used = t.id==='veryhigh' && ui.battle && ui.battle.usedVeryHigh[m.uid];
+    const sealed = t.id==='veryhigh' && typeof futureSilenced === 'function' && futureSilenced();   // (3.76) the distortion Silenced
+    const used = t.id==='veryhigh' && ui.battle && (ui.battle.usedVeryHigh[m.uid] || sealed);
     if(bi>=0) base[bi] = { slot, name:stoneDisplayName(st), mult:stoneMult(st), stonePlus:stonePlus(st),
       target: t.kind==='multi2'?'Multi2':(t.kind==='status'?'Status':'Single'),
-      words:t.words, unlock:0, available:!used, spent:!!used, isStone:true, stoneTier:t.id, stoneType:st.type };   // (3.66) used: it says so, not ???
+      words:t.words, unlock:0, available:!used, spent:!!used, silenced:!!sealed, isStone:true, stoneTier:t.id, stoneType:st.type };   // (3.66) used: it says so, not ???
   });
   /* Steel Soul, once cast, is spent until the 100-word meter fills (2.93).
      Its button keeps its name and says so, rather than going dark as ???. */
@@ -8940,7 +9357,7 @@ function renderBattle(){
         ${b.enemies.map((e,i)=>`
           <div class="enemy-card ${e.hp<=0?'fainted':''}${e.shattered?' shattered':''}" data-enemy="${i}" id="enemy-${i}" style="width:${enemySpriteSize(enemyFieldSlots(b))+16}px;">
             <div class="enemy-status" id="enemyStatus-${i}"></div>
-            <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,enemySpriteSize(enemyFieldSlots(b)),{view:'front',bare:true,crowned:!!e.crowned,stage:e.stage||0,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
+            <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,enemySpriteSize(enemyFieldSlots(b)),{view:'front',bare:true,plain:true,crowned:!!e.crowned,stage:e.stage||0,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
             <div class="info-layer name-plate">
               <div class="mon-title">${SPECIES[e.species].name} <span>Lv ${e.level}</span>${foeCompanionTag(e)}${e.rewinder ? ' <span class="foe-comp-tag" title="Time undoes whatever you do to it">⏳</span>' : ''}</div>
               ${blockBar('enemyBlk-'+i, e)}
@@ -8976,12 +9393,12 @@ function renderBattle(){
           <button class="move-btn ${ok?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${ok?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
             <div class="mv-name">${mv.available || mv.chargeMore || mv.spent || mv.forgotten || mv.taunted || mv.ogFull || mv.ogDone || mv.tried || mv.legacyGive ? escapeHtml(mv.name) : '???'}</div>
-            <div class="mv-meta">${mv.available ? moveMeta(mv, ctlMon) : (mv.chargeMore ? 'Full' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : mv.ogFull ? `Full · ATK +${Math.round(FOREST_GIFT.maxStacks * FOREST_GIFT.step * 100)}%` : mv.ogDone ? 'Grown this turn' : mv.tried ? 'Missed · next turn' : mv.legacyGive ? (mv.legacyWhy || 'Nobody to give to') : 'Locked')}</div>
+            <div class="mv-meta">${mv.available ? moveMeta(mv, ctlMon) : (mv.chargeMore ? 'Full' : mv.silenced ? '🔇 Sealed by the distortion' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : mv.ogFull ? `Full · ATK +${Math.round(FOREST_GIFT.maxStacks * FOREST_GIFT.step * 100)}%` : mv.ogDone ? 'Grown this turn' : mv.tried ? 'Missed · next turn' : mv.legacyGive ? (mv.legacyWhy || 'Nobody to give to') : 'Locked')}</div>
           </button>`; })}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
-        <button class="side-btn" id="switchBtn" ${(b.switchedThisTurn || !canAct)?'disabled':''}>🔄 Switch</button>
-        <button class="side-btn" id="fleeBtn" ${((b.noFlee && !b.arenaChallenge) || !canAct)?'disabled':''}>${(b.arena || b.arenaChallenge)?'🚪 Exit':b.coreSpar?'🏳️ Give up':b.tear?'🚪 Save & leave':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
+        <button class="side-btn" id="switchBtn" ${(switchShut() || !canAct)?'disabled':''}${b.movedThisRound && !b.switchedThisTurn ? ' title="No switching after a move this turn"' : ''}>🔄 Switch</button>
+        <button class="side-btn" id="fleeBtn" ${((b.noFlee && !b.arenaChallenge) || !canAct)?'disabled':''}>${(b.arena || b.arenaChallenge)?'🚪 Exit':b.coreSpar?'🏳️ Give up':b.tear?'🚪 Save & leave':b.future?'🚪 Leave':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
         <button class="side-btn" id="skipBtn" ${canAct?'':'disabled'}>⏭️ Skip turn</button>
         ${(b.arena || b.arenaChallenge)?'<button class="side-btn" id="arenaMoveBtn" style="background:var(--gold);color:#fff;" '+(canAct?'':'disabled')+'>🧪 Test move</button>':''}
       </div>
@@ -9056,7 +9473,7 @@ const STATUS_LABELS = {
   vita:'💖 Vita', jaws:'⛓️ Held Fast', bogged:'🌫 Bogged', lurk:'🌑 Lurk', cunning:'🌘 Cunning',
   forgot:'💭 Forgot', fracture:'🕳️ Spacetime Fracture', barrier:'🧱 Barrier', iceBarrier:'🏔️ Ice Barrier',
   kindle:'🕯️ Kindled', gallop:'🦄 Gallop', blinded:'🙈 Blinded', fleece:'🐑 Fleece', enchant:'🪄 Enchanted', stargaze:'🔭 Stargazer',
-  taunted:'🥱 Taunted', overpower:'🏋️ Overpower',
+  taunted:'🥱 Taunted', overpower:'🏋️ Overpower', nourish:'🌿 Nourish',
 };
 /* A Very High stone's own symbol, by its type: its status's. */
 function veryHighSymbol(type){ return ((STATUS_LABELS[veryHighStatusKey(type)] || '').split(' ')[0]) || '💎'; }
@@ -9252,6 +9669,7 @@ function statusPillHtml(st, who, m){
   const tail = m ? monPillTail(st, m) : null;                             // (3.16) a nap, a freeze, a confusion
   const n = tail != null ? tail : (st.unsweepable && !st.state) ? '' : st.type === 'steelSoul' ? ' · this turn'
           : st.type === 'tachy' ? tachyPillTail(st)                                                            // (3.63) no clock: its two chances
+          : st.type === 'nourish' ? ` ×${st.stacks || 1}`                                                      // (3.76) its stacks, not its turn
           : st.type === 'barrier' ? ` · −${Math.round((st.reduce || 0.5) * 100)}%` : ` ${shown}`;   // a quick buff (2.93); (3.09) a state still counts down; (3.14) a barrier lasts to its caster's next turn
   const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved`
               : st.type === 'aria' ? ` · vengeance ${ariaVengeanceShown(st)}` : '';   // (3.08) his revenge counter
@@ -9327,6 +9745,7 @@ function renderStatusBadges(){
       const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved` : '';
       const n = st.unsweepable ? '' : st.type === 'steelSoul' ? ' · this turn'
               : st.type === 'tachy' ? tachyPillTail(st)                                                // (3.63) a stolen one: its two chances
+              : st.type === 'nourish' ? ` ×${st.stacks || 1}`                                          // (3.76) a future Grass's Nourish
               : st.type === 'barrier' ? ` · −${Math.round((st.reduce || 0.5) * 100)}%` : ' ' + shown;   // a quick buff (2.93); a barrier (3.14)
       return `<span class="status-pill foe"${pillAt(st.type, 'fs')}>${(st.type === 'barrier' && st.label) || STATUS_LABELS[st.type] || st.type}${n}${saved}</span>`;
     }).join('')
@@ -9454,12 +9873,11 @@ function statusTipText(key, st, c, pill){
   switch(key){
     case 'overheat': return `${c.W} deals <b>${s.deal || 1.5}×</b> damage but takes <b>${s.take || 1.5}×</b>.` +
       (s.burn ? ` ${cap(c.foes)} burns for <b>${s.atk ? Math.ceil(s.burn * s.atk) : s.burn + '× ATK'}</b> each turn.` : '');
-    case 'overcharge': return ((s.fresh && (s.firstChance || 0) > (s.chance || 0))
-        ? ((s.freshLeft || 1) > 1   // (3.67) Catalyse
-            ? `${c.Its} next <b>${s.freshLeft}</b> moves that land each have a <b>${pc(s.firstChance)}%</b> chance to go again; after that, <b>${pc(s.chance)}%</b>.`
-            : `${c.Its} next move that lands has a <b>${pc(s.firstChance)}%</b> chance to go again; after that, <b>${pc(s.chance)}%</b>.`)
+    case 'overcharge': { const q = (s.fresh && Array.isArray(s.firsts) && s.firsts.length) ? s.firsts : (s.fresh && s.firstChance != null ? [s.firstChance] : []);
+      return (q.length && (q.length > 1 || q[0] > (s.chance || 0))
+        ? `${c.Its} next move that lands has a <b>${pc(q[0])}%</b> chance to go again` + (q[1] != null ? `, the one after it <b>${pc(q[1])}%</b> (Catalyse)` : '') + `; after that, <b>${pc(s.chance)}%</b>.`   // (3.76) Catalyse's too
         : `Each move ${c.w} lands has a <b>${pc(s.chance || 0.25)}%</b> chance to go again.`) +
-      (s.init ? ` ${c.W} moves <b>${steps(s.init)} sooner</b>.` : '');
+      (s.init ? ` ${c.W} moves <b>${steps(s.init)} sooner</b>.` : ''); }
     case 'spikeArmour': return `${c.W} takes <b>${pc(s.reduce || 0.2)}% less</b> damage, and attackers take <b>${s.thorns || 0.2}× ATK</b> back.` +
       (s.spike ? ` Every hit ${c.w} lands strikes again for <b>${s.spike}× ATK</b>.` : '');
     case 'mirage': return ((s.window && s.step < s.window.length)
@@ -9613,41 +10031,52 @@ function statusTipText(key, st, c, pill){
       return `<b>${n}</b> charge${n === 1 ? '' : 's'} held: Unleash hits every enemy for <b>${chargeMult(cs.def, 'unleash', n)}×</b>, Hyperbeam one for <b>${chargeMult(cs.def, 'hyper', n)}×</b>` +
         ` — for <b>${t}</b> more turn${t === 1 ? '' : 's'} on the field. Switched out, he keeps them. Dragon Legacy (quick) gives one to a monster you switch in; if he falls, they all go to the one you choose.`; }
     /* (3.67) element passives at work */
-    case 'wildfire': return m ? `While your Overheat is up, each turn ${c.w} scorches every enemy for <b>${Math.ceil(WILDFIRE.pct * monAtk(m) * ownBuffMultiplier() * elemSelfAmp(m))}</b>, and itself too — never below half its health.` : '';
+    case 'wildfire': { const oh = getPStatus(0, 'overheat'), p = wildfirePct(oh);
+      return m ? `While your Overheat is up, each turn ${c.w} scorches every enemy for <b>${p}×</b> its ATK (<b>${Math.ceil(p * monAtk(m) * ownBuffMultiplier() * elemSelfAmp(m))}</b> now — the Overheat's tier: ${WILDFIRE.pct.join(' / ')}×), and itself too, never below half its health — on the field or off it.` : ''; }
+    case 'springs': return `While your Ice Tomb's chill is up, at the end of each round your team is healed <b>${SPRINGS.team.map(pc).join(' / ')}%</b> of ${c.its} max HP — <b>${SPRINGS.low.map(pc).join(' / ')}%</b> to one below half health (by the Ice Tomb's tier; a Fire monster above half: nothing) — and one of their marks on your side is washed off, a freeze, sleep, stun or muddle first. At base and + ${c.w} must be on the field; at ✦ it works from the bench too.`;
+    case 'shatter': return `While ${c.w} is in your team, anything chilled takes <b>${pc(SHATTER.chill)}% more</b> damage from your side, and anything frozen <b>${pc(SHATTER.freeze)}% more</b> (both: ${pc(SHATTER.chill + SHATTER.freeze)}%).`;
+    case 'nourishP': return `Every time your Leech Seed drinks, your team gains <b>+${NOURISH.per.map(pc).join(' / ')}% ATK</b> for a turn (by the Leech Seed's tier), up to ${NOURISH.max} stacks — while ${c.w} is in your team, on the field or off it.`;
+    case 'nourish': { const per = s.per || NOURISH.per[0];
+      return `${c.yours ? 'Your team\'s' : 'Their side\'s'} ATK is <b>+${pc(per * (s.stacks || 0))}%</b> (${s.stacks || 0} of ${NOURISH.max}, ${pc(per)}% each) — added to every other ATK bonus. Each drink of ${c.yours ? 'your' : 'their'} Leech Seed adds one and starts the turn again.`; }
+    case 'spikeForm': { const n = m ? spikesWaiting(m) : 0;
+      return `While your Spike Armour is up, a spike forms at the start of each turn, worth <b>${spikePct(getPStatus(0, 'spikeArmour'))}×</b> ${c.its} ATK (by the Spike Armour's tier: ${SPIKE_FORM.pct.join(' / ')}×): on the field it strikes one of them at once; off it, up to ${SPIKE_FORM.max} wait, and all are driven in when ${c.w} takes the field.` + (n ? ` <b>${n}</b> waiting.` : ''); }
     case 'consume': { const cb = m ? consumeBonus(m) : 0;
       return `${c.W} deals <b>+${Math.round(cb * 100)}%</b> damage: 1% for every 1% of health it has lost, up to <b>+${Math.round(CONSUME_CAP * 100)}%</b> at half health.`; }
     case 'burgeon': return `At full health ${c.w} deals <b>${Math.round((BURGEON_AMP - 1) * 100)}% more</b> damage.`;
     case 'capacitor': { const st = m ? capacitorHeld(m) : [];
-      return st.length ? `<b>${st.length}</b> stored charge${st.length === 1 ? '' : 's'} (${st.map(x=> x.dmg).join(', ')}): each strikes a random enemy at the end of the round. While your Overcharge is up, <b>${Math.round(CAPACITOR_PCT * 100)}%</b> of what ${c.w} deals is stored.` : ''; }
+      return st.length ? `<b>${st.length}</b> stored charge${st.length === 1 ? '' : 's'} (${st.map(x=> x.dmg).join(', ')}): each strikes a random enemy at the end of the round. <b>${Math.round(CAPACITOR_PCT * 100)}%</b> of what ${c.w} deals is stored.` : ''; }
     case 'elusiveP': { const r = m ? elusiveReduce(m) : 0;
-      return `While your Mirage is up, ${c.w} takes <b>${Math.round(r * 100)}% less</b> damage (its best dodge chance, up to ${Math.round(ELUSIVE_CAP * 100)}%), and every attack on it leaves afterimages.`; }
+      return (m && elemPassiveOn(m, 'Flying', 'vh'))
+        ? `While your Mirage is up, ${c.w} takes <b>${Math.round(r * 100)}% less</b> damage (its best dodge chance, up to ${Math.round(ELUSIVE_CAP * 100)}%), the rest of your team a third as much, and every attack on it leaves afterimages.`
+        : `While your Mirage is up, ${c.w} takes <b>${Math.round(r * 100)}% less</b> damage: a third of what Elusive gives the one of your team who holds it.`; }
     case 'momentum': { const r = m ? momentumBonus(m) : 0;
       return `${c.W} deals <b>+${Math.round(r * 100)}%</b> damage: +10% for every step of initiative it has (its own passives' too), up to +${Math.round(MOMENTUM.cap * 100)}%.`; }
-    case 'bedrock': return (m && endureActive(m) ? `${c.W} is holding on: nothing takes it below <b>1 HP</b> this turn or the next (a Curse of theirs ends it). ` : '') +
-      `While your Spike Armour is up, ${c.w} takes <b>${Math.round((1 - BEDROCK_TAKE) * 100)}% less</b> damage` +
-      (m && bedrockReady(m) ? `, and the next blow that would knock it out leaves it on 1 HP with a shield, holding on for that turn and the next (once until the meter fills).` : `. Its last stand is used until the meter fills.`);
+
     case 'violentDance': { const tr = Math.max(0, danceTier());
-      return `While your Dragon Dance is up, ${c.w} strikes every enemy <b>${tr + 1}×</b> at the start of each turn for <b>${VIOLENT_DANCE.pct}×</b> its ATK, every damage buff counted, and deals <b>+${Math.round(VIOLENT_DANCE.faster * 100)}%</b> to anything slower than it (Mach Dragon first, then initiative).`; }
+      return `While your Dragon Dance is up and ${c.w} is on the field, it strikes <b>${tr + 1}×</b> at the start of each turn, each at one enemy at random, for <b>${VIOLENT_DANCE.pct}×</b> its ATK — breaking <b>${tr + 1}</b> of that enemy's shields before each strike — every damage buff counted, and deals <b>+${Math.round(VIOLENT_DANCE.faster * 100)}%</b> to anything slower than it (Mach Dragon first, then initiative).`; }
     case 'destruction': return `${c.W}'s attacks are super effective (<b>${DESTRUCTION_MULT}×</b>) against every element except Fairy.`;
     case 'tempering': { const max = m ? temperMax(m) : Infinity, left = m ? temperLeft(m) : 0;
       return `While your Steel Aegis is up, ${c.w} takes <b>${Math.round((1 - TEMPER.take) * 100)}% less</b> damage and deals <b>${Math.round((TEMPER.deal - 1) * 100)}% more</b>` +
         (max !== Infinity ? `, and loses at most <b>${max}</b> health in a turn: <b>${left}</b> left this turn.` : '.'); }
     case 'fortress': return `${c.W} resists every element except Dragon: attacks on it deal <b>⅔</b>.`;
     case 'coruscate': { const r = m ? coruscateBonus(m) : 0;
-      return `While your Diamond Dust is up, ${c.w} deals <b>+${Math.round(r * 100)}%</b>: 5% for each buff your side has up (${yourBuffCount()} now), up to +${Math.round(CORUSCATE.cap * 100)}%.`; }
-    case 'detonate': return `While your Diamond Dust is up, every effect of theirs it sweeps away or stops explodes: <b>${DETONATE_PCT}×</b> ${c.w}'s ATK to every enemy for each one. One more when the dust runs out or is renewed.`;
+      return `While your Diamond Dust is up, every one of your team deals <b>+${+(r * 100).toFixed(1)}%</b>: ${+(CORUSCATE.per * 100).toFixed(1)}% for each buff your side has up (${yourBuffCount()} now), up to +${Math.round(CORUSCATE.cap * 100)}% — with ${c.w} anywhere in your team.`; }
+    case 'detonate': return `Unstable Magic: every buff or debuff — either side's — swept away, kept from forming by a Diamond Dust, or running out makes ${c.w}'s magic burst: <b>${DETONATE_PCT}×</b> its ATK to every enemy for each one. On the field or off it; no Diamond Dust needed.`;
     case 'mindControl': return `While your Discombobulate is up, when one of them is confused into swinging at its own side, you choose the move it uses — one of its own, no words to write — or let it swing as usual.`;
-    case 'focusedFury': return `While your Counter is up, ${c.w} gains an Enrage stack at the end of every turn, hit or not.`;
-    case 'deadlyCurse': { const tr = yourCurseTier();
-      return `While your Curse is up, ${c.w} strikes one enemy at the start of each turn for <b>${(DEADLY_CURSE[tr] || DEADLY_CURSE[0])}×</b> its ATK, every damage buff counted.`; }
-    case 'viciousHex': return `While your Curse is up, each hit of ${c.w}'s marks the enemy it strikes: <b>+${Math.round(HEX.per * 100)}%</b> damage taken a mark, up to ${HEX.max}.`;
-    case 'foresight': return `While your Discombobulate is up, ${c.w} dodges <b>${Math.round(FORESIGHT.dodge * 100)}%</b> of attacks, and each of its strikes has a <b>${Math.round(FORESIGHT.crit * 100)}%</b> chance to deal <b>${FORESIGHT.mult}×</b>.`;
+    case 'focusedFury': return `While ${c.w} is on the field, your Counter stacks become <b>Deflect</b> stacks: each turns away <b>${pc(DEFLECT_REDUCTION)}%</b> of an attack. A + or ✦ one's Combo and Enrage come at once, as it turns (the Enrage to the Counter's caster). Stacks that come while ${c.w} is off the field wait as Counter stacks.`;
+    case 'deadlyCurse': { const tr = Math.max(0, yourCurseTier()), dc = yourDeadlyCurse(), full = DEADLY_CURSE[tr] || DEADLY_CURSE[0];
+      const st = Math.min(DEADLY_CURSE_STAGES, ((dc && dc.stage) || 0) + 1);
+      return `While your Curse is up, ${c.w} strikes one enemy at the start of each turn, building up over ${DEADLY_CURSE_STAGES} turns to <b>${full}×</b> its ATK — next: <b>${+(full * st / DEADLY_CURSE_STAGES).toFixed(2)}×</b> (${st}/${DEADLY_CURSE_STAGES}) — every damage buff counted.`; }
+    case 'viciousHex': return `Each hit of ${c.w}'s marks the enemy it strikes: <b>+${Math.round(HEX.per * 100)}%</b> damage taken a mark, up to ${HEX.max}.`;
+    case 'foresight': return `${c.W} dodges <b>${Math.round(FORESIGHT.dodge * 100)}%</b> of attacks, and each of its strikes has a <b>${Math.round(FORESIGHT.crit * 100)}%</b> chance to deal <b>${FORESIGHT.mult}×</b>.`;
     case 'deadlyCombo': { const r = m ? deadlyComboBonus(m) : 0;
-      return `${c.W}'s attacks deal <b>+${Math.round(r * 100)}%</b>: 10% for each hit it has landed while your Counter is up, up to +${Math.round(DEADLY_COMBO.max * DEADLY_COMBO.per * 100)}%. It goes when the Counter does.`; }
+      return `${c.W}'s attacks deal <b>+${Math.round(r * 100)}%</b>: 10% for each hit it has landed, up to +${Math.round(DEADLY_COMBO.max * DEADLY_COMBO.per * 100)}%, for the rest of the battle.`; }
     case 'hex': { const n = m ? hexOf(m) : 0;
       return n ? `${c.W} takes <b>${Math.round(n * HEX.per * 100)}% more</b> damage from everything: ${n} mark${n === 1 ? '' : 's'} of Vicious Hex (up to ${HEX.max}). If it falls, two thirds of them pass to another.` : ''; }
     case 'metamorph': { const n = m ? metamorphStacks(m) : 0;
-      return `${c.W}'s ATK is <b>+${Math.round(n * METAMORPH.per * 100)}%</b> for the battle. While your Spike Armour is up it grows 5% each turn, up to +${Math.round(METAMORPH.max * METAMORPH.per * 100)}%.`; }
+      return (m && endureActive(m) ? `${c.W} is holding on: nothing takes it below <b>1 HP</b> this turn or the next (a Curse of theirs ends it). ` : '') +
+        `${c.W} deals <b>+${Math.round(n * METAMORPH.per * 100)}%</b> damage for the battle. It grows ${Math.round(METAMORPH.per * 100)}% each turn, on the field or off it, up to +${Math.round(METAMORPH.max * METAMORPH.per * 100)}%` +
+        (m && bedrockReady(m) ? `, and the next blow that would knock it out leaves it on 1 HP with a shield, holding on for that turn and the next (once until the meter fills).` : `. Its last stand is used until the meter fills.`); }
     case 'legacy': { const n = m ? legacyOf(m) : 0;
       return n ? `${c.W}'s ${n === 1 ? 'next attack deals' : `next ${n} attacks each deal`} <b>×${LEGACY_AMP}</b> damage, one charge an attack.` : ''; }
     case 'passive': {

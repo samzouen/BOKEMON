@@ -15,6 +15,9 @@ const REGIONS = [
     unlocked:()=>!!(state.progress.region3||{}).shipPass },
   { id:5, name:'Cosa Nostia', desc:'A harbour town the Family runs, and the dead beneath it.',
     unlocked:()=> typeof region5Ready === 'function' && region5Ready() },
+  /* (3.75) through the tear: open once Selene has been met (17-region6.js) */
+  { id:6, name:'The Time Rift', desc:'Inside the tear, where Selene and Vesper keep watch over time.',
+    unlocked:()=> typeof r6Met === 'function' && r6Met() },
 ];
 
 function renderRegionSelect(){
@@ -151,6 +154,7 @@ function renderExplore(){
         ${inCourageGauntlet() ? (()=>{ const g = COURAGE_GAUNTLET[(state.progress.region2.courage||0) - COURAGE_GAUNTLET_FROM];
           return `<div class="trial-warn">⚠️ The Grove tests you in earnest now — Lv${g?g.level:41} foes. Flee and you fall back to ${COURAGE_FLEE_FALLBACK}.</div>`; })() : ''}
       </div>` : ''}
+    ${(canFight && !zones.length) ? `<div class="placeholder-note"><span class="pn-emoji">🌌</span>The rift's paths keep shifting — there is nowhere to walk yet. Selene says they will settle.</div>` : ''}
     ${canFight ? `
       <div class="zone-row">
         ${zones.map((z,i)=>{

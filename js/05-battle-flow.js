@@ -63,6 +63,8 @@ const BG_FALLBACK = { battle_vault:'battle_catacombs' };
 function bgCandidates(key){
   if(!key) return [];
   const rid0 = (state && state.progress && state.progress.currentRegion) || 1;
+  /* (3.75) the Time Rift: its own art when there is some, its drawn sky until then */
+  if((rid0 === 6 || key === 'rift') && typeof r6BgCandidates === 'function'){ const r6c = r6BgCandidates(key); if(r6c) return r6c; }
   const out = [];
   /* A region's own art takes precedence over the shared screen art, so
      Region 3's Explore shows region3.png rather than Region 1's explore.png. */
@@ -290,7 +292,7 @@ function drainHp(id, oldCur, newCur, max){
 
 function onSwitchPressed(){
   const b=ui.battle;
-  if(b.switchedThisTurn) return;
+  if(switchShut()) return;                               // (3.76) or after a move of yours this turn
   const options = sendOutOptions(b.activeIndex);        // (3.52) a pair whose companion can still fight, too
   if(options.length===0){ toast('No other monster can fight.'); return; }
   monsterChooser('Switch to…', options, (i)=> switchInPair(i));
@@ -492,6 +494,7 @@ function onFlee(){
   if(ui.battle.arenaChallenge) return arenaChallengeOver('left');   // (3.11) a Test Arena challenge: out, as it was
   if(ui.battle.coreSpar) return coreSparEnded('left');        // giving up a spar (2.86)
   if(ui.battle.tear) return tearEnded('left');                // stepping out of the past (2.94)
+  if(ui.battle.future) return futureEnded('left');            // (3.75) stepping back from the future
   if(ui.battle.noFlee) return;
   const trial = inSacredGroveTrial();
   const guardian = !!ui.battle.guardianTrial;
@@ -571,7 +574,7 @@ function onMoveChosen(moveIdx){
   setFocus(mon);
   const mv=unlockedMoves(mon)[moveIdx];
   /* Steel Soul is once a battle (2.93) */
-  if(mv && mv.spent){ ui.battle.phase='player'; toast(`${mv.name} is used — the ${RECHARGE_TARGET}-word meter brings it back.`); return; }
+  if(mv && mv.spent){ ui.battle.phase='player'; toast(mv.silenced ? `The distortion has sealed your Very High stones for this fight.` : `${mv.name} is used — the ${RECHARGE_TARGET}-word meter brings it back.`); return; }
   /* One action begins: what it sets off afterwards (Cunning, Greed, a riposte)
      happens once for the whole of it, and belongs to whoever took it. */
   ui.battle.actionSeq = (ui.battle.actionSeq || 0) + 1;
@@ -677,7 +680,7 @@ function wordsTag(correct, mv){ return (ui.battle && ui.battle._wordsTag) || `${
    and the learned ones for a companion. */
 function pickWords(wordTarget, revision){
   const rev = revision != null ? revision : battleWordsRevise(ui.battle ? activeMon() : null);
-  const pool = (rev || (ui.battle && (ui.battle.coreSpar || ui.battle.tear))) ? revisionPool() : activePool().map(w=>w.text);
+  const pool = (rev || (ui.battle && (ui.battle.coreSpar || ui.battle.tear || ui.battle.future))) ? revisionPool() : activePool().map(w=>w.text);   // (3.75) the future too
   if(pool.length===0) return [];
   const buffer = Math.max(4, Math.ceil(wordTarget * 0.3));   // headroom for misses/spill
   const needChars = wordTarget + buffer;
@@ -815,7 +818,7 @@ function runMoveQuiz(mv, target){
   const words = pickWords(Math.max(0, ceilWords - carry));
   /* (3.52) whose move, when two of yours are out — and whose words */
   const who = (ui.battle && playerField().length > 1) ? `${displayName(activeMon())}: ` : '';
-  const learned = ui.battle && !ui.battle.coreSpar && !ui.battle.tear && battleWordsRevise(activeMon()) && revisionWords().length;
+  const learned = ui.battle && !ui.battle.coreSpar && !ui.battle.tear && !ui.battle.future && battleWordsRevise(activeMon()) && revisionWords().length;
   startQuiz({
     title:mv.name,
     subtitle:`${who}${mv.isStone?stoneTierDef(mv.stoneTier).label+' move':(mv.slot==='Basic'?'Basic move':mv.slot)} · write ${mv.words} words to power it up${mv.scale?` — keep going for up to ${mv.scale.max}× !`:''}${learned ? ' · 🥈🥇 words you have learned' : ''}`,
@@ -1441,6 +1444,7 @@ function resolveBattleMove(mv, target, results, opts){
   if(castOnly && dustBlocks('player') && correct >= mv.words){
     playSfx('move_miss');
     battleMsg(`✨ Their diamond dust scatters your ${mv.name} — nothing takes hold.`);
+    if(!(mv.soul || mv.tachy)) dustStopped('player', 1);   // (3.77) a turn spent on it: Unstable Magic counts it (it bursts at the next step)
     if(mv.soul && ui.battle.usedSoul) ui.battle.usedSoul[mon.uid] = false;   // not spent, as a stone is not (2.93)
     if(mv.tachy) spendTachy(mon, false);                                      // (3.63) nor Tachypsychia
     if(mv.soul || mv.tachy){ ui.battle.phase = 'player'; return renderBattle(); }
@@ -2091,20 +2095,27 @@ function muddledSelfStrike(mv, mon, factor){
   if(!st || !st.self || st.once) removePStatus(0,'discombobulate');
   breakCover(mon); mon._ambush = 0;
   /* 2.84: with its partner beside it, the swing lands on the partner — as a
-     muddled enemy clouts one of its own side — and on itself only alone. */
-  const victim = livingField().find(m=> m !== mon) || mon;
-  battleMsg(victim === mon ? `🌀 ${displayName(mon)} is too dizzy to tell which way is out — it hits itself!`
-                           : `🌀 ${displayName(mon)} swings wildly and clouts ${displayName(victim)}!`);
+     muddled enemy clouts one of its own side — and on itself only alone.
+     (3.76) A future Psychic's Mind Control turns it on every one of yours on
+     the field, itself too. */
+  const mc = typeof foeMindControl === 'function' && foeMindControl();
+  const victims = mc ? livingField().slice() : [livingField().find(m=> m !== mon) || mon];
+  const victim = victims[0];
+  battleMsg(mc ? `🧠 Their Mind Control — ${displayName(mon)}'s swing turns on all of your side!`
+           : victim === mon ? `🌀 ${displayName(mon)} is too dizzy to tell which way is out — it hits itself!`
+                            : `🌀 ${displayName(mon)} swings wildly and clouts ${displayName(victim)}!`);
   bob($('#' + pid('playerBob')), -1);
   setTimeout(()=>{
-    const before = victim.currentHp;
-    dropHp(victim, dmg);   // (3.68) Bedrock's endurance too
-    flashHit($('#' + pid('playerBob', victim)));
-    drainHp(pid('playerHp', victim), before, victim.currentHp, monMaxHp(victim));
-    showDamageNumber(pid('playerBob', victim), before - victim.currentHp);
+    victims.forEach(v=>{
+      const before = v.currentHp;
+      dropHp(v, dmg);   // (3.68) Bedrock's endurance too
+      flashHit($('#' + pid('playerBob', v)));
+      drainHp(pid('playerHp', v), before, v.currentHp, monMaxHp(v));
+      showDamageNumber(pid('playerBob', v), before - v.currentHp);
+    });
     renderStatusBadges();
     setTimeout(()=>{
-      if(victim.currentHp <= 0 || mon.currentHp <= 0) return onMonFainted();
+      if(victims.some(v=> v.currentHp <= 0) || mon.currentHp <= 0) return onMonFainted();
       finishPlayerTurn();
     }, 800);
   }, 420);
@@ -2138,7 +2149,18 @@ function landStrike(h, opts){
      attack, as its first strike on this one lands (breakShields). */
   if(raw > 0) breakShields('player', null, t, yourStrikeKey(opts), 'enemyBlk-' + h.idx, 'enemy-' + h.idx);
   const soaked = (raw > 0 && !h.pierce && shieldsOn(t)) ? applyBlock(t, raw, 'enemyBlk-' + h.idx) : raw;   // (3.64) its own, then its team's
-  const through = capHit(t, soaked);            // (3.15) their Steelcrab's Carapace: a third of its health at most
+  let through = capHit(t, soaked);              // (3.15) their Steelcrab's Carapace: a third of its health at most
+  if(typeof foeTemperLimit === 'function') through = foeTemperLimit(t, through);   // (3.76) a future Steel's Tempering: its share a turn
+  /* (3.75) a future monster's Undying holds it on 1 HP, once a battle —
+     (3.76) and a future Ground's Metamorph, holding on that turn and the next */
+  let held = '';
+  if(through >= before && before > 0 && !(ui.battle && ui.battle.arenaImmortal)){
+    if(typeof foeEndures === 'function' && foeEndures(t)) through = before - 1;
+    else if(typeof foeLastStandReady === 'function' && foeLastStandReady(t)){ through = before - 1; held = foeLastStandUse(t); }
+    else if(typeof talentUndyingReady === 'function' && talentUndyingReady(t)){ through = before - 1; held = talentUndyingUse(t); }
+  }
+  if(typeof foeTemperRecord === 'function') foeTemperRecord(t, through);
+  if(raw > 0 && typeof foeElusiveImages === 'function') foeElusiveImages(t);       // (3.76) a future Flying's Elusive
   h.blocked = raw - soaked;
   h.dmg = through;
   h.oldHp = before;
@@ -2151,6 +2173,15 @@ function landStrike(h, opts){
   if(ui.battle && ui.battle.arenaImmortal && h.newHp <= 0) h.newHp = t.maxHp;
   t.hp = h.newHp;
   h.newHp = t.hp;                               // (3.19) a floor may have held it (the vault's broken Cyborg, at 1)
+  /* (3.75) the distortion's Rewind: the first of them to fall stands again */
+  let rewound = false;
+  if(h.newHp <= 0 && typeof futureRewindReady === 'function' && futureRewindReady(t)){ t.hp = futureRewind(t); h.newHp = t.hp; rewound = true; }
+  if(held || rewound){
+    const nm = SPECIES[t.species].name;
+    floatOver(t, rewound ? 'REWIND' : 'HOLDS ON');
+    setTimeout(()=>{ if(ui.battle) battleMsg(rewound ? `⏳ Time rewinds — the ${escapeHtml(nm)} stands again, at half its health!`
+                                                   : `♾️ ${escapeHtml(nm)}'s ${escapeHtml(held)} — it holds on at 1 HP!`); }, 900);
+  }
   /* (3.15) their Nurse's Lullaby Reflex: the strike reached it — the one of
      yours that struck may fall asleep. (Not a burn or an echo: `noLeech`.) */
   if(raw > 0 && !(opts && opts.noLeech)){
@@ -2230,7 +2261,7 @@ function applyHits(hits, opts){
   if(hits.length) playSfx('hit_dealt');
   let healed = 0;
   hits.forEach(h=>{ healed += landStrike(h, opts); });
-  capacitorStore(mon, hits, opts);                // (3.67) a Capacitor's share, while your Overcharge is up
+  capacitorStore(mon, hits, opts);                // (3.67) a Capacitor's share — (3.77) Overcharge or not
   deadlyComboCount(dealerOf(opts), hits, opts);   // (3.68) Deadly Combo: the hits it landed (3.70: whoever dealt them)
   hexSweep();                                     // (3.68) a marked one that fell passes its marks on
   const ls = ui.battle && ui.battle.pendingLifesteal;
@@ -2250,7 +2281,7 @@ function applyHits(hits, opts){
     const before = mon.currentHp;
     mon.currentHp = Math.min(max, mon.currentHp + healed);
     drainHp(pid('playerHp'), before, mon.currentHp, max);
-    const others = battleParty().filter(m=>m.currentHp>0 && m!==mon).length;
+    const others = healableAllies().filter(m=>m.currentHp>0 && m!==mon).length;   // (3.76) companions off the field too
     battleMsg(`🌱 The seed drinks deep — <b>${mon.currentHp-before} HP</b> to ${displayName(mon)}` +
       (others ? ` and every one of your other ${others} monster${others>1?'s':''}.` : '.'));
   }
@@ -2328,6 +2359,7 @@ function postPlayerAction(mon, hits){
   const struck = hits.filter(h=> h && h.t);
   const landed = struck.filter(h=> h.dmg > 0 && !h.dodged);
   if(struck.length || (b.actionDodges || []).length) mon._omen = 0;   // Ill Omen spent on the swing
+  if(struck.length && typeof talentMarkOpened === 'function') talentMarkOpened(mon);   // (3.75) its first attack of the wave is made
   const lines = [];
   const victims = [...new Set(landed.map(h=> h.t))];
   if(landed.length){
@@ -2337,6 +2369,20 @@ function postPlayerAction(mon, hits){
       const before = mon.currentHp;
       mon.currentHp = Math.min(monMaxHp(mon), mon.currentHp + Math.ceil(total * p.lifesteal));
       if(mon.currentHp > before){ drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon)); lines.push(`🧵 ${displayName(mon)} drinks in ${mon.currentHp - before} HP.`); }
+    }
+    /* (3.75) a Drain constellation: a share of what it dealt; a Devour one:
+       a share of its health for every foe it knocked out */
+    const tls = (typeof talentLifesteal === 'function') ? talentLifesteal(mon) : 0;
+    if(tls > 0 && mon.currentHp > 0){
+      const before = mon.currentHp;
+      mon.currentHp = Math.min(monMaxHp(mon), mon.currentHp + Math.ceil(total * tls));
+      if(mon.currentHp > before){ drainHp(pid('playerHp', mon), before, mon.currentHp, monMaxHp(mon)); lines.push(`🩸 ${displayName(mon)}'s ${talentName(mon, 'lifesteal')} — +${mon.currentHp - before} HP.`); }
+    }
+    const dv = (typeof talentDevour === 'function') ? talentDevour(mon) : 0, ko = victims.filter(t=> t.hp <= 0).length;
+    if(dv > 0 && ko && mon.currentHp > 0){
+      const before = mon.currentHp;
+      mon.currentHp = Math.min(monMaxHp(mon), mon.currentHp + Math.ceil(monMaxHp(mon) * dv * ko));
+      if(mon.currentHp > before){ drainHp(pid('playerHp', mon), before, mon.currentHp, monMaxHp(mon)); lines.push(`🍖 ${displayName(mon)}'s ${talentName(mon, 'devour')} — +${mon.currentHp - before} HP.`); }
     }
     if(noteDealtDamage(mon)) lines.push(`🌘 ${displayName(mon)} slips back into the shadows — Cunning!`);
     const g = greedSteal('player', mon, victims);
@@ -2359,6 +2405,19 @@ function postPlayerAction(mon, hits){
       drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon));
       showDamageNumber(pid('playerBob'), before - mon.currentHp);
       lines.push(`Their spikes strike back for ${before - mon.currentHp}!`);
+    }
+    /* (3.75) a future monster's Barbs: each one you hit strikes back, at its own ATK */
+    if(typeof talentThorns === 'function' && mon.currentHp > 0){
+      let back = 0, nm = '';
+      touched.forEach(t=>{ const v = talentThorns(t); if(v > 0 && t.hp > 0){ back += Math.ceil(v * enemyAtk(t)); nm = nm || talentName(t, 'thorns'); } });
+      if(back > 0){
+        const before = mon.currentHp;
+        dropHp(mon, back);
+        flashHit($('#' + pid('playerBob')));
+        drainHp(pid('playerHp'), before, mon.currentHp, monMaxHp(mon));
+        showDamageNumber(pid('playerBob'), before - mon.currentHp);
+        lines.push(`🌵 Their ${escapeHtml(nm || 'barbs')} strike${nm ? 's' : ''} back for ${before - mon.currentHp}!`);
+      }
     }
     /* Their Ghost Guardian's Knight's Oath (2.97): an attack that reached
        him is answered in purple fire — 0.3× his ATK, no dodging it. */
@@ -2504,14 +2563,14 @@ function afterPlayerAttackReal(mon, hits){
        action's repeat */
     const ocSpent = !!(b0 && b0._ocWindupSeq != null && b0._ocWindupSeq === b0.actionSeq);
     const oc = ocSpent ? null : getPStatus(0,'overcharge');
-    const ocChance = oc ? (oc.fresh && oc.firstChance != null ? oc.firstChance : (oc.chance||0.25)) : 0;
+    const ocP = ocChance(oc);                      // (3.76) the head of its first chances (Catalyse's queue)
     /* Only a strike that reached them — landed, or soaked by their block — is
        anything to repeat. With none (the words went wrong, every strike was
        dodged) Overcharge is not rolled at all, and its first rate — certain at
        ✦ — waits for a move that does reach them (2.74). */
     const reached = (hits || []).filter(h=> h && h.t && !h.dodged && ((h.raw != null ? h.raw : h.dmg) > 0));
     const canRepeat = oc && reached.length && livingEnemies().length>0;
-    const rolled = canRepeat ? Math.random() < ocChance : false;
+    const rolled = canRepeat ? Math.random() < ocP : false;
     if(canRepeat) spendOverchargeFirst(oc);
     /* ocChance honours the ✦ tier's certain first strike; oc.chance alone was
        using the base rate for every repeat. */
@@ -3554,8 +3613,28 @@ function resolveStatusMove(mv, mon, target, correct){
      which sweeps theirs away first. The stone is not spent, and a cast is
      instant, so the turn is still yours. */
   if(mv.stoneType !== 'Fairy' && dustBlocks('player')){
-    ui.battle.usedVeryHigh[mon.uid] = false;
+    /* (3.77) the designer: "buffs/debuffs that are prevented by an enemy's
+       diamond dust can still be deliberately triggered for damage" — with an
+       Unstable Magic holder of yours standing, the stone is spent into the
+       dust and its magic bursts at once (once a stone, as a cast that took
+       hold would be; still your turn). With none, as before: not spent. */
+    const burst = detonateHolders().length > 0;
+    if(!burst) ui.battle.usedVeryHigh[mon.uid] = false;
     playSfx('move_miss');
+    if(burst){
+      dustStopped('player', 1);
+      const det = detonateNow();
+      renderStatusBadges();
+      logBattle(`${displayName(mon)} used ${mv.name} (Very High, instant) — scattered by their dust: Unstable Magic`);
+      battleMsg(`✨ Their diamond dust scatters your ${mv.name} — nothing takes hold, but the magic bursts. ${det}`);
+      return setTimeout(()=>{
+        if(!ui.battle) return;
+        if(livingEnemies().length === 0){ setTimeout(onWaveCleared, 600); return; }
+        ui.battle.phase = 'player';
+        renderBattle();
+        battleMsg(`✨ ${escapeHtml(mv.name)} fed the magic. It is still your turn.`);
+      }, 1100);
+    }
     ui.battle.phase = 'player';
     renderBattle();
     battleMsg(`✨ Their diamond dust scatters your ${mv.name} — nothing takes hold. It is still your turn.`);
@@ -3647,13 +3726,14 @@ function runSingleEnemyTurn(e){
   if(ice){
     ice.turnsLeft--;
     const left = ice.turnsLeft;
-    if(left <= 0) removeEStatus(e,'iceTomb');
+    if(left <= 0){ removeEStatus(e,'iceTomb'); magicBurst(1); }   // (3.77) a debuff run out: Unstable Magic
     renderStatusBadges();
     battleMsg(`🧊 ${SPECIES[e.species].name} is frozen solid!` + (left > 0 ? ` (${left} more turn${left > 1 ? 's' : ''})` : ' The ice is cracking…'));
     return setTimeout(advanceTurn, 700);
   }
   if(getEStatus(e,'paralysed')){
     removeEStatus(e,'paralysed');
+    magicBurst(1);                                                // (3.77) its one turn over: Unstable Magic
     renderStatusBadges();
     battleMsg(`💫 ${SPECIES[e.species].name} is stunned and can't move!`);
     return setTimeout(advanceTurn, 700);
@@ -3688,11 +3768,12 @@ function enemyTurn(){
     if(ice){
       frozenCount++;
       ice.turnsLeft--;
-      if(ice.turnsLeft<=0) removeEStatus(e,'iceTomb');
+      if(ice.turnsLeft<=0){ removeEStatus(e,'iceTomb'); magicBurst(1); }   // (3.77) Unstable Magic
       else e._stillFrozen = true;
     } else if(par){
       frozenCount++;
       removeEStatus(e,'paralysed');       // one turn only
+      magicBurst(1);
     } else {
       acting.push(e);
     }
@@ -3901,7 +3982,7 @@ function runEnemyAttack(i){
   const ice = getEStatus(e,'iceTomb');
   if(ice){
     ice.turnsLeft--;
-    if(ice.turnsLeft <= 0) removeEStatus(e,'iceTomb');
+    if(ice.turnsLeft <= 0){ removeEStatus(e,'iceTomb'); magicBurst(1); }   // (3.77) Unstable Magic
     renderStatusBadges();
     battleMsg(`🧊 ${SPECIES[e.species].name} is frozen solid!`);
     return setTimeout(()=> runEnemyAttack(i+1), 700);
@@ -4146,6 +4227,8 @@ function enemyActs(i, e){
     if(row) move = row;
     tauntSaid = `🥱 ${name} is taunted — it goes for ${escapeHtml(tauntName(taunt))}! `;
   }
+  /* (3.76) a future monster's ✦ Ultra stone: once a battle, on its second action */
+  if(typeof futureUltraFor === 'function' && !e._forcedMove){ const um = futureUltraFor(e); if(um){ move = um; tauntSaid = ''; } }
   if(move && move[1]) e._lastCast = move[1];
   /* Something wound up last turn comes down now, whatever else it had in mind. */
   if(e._windup) move = e._windup;
@@ -4237,7 +4320,7 @@ function enemyActs(i, e){
     /* (3.26) their Overcharge, rolled as it gathers, as yours: up, it comes
        down this same action — and their follow-ups roll no repeat of it */
     const oc = getESide('overcharge');
-    const surge = !!(oc && livingField().length && Math.random() < ((oc.fresh && oc.firstChance != null) ? oc.firstChance : (oc.chance || 0.25)));
+    const surge = !!(oc && livingField().length && Math.random() < ocChance(oc));
     if(oc) spendOverchargeFirst(oc);
     renderStatusBadges();
     bob(document.getElementById('enemyBob-'+idx), -1);
@@ -4585,9 +4668,10 @@ function enemyStrikeOn(ctx, step, done){
         }
         mon.lastDamageTaken = beforeBlock;   // reflection returns the FULL figure
         const was = mon.currentHp;
-        /* (3.67) Bedrock: a blow that would knock it out leaves it on 1 HP,
-           with a shield — once until the meter fills */
+        /* (3.67) Bedrock — (3.76) Metamorph's now: a blow that would knock it
+           out leaves it on 1 HP, with a shield — once until the meter fills */
         if(thisHit >= was && was > 0 && !endureActive(mon) && bedrockReady(mon)){ thisHit = was - 1; bedrockSave(mon); ctx.bedrock = true; }
+        if(thisHit >= was && was > 0 && !endureActive(mon) && typeof talentUndyingReady === 'function' && talentUndyingReady(mon)){ thisHit = was - 1; ctx.undying = talentUndyingUse(mon); }   // (3.75) an Undying constellation
         mon.currentHp = Math.max(hpFloorOf(mon), mon.currentHp - thisHit);   // (3.68) …and holding on, the turn it did and the next
         totalTaken += was - mon.currentHp;
         /* Their Leech Seed drinks from every strike that gets through, as
@@ -4595,6 +4679,7 @@ function enemyStrikeOn(ctx, step, done){
            (3.16) their ✦ Spike Armour strikes again on the same terms. */
         if(thisHit > 0){
           gotThrough++;
+          if(typeof foeHitLanded === 'function') foeHitLanded(e, mon, was - mon.currentHp);   // (3.76) a future monster's Deadly Combo, Capacitor, Vicious Hex
           const sp = spikeRiderTheirs(e, mon);
           spiked += sp; totalTaken += sp;
           seedsFed += theirSeedsDrink(e);
@@ -4616,7 +4701,8 @@ function enemyStrikeOn(ctx, step, done){
       msg += hitCount > 1
         ? `${name} struck ${hitCount} times for ${totalTaken} damage${who}!`
         : `${name} dealt ${totalTaken} damage${who}!`;
-      if(ctx.bedrock){ ctx.bedrock = false; msg += ` 🪨 <b>Bedrock!</b> ${escapeHtml(displayName(mon))} holds on at 1 HP — a shield forms, and it holds on through the next turn.`; }
+      if(ctx.bedrock){ ctx.bedrock = false; msg += ` 🦋 <b>Metamorph!</b> ${escapeHtml(displayName(mon))} holds on at 1 HP — a shield forms, and it holds on through the next turn.`; }
+      if(ctx.undying){ msg += ` ♾️ <b>${escapeHtml(ctx.undying)}!</b> ${escapeHtml(displayName(mon))} holds on at 1 HP.`; ctx.undying = null; }
       if(elu) msg += ` 🪶 The mirage leaves afterimages all the same.`;
       if(spiked > 0) msg += ` (${spiked} of it from their Spike Armour ✦.)`;
       if(crits) msg += ` 💥 ${crits === 1 ? 'A critical strike' : crits + ' critical strikes'}!`;
@@ -4646,6 +4732,16 @@ function enemyStrikeOn(ctx, step, done){
         drainHp('enemyHp-'+idx, oh, nh, e.maxHp);
         if(nh<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
         msg += ` Spikes struck back for ${back}!`;
+      }
+      /* (3.75) a Barbs constellation strikes back, at its own ATK */
+      const tb = (typeof talentThorns === 'function') ? talentThorns(mon) : 0;
+      if(tb > 0 && mon.currentHp > 0 && e.hp > 0){
+        const oh = e.hp, nh = Math.max(0, e.hp - Math.ceil(tb * monAtk(mon)));
+        e.hp = nh;
+        flashHit(document.getElementById('enemy-'+idx));
+        drainHp('enemyHp-'+idx, oh, nh, e.maxHp);
+        if(nh<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
+        msg += ` 🌵 ${escapeHtml(talentName(mon, 'thorns'))} strikes back for ${oh - nh}!`;
       }
       /* Your Ghost Guardian's Knight's Oath (2.97): an attack that reached
          him is answered in purple fire — 0.3× his ATK, no dodging it. */
@@ -4748,6 +4844,7 @@ function enemyStrikeWrap(ctx){
   if(!b) return;
   const { i, e, idx, name, move, ex, next } = ctx;
   e._ambush = 0;                          // the ambush was this attack's alone
+  if(typeof talentMarkOpened === 'function') talentMarkOpened(e);   // (3.75) its first attack of the wave is made
   if(ctx.softened && getEStatus(e,'softened')) removeEStatus(e,'softened');   // your weaken is used up
   if(!ctx.defs.length){                   // it met nothing: every blow slipped or passed through
     burnOut(e, ex);
@@ -4796,6 +4893,13 @@ function enemyStrikeWrap(ctx){
   if(ex.purge){
     const said = novaPurge('enemy', ex.purge);
     if(said){ renderStatusBadges(); msg += ' ' + said; }
+  }
+  /* (3.75) a future monster's Drain: a share of what it dealt */
+  const els = (typeof talentLifesteal === 'function') ? talentLifesteal(e) : 0;
+  if(els > 0 && ctx.totalTaken > 0 && e.hp > 0){
+    const before = e.hp;
+    e.hp = Math.min(e.maxHp, e.hp + Math.ceil(ctx.totalTaken * els));
+    if(e.hp > before){ drainHp('enemyHp-'+idx, before, e.hp, e.maxHp); msg += ` 🩸 ${name}'s ${escapeHtml(talentName(e, 'lifesteal'))} — +${e.hp - before} HP.`; }
   }
   // Life-stealing moves restore the attacker from its own ATK
   const pct = LIFESTEAL[move[1]];
@@ -4851,6 +4955,7 @@ function burnOut(e, ex){
 function theirSeedsDrink(e){
   const ls = getPStatus(0,'leechSeed');
   if(!ls || !isEnemyOwned('leechSeed', ls) || !e) return 0;
+  if(typeof foeNourishProc === 'function') foeNourishProc();     // (3.76) a future Grass's Nourish
   const atk = enemyAtk(e);
   let heal = Math.ceil((ls.heal || 0.15) * atk);
   const me = activeMon();
@@ -4991,12 +5096,12 @@ function enemyFollowUps(i, e, move, ctx, next){
      landed, as before. An area blow is repeated on every one of yours it
      struck. */
   const oc = getESide('overcharge');
-  const ocChance = oc ? (oc.fresh && oc.firstChance != null ? oc.firstChance : (oc.chance || 0.25)) : 0;
+  const ocP = ocChance(oc);
   /* A blow that reached you is what spends their first rate, as yours. */
   const repeat = (then)=>{
     const ocUsed = !!e._ocWindup; e._ocWindup = false;   // (3.26) it brought a wind-up down at once
     if(!oc || ocUsed) return then();
-    const go = Math.random() < ocChance;
+    const go = Math.random() < ocP;
     spendOverchargeFirst(oc);
     if(!go) return then();
     const each = k=> k >= defs.length ? then()
@@ -5180,6 +5285,7 @@ function onPlayerDefeated(){
   if(ui.battle && ui.battle.arenaChallenge) return arenaChallengeOver('lost');   // (3.11) the Test Arena: nothing lost
   if(ui.battle && ui.battle.coreSpar) return coreSparEnded('lost');   // training costs nothing (2.86)
   if(ui.battle && ui.battle.tear) return tearEnded('lost');           // the past keeps nothing back (2.94)
+  if(ui.battle && ui.battle.future) return futureEnded('lost');       // (3.75) nor does the future
   if(ui.battle && ui.battle.climax && ui.battle.climax.lost) return ui.battle.climax.lost();   // (3.19) the vault: Cyborg turns the room back — nothing lost
   if(ui.battle && ui.battle.guardianTrial) return onGuardianTrialResolved();
   if(ui.battle && ui.battle.scriptedLoss==='padrino'){ restoreRealParty(); return onPadrinoResolved(); }

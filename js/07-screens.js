@@ -373,7 +373,8 @@ function renderRegion(){
 
   // Sacred Grove bars the way until the Trial of Courage is passed
   const gated = region2Locked();
-  const challengeLabel = rid===5 ? 'The Family'
+  const challengeLabel = rid===6 ? 'The future, and the past'      // (3.75) the Time Rift
+    : rid===5 ? 'The Family'
     : rid===4 ? 'Aboard the Vane Shear'
     : rid===3 ? 'Electric Dojo (closed)'
     : rid===2 ? 'Water Dojo' : 'Dojo, Jax & Thugs';
@@ -395,7 +396,7 @@ function renderRegion(){
       <div class="menu-card full ${gated?'locked':''}" data-nav="shop"><span class="mc-emoji">🏪</span><div class="mc-title">Shop</div><div class="mc-desc">Spend medals earned from spelling</div></div>
     </div>
     <div class="screen-sub" style="margin-top:18px;font-size:12px;">Level cap here: <b>${levelCap()}</b>${levelCap() > CROWN_GATE
-      ? ` · past ${CROWN_GATE}, a monster needs its Crown, then a breakthrough every ${CEILING_STEP} levels` : ''}</div>
+      ? ` · past ${CROWN_GATE}, a monster needs its Crown, then a breakthrough every ${CEILING_STEP} levels` : ''}${(rid === 6 && typeof starlight === 'function') ? ` · ✨ <b>${starlight()}</b> Starlight` : ''}</div>
     ${devPanel()}
   `;
   $('#backBtn').addEventListener('click', ()=>go('regionSelect'));
@@ -416,6 +417,7 @@ function renderRegion(){
 function renderPartyStub(){
   setScreenBg('home');
   $('#brandSub').textContent = 'Party';
+  const talentsOn = typeof talentsUnlocked === 'function' && talentsUnlocked();   // (3.75) the Talents page, once Selene is met
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← ${ui.walkBack ? 'Back' : 'Region'}</button>
     <div class="party-head-row">
@@ -425,13 +427,17 @@ function renderPartyStub(){
       </div>
       <button class="btn btn-ghost storage-corner" id="storageBtn">📦 ${storedMonsters().length}</button>
     </div>
-    ${companionsUnlocked() ? `<button class="btn btn-ghost" id="compBtn" style="margin-top:10px;">🤝 Companions</button>` : ''}
+    ${(companionsUnlocked() || talentsOn) ? `<div class="btn-row" style="margin-top:10px;">
+      ${companionsUnlocked() ? `<button class="btn btn-ghost" id="compBtn">🤝 Companions</button>` : ''}
+      ${talentsOn ? `<button class="btn btn-ghost" id="talentBtn">✨ Talents</button>` : ''}</div>` : ''}
     <div id="partyList" style="display:flex;flex-direction:column;gap:10px;margin-top:12px;"></div>
   `;
   $('#backBtn').addEventListener('click', ()=> go(backFromMenu()));
   $('#storageBtn').addEventListener('click', ()=>{ ui.storageFrom='party'; ui.storageTab='mons'; go('storage'); });   // (3.65) its Monsters page
   const cpb = $('#compBtn');
   if(cpb) cpb.addEventListener('click', ()=> go('companions'));
+  const tlb = $('#talentBtn');                       // (3.75) "a talents page accessible from a button next to the companions button"
+  if(tlb) tlb.addEventListener('click', ()=> go('talents'));
   renderPartyList();
 }
 
@@ -1892,37 +1898,68 @@ function wireStorageFilter(){
    bag. */
 function highStonesOf(el){ return (state.moveStones || []).filter(st=> st.tier === 'high' && st.type === el); }
 function elemPassivesAnywhere(){
-  return elemPassivesHeld().length > 0 || (state.party || []).concat(state.storage || []).some(m=> m.vhPassive || m.ultraPassive);
+  return elemPassivesHeld().length > 0 || (state.party || []).concat(state.storage || []).some(m=> m.vhPassive || m.ultraPassive || m.vhPassive2 || m.ultraPassive2);
 }
-function elemForgeOpen(){ return (state.progress.currentRegion || 1) >= ELEM_FORGE_FROM || elemPassivesAnywhere(); }
+function elemForgeOpen(){ return (state.progress.currentRegion || 1) >= ELEM_FORGE_FROM || elemPassivesAnywhere() || (typeof r6Met === 'function' && r6Met()); }   // (3.75) or Selene met
 function elemPassiveLabel(el, slot){ const d = elemPassiveDef(el, slot); return d ? d.name : ''; }   // (3.70) no icons: "they are just passives"
-/* Who can take it: a monster of that element (or, 3.71, any Fairy) with the slot empty. */
+/* (3.76) What a slot passive costs: its element's High stones, or Selection
+   Tokens ("allow very high passives to be bought for 2 very high tokens,
+   and ultra passives to be bought for 1 ultra token, in addition to the
+   current cost"). */
+function elemPassiveTokenHtml(slot, px){
+  const [t, n] = ELEM_PASSIVE_TOKENS[slot];
+  return `${selTokenIcon(t, px || 13)} ${n} ${selTokenName(t, n)}`;
+}
+/* Who can take it: wherever elemPassivePlace (02-core.js) finds it a place —
+   an empty slot of a monster of its element; (3.76) on a Fairy, its Fairy
+   one first, then one more on top of it. */
 function elemPassiveTakers(el, slot){
-  return (state.party || []).concat(state.storage || []).filter(m=> !isPassenger(m) && elemPassiveFits(m, el) && !m[slot + 'Passive']);
+  return (state.party || []).concat(state.storage || []).filter(m=> !isPassenger(m) && !!elemPassivePlace(m, el, slot));
+}
+function elemPassiveWhoNote(el){
+  if(el === 'Fairy') return 'Any Fairy monster without its Fairy one there yet (what it holds there now goes on top of it).';
+  if(FAIRY_CANNOT.includes(el)) return `Any ${el} monster with that slot free.`;
+  return `Any ${el} monster with that slot free, or any Fairy with its Fairy one there and nothing on top of it yet.`;
 }
 function attachElemPassive(m, el, slot){
-  if(!m || m[slot + 'Passive'] || elemPassiveCount(el, slot) <= 0 || !elemPassiveFits(m, el)) return false;
+  const place = elemPassivePlace(m, el, slot);
+  if(!m || !place || elemPassiveCount(el, slot) <= 0) return false;
+  const k = slot + 'Passive', k2 = slot + 'Passive2';
   addElemPassive(el, slot, -1);
-  m[slot + 'Passive'] = el;
+  if(place === 'second') m[k2] = el;
+  else { if(m[k] && m[k] !== el) m[k2] = m[k]; m[k] = el; }    // a Fairy one goes in under what is there
   saveProfile();
   playSfx('power_up');
-  toast(`${elemPassiveLabel(el, slot)} — ${displayName(m)}'s ${ELEM_PASSIVE_SLOTS[slot]} slot.`);
+  toast(place === 'second' ? `${elemPassiveLabel(el, slot)} — on top of ${displayName(m)}'s ${elemPassiveLabel('Fairy', slot)}.`
+    : m[k2] ? `${elemPassiveLabel(el, slot)} goes in under ${displayName(m)}'s ${elemPassiveLabel(m[k2], slot)}: both work now.`
+    : `${elemPassiveLabel(el, slot)} — ${displayName(m)}'s ${ELEM_PASSIVE_SLOTS[slot]} slot.`);
   return true;
 }
-async function removeElemPassive(m, slot, after){
-  const el = m && m[slot + 'Passive'];
+/* Taking one off (`second`: the one on top of a Fairy's). Its Fairy one off,
+   what was on top comes down into its place — and rests, if it is an
+   element the monster holds only as a Fairy's perk. */
+async function removeElemPassive(m, slot, after, second){
+  const k = slot + 'Passive', k2 = slot + 'Passive2';
+  const el = m && m[second ? k2 : k];
   if(!el) return;
   const R = ELEM_PASSIVE_REMOVE, med = state.medals || {};
   if((state.inventory.voidStones || 0) < R.voidStones || (med.silver || 0) < R.silver) return toast(`Needs ${R.voidStones} Void Stone and ${R.silver} Silver Medals.`);
-  const snap = { v:state.inventory.voidStones || 0, s:med.silver || 0 };
+  const snap = { v:state.inventory.voidStones || 0, s:med.silver || 0, a:m[k], b:m[k2] };
   state.inventory.voidStones = snap.v - R.voidStones;
   state.medals.silver = snap.s - R.silver;
-  delete m[slot + 'Passive'];
+  if(second) delete m[k2];
+  else if(m[k2]){ m[k] = m[k2]; delete m[k2]; }
+  else delete m[k];
   addElemPassive(el, slot, 1);
   const sv = showSyncingOverlay('Syncing…');
   const ok = await saveProfile({ awaitCloud:true });
   hideSyncingOverlay(sv);
-  if(!ok){ state.inventory.voidStones = snap.v; state.medals.silver = snap.s; m[slot + 'Passive'] = el; addElemPassive(el, slot, -1); showSyncFailure(); return; }
+  if(!ok){
+    state.inventory.voidStones = snap.v; state.medals.silver = snap.s;
+    if(snap.a) m[k] = snap.a; else delete m[k];
+    if(snap.b) m[k2] = snap.b; else delete m[k2];
+    addElemPassive(el, slot, -1); showSyncFailure(); return;
+  }
   playSfx('stone_low');
   toast(`${elemPassiveLabel(el, slot)} is back in your bag.`);
   if(after) after();
@@ -1933,13 +1970,17 @@ function chooseElemPassiveHolder(el, slot, after){
   const ov = document.createElement('div');
   ov.className = 'ep-chooser';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:80;display:flex;align-items:flex-end;justify-content:center;';
+  const where = m=>{
+    const p = elemPassivePlace(m, el, slot), a = m[slot + 'Passive'];
+    return p === 'second' ? ` · on top of its ${escapeHtml(elemPassiveLabel('Fairy', slot))}` : (a && a !== el) ? ` · under its ${escapeHtml(elemPassiveLabel(a, slot))}` : '';
+  };
   ov.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;max-height:82vh;overflow-y:auto;">
     <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;">${escapeHtml(elemPassiveLabel(el, slot))} — on whose ${ELEM_PASSIVE_SLOTS[slot]} slot?</div>
-    <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:2px 0 12px;">Any ${escapeHtml(el)} monster with that slot free${el === 'Fairy' || FAIRY_CANNOT.includes(el) ? '' : ', or any Fairy'}.</div>
+    <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:2px 0 12px;">${escapeHtml(elemPassiveWhoNote(el))}</div>
     ${takers.length ? takers.map((m, i)=> `<button class="btn btn-ghost ep-opt" data-i="${i}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;">
         ${monPortrait(m.species, 36, { stage:monStage(m), crowned:isCrowned(m) })}
-        <span style="flex:1;min-width:0;">${escapeHtml(displayName(m))} · Lv ${m.level} <span style="font-size:10px;">${typeBadges(m.species)}</span></span>
-      </button>`).join('') : `<div class="comp-note" style="margin-bottom:10px;">No ${escapeHtml(el)}${el === 'Fairy' || FAIRY_CANNOT.includes(el) ? '' : ' or Fairy'} monster has that slot free.</div>`}
+        <span style="flex:1;min-width:0;">${escapeHtml(displayName(m))} · Lv ${m.level} <span style="font-size:10px;">${typeBadges(m.species)}</span><small style="opacity:.75;">${where(m)}</small></span>
+      </button>`).join('') : `<div class="comp-note" style="margin-bottom:10px;">No monster has room for it there yet.</div>`}
     <button class="btn btn-ghost" id="epLater" style="margin-top:4px;">Keep it in the bag</button>
   </div>`;
   document.body.appendChild(ov);
@@ -1948,18 +1989,29 @@ function chooseElemPassiveHolder(el, slot, after){
   ov.addEventListener('click', e=>{ if(e.target === ov){ close(); if(after) after(); } });
   ov.querySelectorAll('.ep-opt').forEach(b=> b.addEventListener('click', ()=>{ close(); attachElemPassive(takers[+b.dataset.i], el, slot); if(after) after(); }));
 }
-async function forgeElemPassive(el, slot, after){
-  const need = ELEM_PASSIVE_COST[slot];
-  const pool = highStonesOf(el).slice().sort((a, b)=> stonePlus(a) - stonePlus(b));   // the plain ones first
-  if(pool.length < need) return toast(`Needs ${need} ${stoneName(el, 'high')} in storage.`);
-  const used = new Set(pool.slice(0, need));
-  const snapshot = state.moveStones.slice();
-  state.moveStones = state.moveStones.filter(st=> !used.has(st));
+/* Forging one: from its element's High stones in storage (the plain ones
+   first), or (3.76, `withTokens`) from Selection Tokens. */
+async function forgeElemPassive(el, slot, after, withTokens){
+  let undo;
+  if(withTokens){
+    const [t, n] = ELEM_PASSIVE_TOKENS[slot];
+    if(selTokens(t) < n) return toast(`Needs ${n} ${selTokenName(t, n)}.`);
+    addSelTokens(t, -n);
+    undo = ()=> addSelTokens(t, n);
+  } else {
+    const need = ELEM_PASSIVE_COST[slot];
+    const pool = highStonesOf(el).slice().sort((a, b)=> stonePlus(a) - stonePlus(b));   // the plain ones first
+    if(pool.length < need) return toast(`Needs ${need} ${stoneName(el, 'high')} in storage.`);
+    const used = new Set(pool.slice(0, need));
+    const snapshot = state.moveStones.slice();
+    state.moveStones = state.moveStones.filter(st=> !used.has(st));
+    undo = ()=>{ state.moveStones = snapshot; };
+  }
   addElemPassive(el, slot, 1);
   const sv = showSyncingOverlay('Forging…');
   const ok = await saveProfile({ awaitCloud:true });
   hideSyncingOverlay(sv);
-  if(!ok){ state.moveStones = snapshot; addElemPassive(el, slot, -1); showSyncFailure(); return; }
+  if(!ok){ undo(); addElemPassive(el, slot, -1); showSyncFailure(); return; }
   playSfx('stone_high');
   toast(`Forged ${elemPassiveLabel(el, slot)}!`);
   if(elemPassiveTakers(el, slot).length) return chooseElemPassiveHolder(el, slot, after);
@@ -1977,8 +2029,9 @@ function openPassiveForge(){
     ov.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:560px;width:100%;max-height:86vh;overflow-y:auto;">
       <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:19px;">🌟 Passive Upgrades</div>
       <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:3px 0 12px;line-height:1.45;">
-        Forge an element's passive from its High stones in storage: <b>${ELEM_PASSIVE_COST.vh}</b> for its Very High slot passive, <b>${ELEM_PASSIVE_COST.ultra}</b> for its Ultra slot one.
-        It goes on any monster of that element, one in each slot — and a Fairy can take any element's but Steel's.</div>
+        Forge an element's passive from its High stones in storage — <b>${ELEM_PASSIVE_COST.vh}</b> for its Very High slot passive, <b>${ELEM_PASSIVE_COST.ultra}</b> for its Ultra slot one — or from Selection Tokens: ${elemPassiveTokenHtml('vh')}, or ${elemPassiveTokenHtml('ultra')}.
+        It goes on any monster of that element, one in each slot. A Fairy holds its Fairy one first, and then one more of any element's but Steel's on top of it: both work.
+        <div style="margin-top:5px;">You have ${selTokenIcon('veryhigh', 13)} <b>${selTokens('veryhigh')}</b> · ${selTokenIcon('ultra', 13)} <b>${selTokens('ultra')}</b>.</div></div>
       ${els.map(el=>{
         const have = highStonesOf(el).length;
         return `<div class="ep-el" style="--tc:${TYPE_COLORS[el] || '#888'};">
@@ -1986,18 +2039,23 @@ function openPassiveForge(){
             <span>${escapeHtml(stoneName(el, 'high'))} ×${have} held</span></div>
           ${['vh', 'ultra'].map(slot=>{
             const d = elemPassiveDef(el, slot), need = ELEM_PASSIVE_COST[slot], inBag = elemPassiveCount(el, slot);
+            const [tt, tn] = ELEM_PASSIVE_TOKENS[slot], tok = selTokens(tt) >= tn;
             return `<div class="ep-opt-row">
               <div class="ep-txt"><b>${escapeHtml(d.name)}</b> <small>${ELEM_PASSIVE_SLOTS[slot]} slot${inBag ? ` · ${inBag} in your bag` : ''}</small><div>${d.text}</div></div>
-              <button class="btn ${have >= need ? 'btn-primary' : 'btn-ghost'} ep-forge-btn" data-el="${el}" data-slot="${slot}" ${have >= need ? '' : 'disabled'}>Forge<br><small>${need} stones</small></button>
+              <div class="ep-buy">
+                <button class="btn ${have >= need ? 'btn-primary' : 'btn-ghost'} ep-forge-btn" data-el="${el}" data-slot="${slot}" ${have >= need ? '' : 'disabled'}>Forge<br><small>${need} stones</small></button>
+                <button class="btn ${tok ? 'btn-primary' : 'btn-ghost'} ep-forge-btn" data-el="${el}" data-slot="${slot}" data-tok="1" ${tok ? '' : 'disabled'}>Forge<br><small>${selTokenIcon(tt, 11)} ${tn}</small></button>
+              </div>
             </div>`; }).join('')}
         </div>`; }).join('')}
       <button class="btn btn-ghost" id="epClose" style="margin-top:6px;">Close</button>
     </div>`;
     ov.querySelector('#epClose').addEventListener('click', close);
     ov.querySelectorAll('.ep-forge-btn:not([disabled])').forEach(b=> b.addEventListener('click', ()=>{
-      const el = b.dataset.el, slot = b.dataset.slot, d = elemPassiveDef(el, slot), need = ELEM_PASSIVE_COST[slot];
-      confirmDialogHtml(`Forge <b>${escapeHtml(d.name)}</b> from <b>${need}</b> ${escapeHtml(stoneName(el, 'high'))}? The plain ones go first.`,
-        ()=> forgeElemPassive(el, slot, draw), 'Forge');
+      const el = b.dataset.el, slot = b.dataset.slot, d = elemPassiveDef(el, slot), need = ELEM_PASSIVE_COST[slot], tok = !!b.dataset.tok;
+      confirmDialogHtml(tok ? `Forge <b>${escapeHtml(d.name)}</b> for ${elemPassiveTokenHtml(slot, 14)}?`
+        : `Forge <b>${escapeHtml(d.name)}</b> from <b>${need}</b> ${escapeHtml(stoneName(el, 'high'))}? The plain ones go first.`,
+        ()=> forgeElemPassive(el, slot, draw, tok), 'Forge');
     }));
   };
   const close = ()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); if(ui.screen === 'shop') renderShop(); };
@@ -2005,28 +2063,41 @@ function openPassiveForge(){
   document.body.appendChild(ov);
   draw();
 }
-/* A monster's two slots, on its Stats page. */
+/* A monster's two slots, on its Stats page — (3.76) a Fairy's with room for
+   two in each. */
 function elemPassivePanel(m){
   if(!m || isPassenger(m)) return '';
-  const mine = elemPassiveElements(m);              // (3.71) a Fairy's: every element
-  const fairy = ((SPECIES[m.species] || {}).types || []).includes('Fairy');
-  if(!mine.length && !m.vhPassive && !m.ultraPassive) return '';
+  const mine = elemPassiveElements(m);              // (3.71) a Fairy's: every element but Steel
+  const fairy = isFairyMon(m);
+  const has = ['vh', 'ultra'].some(s=> m[s + 'Passive'] || m[s + 'Passive2']);
+  if(!mine.length && !has) return '';
   if(!elemForgeOpen()) return '';
   const R = ELEM_PASSIVE_REMOVE;
+  const own = monTypes(m).filter(t=> t !== 'Fairy' && ELEMENT_PASSIVES[t]);
+  const canPut = slot=> elemPassivesHeld().filter(x=> x.slot === slot && elemPassivePlace(m, x.el, slot)).map(x=> x.el);
+  const price = slot=> `${ELEM_PASSIVE_COST[slot]} High stones of its element, or ${elemPassiveTokenHtml(slot, 12)}`;
+  const held = (slot, el, second)=>{
+    const d = elemPassiveDef(el, slot), on = elemPassivesIn(m, slot).includes(el);
+    const why = on ? '' : (fairy && !second && el !== 'Fairy' && !monTypes(m).includes(el)) ? ' <small>(it rests until its Fairy one goes in under it)</small>' : ' <small>(not its element now: it rests)</small>';
+    return `<div class="ep-slot${second ? ' ep-slot2' : ''}"><div class="ep-slot-k">${second ? '+ on top' : ELEM_PASSIVE_SLOTS[slot] + ' slot'}</div>
+      <div class="ep-slot-v"><b>${d ? escapeHtml(d.name) : escapeHtml(el)}</b>${why}<div>${d ? d.text : ''}</div></div>
+      <button class="btn btn-ghost ep-btn" data-eprm="${slot}${second ? ':2' : ''}">Take off<br><small>${voidIcon(12)} ${R.voidStones} + 🥈 ${R.silver}</small></button></div>`;
+  };
   const row = slot=>{
-    const el = m[slot + 'Passive'];
-    if(el){
-      const d = elemPassiveDef(el, slot), off = !elemPassiveAt(m, slot);
-      return `<div class="ep-slot"><div class="ep-slot-k">${ELEM_PASSIVE_SLOTS[slot]} slot</div>
-        <div class="ep-slot-v"><b>${d ? escapeHtml(d.name) : escapeHtml(el)}</b>${off ? ' <small>(not its element now: it rests)</small>' : ''}<div>${d ? d.text : ''}</div></div>
-        <button class="btn btn-ghost ep-btn" data-eprm="${slot}">Take off<br><small>${voidIcon(12)} ${R.voidStones} + 🥈 ${R.silver}</small></button></div>`;
+    const a = m[slot + 'Passive'], b = m[slot + 'Passive2'], can = canPut(slot);
+    const put = can.length ? `<button class="btn btn-primary ep-btn" data-epadd="${slot}">Put one on</button>` : '';
+    let html = (a ? held(slot, a, false) : '') + (b ? held(slot, b, true) : '');
+    if(!a){
+      const msg = can.length ? 'You have one for it in your bag.'
+        : fairy ? `Its Fairy one goes in first — forge it at the shop from ${price(slot)}. Then one more of any element but Steel stacks on top of it, and both work.${own.length ? ` Its ${own.map(escapeHtml).join(' or ')} one may also stand alone.` : ''}`
+        : `Forge one at the shop from ${ELEM_PASSIVE_COST[slot]} High stones of ${mine.length > 1 ? 'one of its elements' : 'its element'} (${mine.map(escapeHtml).join(' or ')}), or from ${elemPassiveTokenHtml(slot, 12)}.`;
+      html += `<div class="ep-slot"><div class="ep-slot-k">${ELEM_PASSIVE_SLOTS[slot]} slot</div>
+        <div class="ep-slot-v"><span style="color:var(--ink-soft);">Empty</span><div>${msg}</div></div>${put}</div>`;
+    } else if(fairy && !b && (a === 'Fairy' || can.includes('Fairy'))){
+      html += `<div class="ep-slot ep-slot2"><div class="ep-slot-k">+ on top</div>
+        <div class="ep-slot-v"><span style="color:var(--ink-soft);">${a === 'Fairy' ? 'Room for one more' : 'Room for its Fairy one, under it'}</span><div>${can.length ? 'You have one for it in your bag.' : 'Any element\'s but Steel\'s — forge one at the shop.'}</div></div>${put}</div>`;
     }
-    const can = mine.filter(t=> elemPassiveCount(t, slot) > 0);
-    return `<div class="ep-slot"><div class="ep-slot-k">${ELEM_PASSIVE_SLOTS[slot]} slot</div>
-      <div class="ep-slot-v"><span style="color:var(--ink-soft);">Empty</span><div>${can.length ? 'You have one for it in your bag.'
-        : fairy ? `Forge one at the shop from ${ELEM_PASSIVE_COST[slot]} High stones of any element${mine.includes('Steel') ? '' : ' but Steel'}: a Fairy can hold ${mine.includes('Steel') ? 'any element\'s' : 'any element\'s but Steel\'s'}.`
-        : `Forge one at the shop from ${ELEM_PASSIVE_COST[slot]} High stones of ${mine.length > 1 ? 'one of its elements' : 'its element'} (${mine.map(escapeHtml).join(' or ')}).`}</div></div>
-      ${can.length ? `<button class="btn btn-primary ep-btn" data-epadd="${slot}">Put one on</button>` : ''}</div>`;
+    return html;
   };
   return `<div class="crown-panel ep-panel">
     <div class="crown-title">🌟 Element passives</div>
@@ -2035,21 +2106,24 @@ function elemPassivePanel(m){
 }
 function wireElemPassivePanel(m){
   screenEl.querySelectorAll('[data-eprm]').forEach(b=> b.addEventListener('click', ()=>{
-    const slot = b.dataset.eprm, el = m[slot + 'Passive'], R = ELEM_PASSIVE_REMOVE;
+    const [slot, two] = b.dataset.eprm.split(':'), second = two === '2', R = ELEM_PASSIVE_REMOVE;
+    const el = m[slot + (second ? 'Passive2' : 'Passive')], top = !second && m[slot + 'Passive2'];
+    const rests = top && !monTypes(m).includes(top);
     confirmDialogHtml(`Take <b>${escapeHtml(elemPassiveLabel(el, slot))}</b> off ${escapeHtml(displayName(m))}? It costs ${voidIcon(14)} <b>${R.voidStones}</b> Void Stone and 🥈 <b>${R.silver}</b> Silver Medals, and it goes back to your bag.` +
+      (top ? `<br><b>${escapeHtml(elemPassiveLabel(top, slot))}</b> comes down into its place${rests ? ', and rests until a Fairy one is under it again' : ''}.` : '') +
       `<br><span style="font-size:12px;color:var(--ink-soft);">You have ${state.inventory.voidStones || 0} · ${(state.medals || {}).silver || 0}.</span>`,
-      ()=> removeElemPassive(m, slot, renderStats), 'Take off');
+      ()=> removeElemPassive(m, slot, renderStats, second), 'Take off');
   }));
   screenEl.querySelectorAll('[data-epadd]').forEach(b=> b.addEventListener('click', ()=>{
     const slot = b.dataset.epadd;
-    const can = elemPassiveElements(m).filter(t=> elemPassiveCount(t, slot) > 0);   // (3.71) a Fairy: any in the bag
+    const can = elemPassiveElements(m).filter(t=> elemPassiveCount(t, slot) > 0 && elemPassivePlace(m, t, slot));   // (3.76) where it has room
     if(can.length === 1){ attachElemPassive(m, can[0], slot); return renderStats(); }
     const ov = document.createElement('div');
     ov.className = 'ep-which';
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:80;display:flex;align-items:flex-end;justify-content:center;';
     ov.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;max-height:82vh;overflow-y:auto;">
       <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;margin-bottom:10px;">Which one?</div>
-      ${can.map(t=> `<button class="btn btn-ghost ep-pick" data-el="${t}" style="margin-bottom:8px;">${escapeHtml(elemPassiveLabel(t, slot))} <small style="opacity:.7;">${escapeHtml(t)}</small></button>`).join('')}
+      ${can.map(t=> `<button class="btn btn-ghost ep-pick" data-el="${t}" style="margin-bottom:8px;">${escapeHtml(elemPassiveLabel(t, slot))} <small style="opacity:.7;">${escapeHtml(t)}${elemPassivePlace(m, t, slot) === 'second' ? ' · on top' : ''}</small></button>`).join('')}
       <button class="btn btn-ghost" id="epNo">Cancel</button></div>`;
     document.body.appendChild(ov);
     const close = ()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
@@ -2255,6 +2329,9 @@ function storageCss(){
   .ep-slot-k{ flex:0 0 68px; font-size:11px; font-weight:800; color:var(--ink-soft); }
   .ep-slot-v{ flex:1; min-width:0; font-size:12px; line-height:1.4; }
   .ep-slot-v b{ font-family:'Baloo 2',cursive; font-size:14px; }
+  .ep-buy{ display:flex; flex-direction:column; gap:5px; flex:0 0 auto; }
+  .ep-slot2{ margin-top:0; padding-top:6px; border-top:none; padding-left:14px; }
+  .ep-slot2 .ep-slot-k{ flex-basis:54px; color:var(--accent, #8a5cb8); }
   .ep-dot{ display:inline-block; width:16px; height:16px; border-radius:50%; vertical-align:middle; box-shadow:inset 0 0 0 2px rgba(255,255,255,.55), 0 0 0 1px rgba(35,32,25,.35); }
   .sel-token.tier-ultra{ box-shadow:inset 0 0 0 1.5px rgba(143,42,28,.8), 0 0 5px rgba(224,85,63,.6); }
   .sel-token.tier-veryhigh{ box-shadow:inset 0 0 0 1.5px rgba(169,118,29,.85), 0 0 4px rgba(224,168,60,.6); }

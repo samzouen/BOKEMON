@@ -10,7 +10,9 @@
    always go there. From the Challenge page it is one step away, and it
    hangs over Cyborg's empty cradle in the vault (its Back returns there:
    ui.tearBack), with two ways in:
-     · Enter the space-time tear — the way into Region 6 (not built yet);
+     · Enter the space-time tear — the way into Region 6, the Time Rift
+       (3.75, 17-region6.js: Selene and Vesper the first time, then the
+       region);
      · Challenge the past — the Padrino's battle again, as a WEEKLY challenge.
 
    CHALLENGE THE PAST (3.00: the Padrino's fight in the villa, as the
@@ -152,7 +154,7 @@ function renderTear(){
       <div class="screen-title">The space-time tear</div>
       <div class="tear-wrap" aria-hidden="true">${tearGalaxy()}</div>
       <div class="tear-say">Nemesis went through here, in Cyborg's body. It hums like a held breath.</div>
-      <button class="btn btn-primary tear-btn" id="tearEnter">Enter the space-time tear</button>
+      <button class="btn btn-primary tear-btn" id="tearEnter">${state.progress.currentRegion === 6 ? 'Back into the Time Rift' : 'Enter the space-time tear'}</button>
       ${place ? `<button class="btn btn-primary tear-btn" id="tearGoOn">Carry on — round ${place.round}, wave ${place.wave}</button>
       <div class="tear-saved">💾 Your run is saved: <b>round ${place.round} of ${TEAR.rounds}, wave ${place.wave} of ${TEAR.wavesPerRound}</b>, against ${place.foe === 'Cyborg' ? '<b>Cyborg</b>' : `the <b>${escapeHtml(place.foe)}</b>`}${place.part ? ' (already hurt)' : ''}. Your team will be just as you left it.</div>
       <button class="btn btn-ghost tear-btn tear-ghost" id="tearAnew">Start again from round 1</button>`
@@ -176,7 +178,7 @@ function renderTear(){
     if(ui.tearBack === 'cata_vault' && typeof r5Zone === 'function'){ ui.currentZone = r5Zone('catacombs') || ui.currentZone; return go('cata_vault'); }
     go('challenge');
   });
-  $('#tearEnter').addEventListener('click', ()=> toast('Beyond the tear: coming soon.'));
+  $('#tearEnter').addEventListener('click', ()=> (typeof r6Enter === 'function') ? r6Enter() : toast('Beyond the tear: coming soon.'));   // (3.75) Region 6
   const past = $('#tearPast'); if(past) past.addEventListener('click', ()=> tearChallenge());
   const on = $('#tearGoOn'); if(on) on.addEventListener('click', ()=> tearResume());           // (3.58)
   const anew = $('#tearAnew'); if(anew) anew.addEventListener('click', ()=> tearStartAgain());
@@ -806,7 +808,7 @@ async function rwAct(tape, specs, k, last, pace){
   const html = foes.map(e=> `
     <div class="enemy-card" style="width:${px + 16}px;">
       <div class="enemy-status"></div>
-      <div class="bob avatar-layer" data-rw="av" style="transform:translateY(80px) rotate(14deg);opacity:0;">${monPortrait(e.species, px, { view:'front', bare:true, crowned:!!e.crowned, stage:e.stage || 0 })}</div>
+      <div class="bob avatar-layer" data-rw="av" style="transform:translateY(80px) rotate(14deg);opacity:0;">${monPortrait(e.species, px, { view:'front', bare:true, plain:true, crowned:!!e.crowned, stage:e.stage || 0 })}</div>
       <div class="info-layer name-plate" data-rw="pl" style="opacity:.45;">
         <div class="mon-title">${SPECIES[e.species].name} <span>Lv ${e.level}</span></div>
         <div class="blk-wrap" style="display:none;"></div>
