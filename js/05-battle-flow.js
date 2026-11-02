@@ -97,19 +97,34 @@ const bgMissing = {};
 const FIT_HEIGHT_BGS = ['battle_diving','battle_weather_deck','battle_cabin_deck',
                         'battle_laboratory_deck','battle_whales','sea'];
 
+/* (3.79) Only the latest call counts: a slow picture from the screen before
+   no longer lands on top of this one. And in the Time Rift, where its drawn
+   sky would be the picture, the sky itself moves instead (riftSkyLive,
+   18-rift.js): no faded picture, the dark theme, and the paper cards stay
+   solid. */
+let _bgSeq = 0;
 function setScreenBg(key){
   const el = document.getElementById('screenBg');
   if(!el) return;
+  const seq = ++_bgSeq;
+  const live = typeof riftSkyLive === 'function' ? riftSkyLive : null;
   el.classList.toggle('fit-h', FIT_HEIGHT_BGS.includes(key));
   const cands = bgCandidates(key).filter(u=>!bgMissing[u]);
-  const clear = ()=>{ el.style.backgroundImage=''; el.classList.remove('on'); document.body.classList.remove('has-bg'); };
+  const clear = ()=>{ el.style.backgroundImage=''; el.classList.remove('on'); document.body.classList.remove('has-bg'); if(live) live(null); };
   if(cands.length===0) return clear();
   let i = 0;
   const tryNext = ()=>{
+    if(seq !== _bgSeq) return;
     if(i >= cands.length) return clear();
     const src = cands[i++];
+    const shown = ()=>{
+      if(seq !== _bgSeq) return;
+      if(live && live(key, src)){ el.style.backgroundImage=''; el.classList.remove('on'); document.body.classList.remove('has-bg'); return; }
+      el.style.backgroundImage='url('+src+')'; el.classList.add('on'); document.body.classList.add('has-bg');
+    };
+    if(/^data:/.test(src)) return shown();          // (3.79) a drawn one (the rift's sky) always loads: no waiting on it
     const probe = new Image();
-    probe.onload = ()=>{ el.style.backgroundImage='url('+src+')'; el.classList.add('on'); document.body.classList.add('has-bg'); };
+    probe.onload = shown;
     probe.onerror = ()=>{ bgMissing[src] = true; tryNext(); };
     probe.src = src;
   };

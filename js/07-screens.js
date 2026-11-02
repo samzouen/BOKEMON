@@ -389,7 +389,7 @@ function renderRegion(){
       <div>Prove your courage in the Sacred Grove before the city will receive you.</div>
     </div>` : ''}
     <div class="menu-grid">
-      <div class="menu-card" data-nav="explore"><span class="mc-emoji">🌿</span><div class="mc-title">Explore</div><div class="mc-desc">Find wild monsters</div></div>
+      <div class="menu-card" data-nav="explore"><span class="mc-emoji">${rid === 6 ? '🌌' : '🌿'}</span><div class="mc-title">Explore</div><div class="mc-desc">${rid === 6 ? 'Walk the Rift' : 'Find wild monsters'}</div></div>
       <div class="menu-card ${gated?'locked':''}" data-nav="challenge"><span class="mc-emoji">⚔️</span><div class="mc-title">Challenge</div><div class="mc-desc">${escapeHtml(challengeLabel)}</div></div>
       <div class="menu-card" data-nav="party"><span class="mc-emoji">🎒</span><div class="mc-title">Party</div><div class="mc-desc">Manage your team</div></div>
       <div class="menu-card" data-nav="recover"><span class="mc-emoji">💧</span><div class="mc-title">Recover</div><div class="mc-desc">Heal &amp; revise</div></div>
@@ -1900,9 +1900,26 @@ function wireStorageFilter(){
 function highStonesOf(el){ return (state.moveStones || []).filter(st=> st.tier === 'high' && st.type === el); }
 /* (3.78) What forges a slot's passive: its element's stones of that slot's tier. */
 function forgeStonesOf(el, slot){ const tier = ELEM_PASSIVE_COST[slot][0]; return (state.moveStones || []).filter(st=> st.tier === tier && st.type === el); }
+/* (3.79) Three ways to pay for one: 'stones' — its element's stones of the
+   slot's tier (2 Very High / 1 Ultra); 'high' — its element's High stones
+   (5 / 7, ELEM_PASSIVE_HIGH); 'tokens' — Selection Tokens (6 / 3). (`true`,
+   from before, means tokens.) */
+function forgeHow(how){ return (how === true || how === 'tokens') ? 'tokens' : how === 'high' ? 'high' : 'stones'; }
+function forgePoolOf(el, slot, how){ return forgeHow(how) === 'high' ? highStonesOf(el) : forgeStonesOf(el, slot); }
+function forgeNeed(slot, how){ const h = forgeHow(how); return h === 'high' ? ELEM_PASSIVE_HIGH[slot] : h === 'tokens' ? ELEM_PASSIVE_TOKENS[slot][1] : ELEM_PASSIVE_COST[slot][1]; }
+function forgeCan(el, slot, how){
+  const h = forgeHow(how);
+  return h === 'tokens' ? selTokens(ELEM_PASSIVE_TOKENS[slot][0]) >= ELEM_PASSIVE_TOKENS[slot][1] : forgePoolOf(el, slot, h).length >= forgeNeed(slot, h);
+}
 function forgeCanAny(){
-  return Object.keys(ELEMENT_PASSIVES).some(el=> ['vh', 'ultra'].some(s=> forgeStonesOf(el, s).length >= ELEM_PASSIVE_COST[s][1])) ||
-         ['vh', 'ultra'].some(s=> selTokens(ELEM_PASSIVE_TOKENS[s][0]) >= ELEM_PASSIVE_TOKENS[s][1]);
+  return Object.keys(ELEMENT_PASSIVES).some(el=> ['vh', 'ultra'].some(s=> ['stones', 'high', 'tokens'].some(h=> forgeCan(el, s, h))));
+}
+/* its price, in words, for one way of paying */
+function forgePriceHtml(slot, el, how){
+  const h = forgeHow(how);
+  if(h === 'tokens') return elemPassiveTokenHtml(slot, 13);
+  if(h === 'high'){ const n = ELEM_PASSIVE_HIGH[slot]; return el ? `${n} ${escapeHtml(stoneName(el, 'high'))}` : `${n} High stones`; }
+  return forgeStonePrice(slot, el);
 }
 /* "2 Very High stones" — its price in stones, in words (`el`: of that element's names). */
 function forgeStonePrice(slot, el){
@@ -1976,44 +1993,77 @@ async function removeElemPassive(m, slot, after, second){
   toast(`${elemPassiveLabel(el, slot)} is back in your bag.`);
   if(after) after();
 }
-/* Choosing who takes one from the bag. */
-function chooseElemPassiveHolder(el, slot, after){
-  const takers = elemPassiveTakers(el, slot);
+/* Choosing who takes one. (3.79) Rarest first, and the highest level first
+   within each (byRarityThenLevel, 02-core.js). From the forge (`forge`:
+   { withTokens }), nothing is paid until a monster is chosen — the designer:
+   "When purchasing talents, clicking outside of the monster list should
+   cancel the purchase. Include one more button to cancel the purchase." A
+   monster forges it and puts it on; "Forge it for my bag" forges it for
+   later; Cancel, or a tap outside the list, buys nothing. */
+function chooseElemPassiveHolder(el, slot, after, forge){
+  const takers = byRarityThenLevel(elemPassiveTakers(el, slot));
   const ov = document.createElement('div');
   ov.className = 'ep-chooser';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:80;display:flex;align-items:flex-end;justify-content:center;';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:80;display:flex;align-items:flex-end;justify-content:center;cursor:pointer;';
   const where = m=>{
     const p = elemPassivePlace(m, el, slot), a = m[slot + 'Passive'];
     return p === 'second' ? ` · on top of its ${escapeHtml(elemPassiveLabel('Fairy', slot))}` : (a && a !== el) ? ` · under its ${escapeHtml(elemPassiveLabel(a, slot))}` : '';
   };
-  ov.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;max-height:82vh;overflow-y:auto;">
+  const price = forge ? forgePriceHtml(slot, el, forge.how) : '';
+  ov.innerHTML = `<div class="ep-chooser-box" style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;max-height:82vh;overflow-y:auto;cursor:auto;">
     <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;">${escapeHtml(elemPassiveLabel(el, slot))} — on whose ${ELEM_PASSIVE_SLOTS[slot]} slot?</div>
+    ${forge ? `<div style="font-size:12.5px;font-weight:700;margin:3px 0 2px;">It costs <b>${price}</b>. Nothing is spent until you choose.</div>` : ''}
     <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:2px 0 12px;">${escapeHtml(elemPassiveWhoNote(el))}</div>
     ${takers.length ? takers.map((m, i)=> `<button class="btn btn-ghost ep-opt" data-i="${i}" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;">
         ${monPortrait(m.species, 36, { stage:monStage(m), crowned:isCrowned(m) })}
         <span style="flex:1;min-width:0;">${escapeHtml(displayName(m))} · Lv ${m.level} <span style="font-size:10px;">${typeBadges(m.species)}</span><small style="opacity:.75;">${where(m)}</small></span>
       </button>`).join('') : `<div class="comp-note" style="margin-bottom:10px;">No monster has room for it there yet.</div>`}
-    <button class="btn btn-ghost" id="epLater" style="margin-top:4px;">Keep it in the bag</button>
+    <button class="btn btn-ghost" id="epLater" style="margin-top:4px;">${forge ? 'Forge it for my bag' : 'Keep it in the bag'}</button>
+    ${forge ? `<button class="btn btn-ghost" id="epCancel" style="margin-top:8px;">Cancel</button>` : ''}
   </div>`;
   document.body.appendChild(ov);
   const close = ()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
-  ov.querySelector('#epLater').addEventListener('click', ()=>{ close(); if(after) after(); });
-  ov.addEventListener('click', e=>{ if(e.target === ov){ close(); if(after) after(); } });
-  ov.querySelectorAll('.ep-opt').forEach(b=> b.addEventListener('click', ()=>{ close(); attachElemPassive(takers[+b.dataset.i], el, slot); if(after) after(); }));
+  const done = ()=>{ if(after) after(); };
+  /* from the forge: pay now, then (a monster) put it on */
+  const buy = async m=>{ close(); if(await forgePay(el, slot, forge.how) && m) attachElemPassive(m, el, slot); done(); };
+  ov.querySelector('#epLater').addEventListener('click', ()=>{ if(forge) return buy(null); close(); done(); });
+  const cancel = ov.querySelector('#epCancel');
+  if(cancel) cancel.addEventListener('click', ()=>{ close(); toast('Cancelled — nothing was spent.'); done(); });
+  ov.addEventListener('click', e=>{
+    if(e.target !== ov) return;
+    close();
+    if(forge) toast('Cancelled — nothing was spent.');
+    done();
+  });
+  ov.querySelectorAll('.ep-opt').forEach(b=> b.addEventListener('click', ()=>{
+    const m = takers[+b.dataset.i];
+    if(forge) return buy(m);
+    close(); attachElemPassive(m, el, slot); done();
+  }));
 }
 /* Forging one: from its element's stones of the slot's tier in storage (the
-   plain ones first), or (3.76, `withTokens`) from Selection Tokens. */
-async function forgeElemPassive(el, slot, after, withTokens){
+   plain ones first), or (3.76, `withTokens`) from Selection Tokens. (3.79)
+   With a monster that could take it, who gets it is asked first, and only
+   then is it paid for (chooseElemPassiveHolder); with none, straight to the
+   bag. `how`: 'stones', 'high' or 'tokens' (forgeHow). */
+async function forgeElemPassive(el, slot, after, how){
+  if(elemPassiveTakers(el, slot).length) return chooseElemPassiveHolder(el, slot, after, { how:forgeHow(how) });
+  if(await forgePay(el, slot, how) && after) after();
+}
+/* The paying: the stones (or tokens) go, the passive goes into the bag, and
+   the save must reach the cloud — or all of it is put back. True once done. */
+async function forgePay(el, slot, how){
+  const h = forgeHow(how);
   let undo;
-  if(withTokens){
+  if(h === 'tokens'){
     const [t, n] = ELEM_PASSIVE_TOKENS[slot];
-    if(selTokens(t) < n) return toast(`Needs ${n} ${selTokenName(t, n)}.`);
+    if(selTokens(t) < n){ toast(`Needs ${n} ${selTokenName(t, n)}.`); return false; }
     addSelTokens(t, -n);
     undo = ()=> addSelTokens(t, n);
   } else {
-    const [tier, need] = ELEM_PASSIVE_COST[slot];
-    const pool = forgeStonesOf(el, slot).slice().sort((a, b)=> stonePlus(a) - stonePlus(b));   // the plain ones first
-    if(pool.length < need) return toast(`Needs ${need} ${stoneName(el, tier)} in storage.`);
+    const tier = h === 'high' ? 'high' : ELEM_PASSIVE_COST[slot][0], need = forgeNeed(slot, h);
+    const pool = forgePoolOf(el, slot, h).slice().sort((a, b)=> stonePlus(a) - stonePlus(b));   // the plain ones first
+    if(pool.length < need){ toast(`Needs ${need} ${stoneName(el, tier)} in storage.`); return false; }
     const used = new Set(pool.slice(0, need));
     const snapshot = state.moveStones.slice();
     state.moveStones = state.moveStones.filter(st=> !used.has(st));
@@ -2023,11 +2073,10 @@ async function forgeElemPassive(el, slot, after, withTokens){
   const sv = showSyncingOverlay('Forging…');
   const ok = await saveProfile({ awaitCloud:true });
   hideSyncingOverlay(sv);
-  if(!ok){ undo(); addElemPassive(el, slot, -1); showSyncFailure(); return; }
+  if(!ok){ undo(); addElemPassive(el, slot, -1); showSyncFailure(); return false; }
   playSfx('stone_high');
   toast(`Forged ${elemPassiveLabel(el, slot)}!`);
-  if(elemPassiveTakers(el, slot).length) return chooseElemPassiveHolder(el, slot, after);
-  if(after) after();
+  return true;
 }
 /* The forge (the shop's Passive Upgrades): each element's two, what they
    cost and what you hold. */
@@ -2041,21 +2090,25 @@ function openPassiveForge(){
     ov.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:560px;width:100%;max-height:86vh;overflow-y:auto;">
       <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:19px;">🌟 Passive Upgrades</div>
       <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:3px 0 12px;line-height:1.45;">
-        Forge an element's passive from its stones in storage — <b>${forgeStonePrice('vh')}</b> of its element for its Very High slot passive, <b>${forgeStonePrice('ultra')}</b> for its Ultra slot one — or from Selection Tokens: ${elemPassiveTokenHtml('vh')}, or ${elemPassiveTokenHtml('ultra')}.
+        Forge an element's passive from its stones in storage — <b>${forgeStonePrice('vh')}</b> of its element for its Very High slot passive, <b>${forgeStonePrice('ultra')}</b> for its Ultra slot one, or <b>${ELEM_PASSIVE_HIGH.vh}</b> / <b>${ELEM_PASSIVE_HIGH.ultra} High stones</b> of its element — or from Selection Tokens: ${elemPassiveTokenHtml('vh')}, or ${elemPassiveTokenHtml('ultra')}.
         It goes on any monster of that element, one in each slot. A Fairy holds its Fairy one first, and then one more of any element's but Steel's on top of it: both work.
         <div style="margin-top:5px;">You have ${selTokenIcon('veryhigh', 13)} <b>${selTokens('veryhigh')}</b> · ${selTokenIcon('ultra', 13)} <b>${selTokens('ultra')}</b>.</div></div>
       ${els.map(el=>{
         return `<div class="ep-el" style="--tc:${TYPE_COLORS[el] || '#888'};">
           <div class="ep-el-head">${elemIcon(el, 22)}<span class="type-badge" style="background:${TYPE_COLORS[el] || '#888'};">${escapeHtml(el)}</span>
-            <span>${['vh', 'ultra'].map(s=> `${escapeHtml(stoneName(el, ELEM_PASSIVE_COST[s][0]))} ×${forgeStonesOf(el, s).length}`).join(' · ')} held</span></div>
+            <span>${escapeHtml(stoneName(el, 'high'))} ×${highStonesOf(el).length} · ${['vh', 'ultra'].map(s=> `${escapeHtml(stoneName(el, ELEM_PASSIVE_COST[s][0]))} ×${forgeStonesOf(el, s).length}`).join(' · ')} held</span></div>
           ${['vh', 'ultra'].map(slot=>{
-            const d = elemPassiveDef(el, slot), [ct, need] = ELEM_PASSIVE_COST[slot], have = forgeStonesOf(el, slot).length, inBag = elemPassiveCount(el, slot);
-            const [tt, tn] = ELEM_PASSIVE_TOKENS[slot], tok = selTokens(tt) >= tn;
+            const d = elemPassiveDef(el, slot), [ct, need] = ELEM_PASSIVE_COST[slot], inBag = elemPassiveCount(el, slot);
+            const [tt, tn] = ELEM_PASSIVE_TOKENS[slot];
+            /* (3.79) its stones, its High stones (5 / 7), or tokens */
+            const btn = (how, price, data)=>{ const ok = forgeCan(el, slot, how);
+              return `<button class="btn ${ok ? 'btn-primary' : 'btn-ghost'} ep-forge-btn" data-el="${el}" data-slot="${slot}"${data} ${ok ? '' : 'disabled'}>Forge<br><small>${price}</small></button>`; };
             return `<div class="ep-opt-row">
               <div class="ep-txt"><b>${escapeHtml(d.name)}</b> <small>${ELEM_PASSIVE_SLOTS[slot]} slot${inBag ? ` · ${inBag} in your bag` : ''}</small><div>${d.text}</div></div>
               <div class="ep-buy">
-                <button class="btn ${have >= need ? 'btn-primary' : 'btn-ghost'} ep-forge-btn" data-el="${el}" data-slot="${slot}" ${have >= need ? '' : 'disabled'}>Forge<br><small>${gemIcon(ct, 12)} ${need}</small></button>
-                <button class="btn ${tok ? 'btn-primary' : 'btn-ghost'} ep-forge-btn" data-el="${el}" data-slot="${slot}" data-tok="1" ${tok ? '' : 'disabled'}>Forge<br><small>${selTokenIcon(tt, 11)} ${tn}</small></button>
+                ${btn('stones', `${gemIcon(ct, 12)} ${need}`, '')}
+                ${btn('high', `${gemIcon('high', 12)} ${ELEM_PASSIVE_HIGH[slot]}`, ' data-high="1"')}
+                ${btn('tokens', `${selTokenIcon(tt, 11)} ${tn}`, ' data-tok="1"')}
               </div>
             </div>`; }).join('')}
         </div>`; }).join('')}
@@ -2063,10 +2116,11 @@ function openPassiveForge(){
     </div>`;
     ov.querySelector('#epClose').addEventListener('click', close);
     ov.querySelectorAll('.ep-forge-btn:not([disabled])').forEach(b=> b.addEventListener('click', ()=>{
-      const el = b.dataset.el, slot = b.dataset.slot, d = elemPassiveDef(el, slot), tok = !!b.dataset.tok;
-      confirmDialogHtml(tok ? `Forge <b>${escapeHtml(d.name)}</b> for ${elemPassiveTokenHtml(slot, 14)}?`
-        : `Forge <b>${escapeHtml(d.name)}</b> from <b>${forgeStonePrice(slot, el)}</b>?${ELEM_PASSIVE_COST[slot][1] > 1 ? ' The plain ones go first.' : ' A plain one goes first.'}`,
-        ()=> forgeElemPassive(el, slot, draw, tok), 'Forge');
+      const el = b.dataset.el, slot = b.dataset.slot, d = elemPassiveDef(el, slot);
+      const how = b.dataset.tok ? 'tokens' : b.dataset.high ? 'high' : 'stones';
+      confirmDialogHtml(how === 'tokens' ? `Forge <b>${escapeHtml(d.name)}</b> for ${elemPassiveTokenHtml(slot, 14)}?`
+        : `Forge <b>${escapeHtml(d.name)}</b> from <b>${forgePriceHtml(slot, el, how)}</b>?${forgeNeed(slot, how) > 1 ? ' The plain ones go first.' : ' A plain one goes first.'}`,
+        ()=> forgeElemPassive(el, slot, draw, how), 'Forge');
     }));
   };
   const close = ()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); if(ui.screen === 'shop') renderShop(); };
@@ -2086,7 +2140,7 @@ function elemPassivePanel(m){
   const R = ELEM_PASSIVE_REMOVE;
   const own = monTypes(m).filter(t=> t !== 'Fairy' && ELEMENT_PASSIVES[t]);
   const canPut = slot=> elemPassivesHeld().filter(x=> x.slot === slot && elemPassivePlace(m, x.el, slot)).map(x=> x.el);
-  const price = slot=> `${forgeStonePrice(slot)} of its element, or ${elemPassiveTokenHtml(slot, 12)}`;
+  const price = slot=> `${forgeStonePrice(slot)} of its element, ${ELEM_PASSIVE_HIGH[slot]} High ones, or ${elemPassiveTokenHtml(slot, 12)}`;
   const held = (slot, el, second)=>{
     const d = elemPassiveDef(el, slot), on = elemPassivesIn(m, slot).includes(el);
     const why = on ? '' : (fairy && !second && el !== 'Fairy' && !monTypes(m).includes(el)) ? ' <small>(it rests until its Fairy one goes in under it)</small>' : ' <small>(not its element now: it rests)</small>';
@@ -2101,7 +2155,7 @@ function elemPassivePanel(m){
     if(!a){
       const msg = can.length ? 'You have one for it in your bag.'
         : fairy ? `Its Fairy one goes in first — forge it at the shop from ${price(slot)}. Then one more of any element but Steel stacks on top of it, and both work.${own.length ? ` Its ${own.map(escapeHtml).join(' or ')} one may also stand alone.` : ''}`
-        : `Forge one at the shop from ${forgeStonePrice(slot)} of ${mine.length > 1 ? 'one of its elements' : 'its element'} (${mine.map(escapeHtml).join(' or ')}), or from ${elemPassiveTokenHtml(slot, 12)}.`;
+        : `Forge one at the shop from ${forgeStonePrice(slot)} of ${mine.length > 1 ? 'one of its elements' : 'its element'} (${mine.map(escapeHtml).join(' or ')}), ${ELEM_PASSIVE_HIGH[slot]} High ones, or ${elemPassiveTokenHtml(slot, 12)}.`;
       html += `<div class="ep-slot"><div class="ep-slot-k">${ELEM_PASSIVE_SLOTS[slot]} slot</div>
         <div class="ep-slot-v"><span style="color:var(--ink-soft);">Empty</span><div>${msg}</div></div>${put}</div>`;
     } else if(fairy && !b && (a === 'Fairy' || can.includes('Fairy'))){
@@ -2341,7 +2395,8 @@ function storageCss(){
   .ep-slot-k{ flex:0 0 68px; font-size:11px; font-weight:800; color:var(--ink-soft); }
   .ep-slot-v{ flex:1; min-width:0; font-size:12px; line-height:1.4; }
   .ep-slot-v b{ font-family:'Baloo 2',cursive; font-size:14px; }
-  .ep-buy{ display:flex; flex-direction:column; gap:5px; flex:0 0 auto; }
+  .ep-buy{ display:flex; flex-direction:column; gap:4px; flex:0 0 auto; }
+  .ep-buy .btn.ep-forge-btn{ padding:5px 8px; min-width:74px; }   /* (3.79) three ways to pay now */
   .ep-slot2{ margin-top:0; padding-top:6px; border-top:none; padding-left:14px; }
   .ep-slot2 .ep-slot-k{ flex-basis:54px; color:var(--accent, #8a5cb8); }
   .ep-dot{ display:inline-block; width:16px; height:16px; border-radius:50%; vertical-align:middle; box-shadow:inset 0 0 0 2px rgba(255,255,255,.55), 0 0 0 1px rgba(35,32,25,.35); }

@@ -120,7 +120,7 @@ function renderShop(){
     { id:'goldMedal',     from:5, icon:'🥇', name:'Gold Medal', desc:'Trade tickets for gold.', qty:true },
     /* (3.67) element passives, forged from High stones of one element — (3.75)
        Selene's, in the Time Rift (Region 5's for now, 3.67–3.74) */
-    { id:'passiveForge',  from:ELEM_FORGE_FROM, icon:'🌟', name:'Passive Upgrades', desc:'Forge an element passive from its Very High or Ultra stones.', forge:true },
+    { id:'passiveForge',  from:ELEM_FORGE_FROM, icon:'🌟', name:'Passive Upgrades', desc:'Forge an element passive from its Very High, Ultra or High stones.', forge:true },
     /* Salvage out of the Vane Shear's hold: the last thing on the shelf, sold
        only aboard, and only ever one. */
     { id:'waterStone',    from:4, only:4, icon:uiIcon('water_stone',44,'💧'), name:'Water Stone',
@@ -137,7 +137,8 @@ function renderShop(){
       return `<div class="ware ${stocked ? (can ? '' : 'cant') : 'oos'}" ${stocked ? `data-ware="${w.id}"` : ''}>
         <div class="ware-icon">${w.icon}</div>
         <div class="ware-name">${escapeHtml(w.name)}</div>
-        ${stocked ? `<div class="ware-price">${gemIcon(ELEM_PASSIVE_COST.vh[0], 16)} ${ELEM_PASSIVE_COST.vh[1]} / ${gemIcon(ELEM_PASSIVE_COST.ultra[0], 16)} ${ELEM_PASSIVE_COST.ultra[1]}</div>` : `<div class="ware-oos">Out of stock</div>`}
+        ${stocked ? `<div class="ware-price">${gemIcon(ELEM_PASSIVE_COST.vh[0], 16)} ${ELEM_PASSIVE_COST.vh[1]} / ${gemIcon(ELEM_PASSIVE_COST.ultra[0], 16)} ${ELEM_PASSIVE_COST.ultra[1]}` +
+          ` <span class="ware-or">or ${gemIcon('high', 14)} ${ELEM_PASSIVE_HIGH.vh} / ${ELEM_PASSIVE_HIGH.ultra}</span></div>` : `<div class="ware-oos">Out of stock</div>`}
       </div>`;
     }
     const pr = SHOP_PRICES[w.id];

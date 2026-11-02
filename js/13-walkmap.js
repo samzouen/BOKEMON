@@ -97,7 +97,7 @@ function thingMidX(t){
    look at you while you are beside them. (3.07) `faceR`: someone who sits
    facing right (to a table on their right, say) — turned back that way when
    you walk on. */
-function thingTurns(t){ return !!(t.sprite && !t.walk && !t.rot && !t.still); }
+function thingTurns(t){ return !!((t.sprite || t.html) && !t.walk && !t.rot && !t.still); }
 function thingFaceNear(t, p, near){
   const dx = p ? p.x + 0.5 - thingMidX(t) : 0;
   faceRight(t.el, near && Math.abs(dx) > 0.05 ? dx > 0 : !!t.faceR);
@@ -474,6 +474,7 @@ const wSolid = (d,x,y)=> (y<0||y>=d.rows.length||x<0||x>=d.rows[0].length) ? tru
   (WALK_SOLID.includes(d.rows[y][x]) || !!(d.shut && d.shut(x, y)));
 /* A catacomb guard stands on his tile like anybody else. */
 function wOccupied(d, x, y){
+  if(d.occupied && d.occupied(x, y)) return true;        // (3.79) somebody walking about the deck (Selene, in the Rift)
   return !!(d.stealth && typeof stealthOccupied === 'function' && stealthOccupied(d, x, y));
 }
 
@@ -623,22 +624,23 @@ function renderWalkDeck(id){
 
   /* A deck names its own painting's natural size, or (a catacomb floor) has
      its painting drawn from its grid at runtime. */
-  const nat = d.nat || { weather_deck:[797,1209], cabin_deck:[832,1262], laboratory_deck:[832,1262] }[id];
-  const artUrl = d.paint ? d.paint(d) : `assets/zones/${d.art}.png`;
+  const nat = d.nat || { weather_deck:[797,1209], cabin_deck:[832,1262], laboratory_deck:[832,1262] }[id] || [1, 1];
+  /* (3.79) …or none at all: the Rift's floor is its moving sky, drawn behind the deck (18-rift.js) */
+  const artUrl = d.paint ? d.paint(d) : d.art ? `assets/zones/${d.art}.png` : null;
   /* fit the view across whatever the stage turns out to be — (3.19) or a
      set-piece room's own, wide enough to hold all of it (the vault: `view`) */
   WALK_VIEW = d.view || walkView();
   const avail = Math.min(window.innerWidth - 24, Math.max(220, window.innerHeight - 330));
   WALK_T = Math.max(30, Math.round(avail / WALK_VIEW));
   screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Explore</button>
+    <button class="back-link" id="backBtn">← ${escapeHtml(d.backLabel || 'Explore')}</button>
     ${(state.progress.currentRegion === 4 && typeof expeditionBar === 'function') ? expeditionBar(true) : ''}
     <div class="walk-stage walk-still" id="walkStage">
       <button class="walk-path" id="walkPath">Path</button>
       <div class="walk-world" id="walkWorld" style="
         --wt:${WALK_T}px;
         width:${W*WALK_T}px;height:${H*WALK_T}px;
-        background-image:url('${artUrl}');
+        background-image:${artUrl ? `url('${artUrl}')` : 'none'};
         background-size:${nat[0]*d.bs*WALK_T}px ${nat[1]*d.bs*WALK_T}px;
         background-position:${d.bx*WALK_T}px ${d.by*WALK_T}px;"></div>
     </div>
@@ -654,7 +656,7 @@ function renderWalkDeck(id){
       </div>
     </div>`;
   walkSideRefresh();
-  $('#backBtn').addEventListener('click', ()=>{ walkTeardown(); go('explore'); });
+  $('#backBtn').addEventListener('click', ()=>{ walkTeardown(); go(d.backTo || 'explore'); });   // (3.79) the Rift's goes to its region
   /* remember where to come back to, so Party does not dump you on the region
      screen with your place on the ship lost */
   $('#walkParty').addEventListener('click', ()=> leaveDeck('party'));
@@ -687,9 +689,12 @@ function renderWalkDeck(id){
     }
     const spin = t.rot ? ` style="transform:rotate(${t.rot}deg);"` : '';
     const fallPx = Math.round(WALK_T * 0.8 * (t.h || 1));
-    e.innerHTML = t.sprite
+    /* (3.79) `html`: a picture of its own (a monster's, from assets/mon — Lucesco); `cls`: its own look */
+    e.innerHTML = t.html ? t.html(t, fallPx)
+      : t.sprite
       ? `<img src="assets/npc/${t.sprite}.png" alt=""${spin} onerror="walkArtMissing(this,'${(t.icon||'').replace(/'/g,'')}',${fallPx},${t.rot||0})">`
       : `<span style="font-size:${fallPx}px;line-height:1;">${t.icon||''}</span>`;
+    if(t.cls) e.classList.add(...t.cls.split(' '));
     world.appendChild(e); t.el = e;
     if(t.faceR) faceRight(e, true);     // (3.07) sat facing right
     /* A task: a yellow "!" bobbing over their head, nine tenths of a tile tall. */
@@ -1148,7 +1153,8 @@ function refreshWalk(){
   } else near.forEach(t=>{
     const b=document.createElement('button');
     b.className='wact live';
-    b.innerHTML = escapeHtml(t.verb) + (t.where ? `<small>${escapeHtml(t.where)}</small>` : '');
+    /* (3.79) `sub`: a second line that is not a way out (`where` draws a green arrow) */
+    b.innerHTML = escapeHtml(t.verb) + ((t.where || t.sub) ? `<small>${escapeHtml(t.where || t.sub)}</small>` : '');
     /* (2.95) you turn to it first — unless you are standing on it */
     b.addEventListener('click', ()=>{
       const ws = walkState(); if(ws.busy) return;

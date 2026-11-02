@@ -149,7 +149,7 @@ function renderTear(){
   const place = tearPlace();                       // (3.58) a run kept, to carry on
   const day = tearDayName(tearNextWeek());
   screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← ${ui.tearBack === 'cata_vault' ? 'The vault' : 'Challenge'}</button>
+    <button class="back-link" id="backBtn">← ${ui.tearBack === 'cata_vault' ? 'The vault' : ui.tearBack === 'r6_rift' ? 'The Rift' : 'Challenge'}</button>
     <div class="tear-screen">
       <div class="screen-title">The space-time tear</div>
       <div class="tear-wrap" aria-hidden="true">${tearGalaxy()}</div>
@@ -176,6 +176,7 @@ function renderTear(){
     </div>`;
   $('#backBtn').addEventListener('click', ()=>{
     if(ui.tearBack === 'cata_vault' && typeof r5Zone === 'function'){ ui.currentZone = r5Zone('catacombs') || ui.currentZone; return go('cata_vault'); }
+    if(ui.tearBack === 'r6_rift' && typeof DECKS !== 'undefined' && DECKS.r6_rift) return go('r6_rift');   // (3.79) from the Rift's own tear
     go('challenge');
   });
   $('#tearEnter').addEventListener('click', ()=> (typeof r6Enter === 'function') ? r6Enter() : toast('Beyond the tear: coming soon.'));   // (3.75) Region 6

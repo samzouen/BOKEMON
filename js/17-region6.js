@@ -10,8 +10,9 @@
 
    WHAT IS HERE
    · THE WAY IN — the tear's "Enter the space-time tear" (16-tear.js). The
-     first time, Selene and Vesper (r6SeleneScene); after that, straight to
-     the region. Region 6 is "The Time Rift" (REGIONS, 11-app.js), open once
+     first time, Selene and Vesper (r6SeleneScene); after that, straight in —
+     (3.79) up into the round room, the Rift (18-rift.js, with the region's
+     moving sky). Region 6 is "The Time Rift" (REGIONS, 11-app.js), open once
      she has been met (r6().met). Its level cap is 150 (REGION_CAPS).
    · SELENE'S SHOP — the shop, with her at the counter (shopkeeper6.png) and
      Vesper beside her (mon/vesper_front.png; drawn if missing), and her own
@@ -1328,6 +1329,9 @@ function r6GoIn(){
   ui.currentZone = null;                          // the vault's catacombs are another region's
   ui.walkBack = null;
   saveProfile();
+  /* (3.79) "The tear should lead up into a round room": up out of the tear,
+     into the Rift (18-rift.js) */
+  if(typeof riftGo === 'function' && typeof DECKS !== 'undefined' && DECKS.r6_rift) return riftGo();
   go('region');
 }
 function r6SeleneScene(){
@@ -1447,7 +1451,7 @@ function renderChallengeR6(){
     <button class="btn btn-ghost" id="returnBtn" style="margin-top:4px;">Return</button>`;
   $('#backBtn').addEventListener('click', ()=> go('region'));
   $('#returnBtn').addEventListener('click', ()=> go('region'));
-  $('#cFuture').addEventListener('click', ()=> go('future'));
+  $('#cFuture').addEventListener('click', ()=>{ ui.futureBack = null; go('future'); });
   const tc = $('#cTear');
   if(tc) tc.addEventListener('click', ()=>{ ui.tearBack = null; go('tear'); });
 }
@@ -1463,7 +1467,7 @@ function renderFuture(){
   const day = escapeHtml(tearDayName(tearNextWeek()));
   const worth = distortionPay(on), more = Math.max(0, worth - (f.paid || 0));
   screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Challenge</button>
+    <button class="back-link" id="backBtn">← ${ui.futureBack ? 'The Rift' : 'Challenge'}</button>
     <div class="fu-screen">
       <div class="screen-title" style="text-align:center;">Challenge the future</div>
       <div class="fu-say">${vesperFace(46)} "Three of the future's strongest, this week. Beat them all, and capture one legacy." — Selene</div>
@@ -1498,7 +1502,8 @@ function renderFuture(){
         New monsters and distortions on <b>${day}</b>. Lose, and nothing is taken — not even XP — and the same three wait for you. Every move here asks for your <b>silver and gold words</b>.
         You hold ✨ <b>${starlight()}</b> Starlight.</div>
     </div>`;
-  $('#backBtn').addEventListener('click', ()=> go('challenge'));
+  /* (3.79) come from the Rift's distortion, Back goes there */
+  $('#backBtn').addEventListener('click', ()=>{ const b = ui.futureBack; ui.futureBack = null; go(b || 'challenge'); });
   screenEl.querySelectorAll('[data-dt]').forEach(bt=> bt.addEventListener('click', ()=>{
     const id = bt.dataset.dt, d = futureState().dist;
     if(d[id]) delete d[id]; else d[id] = 1;
@@ -1514,11 +1519,12 @@ function renderFuture(){
    next to the companions button on the party page")
    The twelve skies along the top (open or not, how many lit — a tap shows
    one, to light its constellations); the monsters that can learn (crowned,
-   past 100: the party's first, then storage's); the one chosen, its points,
+   past 100 — (3.79) the rarest first, then the highest level); the one chosen, its points,
    and its own elements' skies, where a tap on a constellation lights it or
    switches it on.
    ============================================================ */
-function talentCandidates(){ return (state.party || []).concat(state.storage || []).filter(m=> m && talentEligible(m)); }
+/* (3.79) rarest first, then the highest level (byRarityThenLevel, 02-core.js) */
+function talentCandidates(){ return byRarityThenLevel((state.party || []).concat(state.storage || []).filter(m=> m && talentEligible(m))); }
 function renderTalents(){
   r6Css();
   setScreenBg('home');
@@ -1782,7 +1788,8 @@ function r6Css(){
   .tl-legend{ font-size:11.5px; font-weight:600; color:var(--ink-soft); margin:10px 2px 0; line-height:1.45; }
   .tl-dev{ display:flex; gap:8px; align-items:center; margin-top:12px; font-size:18px; }
   .tl-dev .btn{ padding:8px 10px; font-size:13px; }
-  .tl-sheet-scrim{ position:fixed; inset:0; background:rgba(20,12,35,.6); z-index:85; display:flex; align-items:flex-end; justify-content:center; }
+  .tl-sheet-scrim{ position:fixed; inset:0; background:rgba(20,12,35,.6); z-index:85; display:flex; align-items:flex-end; justify-content:center; cursor:pointer; }
+  .tl-sheet{ cursor:auto; }   /* (3.79) the pointer makes a tap outside a sheet count on an iPad */
   .tl-sheet{ background:var(--paper); border-radius:18px 18px 0 0; padding:18px 18px 22px; max-width:520px; width:100%; max-height:88vh; overflow-y:auto;
     border-top:4px solid var(--tc, #7a45c8); }
   .tl-sheet-tall{ max-width:560px; }

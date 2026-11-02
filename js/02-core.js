@@ -89,7 +89,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.78';
+const GAME_VERSION = '3.79';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -765,8 +765,9 @@ function payRecycle(tier, sign){
      Ultra slot. A monster holds one of each, of any of its own elements.
    - Forged from stones of that element in storage (the plain ones go
      first) — (3.78) of its own tier: 2 Very High stones for a Very High
-     slot passive, 1 Ultra stone for an Ultra slot one (5 and 7 High stones
-     until 3.77). It waits in the bag until it is put on.
+     slot passive, 1 Ultra stone for an Ultra slot one — (3.79) or, as
+     until 3.77, 5 and 7 High stones of that element (ELEM_PASSIVE_HIGH).
+     It waits in the bag until it is put on.
    - (3.76) Or bought for Selection Tokens — (3.78) at the shop's own rate,
      3 a stone: 6 Very High Tokens, or 3 Ultra Tokens (ELEM_PASSIVE_TOKENS).
    - Taken off with a Void Stone and silver ("removing these with a void
@@ -842,6 +843,9 @@ const ELEMENT_PASSIVES = {
    same element ultra" — [tier, how many] of its element's stones */
 const ELEM_PASSIVE_COST = { vh:['veryhigh', 2], ultra:['ultra', 1] };
 const ELEM_PASSIVE_TOKENS = { vh:['veryhigh', 6], ultra:['ultra', 3] };   // …or Selection Tokens of that tier, 3 a stone (3.76: 2 and 1)
+/* (3.79) …or High stones of its element, as before 3.78 — the designer: "I
+   still want a 5/7 same high stone option to buy passives" */
+const ELEM_PASSIVE_HIGH = { vh:5, ultra:7 };
 const ELEM_FORGE_FROM = 6;   // (3.75) Selene's shop, in the Time Rift (it was Region 5's for now, 3.67–3.74)
 const ELEM_PASSIVE_REMOVE = { voidStones:1, silver:10 };
 const ELEM_PASSIVE_SLOTS = { vh:'Very High', ultra:'Ultra' };
@@ -1969,6 +1973,19 @@ function isPassenger(m){ return isSeed(m) || isEgg(m) || isBaby(m) || (isCuain(m
 function isFixedMember(m){ return isPassenger(m) || isCuain(m); }
 /* The six: fighters that take a slot. Cuain never takes one. */
 function slottedCount(){ return battleParty().filter(m=> !isCuain(m)).length; }
+/* (3.79) A list of monsters to give something to (an element passive just
+   forged, the Talents page's), rarest kinds first — legendary, elite, then
+   starters (the Mouse with them), then wild — and within each the highest
+   level first. The designer: "List monsters first from rarity downwards,
+   starting with legendary, and then downwards by level, starting with
+   highest levels within the tier". Otherwise the order they came in. */
+const RARITY_RANK = { legendary:0, elite:1, starter:2, special:2, wild:3 };
+function byRarityThenLevel(list){
+  const rank = m=>{ const r = RARITY_RANK[(SPECIES[m.species] || {}).tier]; return r == null ? 4 : r; };
+  return (list || []).map((m, i)=> ({ m, i, r:rank(m) }))
+    .sort((a, b)=> a.r - b.r || (b.m.level || 0) - (a.m.level || 0) || a.i - b.i)
+    .map(x=> x.m);
+}
 /* Nothing is bound to anybody: every elemental stone can come off again,
    Cuain's included. */
 function stoneBound(){ return false; }

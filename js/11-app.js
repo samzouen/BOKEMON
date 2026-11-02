@@ -131,6 +131,8 @@ function exploreAvatarSize(){
 }
 
 function renderExplore(){
+  /* (3.79) the Time Rift has no wilds: its Explore is the round room, walked */
+  if(state.progress.currentRegion === 6 && typeof riftGo === 'function' && typeof DECKS !== 'undefined' && DECKS.r6_rift) return riftGo();
   setScreenBg('explore');
   $('#brandSub').textContent = 'Explore';
   const canFight = battleParty().some(m=>m.currentHp>0);
