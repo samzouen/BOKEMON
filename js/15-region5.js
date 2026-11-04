@@ -3220,7 +3220,7 @@ async function r5CapoPurpleBeaten(){
     await saveProfile();
     await r5WispLead();                          // (3.02) the little light: "It wants us to follow."
     walkTeardown();
-    storyModal(monPortrait('whalelord', 150, { view:'front', bare:true }), 'The first tier is clear',
+    storyModal(whaleArt(150), 'The first tier is clear',
       `You have cleared the first tier of the catacombs under Cosa Nostia.<br><br>` +
       `<b>+3 Protein Supplements</b><br><br>` +
       `<i>The Whalelord has felt something in the Armoury, the furthest room off the Long Stair, past the Barracks — ` +
@@ -4315,7 +4315,7 @@ async function r5ConsigliereBeaten(){
     r.tier2 = true;
     await saveProfile();
     walkTeardown();
-    storyModal(monPortrait('whalelord', 150, { view:'front', bare:true }), 'The second tier is clear',
+    storyModal(whaleArt(150), 'The second tier is clear',
       `You have cleared the catacombs under the Old Town.<br><br>` +
       `<b>+3 Protein Supplements</b><br><br>` +
       `<i>The rest of Cosa Nostia is coming soon.</i>`,
@@ -4978,7 +4978,7 @@ async function r5TownCaught(id, d, g, def){
   captureTest(10, ()=>{
     back();
     saveProfile();
-    storyModal(monPortrait('whalelord', 150, { view:'front', bare:true }), whaleName(), hill
+    storyModal(whaleArt(150), whaleName(), hill
       ? `<b>"I put out every lamp on the hill at once. In the dark, an old man opened his door and pulled you in, and shut it on them."</b><br><br>` +
         `Grandpa hands you your cap. <b>"You dropped this,"</b> he says, and winks.<br><br><i>You are at Grandpa's door, in uniform.</i>`
       : `<b>"I blew out every lamp on the piazza at once, and in the dark we ran for the church. Nobody follows anybody into a church at night — not even the Family."</b><br><br>` +

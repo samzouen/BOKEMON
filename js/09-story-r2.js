@@ -73,6 +73,9 @@ async function spend(cur, amount){
   return true;
 }
 
+/* The shopkeeper's size: 110 — (3.80) Selene a little smaller on a phone,
+   so Vesper, a fifth bigger than her (R6_BIG), still leaves room for her words. */
+function shopKeeperPx(rift){ return (rift && window.innerWidth < 520) ? 88 : 110; }
 function renderShop(){
   // aboard the Vane Shear the shop is the shipkeeper's corner of the chart room
   setScreenBg((state.progress.currentRegion === 4) ? 'battle_cabin_deck' : 'shop');
@@ -84,7 +87,7 @@ function renderShop(){
     <button class="back-link" id="backBtn">← ${ui.walkBack ? 'Back' : 'Region'}</button>
 
     <div class="shop-keeper">
-      ${npcPortrait(state.progress.currentRegion===4 ? 'shipkeeper' : 'shopkeeper'+(state.progress.currentRegion||1), rift ? '🧙‍♀️' : '🧑‍🌾',110,'transparent')}${rift ? vesperFace(56) : ''}
+      ${npcPortrait(state.progress.currentRegion===4 ? 'shipkeeper' : 'shopkeeper'+(state.progress.currentRegion||1), rift ? '🧙‍♀️' : '🧑‍🌾',shopKeeperPx(rift),'transparent')}${rift ? vesperFace(Math.round(shopKeeperPx(rift) * R6_BIG)) : ''}
       <div class="shop-bubble">${escapeHtml(ui.shopGreeting)}</div>
     </div>
 
@@ -109,7 +112,7 @@ function renderShop(){
     /* (3.78) the element symbols (02-core.js): Mystery for the random stones —
        the elite one glowing gold and red — and the Universal one, in its
        tier's colour, for the skills you choose */
-    { id:'randomStone',   from:1, icon:mysteryIcon(44), name:'Random Skill Stone', desc:'Any tier, any type — one, or many at once.' },
+    { id:'randomStone',   from:1, icon:mysteryIcon(44), name:'Random Skill Stone', desc:'Any tier, any type — one, or up to 10 at once.' },
     { id:'protein',       from:2, icon:'💪', name:'Protein Supplement',     desc:'Permanently raises one monster\'s stats.' },
     { id:'eliteStone',    from:2, icon:mysteryIcon(44, true), name:'Random Elite Skill Stone', desc:'Guaranteed Very High or Ultra.' },
     { id:'highSkill',     from:2, icon:tierSelectIcon('high'), name:'High Quality Skill', desc:'Pick any High-tier skill yourself.', pick:'high' },
@@ -240,10 +243,15 @@ function openQtyPurchase(w){
 /* (3.78) Random Skill Stones, one or many at once — the designer: "please
    now include a multi-purchase of random skill stone which allows the
    player to buy multiple copies at once". All are rolled and saved behind
-   the ring of the elements (stoneSaveReveal, 07-screens.js), then shown. */
+   the ring of the elements (stoneSaveReveal, 07-screens.js), then shown.
+   (3.83) the designer: "please change '10' to the maximum at one go … this makes the draw more exciting by
+   having it 10 in one go maximum. remove the 'max'" — ten at most in one draw; the Max button is gone, and
+   the 10 button takes as many as you can afford, up to ten. */
+const STONE_DRAW_MAX = 10;
 function openStoneQtyPurchase(w){
   const pr = SHOP_PRICES[w.id];
-  const max = Math.floor(medalCount(pr.cur) / pr.cost);
+  const afford = Math.floor(medalCount(pr.cur) / pr.cost);
+  const max = Math.min(STONE_DRAW_MAX, afford);
   let qty = max > 0 ? 1 : 0;
   const ov = shopOverlay(pr.cur, `
     <div class="qty-card">
@@ -255,10 +263,10 @@ function openStoneQtyPurchase(w){
         <button class="qty-btn" id="qMinus">−</button>
         <div class="qty-val" id="qVal">${qty}</div>
         <button class="qty-btn" id="qPlus">+</button>
-        <button class="qty-btn wide" id="q10">10</button>
-        <button class="qty-btn wide" id="qMax">Max</button>
+        <button class="qty-btn wide" id="q10">${STONE_DRAW_MAX}</button>
       </div>
       <div class="ware-desc" id="qTotal" style="margin-top:10px;"></div>
+      <div class="ware-desc" style="margin-top:2px;">Up to <b>${STONE_DRAW_MAX}</b> in one draw.</div>
       <button class="btn btn-primary" id="qBuy" style="margin-top:14px;" ${qty ? '' : 'disabled'}>Buy</button>
       <button class="btn btn-ghost" id="qCancel" style="margin-top:8px;">Cancel</button>
     </div>`);
@@ -269,8 +277,7 @@ function openStoneQtyPurchase(w){
       : `Not enough ${escapeHtml(curName(pr.cur))}.`;
     ov.querySelector('#qPlus').disabled = qty >= max;
     ov.querySelector('#qMinus').disabled = qty <= 1;
-    ov.querySelector('#q10').disabled = max < 2;
-    ov.querySelector('#qMax').disabled = max < 2;
+    ov.querySelector('#q10').disabled = max < 2 || qty === max;
     ov.querySelector('#qBuy').disabled = qty < 1;
     ov.querySelector('#qBuy').textContent = qty > 1 ? `Buy ${qty}` : 'Buy';
   };
@@ -279,10 +286,9 @@ function openStoneQtyPurchase(w){
   ov.querySelector('#qCancel').addEventListener('click', close);
   ov.querySelector('#qMinus').addEventListener('click', ()=>{ if(qty > 1){ qty--; refresh(); } });
   ov.querySelector('#qPlus').addEventListener('click', ()=>{ if(qty < max){ qty++; refresh(); } });
-  ov.querySelector('#q10').addEventListener('click', ()=>{ qty = Math.min(max, 10); refresh(); });
-  ov.querySelector('#qMax').addEventListener('click', ()=>{ qty = max; refresh(); });
+  ov.querySelector('#q10').addEventListener('click', ()=>{ qty = max; refresh(); });
   ov.querySelector('#qBuy').addEventListener('click', async ()=>{
-    if(qty < 1 || medalCount(pr.cur) < qty * pr.cost) return;
+    if(qty < 1 || qty > STONE_DRAW_MAX || medalCount(pr.cur) < qty * pr.cost) return;
     const n = qty, snapshot = { inv:Object.assign({}, state.inventory), medals:Object.assign({}, state.medals), stones:state.moveStones.length };
     if(!await spend(pr.cur, n * pr.cost)) return;
     const stones = [];

@@ -572,10 +572,18 @@ function riftSkyTick(now){
 const RIFT_LIVE_KEYS = ['region6', 'explore', 'challenge', 'tear', 'shop', 'recover', 'rift'];
 let _riftPage = null, _riftHideT = null;
 function riftSkyLive(key, src){
-  const on = !!key && typeof r6SkyUri === 'function' && src === r6SkyUri() && RIFT_LIVE_KEYS.includes(key);
+  /* (3.82) …and a fight's, when its backdrop is the drawn sky (the designer: "the sky background is so
+     beautiful, please don't cover over it with a translucent white layer in the battle UI") */
+  const on = !!key && typeof r6SkyUri === 'function' && src === r6SkyUri() && (RIFT_LIVE_KEYS.includes(key) || /^battle_/.test(key));
   if(on) riftPageShow(); else riftPageHide(!key);
+  /* (3.83) the designer: "in region 6, the buttons for the main region page, challenge, recover and shop
+     are not translucent. please make them translucent so your art is beautiful and the contrast is not so
+     jarring" — on those pages the cards and buttons go to glass (riftCss, body.r6-glass); a fight and the
+     walks keep theirs */
+  if(typeof document !== 'undefined' && document.body) document.body.classList.toggle('r6-glass', on && RIFT_GLASS_KEYS.includes(key));
   return on;
 }
+const RIFT_GLASS_KEYS = ['region6', 'challenge', 'tear', 'shop', 'recover'];
 function riftPageShow(){
   clearTimeout(_riftHideT); _riftHideT = null;
   riftCss();
@@ -620,6 +628,7 @@ const RIFT_DESK = [[6,1],[7,1],[8,1],[9,1],[10,1],[4,2],[5,2],[11,2],[12,2],[4,3
 /* Selene's walk: from beside the tear (its west side) to beside the ancient portal */
 const RIFT_PATH = [[6,14],[5,14],[5,13],[4,13],[4,12],[4,11],[3,11],[3,10],[3,9]];
 const RIFT_WALK = { step:640, rest:[9000, 16000] };
+const RIFT_VES = { x:0.75, y:-1.0 };     // where Vesper flies, from her square: at her shoulder, on the side she is not facing
 function riftRows(){
   const N = RIFT_ROOM.n, c = N / 2, rows = [];
   for(let y = 0; y < N; y++){
@@ -650,9 +659,10 @@ const RIFT_DECK = {
     { x:7,  y:14, w:3, h:2, icon:'', verb:'The tear', sub:'Challenge the past', act:()=> riftTear() },
     { x:14, y:7,  w:2, h:3, icon:'', verb:'The future', sub:'Challenge it', act:()=> riftFuture() },
     { x:1,  y:7,  w:2, h:3, icon:'', verb:'Ancient portal', sub:'To the past', act:()=> riftPortal('ancient') },
-    { x:2,  y:4,  h:2, icon:'', verb:'Portal', sub:'To the past', act:()=> riftPortal('small') },
+    /* (3.84) the upper one wakes once the Council has called: the Fairy King's jungle (20-jungle.js) */
+    { x:2,  y:4,  h:2, icon:'', verb:'Portal', get sub(){ return (typeof jgPortalAwake === 'function' && jgPortalAwake()) ? 'To the jungle' : 'To the past'; }, act:()=> riftPortal('jungle') },
     { x:2,  y:11, h:2, icon:'', verb:'Portal', sub:'To the past', act:()=> riftPortal('small') },
-    { x:4,  y:1,  w:9, h:3, walk:true, icon:'', verb:'The Council', sub:'Vesper’s station', act:()=> riftCouncil() },
+    { x:4,  y:1,  w:9, h:3, walk:true, icon:'', verb:'The Council', sub:'Vesper’s station', mark:()=> typeof jgCallDue === 'function' && jgCallDue(), act:()=> riftCouncil() },
     { x:4,  y:6,  html:(t, px)=> riftLucescoImg(px), cls:'rift-lion', faceR:true, icon:'🦁', verb:'Talk', sub:'Lucesco', act:()=> riftLucesco() },
   ],
   occupied:(x, y)=> riftSelOn(x, y),
@@ -693,8 +703,10 @@ function riftRoomRender(world, d){
   art('rift-station', 3.2, 0.1, 10.6, 3.4, riftStationSvg(), 'riftStation');
   art('rift-tear', 8.5 - 1.45, 14.95 - 1.45, 2.9, 2.9, tearGalaxy());
   art('rift-future', 15.0 - 1.4, 8.5 - 1.8, 2.8, 3.6, riftFutureSvg());
-  art('rift-portal big', 2.0 - 1.3, 8.5 - 1.95, 2.6, 3.6, riftPortalSvg(true));
-  art('rift-portal', 2.5 - 0.8, 5.0 - 1.4, 1.6, 2.5, riftPortalSvg(false));
+  const bigPortal = art('rift-portal big', 2.0 - 1.3, 8.5 - 1.95, 2.6, 3.6, riftPortalSvg(true));
+  if(typeof pastOpen === 'function' && pastOpen()){ pastCss(); bigPortal.classList.add('past-portal'); }   // (3.81) awake
+  const jgP = art('rift-portal', 2.5 - 0.8, 5.0 - 1.4, 1.6, 2.5, riftPortalSvg(false), 'riftPortalJg');
+  if(typeof jgPortalAwake === 'function' && jgPortalAwake()){ if(typeof jgCss === 'function') jgCss(); jgP.classList.add('jg-awake'); }   // (3.84) awake, green
   art('rift-portal', 2.5 - 0.8, 12.0 - 1.4, 1.6, 2.5, riftPortalSvg(false));
   const me = $('#walkYou');
   if(me) me.classList.add('rift-person');
@@ -702,6 +714,8 @@ function riftRoomRender(world, d){
   riftSelStart();
   /* the first time in, Selene shows you round */
   if(!r6().roomSeen && !ui.sceneRunning) setTimeout(()=>{ if(ui.screen === 'r6_rift') riftTour(); }, 450);
+  /* (3.84) …and once she has, the Council has a call waiting (20-jungle.js) */
+  else if(typeof jgCallDue === 'function' && jgCallDue()) setTimeout(()=>{ if(ui.screen === 'r6_rift' && !ui.sceneRunning) toast('📡 The Council is calling! Go to Vesper\'s station.'); }, 700);
 }
 
 /* ---------- Selene and Vesper, walking ---------- */
@@ -733,7 +747,7 @@ function riftSelPlace(){
   sel.style.zIndex = 10 + p.y;
   faceRight(sel, s.faceR);
   if(ves && !s.vesAway){
-    ves.style.transform = `translate3d(${(p.x + (s.faceR ? -0.55 : 0.55)) * T}px,${(p.y - 0.8) * T}px,0)`;
+    ves.style.transform = `translate3d(${(p.x + (s.faceR ? -RIFT_VES.x : RIFT_VES.x)) * T}px,${(p.y + RIFT_VES.y) * T}px,0)`;
     ves.style.zIndex = 11 + p.y;
     faceRight(ves, s.faceR);
   }
@@ -781,9 +795,11 @@ function riftNearActs(p){
 
 /* ---------- faces, and what everyone says ---------- */
 const riftSeleneFace = ()=> faceNpc('shopkeeper6', '🧙‍♀️');
-const riftVesperFace = ()=> `<img src="assets/mon/vesper_front.png" alt="" onerror="walkArtMissing(this,'🦇',48,0)">`;
-const riftLucescoFace = ()=> `<img src="assets/mon/lucesco_front.png" alt="" onerror="walkArtMissing(this,'🦁',48,0)">`;
-function riftLucescoImg(px){ return `<img src="assets/mon/lucesco_front.png" alt="Lucesco" onerror="walkArtMissing(this,'🦁',${px || 40},0)">`; }
+/* (3.80) Vesper and Lucesco a fifth bigger than Selene (R6_BIG) — beside
+   her in a window of words, and on the floor */
+const riftVesperFace = ()=> `<img class="ss-big" src="assets/mon/vesper_front.png" alt="" onerror="walkArtMissing(this,'🦇',58,0)">`;
+const riftLucescoFace = ()=> `<img class="ss-big" src="assets/mon/lucesco_front.png" alt="" onerror="walkArtMissing(this,'🦁',58,0)">`;
+function riftLucescoImg(px){ return `<img src="assets/mon/lucesco_front.png" alt="Lucesco" onerror="walkArtMissing(this,'🦁',${Math.round((px || 40) * 1.9)},0)">`; }
 const RIFT_TOUR = [
   `"This is the Rift — the heart of the tear, where Vesper and I keep watch over time."<br><br>` +
   `"The tear behind you leads back down to the vault. The past still echoes in it: the Padrino's fight, once a week."`,
@@ -851,8 +867,24 @@ async function riftLucesco(){
   try { await riftSay([riftLucescoFace()], 'Lucesco', riftNext('lion', RIFT_LUCESCO_LINES)); }
   finally { ui.riftTalk = false; }
 }
+const RIFT_PORTAL_AWAKE = `The ancient portal's runes are burning gold, and a warm wind blows out of it, smelling of sand.<br><br>` +
+  `<b>"Rrrr. It is awake. Come — I will walk with you."</b>`;
 async function riftPortal(which){
   if(ui.riftTalk) return;
+  /* (3.84) the upper small one, once the Council has called */
+  if(which === 'jungle'){
+    if(typeof jgPortalAwake === 'function' && jgPortalAwake()) return jgRiftPortal();
+    which = 'small';
+  }
+  /* (3.81) the ancient one is awake — the land of long ago (19-past.js);
+     on a developer's profile only, while its story is written */
+  if(which === 'ancient' && typeof pastOpen === 'function' && pastOpen()){
+    ui.riftTalk = true;
+    try { await riftSay([riftLucescoFace()], 'Lucesco', RIFT_PORTAL_AWAKE); }
+    finally { ui.riftTalk = false; }
+    if(ui.screen === 'r6_rift') pastEnter();
+    return;
+  }
   ui.riftTalk = true;
   try {
     await riftSay([`<span class="rift-face-art">${riftPortalSvg(which === 'ancient')}</span>`],
@@ -886,10 +918,13 @@ async function riftCouncil(){
   ui.sceneRunning = true; w.busy = true;
   document.body.classList.add('rift-scene');
   const st = $('#riftStation');
+  let called = false;
   try {
     await riftVesperFly(8.0, 2.05, 1400);
     if(st) st.classList.add('on');
-    await riftSay([riftVesperFace()], 'Vesper', riftNext('council', RIFT_COUNCIL_LINES));
+    /* (3.84) the first quest: a call from the Fairy King (20-jungle.js) */
+    if(typeof jgCallDue === 'function' && jgCallDue()) called = await jgCouncilCall();
+    else await riftSay([riftVesperFace()], 'Vesper', riftNext('council', RIFT_COUNCIL_LINES));
   } finally {
     if(st) st.classList.remove('on');
     ui.sceneRunning = false; w.busy = false;
@@ -897,6 +932,8 @@ async function riftCouncil(){
     riftVesperHome(1400);
     refreshWalk();
   }
+  /* the call heard: the room again, its "!" gone and the portal awake */
+  if(called) setTimeout(()=>{ if(ui.screen === 'r6_rift' && !ui.sceneRunning){ ui.walkFresh = false; go('r6_rift'); } }, 1500);
 }
 /* The first time in: Selene shows you round — the camera turns to each part
    of the room as she names it. */
@@ -1111,6 +1148,33 @@ function riftCss(){
   body.r6-sky .shop-note{ background:rgba(222,248,236,.95); }
   body.r6-sky .walk-stage{ box-shadow:0 0 0 1px rgba(170,180,255,.28), 0 6px 26px rgba(0,0,0,.6); }
   body.r6-sky .scene-emblem img, body.r6-sky .emblem-pair img{ filter:drop-shadow(0 0 8px rgba(200,180,255,.55)); }
+  /* (3.82) a fight under the live sky: its free-standing words go light, the paper buttons stay paper */
+  body.r6-sky .mon-title, body.r6-sky .mon-title span{ color:#f6f2ff; text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 8px rgba(0,0,0,.7); }
+  body.r6-sky .hp-num, body.r6-sky .atk-line{ color:#ebe6ff; text-shadow:0 1px 3px rgba(0,0,0,.95); }
+  body.r6-sky #battleMsg{ color:#e6e0fb !important; text-shadow:0 1px 4px rgba(0,0,0,.95); }   /* (its own colour is set on it) */
+  body.r6-sky #battleMsg b, body.r6-sky #battleMsg strong{ color:#fff; }
+  /* (3.83) the region's page, Challenge, Recover and the shop: violet glass, the sky through it, its words
+     light (the page's own ink colours turned light inside it, so words coloured by them follow) */
+  body.r6-glass .menu-card, body.r6-glass .challenge-card, body.r6-glass .ware, body.r6-glass .medal-bar,
+  body.r6-glass .shop-bubble, body.r6-glass .hp-card, body.r6-glass #screen > .btn-ghost, body.r6-glass #screen > .btn-row > .btn-ghost,
+  body.r6-glass #screen .storage-corner{
+    --ink:#f4efff; --ink-soft:#cdc2f0; --line:rgba(206,186,255,.30);
+    background:rgba(28,16,60,.38); border:1px solid rgba(206,186,255,.30); color:#f4efff;
+    box-shadow:0 3px 0 rgba(122,96,206,.34), 0 6px 18px rgba(0,0,0,.28);
+    backdrop-filter:blur(2.5px) saturate(1.15); -webkit-backdrop-filter:blur(2.5px) saturate(1.15);
+    text-shadow:0 1px 3px rgba(0,0,0,.75);
+  }
+  body.r6-glass .menu-card:active, body.r6-glass .challenge-card:active, body.r6-glass .ware:active{ box-shadow:0 1px 0 rgba(122,96,206,.34), 0 4px 12px rgba(0,0,0,.26); }
+  body.r6-glass .mc-desc, body.r6-glass .cc-desc, body.r6-glass .ware-desc, body.r6-glass .ware-oos, body.r6-glass .ware-or{ color:#cdc2f0; }
+  body.r6-glass .mc-title, body.r6-glass .cc-title, body.r6-glass .ware-name, body.r6-glass .ware-price, body.r6-glass .medal-bar b{ color:#f8f4ff; }
+  body.r6-glass .cc-desc b[style*="color"]{ filter:brightness(1.3); }
+  body.r6-glass .shop-bubble:before{ background:rgba(28,16,60,.38); border-color:rgba(206,186,255,.30);
+    clip-path:polygon(0 0, 0 100%, 100% 100%); backdrop-filter:blur(2.5px); -webkit-backdrop-filter:blur(2.5px); }
+  body.r6-glass .hp-card .hpbar{ background:rgba(255,255,255,.16); }
+  body.r6-glass #screen > .btn-jade{ background:rgba(36,134,100,.58); color:#f4fff9; border:1px solid rgba(150,240,205,.38);
+    box-shadow:0 4px 0 rgba(12,66,48,.62); backdrop-filter:blur(2.5px); -webkit-backdrop-filter:blur(2.5px); text-shadow:0 1px 3px rgba(0,0,0,.5); }
+  body.r6-glass #screen > .btn-primary{ background:rgba(186,56,44,.6); color:#fff6ee; border:1px solid rgba(255,190,170,.38);
+    box-shadow:0 4px 0 rgba(96,24,18,.62); backdrop-filter:blur(2.5px); -webkit-backdrop-filter:blur(2.5px); text-shadow:0 1px 3px rgba(0,0,0,.5); }
 
   /* the room */
   .walk-stage.rift-stage{ background:#060c24; }
@@ -1129,12 +1193,14 @@ function riftCss(){
   .walk-ent.rift-selene img{ filter:drop-shadow(0 0 2.5px rgba(225,215,255,.9)); }
   .walk-ent.rift-vesper{ transition:transform .95s ease-out; pointer-events:none; }
   .walk-ent.rift-vesper > *{ animation:riftBob 2.6s ease-in-out infinite; }
-  .walk-ent.rift-vesper img{ transform:scale(1.1); filter:drop-shadow(0 0 4px rgba(190,170,255,.8)); }
+  .walk-ent.rift-vesper img{ transform:scale(1.577); filter:drop-shadow(0 0 4px rgba(190,170,255,.8)); }   /* (3.80) 1.2 × a person's 1.314 */
   .walk-ent.rift-vesper .vesper-svg{ width:100%; height:auto; }
   @keyframes riftBob{ 0%,100%{ translate:0 0; } 50%{ translate:0 -12%; } }
-  .walk-ent.rift-lion img{ transform:scale(1.8) translateY(-14%); filter:drop-shadow(0 0 5px rgba(255,140,60,.6)); }
+  .walk-ent.rift-lion img{ transform:scale(1.577) translateY(-10%); filter:drop-shadow(0 0 5px rgba(255,140,60,.6)); }   /* (3.80) 1.2 × Selene */
   .walk-ent.rift-lion .walk-emoji{ filter:drop-shadow(0 0 8px rgba(255,140,60,.95)); translate:0 -10%; }
   body.rift-scene #backBtn, body.rift-scene #walkParty{ pointer-events:none; opacity:.45; }
+  .scene-say .ss-faces img.ss-big{ width:77px; height:77px; }          /* (3.80) 1.2 × 64 */
+  .scene-say .ss-faces .walk-emoji{ line-height:1; }
   .rift-face-art{ display:inline-block; width:56px; height:64px; }
   .rift-face-art svg{ width:100%; height:100%; display:block; }
   /* the station */

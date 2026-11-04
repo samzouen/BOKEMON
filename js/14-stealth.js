@@ -738,7 +738,7 @@ async function caughtEvade(id, d, g, def){
     r.evadeTries[id] = (r.evadeTries[id] || 0) + 1;
     back();
     saveProfile();
-    storyModal(monPortrait('whalelord', 150, { view:'front', bare:true }), whaleName(),
+    storyModal(whaleArt(150), whaleName(),
       (revealed ? `<b>"Too many of them on this floor. Show your face to one, and they all come."</b><br><br>` : '') +
       `<b>"We slipped away from them in the dark. They have gone back to their posts."</b><br><br>` +
       `<i>You are back at ${whereBack}. Try again.</i>`,

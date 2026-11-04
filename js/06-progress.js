@@ -328,11 +328,16 @@ const TOKEN_ENCOUNTER_BONUS = { double:0.05, triple:0.10, starter:0.15, elite:0.
    its own tier's bonus. A triple wave of elite Toads is therefore
    10% (triple) + 18% (elite) + 2 x 12% = 52% on top of the level-based base. */
 function tokenDropChance(){
+  const b = ui.battle;
+  return tokenDropChanceFor(b && Array.isArray(b.enemies) ? b.enemies : null);
+}
+/* (3.82) …for any line-up of foes — the future's screen asks before the fight */
+function tokenDropChanceFor(enemies){
   if(!state.party.length) return 0;
   const topLevel = Math.max(...state.party.map(m=>m.level));
   let chance = topLevel / 100;               // level 25 -> 25%; level 150 -> 150%
-  const b = ui.battle;
-  if(b && Array.isArray(b.enemies)){
+  if(Array.isArray(enemies)){
+    const b = { enemies };
     const n = b.enemies.length;
     if(n >= 3) chance += TOKEN_ENCOUNTER_BONUS.triple;
     else if(n === 2) chance += TOKEN_ENCOUNTER_BONUS.double;
@@ -632,7 +637,8 @@ function showVictory(enemyNames, levelUps, tokens){
   // determine catchable target(s): wild only, species not already caught
   /* `e.fled` also sits at 0 HP, but it left with the loot rather than being
      beaten — only what you actually took down can be caught. */
-  const catchable = b.enemies.filter(e=>e.hp<=0 && !e.fled && SPECIES[e.species].tier!=='npc' && !state.caughtSpecies.includes(e.species));
+  const catchable = b.enemies.filter(e=>e.hp<=0 && !e.fled && SPECIES[e.species].tier!=='npc' && !SPECIES[e.species].noCatch && !state.caughtSpecies.includes(e.species))   // (3.84) noCatch: the jungle's aliens
+    .filter((e, i, all)=> all.findIndex(x=> x.species === e.species) === i);                                    // (3.84) each kind once: catching one of two the same settles both
   screenEl.innerHTML = `
     <div style="text-align:center;padding:14px 0;">
       <div style="font-size:42px;">🎉</div>
@@ -667,6 +673,7 @@ function showVictory(enemyNames, levelUps, tokens){
   $('#regionBtn').addEventListener('click', ()=>go('region'));
   if(breakNow) showEyeBreak();
   $('#againBtn').addEventListener('click', ()=> exploreFurther());
+  if(ui.jgFight && b.jungle && typeof jgVictoryButtons === 'function') jgVictoryButtons();   // (3.84) a fight in the jungle: back into it
 }
 
 /* ---------- CATCHING ---------- */
@@ -722,6 +729,7 @@ function resolveCatch(enemy, results){
 /* Where a catch (or a miss) leaves you: the region, or — in the catacombs —
    the very spot the fight found you. */
 function afterCatch(){
+  if(ui.jgFight && ui.battle && ui.battle.jungle && typeof jgBack === 'function') return jgBack();   // (3.84) the jungle: back where you stood
   if((ui.currentZone||{}).id === 'catacombs' && ui.returnDeck && typeof r5AfterWild === 'function') return r5AfterWild();
   go('region');
 }

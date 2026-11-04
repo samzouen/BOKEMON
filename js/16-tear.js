@@ -108,11 +108,12 @@ function tearNextWeek(){ const w = tearWeekStart(); w.setDate(w.getDate() + 7); 
    clears the paid rounds and nothing else. */
 function tearState(){
   const p = state.progress;
-  if(!p.tear || typeof p.tear !== 'object') p.tear = { week:'', paid:[], stone:false, clears:0, best:0, runs:0 };
+  if(!p.tear || typeof p.tear !== 'object') p.tear = { week:'', paid:[], xpPaid:[], stone:false, clears:0, best:0, runs:0 };
   const t = p.tear;
   if(!Array.isArray(t.paid)) t.paid = [];
+  if(!Array.isArray(t.xpPaid)) t.xpPaid = [];      // (3.83) the rounds whose XP is paid this week
   const wk = tearWeekKey();
-  if(t.week !== wk){ t.week = wk; t.paid = []; }
+  if(t.week !== wk){ t.week = wk; t.paid = []; t.xpPaid = []; }
   return t;
 }
 function tearPaidCount(){ const t = tearState(); return TEAR.pay.filter((_, i)=> !!t.paid[i]).length; }
@@ -195,19 +196,30 @@ function tearFoeLevel(){
 /* All seven rounds' waves: in each, his monsters one at a time (as many as
    wavesPerRound leaves room for — six: all five) and then Cyborg, always the
    round's last. */
+/* (3.83) The designer: "it should mimic the actual padrino fight in terms of the number of monsters -
+   there were 3 per wave". Each of his five in the middle of its wave, crowned, with the two of the
+   Family's strongest that stand beside it in the vault (R5_VAULT_SIDES), all at the tear's level;
+   then Cyborg, alone, as there. */
 function tearWaves(level){
   const L = level || tearFoeLevel();             // (3.58) a kept run keeps the level it began at
   const n = Math.max(1, Math.min(TEAR_TEAM.length + 1, TEAR.wavesPerRound));
+  const one = (sp, ai)=> ({ species:sp, level:L, ai, crowned:true, supplements:TEAR.supplements, nerfed:false, anyLevel:true });
+  const sides = typeof R5_VAULT_SIDES !== 'undefined' ? R5_VAULT_SIDES : {};
+  const sideAi = sp=> typeof r5VaultAi === 'function' ? r5VaultAi(sp, false) : 'best';
   const waves = [];
   for(let r = 0; r < TEAR.rounds; r++){
-    TEAR_TEAM.slice(0, n - 1).forEach((sp, w)=> waves.push([{ species:sp, level:L, ai:TEAR.ai[w] || 'best', crowned:true,
-      supplements:TEAR.supplements, nerfed:false, anyLevel:true }]));
+    TEAR_TEAM.slice(0, n - 1).forEach((sp, w)=>{
+      const [l, rt] = sides[sp] || [];
+      const centre = one(sp, TEAR.ai[w] || 'best');
+      waves.push(l && rt ? [one(l, sideAi(l)), centre, one(rt, sideAi(rt))] : [centre]);
+    });
     waves.push([{ species:'cyborg', level:TEAR.cyborgLevel, ai:'best', crowned:true, nerfed:false, boss:true }]);
   }
   return waves;
 }
 /* (3.11) One round of the past, for the Test Arena's Challengers: his five,
-   crowned, one at a time, then Cyborg — what each of the seven rounds is. */
+   crowned, then Cyborg — what each of the seven rounds is ((3.83) each of the
+   five with its two beside it, as in the vault). */
 function tearRoundBattle(){
   return { waves:tearWaves().slice(0, TEAR.wavesPerRound), isNpc:true, npcId:'padrino2', bgKey:'battle_tear',
            name:'Don Padrino · the past' };
@@ -216,8 +228,9 @@ function tearChallenge(){
   if(!ensurePool()) return;
   if(tearAllPaid()) return toast(`All ${tearWord(TEAR.rounds)} rounds are won this week. The past waits for Monday.`);
   storyModal(monPortrait('cyborg', 140, { view:'front', bare:true, crowned:true }), 'Challenge the past',
-    `The tear shows you the Padrino's villa again. He sends his monsters out one at a time — the Rhino, the Fox, the Shadow, ` +
-    `the Jackal and the Raven, crowned, at level <b>${tearFoeLevel()}</b> — and last of all <b>Cyborg</b>, the time monster, at <b>${TEAR.cyborgLevel}</b>.<br><br>` +
+    `The tear shows you the Padrino's villa again. He sends his monsters out as he did there — the Rhino, the Fox, the Shadow, ` +
+    `the Jackal and the Raven, crowned, at level <b>${tearFoeLevel()}</b>, each with two of the Family's strongest beside it — ` +
+    `and last of all <b>Cyborg</b>, the time monster, at <b>${TEAR.cyborgLevel}</b>.<br><br>` +
     `<b>Beat Cyborg</b> and it rewinds them all, itself too, and he starts again from the Rhino — <b>${tearWord(TEAR.rounds)} rounds</b>.<br><br>` +
     `Cyborg's <b>Futuresight</b> dodges half of your blows, and every dodge is a <b>Spacetime Fracture</b>: its Spacetime Rift Max ` +
     `(<b>1.5×</b> its attack) hits <b>1.1×</b> harder for each one, multiplying. A <b>Curse ✦</b> quiets Futuresight; a <b>Diamond Dust</b> ` +
@@ -225,7 +238,8 @@ function tearChallenge(){
     `Its <b>Organosteel Body</b> arrives behind <b>3 shields</b> and raises <b>1 more every turn</b>, each soaking up to <b>${tearCyborgShield()}</b> ` +
     `of a strike. No Diamond Dust touches them — a <b>Dragon Dance</b> breaks <b>1 / 2 / 3</b> of them with every attack, and a ` +
     `<b>Curse ✦</b> stops new ones: bring your own <b>Very High stones</b>.<br><br>` +
-    `Lose, and nothing is taken — <b>not even XP</b>. Every move asks for your <b>silver and gold words</b>.`,
+    `Lose, and nothing is taken — <b>not even XP</b>. Each round's medals and XP are paid <b>once a week</b>: try again, and only the rounds you win further pay. ` +
+    `Every move asks for your <b>silver and gold words</b>.`,
     ()=> tearBegin(), { subtitle:'The space-time tear', bg:'tear' });
 }
 /* What one of Cyborg's shields soaks from a strike here: its ATK (3.13). */
@@ -403,9 +417,14 @@ function tearRoundWon(round){
     });
     line = `🏅 Round ${round} won — ${tearPayText(pay)}!`;
   } else line = `Round ${round} won — its medals were paid earlier this week.`;
-  const fights = TEAR.wavesPerRound * 2;
-  run.xp += fights;
-  run.events.push(...tearXp(fights));
+  /* (3.83) The designer: "failed challenges that are reattempted should not double award XP … award only
+     XP that hasn't been awarded if further progress is made" — a round's XP, like its medals, once a week */
+  if(!t.xpPaid[round - 1]){
+    t.xpPaid[round - 1] = true;
+    const fights = TEAR.wavesPerRound * 2;
+    run.xp += fights;
+    run.events.push(...tearXp(fights));
+  } else line += ' Its XP was earned earlier this week too.';
   if(tallyBattleForEyeBreak({ round:true })) b.tearBreak = true;     // a round is a battle for the day's count; a break fallen due in its waves is taken before the next (3.23)
   if(round < TEAR.rounds) tearKeep(b, { at:round * TEAR.wavesPerRound });   // (3.58) the next round's start, kept before the rewind plays
   saveProfile();
@@ -483,7 +502,8 @@ function tearResults(kind, run){
     `<div>Rounds won in this run: <b>${run.rounds} of ${TEAR.rounds}</b>.</div>`,
     `<div>${medals ? `Medals in this run: <b>${medals}</b>`
                    : run.rounds ? 'No new medals — those rounds were paid earlier this week.' : 'No rounds won yet in this run.'}</div>`,
-    run.xp ? `<div>XP: <b>${run.xp} fights' worth</b> for the whole team${run.bonus ? ` (with <b>+${run.bonus}</b> for winning all ${tearWord(TEAR.rounds)})` : ''}.</div>` : '',
+    run.xp ? `<div>XP: <b>${run.xp} fights' worth</b> for the whole team${run.bonus ? ` (with <b>+${run.bonus}</b> for winning all ${tearWord(TEAR.rounds)})` : ''}.</div>`
+           : run.rounds ? `<div>No XP this time: those rounds' XP was earned earlier this week. Win further to earn more.</div>` : '',
     run.stone ? `<div style="color:#6a4ab0;font-weight:800;">${stonePic('mindStone', 22)} The Triune Stone of Being! The stone of mind and body — Psychic, Ghost and Physical.</div>` : '',   // (3.57) its picture; (3.58) its name
     ...ups.filter(g=> g.to > g.from).map(g=> `<div>⬆️ ${escapeHtml(g.name)} grew to Lv ${g.to}!</div>`),
     ...ups.filter(g=> g.ready).map(g=> `<div style="color:#6a4ab0;">⚡ ${escapeHtml(g.name)} is ready to break through to Lv ${g.ready} — see your Party.</div>`),

@@ -1687,7 +1687,7 @@ function renderStats(){
   const nameArea = $('#nameArea');
   if(nameArea && isCuain(m)){
     nameArea.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);font-weight:600;">` +
-      `He will not answer to any other name. He is the Whalelord.</div>`;
+      `He will not answer to any other name. He is ${m.crowned ? 'Cuain' : 'the Whalelord'}.</div>`;
   } else if(nameArea){
     const unnamed = !m.nickname;
     const bronze = (state.medals && state.medals.bronze) || 0;
@@ -2613,7 +2613,10 @@ async function doStoneRoll(){
    from left to right, the row scrolling on past the edge (and sideways by
    hand). Skip shows them all at once.
    ============================================================ */
-const REVEAL = { ringMs:1100, flashMs:520, whiteMs:650, cardMs:150, rowGap:420, many:10 };
+const REVEAL = { ringMs:1100, flashMs:520, whiteMs:650, cardMs:150, rowGap:420, many:10,
+  /* (3.83) the two top tiers: their beam, the held breath before the reveal; an Ultra's flash out of the ring */
+  beamMs:{ veryhigh:950, ultra:1700 }, holdMs:{ veryhigh:500, ultra:800 }, ultraFlashMs:1050, ultraOutMs:1600 };
+const REVEAL_BIG = ['veryhigh', 'ultra'];
 const REVEAL_TIERS = ['low', 'mid', 'high', 'veryhigh', 'ultra'];
 const revealWait = ms=> new Promise(r=> setTimeout(r, ms));
 function stoneRevealCss(){
@@ -2683,8 +2686,62 @@ function stoneRevealCss(){
   @keyframes srCardIn{ from{ opacity:0; transform:scale(.4); } to{ opacity:1; transform:scale(1); } }
   @keyframes srCardFlash{ from{ opacity:1; } to{ opacity:0; } }
   .sr-actions{ display:flex; gap:10px; justify-content:center; padding:6px 0 4px; }
+  /* (3.83) the designer: "when ultra is drawn … a prolonged special flash with waves of red-gold sparkles
+     compared to the usual whiteout colour … for the very high tier, flash a silver beam horizontally across
+     the tier and reveal only the silhouette before a delayed reveal and fanfare … For ultra, flash a
+     prolonged golden beam across the tier and silhouette before a delayed reveal and fanfare" */
+  .sr-ov.ultra .sr-flash{ background:radial-gradient(circle, #fffbe6 0%, #ffe27c 9%, #ffb63e 20%, #ff6c3a 32%, #d93228 44%, #9c1820 100%); }
+  .sr-ov.ultra.flash .sr-flash{ animation:srFlash ${REVEAL.ultraFlashMs}ms cubic-bezier(.45,0,.85,.5) forwards; }
+  .sr-ov.ultra.white-out .sr-flash{ animation:srWhite ${REVEAL.ultraOutMs}ms ease-out forwards; }
+  .sr-sparks{ position:absolute; left:50%; top:50%; width:0; height:0; z-index:6; pointer-events:none; }
+  .sr-spark{ position:absolute; left:0; top:0; width:0; height:0; opacity:0; transform:rotate(var(--a));
+    animation:srSpark var(--t, 1.3s) cubic-bezier(.16,.72,.3,1) var(--d) forwards; }
+  .sr-spark b{ position:absolute; left:-.5em; top:-.5em; width:1em; height:1em; line-height:1em; text-align:center; font-style:normal;
+    font-size:calc(28px * var(--s)); animation:srTwinkle .32s ease-in-out infinite alternate; animation-delay:var(--d); }
+  .sr-spark.gold b{ color:#ffe066; text-shadow:0 0 6px #ffb02e, 0 0 16px rgba(255,190,60,.95), 0 0 2px #fff; }
+  .sr-spark.red b{ color:#ff5a3c; text-shadow:0 0 6px #ff2e1e, 0 0 16px rgba(255,70,40,.9), 0 0 2px #ffd0c0; }
+  @keyframes srSpark{ 0%{ opacity:0; transform:rotate(var(--a)) translateY(0); } 12%{ opacity:1; }
+    78%{ opacity:1; } 100%{ opacity:0; transform:rotate(var(--a)) translateY(calc(-1 * var(--r))); } }
+  @keyframes srTwinkle{ from{ transform:scale(.7) rotate(0deg); } to{ transform:scale(1.15) rotate(25deg); } }
+  .sr-dim{ position:absolute; inset:0; z-index:2; pointer-events:none; opacity:0; transition:opacity .35s ease;
+    background:radial-gradient(ellipse at center, rgba(34,24,62,.86) 0%, rgba(14,9,30,.94) 60%, rgba(6,4,14,.97) 100%); }
+  .sr-ov.hush .sr-dim{ opacity:1; }
+  .sr-ov.hush .sr-title, .sr-ov.hush .sr-row-head{ color:#f3eeff; text-shadow:0 1px 3px rgba(0,0,0,.8); }
+  .sr-ov.hush .sr-row-head span{ color:#d2c8f0; }
+  .sr-row, .sr-many{ position:relative; }
+  .sr-beam{ position:absolute; left:0; right:0; height:var(--bh, 30px); margin-top:calc(var(--bh, 30px) / -2); z-index:4; pointer-events:none;
+    transform-origin:left center; transform:scaleX(0); opacity:0; border-radius:50%; }
+  .sr-beam.silver{ background:linear-gradient(180deg, transparent 0%, rgba(150,170,200,.55) 30%, #f6f9ff 47%, #ffffff 50%, #f6f9ff 53%, rgba(150,170,200,.55) 70%, transparent 100%);
+    box-shadow:0 0 18px 4px rgba(214,228,255,.75); }
+  .sr-beam.gold{ background:linear-gradient(180deg, transparent 0%, rgba(232,150,40,.6) 28%, #ffe58a 46%, #fffbe8 50%, #ffe58a 54%, rgba(232,150,40,.6) 72%, transparent 100%);
+    box-shadow:0 0 24px 7px rgba(255,196,70,.85), 0 0 60px 14px rgba(255,120,50,.35); --bh:38px; }
+  .sr-beam::after{ content:''; position:absolute; top:0; bottom:0; width:18%; left:-18%; border-radius:50%;
+    background:radial-gradient(ellipse at center, #fff 0%, rgba(255,255,255,.7) 35%, transparent 70%); opacity:0; }
+  .sr-beam.go{ animation:srBeam var(--bt) cubic-bezier(.3,.6,.3,1) forwards; }
+  .sr-beam.go::after{ animation:srGlint calc(var(--bt) * .45) linear forwards; }
+  .sr-beam.gold.go::after{ animation:srGlint calc(var(--bt) * .45) linear 2 forwards; }
+  @keyframes srBeam{ 0%{ transform:scaleX(0); opacity:1; } 45%{ transform:scaleX(1); opacity:1; } 72%{ transform:scaleX(1); opacity:1; }
+    100%{ transform:scaleX(1) scaleY(.2); opacity:0; } }
+  @keyframes srGlint{ 0%{ left:-18%; opacity:1; } 100%{ left:100%; opacity:1; } }
+  /* the silhouette: the symbol's shape in black on a disc lit white by the beam, no colour yet */
+  .sr-card.sil .sr-gem > .elem-ic, .sr-one.sil .sr-gem > .elem-ic{ filter:grayscale(1) brightness(2.2) contrast(6) drop-shadow(0 0 6px var(--beamGlow)) drop-shadow(0 0 16px var(--beamGlow)) !important; }
+  .sr-card.sil, .sr-one.sil{ --beamGlow:rgba(220,232,255,.95); }
+  .sr-card.sil[data-tier="ultra"], .sr-one.sil.tier-ultra{ --beamGlow:rgba(255,196,70,1); }
+  .sr-ov.hush .sr-card{ background:rgba(255,253,246,.12); box-shadow:0 0 0 1px rgba(255,255,255,.14); }
+  .sr-ov.hush .sr-card.lift, .sr-ov .sr-card.lift{ transition:background .4s; }
+  .sr-card.sil .sr-gem::before, .sr-card.sil .sr-gem::after, .sr-one.sil .sr-gem::before, .sr-one.sil .sr-gem::after{ opacity:0 !important; animation:none; }
+  .sr-card.sil .sr-cname{ visibility:hidden; }
+  .sr-one.sil > :not(.sr-gem){ visibility:hidden; }
+  .sr-card.lift{ opacity:1; animation:srLift .55s cubic-bezier(.2,1.6,.4,1) both; }
+  .sr-card.lift::after{ content:''; position:absolute; inset:0; border-radius:14px; background:#fff; pointer-events:none; animation:srLiftFlash .6s ease-out forwards; }
+  .sr-card.lift .sr-cname{ animation:srRise .45s ease-out both; }
+  .sr-one.lift .sr-gem{ animation:srLift .65s cubic-bezier(.2,1.6,.4,1) both; }
+  .sr-one.lift > :not(.sr-gem){ animation:srRise .5s ease-out both; }
+  @keyframes srLift{ 0%{ transform:scale(.82); } 55%{ transform:scale(1.14); } 100%{ transform:scale(1); } }
+  @keyframes srLiftFlash{ from{ opacity:1; } to{ opacity:0; } }
+  @keyframes srRise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
   @media (prefers-reduced-motion: reduce){
-    .sr-ring, .sr-up, .sr-up .elem-ic, .sr-gem::before, .sr-gem::after{ animation:none !important; }
+    .sr-ring, .sr-up, .sr-up .elem-ic, .sr-gem::before, .sr-gem::after, .sr-spark b{ animation:none !important; }
   }`;
   document.head.appendChild(st);
 }
@@ -2699,6 +2756,7 @@ function stoneRing(label){
       <div class="sr-ring">${types.map((t, i)=> `<span class="sr-sym" style="--a:${(360 / n * i).toFixed(2)}deg;"><span class="sr-up" style="--d:${(-(n - i) * 1.2 / n).toFixed(2)}s;">${elemIcon(t, 46, { title:false })}</span></span>`).join('')}</div>
       <div class="sr-label">${escapeHtml(label || 'Rolling…')}</div>
     </div>
+    <div class="sr-dim"></div>
     <div class="sr-out"></div>
     <div class="sr-flash"></div>`;
   document.body.appendChild(ov);
@@ -2722,7 +2780,7 @@ function showStoneReveal(stone, spinLabel, thenScreen){ return revealStones([sto
 function srPlus(st){ return stonePlus(st) ? `<span class="plus-mark">${UPGRADE_MARKS[stonePlus(st)].trim()}</span>` : ''; }
 function srOneHtml(stone){
   const t = stoneTierDef(stone.tier);
-  return `<div class="sr-one">
+  return `<div class="sr-one tier-${stone.tier}">
       <div class="sr-gem tier-${stone.tier}">${elemIcon(stone.type, 128, { title:false })}</div>
       <div class="stone-tier-big tier-${stone.tier}">${t.label}</div>
       <div class="sr-name">${escapeHtml(stone.name)}${srPlus(stone)}</div>
@@ -2751,16 +2809,48 @@ function srManyHtml(sorted, many){
   }).join('');
   return `<div class="sr-many">${title}<div class="sr-rows">${rows}</div>${actions}</div>`;
 }
+/* (3.83) waves of red-gold sparkles out of `host`'s middle (the screen's, by default) */
+function srSparks(host, o){
+  o = Object.assign({ waves:3, per:18, r:[34, 52], unit:'vmax', gap:.34, t:1.3 }, o || {});
+  const box = document.createElement('div');
+  box.className = 'sr-sparks';
+  let h = '';
+  for(let w = 0; w < o.waves; w++) for(let i = 0; i < o.per; i++){
+    const a = (360 / o.per) * i + w * (180 / o.per) + (Math.random() * 10 - 5);
+    const r = o.r[0] + Math.random() * (o.r[1] - o.r[0]);
+    const d = w * o.gap + Math.random() * .1;
+    h += `<span class="sr-spark ${(i + w) % 3 === 0 ? 'red' : 'gold'}" style="--a:${a.toFixed(1)}deg;--r:${r.toFixed(1)}${o.unit};--d:${d.toFixed(2)}s;--t:${o.t}s;--s:${(.6 + Math.random() * .8).toFixed(2)};"><b>✦</b></span>`;
+  }
+  box.innerHTML = h;
+  host.appendChild(box);
+  setTimeout(()=>{ if(box.parentNode) box.parentNode.removeChild(box); }, Math.round((o.waves * o.gap + o.t + .3) * 1000));
+  return box;
+}
+/* (3.83) the beam across a tier: `host` (positioned), at `top` px in it */
+function srBeam(host, tier, top, ms){
+  const b = document.createElement('div');
+  b.className = 'sr-beam ' + (tier === 'ultra' ? 'gold' : 'silver');
+  b.style.top = Math.round(top) + 'px';
+  b.style.setProperty('--bt', ms + 'ms');
+  host.appendChild(b);
+  void b.offsetWidth;
+  b.classList.add('go');
+  setTimeout(()=>{ if(b.parentNode) b.parentNode.removeChild(b); }, ms + 60);
+  return b;
+}
 async function revealStones(stones, opts){
   opts = opts || {};
   stones = (stones || []).filter(Boolean);
   if(!stones.length) return;
   const ring = opts.ring || stoneRing(opts.label);
   const ov = ring.el;
+  /* (3.83) an Ultra in the draw: the flash out of the ring goes red-gold, longer, in waves of sparkles */
+  const ultra = stones.some(st=> st.tier === 'ultra');
   await revealWait(Math.max(0, REVEAL.ringMs - (Date.now() - ring.t0)));
   fadeOutSfx('stone_roll', 500);                   // the spin eases out as the flash comes
-  ov.classList.add('flash');                         // out of the ring's middle, into white
-  await revealWait(REVEAL.flashMs);
+  if(ultra){ ov.classList.add('ultra'); srSparks(ov); }
+  ov.classList.add('flash');                         // out of the ring's middle, into white (red-gold, for an Ultra)
+  await revealWait(ultra ? REVEAL.ultraFlashMs : REVEAL.flashMs);
   const out = ov.querySelector('.sr-out');
   const finish = ()=>{
     if(ov.parentNode) ov.parentNode.removeChild(ov);
@@ -2770,11 +2860,49 @@ async function revealStones(stones, opts){
     /* (3.65) the new stone, on storage's Items page */
     else { ui.storageTab = 'items'; if(ui.screen === 'shop') ui.storageFrom = 'shop'; if(ui.screen === 'storage') renderStorage(); else go('storage'); }
   };
+  const settle = Math.round((ultra ? REVEAL.ultraOutMs * .4 : REVEAL.whiteMs * .6));
+  let skipped = false;
+  /* (3.83) a Very High or Ultra group: the lights go down, the beam crosses it (`lines`: where), its stones
+     coming as silhouettes as the beam passes; a held breath; then the reveal, and the tier's fanfare */
+  const bigReveal = async (tier, cards, lines, appear)=>{
+    const ms = REVEAL.beamMs[tier];
+    ov.classList.add('hush');
+    await revealWait(240);
+    lines.forEach(l=> srBeam(l.host, tier, l.top, ms));
+    const sweep = ms * .45;
+    for(let i = 0; i < cards.length; i++){
+      if(!skipped) await revealWait(Math.round(sweep / cards.length * (i === 0 ? .5 : 1)));
+      if(!ov.parentNode) return;
+      if(!skipped) cards[i].classList.add('sil');
+      appear(cards[i]);
+    }
+    if(!skipped) await revealWait(Math.round(ms - sweep * (1 - .5 / cards.length)) + REVEAL.holdMs[tier]);
+    if(!ov.parentNode) return;
+    cards.forEach(c=>{ c.classList.remove('sil'); if(!skipped) c.classList.add('lift'); });
+    ov.classList.remove('hush');
+    if(!skipped){
+      playStoneSfx(tier);
+      /* an Ultra's own burst of red-gold, out of each one as it lights */
+      if(tier === 'ultra') cards.forEach(c=>{
+        const host = lines[0].host, hr = host.getBoundingClientRect(), r = (c.querySelector('.sr-gem') || c).getBoundingClientRect();
+        const sp = srSparks(host, { waves:2, per:14, r:[50, 120], unit:'px', gap:.22, t:.9 });
+        sp.style.left = Math.round(r.left - hr.left + r.width / 2) + 'px'; sp.style.top = Math.round(r.top - hr.top + r.height / 2) + 'px';
+      });
+      await revealWait(560);
+    }
+  };
   if(stones.length === 1){
-    out.innerHTML = srOneHtml(stones[0]);
+    const st = stones[0];
+    out.innerHTML = srOneHtml(st);
     ov.classList.add('shown', 'white-out');          // the white fades, the stone glowing in it
-    playStoneSfx(stones[0].tier);
     out.querySelector('#rollOk').addEventListener('click', finish);
+    if(!REVEAL_BIG.includes(st.tier)){ playStoneSfx(st.tier); return; }
+    const one = out.querySelector('.sr-one'), gem = one.querySelector('.sr-gem');
+    one.classList.add('sil');
+    gem.style.visibility = 'hidden';
+    await revealWait(settle);
+    const oRect = out.getBoundingClientRect(), g = gem.getBoundingClientRect();
+    await bigReveal(st.tier, [one], [{ host:out, top:g.top - oRect.top + g.height / 2 }], ()=>{ gem.style.visibility = ''; });
     return;
   }
   const sorted = srSort(stones), many = stones.length >= REVEAL.many;
@@ -2782,8 +2910,12 @@ async function revealStones(stones, opts){
   ov.classList.add('shown', 'white-out');
   const skip = out.querySelector('#srSkip'), okBtn = out.querySelector('#rollOk');
   okBtn.addEventListener('click', finish);
-  let skipped = false;
-  skip.addEventListener('click', ()=>{ skipped = true; });
+  skip.addEventListener('click', ()=>{
+    skipped = true;
+    ov.classList.remove('hush');
+    ov.querySelectorAll('.sr-beam, .sr-sparks').forEach(x=> x.remove());
+    ov.querySelectorAll('.sr-card.sil').forEach(c=> c.classList.remove('sil'));
+  });
   const show = (card, strip)=>{
     card.classList.add(skipped ? 'now' : 'on');
     if(strip && strip.scrollWidth > strip.clientWidth){
@@ -2791,27 +2923,46 @@ async function revealStones(stones, opts){
       if(want > strip.scrollLeft) strip.scrollLeft = want;     // on past the edge
     }
   };
-  await revealWait(Math.round(REVEAL.whiteMs * 0.6));
+  await revealWait(settle);
   if(many){
     for(const row of out.querySelectorAll('.sr-row')){              // low first: the bottom row
       if(!ov.parentNode) return;
       row.classList.add('lit');
-      if(!skipped) playStoneSfx(row.dataset.tier);                    // its fanfare, once
-      const strip = row.querySelector('.sr-strip');
-      for(const card of strip.querySelectorAll('.sr-card')){
-        if(!skipped) await revealWait(REVEAL.cardMs);
-        show(card, strip);
+      const tier = row.dataset.tier, strip = row.querySelector('.sr-strip');
+      const cards = [...strip.querySelectorAll('.sr-card')];
+      if(REVEAL_BIG.includes(tier) && !skipped){
+        const rr = row.getBoundingClientRect(), sr = strip.getBoundingClientRect();
+        await bigReveal(tier, cards, [{ host:row, top:sr.top - rr.top + sr.height / 2 }], c=> show(c, strip));
+      } else {
+        if(!skipped) playStoneSfx(tier);                              // its fanfare, once
+        for(const card of cards){
+          if(!skipped) await revealWait(REVEAL.cardMs);
+          show(card, strip);
+        }
       }
       if(!skipped) await revealWait(REVEAL.rowGap);
     }
   } else {
-    const strip = out.querySelector('.sr-strip');
-    let tier = null;
+    const strip = out.querySelector('.sr-strip'), box = out.querySelector('.sr-many');
+    const groups = [];
     for(const card of strip.querySelectorAll('.sr-card')){
+      const g = groups[groups.length - 1];
+      if(g && g.tier === card.dataset.tier) g.cards.push(card); else groups.push({ tier:card.dataset.tier, cards:[card] });
+    }
+    for(const g of groups){
       if(!ov.parentNode) return;
-      if(card.dataset.tier !== tier){ tier = card.dataset.tier; if(!skipped){ playStoneSfx(tier); await revealWait(220); } }
-      if(!skipped) await revealWait(REVEAL.cardMs + 90);
-      show(card, null);
+      if(REVEAL_BIG.includes(g.tier) && !skipped){
+        /* one beam along each line of the strip that this tier's stones sit on */
+        const br = box.getBoundingClientRect(), tops = [];
+        g.cards.forEach(c=>{ const r = c.getBoundingClientRect(), y = Math.round(r.top - br.top + r.height / 2); if(!tops.some(t=> Math.abs(t - y) < 8)) tops.push(y); });
+        await bigReveal(g.tier, g.cards, tops.map(top=> ({ host:box, top })), c=> show(c, null));
+        continue;
+      }
+      if(!skipped){ playStoneSfx(g.tier); await revealWait(220); }
+      for(const card of g.cards){
+        if(!skipped) await revealWait(REVEAL.cardMs + 90);
+        show(card, null);
+      }
     }
   }
   skip.style.display = 'none';

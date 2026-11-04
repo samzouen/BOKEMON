@@ -583,7 +583,8 @@ const FUTURE = {
   level:200,          // "1 wave of 3 level 200 monsters"
   stonePlus:2,        // their element's Very High stone, at ✦
   power:1,            // × their ATK and HP on top of everything — the knob if the future is too hard (or too easy)
-  xp:12,              // fights' worth of XP for a win (a tear round's)
+  xp:12,              // fights' worth of XP for a win (a tear round's) — (3.82) × the distortions'
+  tickets:6,          // (3.82) "a base +6 tickets to the standard ticket drop rate", × the distortions' too
   words:10,           // phrases to capture a legacy…
   slips:2,            // …and the slips that lose it
 };
@@ -624,6 +625,17 @@ function distortionChosen(){
 }
 function distortionMult(ids){ return (ids || []).reduce((p, id)=> p * ((DISTORTION_POOL[id] || {}).mult || 1), 1); }
 function distortionPay(ids){ return Math.round(FUTURE_STAR_BASE * distortionMult(ids)); }
+/* (3.82) the designer: "multipliers to difficulty (spacetime distortion) should multiply the ticket
+   drop and the XP as well". A win's XP, in fights' worth; its tickets (Skill Tokens): the base and
+   the usual drop together (each whole one certain, what is left a chance of one more), × the same. */
+function futureXp(ids){ return Math.round(FUTURE.xp * distortionMult(ids)); }
+function futureTicketChance(ids, enemies){ return (FUTURE.tickets + tokenDropChanceFor(enemies)) * distortionMult(ids); }
+function futureTicketRoll(ids, enemies){
+  const c = futureTicketChance(ids, enemies);
+  let n = Math.floor(c);
+  if(Math.random() < c - n) n++;
+  return n;
+}
 /* What a set of them does to the numbers: health and attack added up; a
    heal and shields, the greater. */
 function distortionRules(ids){
@@ -781,11 +793,14 @@ function futureWon(){
   }
   if(!f.captured) f.pending = true;
   tallyBattleForEyeBreak();
-  const levelUps = awardXpToParty(FUTURE.xp) || [];
+  const xp = futureXp(ids);
+  const tickets = futureTicketRoll(ids, b.enemies);
+  if(tickets > 0) state.inventory.tokens = (state.inventory.tokens || 0) + tickets;
+  const levelUps = awardXpToParty(xp) || [];
   saveProfile();
   stopMusic();
   playSfx('victory');
-  const run = { ids, worth, star, levelUps, xp:FUTURE.xp };
+  const run = { ids, worth, star, levelUps, xp, tickets, mult:distortionMult(ids) };
   const finish = ()=> f.pending ? futureChoose(run) : futureResults(run);
   const evolvers = levelUps.filter(e=> e.evos && e.evos.length);
   if(evolvers.length) playEvolutions(evolvers, finish); else finish();
@@ -814,7 +829,7 @@ function futureChoose(run){
   screenEl.innerHTML = `
     <div class="fu-screen">
       <div class="screen-title" style="text-align:center;">The future is beaten!</div>
-      <div class="fu-say">${run && run.star ? `✨ <b>+${run.star} Starlight</b>. ` : ''}Now choose one of them. Its legacy — everything that kind of monster will ever learn — comes back with you. The monster itself stays in its own time.</div>
+      <div class="fu-say">${run && run.star ? `✨ <b>+${run.star} Starlight</b>. ` : ''}${run && run.tickets ? `🎟️ <b>+${run.tickets} tickets</b>. ` : ''}Now choose one of them. Its legacy — everything that kind of monster will ever learn — comes back with you. The monster itself stays in its own time.</div>
       <div class="fu-picks">${wk.picks.map((p, i)=>{
         const open = legacyOpen(p.type);
         return `<button class="fu-pick" data-pick="${i}">
@@ -878,7 +893,8 @@ function futureResults(run){
   const lines = [
     run.star ? `<div>✨ <b>+${run.star} Starlight</b> (a win worth ${run.worth}: ${said(run.ids)}). You have <b>${starlight()}</b>.</div>`
              : run.worth != null ? `<div>A win worth ✨ ${run.worth} (${said(run.ids)}) — you were paid as much or more this week already. Switch more distortions on for more.</div>` : '',
-    run.xp ? `<div>XP: <b>${run.xp} fights' worth</b> for the whole team.</div>` : '',
+    run.tickets ? `<div>🎟️ <b>+${run.tickets} tickets</b>${run.mult > 1 ? ` (×${+run.mult.toFixed(2)} for the distortions)` : ''}. You have <b>${state.inventory.tokens || 0}</b>.</div>` : '',
+    run.xp ? `<div>XP: <b>${run.xp} fights' worth</b> for the whole team${run.mult > 1 ? ` (${FUTURE.xp} × ${+run.mult.toFixed(2)})` : ''}.</div>` : '',
     p ? (run.opened ? `<div style="color:#6a4ab0;font-weight:800;">🌌 The <b>${escapeHtml(p.type)}</b> legacy is yours: its sky is open. Light its constellations with Starlight on the Talents page.</div>`
                     : `<div style="color:#6a4ab0;font-weight:800;">🌌 An echo of the ${escapeHtml(p.type)} legacy you hold: ✨ +${LEGACY_ECHO} Starlight.</div>`) : '',
     s ? `<div>💨 The ${escapeHtml(s.type)} legacy slipped back into the future. Win again this week to try again.</div>` : '',
@@ -1312,7 +1328,10 @@ function vesperSvg(px){
     <path d="M55,60 l-1,4 M65,60 l1,4" stroke="#8d72e6" stroke-width="1.6" stroke-linecap="round"/>
   </svg>`;
 }
-function r6Pair(selPx, vesPx){ return `<span class="emblem-pair">${seleneFace(selPx || 130)}${vesperFace(vesPx || 84)}</span>`; }
+/* (3.80) Vesper a fifth bigger than Selene beside him — the designer: "size
+   vesper and lucesco to be larger than Selene by about 20% each" */
+const R6_BIG = 1.2;
+function r6Pair(selPx, vesPx){ selPx = selPx || 130; return `<span class="emblem-pair">${seleneFace(selPx)}${vesperFace(vesPx || Math.round(selPx * R6_BIG))}</span>`; }
 /* Nemesis's three forms, as he left: the falcon, the jackal and the cobra. */
 function nemesisTrioHtml(px){
   const im = (src, alt)=> `<span class="r6-nem"><img src="${src}" alt="${alt}" style="width:${px}px;height:${px}px;object-fit:contain;image-rendering:pixelated;" onerror="this.style.visibility='hidden'"></span>`;
@@ -1395,8 +1414,10 @@ function r6BgCandidates(key){
   if(!key) return null;
   const D = (typeof BG_DIR !== 'undefined' ? BG_DIR : 'assets/bg/');
   if(key === 'rift') return [D + 'rift.png', D + 'region6.png', r6SkyUri()];          // Selene's scene, wherever you come from
+  if(key === 'past') return [D + 'past.png', typeof pastSkyUri === 'function' ? pastSkyUri() : r6SkyUri()];   // (3.81) the land of long ago, at dusk
   const SHARED = ['explore', 'region', 'challenge', 'recover', 'shop', 'battle', 'home', 'region6', 'tear'];
   if(SHARED.includes(key)) return [D + key + '6.png', D + 'region6.png', r6SkyUri()].filter((v, i, a)=> a.indexOf(v) === i);
+  if(key === 'jungle' || key === 'battle_jungle') return [D + key + '.png', typeof jungleSkyUri === 'function' ? jungleSkyUri() : r6SkyUri()];   // (3.84) the time-lost jungle
   if(/^battle_/.test(key)) return [D + key + '.png', D + 'battle6.png', D + 'region6.png', r6SkyUri()];
   return null;
 }
@@ -1494,7 +1515,8 @@ function renderFuture(){
             <span class="fu-dt-txt">${escapeHtml(d.text)}</span>
             <span class="fu-dt-sw">${y ? 'On' : 'Off'}</span></button>`; }).join('')}</div>
         <div class="fu-dist-note">A win now is worth ✨ <b>${worth}</b> (${FUTURE_STAR_BASE}${on.length ? ' × ' + on.map(id=> DISTORTION_POOL[id].mult).join(' × ') : ''}).
-          ${f.paid > 0 ? `This week ✨ <b>${f.paid}</b> is paid already, so it pays ${more ? `✨ <b>${more}</b> more` : 'nothing more — switch more on for more'}.` : ''}</div>
+          ${f.paid > 0 ? `This week ✨ <b>${f.paid}</b> is paid already, so it pays ${more ? `✨ <b>${more}</b> more` : 'nothing more — switch more on for more'}.` : ''}
+          Every win also pays 🎟️ about <b>${Math.round(futureTicketChance(on, wk.picks.map(p=> ({ species:p.species }))))}</b> tickets and <b>${futureXp(on)}</b> fights' worth of XP${on.length ? ', multiplied the same way' : ''}.</div>
       </div>
       ${f.pending ? `<button class="btn btn-primary fu-btn" id="fuCapture">Capture a legacy</button>` : ''}
       <button class="btn ${f.pending ? 'btn-ghost' : 'btn-primary'} fu-btn" id="fuFight">Fight${on.length ? ` — ${on.length} distortion${on.length > 1 ? 's' : ''}` : ''}</button>

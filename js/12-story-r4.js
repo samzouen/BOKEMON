@@ -46,6 +46,8 @@ function whaleName(){
     .find(x => x.species === 'whalelord');
   return (m && m.crowned) ? 'Cuain' : 'Whalelord';
 }
+/* (3.83) his big picture on a story page: crowned once he is Cuain */
+function whaleArt(px){ return monPortrait('whalelord', px, { view:'front', bare:true, crowned:whaleName() === 'Cuain' }); }
 /* Just the given name, for when the role is already obvious from context. */
 function crewFirst(id){ const n = crewName(id); return n.split(' ').slice(1).join(' ') || n; }
 
@@ -146,7 +148,7 @@ function renderWeatherDeck(){
 
       ${g.ghostAccepted && !g.rivalBeaten ? `
         <button class="deck-pin ghost-here" style="left:22%;top:80%;" data-ghost="1">
-          ${monPortrait('whalelord',60,{view:'front',bare:true})}</button>` : ''}
+          ${whaleArt(60)}</button>` : ''}
     </div>
     ${expeditionBar()}
     ${g.diversBeaten ? '' : `<div class="phase-flag">The divers are not letting anyone past.</div>`}
@@ -578,7 +580,7 @@ async function ghostIntro(){
   const g = r4();
   g.ghostMet = true;
   await saveProfile();
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'Something older',
+  storyModal(whaleArt(150), 'Something older',
     `It is dead. You know this the way you know which way is up.<br><br>` +
     `<b>"Child. You carry a dragon with a hole in it. So do I."</b><br><br>` +
     `<b>"A man with a <span style="color:var(--cinnabar)">raven</span> did this. He was carrying the ` +
@@ -587,7 +589,7 @@ async function ghostIntro(){
     ()=>ghostIntro2(), { bg:'battle_diving', subtitle:'The deep' });
 }
 function ghostIntro2(){
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'Then the quiet ones',
+  storyModal(whaleArt(150), 'Then the quiet ones',
     `A long pause. The light through it shifts.<br><br>` +
     `<b>"Then other people came. Quieter ones. They knew where to look, which means somebody told them."</b><br><br>` +
     `Something enormous and old moves behind the words.<br><br>` +
@@ -596,7 +598,7 @@ function ghostIntro2(){
     ()=>ghostAsk(), { bg:'battle_diving', subtitle:'The deep' });
 }
 function ghostAsk(){
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), '"Avenge me"',
+  storyModal(whaleArt(150), '"Avenge me"',
     `<b>"Avenge me. Find my core."</b><br><br>` +
     `<b>"Then your ship may pass east."</b>`,
     ()=>ghostAccept(), { bg:'battle_diving', subtitle:'The deep' });
@@ -605,7 +607,7 @@ async function ghostAccept(){
   const g = r4();
   g.ghostAccepted = true;
   await saveProfile();
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), 'It follows you up',
+  storyModal(whaleArt(150), 'It follows you up',
     `It rises with you, and it does not stop at the surface.<br><br>` +
     `<i>The Whalelord is aboard the ship now — and nobody but you can see him.</i>`,
     ()=>startCorpseScene(), { bg:'weather_deck', subtitle:'Weather Deck' });
@@ -710,12 +712,12 @@ async function corpseSceneEnd(){
    came from, and it is gone. */
 function corpseChat(){
   const g = r4();
-  if(g.cuainJoined) return storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
+  if(g.cuainJoined) return storyModal(whaleArt(150), whaleName(),
     `He hangs above his own body. This time there is no anger in him, only quiet.<br><br>` +
     `<b>"There is still something in there. Not my core — what is left of me around it."</b><br><br>` +
     `<b>"If I could take it back, I would be of more use to you. As it is, I can only follow."</b>`,
     ()=> go('weather_deck'), { bg:'weather_deck', subtitle:'Weather Deck' });
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
+  storyModal(whaleArt(150), whaleName(),
     `He hangs above his own body and does not look away from it.<br><br>` +
     `<b>"That is not a wound. That is a theft."</b><br><br>` +
     `<b>"A core is not something you carry. It is handed down. Father to son, and on, and ` +
@@ -817,7 +819,7 @@ function ghostChat(where){
     ui.ghostHeard[key] = n + 1;
     if(n > 0 && n % 4 !== 0) return cuainQuip();
   }
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
+  storyModal(whaleArt(150), whaleName(),
     body, ()=>go(deck), { bg: BG[deck] || 'sea', subtitle: SUB[deck] || 'The Vane Shear' });
 }
 
@@ -877,7 +879,7 @@ function renderCabinDeck(){
 
       ${g.ghostAccepted && !g.rivalBeaten ? `
         <button class="deck-pin ghost-here" style="left:38%;top:88%;" data-ghost="1">
-          ${monPortrait('whalelord',58,{view:'front',bare:true})}</button>` : ''}
+          ${whaleArt(58)}</button>` : ''}
     </div>
   `;
   $('#backBtn').addEventListener('click', ()=>go('explore'));
@@ -1582,7 +1584,7 @@ function renderLaboratoryDeck(){
         ${npcPortrait('scientist_supervisor','🧑‍🔬',48,'transparent')}</button>
 
       ${investigating ? `<button class="deck-pin" style="left:50%;top:66%;" data-ghost="1">
-        ${monPortrait('whalelord',52,{view:'front',bare:true})}</button>` : ''}
+        ${whaleArt(52)}</button>` : ''}
 
       ${STATIONS.map(st=>`
         <button class="deck-pin sci-pin ${investigating && sciBeaten(st.n) ? 'beaten' : ''}"
@@ -2027,7 +2029,7 @@ async function onScientistWin(n){
 /* What the Whalelord remembers, as much of it as you have earned. */
 function showClues(){
   const v = inv();
-  storyModal(monPortrait('whalelord',140,{view:'front',bare:true}), 'What we know',
+  storyModal(whaleArt(140), 'What we know',
     `<b>Two creatures swam beside them.</b> A researcher is worth suspecting if ` +
     `<i>either</i> of theirs fits.<br><br>` +
     CLUES.slice(0, v.clues).map((c,k)=>`<b>${k+1}.</b> ${c}`).join('<br><br>') +

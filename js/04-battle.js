@@ -2512,14 +2512,18 @@ function applyEntryPassives(holder, species, level, atk){
      meant to be working the moment their carrier takes the field, not waiting
      to be cast. This only ever applies to the player's own monsters. */
   if(holder && holder.uid) applyStonePassives(holder);
+  else deflectOnEntry(holder);                                      // (3.80) theirs: a future Physical's Focused Fury
   if(typeof talentEntry === 'function') talentEntry(holder, atk);   // (3.75) a Bastion constellation's shields; the distortion's
 }
 
 /* Stone passives, fired on entry. Currently only Diamond Dust has one, but the
-   check reads the tier table rather than naming it. */
+   check reads the tier table rather than naming it. (Every way one of yours
+   takes the field comes through here — the first time, from
+   applyEntryPassives; after that, straight here.) */
 function applyStonePassives(mon){
   const b = ui.battle;
   if(!b) return;
+  deflectOnEntry(mon);                       // (3.80) Focused Fury, arriving
   [mon.equippedStone, mon.power1Stone].forEach(st=>{
     if(!st || st.tier !== 'veryhigh') return;
     const plus = stonePlus(st);
@@ -3510,6 +3514,23 @@ function deflectSweep(side){
     (paid ? ` — <b>Combo +${paid}</b>, and <b>Enrage +${paid}</b> for ${nm(who)}, at once.` : '.');
   b._deflectSaid = said;
   return said;
+}
+/* (3.80) A Focused Fury holder taking the field turns its side's Counter
+   stacks at once — Deflect, and a + or ✦ one's Combo and Enrage — not at
+   the next stack made or spent. The designer: "existing counter stacks
+   didn't transform into deflect, combo and enrage when my monkey king who
+   stacked coruscate and physical very high passive swapped in". (A moment
+   later, once the newcomer stands on the field.) */
+function deflectOnEntry(m){
+  const b = ui.battle;
+  if(!b || !m) return;
+  const holds = m.uid ? elemPassiveOn(m, 'Physical', 'vh') : (typeof foeHolds === 'function' && foeHolds(m, 'Physical', 'vh'));
+  if(!holds) return;
+  setTimeout(()=>{
+    if(ui.battle !== b) return;
+    const said = deflectSweep(m.uid ? 'player' : 'enemy');
+    if(said){ b._deflectSaid = ''; battleMsg(said.trim()); }
+  }, 650);
 }
 /* What the last turning said, for the line that made the stacks (once). */
 function takeDeflectSaid(){
@@ -4518,17 +4539,18 @@ function ariaRetaliate(done){
   const dmg = Math.ceil((a.pulse || 0.5) * a.atk * ownBuffMultiplier());
   const hits = foes.map(t=>{ const d = Math.ceil(dmg * hexAmp(t));   // (3.68) Vicious Hex: all damage it takes
     return { t, idx:ui.battle.enemies.indexOf(t), dmg:d, oldHp:t.hp, newHp:Math.max(0, t.hp - d) }; });
-  battleMsg(`The Whalelord's vengeful apparition strikes!`);
   /* (3.68) Vicious Hex: his apparition's blows mark them, even with him on the bench */
   const singer = (state.party || []).concat(state.storage || []).find(m=> m.uid === a.owner) || null;
+  battleMsg(`${singer && singer.crowned ? 'Cuain' : 'The Whalelord'}'s vengeful apparition strikes!`);   // (3.83) his name, once it is his again
   ariaApparition(a, ()=>{ applyHits(hits, { noLeech:true, by:singer }); reportHits(hits); })   // (3.70) his damage, from the bench too
     .then(()=> setTimeout(finish, 350));
 }
 
 /* ---- The apparition, drawn ----
    The screen inverts; his ghost — the same art as his own sprite, crowned or
-   not — fades in to 30% while drifting up from below-right of whoever is out
-   front, and settles directly to their right after exactly 1 s. Half a second
+   not — fades in to 30% while drifting up from below the companion's place
+   in your row (3.83: where the companion stands, or would stand), and
+   settles there after exactly 1 s. Half a second
    later it rushes the enemy side (top right), the hits land as it arrives,
    and the colours come back. ARIA_FX_SPEED scales every step (tests only). */
 let ARIA_FX_SPEED = 1;
@@ -4546,6 +4568,23 @@ function ariaFxCss(){
     .aria-ghost .crown-fizz{display:none !important;}
   `;
   document.head.appendChild(st);
+}
+/* (3.83) The companion's place in your row: its sprite's, when one is out; otherwise where its card would
+   stand — after the leader's, one gap along, its sprite where the leader's sits in its own card. The top
+   left corner of a `px` sprite there. */
+function ariaGhostSlot(px){
+  const at = el=> el ? el.getBoundingClientRect() : null;
+  const comp = at(document.getElementById('companionBob'));
+  if(comp && comp.width > 0) return { x:comp.left + (comp.width - px) / 2, y:comp.top + (comp.height - px) / 2, where:'companion' };
+  const bob = at(document.getElementById('playerBob')), cardEl = document.getElementById('playerCard'), card = at(cardEl);
+  if(bob && card && card.width > 0){
+    const row = cardEl.parentElement, cs = row ? getComputedStyle(row) : null;
+    const gap = cs ? (parseFloat(cs.columnGap) || parseFloat(cs.gap) || 10) : 10;
+    const x = card.right + gap + (bob.left - card.left) + (bob.width - px) / 2;
+    return { x:Math.min(x, innerWidth - px), y:bob.top + (bob.height - px) / 2, where:'slot' };
+  }
+  const f = at(document.getElementById(pid('playerBob')));
+  return f ? { x:f.left + f.width, y:f.top + (f.height - px) / 2, where:'beside' } : { x:innerWidth * 0.1 + px, y:innerHeight * 0.55, where:'none' };
 }
 function ariaApparition(a, onImpact){
   ariaFxCss();
@@ -4568,11 +4607,11 @@ function ariaApparition(a, onImpact){
   g.querySelectorAll('.crowned-aura').forEach(el=> el.classList.remove('crowned-aura'));
   document.body.appendChild(g);
 
-  /* Where: directly right of whoever is out front, level with them. */
-  const fighter = document.getElementById(pid('playerBob'));
-  const r = fighter ? fighter.getBoundingClientRect()
-                    : { left: innerWidth * 0.1, top: innerHeight * 0.55, width: px, height: px };
-  const endX = r.left + r.width, endY = r.top + (r.height - px) / 2;
+  /* Where: (3.83) the designer: "due to companions now taking up more screen space, could whalelord's
+     ghost arise out of the exact position a companion monster would arise please?" — where the companion's
+     sprite stands, or (no companion out) would stand: the next place in your row (ariaGhostSlot). */
+  const slot = ariaGhostSlot(px);
+  const endX = slot.x, endY = slot.y;
   const startX = endX, startY = endY + px * 0.7;                      // straight below: it floats directly up
   /* Where to: up to the enemy row, and to the right — onto the rightmost enemy,
      and always at least half a sprite rightward, so it reads as a rush to the
@@ -7542,7 +7581,7 @@ function beginBattle(config){
     waveLabel: config.waveLabel || null,
     switchedThisTurn:false, busy:false, fightMistakes:[], phase:'player', wordCarry:0,
     charge:null, legacy:{}, legacyBlow:null,   // (3.66) Dragon Legacy's charges, a monster's own
-    aftershock:[], aftershockPending:false, bonusMult:0, _bonusResolved:false,
+    aftershock:[], aftershockPending:false, bonusMult:0, _bonusResolved:false, _bonusOffering:false,
     _passiveUsed:false,
     turnStep:0,          // turnOrder retired with the per-monster initiative
     rechargeWords:0,         // every word written this battle feeds the meter
@@ -9325,6 +9364,13 @@ function startUnstickWatchdog(){
 }
 
 function renderBattle(){
+  /* (3.80) Only while the fight is the screen. A redraw that comes late — the
+     second wind's line, 1.5 s after the words that filled the meter — once
+     landed on a bonus round's quiz (Rampage Max's Aftershock, Heavensplitter's
+     ×2) when its words were begun quickly: the quiz vanished under the fight,
+     its clock ran out with no Continue to press, and the fight never moved
+     again. A quiz, a scene's page or any other screen keeps the screen. */
+  if(ui.screen !== 'battle') return;
   ui._battleActivity = Date.now();
   startUnstickWatchdog();
   const zoneBg = (ui.battle && ui.battle.bgKey)
@@ -9355,7 +9401,7 @@ function renderBattle(){
       <div class="foe-side"><div class="team-slot" id="teamSlot-enemy"></div><div class="foe-side-row" id="foeSideRow"></div></div>
       <div class="enemy-row${enemyFieldSlots(b) > (b.enemies || []).length ? ' centred' : ''}">
         ${b.enemies.map((e,i)=>`
-          <div class="enemy-card ${e.hp<=0?'fainted':''}${e.shattered?' shattered':''}" data-enemy="${i}" id="enemy-${i}" style="width:${enemySpriteSize(enemyFieldSlots(b))+16}px;">
+          <div class="enemy-card ${e.hp<=0?'fainted':''}${e.shattered?' shattered':''}${e.cls ? ' ' + e.cls : ''}" data-enemy="${i}" id="enemy-${i}" style="width:${enemySpriteSize(enemyFieldSlots(b))+16}px;">
             <div class="enemy-status" id="enemyStatus-${i}"></div>
             <div class="bob avatar-layer" id="enemyBob-${i}">${monPortrait(e.species,enemySpriteSize(enemyFieldSlots(b)),{view:'front',bare:true,plain:true,crowned:!!e.crowned,stage:e.stage||0,breathe: e.hp>0 ? ((e.hp/e.maxHp)<0.3 ? 'weak':'normal') : null})}</div>
             <div class="info-layer name-plate">
@@ -9955,7 +10001,7 @@ function statusTipText(key, st, c, pill){
       const hit = (wl && w.per) ? Math.ceil(w.per * monAtk(wl)) : 0;
       return (key === 'wrathStacks' ? `<b>${n}</b> grudge${n === 1 ? '' : 's'} stored. ` : '') +
         `Every enemy move adds a grudge: <b>+${pc(w.bonus || 0.05)}%</b> damage each, up to <b>+${pc(w.bonusCap || 0.5)}%</b>. ` +
-        `Swap the Whalelord back in and every grudge hits every enemy${hit ? ` for <b>${hit}</b>` : ''}.`; }
+        `Swap ${wl ? escapeHtml(displayName(wl)) : 'the Whalelord'} back in and every grudge hits every enemy${hit ? ` for <b>${hit}</b>` : ''}.`; }
     case 'airborne': return `${c.W} is in the air: it dodges <b>${pc(STANCE_EVASION.airborne)}%</b> of attacks.`;
     case 'invisible': return `${c.W} can't be seen: it dodges <b>${pc(STANCE_EVASION.invisible)}%</b> of attacks.`;
     case 'guard': return `${c.W} is on guard: it gains a shield each turn.`;

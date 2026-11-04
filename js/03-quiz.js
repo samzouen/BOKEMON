@@ -458,11 +458,13 @@ function renderQuiz(){
   `;
 
   const qe = $('#quizExit');
-  if(qe) qe.addEventListener('click', ()=>{ stopTimer(); document.body.classList.remove('writing'); if(q.config.onExit) q.config.onExit(); });
+  if(qe) qe.addEventListener('click', ()=>{ if(q._ended) return; q._ended = true; stopTimer(); document.body.classList.remove('writing'); if(q.config.onExit) q.config.onExit(); });
   const erb = $('#exitRecoveryBtn');
-  if(erb) erb.addEventListener('click', ()=>{ stopTimer(); document.body.classList.remove('writing'); if(q.config.onExit) q.config.onExit(); });
+  if(erb) erb.addEventListener('click', ()=>{ if(q._ended) return; q._ended = true; stopTimer(); document.body.classList.remove('writing'); if(q.config.onExit) q.config.onExit(); });
   const se = $('#stopEarly');
   if(se) se.addEventListener('click', ()=>{
+    if(q._ended) return;                             // (3.80) once
+    q._ended = true;
     stopTimer();
     q.locked = true;
     if(q.config.onComplete) q.config.onComplete(q.results);
@@ -838,7 +840,14 @@ function resolveWord(passed, timedOut){
       </div>
       <button class="btn btn-primary" id="quizNext" style="margin-top:12px;">${quizWillEnd(passed) ? 'Continue' : 'Next word'}</button>
     `;
-    $('#quizNext').addEventListener('click', advanceQuiz);
+    /* (3.80) one tap: a quick second one used to run the end of the quiz
+       twice — a move resolved twice, two bonus offers stacked */
+    $('#quizNext').addEventListener('click', e=>{ const bt = e.currentTarget; if(bt.disabled) return; bt.disabled = true; advanceQuiz(); });
+  } else {
+    /* (3.80) The quiz is not on the screen (something drew over it): it must
+       still go on — the next word, or its end — never wait for a button
+       that is not there. */
+    setTimeout(()=>{ if(ui.quiz === q && !q._ended) advanceQuiz(); }, 900);
   }
 }
 
@@ -862,26 +871,22 @@ function masteryChip(word){
 
 function advanceQuiz(){
   const q = ui.quiz;
+  if(!q || q._ended) return;                         // (3.80) a quiz ends once
+  const end = how=>{ q._ended = true; stopTimer(); if(how === 'exit'){ if(q.config.onExit) q.config.onExit(); } else if(q.config.onComplete) q.config.onComplete(q.results); };
   if(q.masteryReward){ announceMastery(q.masteryReward); q.masteryReward = null; }
   if(q.dailyReward){ const r = q.dailyReward; q.dailyReward = null; setTimeout(()=>announceDaily(r), 1200); }
   const last = q.results[q.results.length-1];
-  if(q.config.stopAtFirstMiss && last && !last.passed){
-    stopTimer(); if(q.config.onComplete) q.config.onComplete(q.results); return;
-  }
+  if(q.config.stopAtFirstMiss && last && !last.passed) return end();
   if(q.config.endAfterMistakes){
     const misses = q.results.filter(r=>!r.passed).length;
-    if(misses >= q.config.endAfterMistakes){
-      stopTimer(); if(q.config.onComplete) q.config.onComplete(q.results); return;
-    }
+    if(misses >= q.config.endAfterMistakes) return end();
   }
   // Word-powered moves finish the moment the target is met or exceeded — the
   // overshoot from a long final phrase is handed to the next move as spill.
-  if(q.config.wordTarget && q.wordsDone >= q.config.wordTarget){
-    stopTimer(); if(q.config.onComplete) q.config.onComplete(q.results); return;
-  }
+  if(q.config.wordTarget && q.wordsDone >= q.config.wordTarget) return end();
   q.index++;
   if(q.index < q.config.words.length){ renderQuiz(); }
-  else { stopTimer(); if(q.config.onComplete) q.config.onComplete(q.results); }
+  else end();
 }
 
 

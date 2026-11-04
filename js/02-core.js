@@ -89,7 +89,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.79';
+const GAME_VERSION = '3.84';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -2201,6 +2201,9 @@ function crownIconFallback(img){
    one string in them a child typed. Angle brackets are stripped here rather
    than at every call site. */
 function displayName(mon){
+  /* (3.83) the designer: "change his name to Cuain in the party page and also in conversations. He should
+     still be 'whalelord' as species type" — once his core is home (crowned), he is Cuain */
+  if(mon && mon.species === 'whalelord' && mon.crowned && !mon.nickname && (mon.uid || isCuain(mon))) return 'Cuain';
   const n = mon.nickname || SPECIES[mon.species].name;
   return String(n).replace(/[<>]/g, '');
 }

@@ -510,6 +510,7 @@ function onFlee(){
   if(ui.battle.coreSpar) return coreSparEnded('left');        // giving up a spar (2.86)
   if(ui.battle.tear) return tearEnded('left');                // stepping out of the past (2.94)
   if(ui.battle.future) return futureEnded('left');            // (3.75) stepping back from the future
+  if(ui.battle.jungle && typeof jgFled === 'function') return jgFled();   // (3.84) the jungle: the band lets you go
   if(ui.battle.noFlee) return;
   const trial = inSacredGroveTrial();
   const guardian = !!ui.battle.guardianTrial;
@@ -870,6 +871,20 @@ function feedRecharge(words){
   return true;
 }
 
+/* (3.80) The second wind's line, a moment after the words that filled the
+   meter — and only once the fight is the screen again (a bonus round's quiz
+   begun quickly is still being written: it waits for that). */
+function secondWindSoon(){
+  const b = ui.battle;
+  let tries = 0;
+  const show = ()=>{
+    if(!b || ui.battle !== b) return;
+    if(ui.screen !== 'battle' || !document.getElementById('battleStage')){ if(++tries < 120) setTimeout(show, 500); return; }
+    battleMsg(secondWindMsg());
+    renderBattle();
+  };
+  setTimeout(show, 1500);
+}
 /* What the second wind says it gave back (2.93: Steel Soul too, if a
    monster of yours knows it; 3.00: Rebirth, if a phoenix of yours has it). */
 function secondWindMsg(){
@@ -991,8 +1006,16 @@ function resolveChargeSpend(mv, mon, target){
    requirement, so the move landed for nothing. */
 function offerBonusRound(mv, mon, hits, effMsg, origResults){
   const b = ui.battle;
+  /* (3.80) Once a move: a second offer (the words' Continue tapped twice)
+     would stack a second window under the first. */
+  if(b._bonusOffering) return;
+  b._bonusOffering = true;
   b._bonusOriginal = origResults || (ui.quiz ? ui.quiz.results : []);
+  let done = false;
   askBonusRound(mv, mon, won=>{
+    if(done) return;
+    done = true;
+    b._bonusOffering = false;
     b._bonusResolved = true;
     applyBonusWin(mv, won);
     const orig = b._bonusOriginal || [];
@@ -1022,7 +1045,9 @@ function askBonusRound(mv, mon, cb){
     ? `to lay a <b>Sacred Flame</b> — it burns every enemy at the start of each of your next ${SACRED_FLAME.turns} turns.`
     : `to <b>double</b> the damage.`;
 
+  document.querySelectorAll('.bonus-offer').forEach(x=> x.remove());      // (3.80) never two
   const ov = document.createElement('div');
+  ov.className = 'bonus-offer';
   ov.style.cssText='position:fixed;inset:0;background:rgba(35,32,25,0.6);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;';
   ov.innerHTML = `<div style="background:var(--paper);border-radius:18px;padding:22px;max-width:340px;width:100%;text-align:center;">
     <div style="font-size:40px;">⚡</div>
@@ -1039,11 +1064,15 @@ function askBonusRound(mv, mon, cb){
   document.body.appendChild(ov);
   const close=()=>{ if(ov.parentNode) document.body.removeChild(ov); };
   /* Rampage still lands its own 5 strikes; what the words win is laid by
-     applyBonusWin when the move fires. */
-  const finish = (won)=> cb(won);
+     applyBonusWin when the move fires. (3.80) Whichever button comes first
+     counts, once: a quick second tap does nothing. */
+  let picked = false, finished = false;
+  const finish = (won)=>{ if(finished) return; finished = true; cb(won); };
 
-  ov.querySelector('#bonusSkip').addEventListener('click', ()=>{ close(); finish(false); });
+  ov.querySelector('#bonusSkip').addEventListener('click', ()=>{ if(picked) return; picked = true; close(); finish(false); });
   ov.querySelector('#bonusGo').addEventListener('click', ()=>{
+    if(picked) return;
+    picked = true;
     close();
     /* draw by CHARACTER count, like every other quiz — from every phrase
        learned to silver or gold, in any list (2.89; it was the day's lists,
@@ -1069,7 +1098,7 @@ function askBonusRound(mv, mon, cb){
         const got = res.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0);
         // the bonus words are words written too: they feed the meter, once
         if(feedRecharge(res.reduce((n,r)=>n+(r.words||countWords(r.text)),0)))
-          setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
+          secondWindSoon();
         go('battle');
         finish(got >= target);
       },
@@ -1179,8 +1208,11 @@ function offerRebirth(rise, fall, who){
     battleMsg(`The flame gutters. ${displayName(mon)} does not rise.`);
     setTimeout(fall, 700);
   };
-  ov.querySelector('#rebirthNo').addEventListener('click', ()=>{ close(); fall(); });
+  let picked = false;                                // (3.80) one tap counts
+  ov.querySelector('#rebirthNo').addEventListener('click', ()=>{ if(picked) return; picked = true; close(); fall(); });
   ov.querySelector('#rebirthGo').addEventListener('click', ()=>{
+    if(picked) return;
+    picked = true;
     close();
     startQuiz({
       title:'Rebirth',
@@ -1190,7 +1222,7 @@ function offerRebirth(rise, fall, who){
       onComplete:(res)=>{
         const got = res.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0);
         if(feedRecharge(res.reduce((n,r)=>n+(r.words||countWords(r.text)),0)))
-          setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
+          secondWindSoon();
         if(got < REBIRTH.words) return failed();
         go('battle');
         mon.currentHp = Math.ceil(monMaxHp(mon) * REBIRTH.hp);
@@ -1433,7 +1465,7 @@ function resolveBattleMove(mv, target, results, opts){
   const recharged = feedRecharge(written);
   if(ui.battle){ ui.battle.lastMove = mv; ui.battle.lastFactor = null; }   // (3.00) the clones' half of the blow, set as it lands
   go('battle');
-  if(recharged) setTimeout(()=>{ battleMsg(secondWindMsg()); renderBattle(); }, 1500);
+  if(recharged) secondWindSoon();
   /* (3.66) A quick move that failed no longer spends the turn (quickMissed):
      it used to be this monster's action for the round. */
 

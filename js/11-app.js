@@ -132,6 +132,8 @@ function exploreAvatarSize(){
 
 function renderExplore(){
   /* (3.79) the Time Rift has no wilds: its Explore is the round room, walked */
+  /* (3.84) …or, once you have walked in it, the jungle — where you left off, or a place you have found */
+  if(state.progress.currentRegion === 6 && typeof jgChooser === 'function' && jgPortalAwake() && jgState().seen) return jgChooser(true);
   if(state.progress.currentRegion === 6 && typeof riftGo === 'function' && typeof DECKS !== 'undefined' && DECKS.r6_rift) return riftGo();
   setScreenBg('explore');
   $('#brandSub').textContent = 'Explore';

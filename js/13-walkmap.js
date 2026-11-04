@@ -455,7 +455,13 @@ function checkPrize(){
   takePrize(w.deck, i);
   return true;
 }
-function cuainAboard(){ const g = r4(); return !!g.ghostAccepted; }
+function cuainAboard(){
+  const g = r4();
+  if(!g.ghostAccepted) return false;
+  /* (3.84) a deck he stays out of (the jungle: Lucesco walks with you there instead) */
+  const w = ui.walk, d = w && typeof DECKS !== 'undefined' && DECKS[w.deck];
+  return !(d && d.noGhost);
+}
 /* '#' wall. The catacombs add '~' water, 'o' a pillar, '*' a brazier, 'c' a
    stack of crates and 'G' a shut gate — all solid underfoot. The Old Town's
    tier (2.88) adds 'b' barrels, 'r' cut stone, 'k' a bunk, 'x' a rail and
@@ -1358,7 +1364,7 @@ function whaleImpatient(what){
       `<b>"Birds? You want to chase birds?"</b><br><br>` +
       `<b>"My core is below our feet. My essence. The piece of me they took."</b><br><br>` +
       `<b>"It will not be there forever. Please. Go and look."</b>`;
-  storyModal(monPortrait('whalelord',150,{view:'front',bare:true}), whaleName(),
+  storyModal(whaleArt(150), whaleName(),
     lines, ()=> go('weather_deck'), { bg:'region4', subtitle:'Weather Deck' });
 }
 /* Once he is aboard and until the truth is out, nothing else happens up here. */
@@ -1673,7 +1679,12 @@ function faceImg(src, emoji){
   return `<img src="${src}" alt="" onerror="walkArtMissing(this,'${emoji || '❓'}',48,0)">`;
 }
 function facePlayer(){ return avatarImg(state.avatar || 'm1', 64, { bare:true }); }
-function faceMon(sp, opts){ return monPortrait(sp, 64, Object.assign({ view:'front', bare:true }, opts || {})); }
+function faceMon(sp, opts){
+  const o = Object.assign({ view:'front', bare:true }, opts || {});
+  /* (3.83) Cuain, after his core came home: crowned in every window of words, unless a scene says otherwise */
+  if(sp === 'whalelord' && o.crowned === undefined && typeof whaleName === 'function' && whaleName() === 'Cuain') o.crowned = true;
+  return monPortrait(sp, 64, o);
+}
 
 /* The black curtain, and white words on it. */
 function sceneCurtainEl(){
