@@ -2247,6 +2247,7 @@ function renderStorage(){
   } else {
     renderStoneList();
     wireRecycleAll();
+    if(typeof recStorageWire === 'function') recStorageWire();   // (3.89) your records
     const os = $('#openStones');
     if(os) os.addEventListener('click', ()=>go('elementStones'));
     const sf = ui.stoneFilter || (ui.stoneFilter = { type:'' });
@@ -2311,6 +2312,7 @@ function storageItemsPageHtml(){
         <div class="wal-row">${elemPassivesHeld().map(x=> chip(elemIcon(x.el, 20), x.n, `${elemPassiveDef(x.el, x.slot).name} · ${ELEM_PASSIVE_SLOTS[x.slot]}`, true)).join('')}</div>` : ''}
     </div>
     ${heldStones().length ? `<button class="btn btn-ghost stone-page-btn" id="openStones">💠 Element Stones <span>${totalStones()} held</span></button>` : ''}
+    ${typeof recStorageHtml === 'function' ? (caCss(), recStorageHtml()) : ''}
     <div class="stor-sec-head">💎 Skill Stones <span>${state.moveStones.length}</span></div>
     ${state.moveStones.length ? `<div class="stor-filter">
         <label class="sf-pick${sf.type ? ' on' : ''}" ${sf.type ? `style="--tc:${TYPE_COLORS[sf.type] || '#888'}"` : ''}>${elemIcon(sf.type || 'Universal', 18, { title:false })}<span>Type</span>
@@ -2856,6 +2858,7 @@ async function revealStones(stones, opts){
     if(ov.parentNode) ov.parentNode.removeChild(ov);
     const then = opts.thenScreen;
     if(then === 'shop'){ ui.shopNote = stones.length > 1 ? `${stones.length} stones sent to Storage — open it to equip.` : 'Sent to Storage — open it to equip.'; renderShop(); }
+    else if(then && then.startsWith('deck:')){ toast('Sent to Storage — open it to equip.'); refreshWalk(); }   // (3.89) bought on a walk (the castle's stall): stay there
     else if(then === 'storage'){ ui.storageFrom = 'shop'; ui.storageTab = 'items'; go('storage'); }
     /* (3.65) the new stone, on storage's Items page */
     else { ui.storageTab = 'items'; if(ui.screen === 'shop') ui.storageFrom = 'shop'; if(ui.screen === 'storage') renderStorage(); else go('storage'); }

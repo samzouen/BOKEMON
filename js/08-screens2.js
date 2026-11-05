@@ -920,6 +920,11 @@ function arenaChallengers(){
   /* ---- 6. The Time Rift (3.75): this week's future, at any distortion ---- */
   if(typeof futureArenaVariants === 'function')
     add(6, 'r6_future', 'The future — this week', M(futureWeek().picks[0].species, true), '🌀', futureArenaVariants(V), ()=> futureArenaNote());
+  /* (3.91) the throne room's daily spar, and the four tribal ancestors (22-war.js) — each as its own place fights it */
+  if(typeof caSparBattle === 'function')
+    add(6, 'r6_spar', "The Dauphin's spar", M('fairy_dauphin'), '⚔️', [V(()=> caSparBattle())], ()=> caSparNote());
+  if(typeof ancBattle === 'function')
+    add(6, 'r6_ancestors', 'The tribal ancestors', M(ANC_ORDER[0], true), '🗿', ANC_ORDER.map(id=> V(()=> ancBattle(id), ANC_FOLK[id].name)), (v)=> ancNote(v));
   return L;
 }
 

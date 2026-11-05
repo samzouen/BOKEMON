@@ -89,7 +89,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.84';
+const GAME_VERSION = '3.93';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -118,6 +118,16 @@ const BGM_MAP = {
   battle_legendary: 'battle_legendary.mp3',   // Phoenix, Forest Guardian, the Dragon
   battle_padrino:   'battle_padrino.mp3',     // Don Padrino
   battle_padrino_final: 'battle_padrino_final.mp3',   // (3.39) his last fight — the vault, round by round to Cyborg's fall (b.climax)
+
+  /* (3.85) Region 6's own, uploaded on 2026-11-05. The designer: "past is not
+     active yet because the player has only gone to the fairy kingdom's time
+     lost land, but not the actual past yet. future can be used for the future
+     fight in place of legendaries. regular battle sounds alien." */
+  region6:               'region6.mp3',               // the Rift (no zone_rift yet), the region's page, the land of long ago's walk (no zone_past yet)
+  zone_jungle:           'zone_jungle.mp3',           // the time-lost jungle, walking (20-jungle.js)
+  battle_region6:        'battle_region6.mp3',        // the jungle's alien bands, from the first flash (JG_FIGHT_MUSIC); any other Region 6 fight without a track of its own
+  battle_region6_future: 'battle_region6_future.mp3', // Challenge the future (b.future), ahead of battle_legendary
+  battle_region6_past:   'battle_region6_past.mp3',   // the real past — not yet: no fight there uses it
 };
 
 /* Try each track in turn; the first one that actually loads wins. */
@@ -126,6 +136,8 @@ const BGM_MAP = {
 function bgmFile(key){ return BGM_MAP[key] || (key ? key + '.mp3' : null); }
 
 function playMusicChain(names, opts){
+  /* (3.89) a place's own music, kept so an eye break's records can give it back after */
+  if(/^(region|zone_|main_menu)/.test((names && names[0]) || '')) audio.placeWanted = { names:names.slice(), opts:opts || null };
   const list = names.filter(n=>{
     const f = bgmFile(n);
     return f && !audio.missing[f];
@@ -539,6 +551,9 @@ function playMusic(name, opts){
        guard rejected those keys before it was ever consulted, so every derived
        track (zone_band_concert, battle_region3…) silently did nothing. */
     if(!bgmFile(name)) return;
+    /* (3.89) your records (21-castle.js): your playlist, if it is on, instead of a place's own music;
+       your eye-break playlist while an eye break lasts */
+    if(!opts.fromRecords && typeof recWants === 'function'){ const k = recWants(name); if(k && recPlay(k)) return; }
     audio.musicName = name;
     if(!audio.unlocked) return;
     if(audio.musicEl && audio.musicEl.dataset.track === name && !opts.restart) return;
@@ -553,6 +568,11 @@ function playMusic(name, opts){
     el.loop = opts.chainTo ? false : (opts.loop !== false);
     el.addEventListener('error', ()=>{
       audio.missing[file] = true;
+      /* (3.85) only while it is still the track wanted: a missing file's
+         answer that comes back after the music has moved on (the Rift's
+         zone_rift, slow to say so, and the jungle already playing) must not
+         put the old ladder's next track over the new one */
+      if(audio.musicEl !== el) return;
       // fall through to the next candidate in the ladder
       if(opts.chainFallback && opts.chainFallback.length){
         const rest = opts.chainFallback;
@@ -647,7 +667,7 @@ function playBattleMusic(isBoss, opts){
   /* (3.34) a monster met on foot, in any region: the walking meetings' one
      track, already playing since the first flash (walkEncounter) — kept */
   if(b.encounter && typeof ENCOUNTER_MUSIC !== 'undefined'){
-    playMusicChain(ENCOUNTER_MUSIC, { loop:true });
+    playMusicChain(b.encounterMusic || ENCOUNTER_MUSIC, { loop:true });   // (3.85) a meeting with a track of its own: the jungle's aliens
     return;
   }
   const chain = [];
@@ -657,6 +677,9 @@ function playBattleMusic(isBoss, opts){
      it too; his own theme if the file is not there */
   if(b.climax) chain.push('battle_padrino_final');
   if(b.npcId === 'padrino' || b.npcId === 'padrino2') chain.push('battle_padrino');   // (2.95: padrino2, his regal dress from Region 5 on)
+  /* (3.85) the designer: "future can be used for the future fight in place of
+     legendaries" — ahead of battle_legendary, whoever the week's three are */
+  if(b.future) chain.push('battle_region6_future');
   const legendary = (b.enemies||[]).some(e=>SPECIES[e.species] && SPECIES[e.species].tier==='legendary')
                  || b.guardianTrial || b.scriptedLoss;
   if(legendary) chain.push('battle_legendary');
@@ -789,7 +812,7 @@ const ELEMENT_PASSIVES = {
                    text:'It deals <b>1% more</b> damage for every 1% of health it has lost, up to <b>+50%</b> at half health or below.' } },
   /* (3.76) the designer's two new ones */
   Water: { vh:   { name:'Cleansing Springs', sym:'⛲',
-                   text:'While your Ice Tomb\'s chill is up, at the end of each turn it heals every one of your team for <b>1% / 2% / 2%</b> of its own max HP — <b>5% / 10% / 10%</b> instead to one below half health (by the Ice Tomb\'s tier) — and lifts one of their marks off your side, a freeze, sleep, stun or muddle first. A Fire monster above half health is not healed. At base and + it must be on the field; at ✦ it works from the bench too. Their ✦ Curse (a Deadly one too) stops it.' },
+                   text:'While your Ice Tomb\'s chill is up, at the end of each turn it heals every one of your team for <b>1% / 2% / 2%</b> of its own max HP — <b>5% / 10% / 10%</b> instead to one below half health (by the Ice Tomb\'s tier) — and lifts one of their marks off your side, a freeze, sleep, stun or muddle first. A Fire monster above half health is not healed. At base and + it must be on the field; at ✦ it works from the bench too. Their ✦ Curse stops it.' },
            ultra:{ name:'Shatter', sym:'🧊',
                    text:'Anything chilled takes <b>15% more</b> damage, and anything frozen <b>15% more</b> (both: <b>30%</b>) — from every one of your side, while it is in your team, on the field or off it.' } },
   Grass: { vh:   { name:'Nourish', sym:'🌱',
@@ -799,7 +822,7 @@ const ELEMENT_PASSIVES = {
   Electric: { vh:   { name:'Catalyse', sym:'⚗️',
                       text:'When your Overcharge is cast while it is in your team, your next move that lands after the Overcharge\'s first gets one more chance to repeat: <b>50% / 75% / 100%</b> (by the Overcharge\'s tier: base, + or ✦).' },
               ultra:{ name:'Capacitor', sym:'🔋',
-                      text:'<b>25%</b> of the damage it deals is stored, and strikes a random enemy at the end of the round (or, with none left, one of the next wave as its first turn begins). Each attack stores its own, repeats and extra actions too. No Overcharge needed.' } },
+                      text:'<b>25%</b> of the damage it deals is stored, and strikes a random enemy at the end of the round (or, with none left, one of the next wave as its first turn begins). Each attack stores its own, repeats and extra actions too.' } },
   Flying:   { vh:   { name:'Elusive', sym:'🪶',
                       text:'While your Mirage is up, it takes less damage: as much as its best dodge chance, up to <b>30%</b> — and the rest of your team a third as much, while it is in your team. Every attack on it leaves afterimages, dodged or not.' },
               ultra:{ name:'Momentum', sym:'🌪️',
@@ -813,23 +836,25 @@ const ELEMENT_PASSIVES = {
   Psychic:  { vh:   { name:'Mind Control', sym:'🧠',
                       text:'With it on the field, when your Discombobulate confuses an enemy, its confused swing is yours to aim: choose one of its own moves to turn on its own side, itself included (an AOE strikes all of them), with no words to write. The damage is multiplied by its confusion\'s own self-hit roll. Or let it swing as usual.' },
               ultra:{ name:'Foresight', sym:'👁️',
-                      text:'It dodges <b>20%</b> of attacks, and each of its strikes has a <b>20%</b> chance to be critical (<b>2×</b>). Rolled apart from a Hydra\'s own: if both land, they add up to <b>3×</b>. No Discombobulate needed.' } },
+                      text:'It dodges <b>20%</b> of attacks, and each of its strikes has a <b>20%</b> chance to be critical (<b>2×</b>). Rolled apart from a Hydra\'s own: if both land, they add up to <b>3×</b>.' } },
   /* (3.76) "deadly combo (previously very high) is now the ultra passive effect. focused fury is now
      the very high passive …" */
   Physical: { vh:   { name:'Focused Fury', sym:'😡',
                       text:'While it is on the field, your Counter stacks become <b>Deflect</b> stacks: each turns away <b>90%</b> of an attack, not 80%. If your Counter is + or ✦, each one\'s Combo and Enrage come at once, as it turns (✦: 2 stacks → 2 Deflect, 2 Combo, and +40% ATK to the one who cast it). Stacks that come while it is off the field stay Counter stacks until it is back.' },
               ultra:{ name:'Deadly Combo', sym:'🤜',
-                      text:'Each hit it lands (its quick attacks and afterimages too) makes its attacks <b>10%</b> stronger, up to <b>+30%</b>, for the rest of the battle. No Counter needed.' } },
-  Ghost:    { vh:   { name:'Deadly Curse', sym:'☠️',
-                      text:'With it on the field, your Curse becomes a <b>Deadly Curse</b>: at the start of each turn it strikes one enemy, building up over five turns to <b>0.16× / 0.33× / 0.66×</b> its ATK (the Curse\'s base, + or ✦) — a fifth more each turn — every damage buff counted. A Curse cast while it holds renews it instead (the build-up kept), and a ✦ one makes it ✦.' },
+                      text:'Each hit it lands (its quick attacks and afterimages too) makes its attacks <b>10%</b> stronger, up to <b>+30%</b>, for the rest of the battle.' } },
+  /* (3.86) "rework curse very high passive: binding curse" — and Vicious Hex's debuffs */
+  Ghost:    { vh:   { name:'Binding Curse', sym:'🔗',
+                      text:'While it is in your team, on the field or off it, your Curse can be cast through their Diamond Dust. Each time your Curse is cast, or would be stopped, swept away or run out, it lasts <b>1 more turn</b> instead, and this monster and every cursed enemy on the field lose <b>11%</b> of this monster\'s max HP — straight from their health, past every shield and cut. All of it works only while this monster is above <b>34%</b> of its health: at 34% or below, nothing holds the Curse and nobody loses any health, until it is above 34% again.' },
               ultra:{ name:'Vicious Hex', sym:'🕸️',
-                      text:'All the damage it deals marks the enemy struck (its afterimages too, and a Whalelord\'s Haunting Aria even from the bench), and so does every Deadly Curse strike: <b>+6%</b> damage taken, up to <b>+66%</b> (11 marks). When a marked enemy falls, two thirds of its marks (rounded up) pass to another of its wave, or to the next wave. No Curse needed.' } },
+                      text:'Every time it deals damage, on the field or off it (its afterimages, a Whalelord\'s Haunting Aria from the bench, its Binding Curse too), the enemy it hits gets a random debuff until the end of that turn, each <b>15%</b>: it takes more damage, dodges less, has its hits cut (with any Ice Barrier and Ice Tomb\'s chill, each cutting what the others leave), deals less damage (taken off its damage bonuses), lands fewer critical hits, or its damage cuts are weaker. Each one that runs out counts for Unstable Magic.' } },
   Dragon:   { vh:   { name:'Violent Dance', sym:'🐲',
                       text:'While your Dragon Dance is up and it is on the field, at the start of each turn it strikes <b>1 / 2 / 3</b> times (the Dance\'s base, + or ✦), each at one enemy at random, for <b>0.25× its ATK</b>, as Overheat ✦\'s burn does: every damage buff counts — and before each strike it breaks <b>1 / 2 / 3</b> of that enemy\'s shields, as the Dance does. And it deals <b>+20%</b> damage to anything slower than it (Mach Dragon counts).' },
               ultra:{ name:'Destruction', sym:'☄️',
                       text:'Its attacks are super effective (<b>1.5×</b>) against every element except Fairy.' } },
+  /* (3.86) "steel very high passive might need a rework as it could be overpowered with heals" */
   Steel:    { vh:   { name:'Tempering', sym:'🔨',
-                      text:'While your Steel Aegis is up, it takes <b>10% less</b> damage and deals <b>10% more</b>, and it cannot lose more than <b>66% / 50% / 33%</b> of its health in one turn (the Aegis\'s base, + or ✦; rounded down). While it is on the field, nothing of theirs (Diamond Dust, a Nova, Greed, the tower\'s theft) can sweep or steal any of your side\'s buffs; off the field, your Steel Aegis still can\'t be.' },
+                      text:'While your Steel Aegis is up, once, a blow that would take it below half its health leaves it at half instead, with <b>3 shields</b> — ready again each time the meter fills. And while it is in your team, on the field or off it, no more than <b>2</b> of your side\'s buffs can be swept or stolen in a turn, by a Diamond Dust, a Nova, Greed or anything else, and your Diamond Dust is the last to go.' },
               ultra:{ name:'Fortress', sym:'🏰',
                       text:'It resists every element except Dragon: attacks on it deal <b>⅔</b>.' } },
   /* (3.76) "reduce the damage gain per buff to 1.5% per active buff … reduce the damage caused by
@@ -837,7 +862,7 @@ const ELEMENT_PASSIVES = {
   Fairy:    { vh:   { name:'Coruscate', sym:'🎇',
                       text:'While your Diamond Dust is up and it is in your team (on the field or off it), every one of your team deals <b>1.5% more</b> damage for each buff your side has up (Diamond Dust counts), up to <b>+15%</b>.' },
               ultra:{ name:'Unstable Magic', sym:'🔮',
-                      text:'Every buff or debuff — either side\'s — swept away (a Diamond Dust, a Nova), kept from forming by a Diamond Dust, or running out makes its magic burst: <b>0.2× its ATK</b> to every enemy for each one. So their dust sweeping your effects pays them back, and a buff of yours their dust stops still bursts. On the field or off it; no Diamond Dust needed. Damage buffs and cuts count.' } },
+                      text:'Every buff or debuff — either side\'s — swept away (a Diamond Dust, a Nova), kept from forming by a Diamond Dust, or running out makes your magic burst: <b>0.2×</b> the ATK of your strongest holder to every enemy, once for each, with no limit a turn. So their dust sweeping your effects pays them back, and a buff of yours their dust stops still bursts. On the field or off it. Damage buffs and cuts count.' } },
 };
 /* (3.78) the designer: "change the cost to 2 same-element very high and 1
    same element ultra" — [tier, how many] of its element's stones */
@@ -1916,6 +1941,10 @@ function crownSparkles(px){
    combined with the view suffix, e.g. water_starter1_front.png */
 function spriteKey(species, stage, crowned, exalted){
   const sp = (typeof SPECIES !== 'undefined' && SPECIES[species]) || null;
+  /* (3.90) One picture at every stage, crowned or not: the Dauphin, met
+     only in her last form (fairy_dauphin2), and the Fairy King, mounted, in
+     a fight and in the index (fairy_king_mounted_c). */
+  if(sp && sp.fixedLook) return sp.fixedLook;
   /* (3.53) Crowned, some take another's look: the hatched Water Dragon, its
      core home, is the Water Dragon's crowned picture (water_dragon_c). */
   if(crowned && sp && sp.crownedLook && sp.crownedLook !== species) return spriteKey(sp.crownedLook, stage, true, exalted);

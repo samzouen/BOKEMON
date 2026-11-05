@@ -346,6 +346,7 @@ let _talentGen = 1;
 function talentCacheBump(){ _talentGen++; }
 const _tfxCache = new WeakMap();
 function talentFxOf(x){
+  if(x && x.talentFx) return x.talentFx;          // (3.86) a set of its own: an alien's boosts (20-jungle.js)
   if(!x || !Array.isArray(x.talents) || !x.talents.length) return null;
   const key = _talentGen + '|' + x.talents.join(',') + '|' + (x.level || 0) + '|' + (x.crowned ? 1 : 0) + '|' + (x.species || '');
   const hit = _tfxCache.get(x);
@@ -431,6 +432,7 @@ function talentDealMult(att, def, isPlayer, peek, opts){
     if(fx.superEff && def && def.types && att && att.types && typeMultFor(att, def) > 1) add += fx.superEff;
   }
   add += talentAura(a || att, 'inspire');
+  add -= hexCut(a || att, 'hxDmg');               // (3.86) a Vicious Hex Dulled: off its damage bonuses
   return add ? Math.max(0.1, 1 + add) : 1;
 }
 /* …and the defender's: its damage cuts, all added up (60% at most). */
@@ -451,14 +453,14 @@ function talentTakeMult(def, att){
    one already. Returns the multiplier, or 1. */
 function talentCrit(att, def){
   const a = talentHolder(att), fx = a ? talentFxOf(a) : null;
-  if(!fx || !(fx.crit > 0) || !(Math.random() < Math.min(TALENT_CRIT_CAP, fx.crit))) return 1;
+  if(!fx || !(fx.crit > 0) || !(Math.random() < Math.min(TALENT_CRIT_CAP, fx.crit) - critCut(a))) return 1;   // (3.86) less, Unlucky
   const d = def ? (talentHolder(def) || def) : null;
   if(d && d.species) floatOver(d, 'CRITICAL');
   const b = ui.battle;
   if(b && a.uid){ if(b._critAt !== b.actionSeq){ b._critAt = b.actionSeq; b._crits = 0; } b._crits++; }
   return fx.critX || TALENT_CRIT_MULT;
 }
-function talentDodge(x){ const fx = tfx(x); return fx ? Math.min(TALENT_DODGE_CAP, fx.dodge || 0) : 0; }
+function talentDodge(x){ const fx = tfx(x); return fx ? Math.min(fx.dodgeCap || TALENT_DODGE_CAP, fx.dodge || 0) : 0; }   // (3.86) an alien's own limit
 function talentInit(x){ const fx = tfx(x); return (fx ? (fx.swift || 0) : 0) + ((x && !x.uid && x.distInit) || 0); }   // and the distortion's Haste
 function talentLinger(x){ const fx = tfx(x); return fx ? (fx.linger || 0) : 0; }
 function talentThorns(x){ const fx = tfx(x); return fx ? (fx.thorns || 0) : 0; }
@@ -829,7 +831,7 @@ function futureChoose(run){
   screenEl.innerHTML = `
     <div class="fu-screen">
       <div class="screen-title" style="text-align:center;">The future is beaten!</div>
-      <div class="fu-say">${run && run.star ? `✨ <b>+${run.star} Starlight</b>. ` : ''}${run && run.tickets ? `🎟️ <b>+${run.tickets} tickets</b>. ` : ''}Now choose one of them. Its legacy — everything that kind of monster will ever learn — comes back with you. The monster itself stays in its own time.</div>
+      <div class="fu-say">${run && run.star ? `✨ <b>+${run.star} Starlight</b>. ` : ''}${run && run.tickets ? `${tokenIcon(18)} <b>+${run.tickets} Skill Token${run.tickets === 1 ? '' : 's'}</b>. ` : ''}Now choose one of them. Its legacy — everything that kind of monster will ever learn — comes back with you. The monster itself stays in its own time.</div>
       <div class="fu-picks">${wk.picks.map((p, i)=>{
         const open = legacyOpen(p.type);
         return `<button class="fu-pick" data-pick="${i}">
@@ -893,7 +895,7 @@ function futureResults(run){
   const lines = [
     run.star ? `<div>✨ <b>+${run.star} Starlight</b> (a win worth ${run.worth}: ${said(run.ids)}). You have <b>${starlight()}</b>.</div>`
              : run.worth != null ? `<div>A win worth ✨ ${run.worth} (${said(run.ids)}) — you were paid as much or more this week already. Switch more distortions on for more.</div>` : '',
-    run.tickets ? `<div>🎟️ <b>+${run.tickets} tickets</b>${run.mult > 1 ? ` (×${+run.mult.toFixed(2)} for the distortions)` : ''}. You have <b>${state.inventory.tokens || 0}</b>.</div>` : '',
+    run.tickets ? `<div>${tokenIcon(18)} <b>+${run.tickets} Skill Token${run.tickets === 1 ? '' : 's'}</b>${run.mult > 1 ? ` (×${+run.mult.toFixed(2)} for the distortions)` : ''}. You have <b>${state.inventory.tokens || 0}</b>.</div>` : '',   // (3.87) "should not read tickets but tokens"
     run.xp ? `<div>XP: <b>${run.xp} fights' worth</b> for the whole team${run.mult > 1 ? ` (${FUTURE.xp} × ${+run.mult.toFixed(2)})` : ''}.</div>` : '',
     p ? (run.opened ? `<div style="color:#6a4ab0;font-weight:800;">🌌 The <b>${escapeHtml(p.type)}</b> legacy is yours: its sky is open. Light its constellations with Starlight on the Talents page.</div>`
                     : `<div style="color:#6a4ab0;font-weight:800;">🌌 An echo of the ${escapeHtml(p.type)} legacy you hold: ✨ +${LEGACY_ECHO} Starlight.</div>`) : '',
@@ -982,11 +984,10 @@ function foeSelfAmp(e){
   if(foeHolds(e, 'Flying', 'ultra')) a *= 1 + Math.min(MOMENTUM.cap, MOMENTUM.per * Math.max(0, initiativeOf('enemy', e, true)));
   if(foeHolds(e, 'Physical', 'ultra')) a *= 1 + DEADLY_COMBO.per * Math.min(DEADLY_COMBO.max, e._dcombo || 0);   // (3.77) no Counter needed
   if(foeHolds(e, 'Ground', 'ultra')) a *= 1 + METAMORPH.per * Math.min(METAMORPH.max, e._metamorph || 0);        // (3.77) damage, not ATK
-  if(getESide('steelAegis') && foeHolds(e, 'Steel', 'vh')) a *= TEMPER.deal;
-  return a;
+  return a;   // (3.86) Tempering's 10% more dealt is gone
 }
-/* …and what the one of yours struck adds: Shatter, Vicious Hex's marks,
-   Violent Dance on anything slower. */
+/* …and what the one of yours struck adds: Shatter, (3.86) a Vicious Hex
+   Exposed on it (its marks until 3.86), Violent Dance on anything slower. */
 function foeAttackAmp(e, def){
   let a = foeSelfAmp(e);
   const m = def && def.uid ? realMon(def) : null;
@@ -1005,7 +1006,7 @@ function foeShatterAmp(m){
 function foeForesightOn(e){ return foeHolds(e, 'Psychic', 'ultra'); }
 function foeForesightDodge(t){ return foeForesightOn(t) ? FORESIGHT.dodge : 0; }
 function foeForesightCrit(e, def){
-  if(!foeForesightOn(e) || !(Math.random() < FORESIGHT.crit)) return 1;
+  if(!foeForesightOn(e) || !(Math.random() < FORESIGHT.crit - critCut(e))) return 1;   // (3.86) less, Unlucky
   const m = def && def.uid ? realMon(def) : null;
   if(m) floatOver(m, 'CRITICAL');
   return FORESIGHT.mult;
@@ -1026,12 +1027,10 @@ function foeElusiveReduce(t){
   const hs = foeHolders('Flying', 'vh');
   return hs.length ? Math.max(...hs.map(h=> foeElusiveOwn(h, mir))) * ELUSIVE_SHARE : 0;
 }
-/* Elusive's cut and Tempering's, on one of theirs. */
+/* Elusive's cut, on one of theirs. ((3.86) Tempering's 10% less taken is gone.) */
 function foeDefendMult(t){
   if(!t || t.uid) return 1;
-  let m = 1 - foeElusiveReduce(t);
-  if(getESide('steelAegis') && foeHolds(t, 'Steel', 'vh')) m *= TEMPER.take;
-  return m;
+  return 1 - foeElusiveReduce(t);
 }
 /* A blow of yours landed on an Elusive one: its Mirage's afterimages all the same. */
 function foeElusiveImages(t){
@@ -1040,28 +1039,25 @@ function foeElusiveImages(t){
   mir.pending = (mir.pending || 0) + mir.images;
   return true;
 }
-/* Tempering: no more than 66 / 50 / 33% of its health in a turn, by their Aegis's tier. */
-function foeTemperMax(t){
-  const ag = getESide('steelAegis');
-  return (ag && foeHolds(t, 'Steel', 'vh')) ? Math.floor((TEMPER.cap[vhTier(ag)] || TEMPER.cap[0]) * t.maxHp) : Infinity;
-}
+/* (3.86) Tempering, theirs: while their Steel Aegis is up, once — again
+   every 7 turns (foeRecharge) — a blow of yours that would take it from half
+   its health or more to below half leaves it at half, with 3 shields
+   (landStrike). Its share a turn (3.76) is gone. */
 function foeTemperLimit(t, dmg){
-  const max = foeTemperMax(t);
-  if(max === Infinity || !(dmg > 0)) return dmg;
-  const T = t._temper, taken = (T && T.round === roundNo()) ? T.taken : 0;
-  const ok = Math.max(0, Math.min(dmg, max - taken));
-  if(ok < dmg) floatOver(t, 'TEMPERED');
-  return ok;
+  if(!(dmg > 0) || !t || t.uid || t._temperUsed || !getESide('steelAegis') || !foeHolds(t, 'Steel', 'vh')) return dmg;
+  const half = Math.ceil(TEMPER.floor * t.maxHp);
+  if(t.hp < half || t.hp - dmg >= half) return dmg;
+  t._temperUsed = true;
+  grantBlock(t, TEMPER.shields, enemyAtk(t));
+  floatOver(t, 'TEMPERED');
+  const nm = foeNm(t), b = ui.battle;
+  setTimeout(()=>{ if(ui.battle === b) battleMsg(`🔨 Their ${nm}'s <b>Tempering</b> — it holds at half its health, with <b>${TEMPER.shields}</b> shields.`); }, 900);
+  return t.hp - half;
 }
-function foeTemperRecord(t, dmg){
-  if(!(dmg > 0) || foeTemperMax(t) === Infinity) return;
-  const r = roundNo();
-  if(!t._temper || t._temper.round !== r) t._temper = { round:r, taken:0 };
-  t._temper.taken += dmg;
-}
-/* Metamorph's last stand: once a battle — (3.77) Spike Armour or not — a
-   blow that would fell it leaves it on 1 HP with a shield, and it holds on
-   that turn and the next. Your Curse on them ends it and stops it. */
+/* Metamorph's last stand: once — (3.86) again every 7 turns (foeRecharge);
+   (3.77) Spike Armour or not — a blow that would fell it leaves it on 1 HP
+   with a shield, and it holds on that turn and the next. Your Curse on them
+   ends it and stops it. */
 function foeLastStandReady(t){ return !!(t && !t.uid && foeHolds(t, 'Ground', 'ultra') && !t._lastStand && !foeCurseOnThem()); }
 function foeLastStandUse(t){ t._lastStand = true; grantBlock(t, 1, enemyAtk(t)); t._endure = roundNo() + 1; return 'Metamorph'; }
 function foeEndures(t){ return !!(t && !t.uid && t._endure >= roundNo() && !foeCurseOnThem() && !passivesMuted(t)); }
@@ -1076,31 +1072,14 @@ function foeHitLanded(e, m, dmg){
     const v = Math.round(dmg * CAPACITOR_PCT);
     if(v > 0) (b.foeCapacitor || (b.foeCapacitor = [])).push({ e, dmg:v });
   }
-  if(foeHolds(e, 'Ghost', 'ultra')) addFoeHex(m, 1);                                                    // Vicious Hex
+  if(foeHolds(e, 'Ghost', 'ultra')) giveHexDebuff(m, 'enemy');                                         // (3.86) Vicious Hex: a debuff a hit
 }
-/* Vicious Hex's marks on yours: +6% taken a mark, to +66%. One of yours that
-   falls passes two thirds of them (rounded up) to another of your team. */
-function foeHexOf(m){ return (m && ui.battle && ui.battle.foeHex && ui.battle.foeHex[m.uid]) || 0; }
-function foeHexAmp(m){ const n = foeHexOf(m); return n > 0 ? 1 + HEX.per * Math.min(HEX.max, n) : 1; }
-function addFoeHex(m, n){
-  const b = ui.battle;
-  if(!b || !m || !m.uid || !(n > 0) || playerDust()) return 0;   // your dust: no mark of theirs takes hold
-  const H = b.foeHex || (b.foeHex = {}), was = H[m.uid] || 0;
-  H[m.uid] = Math.min(HEX.max, was + n);
-  return H[m.uid] - was;
-}
-function foeHexSweep(){
-  const b = ui.battle, H = b && b.foeHex;
-  if(!H) return;
-  Object.keys(H).forEach(uid=>{
-    const m = battleMonByUid(uid);
-    if(!(H[uid] > 0) || (m && m.currentHp > 0)) return;
-    const n = Math.ceil(H[uid] * HEX.pass);
-    H[uid] = 0;
-    const live = battleParty().filter(x=> x.currentHp > 0 && x.uid !== uid);
-    if(live.length) addFoeHex(live[Math.floor(Math.random() * live.length)], n);
-  });
-}
+/* (3.86) Vicious Hex on yours: a debuff a hit, each one's own (giveHexDebuff,
+   04-battle.js) — the marks (+6% a mark, until 3.86) are gone. Exposed: 15%
+   more taken. (foeHexSweep stays for the old call sites: nothing passes on.) */
+function foeHexOf(m){ return 0; }
+function foeHexAmp(m){ return (m && m.uid && getMStatus(m, 'hxWeak')) ? 1 + HEX_DEBUFF.pct : 1; }
+function foeHexSweep(){}
 
 /* ---- their Leech Seed drinking (theirSeedsDrink): Nourish ---- */
 function foeNourishProc(){
@@ -1121,32 +1100,67 @@ function foeAtkBonus(e){
 /* ---- their casts (castEnemyVeryHigh) ---- */
 function foeFuryHolder(){ return foeHolders('Physical', 'vh')[0] || null; }              // Focused Fury's Deflect (deflectSweep)
 function foeMindControl(){ return !!(getESide('confusionField') && foeHolders('Psychic', 'vh').length); }   // your muddled swing hits all of your side
-/* Their Tempering on the field: nothing of yours sweeps or steals their buffs. */
+/* (3.86) Their Tempering standing: no more than 2 of their buffs swept or
+   stolen a turn, their Diamond Dust last (temperSweepLeft, 04-battle.js). */
 function foeTemperingGuards(){ return foeHolders('Steel', 'vh').length > 0; }
-/* Their Deadly Curse: their Curse on your side, a holder of it standing. */
-function foeDeadlyCurse(){
+
+/* ---- (3.86) their Binding Curse (Deadly Curse until 3.86): their Curse on
+   your side, a holder of it standing above 34% of its health. Cast through
+   your dust; each time it is cast, or would be swept, washed off or run out,
+   it holds one more turn instead, and their holder and every one of yours on
+   the field lose 11% of the holder's max HP — HP lost, past shields and
+   cuts. Their Vicious Hex counts each as its damage. ---- */
+function foeBindingWorks(e){ return !!(e && !e.uid && e.hp > 0 && foeHolds(e, 'Ghost', 'vh') && e.hp > BINDING.floor * e.maxHp); }
+function foeBinder(){ return ui.battle ? (livingEnemies().find(foeBindingWorks) || null) : null; }
+function foeBindingPulse(h, why){
+  const b = ui.battle;
+  if(!b || !h) return '';
+  const loss = Math.ceil(BINDING.pct * h.maxHp), idx = foeIdx(h), was = h.hp;
+  h.hp = Math.max(1, h.hp - loss);
+  drainHp('enemyHp-' + idx, was, h.hp, h.maxHp);
+  showDamageNumber('enemy-' + idx, was - h.hp);
+  const mine = livingField();
+  mine.forEach(m=>{
+    const before = m.currentHp;
+    m.currentHp = Math.max(hpFloorOf(m), m.currentHp - loss);
+    drainHp(pid('playerHp', m), before, m.currentHp, monMaxHp(m));
+    showDamageNumber(pid('playerBob', m), before - m.currentHp);
+    if(foeHolds(h, 'Ghost', 'ultra')) giveHexDebuff(m, 'enemy');   // their Vicious Hex: its damage
+  });
+  logBattle(`Their Binding Curse (${SPECIES[h.species].name}, ${why}): ${loss} HP from it and from ${mine.length} of yours`);
+  return `🔗 Their ${foeNm(h)}'s <b>Binding Curse</b> — ${why}: it holds one more turn, and it and every one of yours on the field lose <b>${loss}</b> HP.` +
+    (foeBindingWorks(h) ? '' : ` Their ${foeNm(h)} is too weak to hold it any longer.`);
+}
+/* Their Curse on you would go: bound, it holds a turn more and pulses. Returns its line, or ''. */
+function foeBindingHolds(why){
   const c = ui.battle ? getPStatus(0, 'curse') : null;
-  return (c && isEnemyOwned('curse', c) && c.deadly && foeHolders('Ghost', 'vh').length) ? c : null;
+  if(!c || !isEnemyOwned('curse', c)) return '';
+  const h = foeBinder();
+  if(!h) return '';
+  c.turnsLeft = Math.max(0, c.turnsLeft || 0) + 1;
+  return foeBindingPulse(h, why);
 }
 
 /* ---- Unstable Magic (Detonate until 3.77), theirs: every buff or debuff
-   of either side's swept, stopped by a dust or running out (magicBurst) ---- */
+   of either side's swept, stopped by a dust or running out (magicBurst) —
+   (3.86) one burst a count, their strongest holder's; (3.93) no cap (it was
+   3 a turn) ---- */
 function queueFoeDetonate(n){
-  if(!ui.battle || !(n > 0)) return;
-  foeHolders('Fairy', 'ultra').forEach(e=>{ e._detonate = (e._detonate || 0) + n; });
+  const b = ui.battle;
+  if(!b || !(n > 0) || !foeHolders('Fairy', 'ultra').length) return;
+  b.foeDetonateN = (b.foeDetonateN || 0) + n;
 }
-function foeDetonatePending(){ return !!ui.battle && livingEnemies().some(e=> e._detonate > 0); }
+function foeDetonatePending(){ return !!(ui.battle && ui.battle.foeDetonateN > 0); }
 function foeDetonateNow(){
-  const said = [];
-  livingEnemies().forEach(e=>{
-    const n = e._detonate || 0;
-    if(!(n > 0)) return;
-    e._detonate = 0;
-    if(!livingField().length) return;
-    foeStrikeYours(e, DETONATE_PCT * n, true);
-    said.push(`💥 Their ${foeNm(e)}'s Unstable Magic${n > 1 ? ` ×${n}` : ''} — its magic bursts over your side!`);
-  });
-  return said.join(' ');
+  const b = ui.battle;
+  if(!foeDetonatePending()) return '';
+  const n = b.foeDetonateN;
+  b.foeDetonateN = 0;
+  const hs = foeHolders('Fairy', 'ultra');
+  if(!(n > 0) || !hs.length || !livingField().length) return '';
+  const e = hs.slice().sort((x, y)=> enemyAtk(y) * foeSelfAmp(y) - enemyAtk(x) * foeSelfAmp(x))[0];   // the strongest
+  foeStrikeYours(e, DETONATE_PCT * n, true, { noHex:true });
+  return `💥 Their ${foeNm(e)}'s Unstable Magic${n > 1 ? ` ×${n}` : ''} — its magic bursts over your side!`;
 }
 function runFoeDetonate(done){
   const said = foeDetonateNow();
@@ -1172,7 +1186,7 @@ function foeStrikeYours(e, pct, all, opts){
       breakShields('enemy', e, me, opts.breakKey, pid('playerBlk', me), pid('playerBob', me));
       broke = sh0 - shieldsOn(me);
     }
-    const dmg = Math.ceil(pct * enemyAtk(e) * enemyBuffMultiplier() * foeSelfAmp(e) * foeShatterAmp(me) * foeHexAmp(me) * cur);
+    const dmg = Math.ceil(pct * enemyAtk(e) * enemyBuffMultiplier(e) * foeSelfAmp(e) * foeShatterAmp(me) * foeHexAmp(me) * cur);   // (3.93) its Feeble in the pool
     const before = me.currentHp;
     const through = capHit(me, applyBlock(me, dmg, pid('playerBlk', me)));
     dropHp(me, through);
@@ -1181,6 +1195,8 @@ function foeStrikeYours(e, pct, all, opts){
     drainHp(pid('playerHp', me), before, me.currentHp, monMaxHp(me));
     showDamageNumber(pid('playerBob', me), before - me.currentHp);
     if(dmg > through) floatBlocked(pid('playerBob', me), dmg - through);
+    /* (3.86) their Vicious Hex: its upkeep strikes are its damage too (not its Unstable Magic's: noHex) */
+    if(dmg > 0 && !(opts && opts.noHex) && foeHolds(e, 'Ghost', 'ultra')) giveHexDebuff(me, 'enemy');
     return { me, dmg:before - me.currentHp, broke };
   });
 }
@@ -1188,20 +1204,12 @@ function foeWildfire(e, oh){
   if(!e || e.hp <= 0 || !livingField().length) return '';
   const p = wildfirePct(oh);
   foeStrikeYours(e, p, true);
-  let self = Math.ceil(p * enemyAtk(e) * enemyBuffMultiplier() * foeSelfAmp(e));
+  let self = Math.ceil(p * enemyAtk(e) * enemyBuffMultiplier(e) * foeSelfAmp(e));
   const cur = getEStatus(e, 'curse');
   if(cur) self = Math.ceil(self * (1 + (cur.extra != null ? cur.extra : 0.25)));
   const took = Math.max(0, Math.min(self, e.hp - Math.ceil(e.maxHp * WILDFIRE.floor)));
   if(took > 0){ const was = e.hp; e.hp -= took; drainHp('enemyHp-' + foeIdx(e), was, e.hp, e.maxHp); showDamageNumber('enemy-' + foeIdx(e), took); }
   return `🔥 Their ${foeNm(e)}'s Wildfire scorches your side${took > 0 ? ' — and itself' : ''}!`;
-}
-function foeDeadlyStrike(c){
-  const h = foeHolders('Ghost', 'vh')[0];
-  if(!h || !livingField().length) return '';
-  c.stage = Math.min(DEADLY_CURSE_STAGES, (c.stage || 0) + 1);
-  const r = foeStrikeYours(h, deadlyCurseNow(c, vhTier(c)), false)[0];
-  if(r && foeHolders('Ghost', 'ultra').length) addFoeHex(r.me, 1);
-  return r ? `🪆 Their Deadly Curse${c.stage < DEADLY_CURSE_STAGES ? ` (${c.stage}/${DEADLY_CURSE_STAGES})` : ''} strikes ${escapeHtml(displayName(r.me))}!` : '';
 }
 function foeOneStrike(e, pct, label, opts){
   if(!e || e.hp <= 0) return '';
@@ -1219,6 +1227,7 @@ function foeCapacitorStrike(s){
   flashHit(document.getElementById(pid('playerBob', me)));
   drainHp(pid('playerHp', me), before, me.currentHp, monMaxHp(me));
   showDamageNumber(pid('playerBob', me), before - me.currentHp);
+  if(dmg > 0 && s.e && foeHolds(s.e, 'Ghost', 'ultra')) giveHexDebuff(me, 'enemy');   // (3.86) its holder's damage: Vicious Hex
   return `🔋 Their ${s.e && SPECIES[s.e.species] ? foeNm(s.e) + '\'s' : ''} Capacitor — a stored charge strikes ${escapeHtml(displayName(me))}!`;
 }
 function foeUpkeepPassives(done){
@@ -1228,7 +1237,6 @@ function foeUpkeepPassives(done){
   if(battleDistortion('dust')) jobs.push(()=> futureEndlessDust());
   const oh = getESide('overheat');
   if(oh) foeHolders('Fire', 'vh').forEach(e=> jobs.push(()=> getESide('overheat') ? foeWildfire(e, getESide('overheat')) : ''));
-  if(foeDeadlyCurse()) jobs.push(()=>{ const c = foeDeadlyCurse(); return c ? foeDeadlyStrike(c) : ''; });
   const dd = getESide('dragonDance');
   if(dd){
     const n = Math.max(0, vhTier(dd)) + 1;
@@ -1418,6 +1426,7 @@ function r6BgCandidates(key){
   const SHARED = ['explore', 'region', 'challenge', 'recover', 'shop', 'battle', 'home', 'region6', 'tear'];
   if(SHARED.includes(key)) return [D + key + '6.png', D + 'region6.png', r6SkyUri()].filter((v, i, a)=> a.indexOf(v) === i);
   if(key === 'jungle' || key === 'battle_jungle') return [D + key + '.png', typeof jungleSkyUri === 'function' ? jungleSkyUri() : r6SkyUri()];   // (3.84) the time-lost jungle
+  if(key === 'palace' || key === 'battle_palace') return [D + key + '.png', typeof caPalaceBgUri === 'function' ? caPalaceBgUri() : r6SkyUri()];   // (3.90) the King's hall, drawn until there is art
   if(/^battle_/.test(key)) return [D + key + '.png', D + 'battle6.png', D + 'region6.png', r6SkyUri()];
   return null;
 }
@@ -1516,7 +1525,7 @@ function renderFuture(){
             <span class="fu-dt-sw">${y ? 'On' : 'Off'}</span></button>`; }).join('')}</div>
         <div class="fu-dist-note">A win now is worth ✨ <b>${worth}</b> (${FUTURE_STAR_BASE}${on.length ? ' × ' + on.map(id=> DISTORTION_POOL[id].mult).join(' × ') : ''}).
           ${f.paid > 0 ? `This week ✨ <b>${f.paid}</b> is paid already, so it pays ${more ? `✨ <b>${more}</b> more` : 'nothing more — switch more on for more'}.` : ''}
-          Every win also pays 🎟️ about <b>${Math.round(futureTicketChance(on, wk.picks.map(p=> ({ species:p.species }))))}</b> tickets and <b>${futureXp(on)}</b> fights' worth of XP${on.length ? ', multiplied the same way' : ''}.</div>
+          Every win also pays about ${tokenIcon(16)} <b>${Math.round(futureTicketChance(on, wk.picks.map(p=> ({ species:p.species }))))}</b> Skill Tokens and <b>${futureXp(on)}</b> fights' worth of XP${on.length ? ', multiplied the same way' : ''}.</div>
       </div>
       ${f.pending ? `<button class="btn btn-primary fu-btn" id="fuCapture">Capture a legacy</button>` : ''}
       <button class="btn ${f.pending ? 'btn-ghost' : 'btn-primary'} fu-btn" id="fuFight">Fight${on.length ? ` — ${on.length} distortion${on.length > 1 ? 's' : ''}` : ''}</button>

@@ -563,6 +563,7 @@ function endEyeBreak(msg){
   state.eyeBreakUntil = 0;
   state.eyeBreakDue = 0;
   saveProfile();
+  if(typeof recEyeBreakEnd === 'function') recEyeBreakEnd();       // (3.89) and the place's music again
   toast(msg || 'Break over — welcome back!');
 }
 function showEyeBreak(){
@@ -597,6 +598,7 @@ function showEyeBreak(){
     </button>`;
   document.body.appendChild(ov);
   document.body.classList.add('eye-locked');
+  if(typeof recEyeBreakStart === 'function') recEyeBreakStart();   // (3.89) your eye-break records
   /* The parent's password (or the default, if none has been set) ends it now. */
   const gate = ov.querySelector('#eyeGate'), pw = ov.querySelector('#eyePw'), msg = ov.querySelector('#eyePwMsg');
   ov.querySelector('#eyeOverride').addEventListener('click', ()=>{

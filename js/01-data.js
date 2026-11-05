@@ -183,7 +183,7 @@ const SPECIES = {
   ladybird:        { name:'Ladybird',       tier:'elite', types:['Psychic','Flying'], rate:11, nerfedRate:11, base:97, evo:[21,41], color:'#d8342c', glyph:'瓢' },
   mime:            { name:'Mime',           tier:'elite', types:['Psychic'],          rate:11, nerfedRate:11, base:97, evo:[21,41], color:'#f0f0f0', glyph:'丑' },
   /* a fox mage */
-  firefox:         { name:'Firefox',        tier:'wild',  types:['Psychic','Fire'],   rate:7,  nerfedRate:5,  base:97, evo:[11,25], color:'#e86a3a', glyph:'巫' },   // (3.36) wild, two evolutions
+  firefox:         { name:'Firefox',        tier:'elite', types:['Psychic','Fire'],   rate:11, nerfedRate:11, base:97, evo:[11,25], color:'#e86a3a', glyph:'巫' },   // (3.36) wild, two evolutions; (3.87) "change firefox into an elite monster" — a Crown fits her now (firefox2_c)
   seadragon:       { name:'Seadragon',      tier:'elite', types:['Psychic','Dragon'], rate:11, nerfedRate:11, base:96, evo:[41],    evoMult:1.5, color:'#3a7ab8', glyph:'蛟' },   // (3.51) Psychic/Dragon (it was Psychic/Water)
   plasma_manta:    { name:'Plasma Manta',   tier:'elite', types:['Psychic','Flying'], rate:11, nerfedRate:11, base:97, evo:[],      color:'#8a5ae8', glyph:'鲼' },
   sylph:           { name:'Sylph',          tier:'elite', types:['Psychic','Fairy'],  rate:11, nerfedRate:11, base:98, evo:[21,41], color:'#a8e0c8', glyph:'灵' },
@@ -833,10 +833,20 @@ const MOVES = {
      gains 100% hit chance against evasion. Keep grand enchantment as is."
      Stargazer is a 3-turn Lock-On for its side (seesThrough); Arcane Sight
      went with the old Stargazer. */
+  /* (3.87) The designer: "please change firefox into an elite monster. her
+     power1 is now an instant move and her max move buff now also deals damage
+     over time (0.25*atk to all monsters per turn, and can be extended with
+     diamond dust), renamed as fiery enchantment." Stargazer costs no turn
+     (isQuickMove), and rests while it stands; an elite's Max, Fiery
+     Enchantment, takes the Ultimate's place at 51: Grand Enchantment's 1.5×
+     and step, and for as long as the spell is up — a Diamond Dust holding it
+     open too — 0.25× the ATK it was cast at to every one of the other side
+     on the field, every turn (layEnchantBurn). */
   firefox:         [['Basic','Ember Bolt',0.3,'Single',2,1],
                     ['Power1','Stargazer',null,'Self',4,5,{stargaze:{turns:3}}],
                     ['Power2','Blazing Speed',null,'Passive',0,11,{passive:{speed:3, empower:0.15}}],
-                    ['Ultimate','Grand Enchantment',null,'Self',8,25,{enchant:{deal:1.5, turns:3, init:1}}]],
+                    ['Ultimate','Grand Enchantment',null,'Self',8,25,{enchant:{deal:1.5, turns:3, init:1}}],
+                    ['Max','Fiery Enchantment',null,'Self',8,51,{enchant:{deal:1.5, turns:3, init:1, burn:0.25}}]],
   /* "defensive/supportive, applies debuffs hydra uses": it weakens and sends
      to sleep; Tidal Ward, its side takes 15% less while it stands. (3.27)
      "Name the pair Psionic Tide": Tidal Ward and Undertow — while it stands,

@@ -1302,7 +1302,10 @@ function tileWipe(then){
 const ENCOUNTER_MUSIC = ['battle_encounter', 'battle_wild'];
 const ENCOUNTER_MS = { flash:1500, black:500, fade:300 };
 let _encounterOn = false;
-function walkEncounter(begin){
+/* (3.85) `music`: a meeting's own track instead (the jungle's aliens:
+   JG_FIGHT_MUSIC), from the first flash; its fight is given the same
+   (encounterMusic), so nothing changes when the battle begins. */
+function walkEncounter(begin, music){
   if(_encounterOn) return;
   _encounterOn = true;
   if(!document.getElementById('encounterCss')){
@@ -1326,7 +1329,7 @@ function walkEncounter(begin){
   fx.style.animationDuration = (ENCOUNTER_MS.flash * S) + 'ms';
   fx.style.transitionDuration = (ENCOUNTER_MS.fade * S) + 'ms';
   document.body.appendChild(fx);
-  playMusicChain(ENCOUNTER_MUSIC, { loop:true });          // the meeting's own track, from the first flash
+  playMusicChain((Array.isArray(music) && music.length) ? music : ENCOUNTER_MUSIC, { loop:true });   // the meeting's own track, from the first flash
   void fx.offsetWidth;
   fx.classList.add('flash');                                // light and dark…
   setTimeout(()=>{ fx.classList.remove('flash'); fx.classList.add('black'); }, ENCOUNTER_MS.flash * S);   // …then black

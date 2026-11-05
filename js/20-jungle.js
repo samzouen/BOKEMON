@@ -20,7 +20,7 @@
      · an alien: one wave — two of its fairies and it, in the middle;
      · a captain (Humanoid): three waves — two aliens, then itself;
      · a commander (Octopus): six — four aliens, a captain, then itself.
-   Its fairies come on at Lv 100, then turn red and grow to Lv 150, and use
+   Its fairies come on at Lv 98 (3.86: 100), then turn red and grow to Lv 150, and use
    their Ultimate every turn; a captain's or commander's own fairies cast
    Diamond Dust. The aliens: Lv 150–175, unnerfed; a Very High on their first
    turn and every five after, an Ultra on every third turn from the third.
@@ -28,9 +28,12 @@
    High every turn. Aliens are never caught; the fairies, once freed, are
    (if you have none of them yet).
 
-   Each tribe, once you have met its guardian, gives 5 tickets a day for 3
-   of its people freed. The castle's knights count the alien bands beaten
-   each week: 50 pays 50 bronze medals.
+   Each tribe, once you have met its guardian, gives 5 Skill Tokens a day
+   for 1 of its people freed (3.87; 3 until then). The castle's knights
+   count the alien bands beaten each week: 50 pays 50 bronze medals.
+   (3.90) The bands nearest the castle hold the castle's own people instead
+   (jgZoneOf, CA_CITIZENS): the Royal Commander, once met, gives 10 Skill
+   Tokens a day for 2 of them freed.
 
    The ground is made from a seed (jgGround): every profile walks the same
    jungle, and nothing of it is saved but where you have been. It is far
@@ -42,10 +45,15 @@
 const JG_KEY = 'r6_jungle';
 const JG = {
   W:450, H:450, cell:3, newest:0.5, braid:0.18, glades:46, lakes:14, seed:20261104,
-  aliens:{ regular:92, captain:14, commander:4, gap:13, safe:16, sight:4, clock:700, radius:7, active:18, lv:[150, 175] },
-  fairyLv:[100, 150], vhEvery:5, ultraFrom:3, ultraEvery:3,
+  aliens:{ regular:92, captain:14, commander:1, gap:13, safe:16, sight:4, clock:700, radius:7, active:18, lv:[150, 175] },   // (3.86) "maybe 1 commanders on the map max"
+  /* (3.87) "Please reduce their levels to 98, I forgot! 98 at the start
+     before enrage, 98 again when caught" — as anything else you can catch
+     (CATCH_LEVEL_CAP), so a fairy caught in its first form can still climb
+     to its last. "reduce the tribal guardians' demands to 1 citizen per
+     tribe for 5 tokens." */
+  fairyLv:[98, 150], vhEvery:5, ultraFrom:3, ultraEvery:3,
   plus:{ alien:0, captain:1, commander:2 },
-  daily:{ need:3, tokens:5 }, weekly:{ need:50, bronze:50 },
+  daily:{ need:1, tokens:5 }, weekly:{ need:50, bronze:50 },
 };
 
 /* ---------- the save: r6().jungle ----------
@@ -276,6 +284,18 @@ function jgTribeOf(x, y){
   JG_TRIBE_KEYS.forEach(k=>{ const v = V[k], d = Math.hypot(v.x + v.w / 2 - x, v.y + v.h / 2 - y); if(d < bd){ bd = d; best = k; } });
   return best;
 }
+/* (3.90) Whose people a band holds: near the castle (closer to it than 0.7 of
+   the way to the nearest village — 23 bands of 107, the commander's among
+   them), the castle's own (CA_CITIZENS, 21-castle.js); elsewhere the nearest
+   tribe's. Worked out from where it stands, nothing drawn from the seed, so
+   every band stands where it always did. */
+const JG_CASTLE_ZONE = 0.7;
+function jgZoneOf(x, y){
+  const G = jgGround(), C = G.places.castle, V = G.places.villages;
+  const dc = Math.hypot(C.x + C.w / 2 - x, C.y + C.h / 2 - y);
+  const dv = Math.min(...JG_TRIBE_KEYS.map(k=> Math.hypot(V[k].x + V[k].w / 2 - x, V[k].y + V[k].h / 2 - y)));
+  return (typeof CA_CITIZENS !== 'undefined' && dc < dv * JG_CASTLE_ZONE) ? 'castle' : jgTribeOf(x, y);
+}
 
 /* ============================================================
    THE ALIENS — where each band stands, made from the seed too
@@ -298,7 +318,7 @@ function jgBands(){
       const d = Math.hypot(x - ccx, y - ccy);
       if(d < inR || d > outR || !ok(x, y) || tooNear(x, y) || !free(x, y, A.gap)) continue;
       const lv = Math.round(A.lv[0] + (A.lv[1] - A.lv[0]) * Math.max(0, Math.min(1, 1 - (d - 40) / (far - 40))));
-      const band = { id:'b' + bands.length, rank, x, y, hx:x, hy:y, face:'ldru'[ri(4)], tribe:jgTribeOf(x, y),
+      const band = { id:'b' + bands.length, rank, x, y, hx:x, hy:y, face:'ldru'[ri(4)], tribe:jgZoneOf(x, y),
         lv:rank === 'commander' ? A.lv[1] : rank === 'captain' ? Math.min(A.lv[1], lv + 3) : lv,
         aliens:[] };
       const n2 = rank === 'commander' ? 4 : rank === 'captain' ? 2 : 1;
@@ -356,18 +376,30 @@ function jgThings(){
       verb:'Talk', sub:`${t.short} Guardian`, mark:()=> !jgState().met[k], act:()=> jgGuardian(k) });
   });
   P.castle.knights.forEach((kn, i)=>{
-    list.push({ x:kn.x, y:kn.y, cls:'jg-npc jg-knight', html:()=> jgMonImg('fairy_knight_front', WALK_T * 1.5, i === 1),
-      verb:'Talk', sub:'Fairy Knight', mark:()=> !jgState().met.knights, act:()=> jgKnights(), faceR:i === 1 });
+    list.push({ x:kn.x, y:kn.y, cls:'jg-npc jg-knight', html:()=> jgMonImg(JG_GATE_KNIGHT + '_front', WALK_T * 1.5, i === 1, 'fairy_knight_front'),
+      verb:'Talk', sub:JG_GATE_KNIGHT_NAME, mark:()=> !jgState().met.knights, act:()=> jgKnights(), faceR:i === 1 });
   });
   const g = P.castle.gate;
-  list.push({ x:g.x, y:g.y, w:g.w, h:1, icon:'', verb:'The castle gate', sub:'Shut', act:()=> jgGate() });
+  /* (3.88) open once the King is home (21-castle.js): its green arrow, and in */
+  list.push({ x:g.x, y:g.y, w:g.w, h:1, icon:'', act:()=> jgGate(),
+    get verb(){ return (typeof caOpen === 'function' && caOpen()) ? 'Enter' : 'The castle gate'; },
+    get sub(){ return (typeof caOpen === 'function' && caOpen()) ? '' : 'Shut'; },
+    get where(){ return (typeof caOpen === 'function' && caOpen()) ? "The Fairy King's castle" : undefined; },
+    arrow:'up' });
+  if(typeof warJungleThings === 'function') warJungleThings(list, P);   // (3.92) the war: the King, his knights, the invaders at the villages, the ancestors woken
   _jgThings = list;
   return list;
 }
-function jgMonImg(file, px, flip){
+/* `alt`: (3.87) another picture to stand in until this one is there. */
+function jgMonImg(file, px, flip, alt){
   const w = Math.round(px);
-  return `<img class="jg-art" src="assets/mon/${file}.png" alt="" style="width:${w}px;height:${w}px;${flip ? 'transform:scaleX(-1);' : ''}" onerror="this.style.display='none'">`;
+  const err = alt ? `if(!this.dataset.alt){this.dataset.alt=1;this.src='assets/mon/${alt}.png';}else{this.style.display='none';}` : `this.style.display='none'`;
+  return `<img class="jg-art" src="assets/mon/${file}.png" alt="" style="width:${w}px;height:${w}px;${flip ? 'transform:scaleX(-1);' : ''}" onerror="${err}">`;
 }
+/* (3.87) the designer: "chestnut_knight2 (grass physical), 2 of whom now
+   guard the entrance instead of the earlier fairy knight which is no longer
+   in use" — the old Fairy Knight's picture stands in until theirs is there */
+const JG_GATE_KNIGHT = 'chestnut_knight2', JG_GATE_KNIGHT_NAME = 'Chestnut Knight';
 
 /* ---------- in and out ---------- */
 function jgEnter(where){
@@ -909,6 +941,10 @@ function jgHud(){
     const n = Math.min(JG.daily.need, j.rescued[k] || 0);
     bits.push(`<span class="jg-chip${j.paid[k] ? ' done' : ''}" title="${escapeHtml(JG_TRIBES[k].name)}: freed today">${JG_TRIBES[k].icon} ${j.paid[k] ? '✓' : n + '/' + JG.daily.need}</span>`);
   });
+  if(typeof caCommanderMet === 'function' && caCommanderMet()){                     // (3.90) the castle's people, for the Royal Commander
+    const n = Math.min(CA_RESCUE.need, j.rescued.castle || 0);
+    bits.push(`<span class="jg-chip${j.paid.castle ? ' done' : ''}" title="The castle's people: freed today">🏰 ${j.paid.castle ? '✓' : n + '/' + CA_RESCUE.need}</span>`);
+  }
   if(j.met.knights) bits.push(`<span class="jg-chip${j.tallyPaid ? ' done' : ''}" title="Alien bands beaten this week">🛡️ ${j.tallyPaid ? '✓' : Math.min(JG.weekly.need, j.tally || 0) + '/' + JG.weekly.need}</span>`);
   hud.innerHTML = bits.join('');
   hud.style.display = bits.length ? '' : 'none';
@@ -954,7 +990,9 @@ function jgMapOpen(){
    six — the captain next to last, the commander last. */
 function jgWaves(b){
   const R = Math.random, T = JG_TRIBES[b.tribe] || JG_TRIBES.water;
-  const fairy = (boss)=> ({ species:T.members[Math.floor(R() * T.members.length)], level:JG.fairyLv[0], ai:'best', nerfed:false, anyLevel:true,
+  /* (3.90) near the castle, its own people (caCitizenPick) */
+  const pick = ()=> (b.tribe === 'castle' && typeof caCitizenPick === 'function') ? caCitizenPick() : T.members[Math.floor(R() * T.members.length)];
+  const fairy = (boss)=> ({ species:pick(), level:JG.fairyLv[0], ai:'best', nerfed:false, anyLevel:true,
     jg:{ mind:true, tribe:b.tribe },
     /* the designer: "captain and commander encounters also galvanise their fairies to use diamond dust on their respective waves" */
     veryHigh:boss ? { type:'Fairy', plus:0, cast:true } : undefined });
@@ -970,6 +1008,10 @@ function jgWaves(b){
     return [fairy(boss), alien(sp), fairy(boss)];
   });
 }
+/* (3.85) the bands' music, from the first flash to the last blow (walkEncounter
+   and encounterMusic): battle_region6 — the designer: "regular battle sounds
+   alien" — else the walking meetings' own, else the wild theme. */
+const JG_FIGHT_MUSIC = ['battle_region6', 'battle_encounter', 'battle_wild'];
 function jgFight(b, seen){
   if(!b || jgBandBeaten(b) || ui.jgFighting) return;
   if(!battleParty().some(m=> m.currentHp > 0)){ b.calm = Date.now() + 10000; walkState().busy = false; toast('Your team needs healing first.'); return; }
@@ -981,16 +1023,28 @@ function jgFight(b, seen){
   const begin = ()=>{
     ui.jgFighting = false;
     ui.jgFight = { id:b.id, rank:b.rank, tribe:b.tribe, waves:waves.length };
-    beginBattle({ waves, isNpc:false, allowCatch:true, name, bgKey:'battle_jungle', foeRegion:6, encounter:true,
+    beginBattle({ waves, isNpc:false, allowCatch:true, name, bgKey:'battle_jungle', foeRegion:6, encounter:true, encounterMusic:JG_FIGHT_MUSIC,
       onWaveStart:(i)=> jgWaveStart(i),
       onWin:(levelUps)=> jgWon(b, levelUps),
       onLose:()=>{ ui.jgFight = null; go('region'); } });          // lost, as any fight: the region's page, to recover
     if(ui.battle) ui.battle.jungle = b.id;
   };
-  if(typeof walkEncounter === 'function') walkEncounter(begin); else begin();
+  if(typeof walkEncounter === 'function') walkEncounter(begin, JG_FIGHT_MUSIC); else begin();
 }
 /* A wave on the field: what each of them is (their spec's `jg`), their glow;
    the fairies at Lv 100 for a moment, then the alien's grip takes them. */
+/* (3.86) The aliens' own boosts — the designer: "for normal aliens, 15% atk,
+   crit chance (1.5x), dmg boost, dmg reduction, dodge%. 25% for captains,
+   35% for commanders." ATK in its ATK bonuses (e.atkPct: enemyAtk), the rest
+   as a talent set of its own (e.talentFx: talentFxOf) — its criticals ×1.5,
+   its dodge allowed past the talents' 30%. Not the captive fairies. */
+const JG_BOOST = { alien:0.15, captain:0.25, commander:0.35 };
+function jgBoostFx(p){
+  const fx = talentFxSum([{ fx:[{ k:'crit', v:p }, { k:'dmg', v:p }, { k:'def', v:p }, { k:'dodge', v:p }] }]);
+  fx.dodgeCap = Math.max(TALENT_DODGE_CAP, p);
+  fx.jgBoost = p;
+  return fx;
+}
 function jgWaveStart(i){
   const b = ui.battle;
   if(!b) return;
@@ -999,7 +1053,12 @@ function jgWaveStart(i){
   b.enemies.forEach((e, k)=>{
     const sp = specs[k] || {};
     e.jg = sp.jg ? Object.assign({}, sp.jg) : null;
-    if(e.jg && e.jg.alien) e.cls = 'jg-foe-alien' + (e.jg.alien !== 'alien' ? ' jg-foe-' + e.jg.alien : '');
+    if(e.jg && e.jg.alien){
+      e.cls = 'jg-foe-alien' + (e.jg.alien !== 'alien' ? ' jg-foe-' + e.jg.alien : '');
+      const p = JG_BOOST[e.jg.alien] || JG_BOOST.alien;
+      e.atkPct = p;
+      e.talentFx = jgBoostFx(p);
+    }
   });
   setTimeout(()=> jgEnrage(b), 520);
 }
@@ -1067,10 +1126,12 @@ function jgWon(b, levelUps){
   j.tally = (j.tally || 0) + 1;
   /* every wave's captives are free now — counted for their tribes; each kind of them can be caught */
   const freed = {}, kinds = new Set();
+  let citizens = 0;
   ((bt && bt.waves) || []).forEach(w=> (w || []).forEach(sp=>{
     if(!sp || !sp.jg || !sp.jg.mind) return;
-    const k = (SPECIES[sp.species] || {}).tribe;
+    const S = SPECIES[sp.species] || {}, k = S.tribe;
     if(k) freed[k] = (freed[k] || 0) + 1;
+    else if(S.citizen) citizens++;                                     // (3.90) the castle's people
     kinds.add(sp.species);
   }));
   if(bt){
@@ -1087,6 +1148,17 @@ function jgWon(b, levelUps){
   });
   const pays = JG_TRIBE_KEYS.filter(k=> j.met[k] && !j.paid[k] && (j.rescued[k] || 0) >= JG.daily.need);
   pays.forEach(k=>{ j.paid[k] = true; state.inventory.tokens = (state.inventory.tokens || 0) + JG.daily.tokens; });
+  /* (3.90) the Royal Commander's: 10 Skill Tokens a day for 2 of the castle's people (CA_RESCUE), once you have met him */
+  let castlePays = false;
+  if(citizens){
+    const met = typeof caCommanderMet === 'function' && caCommanderMet(), need = CA_RESCUE.need;
+    j.rescued.castle = (j.rescued.castle || 0) + citizens;
+    notes.push(`🏰 ${citizens} of the castle's people freed${met ? ` (${Math.min(need, j.rescued.castle)}/${need} today)` : ''}.`);
+    if(met && !j.paid.castle && j.rescued.castle >= need){
+      castlePays = true; j.paid.castle = true;
+      state.inventory.tokens = (state.inventory.tokens || 0) + CA_RESCUE.tokens;
+    }
+  }
   let weekly = false;
   if(j.met.knights && !j.tallyPaid && j.tally >= JG.weekly.need){
     j.tallyPaid = true; weekly = true;
@@ -1095,9 +1167,11 @@ function jgWon(b, levelUps){
   if(j.met.knights) notes.push(`🛡️ Alien bands beaten this week: ${Math.min(JG.weekly.need, j.tally)}/${JG.weekly.need}.`);
   ui.victoryNotes = (ui.victoryNotes || []).concat(notes);
   saveProfile();
-  const thanks = pays.map(k=> ()=> jgTribeThanks(k)).concat(weekly ? [()=> jgKnightsPay()] : []);
+  const thanks = pays.map(k=> ()=> jgTribeThanks(k)).concat(castlePays ? [()=> caCommanderThanks()] : [], weekly ? [()=> jgKnightsPay()] : []);
   const next = ()=>{ const t = thanks.shift(); if(t) return t().then(next); resumeVictory(); };
-  next();
+  /* (3.87) an evolution the second share of XP brought plays too (it went by unseen) */
+  const evolved = more.filter(e=> e && e.evos && e.evos.length);
+  if(evolved.length) playEvolutions(evolved, next); else next();
 }
 /* the second XP's level-ups folded into the first's (the victory page shows that list) */
 function jgMergeUps(ups, more){
@@ -1107,6 +1181,8 @@ function jgMergeUps(ups, more){
     if(!e){ ups.push(m); return; }
     if(Number.isFinite(m.to)) e.to = Math.max(e.to || 0, m.to);
     if(Number.isFinite(m.from)) e.from = Math.min(Number.isFinite(e.from) ? e.from : m.from, m.from);
+    if(m.evos && m.evos.length) e.evos = (e.evos || []).concat(m.evos);              // (3.87) the page names them too
+    if(m.newMoves && m.newMoves.length) e.newMoves = (e.newMoves || []).concat(m.newMoves);
     ['breakthrough', 'ready'].forEach(k=>{ if(m[k]) e[k] = m[k]; });
   });
 }
@@ -1136,18 +1212,20 @@ function jgBack(){
   go(JG_KEY);
 }
 /* The tribe's thanks: a popup, as the scientists' are. */
+/* "one of our people", "3 of our people" */
+function jgPeople(n){ return n === 1 ? 'one of our people' : `${n} of our people`; }
 function jgTribeThanks(k){
   const T = JG_TRIBES[k];
   return new Promise(res=>{
     storyModal(jgMonImg(T.guardian, 140), `${T.icon} ${T.short} Guardian`,
-      `<b>"You freed ${JG.daily.need} of our people today. ${T.name.replace(/^the /, 'The ')} will not forget it."</b><br><br>` +
-      `🎟️ <b>+${JG.daily.tokens} tickets</b> (you have ${state.inventory.tokens}).<br><br><i>Free ${JG.daily.need} more tomorrow, and they will thank you again.</i>`,
+      `<b>"You freed ${jgPeople(JG.daily.need)} today. ${T.name.replace(/^the /, 'The ')} will not forget it."</b><br><br>` +
+      `${tokenIcon(18)} <b>+${JG.daily.tokens} Skill Tokens</b> (you have ${state.inventory.tokens}).<br><br><i>Free ${JG.daily.need === 1 ? 'another' : JG.daily.need + ' more'} tomorrow, and they will thank you again.</i>`,
       ()=> res(), { subtitle:T.name.replace(/^the /, 'The '), bg:'jungle' });
   });
 }
 function jgKnightsPay(){
   return new Promise(res=>{
-    storyModal(jgMonImg('fairy_knight_front', 140), '🛡️ The Fairy Knights',
+    storyModal(jgMonImg(JG_GATE_KNIGHT + '_front', 140, false, 'fairy_knight_front'), '🛡️ The Chestnut Knights',
       `<b>"${JG.weekly.need} bands of invaders in one week! The castle thanks you, champions."</b><br><br>` +
       `🥉 <b>+${JG.weekly.bronze} bronze medals</b>.<br><br><i>The count starts again on Monday.</i>`,
       ()=> res(), { subtitle:'The castle gate', bg:'jungle' });
@@ -1171,7 +1249,7 @@ async function jgLines(faces, name, lines){
   try { for(const l of lines){ if(ui.screen !== JG_KEY) break; await jgSay(faces, name, l); } }
   finally { ui.jgTalk = false; refreshWalk(); }
 }
-const jgFace = (file)=> `<img src="assets/mon/${file}.png" alt="" onerror="this.replaceWith(document.createTextNode('🧚'))">`;
+const jgFace = (file, alt)=> `<img src="assets/mon/${file}.png" alt="" onerror="${alt ? `if(!this.dataset.alt){this.dataset.alt=1;this.src='assets/mon/${alt}.png';}else{this.replaceWith(document.createTextNode('🧚'));}` : `this.replaceWith(document.createTextNode('🧚'))`}">`;   // (3.87) `alt` stands in
 const JG_LION_LINES = [
   `<b>"These paths twist and turn. When one ends, go back to the last fork and try another."</b>`,
   `<b>"An alien looks only straight ahead — four steps. Keep out of its line, or face it."</b>`,
@@ -1192,26 +1270,28 @@ async function jgGuardian(k){
       `A tall figure in a great ${T.short.toLowerCase()} mask steps out of the lodge, a staff in its hand. Fairies peep out from the huts behind it.`,
       `<b>"Stop, strangers. …You walk with Lucesco? Then you are friends of the Fairy King."</b>`,
       `<b>"The invaders came through the torn sky. They took our people — they bend their minds and make them fight."</b>`,
-      `<b>"Free ${JG.daily.need} of ${T.name.replace(/^the /, 'the ')} each day — beat the aliens that hold them — and we will give you 🎟️ ${JG.daily.tokens} tickets."</b>`,
+      `<b>"Free ${JG.daily.need === 1 ? 'one' : JG.daily.need} of ${T.name.replace(/^the /, 'the ')}'s people each day — beat the aliens that hold them — and we will give you ${tokenIcon(18)} ${JG.daily.tokens} Skill Tokens."</b>`,
     ]);
     j.met[k] = true; saveProfile(); jgHud(); refreshWalk();
     return;
   }
   const n = Math.min(JG.daily.need, j.rescued[k] || 0);
   await jgLines(face, nm, [j.paid[k]
-    ? `<b>"You freed ${JG.daily.need} of our people today. Rest, friends — come back tomorrow."</b>`
-    : `<b>"${n} of our people freed today. ${JG.daily.need - n} more, and the tribe will thank you."</b><br><br><i>The aliens near this village hold ${T.name.replace(/^the /, 'the ')}'s people.</i>`]);
+    ? `<b>"You freed ${jgPeople(JG.daily.need)} today. Rest, friends — come back tomorrow."</b>`
+    : `<b>"${n ? jgPeople(n).replace(/^one/, 'One') + ' freed today.' : 'None of our people freed yet today.'} ${JG.daily.need - n === 1 ? 'One more' : (JG.daily.need - n) + ' more'}, and the tribe will thank you."</b><br><br><i>The aliens near this village hold ${T.name.replace(/^the /, 'the ')}'s people.</i>`]);
 }
 async function jgKnights(){
-  const j = jgState(), face = [jgFace('fairy_knight_front')], nm = 'Fairy Knight';
+  const j = jgState(), face = [jgFace(JG_GATE_KNIGHT + '_front', 'fairy_knight_front')], nm = JG_GATE_KNIGHT_NAME;
   if(!j.met.knights){
     await jgLines(face, nm, [
-      `Two knights in rose-pink armour cross their spears in front of the gate.<br><br><b>"Halt! Who comes to the castle of the Fairy King?"</b>`,
+      `Two knights in polished armour cross their spears in front of the gate.<br><br><b>"Halt! Who comes to the castle of the Fairy King?"</b>`,
       `They see Lucesco, and lower their spears at once.<br><br><b>"Lucesco! The Lion of the Rift himself. Then these are the travellers His Majesty spoke of."</b>`,
-      `<b>"The King is not here. He is away at the front, where the rift in our sky is widest, mending the tear. He will return when it is closed."</b>`,
-      `<b>"Until then, prove yourselves against the invaders. Each week, beat ${JG.weekly.need} of their bands, and the castle will reward you: 🥉 ${JG.weekly.bronze} bronze medals."</b>`,
+      `<b>"His Majesty the Fairy King is home from the front, where the rift in our sky is widest. He will want to meet you."</b>`,
+      `<b>"And prove yourselves against the invaders! Each week, beat ${JG.weekly.need} of their bands, and the castle will reward you: 🥉 ${JG.weekly.bronze} bronze medals."</b>`,
     ]);
     j.met.knights = true; saveProfile(); jgHud(); refreshWalk();
+    /* (3.88) …and the gates open */
+    if(typeof caGateOpens === 'function' && !caOpen()) return caGateOpens();
     return;
   }
   await jgLines(face, nm, [j.tallyPaid
@@ -1219,7 +1299,10 @@ async function jgKnights(){
     : `<b>"${Math.min(JG.weekly.need, j.tally || 0)} bands beaten this week. ${JG.weekly.need - Math.min(JG.weekly.need, j.tally || 0)} more for the castle's reward."</b>`]);
 }
 function jgGate(){
-  return jgLines([], '', [`The great doors are shut, carved with flowers and stars. Beyond them you can hear fountains.<br><br><i>The knights will not open it while the King is away.</i>`]);
+  /* (3.88) the King is home: the knights you have met open it, and then it stands open */
+  if(typeof caOpen === 'function' && caOpen()) return caEnter();
+  if(typeof caCanOpen === 'function' && caCanOpen()) return caGateOpens();
+  return jgLines([], '', [`The great doors are shut, carved with flowers and stars. Beyond them you can hear fountains.<br><br><i>Speak to the knights first.</i>`]);
 }
 
 /* ============================================================
@@ -1276,7 +1359,7 @@ function jgChooser(withRift){
   if(withRift) opts.push({ k:'rift', html:'🌀 The Time Rift', sub:'Selene, Vesper and the portals' });
   opts.push({ k:'last', html:'🌴 The jungle', sub:j.at ? 'Where you left off' : 'From the portal' });
   JG_TRIBE_KEYS.forEach(k=>{ if(j.found[k]) opts.push({ k, html:`${JG_TRIBES[k].icon} ${JG_TRIBES[k].name.replace(/^the /, 'The ')}`, sub:'Their village' }); });
-  if(j.found.castle) opts.push({ k:'castle', html:'🏰 The Fairy King\'s castle', sub:'The south gate' });
+  if(j.found.castle) opts.push({ k:'castle', html:'🏰 The Fairy King\'s castle', sub:(typeof caOpen === 'function' && caOpen()) ? 'Inside its gates' : 'The south gate' });   // (3.89) in, once it is open
   if(!withRift && opts.length === 1) return jgEnter('last');
   const ov = document.createElement('div');
   ov.className = 'refine-scrim jg-choose';
@@ -1291,6 +1374,7 @@ function jgChooser(withRift){
     close();
     const k = btn.dataset.k;
     if(k === 'rift') return riftGo();
+    if(k === 'castle' && typeof caOpen === 'function' && caOpen() && typeof caEnter === 'function') return caEnter();
     jgEnter(k);
   }));
 }

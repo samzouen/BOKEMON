@@ -402,39 +402,49 @@ function onBattleWon(){
   ui.pendingVictory = ()=> showVictory(enemyNames, levelUps, tokens);
   const finish = ()=> b.onWin ? b.onWin(levelUps) : showVictory(enemyNames, levelUps, tokens);
   if(evolvers.length){
-    /* One animation per EVOLUTION, not per monster. A Magnet that crosses both
-       11 and 25 in one payout used to play a single flicker from stage 0 to
-       stage 2 — the middle form never appeared at all. Each crossing now gets
-       its own scene with the correct consecutive pair. */
-    const scenes = [];
-    evolvers.forEach(e=>{
-      if(e.hatched || e.crowned){ scenes.push(e); return; }   // those are one-offs
-      /* `evolutionStage(species, level)` reads the level and nothing else, so
-         a monster CAUGHT above its thresholds — a base form at 66, say — was
-         reported as already fully evolved, and the animation opened on the
-         form it was about to become. The truth is `monStageOf(m)`, which
-         respects evoFloor. Walk up from the stage it is actually in. */
-      const mon = (state.party || []).concat(state.storage || [])
-                    .find(x => x.uid === e.uid);
-      let stage = mon ? monStageOf(mon) : evolutionStage(e.species, e.from);
-      /* monStageOf reports where it has ALREADY arrived, so step back by the
-         number of evolutions this payout is about to play. */
-      stage = Math.max(0, stage - e.evos.length);
-      e.evos.forEach((lvl, k)=>{
-        const last = k === e.evos.length - 1;
-        scenes.push(Object.assign({}, e, {
-          from: lvl - 1, to: lvl, evos:[lvl],
-          stageFrom: stage,
-          stageTo:   stage + 1,
-          newMoves: last ? e.newMoves : [],     // the learning line belongs to the last
-        }));
-        stage++;
-      });
-    });
-    playEvolutions(scenes, finish);
+    /* One animation per EVOLUTION, not per monster (evolutionScenes). */
+    playEvolutions(evolutionScenes(evolvers), finish);
   } else {
     finish();
   }
+}
+/* Each evolution in a list of level-ups as a scene of its own, with the
+   correct consecutive pair. A Magnet that crosses both 11 and 25 in one
+   payout used to play a single flicker from stage 0 to stage 2 — the middle
+   form never appeared at all.
+   `evolutionStage(species, level)` reads the level and nothing else, so a
+   monster CAUGHT above its thresholds — a base form at 98, say — was
+   reported as already fully evolved, and the animation opened on the form it
+   was about to become, or (3.87: the designer, "it uses the existing sprite
+   into existing sprite when the monster is overlevelled") went from its last
+   form to its last form: the NPC fights' page and the future fight handed
+   their level-ups straight to playEvolutions, which read the level. The
+   truth is `monStageOf(m)`, which respects evoFloor: walk up from the stage
+   it is actually in. A scene that already says its stages, a hatching or a
+   crowning passes as it is. */
+function evolutionScenes(list){
+  const out = [];
+  const owned = ()=> (state.party || []).concat(state.storage || [], typeof bondedCompanions === 'function' ? (bondedCompanions() || []) : []);
+  (list || []).forEach(e=>{
+    if(!e) return;
+    if(e.hatched || e.crowned || e.fromSpecies || e.stageFrom != null || !(e.evos && e.evos.length)){ out.push(e); return; }
+    const mon = owned().find(x=> x && x.uid === e.uid);
+    /* monStageOf reports where it has ALREADY arrived, so step back by the
+       number of evolutions this payout is about to play. */
+    let stage = mon ? monStageOf(mon) : evolutionStage(e.species, e.to);
+    stage = Math.max(0, stage - e.evos.length);
+    e.evos.forEach((lvl, k)=>{
+      const last = k === e.evos.length - 1;
+      out.push(Object.assign({}, e, {
+        from: lvl - 1, to: lvl, evos:[lvl],
+        stageFrom: stage,
+        stageTo:   stage + 1,
+        newMoves: last ? e.newMoves : [],     // the learning line belongs to the last
+      }));
+      stage++;
+    });
+  });
+  return out;
 }
 
 /* ---------- EVOLUTION SEQUENCE (9 seconds) ----------
@@ -460,6 +470,7 @@ function evoFlashSchedule(totalMs){
 }
 
 function playEvolutions(list, done){
+  list = evolutionScenes(list);          // (3.87) from the form it is really in, whoever calls
   let i = 0;
   const next = ()=>{
     if(i >= list.length){ done(); return; }

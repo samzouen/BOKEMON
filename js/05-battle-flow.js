@@ -511,6 +511,7 @@ function onFlee(){
   if(ui.battle.tear) return tearEnded('left');                // stepping out of the past (2.94)
   if(ui.battle.future) return futureEnded('left');            // (3.75) stepping back from the future
   if(ui.battle.jungle && typeof jgFled === 'function') return jgFled();   // (3.84) the jungle: the band lets you go
+  if(ui.battle.caSpar && typeof caSparEnded === 'function') return caSparEnded('left');   // (3.90) giving up the Dauphin's spar
   if(ui.battle.noFlee) return;
   const trial = inSacredGroveTrial();
   const guardian = !!ui.battle.guardianTrial;
@@ -612,6 +613,7 @@ function onMoveChosen(moveIdx){
   if(mv && mv.aria && ariaActive()){ ui.battle.phase='player'; toast('Haunting Aria is still active.'); return; }
   /* (3.16) …and so would a second Ice Barrier. */
   if(mv && mv.iceBarrier && getPStatus(0,'iceBarrier')){ ui.battle.phase='player'; toast('Ice Barrier is still up.'); return; }
+  if(mv && mv.stargaze && getPStatus(0, 'stargaze')){ ui.battle.phase = 'player'; toast('Stargazer is still up.'); return; }   // (3.87) instant now, so the same
   if(mv && mv.chargeSpend) return resolveChargeSpend(mv, mon);
   if(mv && (mv.charge || mv.chargeMore)) return runChargeQuiz(mv, mon);
   /* Revitalise: who comes back is chosen before the writing, not after. */
@@ -863,7 +865,7 @@ function feedRecharge(words){
   b.usedUltra = {};
   b.usedSoul = {};                     // and Steel Soul's once-a-battle cast (2.93), Tachypsychia's too (3.63)…
   b.rebirthUsed = false;               // …and the phoenix's Rebirth (3.00, the designer's call)…
-  (b.enemies || []).forEach(e=>{ e._soulUsed = false; });   // …theirs too: one meter, both sides
+  /* (theirs come back on their own since 3.86: every 7 turns, foeRecharge) */
   /* A refined stone's free passive re-arms with the same bar that restores a
      cast — so it fires again the next time its carrier takes the field. */
   b.passiveFired = {};
@@ -1129,7 +1131,7 @@ function layAftershock(mon, pct, fromOvercharge){
     pct = aftershockPct(!!(soul && soul.owner === mon.uid));
   }
   addPreHit({ label:'💥 Aftershock rips through the ground!', pct, atk:monAtk(mon),
-              turnsLeft:AFTERSHOCK.turns, aoe:true, aftershock:true });
+              turnsLeft:AFTERSHOCK.turns, aoe:true, aftershock:true, owner:mon.uid });   // (3.93) `owner`: whose Feeble
   battleMsg(fromOvercharge ? `⚡💥 The Overcharge shakes the ground again — another Aftershock, ${pct}× ATK!`
                            : `💥 An aftershock begins — ${pct}× ATK for ${AFTERSHOCK.turns} turns.`);
   if(!fromOvercharge) b._aftershockLaid = { pct };   // (a repeat's own is not repeated)
@@ -1157,7 +1159,7 @@ function laySacredFlame(mon, fromOvercharge){
   const b = ui.battle;
   if(!b || !mon) return;
   addPreHit({ label:'🐦‍🔥 The Sacred Flame burns!', pct:SACRED_FLAME.pct, atk:monAtk(mon),
-              turnsLeft:SACRED_FLAME.turns, aoe:true, sacredFlame:true });
+              turnsLeft:SACRED_FLAME.turns, aoe:true, sacredFlame:true, owner:mon.uid });
   battleMsg(fromOvercharge ? '⚡🐦‍🔥 The Overcharge feeds the fire — another Sacred Flame!'
                            : `🐦‍🔥 A Sacred Flame is laid — ${SACRED_FLAME.pct}× ATK for ${SACRED_FLAME.turns} turns.`);
   if(!fromOvercharge) b._sacredFlameLaid = true;
@@ -1545,6 +1547,23 @@ function resolveBattleMove(mv, target, results, opts){
     playEffect(mv.name, { type:'Water' });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
+  /* (3.87) The Firefox's Stargazer — the designer: "her power1 is now an
+     instant move". Written right, it costs no turn: choose your move. Its
+     button rests while it stands; one their dust scattered rests until the
+     next turn (markQuickTried), so it can't be written at again and again. */
+  if(mv.stargaze){
+    if(correct < mv.words) return quickMissed(mv, mon, correct);   // no turn spent
+    const line = castStargazer('player', mon, mv.stargaze, mv.name);
+    if(!getPStatus(0, 'stargaze')) markQuickTried(mon, mv);
+    renderStatusBadges();
+    playEffect(mv.name, { type:'Psychic' });
+    logBattle(`${displayName(mon)} used ${mv.name} (quick)`);
+    if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 600);
+    ui.battle.phase = 'player';
+    renderBattle();
+    battleMsg(line + ' It cost no turn — choose your move.');
+    return;
+  }
   /* (3.15) the psychics' support moves: Woolly Warmth, Transfusion, Kindle,
      Gallop, Glitch, and the Mime's Copycat. */
   if(mv.mend || mv.transfuse || mv.kindle || mv.gallop || mv.enchant || mv.stargaze || (mv.glitch && mv.mult == null) || mv.copy){
@@ -1851,7 +1870,7 @@ function resolveBattleMove(mv, target, results, opts){
     const hits = livingEnemies().map(t=>{
       const idx = ui.battle.enemies.indexOf(t);
       if(rollDodge(t, idx, 240, ignoresEvasion(mv, mon))) return { t, idx, dmg:0, oldHp:t.hp, newHp:t.hp, dodged:true };
-      const dmg = enemyGuard(t, computeDamage(mv.extinguish.hpMult || 1.5, pow, { types:[] }, t, true));
+      const dmg = enemyGuard(t, computeDamage(mv.extinguish.hpMult || 1.5, pow, { types:[] }, t, true, false, { from:monRef(mon) }));   // (3.93) its Feeble, as the ice
       return { t, idx, dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) };
     });
     battleMsg(`${mv.name}!`);
@@ -2044,7 +2063,7 @@ function resolveBattleMove(mv, target, results, opts){
       let caught = 0;
       livingEnemies().forEach(x=>{ markConfused(x, lun.ffPower || 1.0, true); if(getEStatus(x,'discombobulate')) caught++; });
       /* (3.24) the Ladybird's Dazzle is a Lunacy in light: its own words */
-      if(caught){ renderStatusBadges(); setTimeout(()=> battleMsg(lun.glow ? '✨ The flash leaves them seeing spots — confused!' : '🌙 The moonlight gets into their heads!'), 650); }
+      if(caught){ renderStatusBadges(); setTimeout(()=> battleMsg(lun.them || (lun.glow ? '✨ The flash leaves them seeing spots — confused!' : '🌙 The moonlight gets into their heads!')), 650); }   // (3.90) or its own words (the Mantis's, the King's)
     }
     /* Nova (the Phoenix), in your hands as in theirs (2.90): a small Diamond
        Dust — one of their buffs swept away, one of their marks on your side
@@ -2197,7 +2216,7 @@ function landStrike(h, opts){
   if(raw > 0) breakShields('player', null, t, yourStrikeKey(opts), 'enemyBlk-' + h.idx, 'enemy-' + h.idx);
   const soaked = (raw > 0 && !h.pierce && shieldsOn(t)) ? applyBlock(t, raw, 'enemyBlk-' + h.idx) : raw;   // (3.64) its own, then its team's
   let through = capHit(t, soaked);              // (3.15) their Steelcrab's Carapace: a third of its health at most
-  if(typeof foeTemperLimit === 'function') through = foeTemperLimit(t, through);   // (3.76) a future Steel's Tempering: its share a turn
+  if(typeof foeTemperLimit === 'function') through = foeTemperLimit(t, through);   // (3.86) a future Steel's Tempering: once, it holds at half its health
   /* (3.75) a future monster's Undying holds it on 1 HP, once a battle —
      (3.76) and a future Ground's Metamorph, holding on that turn and the next */
   let held = '';
@@ -2206,14 +2225,13 @@ function landStrike(h, opts){
     else if(typeof foeLastStandReady === 'function' && foeLastStandReady(t)){ through = before - 1; held = foeLastStandUse(t); }
     else if(typeof talentUndyingReady === 'function' && talentUndyingReady(t)){ through = before - 1; held = talentUndyingUse(t); }
   }
-  if(typeof foeTemperRecord === 'function') foeTemperRecord(t, through);
   if(raw > 0 && typeof foeElusiveImages === 'function') foeElusiveImages(t);       // (3.76) a future Flying's Elusive
   h.blocked = raw - soaked;
   h.dmg = through;
   h.oldHp = before;
   h.newHp = Math.max(0, before - through);
   if(raw > 0) t.lastDamageTaken = raw;          // a reflection returns the full figure, as yours does
-  { const dealer = dealerOf(opts); if(raw > 0 && dealer) hexHit(dealer, t); }   // (3.68) Vicious Hex: its holder's damage marks it (3.70: whoever dealt it)
+  { const dealer = dealerOf(opts); if(raw > 0 && dealer) hexHit(dealer, t, opts); }   // (3.68) Vicious Hex — (3.86) a debuff a hit, whoever dealt it (not Unstable Magic's: opts.noHex)
   if(through > 0) noteHurt(t, yourStrikeKey(opts));   // a hit: its Focus is broken this round (2.97); which attack (3.38)
   /* Arena immortality: a knock-out becomes a full heal, so a test runs as
      long as the tester wants without anything respawning. */
@@ -2833,10 +2851,22 @@ function enemyVita(e, def, next){
 function enemyIceBarrier(e, move, then){
   const idx = ui.battle.enemies.indexOf(e);
   bob(document.getElementById('enemyBob-' + idx), -1);
-  playEffect(move[1], { type:'Water', at:'enemy-' + idx });
-  battleMsg(castIceBarrier('enemy', e, move[6].iceBarrier, move[1]));
+  const gaze = !!(move[6] && move[6].stargaze);   // (3.87) a Firefox's quick Stargazer comes this way too
+  playEffect(move[1], { type:gaze ? 'Psychic' : 'Water', at:'enemy-' + idx });
+  battleMsg(gaze ? castStargazer('enemy', e, move[6].stargaze, move[1]) : castIceBarrier('enemy', e, move[6].iceBarrier, move[1]));
   renderStatusBadges();
   setTimeout(then, 1300);
+}
+/* (3.87) Their Stargazer, if it is worth casting now (enemyActs): their side
+   has none up, your dust would not scatter it, something of yours could
+   dodge them — and it has not been tried this turn. */
+function enemyQuickStargazer(e){
+  if(!e || e._forcedMove || (e._copyQueue && e._copyQueue.length) || getESide('stargaze') || dustBlocks('enemy')) return null;
+  if(e._gazeRound === roundNo()) return null;
+  const gz = (MOVES[e.species] || []).find(m=> m[6] && m[6].stargaze && (e.level || 1) >= m[5]);
+  if(!gz || !livingField().some(m=> playerEvasionFrom(e, m) > 0 || untouchable(m))) return null;
+  e._gazeRound = roundNo();
+  return gz;
 }
 /* A shield (Pillow Puff, Bandage Wall) or the Mime's Invisible Wall
    (castBarrier, 3.14/3.15) on their side. */
@@ -2857,16 +2887,13 @@ function foeSupportPick(e){
   const hurt = m=> hpOfMon(m) / Math.max(1, maxHpOfMon(m));
   /* (3.36) a Firefox's spell: the strongest it knows, while its side has none
      as strong up (and your dust would not scatter it) */
-  const spells = rows.filter(r=> r[6].enchant).sort((a, b)=> (b[6].enchant.deal || 0) - (a[6].enchant.deal || 0));
+  const spells = rows.filter(r=> r[6].enchant).sort((a, b)=> ((b[6].enchant.deal || 0) - (a[6].enchant.deal || 0)) || ((b[6].enchant.burn || 0) - (a[6].enchant.burn || 0)));   // (3.87) Fiery Enchantment first
   if(spells.length && !dustBlocks('enemy')){
-    const up = getESide('enchant');
-    if(!up || (up.deal || 0) < spells[0][6].enchant.deal) return spells[0];
+    const up = getESide('enchant'), top = spells[0][6].enchant;
+    if(!up || (up.deal || 0) < top.deal || ((up.burn || 0) < (top.burn || 0))) return spells[0];
   }
-  /* (3.37) its Stargazer: when something of yours could dodge them — a Lurk,
-     a Mirage, an Aria, any evasion — and its side has none up */
-  const gaze = rows.find(r=> r[6].stargaze);
-  if(gaze && !getESide('stargaze') && !dustBlocks('enemy') &&
-     livingField().some(m=> playerEvasionFrom(e, m) > 0 || untouchable(m))) return gaze;
+  /* (3.37) its Stargazer — (3.87) instant now: cast before its action
+     (enemyQuickStargazer), not as one */
   for(const r of rows){
     const x = r[6];
     if(e._lastCast === r[1] || x.copy) continue;
@@ -4127,6 +4154,11 @@ function enemyActs(i, e){
     const ib = (MOVES.caladrius || []).find(m=> m[6] && m[6].iceBarrier && (e.level || 1) >= m[5]);
     if(ib) return enemyIceBarrier(e, ib, ()=> enemyActs(i, e));
   }
+  /* (3.87) A Firefox's Stargazer, instant as yours is: when something of
+     yours could dodge them (a Lurk, a Mirage, an Aria, any evasion) and
+     their side has none up — once a turn — and then its action goes on. */
+  { const gz = enemyQuickStargazer(e);
+    if(gz) return enemyIceBarrier(e, gz, ()=> enemyActs(i, e)); }
 
   /* (3.48) From Region 5 on (foesFierce), what costs it no turn comes first,
      wherever it has it: Rage and Overpower on its first action, as Jax's
@@ -4490,7 +4522,7 @@ function enemyStrikeOn(ctx, step, done){
      for itself, on your side's stacks — the monster out front and its
      companion alike (3.01: both sides' stacks are the side's). */
   let counterMult = 1;
-  if(counterStacks() > 0 && !ex.stoop){        // a stoop is not an attack a guard can read
+  if(counterStacks() > 0 && !ex.stoop && !ex.pure){        // a stoop is not an attack a guard can read; (3.91) nor reads a pure blow
     counterMult = spendCounterStack(mon);
     if(counterMult < 1){
       counterDrift(document.getElementById(pid('playerBob')), document.getElementById(pid('playerBob')));
@@ -4616,13 +4648,17 @@ function enemyStrikeOn(ctx, step, done){
     } else if(ex.extinguish){
       /* Extinguish: everything it has left, half as much again. Type does not
          come into it; their side's damage buffs and your armour do. */
-      dmg = computeDamage(ex.extinguish.hpMult || 1.5, e.hp, { types:[] }, monRef(mon), false);
+      dmg = computeDamage(ex.extinguish.hpMult || 1.5, e.hp, { types:[] }, monRef(mon), false, false, { from:e });   // (3.93) its Feeble, as the ice
     } else {
       /* `split` means the multiplier is the TOTAL, shared across the strikes —
          Verdant Wrath Max is 1.8 over three hits, not 1.8 three times. Without
          this the Forest Fairy would hit for 5.4× its ATK. */
       const per = (ex.hits > 1 && ex.split && !step.hits) ? move[2] / ex.hits : move[2];
-      dmg = computeDamage(per, enemyAtk(e), e, monRef(mon), false);
+      dmg = computeDamage(per, enemyAtk(e), e, monRef(mon), false, false, ex.pure ? { pure:true } : undefined);   // (3.91) a pure blow: nothing mitigates it
+      /* (3.91) the Fire Ancestor's Max: all the health it has lost, on each
+         hit — type aside, as Extinguish's is; their side's damage buffs and
+         your cuts work on it as on the rest */
+      if(ex.lostHp && e.maxHp > e.hp) dmg += computeDamage(ex.lostHp, Math.max(0, e.maxHp - e.hp), { types:[] }, monRef(mon), false, false, { from:e });   // (3.93) its Feeble cuts this share too
       /* Spacetime Rift Max (Cyborg, 3.00): 1.1× for every Spacetime Fracture
          it holds, multiplying. */
       if(ex.fracture){
@@ -4703,10 +4739,10 @@ function enemyStrikeOn(ctx, step, done){
         const crit = critStrike(e, mon);
         if(crit > 1){ thisHit = Math.ceil(thisHit * crit); crits++; }
         const beforeBlock = thisHit;
-        if(!ex.pierce) thisHit = applyBlock(mon, thisHit, pid('playerBlk'));   // one stack per strike (Wraithblade passes through, 2.97)
+        if(!ex.pierce && !ex.pure) thisHit = applyBlock(mon, thisHit, pid('playerBlk'));   // one stack per strike (Wraithblade passes through, 2.97; (3.91) a pure blow too)
         totalBlocked += beforeBlock - thisHit;
-        thisHit = capHit(mon, thisHit);                                         // (3.15) your Steelcrab's Carapace
-        thisHit = temperCap(mon, thisHit);                                      // (3.69) Tempering: no more than its share this turn
+        if(!ex.pure) thisHit = capHit(mon, thisHit);                            // (3.15) your Steelcrab's Carapace — (3.91) no cap on a pure blow
+        thisHit = temperFloor(mon, thisHit);                                    // (3.86) Tempering: once, it holds at half its health
         /* (3.15) your Nurse's Lullaby Reflex: a strike reached it */
         if(beforeBlock > 0 && mon.currentHp - thisHit > 0){
           if(!zzz) zzz = sleepBackRoll(mon, e);
@@ -4933,7 +4969,7 @@ function enemyStrikeWrap(ctx){
   if(lun && Math.random() < (lun.chance || 0.25) && !enemyStatusBlocked('discombobulate')){
     livingField().forEach(pm=> withFocus(pm, ()=> markPlayerConfused(lun.ffPower || 1.0, true)));
     renderStatusBadges();
-    msg += lun.glow ? ' ✨ The flash leaves you seeing spots — confused!' : ' The moonlight gets into your heads!';   // (3.24) a Ladybird's Dazzle
+    msg += lun.you || (lun.glow ? ' ✨ The flash leaves you seeing spots — confused!' : ' The moonlight gets into your heads!');   // (3.24) a Ladybird's Dazzle; (3.90) its own words
   }
   /* Their Nova (2.90): one of your buffs swept away, one of your marks on
      them burnt off. */
@@ -5333,6 +5369,7 @@ function onPlayerDefeated(){
   if(ui.battle && ui.battle.coreSpar) return coreSparEnded('lost');   // training costs nothing (2.86)
   if(ui.battle && ui.battle.tear) return tearEnded('lost');           // the past keeps nothing back (2.94)
   if(ui.battle && ui.battle.future) return futureEnded('lost');       // (3.75) nor does the future
+  if(ui.battle && ui.battle.caSpar && typeof caSparEnded === 'function') return caSparEnded('lost');   // (3.90) a spar: nothing lost
   if(ui.battle && ui.battle.climax && ui.battle.climax.lost) return ui.battle.climax.lost();   // (3.19) the vault: Cyborg turns the room back — nothing lost
   if(ui.battle && ui.battle.guardianTrial) return onGuardianTrialResolved();
   if(ui.battle && ui.battle.scriptedLoss==='padrino'){ restoreRealParty(); return onPadrinoResolved(); }
