@@ -292,7 +292,7 @@ function pastTalk(who){
 }
 /* Lucesco, always beside you: a button of his own. */
 function pastNearActs(p){
-  return [{ key:'pastLion', html:`🦁 Talk<small>Lucesco</small>`, act:()=>{
+  return [{ key:'pastLion', cls:'lion', html:lucescoActHtml('Talk'), act:()=>{
     const s = pastState();
     s.lionTalk = ((s.lionTalk || 0) + 1);
     return pastLines([pastLionFace()], 'Lucesco', [PAST_LION_LINES[(s.lionTalk - 1) % PAST_LION_LINES.length]]);

@@ -2744,8 +2744,36 @@ function stoneRevealCss(){
   @keyframes srRise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
   @media (prefers-reduced-motion: reduce){
     .sr-ring, .sr-up, .sr-up .elem-ic, .sr-gem::before, .sr-gem::after, .sr-spark b{ animation:none !important; }
-  }`;
+  }
+  /* (3.97) on the starry sky (cosmicSky): its words light, its cards glass */
+  .cosmic-sky{ position:absolute; inset:0; width:100%; height:100%; display:block; z-index:0; pointer-events:none; }
+  .sr-ov.cosmic{ background:#06051a; }
+  .sr-ov.cosmic .sr-stage, .sr-ov.cosmic .sr-out{ z-index:3; }
+  .sr-ov.cosmic .sr-label, .sr-ov.cosmic .sr-title, .sr-ov.cosmic .sr-row-head, .sr-ov.cosmic .sr-name{ color:#f6f1ff; text-shadow:0 1px 3px rgba(0,0,0,.85); }
+  .sr-ov.cosmic .sr-meta, .sr-ov.cosmic .sr-row-head span{ color:#d6ccf2; }
+  .sr-ov.cosmic .sr-card{ background:rgba(255,253,246,.13); box-shadow:0 0 0 1px rgba(255,255,255,.16), 0 4px 14px rgba(0,0,0,.35); }
+  .sr-ov.cosmic .sr-cname{ color:#f6f1ff; } .sr-ov.cosmic .sr-cname small{ color:#cfc6ef; }
+  .sr-ov.cosmic .btn-ghost{ background:rgba(255,255,255,.12); color:#f6f1ff; border-color:rgba(255,255,255,.3); }
+  .sr-one-acts{ display:flex; gap:10px; justify-content:center; }
+  .shop-overlay.cosmic{ background:#06051a; }
+  .shop-overlay.cosmic .shop-ov-top, .shop-overlay.cosmic .shop-ov-body{ position:relative; z-index:1; }
+  .shop-overlay.cosmic .qty-card, .shop-overlay.cosmic .pick-card{ background:rgba(250,246,236,.9); box-shadow:0 10px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.25); }`;
   document.head.appendChild(st);
+}
+/* (3.97) the designer: "I like your starry sky so much I want to have it as the backdrop of all zone's random skill
+   stone pull. It gives a cosmic feel. Can you use the starry background for all screens in the random skill stone
+   pulls and even for the selects and random elites?" — Region 6's drawn sky (18-rift.js), on a canvas of its own
+   behind a reveal or a purchase card, in every region. It stops, and gives its pixels back, once the screen goes. */
+function cosmicSky(host){
+  if(!host || typeof riftSkyNew !== 'function') return null;
+  const cv = document.createElement('canvas');
+  cv.className = 'cosmic-sky';
+  cv.setAttribute('aria-hidden', 'true');
+  host.insertBefore(cv, host.firstChild);
+  host.classList.add('cosmic');
+  const sky = riftSkyNew(cv, 'page');
+  if(typeof riftSkyRun === 'function') riftSkyRun(sky);
+  return sky;
 }
 function stoneRing(label){
   stoneRevealCss();
@@ -2761,6 +2789,7 @@ function stoneRing(label){
     <div class="sr-dim"></div>
     <div class="sr-out"></div>
     <div class="sr-flash"></div>`;
+  cosmicSky(ov);
   document.body.appendChild(ov);
   return { el:ov, t0:Date.now() };
 }
@@ -2780,7 +2809,7 @@ async function stoneSaveReveal(stones, label, rollback, thenScreen){
 /* Shared reveal for every way a stone can be obtained (already saved). */
 function showStoneReveal(stone, spinLabel, thenScreen){ return revealStones([stone], { label:spinLabel, thenScreen }); }
 function srPlus(st){ return stonePlus(st) ? `<span class="plus-mark">${UPGRADE_MARKS[stonePlus(st)].trim()}</span>` : ''; }
-function srOneHtml(stone){
+function srOneHtml(stone, label, skip){
   const t = stoneTierDef(stone.tier);
   return `<div class="sr-one tier-${stone.tier}">
       <div class="sr-gem tier-${stone.tier}">${elemIcon(stone.type, 128, { title:false })}</div>
@@ -2788,11 +2817,11 @@ function srOneHtml(stone){
       <div class="sr-name">${escapeHtml(stone.name)}${srPlus(stone)}</div>
       <div><span class="type-badge" style="background:${TYPE_COLORS[stone.type] || '#888'}">${escapeHtml(stone.type)}</span></div>
       <div class="sr-meta">${t.mult != null ? t.mult + '× ATK' : 'Status move'} · ${t.words} words</div>
-      <button class="btn btn-primary" id="rollOk">Nice!</button>
+      <div class="sr-one-acts">${skip ? `<button class="btn btn-ghost" id="srSoloSkip">Skip</button>` : ''}<button class="btn btn-primary" id="rollOk">${label || 'Nice!'}</button></div>
     </div>`;
 }
-function srCardHtml(st){
-  return `<div class="sr-card" data-tier="${st.tier}"><span class="sr-gem tier-${st.tier}">${elemIcon(st.type, 54, { title:false })}</span>
+function srCardHtml(st, i){
+  return `<div class="sr-card" data-tier="${st.tier}" data-i="${i}"><span class="sr-gem tier-${st.tier}">${elemIcon(st.type, 54, { title:false })}</span>
     <span class="sr-cname">${escapeHtml(st.name)}${srPlus(st)}<small>${escapeHtml(st.type)}</small></span></div>`;
 }
 function srSort(stones){
@@ -2802,12 +2831,12 @@ function srSort(stones){
 function srManyHtml(sorted, many){
   const actions = `<div class="sr-actions"><button class="btn btn-ghost" id="srSkip">Skip</button><button class="btn btn-primary" id="rollOk" style="display:none;">Nice!</button></div>`;
   const title = `<div class="sr-title">${sorted.length} skill stones!</div>`;
-  if(!many) return `<div class="sr-many few">${title}<div class="sr-strip wrap">${sorted.map(srCardHtml).join('')}</div>${actions}</div>`;
+  if(!many) return `<div class="sr-many few">${title}<div class="sr-strip wrap">${sorted.map((st, i)=> srCardHtml(st, i)).join('')}</div>${actions}</div>`;
   const rows = REVEAL_TIERS.map(t=>{
-    const of = sorted.filter(st=> st.tier === t);
+    const of = sorted.map((st, i)=> [st, i]).filter(([st])=> st.tier === t);
     if(!of.length) return '';
     return `<div class="sr-row" data-tier="${t}"><div class="sr-row-head">${gemIcon(t, 16)} ${escapeHtml(stoneTierDef(t).label)} <span>×${of.length}</span></div>
-      <div class="sr-strip">${of.map(srCardHtml).join('')}</div></div>`;
+      <div class="sr-strip">${of.map(([st, i])=> srCardHtml(st, i)).join('')}</div></div>`;
   }).join('');
   return `<div class="sr-many">${title}<div class="sr-rows">${rows}</div>${actions}</div>`;
 }
@@ -2865,35 +2894,7 @@ async function revealStones(stones, opts){
   };
   const settle = Math.round((ultra ? REVEAL.ultraOutMs * .4 : REVEAL.whiteMs * .6));
   let skipped = false;
-  /* (3.83) a Very High or Ultra group: the lights go down, the beam crosses it (`lines`: where), its stones
-     coming as silhouettes as the beam passes; a held breath; then the reveal, and the tier's fanfare */
-  const bigReveal = async (tier, cards, lines, appear)=>{
-    const ms = REVEAL.beamMs[tier];
-    ov.classList.add('hush');
-    await revealWait(240);
-    lines.forEach(l=> srBeam(l.host, tier, l.top, ms));
-    const sweep = ms * .45;
-    for(let i = 0; i < cards.length; i++){
-      if(!skipped) await revealWait(Math.round(sweep / cards.length * (i === 0 ? .5 : 1)));
-      if(!ov.parentNode) return;
-      if(!skipped) cards[i].classList.add('sil');
-      appear(cards[i]);
-    }
-    if(!skipped) await revealWait(Math.round(ms - sweep * (1 - .5 / cards.length)) + REVEAL.holdMs[tier]);
-    if(!ov.parentNode) return;
-    cards.forEach(c=>{ c.classList.remove('sil'); if(!skipped) c.classList.add('lift'); });
-    ov.classList.remove('hush');
-    if(!skipped){
-      playStoneSfx(tier);
-      /* an Ultra's own burst of red-gold, out of each one as it lights */
-      if(tier === 'ultra') cards.forEach(c=>{
-        const host = lines[0].host, hr = host.getBoundingClientRect(), r = (c.querySelector('.sr-gem') || c).getBoundingClientRect();
-        const sp = srSparks(host, { waves:2, per:14, r:[50, 120], unit:'px', gap:.22, t:.9 });
-        sp.style.left = Math.round(r.left - hr.left + r.width / 2) + 'px'; sp.style.top = Math.round(r.top - hr.top + r.height / 2) + 'px';
-      });
-      await revealWait(560);
-    }
-  };
+  const bigReveal = (tier, cards, lines, appear)=> srBigReveal(ov, tier, cards, lines, appear, ()=> skipped);
   if(stones.length === 1){
     const st = stones[0];
     out.innerHTML = srOneHtml(st);
@@ -2927,6 +2928,12 @@ async function revealStones(stones, opts){
     }
   };
   await revealWait(settle);
+  /* (3.97) the designer: "Single pull ultra and very high moves look genuinely exciting now. Can we preserve these
+     for the 10 pull too? Show all the way to high moves, then pause and pull up the individual reveal screens for
+     very high and ultra moves consecutively which are full screen. After all of these have been shown, go back to
+     the display of all moves that were pulled." The Very High and Ultra cards wait, unlit; then each has the single
+     draw's whole screen (srSoloReveal), one after another; then back here, every card lit. */
+  const solo = [];
   if(many){
     for(const row of out.querySelectorAll('.sr-row')){              // low first: the bottom row
       if(!ov.parentNode) return;
@@ -2934,8 +2941,8 @@ async function revealStones(stones, opts){
       const tier = row.dataset.tier, strip = row.querySelector('.sr-strip');
       const cards = [...strip.querySelectorAll('.sr-card')];
       if(REVEAL_BIG.includes(tier) && !skipped){
-        const rr = row.getBoundingClientRect(), sr = strip.getBoundingClientRect();
-        await bigReveal(tier, cards, [{ host:row, top:sr.top - rr.top + sr.height / 2 }], c=> show(c, strip));
+        cards.forEach(c=> solo.push({ card:c, strip }));            // their turn comes, each on its own screen
+        continue;
       } else {
         if(!skipped) playStoneSfx(tier);                              // its fanfare, once
         for(const card of cards){
@@ -2955,10 +2962,7 @@ async function revealStones(stones, opts){
     for(const g of groups){
       if(!ov.parentNode) return;
       if(REVEAL_BIG.includes(g.tier) && !skipped){
-        /* one beam along each line of the strip that this tier's stones sit on */
-        const br = box.getBoundingClientRect(), tops = [];
-        g.cards.forEach(c=>{ const r = c.getBoundingClientRect(), y = Math.round(r.top - br.top + r.height / 2); if(!tops.some(t=> Math.abs(t - y) < 8)) tops.push(y); });
-        await bigReveal(g.tier, g.cards, tops.map(top=> ({ host:box, top })), c=> show(c, null));
+        g.cards.forEach(c=> solo.push({ card:c, strip:null }));      // (3.97) each on its own screen, after the rest
         continue;
       }
       if(!skipped){ playStoneSfx(g.tier); await revealWait(220); }
@@ -2968,8 +2972,86 @@ async function revealStones(stones, opts){
       }
     }
   }
+  if(solo.length){
+    if(!skipped){
+      await revealWait(450);                                          // the held breath: here they come
+      for(let i = 0; i < solo.length && !skipped; i++){
+        if(!ov.parentNode) return;
+        const st = sorted[+solo[i].card.dataset.i];
+        const how = await srSoloReveal(st, i < solo.length - 1 ? 'Next ▸' : 'See them all', i < solo.length - 1);
+        if(how === 'skip') skipped = true;
+      }
+    }
+    if(!ov.parentNode) return;
+    solo.forEach(({ card, strip })=>{ card.classList.add('now', 'lift'); if(strip && strip.scrollWidth > strip.clientWidth) strip.scrollLeft = strip.scrollWidth; });
+    if(!skipped) playStoneSfx(solo[solo.length - 1].card.dataset.tier);
+  }
   skip.style.display = 'none';
   okBtn.style.display = '';
+}
+/* (3.83) a Very High or Ultra group: the lights go down, the beam crosses it (`lines`: where), its stones
+   coming as silhouettes as the beam passes; a held breath; then the reveal, and the tier's fanfare.
+   (3.97) out of revealStones, for the single screens too (srSoloReveal) */
+async function srBigReveal(ov, tier, cards, lines, appear, isSkipped){
+  const skipped = ()=> !!(isSkipped && isSkipped());
+  const ms = REVEAL.beamMs[tier];
+  ov.classList.add('hush');
+  await revealWait(240);
+  lines.forEach(l=> srBeam(l.host, tier, l.top, ms));
+  const sweep = ms * .45;
+  for(let i = 0; i < cards.length; i++){
+    if(!skipped()) await revealWait(Math.round(sweep / cards.length * (i === 0 ? .5 : 1)));
+    if(!ov.parentNode) return;
+    if(!skipped()) cards[i].classList.add('sil');
+    appear(cards[i]);
+  }
+  if(!skipped()) await revealWait(Math.round(ms - sweep * (1 - .5 / cards.length)) + REVEAL.holdMs[tier]);
+  if(!ov.parentNode) return;
+  cards.forEach(c=>{ c.classList.remove('sil'); if(!skipped()) c.classList.add('lift'); });
+  ov.classList.remove('hush');
+  if(!skipped()){
+    playStoneSfx(tier);
+    /* an Ultra's own burst of red-gold, out of each one as it lights */
+    if(tier === 'ultra') cards.forEach(c=>{
+      const host = lines[0].host, hr = host.getBoundingClientRect(), r = (c.querySelector('.sr-gem') || c).getBoundingClientRect();
+      const sp = srSparks(host, { waves:2, per:14, r:[50, 120], unit:'px', gap:.22, t:.9 });
+      sp.style.left = Math.round(r.left - hr.left + r.width / 2) + 'px'; sp.style.top = Math.round(r.top - hr.top + r.height / 2) + 'px';
+    });
+    await revealWait(560);
+  }
+}
+/* (3.97) One Very High or Ultra stone of a bigger draw, on the whole screen as a single draw shows it: the flash
+   (red-gold and sparkling for an Ultra), its silhouette under the beam, the held breath, the reveal and fanfare.
+   Resolves 'next' or 'skip' (the rest of them shown at once). */
+async function srSoloReveal(st, label, canSkip){
+  stoneRevealCss();
+  const ov = document.createElement('div');
+  ov.className = 'sr-ov sr-solo';
+  ov.innerHTML = `<div class="sr-dim"></div><div class="sr-out"></div><div class="sr-flash"></div>`;
+  cosmicSky(ov);
+  document.body.appendChild(ov);
+  const ultra = st.tier === 'ultra';
+  if(ultra){ ov.classList.add('ultra'); srSparks(ov); }
+  void ov.offsetWidth;
+  ov.classList.add('flash');
+  await revealWait(ultra ? REVEAL.ultraFlashMs : REVEAL.flashMs);
+  const out = ov.querySelector('.sr-out');
+  out.innerHTML = srOneHtml(st, label, canSkip);
+  ov.classList.add('shown', 'white-out');
+  const one = out.querySelector('.sr-one'), gem = one.querySelector('.sr-gem');
+  one.classList.add('sil');
+  gem.style.visibility = 'hidden';
+  const done = new Promise(res=>{
+    out.querySelector('#rollOk').addEventListener('click', ()=>{ ov.remove(); res('next'); });
+    const sk = out.querySelector('#srSoloSkip');
+    if(sk) sk.addEventListener('click', ()=>{ ov.remove(); res('skip'); });
+  });
+  await revealWait(Math.round(ultra ? REVEAL.ultraOutMs * .4 : REVEAL.whiteMs * .6));
+  if(ov.parentNode){
+    const oRect = out.getBoundingClientRect(), g = gem.getBoundingClientRect();
+    await srBigReveal(ov, st.tier, [one], [{ host:out, top:g.top - oRect.top + g.height / 2 }], ()=>{ gem.style.visibility = ''; }, ()=> !ov.parentNode);
+  }
+  return done;
 }
 
 /* Elite spin: 5 Elite Skill Tokens, guaranteed High or better. */

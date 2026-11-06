@@ -799,6 +799,13 @@ const riftSeleneFace = ()=> faceNpc('shopkeeper6', '🧙‍♀️');
    her in a window of words, and on the floor */
 const riftVesperFace = ()=> `<img class="ss-big" src="assets/mon/vesper_front.png" alt="" onerror="walkArtMissing(this,'🦇',58,0)">`;
 const riftLucescoFace = ()=> `<img class="ss-big" src="assets/mon/lucesco_front.png" alt="" onerror="walkArtMissing(this,'🦁',58,0)">`;
+/* (3.96) His button beside you, wherever he walks with you (the past, the
+   jungle, the castle): his own picture on it, not 🦁 (the designer). `sub`
+   under his name; the button's class is 'lion'. */
+function lucescoActHtml(verb, sub){
+  return `<img class="wact-face" src="assets/mon/lucesco_front.png" alt="" onerror="this.replaceWith(document.createTextNode('🦁'))">` +
+    `<span class="wact-words">${verb}<small>${sub || 'Lucesco'}</small></span>`;
+}
 function riftLucescoImg(px){ return `<img src="assets/mon/lucesco_front.png" alt="Lucesco" onerror="walkArtMissing(this,'🦁',${Math.round((px || 40) * 1.9)},0)">`; }
 const RIFT_TOUR = [
   `"This is the Rift — the heart of the tear, where Vesper and I keep watch over time."<br><br>` +

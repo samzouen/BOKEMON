@@ -8,7 +8,7 @@
    tangled timelines towards Nemesis's past.
 
    Through the Rift's upper small portal (it wakes once the Council has
-   called), a time-lost jungle: a maze 450 squares across, "a VERY gigantic
+   called), a time-lost jungle: a maze 450 squares across (300 since 3.95), "a VERY gigantic
    maze with many different paths, many of which lead to dead ends", walked
    with Lucesco instead of Cuain. In from its east edge. In its corners four
    tribes of fairies (grass, water, fire, earth) under their guardians; in
@@ -31,9 +31,26 @@
    Each tribe, once you have met its guardian, gives 5 Skill Tokens a day
    for 1 of its people freed (3.87; 3 until then). The castle's knights
    count the alien bands beaten each week: 50 pays 50 bronze medals.
-   (3.90) The bands nearest the castle hold the castle's own people instead
-   (jgZoneOf, CA_CITIZENS): the Royal Commander, once met, gives 10 Skill
-   Tokens a day for 2 of them freed.
+   (3.90) The castle's own people (CA_CITIZENS): the Royal Commander, once
+   met, gives 10 Skill Tokens a day for 2 of them freed.
+
+   (3.95) The designer: "The density of aliens is much too scarce, I
+   underestimated how big the map was. Can we reduce it to 300x300 and put
+   the mazes at the four corners around each village? I still want a
+   significant maze around each corner village. Limit the size of the
+   village to 35 by 35 … Make the maze and forests more dense as well. Keep
+   pathways to single square on average, although you can open clearings on
+   occasions." So: 300 squares across, every path one square wide. Each
+   corner is a maze 112 squares across with its village (35 × 35) inside,
+   two gates into it; between the corners, and round the castle in the
+   middle, woods with far more loops. Now and then the trees stand two or
+   three deep and more (thickets: maze cells left wild). The floor is green,
+   its shade drifting from place to place; the trees are olive; golden light
+   falls through the canopy (jgRays). "360 aliens on the map, proportions
+   of which are 10% commanders and 15% captains, the rest equally divided by
+   12 elements … Swap the locations randomly daily": jgBands, made again
+   each day. "do not divide the captured fairies in waves by region": every
+   band's captives come from every tribe and the castle (jgCaptivePick).
 
    The ground is made from a seed (jgGround): every profile walks the same
    jungle, and nothing of it is saved but where you have been. It is far
@@ -43,9 +60,15 @@
    does.
    ============================================================ */
 const JG_KEY = 'r6_jungle';
+let _jgEx = null, _jgExOf = null;       // where you have been, as bits (jgExBits)
 const JG = {
-  W:450, H:450, cell:3, newest:0.5, braid:0.18, glades:46, lakes:14, seed:20261104,
-  aliens:{ regular:92, captain:14, commander:1, gap:13, safe:16, sight:4, clock:700, radius:7, active:18, lv:[150, 175] },   // (3.86) "maybe 1 commanders on the map max"
+  W:300, H:300, v:395, seed:20261106,
+  village:35, corner:112, newest:0.62,
+  braid:{ maze:0.06, wood:0.45 },          // dead ends opened on through one more wall: the corner mazes keep nearly all of theirs
+  loops:0.04,                              // the woods: walls knocked through besides, for more ways round
+  thick:{ maze:0.05, wood:0.12 },          // cells left wild before the maze is made: thickets, three trees deep or more
+  clearings:{ maze:8, wood:34 }, lakes:7,
+  aliens:{ total:360, commander:36, captain:54, gap:7, safe:9, sight:4, clock:700, radius:6, active:18, lv:[150, 175] },   // (3.95) 10% commanders, 15% captains
   /* (3.87) "Please reduce their levels to 98, I forgot! 98 at the start
      before enrage, 98 again when caught" — as anything else you can catch
      (CATCH_LEVEL_CAP), so a fairy caught in its first form can still climb
@@ -67,8 +90,11 @@ function jgState(){
   if(!r.jungle || typeof r.jungle !== 'object') r.jungle = {};
   const j = r.jungle;
   ['found', 'met', 'rescued', 'paid', 'beaten', 'talk'].forEach(k=>{ if(!j[k] || typeof j[k] !== 'object') j[k] = {}; });
+  /* (3.95) a new jungle (300 across): the old picture of where you had been,
+     and where you stood, belong to the old one. What you found stays found. */
+  if(j.mapV !== JG.v){ j.mapV = JG.v; j.explored = ''; j.at = null; _jgEx = null; }
   const d = today();
-  if(j.day !== d){ j.day = d; j.rescued = {}; j.paid = {}; }
+  if(j.day !== d){ j.day = d; j.rescued = {}; j.paid = {}; j.beaten = {}; }   // (3.95) the bands stand somewhere new each day
   const wk = tearWeekKey();
   if(j.week !== wk){ j.week = wk; j.tally = 0; j.tallyPaid = false; }
   return j;
@@ -96,15 +122,63 @@ const JG_TRIBE_KEYS = ['grass', 'water', 'earth', 'fire'];
    aliens — named as their pictures are, without "alien", their rank and
    their element (the designer). Each kit: Basic, Power1, Power2 (all of
    them), Ultimate, Max, as the starters'. */
+/* (3.96) Their kits, as the designer asked: support, each tribe's two a
+   pair — one with a passive that lifts its own side, one with a passive
+   that drags the other side down (in the Power 2 slot), and an area Power 1
+   for the one whose Ultimate strikes a single foe. Every effect is one the
+   game already has. As captives they cast their Ultimate every turn, so no
+   Ultimate heals or buffs: each is an attack that weakens, blinds, stuns,
+   confuses or lulls. (Until 3.96 every one was the 3.84 placeholder: 0.2×,
+   0.4×, 0.6× all, 1.25×, 1.5×.) */
 const JG_FOLK = {
-  water_fairy: { name:'Water Fairy',  el:'Water',  evo:[115], glyph:'泉', moves:['Splash Charm', 'Dew Drop', 'Tide Twirl', 'Moon Tide', 'Moon Tide Max'] },
-  water_sprite:{ name:'Water Sprite', el:'Water',  glyph:'露', moves:['Ripple', 'Spring Jet', 'Mist Dance', 'Fountain Lance', 'Fountain Lance Max'] },
-  grass_fairy: { name:'Grass Fairy',  el:'Grass',  evo:[115], glyph:'芽', moves:['Petal Puff', 'Seed Flurry', 'Blossom Wind', 'Gratitude Beam', 'Gratitude Beam Max'] },
-  grass_sprite:{ name:'Grass Sprite', el:'Grass',  glyph:'叶', moves:['Leaf Flick', 'Vine Ribbon', 'Meadow Song', 'Thorn Waltz', 'Thorn Waltz Max'] },
-  fire_sprite: { name:'Fire Sprite',  el:'Fire',   glyph:'烛', moves:['Spark Kiss', 'Ember Ribbon', 'Lantern Ring', 'Sunflare', 'Sunflare Max'] },
-  bonedancer:  { name:'Bonedancer',   el:'Fire',   glyph:'舞', moves:['Bone Tap', 'Ghostfire', 'Skull Shuffle', 'Flame Dance', 'Flame Dance Max'] },
-  earth_fairy: { name:'Earth Fairy',  el:'Ground', glyph:'星', moves:['Pebble Wish', 'Star Dust', 'Rock Ring', 'Wishing Quake', 'Wishing Quake Max'] },
-  earth_sprite:{ name:'Earth Sprite', el:'Ground', glyph:'土', moves:['Mud Flick', 'Clay Charm', 'Sand Veil', 'Stone Song', 'Stone Song Max'] },
+  water_fairy: { name:'Water Fairy',  el:'Water',  evo:[115], glyph:'泉', role:'buff', kit:[            // a healer: its side cleansed each turn
+    ['Basic', 'Splash Charm', 0.25, 'Single', 2, 1],
+    ['Power1', 'Dew Drop', null, 'Self', 4, 5, { mend:{ pct:0.15, fleece:{ reduce:0.10, turns:2 } } }],
+    ['Power2', 'Tide Twirl', null, 'Passive', 0, 21, { passive:{ cleanseEnd:1 } }],
+    ['Ultimate', 'Moon Tide', 0.8, 'AOE', 8, 41, { softenHit:{ chance:0.5, amount:0.5 } }],
+    ['Max', 'Moon Tide Max', 1.0, 'AOE', 8, 51, { softenHit:{ chance:1, amount:0.5 } }]] },
+  water_sprite:{ name:'Water Sprite', el:'Water',  glyph:'露', role:'debuff', kit:[                     // a blinder: the other side a step later
+    ['Basic', 'Ripple', 0.25, 'Single', 2, 1, { softenHit:{ chance:0.2, amount:0.5 } }],
+    ['Power1', 'Spring Jet', 0.4, 'AOE', 4, 5, { softenHit:{ chance:0.25, amount:0.5 } }],
+    ['Power2', 'Mist Dance', null, 'Passive', 0, 21, { passive:{ undertow:1, undertowName:'Mist Dance' } }],
+    ['Ultimate', 'Fountain Lance', 1.0, 'Single', 8, 41, { blindHit:{ miss:0.25, turns:2 } }],
+    ['Max', 'Fountain Lance Max', 1.25, 'Single', 8, 51, { blindHit:{ miss:0.25, turns:2 }, softenHit:{ chance:1, amount:0.5 } }]] },
+  grass_fairy: { name:'Grass Fairy',  el:'Grass',  evo:[115], glyph:'芽', role:'buff', kit:[             // its side deals more
+    ['Basic', 'Petal Puff', 0.25, 'Single', 2, 1],
+    ['Power1', 'Seed Flurry', 0.4, 'AOE', 4, 5, { shieldGain:1 }],
+    ['Power2', 'Blossom Wind', null, 'Passive', 0, 21, { passive:{ empower:0.12 } }],
+    ['Ultimate', 'Gratitude Beam', 0.8, 'Single', 8, 41, { softenHit:{ chance:1, amount:0.5 } }],
+    ['Max', 'Gratitude Beam Max', 1.0, 'AOE', 8, 51, { softenHit:{ chance:1, amount:0.5 } }]] },
+  grass_sprite:{ name:'Grass Sprite', el:'Grass',  glyph:'叶', role:'debuff', kit:[                     // a lullaby over the other side
+    ['Basic', 'Leaf Flick', 0.25, 'Single', 2, 1],
+    ['Power1', 'Vine Ribbon', 0.4, 'Single', 4, 5, { stunHit:0.2 }],
+    ['Power2', 'Meadow Song', null, 'Passive', 0, 21, { passive:{ drowse:0.1 } }],
+    ['Ultimate', 'Thorn Waltz', 0.7, 'AOE', 8, 41, { stunHit:0.15 }],
+    ['Max', 'Thorn Waltz Max', 0.9, 'AOE', 8, 51, { stunHit:0.2 }]] },
+  fire_sprite: { name:'Fire Sprite',  el:'Fire',   glyph:'烛', role:'buff', kit:[                       // its side a step sooner
+    ['Basic', 'Spark Kiss', 0.25, 'Single', 2, 1],
+    ['Power1', 'Ember Ribbon', null, 'Self', 4, 5, { kindle:{ deal:1.2, turns:2 } }],
+    ['Power2', 'Lantern Ring', null, 'Passive', 0, 21, { passive:{ slipstream:1, slipName:'Lantern Ring' } }],
+    ['Ultimate', 'Sunflare', 0.8, 'AOE', 8, 41, { blindHit:{ miss:0.25, turns:1 } }],
+    ['Max', 'Sunflare Max', 1.0, 'AOE', 8, 51, { blindHit:{ miss:0.25, turns:2 } }]] },
+  bonedancer:  { name:'Bonedancer',   el:'Fire',   glyph:'舞', role:'debuff', kit:[                     // the other side deals less
+    ['Basic', 'Bone Tap', 0.25, 'Single', 2, 1],
+    ['Power1', 'Ghostfire', 0.4, 'AOE', 4, 5, { softenHit:{ chance:0.25, amount:0.5 } }],
+    ['Power2', 'Skull Shuffle', null, 'Passive', 0, 21, { passive:{ terrorize:0.1 } }],
+    ['Ultimate', 'Flame Dance', 0.8, 'AOE', 8, 41, { confuseHit:{ chance:0.25, ffPower:0.6 } }],
+    ['Max', 'Flame Dance Max', 1.0, 'AOE', 8, 51, { confuseHit:{ chance:0.3, ffPower:0.6 } }]] },
+  earth_fairy: { name:'Earth Fairy',  el:'Ground', glyph:'星', role:'buff', kit:[                       // its side takes less
+    ['Basic', 'Pebble Wish', 0.25, 'Single', 2, 1],
+    ['Power1', 'Star Dust', null, 'Self', 4, 5, { barrier:{ shields:2, on:'partner', worth:1.5, icon:'⭐' } }],
+    ['Power2', 'Rock Ring', null, 'Passive', 0, 21, { passive:{ ward:0.12, wardName:'Rock Ring' } }],
+    ['Ultimate', 'Wishing Quake', 0.8, 'AOE', 8, 41, { stunHit:0.15 }],
+    ['Max', 'Wishing Quake Max', 1.0, 'AOE', 8, 51, { stunHit:0.2, shieldGain:0.75 }]] },
+  earth_sprite:{ name:'Earth Sprite', el:'Ground', glyph:'土', role:'debuff', kit:[                     // the other side dodges half as often
+    ['Basic', 'Mud Flick', 0.25, 'Single', 2, 1, { softenHit:{ chance:0.2, amount:0.5 } }],
+    ['Power1', 'Clay Charm', null, 'Single', 4, 5, { charm:{ turns:3, chance:0.2 } }],
+    ['Power2', 'Sand Veil', null, 'Passive', 0, 21, { passive:{ trueSight:0.5, sightName:'Sand Veil' } }],
+    ['Ultimate', 'Stone Song', 0.8, 'AOE', 8, 41, { sleepHit:0.2 }],
+    ['Max', 'Stone Song Max', 1.0, 'AOE', 8, 51, { sleepHit:0.25 }]] },
 };
 const JG_ALIENS = {
   alien_cocoon_flying:      { name:'Cocoon',      el:'Flying',   glyph:'茧', moves:['Spike Flick', 'Shell Spin', 'Barbed Gale', 'Pod Dive', 'Pod Dive Max'] },
@@ -132,11 +206,14 @@ function jgKit(names){
 }
 (function jgSpecies(){
   if(typeof SPECIES === 'undefined' || typeof MOVES === 'undefined') return;
+  /* (3.94) wild, as the castle's townsfolk: "no crowns if I have not uploaded
+     them, i.e. these are all wild tier monsters" (elite until 3.94; a save's
+     crowned one gives its Crown back: runProfileMigrations) */
   Object.entries(JG_FOLK).forEach(([id, f])=>{
     const tribe = JG_TRIBE_KEYS.find(k=> JG_TRIBES[k].members.includes(id));
-    SPECIES[id] = { name:f.name, tier:'elite', types:[f.el, 'Fairy'], rate:11, nerfedRate:11, base:100, evo:f.evo || [], color:TYPE_COLORS[f.el] || '#c98bd0',
+    SPECIES[id] = { name:f.name, tier:'wild', types:[f.el, 'Fairy'], rate:11, nerfedRate:11, base:100, evo:f.evo || [], color:TYPE_COLORS[f.el] || '#c98bd0',
                     glyph:f.glyph, bossOnly:true, tribe };
-    MOVES[id] = jgKit(f.moves);
+    MOVES[id] = f.kit ? f.kit.map(r=> r.slice()) : jgKit(f.moves);   // (3.96) their own kits
   });
   Object.entries(JG_ALIENS).forEach(([id, a])=>{
     SPECIES[id] = { name:a.name, tier:'elite', types:a.el ? [a.el] : [], rate:11, nerfedRate:11, base:150, evo:[], color:a.el ? TYPE_COLORS[a.el] : '#7a2430',
@@ -153,111 +230,228 @@ const JG_SOLID = [true, false, true, false, false, true, true, true, true, false
 function jgRng(seed){ let a = seed >>> 0; return ()=>{ a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 function jgHash(x, y, k){ let h = (x * 374761393 + y * 668265263 + (k || 0) * 2147483647) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 let _jgGround = null;
+/* (3.95) 300 squares across. The maze is made on cells: each cell one square
+   (on the odd rows and columns), each wall between two cells one square (on
+   the even), so every path is one square wide. A growing tree over every
+   cell that is left to it; then, in the woods only, most dead ends opened
+   on and more walls knocked through. The corners keep theirs: a real maze
+   round each village. The designer: "is it possible to have landmarks more
+   circular? villages, lakes, should approximate ovoids or circles" — so the
+   villages, the lakes, the clearings and the glade you arrive in are ovals
+   and circles, each with an edge of trees (the cells within 2 squares of it
+   left out of the maze), and the ways into them dug through it. The maze
+   itself, and the castle (64 × 64, as its own maps are), stay square. */
 function jgGround(){
   if(_jgGround) return _jgGround;
-  const { W, H } = JG, C = JG.cell, CW = W / C, CH = H / C;          // 150 × 150 cells
+  const { W, H } = JG, CW = (W - 1) >> 1, CH = (H - 1) >> 1;         // 149 × 149 cells
   const R = jgRng(JG.seed), ri = n=> Math.floor(R() * n);
-  const g = new Uint8Array(W * H);                                    // all hedge
+  const mix = list=>{ for(let i = list.length - 1; i > 0; i--){ const j = ri(i + 1); const t = list[i]; list[i] = list[j]; list[j] = t; } return list; };
+  const g = new Uint8Array(W * H);                                    // all forest
   const put = (x, y, t)=>{ if(x >= 0 && y >= 0 && x < W && y < H) g[y * W + x] = t; };
-  const cellOpen = (i, j)=>{ for(let dy = 0; dy < 2; dy++) for(let dx = 0; dx < 2; dx++) put(i * C + dx, j * C + dy, JG_T.PATH); };
-  const knock = (i, j, dx, dy)=>{                                     // the hedge between two cells: two squares
-    if(dx === 1){ put(i * C + 2, j * C, JG_T.PATH); put(i * C + 2, j * C + 1, JG_T.PATH); }
-    if(dx === -1){ put((i - 1) * C + 2, j * C, JG_T.PATH); put((i - 1) * C + 2, j * C + 1, JG_T.PATH); }
-    if(dy === 1){ put(i * C, j * C + 2, JG_T.PATH); put(i * C + 1, j * C + 2, JG_T.PATH); }
-    if(dy === -1){ put(i * C, (j - 1) * C + 2, JG_T.PATH); put(i * C + 1, (j - 1) * C + 2, JG_T.PATH); }
-  };
-  /* the maze: a growing tree, half newest (long runs), half at random (branches) */
-  const seen = new Uint8Array(CW * CH), links = new Uint8Array(CW * CH);   // bits: 1 E, 2 S, 4 W, 8 N
-  const DIRS = [[1, 0, 1, 4], [0, 1, 2, 8], [-1, 0, 4, 1], [0, -1, 8, 2]];
-  const stack = [[CW - 1, Math.floor(CH / 2)]];
-  seen[stack[0][1] * CW + stack[0][0]] = 1; cellOpen(stack[0][0], stack[0][1]);
-  while(stack.length){
-    const k = R() < JG.newest ? stack.length - 1 : ri(stack.length);
-    const [i, j] = stack[k];
-    const opts = DIRS.filter(([dx, dy])=>{ const a = i + dx, b = j + dy; return a >= 0 && b >= 0 && a < CW && b < CH && !seen[b * CW + a]; });
-    if(!opts.length){ stack.splice(k, 1); continue; }
-    const [dx, dy, bit, back] = opts[ri(opts.length)];
-    const a = i + dx, b = j + dy;
-    seen[b * CW + a] = 1; links[j * CW + i] |= bit; links[b * CW + a] |= back;
-    cellOpen(a, b); knock(i, j, dx, dy);
-    stack.push([a, b]);
-  }
-  /* loops: some dead ends opened on through one more hedge */
-  const deg = v=> (v & 1) + ((v >> 1) & 1) + ((v >> 2) & 1) + ((v >> 3) & 1);
-  for(let j = 0; j < CH; j++) for(let i = 0; i < CW; i++){
-    if(deg(links[j * CW + i]) !== 1 || R() >= JG.braid) continue;
-    const opts = DIRS.filter(([dx, dy, bit])=>{ const a = i + dx, b = j + dy; return !(links[j * CW + i] & bit) && a >= 0 && b >= 0 && a < CW && b < CH; });
-    if(!opts.length) continue;
-    const [dx, dy, bit, back] = opts[ri(opts.length)];
-    links[j * CW + i] |= bit; links[(j + dy) * CW + i + dx] |= back;
-    knock(i, j, dx, dy);
-  }
+  const at = (x, y)=> (x < 0 || y < 0 || x >= W || y >= H) ? JG_T.HEDGE : g[y * W + x];
   const fill = (x0, y0, w, h, t)=>{ for(let y = y0; y < y0 + h; y++) for(let x = x0; x < x0 + w; x++) put(x, y, t); };
-  const places = { villages:{}, castle:null, entry:null, lakes:[], glades:[] };
+  const oval = (x, y, cx, cy, rx, ry)=> ((x - cx) / rx) * ((x - cx) / rx) + ((y - cy) / ry) * ((y - cy) / ry) <= 1;
+  const fillOval = (cx, cy, rx, ry, t)=>{ for(let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) for(let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) if(oval(x, y, cx, cy, rx, ry)) put(x, y, t); };
+  const TX = i=> 2 * i + 1;                                           // a cell's square, across or down
+  const CA = JG.corner, EDGE = 2.2;                                   // a round place's edge of trees: the maze keeps this far off
+  const inCorner = (x, y)=> (x < CA || x >= W - CA) && (y < CA || y >= H - CA);
+  const zoneOf = (i, j)=> inCorner(TX(i), TX(j)) ? 'maze' : 'wood';
+  /* cells the maze keeps out of: 1 a place (village, castle, the way in, a lake), 2 a thicket */
+  const keep = new Uint8Array(CW * CH);
+  const span = (a, b)=> [Math.max(0, Math.ceil((a - 1) / 2)), Math.min(CW - 1, Math.floor((b - 1) / 2))];
+  const keepRect = (x0, y0, x1, y1, v)=>{ const [i0, i1] = span(x0, x1), [j0, j1] = span(y0, y1); for(let j = j0; j <= j1; j++) for(let i = i0; i <= i1; i++) keep[j * CW + i] = v; };
+  const keepOval = (cx, cy, rx, ry, v)=>{
+    const [i0, i1] = span(cx - rx - EDGE - 1, cx + rx + EDGE + 1), [j0, j1] = span(cy - ry - EDGE - 1, cy + ry + EDGE + 1);
+    for(let j = j0; j <= j1; j++) for(let i = i0; i <= i1; i++) if(oval(TX(i), TX(j), cx, cy, rx + EDGE, ry + EDGE)) keep[j * CW + i] = v;
+  };
+  const places = { villages:{}, castle:null, entry:null, lakes:[], glades:[], gates:[] };
   const busy = [];
   const clash = (x, y, w, h, pad)=> busy.some(b=> x < b.x + b.w + pad && x + w + pad > b.x && y < b.y + b.h + pad && y + h + pad > b.y);
-  /* the castle: the middle; a ring of road round its walls; the gate in its south wall */
-  const CS = 64, cx0 = Math.floor((W - CS) / 2), cy0 = Math.floor((H - CS) / 2), ring = 4;
-  fill(cx0 - ring, cy0 - ring, CS + ring * 2, CS + ring * 2, JG_T.ROAD);
+  /* the castle in the middle (64 × 64, as its own maps are), a road 4 wide round its walls */
+  const CS = 64, cx0 = (W - CS) >> 1, cy0 = (H - CS) >> 1, ring = 4;
+  const road = { x:cx0 - ring, y:cy0 - ring, w:CS + ring * 2, h:CS + ring * 2 };
+  keepRect(road.x - 1, road.y - 1, road.x + road.w + 1, road.y + road.h + 1, 1);
+  busy.push({ x:road.x - 2, y:road.y - 2, w:road.w + 4, h:road.h + 4 });
+  /* the villages: ovals 35 across at most, set into their corners, a maze all round each */
+  const VS = JG.village, off = 25;
+  const VSHAPE = { grass:[17.5, 17.5], water:[17.5, 16.2], earth:[16.2, 17.5], fire:[17.5, 16.8] };
+  const corners = { nw:[off, off], ne:[W - off - VS - 1, off], sw:[off, H - off - VS - 1], se:[W - off - VS - 1, H - off - VS - 1] };
+  const vill = {};
+  JG_TRIBE_KEYS.forEach(k=>{
+    const [vx, vy] = corners[JG_TRIBES[k].corner], [rx, ry] = VSHAPE[k], cx = vx + (VS >> 1), cy = vy + (VS >> 1);
+    vill[k] = { vx, vy, cx, cy, rx, ry };
+    keepOval(cx, cy, rx, ry, 1);
+    busy.push({ x:vx - 3, y:vy - 3, w:VS + 6, h:VS + 6 });
+  });
+  /* the way in: a half-round glade at the east edge, half way down */
+  const ecx = W - 1, ecy = H >> 1, er = 5.6;
+  keepOval(ecx, ecy, er, er, 1);
+  busy.push({ x:W - 10, y:ecy - 9, w:10, h:19 });
+  /* lakes, in the woods: ovals, their cells kept out, a shore all round */
+  let tries = 0;
+  while(places.lakes.length < JG.lakes && tries++ < 4000){
+    const rx = 7.5 + R() * 3, ry = 5.5 + R() * 2.5, cx = 14 + ri(W - 28), cy = 14 + ri(H - 28);
+    const x = Math.floor(cx - rx), y = Math.floor(cy - ry), w = Math.ceil(2 * rx) + 1, h = Math.ceil(2 * ry) + 1;
+    if(x < 5 || y < 5 || x + w > W - 5 || y + h > H - 5) continue;
+    if(inCorner(x, y) || inCorner(x + w, y) || inCorner(x, y + h) || inCorner(x + w, y + h) || clash(x, y, w, h, 10)) continue;
+    keepOval(cx, cy, rx, ry, 1);
+    places.lakes.push({ x, y, w, h, cx, cy, rx, ry }); busy.push({ x, y, w, h });
+  }
+  /* thickets: here and there a cell left wild — three trees deep, more where two touch */
+  const nearPlace = (i, j)=> [[1, 0], [-1, 0], [0, 1], [0, -1], [0, 0]].some(([a, b])=>{ const u = i + a, v = j + b; return u >= 0 && v >= 0 && u < CW && v < CH && keep[v * CW + u] === 1; });
+  for(let j = 0; j < CH; j++) for(let i = 0; i < CW; i++){
+    if(keep[j * CW + i] || R() >= JG.thick[zoneOf(i, j)] || nearPlace(i, j)) continue;
+    keep[j * CW + i] = 2;
+    if(R() < 0.4){
+      const [a, b] = [[1, 0], [0, 1], [-1, 0], [0, -1]][ri(4)], u = i + a, v = j + b;
+      if(u >= 0 && v >= 0 && u < CW && v < CH && !keep[v * CW + u] && !nearPlace(u, v)) keep[v * CW + u] = 2;
+    }
+  }
+  /* the maze: a growing tree, mostly from the newest (long winding runs), now and then from anywhere (branches) */
+  const seen = new Uint8Array(CW * CH), links = new Uint8Array(CW * CH);   // bits: 1 E, 2 S, 4 W, 8 N
+  const DIRS = [[1, 0, 1, 4], [0, 1, 2, 8], [-1, 0, 4, 1], [0, -1, 8, 2]];
+  const free = (i, j)=> i >= 0 && j >= 0 && i < CW && j < CH && !keep[j * CW + i];
+  const openCell = (i, j)=> put(TX(i), TX(j), JG_T.PATH);
+  const knock = (i, j, dx, dy)=> put(TX(i) + dx, TX(j) + dy, JG_T.PATH);
+  const si = (W - 13) >> 1, sj = (ecy - 1) >> 1;                       // a cell a little way in from the way in
+  keep[sj * CW + si] = 0;
+  const stack = [sj * CW + si];
+  seen[sj * CW + si] = 1; openCell(si, sj);
+  while(stack.length){
+    const k = R() < JG.newest ? stack.length - 1 : ri(stack.length);
+    const c = stack[k], i = c % CW, j = (c - i) / CW;
+    const opts = DIRS.filter(([dx, dy])=> free(i + dx, j + dy) && !seen[(j + dy) * CW + i + dx]);
+    if(!opts.length){ stack[k] = stack[stack.length - 1]; stack.pop(); continue; }
+    const [dx, dy, bit, back] = opts[ri(opts.length)];
+    const a = i + dx, b = j + dy;
+    seen[b * CW + a] = 1; links[c] |= bit; links[b * CW + a] |= back;
+    openCell(a, b); knock(i, j, dx, dy);
+    stack.push(b * CW + a);
+  }
+  /* loops: dead ends opened on (most, in the woods; a few, in the corners), and in the woods more walls knocked through */
+  const deg = v=> (v & 1) + ((v >> 1) & 1) + ((v >> 2) & 1) + ((v >> 3) & 1);
+  const link = (i, j, d)=>{ const [dx, dy, bit, back] = DIRS[d]; links[j * CW + i] |= bit; links[(j + dy) * CW + i + dx] |= back; knock(i, j, dx, dy); };
+  for(let j = 0; j < CH; j++) for(let i = 0; i < CW; i++){
+    const c = j * CW + i;
+    if(!seen[c] || deg(links[c]) !== 1 || R() >= JG.braid[zoneOf(i, j)]) continue;
+    const opts = [0, 1, 2, 3].filter(d=>{ const [dx, dy, bit] = DIRS[d]; return !(links[c] & bit) && free(i + dx, j + dy) && seen[(j + dy) * CW + i + dx]; });
+    if(opts.length) link(i, j, opts[ri(opts.length)]);
+  }
+  for(let j = 0; j < CH; j++) for(let i = 0; i < CW; i++){
+    const c = j * CW + i;
+    if(!seen[c] || zoneOf(i, j) !== 'wood') continue;
+    for(const d of [0, 1]){
+      const [dx, dy, bit] = DIRS[d];
+      if(!(links[c] & bit) && free(i + dx, j + dy) && seen[(j + dy) * CW + i + dx] && zoneOf(i + dx, j + dy) === 'wood' && R() < JG.loops) link(i, j, d);
+    }
+  }
+  /* clearings, now and then: a round patch of open grass where the paths meet (a tree or two standing in the big ones) */
+  tries = 0;
+  const made = { maze:0, wood:0 }, want = { maze:JG.clearings.maze * 4, wood:JG.clearings.wood };
+  while((made.maze < want.maze || made.wood < want.wood) && tries++ < 8000){
+    const ci = 3 + ri(CW - 6), cj = 3 + ri(CH - 6), z = zoneOf(ci, cj);
+    if(made[z] >= want[z] || !seen[cj * CW + ci]) continue;
+    const r = z === 'maze' ? 1.6 + R() * 0.9 : 2.2 + R() * 2.3, cx = TX(ci), cy = TX(cj);
+    const x = Math.floor(cx - r), y = Math.floor(cy - r), w = Math.ceil(2 * r) + 1;
+    if(clash(x, y, w, w, 3) || inCorner(cx, cy) !== (z === 'maze')) continue;
+    fillOval(cx, cy, r, r, JG_T.GLADE);
+    if(r >= 3.4){ const n = 1 + Math.floor(r * r / 9); for(let k = 0; k < n; k++){ const a = R() * Math.PI * 2, d = R() * (r - 1.6); put(Math.round(cx + Math.cos(a) * d), Math.round(cy + Math.sin(a) * d), JG_T.TREE); } }
+    places.glades.push({ x, y, w, h:w, cx, cy, r, zone:z }); busy.push({ x, y, w, h:w }); made[z]++;
+  }
+  /* a way out of a round place: from its middle along an odd row (or column) near it, out
+     of it, then dug through its edge of trees to the first path of the maze */
+  const gate = (cx, cy, dx, dy, inside, spread)=>{
+    const c0 = Math.round(dx ? cy : cx), rows = [];
+    for(let o = -spread; o <= spread; o++){ const p = c0 + o; if(p & 1) rows.push(p); }
+    for(const p of mix(rows)){
+      let x = dx ? Math.round(cx) : p, y = dx ? p : Math.round(cy);
+      if(!inside(x, y)) continue;
+      for(let guard = 0; inside(x, y) && guard < 80; guard++){ x += dx; y += dy; }
+      if(JG_SOLID[at(x - dx, y - dy)]) continue;                      // it must come out of open ground, not a hut or a tree
+      const dug = [];
+      let ok = false;
+      for(let k = 0; k < 7; k++){
+        if(x < 1 || y < 1 || x >= W - 1 || y >= H - 1) break;
+        const t = at(x, y);
+        if(!JG_SOLID[t]){ ok = t === JG_T.PATH || t === JG_T.GLADE; break; }
+        dug.push([x, y, t]); put(x, y, JG_T.PATH); x += dx; y += dy;
+      }
+      if(ok && dug.length){ places.gates.push({ x:dug[0][0], y:dug[0][1] }); return true; }
+      dug.forEach(([a, b, t])=> put(a, b, t));
+    }
+    return false;
+  };
+  /* openings along one side of the castle's road: `n` of them, spread out, each where the maze reaches it */
+  const openSide = (fixed, from, to, horiz, dir, n, avoid)=>{
+    for(let s = 0; s < n; s++){
+      const lo = from + Math.floor((to - from) * s / n), hi = from + Math.floor((to - from) * (s + 1) / n);
+      const cand = [];
+      for(let p = lo; p <= hi; p++) if(p % 2 === 1 && !(avoid && avoid(p))) cand.push(p);
+      for(const p of mix(cand)){
+        const x = horiz ? p : fixed, y = horiz ? fixed : p, dx = horiz ? 0 : dir, dy = horiz ? dir : 0;
+        let far = 1; while(far <= 4 && JG_SOLID[at(x + dx * far, y + dy * far)]) far++;
+        const fx = x + dx * far, fy = y + dy * far;
+        if(far > 4 || fx < 1 || fy < 1 || fx >= W - 1 || fy >= H - 1 || at(fx, fy) !== JG_T.PATH) continue;
+        for(let k = 1; k < far; k++) put(x + dx * k, y + dy * k, JG_T.PATH);
+        places.gates.push({ x:x + dx, y:y + dy });
+        break;
+      }
+    }
+  };
+  /* the castle: the road round its walls; the castle; the gate in its south wall; ways in from the woods on every side */
+  fill(road.x, road.y, road.w, road.h, JG_T.ROAD);
   fill(cx0, cy0, CS, CS, JG_T.CASTLE);
   const gx = cx0 + CS / 2 - 2;
   fill(gx, cy0 + CS - 3, 4, 3, JG_T.GATE);
   places.castle = { x:cx0, y:cy0, w:CS, h:CS, gx, gate:{ x:gx, y:cy0 + CS - 1, w:4 }, stand:{ x:gx + 1, y:cy0 + CS + 2 },
-                    knights:[{ x:gx - 1, y:cy0 + CS }, { x:gx + 4, y:cy0 + CS }] };
-  busy.push({ x:cx0 - ring, y:cy0 - ring, w:CS + ring * 2, h:CS + ring * 2 });
-  /* the villages, in the corners: open ground, eight huts round a green, the guardian's lodge at the back */
-  const VS = 36, corners = { nw:[2, 2], ne:[W - VS - 3, 2], sw:[2, H - VS - 3], se:[W - VS - 3, H - VS - 3] };
+                    knights:[{ x:gx - 1, y:cy0 + CS }, { x:gx + 4, y:cy0 + CS }], road };
+  const rx1 = road.x + road.w - 1, ry1 = road.y + road.h - 1;
+  openSide(road.x, road.y + 3, ry1 - 3, false, -1, 3);
+  openSide(rx1, road.y + 3, ry1 - 3, false, 1, 3);
+  openSide(road.y, road.x + 3, rx1 - 3, true, -1, 3);
+  openSide(ry1, road.x + 3, rx1 - 3, true, 1, 3, p=> p >= gx - 6 && p <= gx + 9);
+  /* the villages: open ground, eight huts round a green, the guardian's lodge in the middle; two gates, towards the middle of the jungle */
   JG_TRIBE_KEYS.forEach(k=>{
-    const [vx, vy] = corners[JG_TRIBES[k].corner];
-    fill(vx, vy, VS, VS, JG_T.VILLAGE);
+    const { vx, vy, cx, cy, rx, ry } = vill[k], c = JG_TRIBES[k].corner;
+    fillOval(cx, cy, rx, ry, JG_T.VILLAGE);
     const huts = [];
     for(let n = 0; n < 8; n++){
-      const ang = n / 8 * Math.PI * 2 + 0.3, rr = VS * 0.33;
-      const hx = Math.round(vx + VS / 2 + Math.cos(ang) * rr) - 2, hy = Math.round(vy + VS / 2 + Math.sin(ang) * rr) - 2;
+      const ang = n / 8 * Math.PI * 2 + 0.3;
+      const hx = Math.round(cx + 0.5 + Math.cos(ang) * rx * 0.66) - 2, hy = Math.round(cy + 0.5 + Math.sin(ang) * ry * 0.66) - 2;
       fill(hx, hy, 4, 3, JG_T.HUT); huts.push({ x:hx, y:hy, w:4, h:3 });
     }
-    const lodge = { x:vx + VS / 2 - 3, y:vy + VS / 2 - 3, w:6, h:4 };
+    const lodge = { x:cx - 3, y:cy - 3, w:6, h:4 };
     fill(lodge.x, lodge.y, lodge.w, lodge.h, JG_T.HUT);
-    places.villages[k] = { x:vx, y:vy, w:VS, h:VS, huts, lodge, guardian:{ x:lodge.x + 2, y:lodge.y + lodge.h }, stand:{ x:lodge.x + 2, y:lodge.y + lodge.h + 2 } };
-    /* trees about the village, clear of the huts, the green and the lodge's front */
-    for(let n = 0, tr = 0; n < 34 && tr < 400; tr++){
+    places.villages[k] = { x:vx, y:vy, w:VS, h:VS, cx, cy, rx, ry, huts, lodge, guardian:{ x:lodge.x + 2, y:lodge.y + lodge.h }, stand:{ x:lodge.x + 2, y:lodge.y + lodge.h + 2 } };
+    for(let n = 0, tr = 0; n < 26 && tr < 500; tr++){
       const tx = vx + 1 + ri(VS - 2), ty = vy + 1 + ri(VS - 2);
-      if(Math.hypot(tx - (vx + VS / 2), ty - (vy + VS / 2)) < 8) continue;
+      if(!oval(tx, ty, cx, cy, rx - 1.8, ry - 1.8) || Math.hypot(tx - cx, ty - cy) < 8) continue;
       if(huts.concat([lodge]).some(h=> tx >= h.x - 2 && tx < h.x + h.w + 2 && ty >= h.y - 2 && ty < h.y + h.h + 3)) continue;
       if(g[ty * W + tx] !== JG_T.VILLAGE) continue;
       g[ty * W + tx] = JG_T.TREE; n++;
     }
-    busy.push({ x:vx, y:vy, w:VS, h:VS });
+    const inV = (x, y)=> oval(x, y, cx, cy, rx, ry);
+    gate(cx, cy, c[1] === 'w' ? 1 : -1, 0, inV, 9);
+    gate(cx, cy, 0, c[0] === 'n' ? 1 : -1, inV, 9);
   });
-  /* the way in: the east edge, half way down — a small glade, the portal at its edge */
-  const ey = Math.floor(H / 2) - 4, ex = W - 10;
-  fill(ex, ey, 10, 9, JG_T.ENTRY);
-  places.entry = { x:ex, y:ey, w:10, h:9, portal:{ x:W - 2, y:ey + 3, w:2, h:2 }, stand:{ x:W - 4, y:ey + 4 } };
-  busy.push({ x:ex, y:ey, w:10, h:9 });
-  /* lakes: water with a shore of open ground all round it (so no way is cut) */
-  let tries = 0;
-  while(places.lakes.length < JG.lakes && tries++ < 2000){
-    const w = 14 + ri(18), h = 10 + ri(14), x = 6 + ri(W - w - 12), y = 6 + ri(H - h - 12);
-    if(clash(x, y, w, h, 8)) continue;
-    fill(x, y, w, h, JG_T.SHORE);
-    const cxl = x + w / 2, cyl = y + h / 2, rx = w / 2 - 2.2, ry = h / 2 - 2.2;
-    for(let yy = y; yy < y + h; yy++) for(let xx = x; xx < x + w; xx++){
-      const d = ((xx + .5 - cxl) / rx) ** 2 + ((yy + .5 - cyl) / ry) ** 2;
-      if(d < 0.82 + 0.18 * Math.sin(xx * 0.9 + yy * 1.3)) g[yy * W + xx] = JG_T.WATER;
+  /* the way in: the half-round glade at the east edge, the portal at its edge; two ways west into the woods */
+  fillOval(ecx, ecy, er, er, JG_T.ENTRY);
+  places.entry = { x:W - 6, y:ecy - 5, w:6, h:11, portal:{ x:W - 2, y:ecy - 1, w:2, h:2 }, stand:{ x:W - 4, y:ecy } };
+  const inE = (x, y)=> x < W && oval(x, y, ecx, ecy, er, er);
+  gate(ecx, ecy - 2, -1, 0, inE, 1);
+  gate(ecx, ecy + 2, -1, 0, inE, 1);
+  /* the lakes: water with a shore of open ground all round it, and ways onto the shore from every side the maze reaches */
+  places.lakes.forEach(L=>{
+    fillOval(L.cx, L.cy, L.rx, L.ry, JG_T.SHORE);
+    const wx = L.rx - 2.4, wy = L.ry - 2.4;
+    for(let yy = L.y; yy < L.y + L.h; yy++) for(let xx = L.x; xx < L.x + L.w; xx++){
+      const d = ((xx - L.cx) / wx) ** 2 + ((yy - L.cy) / wy) ** 2;
+      if(d < 0.86 + 0.14 * Math.sin(xx * 0.9 + yy * 1.3)) g[yy * W + xx] = JG_T.WATER;
     }
-    places.lakes.push({ x, y, w, h }); busy.push({ x, y, w, h });
-  }
-  /* glades: open grass, a few trees standing in them */
-  tries = 0;
-  while(places.glades.length < JG.glades && tries++ < 3000){
-    const w = 6 + ri(10), h = 6 + ri(10), x = 4 + ri(W - w - 8), y = 4 + ri(H - h - 8);
-    if(clash(x, y, w, h, 6)) continue;
-    fill(x, y, w, h, JG_T.GLADE);
-    const n = Math.floor(w * h / 40);
-    for(let k = 0; k < n; k++) put(x + 2 + ri(w - 4), y + 2 + ri(h - 4), JG_T.TREE);
-    places.glades.push({ x, y, w, h }); busy.push({ x, y, w, h });
-  }
-  /* anything walkable that cannot be reached from the way in goes back to hedge (a glade's tree can box in a square) */
+    const inL = (x, y)=> oval(x, y, L.cx, L.cy, L.rx, L.ry);
+    [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy])=> gate(L.cx, L.cy, dx, dy, inL, 3));
+  });
+  /* anything walkable that cannot be reached from the way in goes back to forest */
   const reach = new Uint8Array(W * H), q = new Int32Array(W * H);
   let qh = 0, qt = 0; const s0 = places.entry.stand.y * W + places.entry.stand.x; q[qt++] = s0; reach[s0] = 1;
   while(qh < qt){
@@ -268,14 +462,15 @@ function jgGround(){
     if(y < H - 1){ const u = v + W; if(!reach[u] && !JG_SOLID[g[u]]){ reach[u] = 1; q[qt++] = u; } }
   }
   for(let i = 0; i < W * H; i++) if(!JG_SOLID[g[i]] && !reach[i]) g[i] = JG_T.HEDGE;
-  _jgGround = { g, W, H, places, R };
+  _jgGround = { g, W, H, places, R, inCorner };
   return _jgGround;
 }
 function jgTile(x, y){ const G = jgGround(); return (x < 0 || y < 0 || x >= G.W || y >= G.H) ? JG_T.HEDGE : G.g[y * G.W + x]; }
 function jgSolidAt(x, y){ return JG_SOLID[jgTile(x, y)]; }
 function jgVillageAt(x, y){
   const V = jgGround().places.villages;
-  return JG_TRIBE_KEYS.find(k=>{ const v = V[k]; return x >= v.x && y >= v.y && x < v.x + v.w && y < v.y + v.h; }) || null;
+  /* (3.95) its oval, not the square round it (the maze runs in the corners of that) */
+  return JG_TRIBE_KEYS.find(k=>{ const v = V[k], a = (x - v.cx) / v.rx, b = (y - v.cy) / v.ry; return a * a + b * b <= 1; }) || null;
 }
 /* the nearest tribe's lands: whose people its aliens hold */
 function jgTribeOf(x, y){
@@ -284,55 +479,87 @@ function jgTribeOf(x, y){
   JG_TRIBE_KEYS.forEach(k=>{ const v = V[k], d = Math.hypot(v.x + v.w / 2 - x, v.y + v.h / 2 - y); if(d < bd){ bd = d; best = k; } });
   return best;
 }
-/* (3.90) Whose people a band holds: near the castle (closer to it than 0.7 of
-   the way to the nearest village — 23 bands of 107, the commander's among
-   them), the castle's own (CA_CITIZENS, 21-castle.js); elsewhere the nearest
-   tribe's. Worked out from where it stands, nothing drawn from the seed, so
-   every band stands where it always did. */
-const JG_CASTLE_ZONE = 0.7;
-function jgZoneOf(x, y){
-  const G = jgGround(), C = G.places.castle, V = G.places.villages;
-  const dc = Math.hypot(C.x + C.w / 2 - x, C.y + C.h / 2 - y);
-  const dv = Math.min(...JG_TRIBE_KEYS.map(k=> Math.hypot(V[k].x + V[k].w / 2 - x, V[k].y + V[k].h / 2 - y)));
-  return (typeof CA_CITIZENS !== 'undefined' && dc < dv * JG_CASTLE_ZONE) ? 'castle' : jgTribeOf(x, y);
-}
+/* (3.95) Whose people a band holds: everyone's — the designer: "do not
+   divide the captured fairies in waves by region" (jgCaptivePick). A band
+   still knows the village it is nearest. */
+function jgZoneOf(x, y){ return jgTribeOf(x, y); }
 
 /* ============================================================
-   THE ALIENS — where each band stands, made from the seed too
+   THE ALIENS — where each band stands, made again each day
+   (3.95) 360 of them: 36 commanders' bands, 54 captains', and 270 lone
+   aliens, 22 of each kind of alien and 23 of six kinds (which six, the
+   day's draw). Where they stand is the day's draw too, from a seed of the
+   day: everyone meets the same jungle that day, and a different one the
+   next. Never right by a village, the way in or the castle gate.
    ============================================================ */
-let _jgBands = null;
+let _jgBands = null, _jgBandsDay = null;
+function jgDaySeed(day){ let h = 2166136261; const s = String(day); for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function jgBands(){
-  if(_jgBands) return _jgBands;
+  const day = today();
+  if(_jgBands && _jgBandsDay === day) return _jgBands;
   const G = jgGround(), { W, H, places } = G, A = JG.aliens;
-  const R = jgRng(JG.seed ^ 0x51ed), ri = n=> Math.floor(R() * n);
+  const R = jgRng((JG.seed ^ 0x51ed ^ jgDaySeed(day)) >>> 0), ri = n=> Math.floor(R() * n);
+  const mix = list=>{ for(let i = list.length - 1; i > 0; i--){ const j = ri(i + 1); const t = list[i]; list[i] = list[j]; list[j] = t; } return list; };
   const C = places.castle, ccx = C.x + C.w / 2, ccy = C.y + C.h / 2, far = Math.hypot(ccx, ccy);
   const safe = [places.entry, ...Object.values(places.villages), { x:C.x - 8, y:C.y + C.h - 2, w:C.w + 16, h:14 }];
   const tooNear = (x, y)=> safe.some(s=> x > s.x - A.safe && x < s.x + s.w + A.safe && y > s.y - A.safe && y < s.y + s.h + A.safe);
+  const spots = [];
+  for(let y = 1; y < H - 1; y++) for(let x = 1; x < W - 1; x++){
+    const t = G.g[y * W + x];
+    if((t === JG_T.PATH || t === JG_T.GLADE || t === JG_T.SHORE) && !tooNear(x, y)) spots.push(y * W + x);
+  }
+  mix(spots);
+  /* the lone aliens' kinds: 22 each, and today's six one more */
+  const kinds = [];
+  mix(JG_ALIEN_IDS.slice()).forEach((id, n)=>{ for(let k = 0; k < 22 + (n < 6 ? 1 : 0); k++) kinds.push(id); });
+  mix(kinds);
+  const nReg = A.total - A.commander - A.captain;
+  while(kinds.length < nReg) kinds.push(JG_ALIEN_IDS[ri(JG_ALIEN_IDS.length)]);
+  const ranks = [];
+  for(let k = 0; k < A.commander; k++) ranks.push('commander');
+  for(let k = 0; k < A.captain; k++) ranks.push('captain');
+  for(let k = 0; k < nReg; k++) ranks.push('alien');
+  /* a grid of who stands where, for the gap between bands */
+  const taken = new Int32Array(W * H).fill(-1);
   const bands = [];
-  const ok = (x, y)=> jgTile(x, y) === JG_T.PATH || jgTile(x, y) === JG_T.GLADE || jgTile(x, y) === JG_T.SHORE;
-  const free = (x, y, gap)=> bands.every(b=> Math.abs(b.x - x) + Math.abs(b.y - y) >= gap);
-  const place = (rank, n, inR, outR)=>{
-    let tries = 0;
-    while(n > 0 && tries++ < 40000){
-      const x = 2 + ri(W - 4), y = 2 + ri(H - 4);
-      const d = Math.hypot(x - ccx, y - ccy);
-      if(d < inR || d > outR || !ok(x, y) || tooNear(x, y) || !free(x, y, A.gap)) continue;
-      const lv = Math.round(A.lv[0] + (A.lv[1] - A.lv[0]) * Math.max(0, Math.min(1, 1 - (d - 40) / (far - 40))));
-      const band = { id:'b' + bands.length, rank, x, y, hx:x, hy:y, face:'ldru'[ri(4)], tribe:jgZoneOf(x, y),
-        lv:rank === 'commander' ? A.lv[1] : rank === 'captain' ? Math.min(A.lv[1], lv + 3) : lv,
-        aliens:[] };
-      const n2 = rank === 'commander' ? 4 : rank === 'captain' ? 2 : 1;
-      for(let k = 0; k < n2; k++) band.aliens.push(JG_ALIEN_IDS[ri(JG_ALIEN_IDS.length)]);
-      if(rank === 'commander') band.aliens.push(JG_CAPTAIN, JG_COMMANDER);
-      if(rank === 'captain') band.aliens.push(JG_CAPTAIN);
-      band.lead = band.aliens[band.aliens.length - 1];
-      bands.push(band); n--;
+  const roomy = (x, y, gap)=>{
+    for(let dy = -gap + 1; dy < gap; dy++){
+      const yy = y + dy; if(yy < 0 || yy >= H) continue;
+      const span = gap - 1 - Math.abs(dy);
+      for(let dx = -span; dx <= span; dx++){ const xx = x + dx; if(xx >= 0 && xx < W && taken[yy * W + xx] >= 0) return false; }
     }
+    return true;
   };
-  place('commander', A.commander, 46, 120);
-  place('captain', A.captain, 60, 210);
-  place('alien', A.regular, 44, 400);
-  _jgBands = bands;
+  let si = 0, gap = A.gap, reg = 0;
+  for(let r = 0; r < ranks.length; r++){
+    const rank = ranks[r];
+    let placed = null;
+    for(let pass = 0; pass < 3 && !placed; pass++){
+      for(let n = 0; n < spots.length && !placed; n++){
+        const v = spots[(si + n) % spots.length];
+        const x = v % W, y = (v - x) / W;
+        if(taken[v] >= 0 || !roomy(x, y, gap)) continue;
+        placed = { x, y }; si = (si + n + 1) % spots.length;
+      }
+      if(!placed) gap = Math.max(2, gap - 2);                         // never short of room: a little closer together
+    }
+    if(!placed) break;
+    const { x, y } = placed;
+    const d = Math.hypot(x - ccx, y - ccy);
+    const lv = Math.round(A.lv[0] + (A.lv[1] - A.lv[0]) * Math.max(0, Math.min(1, 1 - (d - 40) / (far - 40))));
+    const band = { id:'b' + bands.length, rank, x, y, hx:x, hy:y, face:'ldru'[ri(4)], tribe:jgTribeOf(x, y),
+      lv:rank === 'commander' ? A.lv[1] : rank === 'captain' ? Math.min(A.lv[1], lv + 3) : lv, aliens:[] };
+    if(rank === 'alien') band.aliens.push(kinds[reg++]);
+    else {
+      for(let k = 0; k < (rank === 'commander' ? 4 : 2); k++) band.aliens.push(JG_ALIEN_IDS[ri(JG_ALIEN_IDS.length)]);
+      if(rank === 'commander') band.aliens.push(JG_CAPTAIN, JG_COMMANDER);
+      else band.aliens.push(JG_CAPTAIN);
+    }
+    band.lead = band.aliens[band.aliens.length - 1];
+    taken[y * W + x] = bands.length;
+    bands.push(band);
+  }
+  _jgBands = bands; _jgBandsDay = day;
   return bands;
 }
 function jgBandBeaten(b){ return jgState().beaten[b.id] === today(); }
@@ -356,8 +583,12 @@ const JG_DECK = {
   rows:Array.from({ length:JG.H }, ()=> JG_ROW),
   bx:0, by:0, bs:1 / 32, nat:[1, 1],
   get spawn(){ const s = jgGround().places.entry.stand; return [s.x, s.y]; },
-  occupied:(x, y)=> jgSolidAt(x, y) || !!jgBandAt(x, y),
+  occupied:(x, y)=> jgSolidAt(x, y) || !!jgBandAt(x, y) || jgFolkAt(x, y),   // (3.96) and the villages' people
   get things(){ return jgThings(); },
+  /* (3.96) its 100 finds (jgFinds): the deck's prizes, as the ship's and the catacombs' are — glinting near you (ownTwinkles: jgShowFinds) */
+  get prizes(){ return jgFinds(); },
+  ownTwinkles:true,
+  get prizeLines(){ return JG_FIND_LINES; },
   nearActs:(d, p)=> jgNearActs(p),
   onStep:(p, d)=> jgStep(p, d),
   onRender:(world, d)=> jgRender(world, d),
@@ -372,11 +603,12 @@ function jgThings(){
   list.push({ x:pt.x, y:pt.y, w:pt.w, h:pt.h, icon:'', verb:'The portal', sub:'Back to the Rift', act:()=> jgHome() });
   JG_TRIBE_KEYS.forEach(k=>{
     const v = P.villages[k], t = JG_TRIBES[k];
-    list.push({ x:v.guardian.x, y:v.guardian.y, w:2, h:1, cls:'jg-npc jg-guardian', html:(tt, px)=> jgMonImg(t.guardian, WALK_T * 2.1),
+    /* (3.96) the designer: "way too big" — 2.1 squares, now 1.6: half as tall again as you */
+    list.push({ x:v.guardian.x, y:v.guardian.y, w:2, h:1, cls:'jg-npc jg-guardian', html:(tt, px)=> jgMonImg(t.guardian, WALK_T * 1.6),
       verb:'Talk', sub:`${t.short} Guardian`, mark:()=> !jgState().met[k], act:()=> jgGuardian(k) });
   });
   P.castle.knights.forEach((kn, i)=>{
-    list.push({ x:kn.x, y:kn.y, cls:'jg-npc jg-knight', html:()=> jgMonImg(JG_GATE_KNIGHT + '_front', WALK_T * 1.5, i === 1, 'fairy_knight_front'),
+    list.push({ x:kn.x, y:kn.y, cls:'jg-npc jg-knight', html:()=> jgMonImg(JG_GATE_KNIGHT + '_front', WALK_T * 1.5, false, 'fairy_knight_front'),
       verb:'Talk', sub:JG_GATE_KNIGHT_NAME, mark:()=> !jgState().met.knights, act:()=> jgKnights(), faceR:i === 1 });
   });
   const g = P.castle.gate;
@@ -394,7 +626,8 @@ function jgThings(){
 function jgMonImg(file, px, flip, alt){
   const w = Math.round(px);
   const err = alt ? `if(!this.dataset.alt){this.dataset.alt=1;this.src='assets/mon/${alt}.png';}else{this.style.display='none';}` : `this.style.display='none'`;
-  return `<img class="jg-art" src="assets/mon/${file}.png" alt="" style="width:${w}px;height:${w}px;${flip ? 'transform:scaleX(-1);' : ''}" onerror="${err}">`;
+  /* (3.96) flipped with scale, not transform: a figure's 1.314 (index.html, .walk-ent img) stays, and its centring with it */
+  return `<img class="jg-art" src="assets/mon/${file}.png" alt="" style="width:${w}px;height:${w}px;${flip ? 'scale:-1 1;' : ''}" onload="spriteFeet(this)" onerror="${err}">`;
 }
 /* (3.87) the designer: "chestnut_knight2 (grass physical), 2 of whom now
    guard the entrance instead of the earlier fairy knight which is no longer
@@ -427,10 +660,16 @@ function jgHome(){
 }
 /* Where you stand, kept with the save now and then (and as you go). */
 let _jgSteps = 0;
+/* (3.96) Not in the middle of a walk: a save (the whole profile, written
+   out) every 25 steps was a hitch you could feel. Now it waits until you
+   have stood still a moment. */
+let _jgSaveSoon = null;
 function jgSave(now){
   const w = walkState(), p = w.at && w.at[JG_KEY];
   if(p) jgState().at = { x:p.x, y:p.y };
-  if(now || ++_jgSteps % 25 === 0) saveProfile();
+  clearTimeout(_jgSaveSoon);
+  if(now){ _jgSaveSoon = null; saveProfile(); return; }
+  _jgSaveSoon = setTimeout(()=>{ _jgSaveSoon = null; if(typeof walkHolding === 'function' && walkHolding()) return jgSave(false); saveProfile(); }, 1500);
 }
 
 /* ---------- Lucesco, at your heels (as in the past, 19-past.js) ---------- */
@@ -440,6 +679,7 @@ function jgLionPlace(){
   el.style.transform = `translate3d(${at.x * WALK_T}px,${at.y * WALK_T}px,0)`;
   el.style.zIndex = 10 + at.y;
   faceRight(el, !!at.faceR);
+  jgSeeThrough();                                                       // (3.96) the crowns over you both, see-through
 }
 function jgLionStep(p){
   const trail = (ui.jgTrail || []).concat([{ x:p.x, y:p.y }]).slice(-3);
@@ -455,10 +695,15 @@ function jgLionStep(p){
 /* ---------- a step ---------- */
 function jgStep(p, d){
   jgLionStep(p);
+  jgSeeThrough();                                                       // (3.96) (again, if he did not move)
+  const j = jgState();
+  if(j.jumpIn > 0) j.jumpIn--;                      // (3.96) Lucesco gets his breath back: a step at a time
   jgSave(false);
   jgExplore(p.x, p.y);
   jgDiscover(p.x, p.y);
   jgShowBands();
+  jgShowFolk();                                     // (3.96) the villages' people, the finds' glints
+  jgShowFinds();
   return jgLook();                                  // seen: the held key lets go
 }
 /* The five places, found as you come to them. */
@@ -478,13 +723,13 @@ function jgDiscover(x, y){
 
 /* ---------- where you have been: one bit for every 3 × 3 squares ---------- */
 const JG_EX = { cell:3, r:5 };
-let _jgEx = null, _jgExOf = null;
 function jgExBits(){
+  const j = jgState();                               // first: (3.95) it may clear the old jungle's picture
   if(_jgEx && _jgExOf === state) return _jgEx;       // (another profile: its own picture)
   _jgExOf = state;
   const n = Math.ceil(JG.W / JG_EX.cell) * Math.ceil(JG.H / JG_EX.cell);
   _jgEx = new Uint8Array(Math.ceil(n / 8));
-  const s = jgState().explored;
+  const s = j.explored;
   if(typeof s === 'string' && s){
     try { const bin = atob(s); for(let i = 0; i < Math.min(bin.length, _jgEx.length); i++) _jgEx[i] = bin.charCodeAt(i); } catch(e){}
   }
@@ -540,9 +785,11 @@ function jgRender(world, d){
   por.innerHTML = riftPortalSvg(false);
   world.appendChild(por);
   ui.jgBandEls = {};
+  ui.jgFolkEls = {}; ui.jgFindEls = {};             // (3.96) a new world: theirs drawn afresh
   /* those right by you as you arrive give you a moment */
   if(p){ const now = Date.now(); jgBands().forEach(b=>{ if(Math.abs(b.x - p.x) + Math.abs(b.y - p.y) < 8) b.calm = Math.max(b.calm || 0, now + 3000); }); }
   jgShowBands();
+  jgShowFolk(); jgShowFinds();
   jgHud();
   if(p){ jgExplore(p.x, p.y); jgDiscover(p.x, p.y); }
   jgTickStart();
@@ -551,84 +798,334 @@ function jgRender(world, d){
 }
 
 /* ---------- the painting: what is in view, only ---------- */
-const JG_P = { cv:null, stage:null, world:null, raf:0, key:'', last:0, atlas:null, S:0 };
+const JG_P = { cv:null, stage:null, world:null, raf:0, key:'', last:0, atlas:null, S:0, win:null, layerKey:'' };
+/* (3.96) The ground's canvas lives inside the deck's world and moves with
+   it: the glide of each step is the browser's own, sprites and ground
+   together, and nothing is painted while you walk. It holds the squares in
+   view and JG_PAINT_MARGIN more all round, and is painted again only when
+   the view comes within JG_PAINT_NEAR of its edge (every few steps), the
+   size of a square changes, or water in it ripples. (3.84–3.95: a canvas
+   under the world, painted again on every frame of every step to follow
+   the camera, and a frame behind it when the page was busy: the stutter.) */
+const JG_PAINT_MARGIN = 5, JG_PAINT_NEAR = 2;
 function jgPaintStart(stage, world){
   if(!stage || !world) return;
-  let cv = stage.querySelector('canvas.jg-ground');
+  stage.querySelectorAll(':scope > canvas.jg-ground').forEach(c=> c.remove());
+  let cv = world.querySelector(':scope > canvas.jg-ground');
   if(!cv){
     cv = document.createElement('canvas');
     cv.className = 'jg-ground';
     cv.setAttribute('aria-hidden', 'true');
-    stage.insertBefore(cv, stage.firstChild);
+    world.insertBefore(cv, world.firstChild);
   }
-  Object.assign(JG_P, { cv, stage, world, key:'', last:0 });
+  /* (3.96) over everyone: what of the trees' crowns reaches out over the paths (jgPaintLayer's `ov`) */
+  let ov = world.querySelector(':scope > canvas.jg-over');
+  if(!ov){
+    ov = document.createElement('canvas');
+    ov.className = 'jg-over';
+    ov.setAttribute('aria-hidden', 'true');
+    world.appendChild(ov);
+  }
+  jgRays(stage);
+  Object.assign(JG_P, { cv, ov, stage, world, key:'', last:0, layerKey:'', win:null, holes:null, seeRaf:0 });
   if(!JG_P.raf && typeof requestAnimationFrame === 'function') JG_P.raf = requestAnimationFrame(jgPaintTick);
+}
+/* (3.95) "slowly shifting, cascading rays of golden light from the top
+   diagonally down to connote sunlight filtering down across the map":
+   shafts of light over the map (not the buttons), each swaying on its own
+   slow clock, a shimmer running down it. Still, if the device asks for
+   less motion. */
+const JG_RAYS = [[-6, 13, 0.4, 27, -4], [13, 8, 0.28, 19, -13], [28, 18, 0.44, 33, -21], [49, 10, 0.3, 23, -7], [63, 21, 0.36, 37, -29], [85, 12, 0.3, 21, -16]];
+function jgRays(stage){
+  if(!stage || stage.querySelector('.jg-rays')) return;
+  const el = document.createElement('div');
+  el.className = 'jg-rays';
+  el.setAttribute('aria-hidden', 'true');
+  el.innerHTML = JG_RAYS.map(([x, w, o, d, dl])=> `<i style="--x:${x}%;--w:${w}%;--o:${o};--d:${d}s;--dl:${dl}s"></i>`).join('');
+  stage.appendChild(el);
 }
 function jgPaintTick(now){
   JG_P.raf = 0;
   if(!JG_P.cv || !JG_P.cv.isConnected) return;          // the map is gone: the clock stops
-  const cam = riftCam(JG_P.world);
-  if(cam.key !== JG_P.key || now - JG_P.last > 220){
-    JG_P.key = cam.key; JG_P.last = now;
-    try { jgPaintDraw(cam, now); } catch(e){ console.error('jungle paint:', e); }
-  }
+  try { jgPaintDraw(null, now); } catch(e){ console.error('jungle paint:', e); }
   JG_P.raf = requestAnimationFrame(jgPaintTick);
 }
+/* Paints the ground if the view needs it (the camera's own view, where it
+   is going: sceneCamView); otherwise does nothing. `cam` is not needed (the
+   old painter's). */
 function jgPaintDraw(cam, now){
-  const cv = JG_P.cv, st = JG_P.stage;
-  const W = st.clientWidth, H = st.clientHeight;
-  if(!W || !H) return;
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  if(cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)){ cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
-  const ctx = cv.getContext('2d');
-  const T = WALK_T, s = cam.s || 1, k = T * s * dpr;              // one square, on the canvas
+  const cv = JG_P.cv, view = typeof sceneCamView === 'function' ? sceneCamView() : null;
+  if(!cv || !view) return;
+  const T = WALK_T, dpr = Math.min(1.5, window.devicePixelRatio || 1), k = T * dpr;
   const S = Math.max(8, Math.round(k));
-  if(!JG_P.atlas || JG_P.S !== S){ JG_P.atlas = new Map(); JG_P.S = S; }
-  const ox = dpr * (W / 2 + cam.e), oy = dpr * (H / 2 + cam.f);     // where the world's corner is
-  const x0 = Math.floor(-ox / k) - 1, y0 = Math.floor(-oy / k) - 1;
-  const x1 = Math.ceil((cv.width - ox) / k) + 1, y1 = Math.ceil((cv.height - oy) / k) + 1;
-  ctx.fillStyle = '#163a22'; ctx.fillRect(0, 0, cv.width, cv.height);
-  const frame = Math.floor(now / 420) % 4;
-  for(let y = y0; y <= y1; y++){
-    const py = Math.round(oy + y * k), ph = Math.round(oy + (y + 1) * k) - py;
-    for(let x = x0; x <= x1; x++){
-      const px = Math.round(ox + x * k), pw = Math.round(ox + (x + 1) * k) - px;
-      jgPaintTile(ctx, x, y, px, py, pw, ph, frame);
+  if(!JG_P.atlas || JG_P.S !== S){ JG_P.atlas = new Map(); JG_P.S = S; JG_P.layerKey = ''; }
+  const frame = Math.floor((now || 0) / 420) % 4, key = T + ':' + k.toFixed(3);
+  let w = JG_P.win;
+  const inside = w && view.x0 - JG_PAINT_NEAR >= w.x0 && view.y0 - JG_PAINT_NEAR >= w.y0 && view.x1 + JG_PAINT_NEAR <= w.x1 + 1 && view.y1 + JG_PAINT_NEAR <= w.y1 + 1;
+  if(inside && JG_P.layerKey === key && !(w.water && w.frame !== frame)) return;
+  if(!inside || JG_P.layerKey !== key){
+    const cols = Math.ceil(view.x1 - view.x0) + 2 * JG_PAINT_MARGIN + 1, rows = Math.ceil(view.y1 - view.y0) + 2 * JG_PAINT_MARGIN + 1;
+    const x0 = Math.floor(view.x0) - JG_PAINT_MARGIN, y0 = Math.floor(view.y0) - JG_PAINT_MARGIN;
+    w = JG_P.win = { x0, y0, x1:x0 + cols - 1, y1:y0 + rows - 1, water:false, frame };
+  }
+  const fresh = !inside || JG_P.layerKey !== key;                       // new squares (not only the water's ripple): the crowns over the paths too
+  const cols = w.x1 - w.x0 + 1, rows = w.y1 - w.y0 + 1, pw = Math.ceil(cols * k), ph = Math.ceil(rows * k);
+  const ov = JG_P.ov && JG_P.ov.isConnected ? JG_P.ov : null;
+  [cv].concat(fresh && ov ? [ov] : []).forEach(c=>{
+    if(c.width !== pw || c.height !== ph){ c.width = pw; c.height = ph; }
+    c.style.left = (w.x0 * T) + 'px'; c.style.top = (w.y0 * T) + 'px';
+    c.style.width = (pw / dpr) + 'px'; c.style.height = (ph / dpr) + 'px';
+  });
+  JG_P.k = k;
+  if(!fresh){ jgPaintWater(cv.getContext('2d'), w, k, frame); w.frame = frame; return; }   // (3.96) only the water rippling: only its squares
+  w.water = jgPaintLayer(cv.getContext('2d'), w.x0, w.y0, w.x1, w.y1, k, frame, pw, ph, fresh ? ov : null);
+  w.frame = frame;
+  JG_P.layerKey = key;
+  if(fresh){ JG_P.holes = null; jgSeeThrough(true); }                   // the see-through, cut again in the new layer
+}
+/* (3.96) The crowns over the path you (and Lucesco) stand under go see-through, as the Old Town's church spire
+   does (3.31): a soft round window in them, gliding with you as you step. Only that patch of the layer is drawn
+   again, so it costs next to nothing. */
+const JG_SEE = { r:0.95, inner:0.3, cut:0.72 };
+function jgSeePoints(){
+  const W = walkState(), p = W.at && W.at[JG_KEY], L = ui.jgLion;
+  if(!p) return null;
+  const pts = [[p.x + 0.5, p.y + 0.6]];
+  if(L) pts.push([L.x + 0.5, L.y + 0.6]);
+  return pts;
+}
+function jgSeeThrough(now){
+  const ov = JG_P.ov, w = JG_P.win;
+  if(!ov || !w || !JG_P.k || !ov.isConnected) return;
+  const to = jgSeePoints();
+  if(!to) return;
+  const from = JG_P.holes;
+  cancelAnimationFrame(JG_P.seeRaf); JG_P.seeRaf = 0;
+  const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(now || !from || from.length !== to.length || reduce){ jgOverPatch(from, to); JG_P.holes = to; return; }
+  const t0 = performance.now(), D = typeof WALK_REP === 'number' ? WALK_REP : 200;
+  let last = from;
+  const step = t=>{
+    const a = Math.min(1, (t - t0) / D);
+    const cur = to.map((q, i)=> [from[i][0] + (q[0] - from[i][0]) * a, from[i][1] + (q[1] - from[i][1]) * a]);
+    jgOverPatch(last, cur);
+    last = cur; JG_P.holes = cur;
+    JG_P.seeRaf = a < 1 ? requestAnimationFrame(step) : 0;
+  };
+  JG_P.seeRaf = requestAnimationFrame(step);
+}
+/* the patch round the windows `was` (put back) and `now` (cut): the crowns there drawn again, then the windows cut */
+function jgOverPatch(was, now){
+  const ov = JG_P.ov, w = JG_P.win, k = JG_P.k, g = ov.getContext('2d'), R = JG_SEE.r;
+  const all = (was || []).concat(now || []);
+  if(!all.length) return;
+  const X0 = Math.floor(Math.min(...all.map(q=> q[0])) - R - 0.5), X1 = Math.ceil(Math.max(...all.map(q=> q[0])) + R + 0.5);
+  const Y0 = Math.floor(Math.min(...all.map(q=> q[1])) - R - 0.5), Y1 = Math.ceil(Math.max(...all.map(q=> q[1])) + R + 0.5);
+  const px = v=> Math.round((v - w.x0) * k), py = v=> Math.round((v - w.y0) * k);
+  const rx = px(X0), ry = py(Y0), rw = px(X1) - rx, rh = py(Y1) - ry;
+  g.save();
+  g.beginPath(); g.rect(rx, ry, rw, rh); g.clip();
+  g.clearRect(rx, ry, rw, rh);
+  for(let y = Y0; y <= Y1 + 1; y++) for(let x = X0 - 1; x <= X1 + 1; x++){
+    if(jgTile(x, y) !== JG_T.HEDGE) continue;
+    g.drawImage(jgSprite('tree3', jgTreeKey(x, y)), Math.round((x - w.x0 - 0.2) * k), Math.round((y - w.y0 - 0.6) * k), Math.round(1.4 * k), Math.round(1.6 * k));
+  }
+  jgVillageTreesOver(g, X0, Y0, X1, Y1, w.x0, w.y0, k);               // (3.97) the villages' trees too
+  g.globalCompositeOperation = 'destination-out';                       // only over the paths, as the layer is
+  g.fillStyle = '#000';
+  for(let y = Y0; y < Y1; y++) for(let x = X0; x < X1; x++) if(JG_SOLID[jgTile(x, y)]) g.fillRect(px(x), py(y), px(x + 1) - px(x), py(y + 1) - py(y));
+  (now || []).forEach(([hx, hy])=>{
+    const cx = (hx - w.x0) * k, cy = (hy - w.y0) * k, gr = g.createRadialGradient(cx, cy, k * JG_SEE.inner, cx, cy, k * R);
+    gr.addColorStop(0, `rgba(0,0,0,${JG_SEE.cut})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(cx - k * R, cy - k * R, 2 * k * R, 2 * k * R);
+  });
+  g.restore();
+}
+/* (3.96) the water's next ripple, its squares alone (the rest of the layer as it was) */
+function jgPaintWater(ctx, w, k, frame){
+  for(let y = w.y0; y <= w.y1; y++){
+    const py = Math.round((y - w.y0) * k), ph = Math.round((y + 1 - w.y0) * k) - py;
+    for(let x = w.x0; x <= w.x1; x++){
+      if(jgTile(x, y) !== JG_T.WATER) continue;
+      const px = Math.round((x - w.x0) * k), pw = Math.round((x + 1 - w.x0) * k) - px;
+      jgPaintTile(ctx, x, y, px, py, pw, ph, frame, 1);
     }
   }
-  /* trees stand up over the ground round them */
+}
+/* the squares x0…x1, y0…y1 onto a layer whose corner is square (x0, y0); says whether any water was drawn.
+   (3.96) `ov`: a second layer, over everyone, for what of the trees reaches out over the paths */
+function jgPaintLayer(ctx, x0, y0, x1, y1, k, frame, lw, lh, ov){
+  ctx.fillStyle = '#2a3417'; ctx.fillRect(0, 0, lw, lh);
+  let water = false;
+  const trees = [];                                                   // the tree squares in view, as drawn: [px, py, pw, ph]
+  const solid = [];                                                   // (3.97) and every square nobody stands on (trees, huts, water…)
+  for(let y = y0; y <= y1; y++){
+    const py = Math.round((y - y0) * k), ph = Math.round((y + 1 - y0) * k) - py;
+    for(let x = x0; x <= x1; x++){
+      const px = Math.round((x - x0) * k), pw = Math.round((x + 1 - x0) * k) - px;
+      const t = jgTile(x, y);
+      if(t === JG_T.WATER) water = true;
+      if(t === JG_T.HEDGE){ ctx.fillStyle = jgShadeCss(x, y); ctx.fillRect(px, py, pw, ph); trees.push([px, py, pw, ph]); }   // the deep shade under the trees
+      else jgPaintTile(ctx, x, y, px, py, pw, ph, frame, 1);
+      if(JG_SOLID[t]) solid.push([px, py, pw, ph]);
+    }
+  }
+  /* (3.96) the designer: "Can we allow the trees to rise up to half a tile and include dark shadowy trunks at the bottom
+     of each row? Make it look like real trees please. The round tops of the trees can protrude up to 1/3 or even 1/2 a
+     tile on top tile into the empty path" — and of the mockups, "Round olive trees are amazing!". A round olive tree
+     on every tree square; where a path runs below it, its trunk shows in the shade under its crown, its shadow on the
+     path; its crown reaches up to 0.4 of a square over the square above. Row by row, back to front: on the ground,
+     what stands on the trees' own squares; over everyone (`ov`), what reaches over a path, which you can walk under
+     (see-through round you and Lucesco: jgSeeThrough). */
+  ctx.fillStyle = 'rgba(10,16,4,.42)';
+  for(let y = y0 - 1; y <= y1; y++) for(let x = x0 - 1; x <= x1 + 1; x++){
+    if(jgTile(x, y) !== JG_T.HEDGE || jgTile(x, y + 1) === JG_T.HEDGE) continue;
+    ctx.beginPath(); ctx.ellipse((x - x0 + 0.56) * k, (y - y0 + 1.0) * k, 0.46 * k, 0.13 * k, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  const drawTrees = g=>{
+    for(let y = y0; y <= y1 + 1; y++) for(let x = x0 - 1; x <= x1 + 1; x++){
+      if(jgTile(x, y) !== JG_T.HEDGE) continue;
+      g.drawImage(jgSprite('tree3', jgTreeKey(x, y)), Math.round((x - x0 - 0.2) * k), Math.round((y - y0 - 0.6) * k), Math.round(1.4 * k), Math.round(1.6 * k));
+    }
+  };
+  /* whole on the ground (what reaches over a path is drawn again over everyone, and under you shows only where it is
+     see-through); on `ov` whole too, then the trees' own squares cleared out of it: no clipping, so it is quick */
+  drawTrees(ctx);
+  if(ov){
+    const og = ov.getContext('2d');
+    og.clearRect(0, 0, ov.width, ov.height);
+    drawTrees(og);
+    jgVillageTreesOver(og, x0, y0, x1, y1, x0, y0, k);                // (3.97) and the villages' tall trees
+    og.globalCompositeOperation = 'destination-out';
+    og.fillStyle = '#000';
+    solid.forEach(r=> og.fillRect(r[0], r[1], r[2], r[3]));
+    og.globalCompositeOperation = 'source-over';
+  }
+  /* trees stand up over the ground round them (the villages') */
   for(let y = y0; y <= y1 + 1; y++) for(let x = x0; x <= x1; x++){
     if(jgTile(x, y) !== JG_T.TREE) continue;
     const spr = jgSprite('tree', jgHash(x, y, 3) < 0.5 ? 0 : 1);
-    ctx.drawImage(spr, Math.round(ox + (x - 0.5) * k), Math.round(oy + (y - 1.2) * k), Math.round(2 * k), Math.round(2 * k));
+    ctx.drawImage(spr, Math.round((x - 0.5 - x0) * k), Math.round((y - 1.2 - y0) * k), Math.round(2 * k), Math.round(2 * k));
+  }
+  return water;
+}
+/* (3.97) The designer: "The see through needs to happen … for tall trees which reach up 2 tiles. … also apply to the
+   jungle village trees." A village tree over everyone: only what of it rises above its own row (its crown over the
+   square behind it), so who stands beside it or in front of it is not hidden. Squares x0…, y0… from the layer's corner. */
+function jgVillageTreesOver(g, X0, Y0, X1, Y1, x0, y0, k){
+  for(let y = Y0; y <= Y1 + 2; y++) for(let x = X0 - 1; x <= X1 + 1; x++){
+    if(jgTile(x, y) !== JG_T.TREE) continue;
+    const px = Math.round((x - 0.5 - x0) * k), py = Math.round((y - 1.2 - y0) * k), base = Math.round((y - y0) * k), sz = Math.round(2 * k);
+    if(base <= py) continue;
+    g.save(); g.beginPath(); g.rect(px, py, sz, base - py); g.clip();
+    g.drawImage(jgSprite('tree', jgHash(x, y, 3) < 0.5 ? 0 : 1), px, py, sz, sz);
+    g.restore();
   }
 }
-function jgPaintTile(ctx, x, y, px, py, pw, ph, frame){
+/* (3.96) a tree square's look: 1 a path below it (its trunk shows), ×2 one of four shapes, ×8 deep in the woods (darker) */
+function jgTreeKey(x, y){
+  const H = (a, b)=> jgTile(a, b) === JG_T.HEDGE;
+  const front = H(x, y + 1) ? 0 : 1;
+  const deep = H(x - 1, y - 1) && H(x, y - 1) && H(x + 1, y - 1) && H(x - 1, y) && H(x + 1, y) && H(x - 1, y + 1) && H(x, y + 1) && H(x + 1, y + 1) ? 1 : 0;
+  return front | (Math.floor(jgHash(x, y, 41) * 4) << 1) | (deep << 3);
+}
+/* the shade under the trees: almost black-green, a little lighter and darker here and there */
+const _jgShade = new Map();
+function jgShadeCss(x, y){
+  const d = Math.floor(jgHash(x, y, 91) * 4);
+  let c = _jgShade.get(d);
+  if(!c){ c = `rgb(${24 + d * 3},${33 + d * 4},${15 + d * 2})`; _jgShade.set(d, c); }
+  return c;
+}
+/* (3.95) The floor's green: a colour for every square, drifting slowly from
+   place to place — fresher by the Grass tribe, bluer by the Water's,
+   yellower by the Earth's and the Fire's, emerald round the castle — and
+   lighter and darker in patches. Worked out once (about 40 ms). */
+const JG_FLOOR_HUE = { grass:100, water:146, earth:80, fire:68, castle:124 };
+let _jgFloor = null;
+function jgHslRgb(h, s, l){
+  h = ((h % 360) + 360) % 360 / 360;
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const f = t=>{ t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+  return [Math.round(f(h + 1 / 3) * 255), Math.round(f(h) * 255), Math.round(f(h - 1 / 3) * 255)];
+}
+function jgFloor(){
+  if(_jgFloor) return _jgFloor;
+  const G = jgGround(), { W, H, places } = G;
+  const rgb = new Uint8ClampedArray(W * H * 4);
+  const anchors = JG_TRIBE_KEYS.map(k=>{ const v = places.villages[k]; return [v.x + v.w / 2, v.y + v.h / 2, JG_FLOOR_HUE[k]]; });
+  const C = places.castle; anchors.push([C.x + C.w / 2, C.y + C.h / 2, JG_FLOOR_HUE.castle]);
+  const noise = (x, y, s, k)=>{
+    const gx = x / s, gy = y / s, x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const a = jgHash(x0, y0, k), b = jgHash(x0 + 1, y0, k), c = jgHash(x0, y0 + 1, k), d = jgHash(x0 + 1, y0 + 1, k);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  };
+  for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
+    let ws = 0, hs = 0;
+    for(let k = 0; k < anchors.length; k++){ const A = anchors[k], w = 1 / ((A[0] - x) * (A[0] - x) + (A[1] - y) * (A[1] - y) + 900); ws += w; hs += w * A[2]; }
+    const n = 0.62 * noise(x, y, 26, 11) + 0.38 * noise(x, y, 7, 12);
+    const c = jgHslRgb(hs / ws + (noise(x, y, 41, 13) - 0.5) * 16, 0.40 + (n - 0.5) * 0.18, 0.345 + (n - 0.5) * 0.16);
+    const i = (y * W + x) * 4; rgb[i] = c[0]; rgb[i + 1] = c[1]; rgb[i + 2] = c[2]; rgb[i + 3] = 255;
+  }
+  _jgFloor = { rgb, css:new Map() };
+  return _jgFloor;
+}
+function jgFloorCss(x, y){
+  if(x < 0 || y < 0 || x >= JG.W || y >= JG.H) return '#3f6e31';
+  const F = jgFloor(), i = (y * JG.W + x) * 4, key = (F.rgb[i] << 16) | (F.rgb[i + 1] << 8) | F.rgb[i + 2];
+  let s = F.css.get(key);
+  if(!s){ s = `rgb(${F.rgb[i]},${F.rgb[i + 1]},${F.rgb[i + 2]})`; F.css.set(key, s); }
+  return s;
+}
+/* (3.95) A wall square is a tree's crown, olive: joined to the crowns beside
+   it, rounded where a path runs by, darker where the trees stand deep. */
+function jgWallKey(x, y){
+  const H = (a, b)=> jgTile(a, b) === JG_T.HEDGE;
+  const mask = (H(x, y - 1) ? 1 : 0) | (H(x + 1, y) ? 2 : 0) | (H(x, y + 1) ? 4 : 0) | (H(x - 1, y) ? 8 : 0);
+  const deep = mask === 15 && H(x - 1, y - 1) && H(x + 1, y - 1) && H(x - 1, y + 1) && H(x + 1, y + 1) ? 1 : 0;
+  return mask | (Math.floor(jgHash(x, y, 2) * 3) << 4) | (deep << 6);
+}
+/* `pass`: 1 the ground and the crowns' shapes, the leaves left to a second pass over them all (jgPaintDraw);
+   left out, everything in this square at once (the castle's views over the jungle) */
+const JG_LEAF_SPILL = 0.3;                                            // how far a crown's leaves spread into the crowns beside it, in squares
+function jgPaintTile(ctx, x, y, px, py, pw, ph, frame, pass){
   const t = jgTile(x, y), v = jgHash(x, y, 1);
-  let spr;
+  let spr = null, floor = false;
   switch(t){
-    case JG_T.HEDGE: spr = jgSprite('hedge', Math.floor(v * 6)); break;
-    case JG_T.PATH: spr = jgSprite('path', Math.floor(v * 6)); break;
-    case JG_T.GLADE: spr = jgSprite('glade', Math.floor(v * 4)); break;
-    case JG_T.TREE: { const vk = jgVillageAt(x, y); spr = vk ? jgSprite('village-' + vk, Math.floor(v * 3)) : jgSprite('glade', Math.floor(v * 4)); break; }
+    case JG_T.HEDGE: {                                                // (3.96) the shade under a round olive tree, and (drawn alone: the castle's views) the tree
+      ctx.fillStyle = jgShadeCss(x, y); ctx.fillRect(px, py, pw, ph);
+      if(pass !== 1){
+        const n = jgTreeKey(x, y);
+        if(n & 1){ ctx.fillStyle = 'rgba(10,16,4,.42)'; ctx.beginPath(); ctx.ellipse(px + pw * 0.56, py + ph * 0.94, pw * 0.44, ph * 0.08, 0, 0, Math.PI * 2); ctx.fill(); }
+        ctx.drawImage(jgSprite('tree3', n), Math.round(px - pw * 0.2), Math.round(py - ph * 0.6), Math.round(pw * 1.4), Math.round(ph * 1.6));
+      }
+      return;
+    }
+    case JG_T.PATH: floor = true; spr = jgSprite('fl', Math.floor(v * 10)); break;
+    case JG_T.GLADE: floor = true; spr = jgSprite('glade', Math.floor(v * 4)); break;
+    case JG_T.TREE: { const vk = jgVillageAt(x, y); if(vk) spr = jgSprite('village-' + vk, Math.floor(v * 3)); else { floor = true; spr = jgSprite('glade', Math.floor(v * 4)); } break; }
     case JG_T.SHORE: spr = jgSprite('shore', Math.floor(v * 3)); break;
     case JG_T.WATER: spr = jgSprite('water', (frame + Math.floor(v * 4)) % 4); break;
     case JG_T.VILLAGE: spr = jgSprite('village-' + (jgVillageAt(x, y) || 'grass'), Math.floor(v * 3)); break;
-    case JG_T.HUT: spr = jgSprite('hut-' + (jgVillageAt(x, y) || 'grass'), jgHutPart(x, y)); break;
+    case JG_T.HUT: {                                                  // (3.96) a flowering grass mound, sliced square by square
+      const vk = jgVillageAt(x, y) || 'grass', r = jgHutRect(x, y, vk), S = JG_P.S || 48;
+      ctx.drawImage(jgSprite('village-' + vk, Math.floor(v * 3)), px, py, pw, ph);
+      if(r) ctx.drawImage(jgSprite(`mound-${vk}-${r.w}x${r.h}`, r.n), (x - r.x) * S, (y - r.y) * S, S, S, px, py, pw, ph);
+      return;
+    }
     case JG_T.CASTLE: spr = jgSprite('castle-' + jgCastlePart(x, y), (x + y) & 1); break;
     case JG_T.GATE: spr = jgSprite('gate', 0); break;
     case JG_T.ROAD: spr = jgSprite('road', Math.floor(v * 3)); break;
-    case JG_T.ENTRY: spr = jgSprite('entry', Math.floor(v * 3)); break;
+    case JG_T.ENTRY: floor = true; spr = jgSprite('entry', Math.floor(v * 3)); break;
   }
+  if(floor){ ctx.fillStyle = jgFloorCss(x, y); ctx.fillRect(px, py, pw, ph); }
   if(spr) ctx.drawImage(spr, px, py, pw, ph);
-  /* what touches it: a hedge's sunlit top, the shade a hedge throws, the water's sandy rim, a hut's door */
+  /* what touches it: the shade the trees throw, the water's sandy rim */
   const solid = JG_SOLID[t];
-  if(t === JG_T.HEDGE){
-    if(!JG_SOLID[jgTile(x, y - 1)]){ ctx.fillStyle = 'rgba(160,220,120,.30)'; ctx.fillRect(px, py, pw, Math.max(1, ph * 0.16)); }
-    if(!JG_SOLID[jgTile(x, y + 1)]){ ctx.fillStyle = 'rgba(6,24,10,.45)'; ctx.fillRect(px, py + ph * 0.86, pw, ph * 0.14 + 1); }
-  } else if(!solid){
+  if(!solid){
     const n = jgTile(x, y - 1), w = jgTile(x - 1, y);
-    if(n === JG_T.HEDGE || n === JG_T.HUT || n === JG_T.CASTLE) ctx.drawImage(jgSprite('shadeN', 0), px, py, pw, ph);
+    if(n === JG_T.HEDGE || n === JG_T.CASTLE) ctx.drawImage(jgSprite('shadeN', 0), px, py, pw, ph);   // (3.96) a mound throws its own round shadow
     if(w === JG_T.HEDGE) ctx.drawImage(jgSprite('shadeW', 0), px, py, pw, ph);
   } else if(t === JG_T.WATER){
     ctx.fillStyle = 'rgba(232,222,170,.6)';
@@ -639,13 +1136,16 @@ function jgPaintTile(ctx, x, y, px, py, pw, ph, frame){
     if(jgTile(x + 1, y) !== JG_T.WATER) ctx.fillRect(px + pw - e, py, e, ph);
   }
 }
-/* a hut's squares, by where they are in it: 0 its ridge, 1 its roof, 2 its front wall, 3 the door in it */
-function jgHutPart(x, y){
-  const v = jgGround().places.villages[jgVillageAt(x, y) || 'grass'];
-  const r = v && v.huts.concat([v.lodge]).find(h=> x >= h.x && y >= h.y && x < h.x + h.w && y < h.y + h.h);
-  if(!r) return 1;
-  if(y === r.y + r.h - 1) return (x === r.x + Math.floor((r.w - 1) / 2) || (r.w > 4 && x === r.x + Math.floor(r.w / 2))) ? 3 : 2;
-  return y === r.y ? 0 : 1;
+/* (3.96) the hut (or the lodge) a square is part of, and which look it has: `n` 0/1 a hut (its window on the left or the right), 2 the lodge */
+function jgHutRect(x, y, vk){
+  const v = jgGround().places.villages[vk || jgVillageAt(x, y) || 'grass'];
+  if(!v) return null;
+  const L = v.lodge;
+  if(x >= L.x && y >= L.y && x < L.x + L.w && y < L.y + L.h) return { x:L.x, y:L.y, w:L.w, h:L.h, n:2 };
+  const i = v.huts.findIndex(h=> x >= h.x && y >= h.y && x < h.x + h.w && y < h.y + h.h);
+  if(i < 0) return null;
+  const h = v.huts[i];
+  return { x:h.x, y:h.y, w:h.w, h:h.h, n:i & 1 };
 }
 /* the castle's squares: its wall (three deep, battlements round the outside), towers, the keep, gardens */
 function jgCastlePart(x, y){
@@ -665,7 +1165,9 @@ function jgSprite(kind, n){
   const S = JG_P.S || 48;
   c = document.createElement('canvas');
   const big = kind === 'tree';
-  c.width = c.height = big ? S * 2 : S;
+  c.width = c.height = big ? S * 2 : kind === 'leaf' ? S + 2 * Math.round(S * JG_LEAF_SPILL) : S;
+  if(kind.startsWith('mound-')){ const d = kind.split('-')[2].split('x'); c.width = (+d[0] || 4) * S; c.height = (+d[1] || 3) * S; }   // (3.96) a whole mound
+  if(kind === 'tree3'){ c.width = Math.round(S * 1.4); c.height = Math.round(S * 1.6); }                                        // (3.96) a tree and the crown over the square above
   const g = c.getContext('2d');
   jgDrawSprite(g, kind, n, S);
   A.set(key, c);
@@ -687,28 +1189,103 @@ function jgDrawSprite(g, kind, n, S){
       for(let m = -1; m <= 1; m++){ g.beginPath(); g.moveTo(bx + m * S * 0.05, by); g.lineTo(bx + m * S * 0.1, by - S * (0.14 + 0.05 * Math.abs(m))); g.stroke(); }
     }
   };
-  if(kind === 'hedge'){
-    g.fillStyle = '#163a22'; g.fillRect(0, 0, S, S);
-    const cols = ['#1f4d2c', '#2b6337', '#3a7d43', '#4c9450'];
-    for(let k = 0; k < 9; k++){
-      g.fillStyle = cols[Math.floor(h(k + 21) * cols.length)];
-      g.beginPath(); g.arc(h(k) * S, h(k + 7) * S, S * (0.17 + h(k + 14) * 0.2), 0, Math.PI * 2); g.fill();
+  /* (3.96) a round olive tree, its square's corner at (0.2, 0.6) of a square in the picture: the crown
+     reaching 0.4 of a square up over the square above; `n` 1: a path below (its trunk shows), ×2 its shape,
+     ×8 deep in the woods (darker) */
+  if(kind === 'tree3'){
+    const front = n & 1, v = (n >> 1) & 3, deep = (n >> 3) & 1, ox = S * 0.2, oy = S * 0.6;
+    const jx = [-0.05, 0.03, -0.02, 0.05][v] * S, jr = [0.95, 1.04, 0.99, 1.08][v];
+    const c = deep ? ['#263418', '#33441d', '#435a25', '#58702f'] : ['#2f3d19', '#3d4f22', '#4f6429', '#68803a'];
+    if(front){
+      const tg = g.createLinearGradient(ox + S * 0.4 + jx, 0, ox + S * 0.6 + jx, 0);
+      tg.addColorStop(0, '#3a2814'); tg.addColorStop(0.5, '#5a3f22'); tg.addColorStop(1, '#2a1c0c');
+      g.fillStyle = tg; g.beginPath();
+      g.moveTo(ox + S * 0.42 + jx, oy + S * 0.55); g.lineTo(ox + S * 0.58 + jx, oy + S * 0.55);
+      g.lineTo(ox + S * 0.63 + jx, oy + S * 0.97); g.quadraticCurveTo(ox + S * 0.5 + jx, oy + S * 0.92, ox + S * 0.37 + jx, oy + S * 0.97);
+      g.closePath(); g.fill();
+      g.strokeStyle = '#24170a'; g.lineWidth = Math.max(1, S / 30); g.lineCap = 'round';
+      g.beginPath(); g.moveTo(ox + S * 0.4 + jx, oy + S * 0.95); g.quadraticCurveTo(ox + S * 0.32 + jx, oy + S * 0.99, ox + S * 0.27 + jx, oy + S * 0.98);
+      g.moveTo(ox + S * 0.6 + jx, oy + S * 0.95); g.quadraticCurveTo(ox + S * 0.68 + jx, oy + S * 0.99, ox + S * 0.73 + jx, oy + S * 0.98); g.stroke();
     }
-    if(n % 3 === 0){                                                  // a flower, now and then
-      g.fillStyle = ['#e85d8a', '#f2c94c', '#ffffff', '#b07cf0'][n % 4];
-      g.beginPath(); g.arc(S * (0.25 + 0.5 * h(42)), S * (0.25 + 0.5 * h(43)), S * 0.07, 0, Math.PI * 2); g.fill();
-    }
-    if(n === 4){                                                      // a vine
-      g.strokeStyle = 'rgba(120,180,80,.7)'; g.lineWidth = Math.max(1, S / 18);
-      g.beginPath(); g.moveTo(S * 0.2, 0); g.quadraticCurveTo(S * 0.55, S * 0.45, S * 0.3, S); g.stroke();
-    }
+    const cx = ox + S * 0.5 + jx, cy = oy + S * 0.18;
+    const blob = (bx, by, r, col)=>{ g.fillStyle = col; g.beginPath(); g.arc(bx, by, r, 0, Math.PI * 2); g.fill(); };
+    blob(cx, cy + S * 0.06, S * 0.56 * jr, c[0]);                                  // its shaded underside
+    blob(cx - S * 0.24, cy + S * 0.1, S * 0.34 * jr, c[1]); blob(cx + S * 0.24, cy + S * 0.12, S * 0.33 * jr, c[1]);
+    blob(cx, cy - S * 0.02, S * 0.46 * jr, c[1]);
+    blob(cx - S * 0.1, cy - S * 0.1, S * 0.3 * jr, c[2]); blob(cx + S * 0.16, cy - S * 0.04, S * 0.22 * jr, c[2]);
+    blob(cx - S * 0.16, cy - S * 0.2, S * 0.14 * jr, c[3]); blob(cx + S * 0.06, cy - S * 0.24, S * 0.1 * jr, c[3]);   // the sun on its top
     return;
   }
-  if(kind === 'path'){ dots('#8c7650', ['#7a6544', '#9d8760', '#a8956d'], 6, 0.04); tufts('#5f8a3e', n % 2 ? 1 : 0); return; }
-  if(kind === 'glade'){ dots('#5e9a48', ['#76b25a', '#f3d66c', '#ef9ab9', '#ffffff', '#76b25a'], 7, 0.035); tufts('#3f7a34', 2); return; }
+  /* (3.95) a tree's crown, seen from above: olive, joined to its neighbours,
+     rounded and leafy where a path runs by; `n` = which sides join (1 N,
+     2 E, 4 S, 8 W), its look (×16) and whether it stands deep (×64) */
+  if(kind === 'wall' || kind === 'leaf'){
+    const jn = n & 1, je = n & 2, js = n & 4, jw = n & 8, look = (n >> 4) & 3, deep = (n >> 6) & 1;
+    /* one colour under every crown (no seams between them); the leaves vary */
+    const base = deep ? '#253117' : '#33421d';
+    const P = deep ? [['#2c3a1a', '#33431e', '#4a5d2a'], ['#2f3a19', '#36441d', '#4e5e29'], ['#29391d', '#304321', '#45602e']][look]
+                   : [['#3d4f22', '#485c28', '#627936'], ['#415024', '#4c5d29', '#677a35'], ['#3a5025', '#455e2c', '#5c7a3b']][look];
+    const e = S * 0.07, r = S * 0.36;
+    const shape = (o, sp)=>{                                          // the crown's outline, offset `o`, spreading `sp` into joined neighbours
+      const x0 = o + (jw ? -sp : e), x1 = o + S + (je ? sp : -e), y0 = o + (jn ? -sp : e), y1 = o + S + (js ? sp : -e);
+      const tl = (!jn && !jw) ? r : 0, tr = (!jn && !je) ? r : 0, br = (!js && !je) ? r : 0, bl = (!js && !jw) ? r : 0;
+      g.beginPath(); g.moveTo(x0 + tl, y0); g.lineTo(x1 - tr, y0);
+      if(tr) g.quadraticCurveTo(x1, y0, x1, y0 + tr);
+      g.lineTo(x1, y1 - br); if(br) g.quadraticCurveTo(x1, y1, x1 - br, y1);
+      g.lineTo(x0 + bl, y1); if(bl) g.quadraticCurveTo(x0, y1, x0, y1 - bl);
+      g.lineTo(x0, y0 + tl); if(tl) g.quadraticCurveTo(x0, y0, x0 + tl, y0);
+      g.closePath();
+    };
+    if(kind === 'wall'){
+      /* the crown's body: leafy bumps over a path, its top in the sun, its underside in shadow */
+      g.fillStyle = base;
+      const bump = (cx, cy)=>{ g.beginPath(); g.arc(cx, cy, S * 0.11, 0, Math.PI * 2); g.fill(); };
+      [0.3, 0.7].forEach((f, i)=>{
+        const j = (h(90 + i) - 0.5) * S * 0.12;
+        if(!jn) bump(S * f + j, e + S * 0.05);
+        if(!js) bump(S * f - j, S - e - S * 0.05);
+        if(!jw) bump(e + S * 0.05, S * f + j);
+        if(!je) bump(S - e - S * 0.05, S * f - j);
+      });
+      shape(0, 0); g.fill();
+      return;
+    }
+    /* the leaves: clumps over the crown and a little into the crowns beside it (drawn over them all) */
+    const m = Math.round(S * JG_LEAF_SPILL);
+    g.save(); shape(m, m); g.clip();
+    for(let k = 0; k < 11; k++){
+      g.fillStyle = P[k % 2];
+      g.beginPath(); g.arc(m + S * (-0.1 + 1.2 * h(k)), m + S * (-0.1 + 1.2 * h(k + 20)), S * (0.15 + 0.12 * h(k + 40)), 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = P[2]; g.globalAlpha = deep ? 0.28 : 0.45;
+    for(let k = 0; k < 5; k++){ g.beginPath(); g.arc(m + S * (0.1 + 0.75 * h(k + 60)), m + S * (0.06 + 0.62 * h(k + 70)), S * (0.05 + 0.05 * h(k + 80)), 0, Math.PI * 2); g.fill(); }
+    g.globalAlpha = 1;
+    g.restore();
+    g.save(); g.beginPath(); g.rect(m, m, S, S); g.clip();
+    if(!jn){ g.fillStyle = 'rgba(214,226,140,.18)'; g.fillRect(m, m, S, S * 0.13); }                          // sun on the crowns' tops
+    if(!js){ const gr = g.createLinearGradient(0, m + S * 0.6, 0, m + S); gr.addColorStop(0, 'rgba(12,16,4,0)'); gr.addColorStop(1, 'rgba(12,16,4,.4)'); g.fillStyle = gr; g.fillRect(m, m + S * 0.6, S, S * 0.4); }
+    g.restore();
+    return;
+  }
+  /* (3.95) the green floor's grass, over its colour (jgFloorCss): tufts, clover, now and then a flower */
+  if(kind === 'fl'){
+    if(n < 4) tufts('rgba(30,70,24,.45)', 1 + (n % 2));
+    else if(n < 6){ g.fillStyle = 'rgba(150,200,110,.35)'; for(let k = 0; k < 5; k++){ g.beginPath(); g.arc(h(k) * S, h(k + 40) * S, S * (0.03 + h(k + 80) * 0.03), 0, Math.PI * 2); g.fill(); } }
+    else if(n === 6){ g.fillStyle = ['#fff6d8', '#f3d66c', '#f2a7c3'][Math.floor(h(5) * 3)]; g.beginPath(); g.arc(S * (0.25 + 0.5 * h(6)), S * (0.25 + 0.5 * h(7)), S * 0.055, 0, Math.PI * 2); g.fill(); tufts('rgba(30,70,24,.4)', 1); }
+    else { g.fillStyle = 'rgba(20,46,16,.22)'; for(let k = 0; k < 4; k++){ g.beginPath(); g.arc(h(k + 3) * S, h(k + 33) * S, S * (0.04 + h(k + 63) * 0.05), 0, Math.PI * 2); g.fill(); } }
+    return;
+  }
+  /* a clearing: the same green, sunnier, with flowers */
+  if(kind === 'glade'){
+    g.fillStyle = 'rgba(255,246,170,.13)'; g.fillRect(0, 0, S, S);
+    const cols = ['#f3d66c', '#ef9ab9', '#ffffff', '#b8e08a'];
+    for(let k = 0; k < 5; k++){ g.fillStyle = cols[(k + n) % cols.length]; g.beginPath(); g.arc(h(k) * S, h(k + 40) * S, S * (0.03 + h(k + 80) * 0.03), 0, Math.PI * 2); g.fill(); }
+    tufts('rgba(30,70,24,.4)', 2);
+    return;
+  }
   if(kind === 'shore'){ dots('#a3b673', ['#c9c78e', '#86a45a'], 5, 0.04); return; }
   if(kind === 'road'){ dots('#a49b8a', ['#b8b0a0', '#8f8676', '#c4bdae'], 7, 0.07); return; }
-  if(kind === 'entry'){ dots('#6c8f5a', ['#89b071', '#c7e3a8'], 6, 0.04); tufts('#4f7a3c', 1); return; }
+  if(kind === 'entry'){ g.fillStyle = 'rgba(220,255,200,.16)'; g.fillRect(0, 0, S, S); g.fillStyle = 'rgba(200,240,170,.45)'; for(let k = 0; k < 5; k++){ g.beginPath(); g.arc(h(k) * S, h(k + 40) * S, S * 0.04, 0, Math.PI * 2); g.fill(); } tufts('rgba(30,70,24,.4)', 1); return; }
   if(kind === 'water'){
     g.fillStyle = '#2d6f9c'; g.fillRect(0, 0, S, S);
     const ph = n / 4 * Math.PI * 2;
@@ -724,23 +1301,15 @@ function jgDrawSprite(g, kind, n, S){
     if(n === 2){ g.fillStyle = ['#f3d66c', '#ef9ab9', '#ffffff'][(n * 7) % 3]; g.beginPath(); g.arc(S * 0.62, S * 0.4, S * 0.06, 0, Math.PI * 2); g.fill(); }
     return;
   }
-  if(kind.startsWith('hut-')){
-    const T = JG_TRIBES[kind.slice(4)] || JG_TRIBES.grass;
-    if(n >= 2){                                                       // the front wall, under the eaves; a door in it
-      g.fillStyle = T.wall; g.fillRect(0, 0, S, S);
-      g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, 0, S, S * 0.16);
-      g.strokeStyle = 'rgba(90,60,30,.35)'; g.lineWidth = Math.max(1, S / 28);
-      for(let k = 1; k < 4; k++){ g.beginPath(); g.moveTo(k * S / 4, S * 0.16); g.lineTo(k * S / 4, S); g.stroke(); }
-      if(n === 3){ g.fillStyle = '#4a2f18'; g.beginPath(); g.moveTo(S * 0.25, S); g.lineTo(S * 0.25, S * 0.42); g.quadraticCurveTo(S * 0.5, S * 0.2, S * 0.75, S * 0.42); g.lineTo(S * 0.75, S); g.fill(); }
-      return;
-    }
-    g.fillStyle = T.roof[n === 0 ? 0 : 1]; g.fillRect(0, 0, S, S);   // thatch: rows of straw, darker along the ridge
-    g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = Math.max(1, S / 30);
-    for(let k = 1; k < 5; k++){ g.beginPath(); g.moveTo(0, k * S / 5); g.lineTo(S, k * S / 5 + (k % 2 ? 1 : -1)); g.stroke(); }
-    g.fillStyle = T.roof[2]; g.globalAlpha = .35;
-    for(let k = 0; k < 6; k++){ g.fillRect(h(k) * S, h(k + 9) * S, S * 0.18, S * 0.05); }
-    g.globalAlpha = 1;
-    if(n === 0){ g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(0, 0, S, S * 0.22); }
+  /* (3.96) the designer: "The house also don't look tribal. Could you draw
+     them as flowering grass mounds please?" A dome of grass the size of the
+     hut (4 × 3 squares; the guardian's lodge 6 × 4), its flowers the
+     tribe's colours, a round wooden door at the front and a little round
+     window beside it; the lodge, lanterns by its door and the tribe's
+     pennant on top. Drawn whole, then shown a square at a time. */
+  if(kind.startsWith('mound-')){
+    const [, tk, dims] = kind.split('-'), [tw, th] = dims.split('x').map(Number);
+    jgDrawMound(g, tk, tw || 4, th || 3, n, S);
     return;
   }
   if(kind.startsWith('castle-')){
@@ -766,19 +1335,135 @@ function jgDrawSprite(g, kind, n, S){
     return;
   }
   if(kind === 'shadeN'){
-    const gr = g.createLinearGradient(0, 0, 0, S * 0.42); gr.addColorStop(0, 'rgba(8,28,10,.46)'); gr.addColorStop(1, 'rgba(8,28,10,0)');
+    const gr = g.createLinearGradient(0, 0, 0, S * 0.42); gr.addColorStop(0, 'rgba(14,20,4,.48)'); gr.addColorStop(1, 'rgba(14,20,4,0)');
     g.fillStyle = gr; g.fillRect(0, 0, S, S * 0.42);
     return;
   }
-  if(kind === 'shadeW'){ g.fillStyle = 'rgba(8,28,10,.2)'; g.fillRect(0, 0, S * 0.12, S); return; }
+  if(kind === 'shadeW'){ g.fillStyle = 'rgba(14,20,4,.22)'; g.fillRect(0, 0, S * 0.12, S); return; }
   if(kind === 'tree'){
     const Z = S * 2;
     g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.ellipse(Z * 0.5, Z * 0.86, Z * 0.32, Z * 0.1, 0, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#5a3d22'; g.fillRect(Z * 0.45, Z * 0.5, Z * 0.1, Z * 0.36);
-    const cols = n ? ['#2f6b35', '#3d8442', '#4f9a4c'] : ['#356f2f', '#4a8a3a', '#62a54a'];
+    g.fillStyle = '#4a3420'; g.fillRect(Z * 0.45, Z * 0.5, Z * 0.1, Z * 0.36);
+    const cols = n ? ['#3b4a20', '#4a5c27', '#5b6e30'] : ['#404f22', '#506229', '#627633'];   // (3.95) olive, as the forest's
     for(let k = 0; k < 6; k++){
       g.fillStyle = cols[k % 3];
       g.beginPath(); g.arc(Z * (0.28 + 0.44 * h(k + 80)), Z * (0.2 + 0.32 * h(k + 90)), Z * (0.16 + 0.07 * h(k + 99)), 0, Math.PI * 2); g.fill();
+    }
+  }
+}
+
+/* (3.96) The tribes' mounds: the grass of each (fresher by the Grass tribe,
+   bluer by the Water's, yellower by the Earth's and the Fire's) and its
+   flowers. */
+const JG_MOUND = {
+  grass:{ top:'#93c95c', mid:'#5f9a3c', low:'#365f22', blade:['#b2df7e', '#4b8231'], flowers:['#f4a9c8', '#fff4dc', '#f6d76a', '#e98bb5'], pennant:'#5fb04a' },
+  water:{ top:'#8fc99a', mid:'#579a72', low:'#2f5e4a', blade:['#b0e0b9', '#3c7a5e'], flowers:['#8fd0f2', '#ffffff', '#c3a6ef', '#6fb5e8'], pennant:'#3f8fd0' },
+  earth:{ top:'#b1bf66', mid:'#7a8f3e', low:'#4a5a23', blade:['#cfd889', '#5e722d'], flowers:['#f6d76a', '#f2a457', '#fbeccc', '#e2b65a'], pennant:'#c98a3a' },
+  fire: { top:'#bcc15e', mid:'#879038', low:'#545a20', blade:['#dadc84', '#6b772b'], flowers:['#f0573c', '#f7a03c', '#ffd85c', '#ff7a59'], pennant:'#e0502c' },
+};
+function jgDrawMound(g, tk, tw, th, n, S){
+  const M = JG_MOUND[tk] || JG_MOUND.grass, Wd = tw * S, Ht = th * S, lodge = n === 2;
+  const h = k=> jgHash(tw * 31 + th * 7 + n * 101, (tk.charCodeAt(0) || 0) * 13 + k, 77);
+  const by = Ht * 0.94, x0 = Wd * 0.03, x1 = Wd * 0.97, top = Ht * (lodge ? 0.07 : 0.1);
+  const dome = ()=>{
+    g.beginPath(); g.moveTo(x0, by);
+    g.bezierCurveTo(x0 - Wd * 0.01, Ht * 0.36, Wd * 0.2, top, Wd * 0.5, top);
+    g.bezierCurveTo(Wd * 0.8, top, x1 + Wd * 0.01, Ht * 0.36, x1, by);
+    g.closePath();
+  };
+  /* its shadow on the green */
+  g.fillStyle = 'rgba(10,24,6,.3)'; g.beginPath(); g.ellipse(Wd * 0.5, by, Wd * 0.5, Ht * 0.075, 0, 0, Math.PI * 2); g.fill();
+  /* the mound: sunlit up and to the left, in shade low down and to the right */
+  const gr = g.createLinearGradient(Wd * 0.28, top, Wd * 0.62, by);
+  gr.addColorStop(0, M.top); gr.addColorStop(0.55, M.mid); gr.addColorStop(1, M.low);
+  g.fillStyle = gr; dome(); g.fill();
+  g.save(); dome(); g.clip();
+  /* grass, blade by blade */
+  g.lineCap = 'round'; g.lineWidth = Math.max(1, S / 24);
+  const blades = Math.round(tw * th * 30);
+  for(let k = 0; k < blades; k++){
+    const bx = h(k) * Wd, bb = top + h(k + 500) * (by - top) * 1.02, lean = (h(k + 300) - 0.5) * S * 0.07;
+    g.strokeStyle = M.blade[k % 2]; g.globalAlpha = 0.3 + 0.4 * h(k + 900);
+    g.beginPath(); g.moveTo(bx, bb); g.quadraticCurveTo(bx + lean * 0.4, bb - S * 0.06, bx + lean, bb - S * (0.1 + 0.06 * h(k + 400))); g.stroke();
+  }
+  g.globalAlpha = 1;
+  /* a soft light on its crown, shade along its foot */
+  const hi = g.createRadialGradient(Wd * 0.38, top + Ht * 0.18, 0, Wd * 0.38, top + Ht * 0.18, Wd * 0.42);
+  hi.addColorStop(0, 'rgba(255,250,200,.22)'); hi.addColorStop(1, 'rgba(255,250,200,0)');
+  g.fillStyle = hi; g.fillRect(0, 0, Wd, Ht);
+  const sh = g.createLinearGradient(0, by - Ht * 0.28, 0, by);
+  sh.addColorStop(0, 'rgba(8,22,4,0)'); sh.addColorStop(1, 'rgba(8,22,4,.38)');
+  g.fillStyle = sh; g.fillRect(0, by - Ht * 0.28, Wd, Ht * 0.28);
+  g.restore();
+  /* tufts standing out of its outline */
+  g.strokeStyle = M.low; g.lineWidth = Math.max(1, S / 22);
+  for(let k = 0; k < tw * 9; k++){
+    const t = k / (tw * 9), a = Math.PI * (1 - t);
+    const ex = Wd * 0.5 + Math.cos(a) * (x1 - x0) * 0.5, ey = by - Math.sin(a) * (by - top) * (0.94 + 0.06 * Math.sin(a));
+    if(ey > by - S * 0.15) continue;
+    const ox = Math.cos(a), oy = -Math.sin(a), L = S * (0.07 + 0.05 * h(k + 700));
+    g.globalAlpha = 0.7;
+    g.beginPath(); g.moveTo(ex, ey); g.lineTo(ex + ox * L + (h(k + 800) - 0.5) * S * 0.05, ey + oy * L); g.stroke();
+  }
+  g.globalAlpha = 1;
+  /* the round door, in a frame of wood; a garland of flowers over it */
+  const dw = S * (lodge ? 1.3 : 1.02), dh = S * (lodge ? 1.55 : 1.22), dcx = Wd * 0.5, dyb = by - S * 0.01, fr = S * 0.1;
+  const arch = (w, hh, grow)=>{ const r = w / 2 + grow; g.beginPath(); g.moveTo(dcx - r, dyb); g.lineTo(dcx - r, dyb - hh + w / 2); g.arc(dcx, dyb - hh + w / 2, r, Math.PI, 0); g.lineTo(dcx + r, dyb); g.closePath(); };
+  g.fillStyle = '#8a5f36'; arch(dw, dh, fr); g.fill();
+  g.fillStyle = '#5a3a1e'; arch(dw, dh, 0); g.fill();
+  g.save(); arch(dw, dh, 0); g.clip();
+  g.strokeStyle = 'rgba(0,0,0,.28)'; g.lineWidth = Math.max(1, S / 30);
+  for(let k = 1; k < 4; k++){ const xx = dcx - dw / 2 + k * dw / 4; g.beginPath(); g.moveTo(xx, dyb - dh); g.lineTo(xx, dyb); g.stroke(); }
+  g.restore();
+  g.fillStyle = '#e8c35a'; g.beginPath(); g.arc(dcx + dw * 0.26, dyb - dh * 0.42, S * 0.055, 0, Math.PI * 2); g.fill();
+  const flower = (fx, fy, r, col)=>{
+    g.fillStyle = col;
+    for(let p = 0; p < 5; p++){ const a = p / 5 * Math.PI * 2 + fx * 0.7; g.beginPath(); g.arc(fx + Math.cos(a) * r * 0.85, fy + Math.sin(a) * r * 0.85, r * 0.6, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#ffe27a'; g.beginPath(); g.arc(fx, fy, r * 0.45, 0, Math.PI * 2); g.fill();
+  };
+  const gr2 = dw / 2 + fr * 1.4;
+  for(let k = 0; k <= 8; k++){                                       // the garland round the arch
+    const a = Math.PI * (1 - k / 8);
+    flower(dcx + Math.cos(a) * gr2, dyb - dh + dw / 2 - Math.sin(a) * gr2, S * 0.075, M.flowers[k % M.flowers.length]);
+  }
+  /* a little round window, lamplit (the huts); lanterns either side of the door (the lodge) */
+  if(!lodge){
+    const wx = Wd * (n ? 0.78 : 0.22), wy = by - Ht * 0.42, wr = S * 0.22;
+    g.fillStyle = '#8a5f36'; g.beginPath(); g.arc(wx, wy, wr + S * 0.06, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffe7a3'; g.beginPath(); g.arc(wx, wy, wr, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#8a5f36'; g.lineWidth = Math.max(1, S / 24);
+    g.beginPath(); g.moveTo(wx - wr, wy); g.lineTo(wx + wr, wy); g.moveTo(wx, wy - wr); g.lineTo(wx, wy + wr); g.stroke();
+  } else {
+    [-1, 1].forEach(sd=>{
+      const lx = dcx + sd * (dw / 2 + S * 0.45), ly = dyb - S * 0.75;
+      const glow = g.createRadialGradient(lx, ly, 0, lx, ly, S * 0.5);
+      glow.addColorStop(0, 'rgba(255,214,110,.55)'); glow.addColorStop(1, 'rgba(255,214,110,0)');
+      g.fillStyle = glow; g.fillRect(lx - S * 0.5, ly - S * 0.5, S, S);
+      g.fillStyle = '#5a3a1e'; g.fillRect(lx - S * 0.03, ly, S * 0.06, S * 0.7);
+      g.fillStyle = '#ffd36a'; g.beginPath(); g.ellipse(lx, ly, S * 0.12, S * 0.15, 0, 0, Math.PI * 2); g.fill();
+    });
+    /* the tribe's pennant, on a pole from its crown */
+    const px = Wd * 0.5, py = top + S * 0.05;
+    g.strokeStyle = '#5a3a1e'; g.lineWidth = Math.max(2, S / 14);
+    g.beginPath(); g.moveTo(px, py + S * 0.1); g.lineTo(px, py - S * 0.75); g.stroke();
+    g.fillStyle = M.pennant; g.beginPath(); g.moveTo(px, py - S * 0.75); g.lineTo(px + S * 0.6, py - S * 0.58); g.lineTo(px, py - S * 0.4); g.closePath(); g.fill();
+  }
+  /* and flowers all over it, in clumps, thickest round its crown */
+  const clumps = Math.round(tw * th * (lodge ? 1.5 : 1.25));
+  for(let c = 0; c < clumps; c++){
+    let cx = 0, cy = 0, tries = 0;
+    do {
+      cx = Wd * (0.1 + 0.8 * h(c * 7 + tries + 1000));
+      const crown = h(c * 11 + tries + 2000) < 0.55;
+      cy = crown ? top + (by - top) * (0.08 + 0.3 * h(c + tries + 3000)) : top + (by - top) * (0.2 + 0.62 * h(c + tries + 3000));
+      dome(); tries++;
+    } while(tries < 12 && (!g.isPointInPath(cx, cy) || (Math.abs(cx - dcx) < dw * 0.9 && cy > dyb - dh - S * 0.35)));
+    if(tries >= 12) continue;
+    const k = 2 + Math.floor(h(c + 4000) * 4);
+    for(let f = 0; f < k; f++){
+      const fx = cx + (h(c * 5 + f + 5000) - 0.5) * S * 0.5, fy = cy + (h(c * 5 + f + 6000) - 0.5) * S * 0.32;
+      dome(); if(!g.isPointInPath(fx, fy)) continue;
+      flower(fx, fy, S * (0.05 + 0.025 * h(c + f + 7000)), M.flowers[(c + f) % M.flowers.length]);
     }
   }
 }
@@ -787,9 +1472,13 @@ function jgDrawSprite(g, kind, n, S){
 function jgShowBands(){
   const world = $('#walkWorld'), w = walkState(), p = w.at && w.at[JG_KEY];
   if(!world || !p || ui.screen !== JG_KEY) return;
+  const all = jgBands();
+  /* (3.95) a new day while you walk: new bands in new places — yesterday's pictures go */
+  if(ui.jgBandEls && ui.jgBandDay !== _jgBandsDay){ Object.values(ui.jgBandEls).forEach(el=> el.remove()); ui.jgBandEls = {}; }
+  ui.jgBandDay = _jgBandsDay;
   const els = ui.jgBandEls || (ui.jgBandEls = {});
   const R = 15;
-  jgBands().forEach(b=>{
+  all.forEach(b=>{
     const near = Math.abs(b.x - p.x) <= R && Math.abs(b.y - p.y) <= R && !jgBandBeaten(b);
     let el = els[b.id];
     if(near && !el){
@@ -829,6 +1518,406 @@ function jgBandPlace(b){
   }
 }
 
+/* ============================================================
+   (3.96) THE VILLAGES' OWN PEOPLE
+   The designer: "the villages are sad and empty. Please fill them with
+   fairies either walking, or facing each other in conversation, or
+   pottering in a small perimeter outside their houses." Sixteen in each
+   village, of its own tribe: five out walking on the green, three pairs
+   chatting face to face (a word bubble each, in turn), and five about
+   their own front doors (now and then popping inside a moment). Made from
+   the jungle's seed, so each starts where it always starts; they move only
+   while you are near, on the bands' clock, and stop to look at you when you
+   come up beside them. The walkers keep out of the gates, the guardian's
+   ground and where you arrive. While the war is at their village they stay
+   indoors.
+   ============================================================ */
+const JG_VILLAGE_FOLK = { grass:['grass_fairy', 'grass_fairy1', 'grass_sprite'], water:['water_fairy', 'water_fairy1', 'water_sprite'],
+                          earth:['earth_fairy', 'earth_sprite'], fire:['fire_sprite', 'bonedancer'] };
+/* each picture (96 × 96): how tall what is drawn in it is, its middle across, where its feet are — then how tall to show it, in squares */
+const JG_FOLK_LOOK = {
+  water_fairy:[0.39, 0.49, 0.69, 0.78], water_fairy1:[0.40, 0.50, 0.70, 0.86], water_sprite:[0.32, 0.50, 0.66, 0.7],
+  grass_fairy:[0.32, 0.45, 0.67, 0.7], grass_fairy1:[0.54, 0.47, 0.77, 0.92], grass_sprite:[0.54, 0.51, 0.77, 0.88],
+  earth_fairy:[0.42, 0.50, 0.71, 0.8], earth_sprite:[0.40, 0.58, 0.70, 0.78],
+  fire_sprite:[0.52, 0.50, 0.76, 0.86], bonedancer:[0.73, 0.50, 0.86, 1.0],
+};
+const JG_FOLK_PLAN = { walk:5, chat:3, potter:5, near:14 };
+const JG_FOLK_SAY = ['…', '♪', '!', '?', '✿', 'ha!', '♥', '…!'];
+const JG_FOLK_LINES = {
+  grass:[
+    `<b>"Hello! Mind the moss — it's ticklish."</b>`,
+    `<b>"Our mounds grow a new flower every morning. I've named this one Bob."</b>`,
+    `<b>"The Guardian can hear the grass growing. Shh… can you?"</b>`,
+    `<b>"The invaders carried off my cousin. If you see fairies with an alien band, set them free!"</b>`,
+    `<b>"Lucesco! I've never seen a lion up close. Is his mane really fire?"</b>`],
+  water:[
+    `<b>"Splish! Come to see the lakes? The water's lovely today."</b>`,
+    `<b>"Before the sky tore, our lakes were as still as glass."</b>`,
+    `<b>"The Guardian can hear one raindrop land on the far side of the jungle."</b>`,
+    `<b>"If you find our people with the aliens, bring them home, won't you?"</b>`,
+    `<b>"I'm practising my bubbles. This one's nearly as big as my head!"</b>`],
+  earth:[
+    `<b>"Careful — I've only just swept this path."</b>`,
+    `<b>"Our mounds stay cool in the sun and snug in the rain. Clever, aren't they?"</b>`,
+    `<b>"I'm counting pebbles. Two hundred and… oh! I've lost count again."</b>`,
+    `<b>"The Guardian never sleeps. Well — maybe a little nap at noon."</b>`,
+    `<b>"The aliens took my brother. You'll free him, won't you?"</b>`],
+  fire:[
+    `<b>"Warm day, isn't it? Every day is warm here!"</b>`,
+    `<b>"The bonedancers dance all night. My feet hurt just from watching."</b>`,
+    `<b>"Don't worry — our lanterns never singe the grass."</b>`,
+    `<b>"The invaders don't like our fire one bit. Good!"</b>`,
+    `<b>"Is that lion made of fire too? We could be cousins!"</b>`],
+};
+let _jgFolk = null, _jgFolkKeep = {}, _jgFolkBy = {};
+function jgFolkAll(){
+  if(_jgFolk) return _jgFolk;
+  const P = jgGround().places, list = [];
+  const finds = new Set(jgFinds().map(([x, y])=> x + ',' + y));
+  JG_TRIBE_KEYS.forEach((k, ti)=>{
+    const V = P.villages[k], L = V.lodge, R = jgRng((JG.seed ^ (0x5f01 + ti * 7919)) >>> 0), ri = n=> Math.floor(R() * n);
+    const kinds = JG_VILLAGE_FOLK[k], pick = ()=> kinds[ri(kinds.length)];
+    const key = (x, y)=> x + ',' + y, keep = new Set(), used = new Set();
+    const hold = (x0, y0, x1, y1)=>{ for(let y = y0; y <= y1; y++) for(let x = x0; x <= x1; x++) keep.add(key(x, y)); };
+    hold(L.x - 1, L.y + L.h, L.x + L.w, L.y + L.h + 3);                                  // before the lodge: its guardian, where you arrive
+    P.gates.forEach(g=>{ if(Math.hypot(g.x - V.cx, g.y - V.cy) < Math.max(V.rx, V.ry) + 4) hold(g.x - 2, g.y - 2, g.x + 2, g.y + 2); });   // the ways in
+    if(typeof warSpots === 'function'){ const S = warSpots(k); [S.king, S.anc].concat(S.guards).forEach(q=> hold(q.x - 1, q.y - 1, q.x + 1, q.y + 1)); }
+    if(typeof warBands === 'function') warBands(k).forEach(b=> hold(Math.min(b.x, b.knight.x) - 1, b.y - 1, Math.max(b.x, b.knight.x) + 1, b.y + 1));
+    const open = (x, y)=> jgVillageAt(x, y) === k && jgTile(x, y) === JG_T.VILLAGE && !keep.has(key(x, y)) && !used.has(key(x, y)) && !finds.has(key(x, y));
+    const roomy = (x, y)=> [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dy])=> !used.has(key(x + dx, y + dy)));
+    const add = f=>{ f.id = 'f' + k + list.length; f.tribe = k; f.x0 = f.x; f.y0 = f.y; list.push(f); used.add(key(f.x, f.y)); _jgFolkBy[f.id] = f; return f; };
+    /* about their own doors: one each at five of the eight huts (the first five with room before the door) */
+    const huts = V.huts.slice();
+    for(let i = huts.length - 1; i > 0; i--){ const j = ri(i + 1); const t = huts[i]; huts[i] = huts[j]; huts[j] = t; }
+    let potters = 0;
+    huts.forEach(h=>{
+      if(potters >= JG_FOLK_PLAN.potter) return;
+      const a = h.x + (h.w >> 1) - 1 + ri(2), dy = h.y + h.h;                             // before its round door (either half of it)
+      const dx = open(a, dy) ? a : open(h.x + h.w - 1 - (a - h.x), dy) ? h.x + h.w - 1 - (a - h.x) : null;
+      if(dx == null) return;
+      add({ kind:'potter', sprite:pick(), x:dx, y:dy, faceR:R() < 0.5, door:{ x:dx, y:dy }, box:{ x0:h.x - 1, y0:h.y - 1, x1:h.x + h.w, y1:h.y + h.h + 1 } });
+      potters++;
+    });
+    /* pairs talking, side by side on the green, facing each other */
+    const doorFront = (x, y)=> V.huts.concat([L]).some(h=> y >= h.y + h.h && y <= h.y + h.h + 1 && x >= h.x - 1 && x <= h.x + h.w);
+    for(let n = 0, tries = 0; n < JG_FOLK_PLAN.chat && tries < 600; tries++){
+      const a = R() * Math.PI * 2, rr = 0.3 + 0.5 * R();
+      const x = Math.round(V.cx + Math.cos(a) * V.rx * rr), y = Math.round(V.cy + Math.sin(a) * V.ry * rr);
+      if(!open(x, y) || !open(x + 1, y) || !roomy(x, y) || !roomy(x + 1, y) || doorFront(x, y) || doorFront(x + 1, y)) continue;
+      const one = add({ kind:'chat', sprite:pick(), x, y, faceR:true }), two = add({ kind:'chat', sprite:pick(), x:x + 1, y, faceR:false });
+      one.mate = two.id; two.mate = one.id; one.lead = true; n++;
+    }
+    /* out walking: anywhere on the green */
+    for(let n = 0, tries = 0; n < JG_FOLK_PLAN.walk && tries < 600; tries++){
+      const a = R() * Math.PI * 2, rr = 0.15 + 0.75 * R();
+      const x = Math.round(V.cx + Math.cos(a) * V.rx * rr), y = Math.round(V.cy + Math.sin(a) * V.ry * rr);
+      if(!open(x, y) || !roomy(x, y)) continue;
+      add({ kind:'walk', sprite:pick(), x, y, faceR:R() < 0.5 }); n++;
+    }
+    _jgFolkKeep[k] = keep;
+  });
+  _jgFolk = list;
+  return list;
+}
+function jgFolkAway(f){ return typeof warStage === 'function' && warStage() === f.tribe; }   // the war is at their village: indoors
+function jgFolkHere(f){ return !f.inside && !jgFolkAway(f); }
+/* somebody of a village standing on (x, y) — `but` not counted */
+function jgFolkAt(x, y, but){
+  const k = jgVillageAt(x, y);
+  if(!k) return false;
+  return jgFolkAll().some(f=> f !== but && f.tribe === k && f.x === x && f.y === y && jgFolkHere(f));
+}
+function jgFolkName(id){ const f = JG_FOLK[id] || JG_FOLK[String(id).replace(/1$/, '')]; return f ? f.name : 'Fairy'; }
+function jgFolkImg(id){
+  const L = JG_FOLK_LOOK[id] || [0.5, 0.5, 0.75, 0.7], T = WALK_T;
+  const px = Math.round(T * L[3] / L[0]);                          // the picture, so that what is in it stands L[3] squares tall
+  const bottom = Math.round(-(1 - L[2]) * px + T * 0.04);          // its feet on the square's bottom edge
+  return `<img class="jg-folk-art" src="assets/mon/${id}_front.png" alt="" style="width:${px}px;height:${px}px;bottom:${bottom}px;` +
+    `translate:${(-L[1] * 100).toFixed(1)}% 0;transform-origin:${(L[1] * 100).toFixed(1)}% 50%;" onerror="this.style.display='none'">`;
+}
+/* only those near you are drawn (as the bands are) */
+function jgShowFolk(){
+  const world = $('#walkWorld'), w = walkState(), p = w.at && w.at[JG_KEY];
+  if(!world || !p || ui.screen !== JG_KEY) return;
+  const els = ui.jgFolkEls || (ui.jgFolkEls = {}), R = JG_FOLK_PLAN.near;
+  jgFolkAll().forEach(f=>{
+    const show = !jgFolkAway(f) && Math.abs(f.x - p.x) <= R && Math.abs(f.y - p.y) <= R;
+    let el = els[f.id];
+    if(!show){ if(el){ el.remove(); delete els[f.id]; } return; }
+    if(el && el.isConnected) return;
+    el = document.createElement('div');
+    el.className = 'walk-ent jg-folk jg-folk-' + f.kind + ' jg-fresh';
+    el.style.setProperty('--fd', (-(jgHash(f.x0, f.y0, 9) * 2.4)).toFixed(2) + 's');   // its hover, out of step with the rest
+    const L = JG_FOLK_LOOK[f.sprite] || [0.5, 0.5, 0.75, 0.7];
+    el.innerHTML = jgFolkImg(f.sprite) + (f.kind === 'chat' ? `<i class="jg-say ${f.faceR ? 'r' : 'l'}" style="bottom:${Math.round(WALK_T * (L[3] + 0.1))}px"></i>` : '');
+    world.appendChild(el); els[f.id] = el;
+    jgFolkPlace(f);
+    requestAnimationFrame(()=> requestAnimationFrame(()=> el.classList.remove('jg-fresh')));
+  });
+}
+function jgFolkPlace(f){
+  const el = ui.jgFolkEls && ui.jgFolkEls[f.id];
+  if(!el) return;
+  el.style.transform = `translate3d(${f.x * WALK_T}px,${f.y * WALK_T}px,0)`;
+  el.style.zIndex = 10 + f.y;
+  faceRight(el, !!f.faceR);
+  el.classList.toggle('jg-in', !!f.inside);
+}
+function jgFolkFree(f, x, y, p, lion){
+  if(f.kind === 'potter'){ const b = f.box; if(x < b.x0 || x > b.x1 || y < b.y0 || y > b.y1) return false; }
+  if(jgVillageAt(x, y) !== f.tribe || jgTile(x, y) !== JG_T.VILLAGE) return false;
+  if(f.kind === 'walk' && _jgFolkKeep[f.tribe] && _jgFolkKeep[f.tribe].has(x + ',' + y)) return false;
+  if((p && p.x === x && p.y === y) || (lion && lion.x === x && lion.y === y)) return false;
+  if(jgFolkAt(x, y, f) || wBlockedBy(JG_DECK, x, y) || jgFindAt(x, y)) return false;   // (the finds stay in sight)
+  return true;
+}
+/* their clock (the bands', jgTickOnce): a step, a look about, a word */
+function jgFolkTick(p){
+  const els = ui.jgFolkEls || {}, lion = ui.jgLion;
+  jgFolkAll().forEach(f=>{
+    const el = els[f.id];
+    if(!el) return;                                                // not near you: it waits where it is
+    if(f.kind === 'chat'){ if(f.lead) jgFolkChat(f, els); return; }
+    if(f.inside){                                                  // indoors a moment, then out of its door again
+      if(--f.inside > 0) return;
+      if(jgFolkFree(f, f.door.x, f.door.y, p, lion)){ f.x = f.door.x; f.y = f.door.y; f.inside = 0; jgFolkPlace(f); }
+      else f.inside = 1;
+      return;
+    }
+    const dx = p.x - f.x, dy = p.y - f.y;
+    if(Math.abs(dx) + Math.abs(dy) === 1){ if(dx) f.faceR = dx > 0; jgFolkPlace(f); return; }   // you, beside it: it stops and looks at you
+    const r = Math.random();
+    if(f.kind === 'potter' && f.x === f.door.x && f.y === f.door.y && r < 0.07){ f.inside = 4 + Math.floor(Math.random() * 6); jgFolkPlace(f); return; }
+    if(r > (f.kind === 'walk' ? 0.55 : 0.32)){ if(r > 0.94){ f.faceR = !f.faceR; jgFolkPlace(f); } return; }   // stands a moment, now and then turning about
+    const dirs = Object.keys(JG_DIR).filter(d=> jgFolkFree(f, f.x + JG_DIR[d][0], f.y + JG_DIR[d][1], p, lion));
+    if(!dirs.length) return;
+    const go = f.kind === 'walk' && f.last && dirs.includes(f.last) && Math.random() < 0.7 ? f.last : dirs[Math.floor(Math.random() * dirs.length)];
+    f.last = go;
+    const [mx, my] = JG_DIR[go];
+    f.x += mx; f.y += my;
+    if(mx) f.faceR = mx > 0;
+    jgFolkPlace(f);
+    el.classList.remove('jg-step'); void el.offsetWidth; el.classList.add('jg-step');
+  });
+}
+/* a pair talking: one, then the other, a word bubble over whoever speaks; now and then a quiet moment */
+function jgFolkChat(f, els){
+  const m = _jgFolkBy[f.mate];
+  if(!m) return;
+  f.t = (f.t || 0) + 1;
+  if(f.t < (f.next || 0)) return;
+  f.t = 0;
+  const quiet = f.speaker && Math.random() < 0.25;
+  f.speaker = quiet ? null : (f.speaker === f.id ? m.id : f.id);
+  f.next = quiet ? 2 : 3 + Math.floor(Math.random() * 4);
+  [f, m].forEach(x=>{
+    const e = els[x.id];
+    if(!e) return;
+    const on = f.speaker === x.id;
+    e.classList.toggle('talking', on);
+    if(on){ const b = e.querySelector('.jg-say'); if(b) b.textContent = JG_FOLK_SAY[Math.floor(Math.random() * JG_FOLK_SAY.length)]; }
+  });
+}
+function jgFolkNear(p){
+  const els = ui.jgFolkEls || {};
+  return jgFolkAll().find(f=> els[f.id] && jgFolkHere(f) && Math.abs(f.x - p.x) + Math.abs(f.y - p.y) === 1) || null;
+}
+function jgFolkTalk(f){
+  const w = walkState(), p = w.at && w.at[JG_KEY];
+  if(p && p.x !== f.x){ f.faceR = p.x > f.x; jgFolkPlace(f); }
+  const j = jgState(), key = 'folk_' + f.tribe, lines = JG_FOLK_LINES[f.tribe] || JG_FOLK_LINES.grass;
+  j.talk[key] = (j.talk[key] || 0) + 1;
+  return jgLines([jgFace(f.sprite + '_front')], jgFolkName(f.sprite), [lines[(j.talk[key] - 1) % lines.length]]);
+}
+
+/* ============================================================
+   (3.96) FINDS: 100 of them, 10 Skill Tokens each
+   The designer: "could you randomly but evenly distribute 100 finds of 10
+   tickets across the 90000 squares on the spaces that are walkable and
+   reachable? Make all of these do a subtle twinkle occasionally … All
+   outside the fairy king castle perimeters but inside villages is fine."
+   One in each block of 30 × 30 squares, on an open square of it chosen at
+   random, at least 12 steps from the others where it can be; the four
+   blocks inside the castle's ring give theirs to the roomiest. From the
+   jungle's seed: the same for everyone, always (every open square of the
+   jungle can be reached, 3.95). They are the deck's prizes (13-walkmap.js:
+   checkPrize, takePrize), kept in r6().found.r6_jungle, and only those near
+   you are drawn — a glint now and then (walkTwinkleEl).
+   ============================================================ */
+const JG_FINDS = { n:100, grid:10, apart:12, near:13 };
+let _jgFinds = null, _jgFindIx = null;
+function jgFinds(){
+  if(_jgFinds) return _jgFinds;
+  const G = jgGround(), { W, H, places, g } = G, R = jgRng((JG.seed ^ 0x71c4e7) >>> 0);
+  const rd = places.castle.road, E = places.entry, avoid = new Set();
+  jgThings().forEach(t=>{ for(let y = t.y - 1; y <= t.y + (t.h || 1); y++) for(let x = t.x - 1; x <= t.x + (t.w || 1); x++) avoid.add(y * W + x); });   // where somebody stands, or something is
+  Object.values(places.villages).forEach(v=>{ for(let y = v.stand.y - 1; y <= v.stand.y + 1; y++) for(let x = v.stand.x - 1; x <= v.stand.x + 1; x++) avoid.add(y * W + x); });
+  const ok = v=>{
+    const x = v % W, y = (v - x) / W, t = g[v];
+    if(JG_SOLID[t] || t === JG_T.ROAD || t === JG_T.ENTRY || avoid.has(v)) return false;
+    if(x >= rd.x - 1 && x <= rd.x + rd.w && y >= rd.y - 1 && y <= rd.y + rd.h) return false;   // the castle and the road round it
+    if(x >= E.x - 3 && y >= E.y - 3 && y <= E.y + E.h + 3) return false;                       // the way in
+    return true;
+  };
+  const C = JG_FINDS.grid, cw = W / C, ch = H / C, cells = [];
+  for(let cy = 0; cy < C; cy++) for(let cx = 0; cx < C; cx++){
+    const list = [];
+    for(let y = Math.floor(cy * ch); y < Math.floor((cy + 1) * ch); y++) for(let x = Math.floor(cx * cw); x < Math.floor((cx + 1) * cw); x++){ const v = y * W + x; if(ok(v)) list.push(v); }
+    cells.push(list);
+  }
+  const picks = [];
+  const apart = v=> picks.every(u=> Math.abs(u % W - v % W) + Math.abs(Math.floor(u / W) - Math.floor(v / W)) >= JG_FINDS.apart);
+  const place = list=>{ for(let t = 0; t < 60; t++){ const v = list[Math.floor(R() * list.length)]; if(apart(v) || t === 59){ picks.push(v); return; } } };
+  let spare = 0;
+  cells.forEach(list=>{ if(list.length) place(list); else spare++; });
+  const roomiest = cells.filter(l=> l.length).sort((a, b)=> b.length - a.length);
+  for(let s = 0; s < spare && roomiest.length; s++) place(roomiest[s % roomiest.length]);
+  _jgFinds = picks.slice(0, JG_FINDS.n).map(v=> [v % W, Math.floor(v / W)]);
+  _jgFindIx = new Map(_jgFinds.map(([x, y], i)=> [y * W + x, i]));
+  return _jgFinds;
+}
+/* an untaken find on (x, y)? */
+function jgFindAt(x, y){
+  jgFinds();
+  const i = _jgFindIx.get(y * JG.W + x);
+  return i != null && !(typeof prizeTaken === 'function' && prizeTaken(JG_KEY, i));
+}
+function jgShowFinds(){
+  const world = $('#walkWorld'), w = walkState(), p = w.at && w.at[JG_KEY];
+  if(!world || !p || ui.screen !== JG_KEY || typeof walkTwinkleEl !== 'function') return;
+  const els = ui.jgFindEls || (ui.jgFindEls = {}), R = JG_FINDS.near;
+  jgFinds().forEach(([x, y], i)=>{
+    const show = Math.abs(x - p.x) <= R && Math.abs(y - p.y) <= R && !prizeTaken(JG_KEY, i);
+    let el = els[i];
+    if(!show){ if(el){ el.remove(); delete els[i]; } return; }
+    if(el && el.isConnected) return;
+    el = walkTwinkleEl(x, y, i);
+    world.appendChild(el); els[i] = el;
+  });
+}
+const JG_FIND_LINES = [
+  `Something glints in the grass.`,
+  `Oh, what's this?`,
+  `Lucesco sniffs at something shiny.`,
+  `Hold on — look!`,
+  `Lucky!`,
+  `A fairy must have dropped this.`,
+  `Tucked under a leaf…`,
+  `Well, well.`,
+];
+
+/* ============================================================
+   (3.96) LUCESCO'S LEAP
+   The designer: "giving him a jump ability that allows him to carry the
+   player over a single wall in the maze. Double walls not possible …
+   animate by cutting each different player sprite's legs and placing them
+   in the right position over his sprite to let him jump with the player …
+   This ability will have a cooldown based on the number of steps taken,
+   maybe every 50 steps?" Face a wall of trees one tree thick with open
+   ground beyond it and his button says Jump: you ride him over (your
+   picture from the waist up, on his back), and land beyond. Then 50 steps
+   before he can again (jgState().jumpIn, counted down by jgStep). Only the
+   forest's trees: not water, a hut, the castle's walls, or two trees deep.
+   ============================================================ */
+const JG_JUMP = { steps:50, ms:900, high:1.05 };
+/* how much of each picture is legs — what is cut away as you sit on him (the rest: 44%) */
+const JG_RIDE_CUT = { m2:0.4, m3:0.5, f2:0.45, f5:0.42 };
+function jgJumpIn(){ return Math.max(0, jgState().jumpIn | 0); }
+function jgJumpFrom(p, dir){
+  const v = JG_DIR[dir];
+  if(!v || !p) return null;
+  const wx = p.x + v[0], wy = p.y + v[1], x = p.x + 2 * v[0], y = p.y + 2 * v[1];
+  if(jgTile(wx, wy) !== JG_T.HEDGE) return null;                          // only the forest's trees
+  if(x < 1 || y < 1 || x >= JG.W - 1 || y >= JG.H - 1) return null;
+  if(jgSolidAt(x, y) || jgBandAt(x, y) || wBlockedBy(JG_DECK, x, y) || jgFolkAt(x, y)) return null;   // two deep, or somebody there
+  return { x, y, dir };
+}
+function jgJumpHtml(mark){
+  const T = WALK_T, LS = 1.577 * T, av = (state && state.avatar) || 'm1', cut = JG_RIDE_CUT[av] != null ? JG_RIDE_CUT[av] : 0.44;
+  /* his picture as he is on the map (1.577 × a square, lifted a tenth); you astride his back, behind the mane */
+  const RS = Math.round(1.2 * T), backX = -0.2885 * T + 0.63 * LS, backY = -0.4465 * T + 0.45 * LS;
+  return `<i class="jg-ride-shadow"></i><div class="jg-ride-arc">` +
+    `<img class="jg-ride-lion" src="assets/mon/lucesco_front.png" alt="" style="width:${Math.round(LS)}px;height:${Math.round(LS)}px;left:${Math.round(0.5 * T - LS / 2)}px;top:${Math.round(0.342 * T - LS / 2)}px">` +
+    `<img class="jg-ride-you" src="assets/avatar/${av}.png" alt="" onerror="avatarFallback(this)" data-px="${RS}" data-id="${av}" data-bare="1" ` +
+      `style="width:${RS}px;height:${RS}px;left:${Math.round(backX - RS / 2)}px;top:${Math.round(backY - (1 - cut) * RS)}px;clip-path:inset(0 0 ${Math.round(cut * 100)}% 0)">` +
+    `</div>`;
+}
+async function jgJump(J){
+  const w = walkState(), p = w.at && w.at[JG_KEY];
+  if(!p || !J || w.busy || ui.jgAlert || ui.jgTalk || jgJumpIn()) return;
+  const world = $('#walkWorld'), me = $('#walkYou'), lion = document.getElementById('jgLion');
+  if(!world || !me) return;
+  releaseKeys();
+  w.busy = true;
+  const T = WALK_T, from = { x:p.x, y:p.y }, v = JG_DIR[J.dir];
+  const faceR = v[0] ? v[0] > 0 : w.faceX === 'r';
+  if(v[0]) w.faceX = v[0] > 0 ? 'r' : 'l';
+  const ride = document.createElement('div');
+  ride.className = 'walk-ent jg-ride' + (faceR ? ' face-r' : '');
+  ride.style.zIndex = 12 + Math.max(from.y, J.y);
+  ride.style.transform = `translate3d(${from.x * T}px,${from.y * T}px,0)`;
+  ride.innerHTML = jgJumpHtml();
+  world.appendChild(ride);
+  me.classList.add('jg-riding');
+  if(lion) lion.classList.add('jg-riding');
+  /* the camera glides with the leap, not ahead of it */
+  p.x = J.x; p.y = J.y;
+  world.style.transition = `transform ${(JG_JUMP.ms * 0.8 / 1000).toFixed(2)}s ease-in-out ${(JG_JUMP.ms * 0.12 / 1000).toFixed(2)}s`;
+  refreshWalk();
+  const D = JG_JUMP.ms, reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const arc = ride.querySelector('.jg-ride-arc'), sh = ride.querySelector('.jg-ride-shadow');
+  const at = (x, y)=> `translate3d(${x * T}px,${y * T}px,0)`;
+  try {
+    if(typeof ride.animate === 'function' && !reduce){
+      const up = -JG_JUMP.high * T;
+      const a1 = ride.animate([{ transform:at(from.x, from.y), offset:0 }, { transform:at(from.x, from.y), offset:0.12 },
+                               { transform:at(J.x, J.y), offset:0.9 }, { transform:at(J.x, J.y), offset:1 }], { duration:D, easing:'linear', fill:'forwards' });
+      arc.animate([{ transform:'translateY(0) scaleY(1)', offset:0 }, { transform:`translateY(${0.05 * T}px) scaleY(.9)`, offset:0.12, easing:'cubic-bezier(.25,.7,.55,1)' },
+                   { transform:`translateY(${up}px) scaleY(1.05)`, offset:0.5, easing:'cubic-bezier(.45,0,.75,.35)' }, { transform:`translateY(${0.04 * T}px) scaleY(.92)`, offset:0.9 },
+                   { transform:'translateY(0) scaleY(1)', offset:1 }], { duration:D, fill:'forwards' });
+      if(sh) sh.animate([{ transform:'scale(1)', opacity:1, offset:0 }, { transform:'scale(1)', opacity:1, offset:0.12 }, { transform:'scale(.55)', opacity:0.45, offset:0.5 },
+                         { transform:'scale(1)', opacity:1, offset:0.9 }, { transform:'scale(1)', opacity:1, offset:1 }], { duration:D, fill:'forwards' });
+      await a1.finished.catch(()=>{});
+    } else {
+      await new Promise(r=> setTimeout(r, 120));
+      ride.style.transform = at(J.x, J.y);
+      await new Promise(r=> setTimeout(r, 200));
+    }
+  } catch(e){}
+  if(world.isConnected) world.style.transition = '';
+  ride.remove();
+  me.classList.remove('jg-riding');
+  /* Lucesco beside you where you land: ahead of you if he can, else to a side */
+  const free = [[v[0], v[1]], [v[1], v[0]], [-v[1], -v[0]]].map(([dx, dy])=> ({ x:J.x + dx, y:J.y + dy }))
+    .find(q=> !jgSolidAt(q.x, q.y) && !wBlockedBy(JG_DECK, q.x, q.y) && !jgBandAt(q.x, q.y) && !jgFolkAt(q.x, q.y));
+  ui.jgLion = free ? { x:free.x, y:free.y, faceR:free.x !== J.x ? free.x < J.x : faceR } : { x:J.x, y:J.y, faceR };
+  ui.jgTrail = [{ x:J.x, y:J.y }];
+  if(lion){ lion.classList.add('jg-fresh'); jgLionPlace(); requestAnimationFrame(()=> requestAnimationFrame(()=>{ lion.classList.remove('jg-fresh', 'jg-riding'); })); }
+  const j = jgState();
+  j.jumpIn = JG_JUMP.steps;
+  j.jumps = (j.jumps || 0) + 1;
+  w.busy = false;
+  jgSave(false);
+  jgExplore(J.x, J.y);
+  jgDiscover(J.x, J.y);
+  jgShowBands(); jgShowFolk(); jgShowFinds();
+  w.actSig = null;
+  refreshWalk();
+  if(typeof checkPrize === 'function' && checkPrize()){ releaseKeys(); return; }   // landed on a find
+  jgLook();
+}
+/* the button beside you, while you face a wall he can leap */
+function jgJumpAct(p){
+  const J = jgJumpFrom(p, walkState().face);
+  if(!J) return null;
+  const n = jgJumpIn();
+  const j = jgState();
+  if(!j.talk.jumpHint){ j.talk.jumpHint = 1; setTimeout(()=> toast('🦁 Lucesco can carry you over this wall — tap Jump!'), 50); }
+  if(n) return { key:'jgJump' + n, cls:'lion off', html:lucescoActHtml('Jump', `in ${n} step${n === 1 ? '' : 's'}`),
+                 act:()=> toast(`🦁 Lucesco is catching his breath — ${n} more step${n === 1 ? '' : 's'}.`) };
+  return { key:'jgJump', cls:'lion leap', html:lucescoActHtml('Jump!', 'over the trees'), act:()=> jgJump(J) };
+}
+
 /* ---------- their clock: a step every 0.7 s, for those near you ---------- */
 let _jgTick = null;
 function jgTickStart(){
@@ -862,6 +1951,7 @@ function jgTickOnce(){
     jgBandPlace(b);
   });
   jgShowBands();                                    // one that has wandered into view
+  jgFolkTick(p);                                    // (3.96) the villages' people: a step, a look, a word
   jgLook();
   refreshWalk();
 }
@@ -918,7 +2008,11 @@ function jgHold(on){
 
 /* ---------- the buttons beside you ---------- */
 function jgNearActs(p){
-  const acts = [{ key:'jgLion', html:'🦁 Talk<small>Lucesco</small>', act:()=> jgLionTalk() }];
+  const acts = [{ key:'jgLion', cls:'lion', html:lucescoActHtml('Talk'), act:()=> jgLionTalk() }];   // (3.96) his face on it
+  const jump = jgJumpAct(p);                                                                          // (3.96) his leap, facing a wall he can clear
+  if(jump) acts.push(jump);
+  const f = jgFolkNear(p);                                                                            // (3.96) one of the villagers beside you
+  if(f) acts.push({ key:'jgF' + f.id, at:{ x:f.x, y:f.y }, html:`💬 Talk<small>${escapeHtml(jgFolkName(f.sprite))}</small>`, act:()=> jgFolkTalk(f) });
   jgBands().forEach(b=>{
     if(jgBandBeaten(b) || Math.abs(b.x - p.x) + Math.abs(b.y - p.y) !== 1) return;
     const nm = SPECIES[b.lead].name;
@@ -965,9 +2059,10 @@ function jgMapOpen(){
   document.body.appendChild(ov);
   const cv = ov.querySelector('#jgMapCv'), ctx = cv.getContext('2d');
   const img = ctx.createImageData(JG.W, JG.H), D = img.data;
-  const COL = { 0:[24,58,34], 1:[150,126,86], 2:[46,111,156], 3:[110,160,84], 4:[214,196,150], 5:[132,128,160], 6:[120,80,40], 7:[150,100,60], 8:[40,90,40], 9:[170,180,120], 10:[120,160,100], 11:[170,162,146] };
+  const COL = { 0:[44,54,24], 2:[46,111,156], 3:[150,196,110], 4:[214,196,150], 5:[132,128,160], 6:[120,80,40], 7:[150,100,60], 8:[52,64,28], 9:[170,180,120], 10:[150,190,120], 11:[170,162,146] };   // (3.95) the paths in their own green (jgFloor)
+  const F = jgFloor().rgb;
   for(let y = 0; y < JG.H; y++) for(let x = 0; x < JG.W; x++){
-    const i = (y * JG.W + x) * 4, seen = jgExplored(x, y), c = COL[G.g[y * JG.W + x]] || [0, 0, 0];
+    const i = (y * JG.W + x) * 4, seen = jgExplored(x, y), t = G.g[y * JG.W + x], c = t === JG_T.PATH ? [Math.min(255, F[i] + 24), Math.min(255, F[i + 1] + 30), Math.min(255, F[i + 2] + 18)] : (COL[t] || [0, 0, 0]);
     if(seen){ D[i] = c[0]; D[i + 1] = c[1]; D[i + 2] = c[2]; } else { D[i] = 14; D[i + 1] = 22; D[i + 2] = 18; }
     D[i + 3] = 255;
   }
@@ -988,10 +2083,28 @@ function jgMapOpen(){
 /* A band's waves. Each: two of the tribe's fairies (the tribe whose lands it
    holds) and an alien between them; a captain's band, three; a commander's,
    six — the captain next to last, the commander last. */
+/* (3.95) Whose people the jungle's bands hold: anyone's — the designer: "do
+   not divide the captured fairies in waves by region. Let them be randomly
+   encountered regardless of region so that a mix of fairy types are
+   available." The tribes' fairies, and the castle's people as caCitizenPick
+   weighs them (its townsfolk twice as often as its knights and elites); a
+   tribe's fairy as often as a townsman. Each still counts for its own tribe,
+   or for the castle, when it is freed. */
+function jgCaptivePool(){
+  const pool = Object.keys(JG_FOLK).map(id=> [id, 2]);
+  if(typeof CA_CITIZENS !== 'undefined') CA_CITIZENS.forEach(id=> pool.push([id, SPECIES[id] && SPECIES[id].tier === 'wild' && !/_knight$/.test(id) ? 2 : 1]));
+  return pool;
+}
+function jgCaptivePick(){
+  const pool = jgCaptivePool();
+  let r = Math.random() * pool.reduce((a, p)=> a + p[1], 0);
+  for(const [id, w] of pool){ r -= w; if(r < 0) return id; }
+  return pool[0][0];
+}
 function jgWaves(b){
   const R = Math.random, T = JG_TRIBES[b.tribe] || JG_TRIBES.water;
-  /* (3.90) near the castle, its own people (caCitizenPick) */
-  const pick = ()=> (b.tribe === 'castle' && typeof caCitizenPick === 'function') ? caCitizenPick() : T.members[Math.floor(R() * T.members.length)];
+  /* the war's forces at a village still hold that village's own people (22-war.js) */
+  const pick = ()=> b.war ? T.members[Math.floor(R() * T.members.length)] : jgCaptivePick();
   const fairy = (boss)=> ({ species:pick(), level:JG.fairyLv[0], ai:'best', nerfed:false, anyLevel:true,
     jg:{ mind:true, tribe:b.tribe },
     /* the designer: "captain and commander encounters also galvanise their fairies to use diamond dust on their respective waves" */
@@ -1256,6 +2369,7 @@ const JG_LION_LINES = [
   `<b>"The fairies with them are not wicked. Their minds are not their own. Beat the alien's band, and they are free."</b>`,
   `<b>"Four tribes live in the corners of this land, and the Fairy King's castle stands in the middle."</b>`,
   `<b>"If you are lost, look at the map. It shows where we have been."</b>`,
+  `<b>"Face a wall of trees only one tree thick, and I can leap it with you on my back. Then I need fifty steps to get my breath back."</b>`,   // (3.96)
 ];
 function jgLionTalk(){
   const j = jgState();
@@ -1278,7 +2392,7 @@ async function jgGuardian(k){
   const n = Math.min(JG.daily.need, j.rescued[k] || 0);
   await jgLines(face, nm, [j.paid[k]
     ? `<b>"You freed ${jgPeople(JG.daily.need)} today. Rest, friends — come back tomorrow."</b>`
-    : `<b>"${n ? jgPeople(n).replace(/^one/, 'One') + ' freed today.' : 'None of our people freed yet today.'} ${JG.daily.need - n === 1 ? 'One more' : (JG.daily.need - n) + ' more'}, and the tribe will thank you."</b><br><br><i>The aliens near this village hold ${T.name.replace(/^the /, 'the ')}'s people.</i>`]);
+    : `<b>"${n ? jgPeople(n).replace(/^one/, 'One') + ' freed today.' : 'None of our people freed yet today.'} ${JG.daily.need - n === 1 ? 'One more' : (JG.daily.need - n) + ' more'}, and the tribe will thank you."</b><br><br><i>Any band in the jungle may hold some of ${T.name.replace(/^the /, 'the ')}'s people.</i>`]);
 }
 async function jgKnights(){
   const j = jgState(), face = [jgFace(JG_GATE_KNIGHT + '_front', 'fairy_knight_front')], nm = JG_GATE_KNIGHT_NAME;
@@ -1356,15 +2470,20 @@ function jgPortal(){
    civilizations once discovered"). From Region 6's Explore it offers the Rift too. */
 function jgChooser(withRift){
   const j = jgState(), opts = [];
-  if(withRift) opts.push({ k:'rift', html:'🌀 The Time Rift', sub:'Selene, Vesper and the portals' });
-  opts.push({ k:'last', html:'🌴 The jungle', sub:j.at ? 'Where you left off' : 'From the portal' });
-  JG_TRIBE_KEYS.forEach(k=>{ if(j.found[k]) opts.push({ k, html:`${JG_TRIBES[k].icon} ${JG_TRIBES[k].name.replace(/^the /, 'The ')}`, sub:'Their village' }); });
-  if(j.found.castle) opts.push({ k:'castle', html:'🏰 The Fairy King\'s castle', sub:(typeof caOpen === 'function' && caOpen()) ? 'Inside its gates' : 'The south gate' });   // (3.89) in, once it is open
-  if(!withRift && opts.length === 1) return jgEnter('last');
+  /* (3.97) the designer: "include the portal itself as a quick travel destination. Replace the emoticons that show
+     each destination with the guardians' pictures and the king's picture for the tribes and castle respectively. For
+     where the player last left off, show Lucesco's image." */
+  const pic = (file, alt)=> `<img class="jg-go-pic" src="assets/mon/${file}.png" alt="" onerror="this.replaceWith(document.createTextNode('${alt}'))">`;
+  if(withRift) opts.push({ k:'rift', pic:'<span class="jg-go-pic jg-go-emoji">🌀</span>', name:'The Time Rift', sub:'Selene, Vesper and the portals' });
+  if(j.at) opts.push({ k:'last', pic:pic('lucesco_front', '🦁'), name:'Where you left off', sub:'Lucesco remembers the way' });
+  opts.push({ k:'entry', pic:`<span class="jg-go-pic jg-go-portal">${typeof riftPortalSvg === 'function' ? riftPortalSvg(false) : '🌀'}</span>`, name:'The portal', sub:'The glade where the jungle begins' });
+  JG_TRIBE_KEYS.forEach(k=>{ if(j.found[k]) opts.push({ k, pic:pic(JG_TRIBES[k].guardian, JG_TRIBES[k].icon), name:JG_TRIBES[k].name.replace(/^the /, 'The '), sub:'Their village, by their guardian' }); });
+  if(j.found.castle) opts.push({ k:'castle', pic:pic('fairy_king_c_front', '🏰'), name:'The Fairy King\'s castle', sub:(typeof caOpen === 'function' && caOpen()) ? 'Inside its gates' : 'The south gate' });   // (3.89) in, once it is open
+  if(!withRift && opts.length === 1) return jgEnter(opts[0].k);
   const ov = document.createElement('div');
   ov.className = 'refine-scrim jg-choose';
   ov.innerHTML = `<div class="refine-card"><div class="refine-name">Where to?</div>
-      <div class="jg-choose-list">${opts.map(o=> `<button class="btn btn-ghost jg-go" data-k="${o.k}">${o.html}<small>${escapeHtml(o.sub)}</small></button>`).join('')}</div>
+      <div class="jg-choose-list">${opts.map(o=> `<button class="btn btn-ghost jg-go" data-k="${o.k}">${o.pic}<span class="jg-go-words">${escapeHtml(o.name)}<small>${escapeHtml(o.sub)}</small></span></button>`).join('')}</div>
       <button class="btn btn-ghost" id="jgChooseNo" style="margin-top:10px;">Cancel</button></div>`;
   document.body.appendChild(ov);
   const close = ()=> ov.remove();
@@ -1448,8 +2567,23 @@ function jgCss(){
   const s = document.createElement('style');
   s.id = 'jgCss';
   s.textContent = `
-  .walk-stage.jg-stage{ background:#163a22; }
-  .jg-ground{ position:absolute; inset:0; width:100%; height:100%; display:block; z-index:0; pointer-events:none; }
+  .walk-stage.jg-stage{ background:#2a3417; }
+  .jg-rays{ position:absolute; inset:0; z-index:3; pointer-events:none; overflow:hidden; mix-blend-mode:screen; }
+  .jg-rays i{ position:absolute; top:-45%; left:var(--x); width:var(--w); height:190%; opacity:var(--o); transform-origin:50% 0; will-change:transform;
+    -webkit-mask-image:linear-gradient(180deg, transparent 0%, #000 22%, #000 58%, transparent 95%); mask-image:linear-gradient(180deg, transparent 0%, #000 22%, #000 58%, transparent 95%);
+    animation:jgRaySway var(--d) ease-in-out var(--dl) infinite alternate; }
+  .jg-rays i::before{ content:''; position:absolute; inset:0;
+    background:linear-gradient(90deg, rgba(255,204,92,0) 0%, rgba(255,214,112,.40) 28%, rgba(255,234,164,.62) 50%, rgba(255,214,112,.40) 72%, rgba(255,204,92,0) 100%);
+    animation:jgRayGlow calc(var(--d) * .62) ease-in-out var(--dl) infinite alternate; }
+  .jg-rays i::after{ content:''; position:absolute; left:0; right:0; top:-40%; height:180%;
+    background:repeating-linear-gradient(180deg, rgba(255,242,196,0) 0px, rgba(255,242,196,0) 80px, rgba(255,246,206,.26) 120px, rgba(255,242,196,0) 160px);
+    animation:jgRayFall 8s linear var(--dl) infinite; }
+  @keyframes jgRaySway{ from{ transform:rotate(23deg) translateX(-16%); } to{ transform:rotate(29deg) translateX(18%); } }
+  @keyframes jgRayGlow{ from{ opacity:.28; } to{ opacity:1; } }
+  @keyframes jgRayFall{ from{ transform:translateY(-160px); } to{ transform:translateY(0); } }
+  @media (prefers-reduced-motion: reduce){ .jg-rays i, .jg-rays i::before, .jg-rays i::after{ animation:none; } .jg-rays i{ transform:rotate(26deg); } }
+  .jg-ground{ position:absolute; left:0; top:0; display:block; z-index:0; pointer-events:none; }   /* (3.96) inside the world: placed and sized as it is painted */
+  .jg-over{ position:absolute; left:0; top:0; display:block; z-index:1000; pointer-events:none; }   /* (3.96) the crowns over the paths: over everyone */
   .jg-stage .walk-world{ z-index:1; }
   .walk-ent.jg-lion{ transition:transform .2s linear, opacity .5s; }
   .walk-ent.jg-lion.jg-hidden{ opacity:0; }
@@ -1465,9 +2599,40 @@ function jgCss(){
   .rift-portal.jg-awake .rp-swirl{ opacity:.85 !important; animation-duration:9s !important; }
   .rift-portal.jg-awake .rp-sleep{ animation:none !important; opacity:1 !important; }
   .walk-ent.jg-npc{ overflow:visible; }
-  .walk-ent.jg-npc .jg-art{ position:absolute; left:50%; bottom:0; transform:translateX(-50%); image-rendering:pixelated; pointer-events:none;
-    filter:drop-shadow(0 3px 2px rgba(0,0,0,.35)); }
-  .walk-ent.jg-knight.face-r .jg-art{ transform:translateX(-50%) scaleX(-1); }
+  /* (3.96) centred with translate, not transform: face-r's scale:-1 1 (13-walkmap.js) is applied
+     after a transform, so it mirrored the shift too and the picture jumped its own width to the
+     right ("they flip to a different square when approached from the right") */
+  .walk-ent.jg-npc .jg-art{ position:absolute; left:50%; bottom:0; translate:-50% var(--feet, 0); transform:none; image-rendering:pixelated; pointer-events:none;
+    filter:drop-shadow(0 3px 2px rgba(0,0,0,.35)); }   /* transform:none: its own size, not a person's 1.314 (index.html), as before 3.96 */
+  /* (3.96) the villages' people: a gentle hover (fairies), a hop as they step, a word bubble as they talk */
+  .walk-ent.jg-folk{ overflow:visible; pointer-events:none; transition:transform .62s linear, opacity .45s; }
+  .walk-ent.jg-folk-potter{ transition:transform .9s ease-in-out, opacity .45s; }
+  .walk-ent.jg-folk.jg-fresh{ transition:none; }
+  .walk-ent.jg-folk::before{ content:''; position:absolute; left:26%; right:26%; bottom:-3%; height:15%; border-radius:50%; background:rgba(8,20,4,.22); }
+  .walk-ent.jg-folk .jg-folk-art{ position:absolute; left:50%; image-rendering:pixelated; pointer-events:none; filter:drop-shadow(0 2px 1px rgba(0,0,0,.28));
+    transform:none; animation:jgHover 2.4s ease-in-out var(--fd, 0s) infinite; }   /* (not a person's 1.314: sized by jgFolkImg) */
+  .walk-ent.jg-folk.jg-step .jg-folk-art{ animation:jgFolkHop .62s ease-in-out, jgHover 2.4s ease-in-out var(--fd, 0s) infinite; }
+  .walk-ent.jg-folk.talking .jg-folk-art{ animation:jgFolkTalk .42s ease-in-out infinite alternate; }
+  .walk-ent.jg-folk.jg-in{ opacity:0; }
+  @keyframes jgHover{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-4%); } }
+  @keyframes jgFolkHop{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-9%); } }
+  @keyframes jgFolkTalk{ from{ transform:translateY(0) rotate(0deg); } to{ transform:translateY(-3%) rotate(-3deg); } }
+  .jg-say{ position:absolute; font:900 calc(var(--wt, 48px) * .3)/1 'Nunito',sans-serif; color:#3a3a3a; background:#fffef6; border-radius:9px;
+    padding:3px 6px; min-width:1.4em; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,.35); opacity:0; transform:scale(.6); transition:opacity .18s, transform .18s; pointer-events:none; z-index:2; white-space:nowrap; font-style:normal; }
+  .jg-say.r{ left:58%; } .jg-say.l{ right:58%; }
+  .jg-say::after{ content:''; position:absolute; bottom:-4px; width:8px; height:8px; background:#fffef6; transform:rotate(45deg); }
+  .jg-say.r::after{ left:6px; } .jg-say.l::after{ right:6px; }
+  .walk-ent.jg-folk.talking .jg-say{ opacity:1; transform:scale(1); }
+  /* (3.96) Lucesco's leap: you on his back, over the trees */
+  .walk-you.jg-riding, .walk-ent.jg-lion.jg-riding{ opacity:0 !important; transition:none !important; }
+  .walk-ent.jg-lion.jg-fresh{ transition:none !important; }
+  .walk-ent.jg-ride{ overflow:visible; pointer-events:none; }
+  .jg-ride .jg-ride-arc{ position:absolute; inset:0; transform-origin:50% 100%; }
+  .jg-ride.face-r .jg-ride-arc{ scale:-1 1; }
+  .jg-ride .jg-ride-lion, .jg-ride .jg-ride-you{ position:absolute; image-rendering:pixelated; pointer-events:none; max-width:none; transform:none; object-fit:fill; }
+  .jg-ride .jg-ride-lion{ filter:drop-shadow(0 0 5px rgba(255,140,60,.6)); }
+  .jg-ride .jg-ride-shadow{ position:absolute; left:4%; right:4%; bottom:-10%; height:26%; border-radius:50%; background:rgba(0,0,0,.3); }
+  .wact.lion.leap{ background:#c0702c; border-color:#8e4f1a; color:#fff; }
   .walk-ent.jg-band{ transition:transform .3s linear; overflow:visible; pointer-events:none; }
   .jg-band .jg-alien-art{ position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center; }
   .jg-band .jg-alien-art .jg-art{ image-rendering:pixelated; flex:0 0 auto; margin-bottom:-6%;
@@ -1492,15 +2657,20 @@ function jgCss(){
   #jgMapCv{ image-rendering:pixelated; border-radius:8px; display:block; margin:0 auto; background:#0e1612; }
   .jg-map-key{ font-size:12px; font-weight:700; color:var(--ink-soft); margin:8px 0; }
   .jg-choose-list{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
-  .jg-choose .btn.jg-go{ display:flex; flex-direction:column; align-items:flex-start; text-align:left; }
+  .jg-choose .btn.jg-go{ display:flex; flex-direction:row; align-items:center; gap:10px; text-align:left; padding-top:6px; padding-bottom:6px; }
+  .jg-choose .jg-go-words{ display:flex; flex-direction:column; align-items:flex-start; }
   .jg-choose .btn.jg-go small{ font:700 11px/1.2 'Nunito',sans-serif; color:var(--ink-soft); margin-top:2px; }
+  .jg-choose .jg-go-pic{ width:46px; height:46px; flex:0 0 46px; object-fit:contain; image-rendering:pixelated; display:flex; align-items:center; justify-content:center;
+    margin:-4px 0; filter:drop-shadow(0 1px 1px rgba(0,0,0,.3)); }
+  .jg-choose .jg-go-emoji{ font-size:30px; }
+  .jg-choose .jg-go-portal svg{ width:100%; height:100%; overflow:visible; filter:hue-rotate(80deg) saturate(1.3); }
   .jg-king-light svg{ display:block; }
   /* the fight */
   .enemy-card.jg-foe-alien .avatar-layer .mon-sprite{ filter:drop-shadow(0 0 3px #000) drop-shadow(0 0 3px #000) drop-shadow(0 0 10px rgba(220,20,30,1)) !important; }
   .enemy-card.jg-foe-mind .avatar-layer .mon-sprite{ filter:sepia(.7) saturate(3.4) hue-rotate(-30deg) brightness(.95) drop-shadow(0 0 7px rgba(255,40,40,1)) !important; }
   .enemy-card.jg-enraging .avatar-layer{ animation:jgEnrage 1.2s ease-out; }
   @keyframes jgEnrage{ 0%{ transform:scale(1); filter:brightness(1); } 30%{ transform:scale(1.22); filter:brightness(2.2) drop-shadow(0 0 16px #ff2020); } 100%{ transform:scale(1); filter:none; } }
-  @media (prefers-reduced-motion: reduce){ .jg-band .jg-alien-art .jg-art, .enemy-card.jg-enraging .avatar-layer{ animation:none; } }
+  @media (prefers-reduced-motion: reduce){ .jg-band .jg-alien-art .jg-art, .enemy-card.jg-enraging .avatar-layer, .walk-ent.jg-folk .jg-folk-art{ animation:none !important; } }
   `;
   document.head.appendChild(s);
 }

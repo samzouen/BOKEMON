@@ -702,15 +702,8 @@ function pickWords(wordTarget, revision){
   if(pool.length===0) return [];
   const buffer = Math.max(4, Math.ceil(wordTarget * 0.3));   // headroom for misses/spill
   const needChars = wordTarget + buffer;
-  const out=[]; let chars=0; let bag=shuffle(pool);
-  let guard = 0;
-  while(chars < needChars && guard++ < 500){
-    if(bag.length===0) bag=shuffle(pool);
-    const w = bag.pop();
-    out.push(w);
-    chars += countWords(w);
-  }
-  return out;
+  /* (3.95) the least tested first, the ones just written held back (drawPhrases, 02-core.js) */
+  return drawPhrases(pool, 0, (out, chars)=> chars >= needChars);
 }
 function countWords(text){ return (text||'').length; }   // one hanzi = one word
 /* ============================================================
@@ -841,6 +834,7 @@ function runMoveQuiz(mv, target){
     title:mv.name,
     subtitle:`${who}${mv.isStone?stoneTierDef(mv.stoneTier).label+' move':(mv.slot==='Basic'?'Basic move':mv.slot)} · write ${mv.words} words to power it up${mv.scale?` — keep going for up to ${mv.scale.max}× !`:''}${learned ? ' · 🥈🥇 words you have learned' : ''}`,
     words, stopAtFirstMiss:true, lockExit:true,
+    move:mv, attacker:activeMon(), target:target || null,             // (3.97) the spelling screen's banner
     wordTarget: ceilWords,
     stopAt: mv.scale ? mv.words : 0,     // scaling moves may be ended once powered
     startingWords: carry,
@@ -904,6 +898,11 @@ function secondWindMsg(){
 
 function bankWordSpill(mv){
   if(!ui.battle) return 0;
+  /* (3.97) A scaling move (Incinerate, Incinerate Max) spends its words past
+     the requirement on its own power: none roll on into the next move. The
+     designer: "Incinerate max keeps bonus words into the next round. It
+     should not do so since those words gave a bonus to its damage." */
+  if(mv && mv.scale){ ui.battle.wordCarry = 0; return 0; }
   const done = (ui.quiz && ui.quiz.wordsDone) || 0;
   const spill = Math.max(0, done - mv.words);
   ui.battle.wordCarry = spill;
@@ -1773,7 +1772,7 @@ function resolveBattleMove(mv, target, results, opts){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
     applyClones(mv, mon);
     renderStatusBadges();
-    battleMsg(`${mv.name}! Two clones fight alongside you for ${mv.clones.turns} turns.`);
+    battleMsg(`${mv.name}! Two clones spring up beside ${escapeHtml(displayName(mon))} — they join ${mv.clones.full ? 'his' : 'its'} next <b>${mv.clones.turns}</b> attacks.`);   // (3.96) his, not the side's
     playEffect(mv.name, { type:SPECIES[mon.species].types[0] });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
   }
@@ -2407,7 +2406,7 @@ function afterPlayerAttackBody(mon, hits){
      repeat had come, so an action that won an extra one lost both. It comes
      last now, once all of them have run (endPlayerAction). */
   const cl = ui.battle && ui.battle.clones;
-  if(cl && cl.turnsLeft>0 && !ui.battle._cloneEchoing && hits && hits.length && ui.battle.lastMove){
+  if(cl && cl.turnsLeft>0 && clonesServe(mon) && !ui.battle._cloneEchoing && hits && hits.length && ui.battle.lastMove){   // (3.96) his attacks only
     return runCloneEchoes(mon, ui.battle.lastMove, ()=> afterPlayerAttackReal(mon, hits));
   }
   return afterPlayerAttackReal(mon, hits);
@@ -4673,10 +4672,10 @@ function enemyStrikeOn(ctx, step, done){
         if(getEStatus(e,'softened')) ctx.softened = true;
         /* a guard their side pulled off earlier makes this swing heavier —
            the Combo is their side's (3.01), as yours is your side's */
-        if(b.eCombo){
+        if(b.eCombo || e.comboStacks > 0){                      // (3.96) and its own, from its Focused Fury
           const cE = getESide('counter');
-          ctx.mults.combo = 1 + b.eCombo * ((cE && cE.combo) || 0.25);
-          b.eCombo = 0;
+          ctx.mults.combo = 1 + ((b.eCombo || 0) + (e.comboStacks || 0)) * ((cE && cE.combo) || 0.25);
+          b.eCombo = 0; e.comboStacks = 0;
         }
         /* Rage: a free 20% critical, or a bought certainty. */
         ctx.mults.rage = rageMultiplier(e);

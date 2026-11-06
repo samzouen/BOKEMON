@@ -389,6 +389,59 @@ function speakWord(text){
   }catch(e){}
 }
 
+/* ---------- (3.97) the spelling screen's battle look ---------- */
+function quizShade(hex, f){
+  const n = parseInt(String(hex).slice(1), 16);
+  if(isNaN(n)) return hex;
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v=> Math.max(0, Math.min(255, Math.round(f >= 0 ? v + (255 - v) * f : v * (1 + f)))));
+  return '#' + c.map(v=> v.toString(16).padStart(2, '0')).join('');
+}
+/* the move's colour: its stone's element, or its monster's first */
+function quizColour(c){
+  const mv = c.move, att = c.attacker;
+  const ty = (mv && mv.stoneType) || (att && SPECIES[att.species] && SPECIES[att.species].types && SPECIES[att.species].types[0]);
+  return (ty && TYPE_COLORS[ty]) || '#d4643a';
+}
+function quizPic(m, px){
+  if(!m || !m.species || !SPECIES[m.species]) return '';
+  return monPortrait(m.species, px, { view:'front', bare:true, stage:typeof monStage === 'function' ? monStage(m) : 0, crowned:typeof isCrowned === 'function' && !!m.uid && isCrowned(m) });
+}
+function quizBannerHtml(q){
+  const c = q.config, mv = c.move, att = c.attacker;
+  if(!mv || !att) return '';
+  let foes = c.target ? [c.target] : ((ui.battle && typeof livingEnemies === 'function') ? livingEnemies().slice(0, 3) : []);
+  foes = foes.filter(f=> f && f.species);
+  const hp = t=>{ const max = t.maxHp || (typeof monMaxHp === 'function' ? monMaxHp(t) : 1), now = t.hp != null ? t.hp : t.currentHp; return Math.max(0, Math.min(1, now / Math.max(1, max))); };
+  return `<div class="qz-banner">
+    <span class="qz-me">${quizPic(att, 76)}</span>
+    <div class="qz-mv"><div class="qz-name">${escapeHtml(c.title || mv.name || '')}</div><div class="qz-sub">${escapeHtml(c.subtitle || '')}</div></div>
+    ${foes.length ? `<div class="qz-vs"><small>${foes.length > 1 ? 'TARGETS' : 'TARGET'}</small><div class="qz-foes">${foes.map(t=> `<span class="qz-foe">${quizPic(t, foes.length > 1 ? 40 : 56)}<span class="qz-hp"><i style="width:${(hp(t) * 100).toFixed(0)}%"></i></span></span>`).join('')}</div></div>` : ''}
+  </div>`;
+}
+function quizGaugeHtml(q){
+  const c = q.config, n = c.wordTarget, done = Math.min(q.wordsDone || 0, n);
+  const need = c.stopAt || (c.move && c.move.words) || n, scale = c.move && c.move.scale;
+  const segs = [];
+  for(let i = 1; i <= n; i++) segs.push(`<i class="${i <= done ? 'on' : ''}${i === done && q.index > 0 ? ' new' : ''}${i === need && need < n ? ' goal' : ''}${i === n && scale ? ' max' : ''}"></i>`);
+  const ready = c.stopAt && (q.wordsDone || 0) >= c.stopAt;
+  return `<div class="qz-gauge">
+    <div class="qz-gh"><span>⚡ POWER</span><b><span id="wordCount">${done}</span> / ${n}</b></div>
+    <div class="qz-segs">${segs.join('')}</div>
+    <div class="qz-marks"><span>${need} word${need === 1 ? '' : 's'}${need < n ? ': powered' : ''}</span>${scale ? `<span>${n} words: ${scale.max}×</span>` : ''}</div>
+    ${(c.startingWords || 0) > 0 ? `<div class="qz-carry">+${c.startingWords} carried over</div>` : ''}
+    ${c.stopAt ? `<button class="qz-stop${ready ? ' ready' : ''}" id="stopEarly" ${ready ? '' : 'disabled'}>⏹ Stop here${ready ? ` — ${q.wordsDone} words` : ` (${c.stopAt} needed)`}</button>` : ''}
+  </div>`;
+}
+/* a red seal stamped on the square as a character is done */
+const QUIZ_STAMPS = ['好', '棒', '对', '妙'];
+function quizStamp(box){
+  if(!box) return;
+  const st = document.createElement('div');
+  st.className = 'qz-stamp';
+  st.textContent = QUIZ_STAMPS[Math.floor(Math.random() * QUIZ_STAMPS.length)];
+  box.appendChild(st);
+}
+
 function renderQuiz(){
   const q = ui.quiz;
   const word = q.config.words[q.index];
@@ -406,53 +459,49 @@ function renderQuiz(){
   document.body.classList.add('writing');
   document.body.classList.toggle('left-handed', !!(state && state.settings && state.settings.leftHanded));
 
+  /* (3.97) no "Word 3 / 10" over a move's words: it counted the phrases drawn, not the words wanted (the
+     designer: "doesn't need to be shown as it doesn't make sense either. The spelling bar is sufficient").
+     (3.97) The designer, of the mockups: "I think A is great, but perhaps with a black background? I find the
+     references to paper background out of place in this game." A battle's spelling is a battle screen now: the
+     move's banner (yours, its name, its target), a power gauge that lights a segment a word, a burning fuse for
+     the clock, hearts for the slips, a white card to write on with a glowing edge in the move's colour, a red
+     stamp on each character done and a streak of words written clean — on black (body.writing, index.html). */
+  const tc = quizColour(q.config);
+  screenEl.style.setProperty('--tc', tc); screenEl.style.setProperty('--tc-l', quizShade(tc, 0.35)); screenEl.style.setProperty('--tc-d', quizShade(tc, -0.35));
+  const banner = quizBannerHtml(q);
   screenEl.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;">
+    <div class="qz-top">
       ${q.config.lockExit
-        ? `<span style="font-size:13px;font-weight:800;color:var(--ink-soft);opacity:0.6;">🔒 Committed</span>`
+        ? `<span class="qz-lock">🔒 Committed</span>`
         : `<button class="back-link" id="quizExit">← Exit</button>`}
-      <div style="font-weight:800;color:var(--ink-soft);font-size:13px;">Word ${q.index+1} / ${total}</div>
+      ${q.config.wordTarget ? '' : `<div class="qz-count">Word ${q.index+1} / ${total}</div>`}
     </div>
 
     <div class="quiz-layout">
       <div class="quiz-controls">
-        <div class="screen-title" style="font-size:20px;">${escapeHtml(q.config.title||'Spell the word')}</div>
-        <div class="screen-sub" style="margin-bottom:10px;">${escapeHtml(q.config.subtitle||'Listen, then write what you hear.')}</div>
-        ${q.config.recovery ? `<div style="display:flex;gap:5px;margin-bottom:10px;">${state.party.map(m=>{const max=monMax(m);const pct=Math.max(0,m.currentHp/max*100);return `<div style="flex:1;"><div class="hpbar" style="height:6px;"><div class="hpfill" style="width:${pct}%;background:${pct<30?'var(--cinnabar)':'var(--jade)'};"></div></div></div>`;}).join('')}</div>` : ''}
+        ${banner || `<div class="screen-title qz-title">${escapeHtml(q.config.title||'Spell the word')}</div>
+        <div class="screen-sub qz-subtitle">${escapeHtml(q.config.subtitle||'Listen, then write what you hear.')}</div>`}
+        ${q.config.recovery ? `<div class="qz-party">${state.party.map(m=>{const max=monMax(m);const pct=Math.max(0,m.currentHp/max*100);return `<div><div class="hpbar"><div class="hpfill" style="width:${pct}%;background:${pct<30?'var(--cinnabar)':'var(--jade)'};"></div></div></div>`;}).join('')}</div>` : ''}
         ${q.config.recovery ? `<button class="btn btn-ghost" id="exitRecoveryBtn" style="margin-bottom:10px;">✕ Exit recovery</button>` : ''}
 
         <div class="listen-row-2">
           <button class="btn btn-jade" id="listenBtn">🔊 Listen</button>
           <button class="btn btn-ghost" id="defBtn">📖 Meaning</button>
         </div>
-        <div id="defBox" style="text-align:center;font-size:13px;color:var(--ink-soft);font-weight:700;min-height:18px;margin:6px 0;"></div>
-        ${q.config.wordTarget ? `
-        <div class="word-meter">
-          <div class="word-meter-head">
-            <span>字 Words written</span>
-            <span><b id="wordCount">${Math.min(q.wordsDone||0, q.config.wordTarget)}</b> / ${q.config.wordTarget}</span>
-          </div>
-          <div class="word-meter-bar"><div id="wordMeterFill" style="width:${Math.min(100,(q.wordsDone||0)/q.config.wordTarget*100)}%;"></div></div>
-          ${(q.config.startingWords||0) > 0 ? `<div class="word-meter-note">+${q.config.startingWords} carried over</div>` : ''}
-          ${q.config.stopAt ? `<button class="btn btn-ghost stop-early ${(q.wordsDone||0) >= q.config.stopAt ? 'ready' : ''}"
-             id="stopEarly" ${(q.wordsDone||0) >= q.config.stopAt ? '' : 'disabled'}>
-             ⏹ Stop here${(q.wordsDone||0) >= q.config.stopAt ? ` — ${q.wordsDone} words` : ` (${q.config.stopAt} needed)`}
-           </button>` : ''}
-        </div>` : ''}
+        <div id="defBox" class="qz-def"></div>
+        ${q.config.wordTarget ? quizGaugeHtml(q) : ''}
 
         ${q.config.relaxed ? '' : `
-        <div id="timerBar" style="height:8px;background:var(--paper-3);border-radius:6px;overflow:hidden;margin-bottom:4px;">
-          <div id="timerFill" style="height:100%;width:100%;background:var(--jade);transition:width .25s linear;"></div>
-        </div>
-        <div id="mistakeDots" style="display:flex;justify-content:center;gap:6px;margin:8px 0;"></div>`}
+        <div id="timerBar" class="qz-fuse"><div id="timerFill"><i class="qz-spark"></i></div></div>
+        <div id="mistakeDots" class="qz-hearts"></div>`}
       </div>
 
       <div class="quiz-write">
         <!-- result/next sits ABOVE the box so it needs no scrolling -->
         <div id="quizResult"></div>
         <div id="charProgress" class="char-progress"></div>
-        <div id="charsRow" class="write-wrap"></div>
-        <div id="quizStatus" style="text-align:center;font-size:14px;font-weight:700;min-height:20px;"></div>
+        <div id="charsRow" class="write-wrap">${(q.streak || 0) >= 2 ? `<div class="qz-streak">🔥 ×${q.streak} streak</div>` : ''}</div>
+        <div id="quizStatus" class="qz-status"></div>
       </div>
     </div>
   `;
@@ -519,12 +568,10 @@ function renderMistakeDots(){
   if(q.config.relaxed) return;   // no attempt limit in practice mode
   const el = $('#mistakeDots');
   if(!el) return;
-  el.innerHTML = '';
-  for(let i=0;i<MISTAKE_LIMIT;i++){
-    const d = document.createElement('div');
-    d.style.cssText = 'width:9px;height:9px;border-radius:50%;background:'+(i<q.consecutiveMistakes?'var(--cinnabar)':'var(--paper-3)');
-    el.appendChild(d);
-  }
+  /* (3.97) hearts: a slip in a row empties one, from the right */
+  let h = '';
+  for(let i=0;i<MISTAKE_LIMIT;i++) h += `<span class="qz-heart${i >= MISTAKE_LIMIT - q.consecutiveMistakes ? ' lost' : ''}">♥</span>`;
+  el.innerHTML = h;
 }
 
 /* THE BUG THAT FROZE THE CLOCK AFTER WORD ONE
@@ -586,7 +633,7 @@ function updateTimerBar(){
   if(!fill || !q) return;
   const pct = Math.max(0,(q.timeLeft/TIMER_SECONDS)*100);
   fill.style.width = pct+'%';
-  fill.style.background = pct < 33 ? 'var(--cinnabar)' : (pct < 66 ? 'var(--gold)' : 'var(--jade)');
+  fill.dataset.t = pct < 33 ? 'low' : (pct < 66 ? 'mid' : 'high');   // (3.97) a fuse: green, then gold, then red (index.html)
 }
 
 function writeBoxSize(){
@@ -706,7 +753,7 @@ function loadCharData(ch, onComplete, onError){
 function buildWriter(i, box){
   const q = ui.quiz;
   const size = writeBoxSize();
-  if(box){ box.style.width = size+'px'; box.style.height = size+'px'; }
+  if(box){ box.style.width = size+'px'; box.style.height = size+'px'; const row = box.parentNode; if(row && row.style) row.style.setProperty('--bw', size + 'px'); }   // (3.97) where the streak sits
   // Practice ("relaxed") mode is a low-pressure learning space: no timer, no
   // attempt cap, and Hanzi Writer's own hint appears after 3 misses on a stroke.
   // Battle / catch / recovery keep the strict rules — no hints there, ever.
@@ -785,6 +832,7 @@ function buildWriter(i, box){
     },
     onComplete:function(){
       if(q.locked) return;
+      quizStamp(box);                                                  // (3.97) 好!
       if(i+1 < q.chars.length){
         // brief green flash, then the same big box takes the next character
         if(box) box.classList.add('char-done');
@@ -792,7 +840,7 @@ function buildWriter(i, box){
           if(box) box.classList.remove('char-done');
           initQuizChar(i+1);
           holdTimerForLoad();       // pause while the next character's strokes arrive
-        }, 280);
+        }, 520);                                                       // (3.97) long enough to see the stamp
       } else {
         if(box) box.classList.add('char-done');
         resolveWord(true,false);
@@ -823,6 +871,7 @@ function resolveWord(passed, timedOut){
   }
   playSfx(passed ? 'answer_correct' : 'answer_wrong');
   if(passed) q.wordsDone = (q.wordsDone||0) + countWords(word);
+  q.streak = (passed && !(q.wordMistakes > 0)) ? (q.streak || 0) + 1 : 0;   // (3.97) words in a row without a slip
   q.results.push({ text:word, passed, mistakes:q.wordMistakes||0, timedOut, words:countWords(word) });
 
   const st = $('#quizStatus');
@@ -830,12 +879,10 @@ function resolveWord(passed, timedOut){
   if(st) st.textContent = '';
   if(rb){
     rb.innerHTML = `
-      <div style="text-align:center;margin-top:10px;padding:14px;border-radius:12px;background:${passed?'rgba(47,143,111,0.12)':'rgba(200,69,58,0.09)'};border:1px solid ${passed?'rgba(47,143,111,0.35)':'rgba(200,69,58,0.3)'};">
-        <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:18px;color:${passed?'var(--jade-dark)':'var(--cinnabar-dark)'};">
-          ${passed?'✓ Correct!':(timedOut?'⏱ Out of time':'✗ Not quite')}
-        </div>
-        <div style="font-family:'Noto Sans SC';font-size:26px;font-weight:700;margin-top:4px;">${escapeHtml(word)}</div>
-        <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:2px;">${escapeHtml(definitionFor(word)||'')}</div>
+      <div class="qz-res ${passed ? 'ok' : 'bad'}">
+        <div class="qz-res-head">${passed?'✓ Correct!':(timedOut?'⏱ Out of time':'✗ Not quite')}${passed && q.streak >= 2 ? ` <span class="qz-res-streak">🔥 ×${q.streak}</span>` : ''}</div>
+        <div class="qz-res-word">${escapeHtml(word)}</div>
+        <div class="qz-res-def">${escapeHtml(definitionFor(word)||'')}</div>
         ${(passed && !q.config.relaxed) ? masteryChip(word) : ''}
       </div>
       <button class="btn btn-primary" id="quizNext" style="margin-top:12px;">${quizWillEnd(passed) ? 'Continue' : 'Next word'}</button>

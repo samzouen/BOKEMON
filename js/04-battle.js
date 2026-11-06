@@ -687,6 +687,13 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
      no armour (the Water Ancestor's Max: only a dodge stops it). What makes
      the target softer, and the attacker's own strength, still count. */
   const pure = !!(opts && opts.pure);
+  /* (3.96) The designer: "Pre turn phase attacks should not crit. This
+     includes wildfire, violent dance." Wildfire, Violent Dance, Spike
+     Formation, a Capacitor's release, the pre-hits and the Aria's answer
+     never roll one (their damage is reckoned without this); the quick
+     attacks, which come here, say `preTurn`, and no critical of any kind
+     is rolled for them. */
+  const noCrit = !!(opts && (opts.rider || opts.preTurn));
   let fc = 1;                                      // (3.70) Foresight's critical, for the Hydra's to add to
   dmg *= typeMultFor(attacker, defender);          // (3.69) with Destruction and Fortress
   /* The attack that ends a Lurk may be an ambush (Ambush, Pounce); an Ill Omen
@@ -721,7 +728,7 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
        multiplying with the above */
     dmg *= legacyAmp(attacker, peek);
     dmg *= elemAttackAmp(attacker, defender);      // (3.67) Consume, Burgeon, Shatter
-    if(!peek && !(opts && opts.rider)) fc = foresightCrit(attacker, defender);   // (3.68) Foresight's critical, its own roll
+    if(!peek && !noCrit) fc = foresightCrit(attacker, defender);   // (3.68) Foresight's critical, its own roll
     dmg *= fc;
     /* (Steel Soul's bonus is added above, before these buffs.) Steel Soul's
        reduction works both ways (2.90): its caster also hits that much harder
@@ -771,7 +778,7 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     /* (3.76) a future monster's element passives, as yours above (17-region6.js) */
     if(typeof foeAttackAmp === 'function'){
       dmg *= foeAttackAmp(attacker, defender);
-      if(!peek && !(opts && opts.rider)){ fc = foeForesightCrit(attacker, defender); dmg *= fc; }
+      if(!peek && !noCrit){ fc = foeForesightCrit(attacker, defender); dmg *= fc; }
     }
   }
   /* (3.75) Talents, either side's (17-region6.js): its damage bonuses, all
@@ -779,7 +786,7 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
      made one already (the two would add, as Foresight's and a Hydra's do). */
   if(typeof talentDealMult === 'function'){
     dmg *= talentDealMult(attacker, defender, isPlayerAttacking, peek, opts);
-    if(!peek && !(opts && opts.rider) && fc === 1){ const tc = talentCrit(attacker, defender); if(tc > 1){ dmg *= tc; fc = tc; } }
+    if(!peek && !noCrit && fc === 1){ const tc = talentCrit(attacker, defender); if(tc > 1){ dmg *= tc; fc = tc; } }
   }
 
   // defender-side modifiers
@@ -918,7 +925,7 @@ function applyVeryHighEffect(type, casterMon, casterAtk, targets, plus){
       setPStatus(uid, { type:'counter', turnsLeft:STATUS_TURNS + 1, tier,
                         regain:d.regain||0.10, combo:d.combo||0.25,
                         enrage:d.enrage||0, owner:uid });
-      addCounterStack(casterMon, tier, d.stacks || 1);     // (3.76) after the status: Focused Fury's Enrage goes to its caster
+      addCounterStack(casterMon, tier, d.stacks || 1);     // (3.76) after the status; (3.96) Focused Fury pays its own holder
       res.msg = d.text + takeDeflectSaid();
       break;
     }
@@ -1373,27 +1380,41 @@ function nourishBonus(m, base){
 }
 /* Wildfire, in the pre-action phase beside Overheat ✦'s burn. */
 function wildfirePct(st){ return WILDFIRE.pct[Math.max(0, vhTier(st))] || WILDFIRE.pct[0]; }
+/* (3.94) The designer: "the issue with wildfire is that it is free damage
+   once 50% hp is hit. it's meant to help a monster get to 50% hp for the
+   ultra passive … let's keep it to strongest hit only". Of several holders,
+   only the one whose scorch would hit hardest burns — them and itself — as
+   only the strongest holder's Unstable Magic bursts. (Every holder burned,
+   one after another, until 3.94.) */
+function wildfireScorch(me, oh){
+  const b = ui.battle;
+  /* its own multipliers count too (Consume, Burgeon — and Shatter on a
+     chilled one), as they do on any blow of its */
+  const base = wildfirePct(oh) * monAtk(me) * ownBuffMultiplier(me);
+  const hits = livingEnemies().map(t=>{
+    let dmg = Math.ceil(base * elemAttackAmp(monRef(me), t) * hexAmp(t));
+    const cur = getEStatus(t, 'curse');
+    if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
+    return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) };
+  });
+  return { base, hits, total:hits.reduce((s, h)=> s + h.dmg, 0) };
+}
+function wildfireHolder(){
+  const oh = ui.battle ? getPStatus(0, 'overheat') : null;
+  if(!oh || !livingEnemies().length) return null;
+  const hs = yourHolders('Fire', 'vh').filter(m=> m.currentHp > 0);    // (3.76) on the field or off it
+  if(!hs.length) return null;
+  return hs.map(h=> ({ h, total:wildfireScorch(h, oh).total })).sort((x, y)=> y.total - x.total)[0].h;
+}
 function runWildfire(done){
   const b = ui.battle;
   if(!b || !getPStatus(0, 'overheat')) return done();
-  const holders = yourHolders('Fire', 'vh');                 // (3.76) on the field or off it
-  if(!holders.length) return done();
-  let k = 0;
-  const step = ()=>{
-    if(!ui.battle || k >= holders.length) return done();
-    const me = holders[k++];
-    const foes = livingEnemies(), oh = getPStatus(0, 'overheat');
-    if(!foes.length || me.currentHp <= 0 || !oh) return step();
+  const me = wildfireHolder();
+  if(!me) return done();
+  {
+    const oh = getPStatus(0, 'overheat');
     const out = playerField().includes(me);
-    /* its own multipliers count too (Consume, Burgeon — and Shatter on a
-       chilled one), as they do on any blow of its */
-    const base = wildfirePct(oh) * monAtk(me) * ownBuffMultiplier(me);
-    const hits = foes.map(t=>{
-      let dmg = Math.ceil(base * elemAttackAmp(monRef(me), t) * hexAmp(t));
-      const cur = getEStatus(t, 'curse');
-      if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
-      return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) };
-    });
+    const { base, hits } = wildfireScorch(me, oh);
     applyHits(hits, { noLeech:true, by:me });   // upkeep damage never feeds Leech Seed — its own, for Vicious Hex (3.70)
     reportHits(hits);
     /* itself: straight to its health (its shields are not spent on its own
@@ -1415,9 +1436,8 @@ function runWildfire(done){
     logBattle(`Wildfire (${displayName(me)}${out ? '' : ', off the field'}): ${hits.map(h=> h.dmg).join('/')} to them, ${took} to itself`);
     battleMsg(`🔥 Wildfire! ${escapeHtml(displayName(me))}'s flames${out ? '' : ', from the bench,'} scorch them` + (took > 0 ? ' — and itself.' : '.'));
     renderStatusBadges();
-    setTimeout(step, 850);
-  };
-  step();
+    setTimeout(done, 850);
+  }
 }
 /* ---- (3.67) Electric, Flying, Ground ----
    - Catalyse (Electric, VH): (3.76) an Overcharge cast while a holder stands
@@ -1457,7 +1477,7 @@ function momentumBonus(m){
 }
 /* A holder's own cut: its best dodge chance, up to 30%. */
 function elusiveOwn(m, mir){
-  const cl = getPStatus(0, 'clones'), tac = tachyOf(m);
+  const cl = clonesServe(m) ? getPStatus(0, 'clones') : null, tac = tachyOf(m);   // (3.96) his clones, his dodge
   const best = Math.max(stanceEvasion(m),
     (mir.window && mir.step < mir.window.length) ? mir.window[mir.step] : (mir.chance || 0.20),
     (cl && cl.evade) || 0, tac ? tachyDodgeChance(tac) : 0);
@@ -1769,14 +1789,18 @@ const BINDING = { pct:0.11, floor:0.34 };
 function bindingWorks(m){
   return !!(m && m.uid && m.currentHp > 0 && elemPassiveOn(m, 'Ghost', 'vh') && m.currentHp > BINDING.floor * monMaxHp(m));
 }
-/* Who binds your Curse now: `pref` (a uid, or the caster) if it can, else the
-   first of yours who can. */
+/* Who binds your Curse now: (3.94) the strongest of yours who can — the most
+   max HP, so the biggest pulse — chosen afresh each time. When it falls to
+   34% or below, the next strongest above it carries on; healed above 34%, it
+   takes the Curse back. The designer: "continue the effect with a healthy
+   second passive holder if one is present, after the first one stops
+   (resuming with the first one if it is healed)". (Until 3.94 the caster,
+   else the first who could, and whoever took over kept it.) `pref` is no
+   longer preferred. */
 function yourBinder(pref){
   if(!ui.battle) return null;
-  const uid = pref && (pref.uid || pref);
-  const want = uid ? battleMonByUid(uid) : null;
-  if(want && bindingWorks(want) && yourHolders('Ghost', 'vh').includes(want)) return want;
-  return yourHolders('Ghost', 'vh').find(bindingWorks) || null;
+  const able = yourHolders('Ghost', 'vh').filter(bindingWorks);
+  return able.length ? able.slice().sort((x, y)=> monMaxHp(y) - monMaxHp(x))[0] : null;
 }
 function yourBoundCurse(){
   const c = ui.battle && ui.battle.fieldStatus && ui.battle.fieldStatus.curse;
@@ -1791,6 +1815,7 @@ function bindingPulse(h, why){
   const max = monMaxHp(h), loss = Math.ceil(BINDING.pct * max), was = h.currentHp;
   h.currentHp = Math.max(1, h.currentHp - loss);
   if(playerField().includes(h)){ drainHp(pid('playerHp', h), was, h.currentHp, max); showDamageNumber(pid('playerBob', h), was - h.currentHp); }
+  if(h.currentHp < was) noteWrath();                // (3.94) "count this damage as a hit for gathering wrath" 
   const struck = livingEnemies().filter(e=> getEStatus(e, 'curse'));
   struck.forEach(t=>{
     const idx = b.enemies.indexOf(t), before = t.hp;
@@ -2174,6 +2199,16 @@ function applyDot(mv, mon){
 function applyShell(mv, mon){
   setPStatus(0, { type:'shell', turnsLeft:(mv.shell.turns||1)+1,
                   reduce:mv.shell.reduce||0, thorns:mv.shell.thorns||0, owner:mon.uid });
+}
+/* (3.96) The clones fight for the one who called them up — his blows are
+   echoed, he dodges — and for nobody else on his side. The designer: "monkey
+   king's clones are working for other monsters, not just himself. They
+   should only work for his attacks." (Until 3.96 the echoes followed any of
+   your attacks, and the dodge was whoever's was out front.) A copy of the
+   side's status with no caster named (an old save's) still serves anyone. */
+function clonesServe(mon){
+  const cl = ui.battle && ui.battle.clones;
+  return !!(cl && mon && (!cl.uid || cl.uid === mon.uid));
 }
 function applyClones(mv, mon){
   if(dustBlocks('player')) return;                  // their dust: no copies form
@@ -2771,7 +2806,7 @@ function enemyEvasion(t, noTachy){
   if(mir && mir.window && mir.step < mir.window.length) mir.tested = true;   // its window met a real blow
   if(mir) src.push((mir.window && mir.step < mir.window.length) ? mir.window[mir.step] : (mir.chance || 0.20));
   const cl = getESide('clones');
-  if(cl) src.push(cl.evade || 0);
+  if(cl && (!cl.owner || cl.owner === t)) src.push(cl.evade || 0);   // (3.96) theirs too: only the one they fight beside
   const tac = noTachy ? null : tachyOf(t);
   if(tac) src.push(tachyDodgeChance(tac));
   /* Futuresight (Cyborg, 3.00): it saw the blow coming. What it IS — no dust
@@ -3604,17 +3639,23 @@ function deflectSweep(side){
   if(!n) return '';
   let who = null;
   if(paid){
-    if(side === 'player') b.pCombo = (b.pCombo || 0) + paid; else b.eCombo = (b.eCombo || 0) + paid;
-    const c = side === 'player' ? getPStatus(0, 'counter') : getESide('counter');
-    who = side === 'player' ? (c && c.owner ? battleMonByUid(c.owner) : null) : (c && c.owner && c.owner.hp > 0 ? c.owner : null);
-    if(!who || hpOfMon(who) <= 0) who = h;
+    /* (3.96) Both go to the holder who turned them. The designer: "When my
+       monkey king switched in after counter had been cast, they became
+       counter stacks but never gave him the enrage and combo." Until 3.96
+       the Enrage went to the Counter's caster (often benched by then) and
+       the Combo to the side, for whichever of it struck next (his
+       companion, as often as not). Now the Focused Fury holder takes the
+       Enrage, for the battle, and a Combo of his own (comboStacks), which
+       his next attack spends (comboMultiplier, clearCombo). */
+    who = h;
+    who.comboStacks = (who.comboStacks || 0) + paid;
     who.enrageStacks = (who.enrageStacks || 0) + paid;
     paintEnrage(who);
   }
   renderStatusBadges();
   const nm = x=> escapeHtml(x.uid ? displayName(x) : SPECIES[x.species].name);
   const said = ` 😡 ${side === 'player' ? '' : 'Their '}${nm(h)}'s Focused Fury: ${n === 1 ? 'the Counter stack is a Deflect stack' : `${n} Counter stacks are Deflect stacks`}` +
-    (paid ? ` — <b>Combo +${paid}</b>, and <b>Enrage +${paid}</b> for ${nm(who)}, at once.` : '.');
+    (paid ? ` — <b>Combo +${paid}</b> and <b>Enrage +${paid}</b> for ${nm(who)}, at once.` : '.');
   b._deflectSaid = said;
   return said;
 }
@@ -3707,11 +3748,13 @@ function spendEnemyCounter(e){
                         : `✋ ${SPECIES[e.species].name} takes it on the guard — <b>80% turned away!</b> Their next blow will be heavier.`) + turned);
   return 1 - cut;
 }
-/* Combo: additive, the side's, spent by its next attack. */
+/* Combo: additive, the side's, spent by its next attack — (3.96) and a
+   monster's own (comboStacks: what Focused Fury paid it as it turned the
+   stacks), spent by ITS next attack. */
 function comboMultiplier(mon){
   const ours = !!(mon && isOurs(mon));
   const c = ours ? getPStatus(0,'counter') : getESide('counter');
-  const n = ui.battle ? ((ours ? ui.battle.pCombo : ui.battle.eCombo) || 0) : 0;
+  const n = (ui.battle ? ((ours ? ui.battle.pCombo : ui.battle.eCombo) || 0) : 0) + ((mon && mon.comboStacks) || 0);
   if(!n) return 1;
   return 1 + n * ((c && c.combo) || 0.25);
 }
@@ -3719,6 +3762,7 @@ function clearCombo(mon){
   if(!mon || !ui.battle) return;
   if(isOurs(mon)) ui.battle.pCombo = 0;
   else ui.battle.eCombo = 0;
+  mon.comboStacks = 0;
 }
 /* Enrage: permanent for the battle, a share of BASE attack, additive. */
 function enrageBonus(mon){
@@ -3997,7 +4041,7 @@ function castEnemyVeryHigh(e, type, plus){
       const tier = plus || 0;
       setESide({ type:'counter', turnsLeft:STATUS_TURNS + 1, tier, regain:d.regain || 0.10, combo:d.combo || 0.25, enrage:d.enrage || 0, owner:e });
       let ff = '';
-      if(!dustBlocks('enemy')){ addCounterStack(e, tier, d.stacks || 1); ff = takeDeflectSaid(); }     // (3.76) after the status: Focused Fury's Enrage goes to its caster
+      if(!dustBlocks('enemy')){ addCounterStack(e, tier, d.stacks || 1); ff = takeDeflectSaid(); }     // (3.76) after the status; (3.96) Focused Fury pays its own holder
       return `👊 ${who} casts <b>Counter</b>: their side is braced to take your next blow on the guard.` + ff;
     }
     case 'Ghost': {
@@ -4190,7 +4234,7 @@ function playerEvasionFrom(e, peek, noTachy){
   if(own >= 1) return sightFactor('enemy');       // (3.15) their Firefox's Arcane Sight
   const mir = getPStatus(0,'mirage');
   if(!peek && mir && mir.window && mir.step < mir.window.length) mir.tested = true;   // its window met a real blow
-  const cl  = getPStatus(0,'clones');
+  const cl  = clonesServe(mon) ? getPStatus(0,'clones') : null;   // (3.96) only the one they fight beside
   /* Tachypsychia hides its caster only — as theirs does (2.80). */
   const tac = noTachy ? null : tachyOf(mon);
   const dotMiss = e ? getEStatus(e,'dot') : null;
@@ -5140,7 +5184,7 @@ function quickStrikeTheirs(mon, done){
     return setTimeout(done, 650);
   }
   const ref = Object.assign(monRef(mon), { _ambush:0, _omen:0, _blow:newBlowId('q') });   // an ambush or omen waits for a real blow; an attack of its own (2.97)
-  const dmg = computeDamage(quickOf(mon), monAtk(mon), ref, t, true);
+  const dmg = computeDamage(quickOf(mon), monAtk(mon), ref, t, true, false, { preTurn:true });   // (3.96) before anyone moves: no critical
   const hits = [{ t, idx, dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }];
   battleMsg(`⚡ Quick attack! ${name} darts in before anyone moves.`);
   setTimeout(()=>{ applyHits(hits, { noLeech:true, blow:ref._blow }); reportHits(hits); setTimeout(done, 400); }, 250);   // (its own attack: your Dragon Dance breaks shields first, 3.13)
@@ -5171,7 +5215,7 @@ function quickStrikeYours(e, mon, done){
   const omen = e._omen, amb = e._ambush;
   e._omen = 0; e._ambush = 0;                                 // kept for its real blow
   e._blow = newBlowId('q');                                   // an attack of its own (2.97)
-  const dmg = computeDamage(quickOf(e), enemyAtk(e), e, monRef(mon), false);
+  const dmg = computeDamage(quickOf(e), enemyAtk(e), e, monRef(mon), false, false, { preTurn:true });   // (3.96) no critical before anyone moves
   e._omen = omen; e._ambush = amb;
   const before = mon.currentHp;
   breakShields('enemy', e, mon, e._blow, pid('playerBlk'), pid('playerBob'));   // their Dragon Dance, before it hits (3.13)
@@ -5805,7 +5849,7 @@ function passiveDamageMult(attacker, defender, isPlayerAttacking, peek, opts){
        here (every strike of yours asks computeDamage); each of theirs in
        enemyStrikeOn's strike loop (critStrike), since theirs asks once an
        attack. Never on an estimate, never on a rider's strike. */
-    if(pa.crit && isPlayerAttacking && !peek && !(opts && opts.rider)) m *= critStrike(attacker, them);
+    if(pa.crit && isPlayerAttacking && !peek && !(opts && (opts.rider || opts.preTurn))) m *= critStrike(attacker, them);   // (3.96) never on a pre-turn strike
   }
   const pd = (defender && defender.species && !(opts && opts.pure)) ? passiveOf(defender) : null;   // (3.91) a pure blow: no armour of the target's
   if(pd){
@@ -9141,11 +9185,11 @@ function passiveBits(p, atk){
   if(p.speed)        bits.push(`Moves <b>${steps(p.speed)} sooner</b>`);
   if(p.braced)       bits.push(`Takes <b>${pc(p.braced)}% less</b> until it has moved each round`);
   if(p.shakeOff)     bits.push(`Shakes off <b>one</b> debuff on itself each turn`);
-  if(p.slipstream)   bits.push(`<b>Slipstream</b>: its side moves <b>1 step sooner</b>`);
+  if(p.slipstream)   bits.push(`<b>${escapeHtml(p.slipName || 'Slipstream')}</b>: its side moves <b>1 step sooner</b>`);   // (3.96) a name of its own (the Fire Sprite's Lantern Ring)
   if(p.lockOn)       bits.push(`<b>Lock-On</b>: its side's attacks can't be dodged`);
   if(p.ward)         bits.push(`<b>${p.wardName || 'Tidal Ward'}</b>: its side takes <b>${pc(p.ward)}% less</b> damage`);
-  if(p.undertow)     bits.push(`<b>Undertow</b>: the other side moves <b>1 step later</b>`);   // (3.27)
-  if(p.trueSight)    bits.push(`<b>Arcane Sight</b>: the other side dodges <b>${pc(p.trueSight)}% less</b> often`);
+  if(p.undertow)     bits.push(`<b>${escapeHtml(p.undertowName || 'Undertow')}</b>: the other side moves <b>1 step later</b>`);   // (3.27); (3.96) the Water Sprite's Mist Dance
+  if(p.trueSight)    bits.push(`<b>${escapeHtml(p.sightName || 'Arcane Sight')}</b>: the other side dodges <b>${pc(p.trueSight)}% less</b> often`);   // (3.96) the Earth Sprite's Sand Veil
   if(p.empower)      bits.push(`Its side deals <b>${pc(p.empower)}% more</b> damage`);
   if(p.meditate)     bits.push(`<b>Meditate</b>: <b>+${pc(p.meditate)}%</b> damage for each turn it isn't hit, up to <b>+${pc(p.meditate * (p.meditateMax || 4))}%</b>`);
   if(p.sleepBack)    bits.push(`<b>Lullaby Reflex</b>: <b>${pc(p.sleepBack)}%</b> chance to put its attacker to sleep`);
@@ -9413,7 +9457,7 @@ function moveEffectText(mv, mon, atk){
     : `It hits back for <b>${val(mv.shell.thorns)}</b> at anything that strikes it.`);
   if(mv.clones) out.push(mv.clones.full
     ? `Two clones join his next <b>${mv.clones.turns}</b> attacks: each blow deals <b>${+(1 + 2 * mv.clones.mult).toFixed(2)}×</b>. He dodges <b>${pc(mv.clones.evade)}%</b> while they stand.`
-    : `Two copies echo each move for ${mv.clones.turns} turns at half power, and you dodge <b>${pc(mv.clones.evade)}%</b>.`);
+    : `Two copies echo its next ${mv.clones.turns} attacks at half power, and it dodges <b>${pc(mv.clones.evade)}%</b> while they stand.`);   // (3.96) its own, not the side's
   if(mv.charge){
     const d = mv.charge;
     const ns = Array.from({ length:chargeCaps(d).lucky }, (_, i)=> i + 1);
@@ -9927,6 +9971,7 @@ function renderStatusBadges(){
     if(m.currentHp <= 0){ slot.innerHTML = ''; return; }
     const out = monStatuses(m).map(st=> statusPillHtml(st, who, m));
     if(m.enrageStacks) out.push(`<span class="status-pill"${pillAt('enrage', who)}>😤 Enrage ×${m.enrageStacks} (+${enrageBonus(m)} ATK)</span>`);
+    if(m.comboStacks > 0) out.push(`<span class="status-pill"${pillAt('ownCombo', who)}>💪 Combo ×${m.comboStacks}</span>`);   // (3.96) its own, from Focused Fury
     const sp = stancePills(m, who);
     if(sp) out.push(sp);
     /* (3.66) the Cataclysm's charges, on the dragon who holds them; Dragon
@@ -10134,7 +10179,10 @@ function statusTipText(key, st, c, pill){
       const n = (c.yours ? b.pCombo : b.eCombo) || 0;
       const per = ((c.yours ? getPStatus(0,'counter') : getESide('counter')) || {}).combo || 0.25;
       return `${c.Its} next attack deals <b>+${pc(n * per)}%</b>. Each block with a Counter stack adds <b>${pc(per)}%</b>.`; }
-    case 'enrage': return m ? `${c.W}'s ATK is <b>+${enrageBonus(m)}</b> for the rest of the battle: <b>+20%</b> for each attack it blocked with a + or ✦ Counter stack.` : '';
+    case 'enrage': return m ? `${c.W}'s ATK is <b>+${enrageBonus(m)}</b> for the rest of the battle: <b>+20%</b> for each attack it blocked with a + or ✦ Counter stack` +
+      (elemPassiveOn(m, 'Physical', 'vh') ? `, and for each + or ✦ Counter stack its Focused Fury turned into a Deflect stack.` : '.') : '';
+    case 'ownCombo': { const n = (m && m.comboStacks) || 0, per = ((c.yours ? getPStatus(0,'counter') : getESide('counter')) || {}).combo || 0.25;
+      return `${c.W}'s next attack deals <b>+${pc(n * per)}%</b>: its Focused Fury turned ${n === 1 ? 'a + or ✦ Counter stack' : n + ' + or ✦ Counter stacks'} into Deflect.`; }
     case 'iceTomb': { const n = Math.max(1, s.turnsLeft || 1);
       return `${c.W} is frozen solid: it misses its next <b>${n}</b> turn${n === 1 ? '' : 's'}.`; }
     case 'chill': return `${c.W} moves <b>${steps(s.slow || 1)} later</b> and deals <b>${pc(s.cut)}% less</b> damage.` +
@@ -10276,7 +10324,7 @@ function statusTipText(key, st, c, pill){
         ` — for <b>${t}</b> more turn${t === 1 ? '' : 's'} on the field. Switched out, he keeps them. Dragon Legacy (quick) gives one to a monster you switch in; if he falls, they all go to the one you choose.`; }
     /* (3.67) element passives at work */
     case 'wildfire': { const oh = getPStatus(0, 'overheat'), p = wildfirePct(oh);
-      return m ? `While your Overheat is up, each turn ${c.w} scorches every enemy for <b>${p}×</b> its ATK (<b>${Math.ceil(p * monAtk(m) * ownBuffMultiplier(m) * elemSelfAmp(m))}</b> now — the Overheat's tier: ${WILDFIRE.pct.join(' / ')}×), and itself too, never below half its health — on the field or off it.` : ''; }
+      return m ? `While your Overheat is up, each turn ${c.w} scorches every enemy for <b>${p}×</b> its ATK (<b>${Math.ceil(p * monAtk(m) * ownBuffMultiplier(m) * elemSelfAmp(m))}</b> now — the Overheat's tier: ${WILDFIRE.pct.join(' / ')}×), and itself too, never below half its health — on the field or off it. With several holders, only the one whose scorch would hit hardest burns.` : ''; }
     case 'springs': return `While your Ice Tomb's chill is up, at the end of each round your team is healed <b>${SPRINGS.team.map(pc).join(' / ')}%</b> of ${c.its} max HP — <b>${SPRINGS.low.map(pc).join(' / ')}%</b> to one below half health (by the Ice Tomb's tier; a Fire monster above half: nothing) — and one of their marks on your side is washed off, a freeze, sleep, stun or muddle first. At base and + ${c.w} must be on the field; at ✦ it works from the bench too.`;
     case 'shatter': return `While ${c.w} is in your team, anything chilled takes <b>${pc(SHATTER.chill)}% more</b> damage from your side, and anything frozen <b>${pc(SHATTER.freeze)}% more</b> (both: ${pc(SHATTER.chill + SHATTER.freeze)}%).`;
     case 'nourishP': return `Every time your Leech Seed drinks, your team gains <b>+${NOURISH.per.map(pc).join(' / ')}% ATK</b> for a turn (by the Leech Seed's tier), up to ${NOURISH.max} stacks — while ${c.w} is in your team, on the field or off it.`;
@@ -10312,7 +10360,8 @@ function statusTipText(key, st, c, pill){
     case 'deadlyCurse': { const works = m ? bindingWorks(m) : false;   // (3.86) Binding Curse now (the pill's key kept)
       return `With ${c.w} in your team, your Curse is cast through their Diamond Dust. Each time it is cast, or would be swept, washed off or run out, it holds <b>1 more turn</b> instead, ` +
         `and ${c.w} and every cursed enemy on the field lose <b>${Math.round(BINDING.pct * 100)}%</b> of ${c.its} max HP — straight from their health, past shields and cuts. ` +
-        (works ? `It works while ${c.w} is above <b>${Math.round(BINDING.floor * 100)}%</b> of its health.` : `${c.W} is at ${Math.round(BINDING.floor * 100)}% of its health or below: it can't hold the Curse now.`); }
+        (works ? `It works while ${c.w} is above <b>${Math.round(BINDING.floor * 100)}%</b> of its health.` : `${c.W} is at ${Math.round(BINDING.floor * 100)}% of its health or below: it can't hold the Curse now.`) +
+        ` With several holders, the one with the most max HP above ${Math.round(BINDING.floor * 100)}% holds it; when it falls to ${Math.round(BINDING.floor * 100)}%, the next takes over, and it takes it back once healed. Each pulse counts for Gathering Wrath.`; }
     case 'viciousHex': return `Every time ${c.w} deals damage, on the field or off it, the enemy it hits gets a random debuff until the end of that turn, each <b>${pc(HEX_DEBUFF.pct)}%</b>: ` +
       `it takes more damage, dodges less, has its hits cut (with any Ice Barrier and Ice Tomb's chill), deals less damage, lands fewer critical hits, or its damage cuts are weaker. Each one that runs out counts for Unstable Magic.`;
     case 'foresight': return `${c.W} dodges <b>${Math.round(FORESIGHT.dodge * 100)}%</b> of attacks, and each of its strikes has a <b>${Math.round(FORESIGHT.crit * 100)}%</b> chance to deal <b>${FORESIGHT.mult}×</b>.`;

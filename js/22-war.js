@@ -220,7 +220,7 @@ function warBands(k){
   hold(L.x - 1, L.y - 1, L.x + L.w, L.y + L.h);                           // the lodge
   hold(L.x + 1, L.y + L.h, L.x + 4, L.y + L.h + 3);                       // the guardian, and where you arrive
   [S.king].concat(S.guards, [S.anc]).forEach(p=> hold(p.x - 1, p.y - 1, p.x + 1, p.y + 1));   // the King, his knights, the ancestor's place
-  const free = (x, y)=> !reserved.has(key(x, y)) && !jgSolidAt(x, y);
+  const free = (x, y)=> !reserved.has(key(x, y)) && !jgSolidAt(x, y) && jgVillageAt(x, y) === k;   // (3.95) on the village's own ground: the maze runs round its oval
   const KNIGHTS = ['chestnut_knight2', 'duck_knight2', 'bug_knight1'];
   for(let i = 0; i < n; i++){
     const rank = i < F.commanders ? 'commander' : 'captain';
@@ -264,9 +264,9 @@ function warJungleThings(list, P){
   WAR_ORDER.forEach(k=>{
     const S = warSpots(k), A = ANC_FOLK[warAncId(k)];
     /* the King, mounted, with two knights, while the war is at this village */
-    list.push({ x:S.king.x, y:S.king.y, cls:'jg-npc war-king', html:()=> jgMonImg('fairy_king_mounted_c_front', WALK_T * 2.3, true, 'fairy_king_c_front'),
+    list.push({ x:S.king.x, y:S.king.y, cls:'jg-npc war-king', faceR:true, html:()=> jgMonImg('fairy_king_mounted_c_front', WALK_T * 2.3, false, 'fairy_king_c_front'),   // (3.96) faces right with face-r, so he can turn to you
       verb:'Talk', sub:'The Fairy King', when:()=> warStage() === k, mark:()=> warStage() === k && !warBandsLeft(k).length, act:()=> warKingVillage(k) });
-    S.guards.forEach((g, i)=> list.push({ x:g.x, y:g.y, cls:'jg-npc war-guard', still:true, html:()=> jgMonImg('chestnut_knight2_front', WALK_T * 1.5, i === 1),
+    S.guards.forEach((g, i)=> list.push({ x:g.x, y:g.y, cls:'jg-npc war-guard', still:true, faceR:i === 1, html:()=> jgMonImg('chestnut_knight2_front', WALK_T * 1.5),
       verb:'Talk', sub:'Chestnut Knight', when:()=> warStage() === k, act:()=> warKnightTalk(k) }));
     /* the invaders, each band fought by one of the King's knights */
     warBands(k).forEach(b=>{

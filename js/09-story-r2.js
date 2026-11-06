@@ -169,12 +169,14 @@ function renderShop(){
 }
 
 /* Overlay header showing the relevant currency, per spec. */
-function shopOverlay(cur, inner, selTier){
+function shopOverlay(cur, inner, selTier, cosmic){
   const ov = document.createElement('div');
   ov.className = 'shop-overlay';
   ov.innerHTML = `
     <div class="shop-ov-top">${curIcon(cur)} <b id="ovCount">${medalCount(cur)}</b>${selTier ? ` &nbsp; ${selTokenIcon(selTier, 18)} <b id="ovSel">${selTokens(selTier)}</b>` : ''}</div>
     <div class="shop-ov-body">${inner}</div>`;
+  /* (3.97) the skill stones' own screens (a random draw, an elite one, a chosen one): the starry sky behind */
+  if(cosmic && typeof cosmicSky === 'function'){ if(typeof stoneRevealCss === 'function') stoneRevealCss(); cosmicSky(ov); }
   document.body.appendChild(ov);
   return ov;
 }
@@ -269,7 +271,7 @@ function openStoneQtyPurchase(w){
       <div class="ware-desc" style="margin-top:2px;">Up to <b>${STONE_DRAW_MAX}</b> in one draw.</div>
       <button class="btn btn-primary" id="qBuy" style="margin-top:14px;" ${qty ? '' : 'disabled'}>Buy</button>
       <button class="btn btn-ghost" id="qCancel" style="margin-top:8px;">Cancel</button>
-    </div>`);
+    </div>`, null, true);
   const refresh = ()=>{
     ov.querySelector('#qVal').textContent = qty;
     ov.querySelector('#qTotal').innerHTML = qty
@@ -313,7 +315,7 @@ function openSinglePurchase(w){
       ${w.id==='randomStone' ? oddsTable() : ''}
       <button class="btn btn-primary" id="pBuy" ${medalCount(pr.cur)>=pr.cost?'':'disabled'}>${medalCount(pr.cur)>=pr.cost?'Buy':'Not enough'}</button>
       <button class="btn btn-ghost" id="pCancel" style="margin-top:8px;">Cancel</button>
-    </div>`);
+    </div>`, null, w.id === 'randomStone' || w.id === 'eliteStone');
   const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
   ov.querySelector('#pCancel').addEventListener('click', close);
   ov.querySelector('#pBuy').addEventListener('click', async ()=>{
@@ -370,7 +372,7 @@ function openSkillPicker(w){
           </button>`).join('')}
       </div>
       <button class="btn btn-ghost" id="pkCancel" style="margin-top:12px;">Cancel</button>
-    </div>`, sel);
+    </div>`, sel, true);
   const close = ()=>{ if(ov.parentNode) document.body.removeChild(ov); };
   ov.querySelector('#pkCancel').addEventListener('click', close);
   ov.querySelectorAll('.pick-opt').forEach(b=>b.addEventListener('click', ()=>{

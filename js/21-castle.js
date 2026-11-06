@@ -31,7 +31,7 @@
 
    (3.90) The kingdom's people are monsters now (CA_FOLK): the knights, the
    townsfolk and the palace's Mantis servants can be caught from the alien
-   bands nearest the castle; the Royal Commander pays for them freed; the
+   bands (3.95: any band); the Royal Commander pays for them freed; the
    Dauphin spars every day; the Painter is home (his portraits to come).
    ============================================================ */
 
@@ -77,6 +77,24 @@ const CA_WHO = {
   townDuck:  { sprite:'duck_knight',        name:'A Duck Knight cadet', icon:'🦆' },
   townCream: { sprite:'cream_fairy',        name:'A little Cream Fairy', icon:'🍮' },
   townMelody:{ sprite:'melody_fairy',       name:'A Melody Fairy',      icon:'🎵' },
+  /* (3.97) the designer: "more sprites running around in the castle too!" — the little ones run */
+  kidChoux:  { sprite:'choux_fairy',        name:'A little Choux Fairy', icon:'🧁' },
+  kidBunny:  { sprite:'fairybunny',         name:'A little Fairybunny', icon:'🐇' },
+  kidCream:  { sprite:'cream_fairy',        name:'A little Cream Fairy', icon:'🍮' },
+  gardener:  { sprite:'cream_fairy1',       name:'The gardener',        icon:'🌹' },
+  picker:    { sprite:'fairybunny1',        name:'A Fairybunny',        icon:'🍎' },
+  pickerBird:{ sprite:'fairybird1',         name:'A Fairybird',         icon:'🍐' },
+  cadet:     { sprite:'duck_knight',        name:'A Duck Knight cadet', icon:'🦆' },
+  greeter:   { sprite:'melody_fairy',       name:'A Melody Fairy',      icon:'🎵' },
+  stroller:  { sprite:'choux_fairy1',       name:'A Choux Fairy',       icon:'🧁' },
+  scholar:   { sprite:'fairybird',          name:'A young Fairybird',   icon:'🐦' },
+  /* (3.97) the market's people: shoppers, a couple out for a stroll, a busker, someone resting on a bench */
+  shopBird:  { sprite:'fairybird1',         name:'A Fairybird',         icon:'🐦' },
+  shopDuck:  { sprite:'duck_knight1',       name:'A Duck Knight, off duty', icon:'🦆' },
+  coupleA:   { sprite:'choux_fairy1',       name:'A Choux Fairy',       icon:'🧁' },
+  coupleB:   { sprite:'cream_fairy1',       name:'A Cream Fairy',       icon:'🍮' },
+  kidTag:    { sprite:'fairybunny',         name:'A little Fairybunny', icon:'🐇' },
+  resting:   { sprite:'bug_knight',         name:'A Bug Knight, resting', icon:'🪲' },
 };
 
 /* ============================================================
@@ -140,8 +158,8 @@ const CA_FOLK = {
     ['Basic', 'Bunny Hop', 0.25, 'Single', 2, 1],
     ['Power1', 'Bunny Eyes', null, 'Single', 4, 5, { charm:{ turns:3, chance:0.2 } }],
     ['Power2', 'Lucky Paw', null, 'Passive', 0, 18, { passive:{ evadeAlways:0.2 } }],
-    ['Ultimate', 'Lucky Comet', 1.25, 'Single', 8, 25, { confuseHit:{ chance:0.25, ffPower:0.6 } }],
-    ['Max', 'Lucky Comet Max', 1.5, 'Single', 8, 51, { confuseHit:{ chance:0.3, ffPower:0.6 } }]] },
+    ['Ultimate', 'Lucky Comet', 0.8, 'AOE', 8, 25, { confuseHit:{ chance:0.25, ffPower:0.6 } }],   // (3.96) on every foe, a support's (1.25× on one until 3.96)
+    ['Max', 'Lucky Comet Max', 1.0, 'AOE', 8, 51, { confuseHit:{ chance:0.3, ffPower:0.6 } }]] },
   melody_fairy:   { name:'Melody Fairy', tier:'wild', types:['Fairy'], evo:[], glyph:'乐', color:'#c69ae6', citizen:true, moves:[
     ['Basic', 'Note Tap', 0.25, 'Single', 2, 1],
     ['Power1', 'Encore', null, 'Self', 4, 5, { enchant:{ deal:1.25, turns:3 } }],
@@ -192,7 +210,7 @@ const CA_CITIZENS = Object.keys(CA_FOLK).filter(id=> CA_FOLK[id].citizen);
     MOVES[id] = f.moves.map(r=> r.slice());
   });
 })();
-/* a captive for an alien band near the castle: the townsfolk twice as often as the knights' and the elites' kind */
+/* a captive of the castle's people: the townsfolk twice as often as the knights' and the elites' kind (since 3.95 jgCaptivePool weighs them so, with the tribes') */
 function caCitizenPick(){
   const w = CA_CITIZENS.map(id=> SPECIES[id].tier === 'wild' && !/_knight$/.test(id) ? 2 : 1);
   let r = Math.random() * w.reduce((a, b)=> a + b, 0);
@@ -206,8 +224,8 @@ const CA_BLADES = ['fire', 'ground', 'water', 'grass'];   // sealed_blade_<el>: 
 function caMonImg(sprite, px, flip, icon, view){
   const w = Math.round(px), f = `${sprite}_${view || 'front'}`;
   const back = view === 'back' ? `if(!this.dataset.alt){this.dataset.alt=1;this.src='assets/mon/${sprite}_front.png';return;}` : '';
-  return `<img class="ca-art" src="assets/mon/${f}.png" alt="" style="width:${w}px;height:${w}px;${flip ? 'transform:translateX(-50%) scaleX(-1);' : ''}"` +
-    ` onerror="${back}walkArtMissing(this,'${icon || '🧚'}',${Math.round(w * 0.62)},0)">`;
+  return `<img class="ca-art" src="assets/mon/${f}.png" alt="" style="width:${w}px;height:${w}px;${flip ? 'scale:-1 1;' : ''}"` +
+    ` onload="spriteFeet(this)" onerror="${back}walkArtMissing(this,'${icon || '🧚'}',${Math.round(w * 0.62)},0)">`;
 }
 function caFace(who){
   const c = CA_WHO[who] || {};
@@ -305,25 +323,33 @@ function caGrounds(){
     fruit:  { x:16, y:42, w:4, scheme:'green', goods:'fruit' },
     flower: { x:44, y:42, w:4, scheme:'gold', goods:'flower' },
   };
-  Object.values(m.tags.stalls).forEach(s=>{
-    fill(s.x, s.y, s.w, 1, T.STALL, (x)=> 'stall-' + s.scheme + ':' + (x === s.x ? 'l' : x === s.x + s.w - 1 ? 'r' : 'm'));
-    caDeco(m, 'awning', s.x, s.y - 1.15, s.w, 1.15, { scheme:s.scheme, goods:s.goods || '', z:s.y + 0.1 });
+  /* (3.97) each stall one picture (23-castle-art.js): its canopy high over its keepers, its counter in front of their
+     legs (the see-through layer draws it again over them), its goods on top */
+  const STALL_GOODS = { retail:'medals', painter:'paintings', fruit:'fruit', flower:'flower' };
+  Object.entries(m.tags.stalls).forEach(([id, s])=>{
+    fill(s.x, s.y, s.w, 1, T.STALL, (x)=> 'pave:' + (x % 4));
+    caDeco(m, 'stall', s.x - 0.15, s.y - 2.4, s.w + 0.3, 3.4, { scheme:s.scheme, goods:STALL_GOODS[id], cols:s.w, z:s.y + 0.95 });
   });
   m.tags.stalls.painter.easel = { x:42, y:34 };
+  /* (3.97) bunting: from the square's corner lamps up to the fountain's fairy, and along its north side from the
+     tavern to the record store ("I want the market square to feel warm and exciting") — [x1, y1, x2, y2, sag] */
+  m.tags.bunting = [[15.5, 32.0, 31.5, 34.7, 0.7], [48.5, 32.0, 31.5, 34.7, 0.7], [15.5, 43.0, 31.5, 35.0, 0.9], [48.5, 43.0, 31.5, 35.0, 0.9], [21.9, 30.6, 42.1, 30.6, 0.9]];
+  m.tags.breeze = { x0:12, y0:30, x1:51, y1:43 };                     // (3.97) petals blown across the square (caPetals)
   caDeco(m, 'easel', 41.6, 33.2, 1.2, 1.8, { z:34.9 });
-  [[27, 35], [36, 35], [27, 42], [36, 42]].forEach(([x, y])=> caPut(m, x, y, T.BENCH, 'bench'));
+  [[27, 35], [36, 35], [27, 42], [36, 42]].forEach(([x, y])=>{ caPut(m, x, y, T.BENCH, 'pave:2'); caDeco(m, 'bench', x - 0.05, y - 0.55, 1.1, 1.55, { z:y + 0.9 }); });   // (3.97) iron and wood
   [[15, 33], [48, 33], [15, 44], [48, 44], [28, 48], [35, 48], [28, 51], [35, 51], [28, 27], [35, 27], [28, 30], [35, 30]].forEach(([x, y])=>{
     const under = caAt(m, x, y);
     caPut(m, x, y, T.LAMP, under === T.PAVE ? 'pave:1' : under === T.COBBLE ? 'cobble:2' : 'grass:1'); caDeco(m, 'lamp', x, y - 1.3, 1, 2.3, { z:y + 0.5 });
   });
   /* a well and a notice board: the square's other goings-on */
-  caPut(m, 23, 43, T.PLANTER, 'well'); m.tags.well = { x:23, y:43 };
-  caPut(m, 40, 43, T.PLANTER, 'board'); caDeco(m, 'board', 39.9, 42.2, 1.2, 1.9, { z:43.4 }); m.tags.board = { x:40, y:43 };
+  caPut(m, 23, 43, T.PLANTER, 'pave:1'); caDeco(m, 'well', 22.1, 41.8, 1.8, 2.25, { z:43.9 }); m.tags.well = { x:23, y:43 };   // (3.97) a roof and a bucket
+  caPut(m, 40, 43, T.PLANTER, 'pave:2'); caDeco(m, 'board', 39.9, 42.2, 1.2, 1.9, { z:43.4 }); m.tags.board = { x:40, y:43 };
   /* the tavern and the record store, fronting the square's north side */
   m.tags.buildings = [];
   const house = (x, y, w, h, scheme, o)=>{
     const b = Object.assign({ x, y, w, h, scheme }, o || {});
     m.tags.buildings.push(b);
+    const bi = m.tags.buildings.length - 1;                            // (3.97) its picture, drawn whole (23-castle-art.js)
     const front = b.front || 2;
     for(let yy = y; yy < y + h; yy++) for(let xx = x; xx < x + w; xx++){
       const roof = yy < y + h - front, edgeL = xx === x, edgeR = xx === x + w - 1;
@@ -333,7 +359,7 @@ function caGrounds(){
         const low = yy === y + h - 1, door = low && (b.door || []).includes(xx);
         part = door ? (b.door.indexOf(xx) === 0 ? 'doorL' : 'doorR') : low ? ((xx - x) % 2 ? 'base' : 'baseWin') : ((xx - x) % 2 === 0 ? 'win' : 'wall');
       }
-      caPut(m, xx, yy, T.HOUSE, 'house-' + scheme + ':' + part);
+      caPut(m, xx, yy, T.HOUSE, 'bld:' + bi + ':' + (xx - x) + ':' + (yy - y));   // (3.97) was 'house-' + scheme + ':' + part, a square at a time
     }
     if(b.sign) caDeco(m, 'sign', x + w / 2 - 0.8, y + h - front - 0.35, 1.6, 0.9, { text:b.sign, scheme, z:y + h - 0.6 });
     if(b.chimney) caDeco(m, 'chimney', x + w - 2.2, y - 0.9, 0.9, 1.6, { z:y });
@@ -349,7 +375,7 @@ function caGrounds(){
     else if(iy === 6) part = 'cornice';
     else if(iy < 11) part = (ix % 3 === 1) ? 'win' : (ix % 3 === 0 ? 'pilaster' : 'wall');
     else part = (x === 31 || x === 32) ? (x === 31 ? 'doorL' : 'doorR') : (ix % 3 === 1 ? 'baseWin' : 'base');
-    caPut(m, x, y, T.PALACE, 'palace:' + part);
+    caPut(m, x, y, T.PALACE, 'pal:' + ix + ':' + iy);                  // (3.97) the hall drawn whole (was 'palace:' + part)
   }
   m.tags.palaceDoor = { x:31, y:19, w:2 };
   caDeco(m, 'palaceTower', 16.6, 4.2, 4.2, 15.9, { z:19.2 });
@@ -413,7 +439,7 @@ function caGrounds(){
   row(5, 28, 47, 5); row(36, 59, 47, 5);
   row(10, 28, 54, 5); row(36, 54, 54, 5);                              // between the corner towers
   /* the avenue's planters and the gate court's */
-  [[26, 55], [37, 55], [26, 59], [37, 59]].forEach(([x, y])=> caPut(m, x, y, T.PLANTER, 'planter'));
+  [[26, 55], [37, 55], [26, 59], [37, 59]].forEach(([x, y], i)=>{ caPut(m, x, y, T.PLANTER, 'pave:' + i); caDeco(m, 'planter', x - 0.05, y - 1.0, 1.1, 2.0, { n:i, z:y + 0.9 }); });   // (3.97) stone urns, something growing in each
   /* anything walkable that can't be reached from the gate goes back to grass with a bush on it */
   const reach = new Uint8Array(W * H), q = [m.tags.gate.y * W + m.tags.gate.x];
   reach[q[0]] = 1;
@@ -457,7 +483,18 @@ function caGrounds(){
    the castle on the inner side, the jungle on the outer — moving more slowly
    than the wall as you walk, so it lies far below.
    ============================================================ */
-const CA_P = { cv:null, stage:null, world:null, raf:0, key:'', last:0, atlas:null, S:0, map:null, views:null, bg:'#2b2a33' };
+const CA_P = { cv:null, ov:null, stage:null, world:null, raf:0, key:'', last:0, atlas:null, S:0, map:null, views:null, bg:'#2b2a33' };
+/* (3.97) The designer: "The see through needs to happen for the palace spires too when the player walks behind, and
+   for tall trees which reach up 2 tiles." What of a tall thing reaches up over a square you can stand on behind it
+   (north of where it stands) is drawn a second time on a layer over everyone (canvas.ca-over), so whoever stands
+   there is hidden behind it — and round you and Lucesco that layer goes see-through, as the jungle's crowns do
+   (JG_SEE). Only these kinds: a sign or a banner never hides anyone. A market stall is one of them: its counter
+   stands in front of its keepers' legs, its canopy over whoever passes behind it ("put the fairies properly behind
+   their stalls instead of above"). */
+const CA_OVER_KINDS = new Set(['tree', 'lamp', 'palaceTower', 'keep', 'cornerTower', 'fountSmall', 'fountGrand', 'chimney', 'column', 'bookcase', 'stall', 'planter', 'well',
+  /* (3.97) and indoors: whatever stands up high enough to hide someone behind it, and the counters with their keepers behind */
+  'candelabra', 'palm', 'armour', 'vase', 'clock', 'globe', 'readingTable', 'harp', 'plantPot', 'desk', 'rockingHorse', 'teaTable', 'armchair',
+  'bar', 'table', 'barrels', 'recCounter', 'recBin', 'gramophone', 'jukebox', 'boxes']);
 function caPaintStart(stage, world, m, views, bg){
   if(!stage || !world) return;
   let cv = stage.querySelector('canvas.ca-ground');
@@ -467,15 +504,23 @@ function caPaintStart(stage, world, m, views, bg){
     cv.setAttribute('aria-hidden', 'true');
     stage.insertBefore(cv, stage.firstChild);
   }
-  Object.assign(CA_P, { cv, stage, world, key:'', last:0, map:m, views:views || null, bg:bg || '#2b2a33' });
+  let ov = stage.querySelector('canvas.ca-over');
+  if(!ov){
+    ov = document.createElement('canvas');
+    ov.className = 'ca-over';
+    ov.setAttribute('aria-hidden', 'true');
+    world.after(ov);                                                  // over the world (everyone in it), under the stage's buttons
+  }
+  Object.assign(CA_P, { cv, ov, stage, world, key:'', last:0, map:m, views:views || null, bg:bg || '#2b2a33' });
   if(!CA_P.raf && typeof requestAnimationFrame === 'function') CA_P.raf = requestAnimationFrame(caPaintTick);
 }
 function caPaintTick(now){
   CA_P.raf = 0;
   if(!CA_P.cv || !CA_P.cv.isConnected) return;
   const cam = riftCam(CA_P.world);
-  if(cam.key !== CA_P.key || now - CA_P.last > 160){
-    CA_P.key = cam.key; CA_P.last = now;
+  const key = cam.key + caSeeKey();                                   // (3.97) you or Lucesco moving redraws the see-through
+  if(key !== CA_P.key || now - CA_P.last > (CA_P.fast ? 60 : 160)){   // (3.97) a little oftener while petals are in the air
+    CA_P.key = key; CA_P.last = now;
     try { caPaintDraw(cam, now); } catch(e){ console.error('castle paint:', e); }
   }
   CA_P.raf = requestAnimationFrame(caPaintTick);
@@ -515,9 +560,11 @@ function caPaintDraw(cam, now){
       const i = y * m.W + x, t = m.g[i];
       if(t === CA_T.VIEWIN || t === CA_T.VIEWOUT || t === CA_T.VOID) continue;
       const px = Math.round(ox + x * k), pw = Math.round(ox + (x + 1) * k) - px;
+      if(m.room && typeof CA_ROOM !== 'undefined'){ CA_ROOM.slice(ctx, m, x, y, CA_P.S, px, py, pw, ph); continue; }   // (3.97) a room: its picture (24-room-art.js), its shade in it
       let key = m.spr[i];
       if(key === 'water') key = 'water:' + ((frame + (x * 3 + y) % 4) % 4);
-      if(key) ctx.drawImage(caSpr(key), px, py, pw, ph);
+      if(key && (key[0] === 'b' || key[0] === 'p') && /^(bld|pal):/.test(key)) CA_ART.bldSlice(ctx, key, CA_P.S, px, py, pw, ph);
+      else if(key) ctx.drawImage(caSpr(key), px, py, pw, ph);
       caEdges(ctx, m, x, y, t, px, py, pw, ph);
     }
   }
@@ -526,6 +573,118 @@ function caPaintDraw(cam, now){
     if(d.x + d.w < x0 - 1 || d.x > x1 + 1 || d.y + d.h < y0 - 1 || d.y > y1 + 1) return;
     caDrawDeco(ctx, d, ox + d.x * k, oy + d.y * k, d.w * k, d.h * k, now);
   });
+  caPaintOver(m, k, ox, oy, x0, y0, x1, y1, dpr, now);
+}
+/* (3.97) the layer over everyone: each tall thing again, but only over the squares one can stand on behind it, then
+   a soft window round you and round Lucesco */
+function caPaintOver(m, k, ox, oy, x0, y0, x1, y1, dpr, now){
+  const ov = CA_P.ov, cv = CA_P.cv;
+  if(!ov || !ov.isConnected) return;
+  if(ov.width !== cv.width || ov.height !== cv.height){ ov.width = cv.width; ov.height = cv.height; }
+  const g = ov.getContext('2d');
+  g.clearRect(0, 0, ov.width, ov.height);
+  let any = false;
+  m.deco.forEach(d=>{
+    if(!CA_OVER_KINDS.has(d.kind)) return;
+    if(d.x + d.w < x0 - 1 || d.x > x1 + 1 || d.y + d.h < y0 - 1 || d.y > y1 + 1) return;
+    const base = Math.floor(d.z != null ? d.z : d.y + d.h);           // the row it stands in
+    const sx0 = Math.max(x0, Math.floor(d.x)), sx1 = Math.min(x1, Math.ceil(d.x + d.w) - 1);
+    const sy0 = Math.max(y0, Math.floor(d.y)), sy1 = Math.min(y1, base - 1);
+    let squares = 0;
+    g.save(); g.beginPath();
+    for(let y = sy0; y <= sy1; y++) for(let x = sx0; x <= sx1; x++){
+      if(caSolidCode(caAt(m, x, y))) continue;
+      const px = Math.round(ox + x * k), py = Math.round(oy + y * k);
+      g.rect(px, py, Math.round(ox + (x + 1) * k) - px, Math.round(oy + (y + 1) * k) - py);
+      squares++;
+    }
+    if(squares){ g.clip(); caDrawDeco(g, d, ox + d.x * k, oy + d.y * k, d.w * k, d.h * k, now); any = true; }
+    g.restore();
+  });
+  if(m.tags && m.tags.bunting && caBunting(g, m.tags.bunting, k, ox, oy, x0, y0, x1, y1, now)) any = true;   // (3.97) overhead, over everyone
+  CA_P.fast = caPetals(g, m, k, ox, oy, x0, y0, x1, y1, now);
+  if(CA_P.fast) any = true;
+  CA_P.overAny = any;
+  if(!any) return;
+  const st = CA_P.stage, sr = st.getBoundingClientRect(), R = k * JG_SEE.r;
+  g.globalCompositeOperation = 'destination-out';
+  caSeeEls().forEach(el=>{
+    const r = el.getBoundingClientRect();
+    if(!r.width) return;
+    const cx = (r.left + r.width / 2 - sr.left) * dpr, cy = (r.top + r.height * 0.6 - sr.top) * dpr;
+    const gr = g.createRadialGradient(cx, cy, k * JG_SEE.inner, cx, cy, R);
+    gr.addColorStop(0, `rgba(0,0,0,${JG_SEE.cut})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+  });
+  g.globalCompositeOperation = 'source-over';
+}
+function caSeeEls(){ return ['walkYou', 'caLion'].map(id=> document.getElementById(id)).filter(Boolean); }
+/* (3.97) strings of little flags, sagging, swaying a little; says whether any was in view */
+const CA_FLAGS = ['#e8414f', '#f2c23a', '#3c6fc4', '#3f9d5a', '#f07aa6', '#ffffff'];
+function caBunting(g, strings, k, ox, oy, x0, y0, x1, y1, now){
+  const t = now / 1000;
+  let drawn = false;
+  strings.forEach(([ax, ay, bx, by, sag], si)=>{
+    if(Math.max(ax, bx) < x0 - 1 || Math.min(ax, bx) > x1 + 1 || Math.max(ay, by) + sag < y0 - 1 || Math.min(ay, by) > y1 + 1) return;
+    drawn = true;
+    const P = u=> [ax + (bx - ax) * u, ay + (by - ay) * u + sag * 4 * u * (1 - u)];
+    g.strokeStyle = 'rgba(70,50,35,.75)'; g.lineWidth = Math.max(1, k * 0.022);
+    g.beginPath();
+    for(let i = 0; i <= 24; i++){ const [x, y] = P(i / 24); i ? g.lineTo(ox + x * k, oy + y * k) : g.moveTo(ox + x * k, oy + y * k); }
+    g.stroke();
+    const n = Math.max(2, Math.floor(Math.hypot(bx - ax, by - ay) / 0.55));
+    for(let i = 1; i < n; i++){
+      const u = i / n, [x, y] = P(u), sw = Math.sin(t * 2.1 + i * 0.8 + si) * 0.05;
+      const px = ox + x * k, py = oy + y * k;
+      g.fillStyle = CA_FLAGS[(i + si * 2) % CA_FLAGS.length];
+      g.beginPath(); g.moveTo(px - 0.13 * k, py); g.lineTo(px + 0.13 * k, py); g.lineTo(px + sw * k, py + 0.3 * k); g.closePath(); g.fill();
+      g.fillStyle = 'rgba(0,0,0,.12)'; g.beginPath(); g.moveTo(px + 0.02 * k, py); g.lineTo(px + 0.13 * k, py); g.lineTo(px + sw * k, py + 0.3 * k); g.closePath(); g.fill();
+    }
+  });
+  return drawn;
+}
+/* (3.97) petals in the air: falling from the gardens' blossom trees and drifting off on the wind, and a few blown right
+   across the market square on the breeze ("I want the market square to feel warm and exciting"); says whether any was in view */
+const CA_PETAL_COLS = ['#f7c6d8', '#f2a7c3', '#fde4ee', '#e889ad'];
+function caPetals(g, m, k, ox, oy, x0, y0, x1, y1, now){
+  if(!m.deco || m.room) return false;
+  const t = now / 1000;
+  let drawn = false;
+  const petal = (px, py, a, rot, c)=>{
+    if(a <= 0.02 || px < x0 - 1 || px > x1 + 1 || py < y0 - 1 || py > y1 + 1) return;
+    g.globalAlpha = a; g.fillStyle = c;
+    g.save(); g.translate(ox + px * k, oy + py * k); g.rotate(rot); g.scale(1, 0.3 + 0.7 * Math.abs(Math.cos(rot * 1.7)));   // tumbling as it falls
+    g.beginPath(); g.ellipse(0, 0, k * 0.085, k * 0.05, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.5)'; g.beginPath(); g.ellipse(-k * 0.02, -k * 0.01, k * 0.03, k * 0.015, 0, 0, Math.PI * 2); g.fill();
+    g.restore();
+  };
+  const trees = m._blossoms || (m._blossoms = m.deco.filter(d=> d.kind === 'tree' && d.variant === 'blossom'));
+  trees.forEach((d, ti)=>{
+    if(d.x + 6 < x0 || d.x - 1 > x1 || d.y + 6 < y0 || d.y > y1) return;
+    drawn = true;
+    for(let i = 0; i < 8; i++){
+      const seed = jgHash(i, ti, 31), p = (t * (0.08 + seed * 0.05) + seed) % 1;
+      const sx = d.x + d.w * (0.2 + 0.6 * jgHash(i, ti, 32)), sy = d.y + d.h * (0.2 + 0.25 * jgHash(i, ti, 33));
+      const px = sx + p * (1.5 + 2.5 * seed) + Math.sin(t * 1.4 + i * 1.7) * 0.25, py = sy + p * (2 + 1.5 * seed);
+      petal(px, py, Math.min(1, p * 6, (1 - p) * 4) * 0.9, t * (1 + seed * 2) + i, CA_PETAL_COLS[i % 4]);
+    }
+  });
+  const B = m.tags && m.tags.breeze;
+  if(B && !(B.x1 < x0 || B.x0 > x1 || B.y1 < y0 || B.y0 > y1)){
+    drawn = true;
+    for(let i = 0; i < 26; i++){
+      const seed = jgHash(i, 7, 41), p = (t * (0.022 + seed * 0.02) + seed) % 1;
+      const px = B.x0 + (B.x1 - B.x0) * p, py = B.y0 + (B.y1 - B.y0) * jgHash(i, 7, 42) + Math.sin(t * 0.9 + i * 2.3) * 0.6 + p * 2;
+      petal(px, py, Math.min(1, p * 8, (1 - p) * 8) * 0.85, t * (0.8 + seed) + i, CA_PETAL_COLS[i % 4]);
+    }
+  }
+  g.globalAlpha = 1;
+  return drawn;
+}
+/* where you and Lucesco are drawn now (to the pixel, mid-step too): a change redraws the layer */
+function caSeeKey(){
+  if(!CA_P.overAny) return '';
+  return caSeeEls().map(el=>{ const r = el.getBoundingClientRect(); return Math.round(r.left) + ',' + Math.round(r.top); }).join(';');
 }
 /* the seams between squares: water's stone rim, the shade a wall or a hedge throws to the south */
 function caEdges(ctx, m, x, y, t, px, py, pw, ph){
@@ -559,8 +718,10 @@ function caDrawView(ctx, v, k, ox, oy, x0, y0, x1, y1, frame, now){
   if(cx0 >= cx1 || cy0 >= cy1) return;
   ctx.save();
   ctx.beginPath(); ctx.rect(ox + cx0 * k, oy + cy0 * k, (cx1 - cx0) * k, (cy1 - cy0) * k); ctx.clip();
-  ctx.fillStyle = v.src === 'jungle' ? '#163a22' : '#4d6b3a'; ctx.fillRect(ox + cx0 * k, oy + cy0 * k, (cx1 - cx0) * k, (cy1 - cy0) * k);
-  const p = caYou(), camAlong = p ? (v.along === 'x' ? p.x + 0.5 : p.y + 0.5) : (v.at0 + 0.5);
+  ctx.fillStyle = v.src === 'jungle' ? '#2a3417' : '#4d6b3a'; ctx.fillRect(ox + cx0 * k, oy + cy0 * k, (cx1 - cx0) * k, (cy1 - cy0) * k);
+  /* (3.97) the designer: "The distant scenery is jerky from the walls when walking" — it followed your square, so it
+     jumped a square's worth at each step while the wall glided under it; now it follows the camera, as the wall does */
+  const camAlong = v.along === 'x' ? (ctx.canvas.width / 2 - ox) / k : (ctx.canvas.height / 2 - oy) / k;
   const f = v.f || 0.62, kk = k * f;
   const camSrc = v.src0 + (camAlong - v.at0);                     // the source's square below you
   /* the source squares that can show: along, those within the view's width; away, its depth */
@@ -583,7 +744,8 @@ function caDrawView(ctx, v, k, ox, oy, x0, y0, x1, y1, frame, now){
         if(sx < 0 || sy < 0 || sx >= gm.W || sy >= gm.H) continue;
         let key = gm.spr[sy * gm.W + sx];
         if(key === 'water') key = 'water:' + frame;
-        if(key) ctx.drawImage(caSpr(key), px, py, pw, ph);
+        if(key && /^(bld|pal):/.test(key)) CA_ART.bldSlice(ctx, key, kk, px, py, pw, ph);   // (3.97) its picture, small
+        else if(key) ctx.drawImage(caSpr(key), px, py, pw, ph);
       }
     }
   }
@@ -658,6 +820,7 @@ function caDrawSprite(g, key, S){
   const lw = Math.max(1, S / 32);
   switch(kind){
     case 'cobble': {
+      if(typeof CA_ART !== 'undefined'){ CA_ART.cobble(g, S, n); return; }   // (3.97) rounder, finer
       R(0, 0, 1, 1, '#7d756a');
       const cols = ['#a49a8a', '#9a9080', '#b0a796', '#958b7c'];
       for(let r = 0; r < 4; r++) for(let c = -1; c < 4; c++){
@@ -951,6 +1114,7 @@ function caDrawDeco(g, d, x, y, w, h, now){
       return;
     }
     case 'lamp': {
+      if(typeof CA_ART !== 'undefined') return CA_ART.lamp(g, d, x, y, w, h, k, t);   // (3.97) an iron post, a four-paned lantern
       g.fillStyle = 'rgba(0,0,0,.2)'; g.beginPath(); g.ellipse(x + w / 2, y + h * 0.95, w * 0.22, h * 0.04, 0, 0, 7); g.fill();
       g.fillStyle = '#2f2b36'; g.fillRect(x + w * 0.45, y + h * 0.3, w * 0.1, h * 0.66); g.fillRect(x + w * 0.35, y + h * 0.9, w * 0.3, h * 0.06);
       g.fillStyle = 'rgba(255,214,120,.28)'; g.beginPath(); g.arc(x + w / 2, y + h * 0.2, w * 0.5, 0, 7); g.fill();
@@ -969,6 +1133,7 @@ function caDrawDeco(g, d, x, y, w, h, now){
       return;
     }
     case 'easel': {
+      if(typeof CA_ART !== 'undefined') return CA_ART.easel(g, d, x, y, w, h, k);   // (3.97) the palace on his canvas
       g.strokeStyle = '#7a4a28'; g.lineWidth = Math.max(1.5, k * 0.07);
       g.beginPath(); g.moveTo(x + w * 0.5, y); g.lineTo(x + w * 0.15, y + h); g.moveTo(x + w * 0.5, y); g.lineTo(x + w * 0.85, y + h); g.moveTo(x + w * 0.5, y); g.lineTo(x + w * 0.5, y + h * 0.95); g.stroke();
       g.fillStyle = '#f7f2e4'; g.fillRect(x + w * 0.12, y + h * 0.12, w * 0.76, h * 0.42);
@@ -977,12 +1142,14 @@ function caDrawDeco(g, d, x, y, w, h, now){
       return;
     }
     case 'board': {
+      if(typeof CA_ART !== 'undefined') return CA_ART.board(g, d, x, y, w, h, k);   // (3.97) a little roof, its notices
       g.fillStyle = '#6b4426'; g.fillRect(x + w * 0.1, y + h * 0.2, w * 0.08, h * 0.8); g.fillRect(x + w * 0.82, y + h * 0.2, w * 0.08, h * 0.8);
       g.fillStyle = '#9c6a3c'; g.fillRect(x, y + h * 0.1, w, h * 0.45);
       [['#f7f2e4', 0.08, 0.16], ['#fde9a8', 0.42, 0.2], ['#e3f0fb', 0.68, 0.14]].forEach(([c, a, b])=>{ g.fillStyle = c; g.fillRect(x + w * a, y + h * b, w * 0.26, h * 0.3); });
       return;
     }
     case 'sign': {
+      if(typeof CA_ART !== 'undefined') return CA_ART.sign(g, d, x, y, w, h, k, t);   // (3.97) a carved board on an iron rod
       g.strokeStyle = '#3a2a1a'; g.lineWidth = Math.max(1, k * 0.05);
       g.beginPath(); g.moveTo(x + w * 0.2, y); g.lineTo(x + w * 0.2, y + h * 0.25); g.moveTo(x + w * 0.8, y); g.lineTo(x + w * 0.8, y + h * 0.25); g.stroke();
       g.fillStyle = '#6e4426'; g.fillRect(x, y + h * 0.22, w, h * 0.78);
@@ -991,11 +1158,13 @@ function caDrawDeco(g, d, x, y, w, h, now){
       return;
     }
     case 'chimney': {
+      if(typeof CA_ART !== 'undefined') return CA_ART.chimney(g, d, x, y, w, h, k, t);   // (3.97) brick, its pots, its smoke
       g.fillStyle = '#8a4a3a'; g.fillRect(x, y + h * 0.35, w, h * 0.65); g.fillStyle = '#6e3a2e'; g.fillRect(x - w * 0.08, y + h * 0.3, w * 1.16, h * 0.1);
       for(let i = 0; i < 3; i++){ const p = ((t * 0.4 + i / 3) % 1); g.fillStyle = `rgba(230,230,240,${0.45 * (1 - p)})`; g.beginPath(); g.arc(x + w * (0.5 + 0.3 * Math.sin(p * 4 + i)), y + h * (0.3 - p * 0.9), w * (0.18 + p * 0.3), 0, 7); g.fill(); }
       return;
     }
     case 'banner': {
+      if(typeof CA_ART !== 'undefined') return CA_ART.banner(g, d, x, y, w, h, k, t);   // (3.97) a crown worked in gold, a fringe
       const sway = Math.sin(t * 1.6 + d.x) * w * 0.05;
       g.fillStyle = '#d9b247'; g.fillRect(x - w * 0.05, y, w * 1.1, h * 0.06);
       g.fillStyle = '#2f4f9a'; g.beginPath(); g.moveTo(x + w * 0.1, y + h * 0.05); g.lineTo(x + w * 0.9, y + h * 0.05); g.lineTo(x + w * 0.9 + sway, y + h * 0.85); g.lineTo(x + w * 0.5 + sway, y + h); g.lineTo(x + w * 0.1 + sway, y + h * 0.85); g.fill();
@@ -1031,7 +1200,11 @@ function caDrawDeco(g, d, x, y, w, h, now){
       }
       return;
     }
-    case 'palaceTower': case 'cornerTower': case 'keep': return caDrawTower(g, d, x, y, w, h, k, t);
+    case 'palaceTower': case 'cornerTower': case 'keep': return CA_ART.tower(g, d, x, y, w, h, k, t);   // (3.97) was caDrawTower
+    case 'stall': return CA_ART.stall(g, d, x, y, w, h, k);            // (3.97) the market's stalls, their keepers behind
+    case 'planter': return CA_ART.planter(g, d, x, y, w, h, k);
+    case 'bench': return CA_ART.bench(g, d, x, y, w, h, k);
+    case 'well': return CA_ART.well(g, d, x, y, w, h, k);
     default: return caDrawFurniture(g, d, x, y, w, h, k, t);
   }
 }
@@ -1136,7 +1309,11 @@ function caWallMap(k){
     Object.assign(rect(sp.inn), { src:'castle', along, at0:0, src0:0, edge:inEdge, srcEdge:inSrcEdge, out:inOut, srcOut:inSrcOut, f:0.6 }),
     Object.assign(rect(sp.out), { src:'jungle', along, at0:0, src0:sp.across ? jc.x : jc.y, edge:outEdge, srcEdge:outSrcEdge, out:outOut, srcOut:outSrcOut, f:0.6 }),
   ];
-  m.tags = { sp, lanes:[sp.walk[0], sp.walk[1] - 1], mid:sp.walk[0] + 1 };
+  /* (3.97) the designer: "chestnut knights are not well placed" — they stood in the battlements themselves, half over
+     the drop. Now each stands on the walkway's square by his notch, looking out; the square behind him is yours to
+     pass by; the patrols march in the two rows behind that */
+  const look = sp.crenel < sp.walk[0] ? sp.walk[0] : sp.walk[1] - 1, inward = sp.crenel < sp.walk[0] ? 1 : -1;
+  m.tags = { sp, look, mid:look + inward, lanes:[look + 2 * inward, look + 3 * inward] };
   _caMaps['wall_' + k] = m;
   return m;
 }
@@ -1188,7 +1365,9 @@ function caRampMap(c){
   ['duck', 'bug', 'knight'].forEach((who, i)=>{
     const [x, y] = outerNotches[i];
     caPut(m, x, y, T.NOTCH, (y === 2 || y === 11) ? 'notchH' : 'notchV');
-    m.tags.notches.push({ who, x, y });
+    /* (3.97) standing on the walkway by the notch, looking out (not in the battlements) */
+    const side = y === 2 ? 'n' : y === 11 ? 's' : x === 2 ? 'w' : 'e';
+    m.tags.notches.push({ who, x:x + (side === 'w' ? 1 : side === 'e' ? -1 : 0), y:y + (side === 'n' ? 1 : side === 's' ? -1 : 0), side, notch:{ x, y } });
   });
   /* the spyglass in the outer corner */
   const sx = c[1] === 'w' ? 3 : 10, sy = c[0] === 'n' ? 3 : 10;
@@ -1209,15 +1388,20 @@ function caPalaceMap(){
   caFill(m, 0, 0, W, H, T.IWALL, 'iwall:top');
   /* the hall */
   caFill(m, 12, 2, 16, 31, T.MARBLE);
-  wallRow(1, 12, 28, (x)=> x % 4 === 1 ? 'window' : x % 4 === 3 ? 'tapestry:' + (x % 8 > 3 ? 1 : 0) : 'plain');
+  /* (3.97) "More detail inside the palace would be wonderful": its north wall laid out — tall windows of stained glass,
+     a torch either side of the King's canopy, a tapestry behind each sealed blade */
+  const HALL_N = { 13:'window', 15:'tapestry:0', 16:'tapestry:1', 17:'window', 18:'torch', 19:'drape', 20:'drape', 21:'torch', 22:'window', 23:'tapestry:1', 24:'tapestry:0', 26:'window' };
+  wallRow(1, 12, 28, (x)=> HALL_N[x] || 'plain');
   caFill(m, 14, 2, 12, 5, T.DAIS);
+  m.tags.dais = { x:14, y:2, w:12, h:5, carpet:{ x:18, y:4.3, w:4 } };
+  m.tags.inlay = [{ x:12.3, y:7.3, w:15.4, h:25.4 }];
   for(let y = 7; y < 33; y++) for(let x = 18; x < 22; x++) caPut(m, x, y, T.CARPET, 'carpet:' + (x === 18 ? 'l' : x === 21 ? 'r' : '') + (y === 7 ? 't' : ''));
   caFill(m, 19, 2, 2, 2, T.THRONE, 'dais'); caDeco(m, 'throne', 18.6, 0.9, 2.8, 3.3, { z:3.9 });
   m.tags.blades = [{ el:'fire', x:15, y:2 }, { el:'ground', x:16, y:2 }, { el:'water', x:23, y:2 }, { el:'grass', x:24, y:2 }];
   m.tags.blades.forEach(b=>{ caPut(m, b.x, b.y, T.PLINTH, 'plinth:0'); caDeco(m, 'blade', b.x - 0.1, b.y - 1.2, 1.2, 2.2, { el:b.el, z:b.y + 0.9 }); });
   m.tags.court = { king:{ x:19, y:3, w:2 }, dauphin:{ x:22, y:4 }, advisor:{ x:17, y:4 }, commander:{ x:22, y:8 } };
   m.tags.guards = [];
-  for(let y = 10; y < 32; y += 3){ m.tags.guards.push({ x:16, y }, { x:23, y }); }
+  for(let y = 10; y < 32; y += 3){ m.tags.guards.push({ x:17, y }, { x:22, y }); }   // (3.97) right by the carpet's edges, a guard of honour (they stood a square off it)
   for(let y = 8; y < 33; y += 3){ [13, 26].forEach(x=>{ caPut(m, x, y, T.COLUMN, 'marble:0'); caDeco(m, 'column', x - 0.05, y - 1.6, 1.1, 2.6, { z:y + 0.9 }); }); }
   /* the corridors, west and east, and their rooms */
   caFill(m, 2, 2, 9, 31, T.MARBLE); caFill(m, 29, 2, 9, 31, T.MARBLE);
@@ -1226,7 +1410,10 @@ function caPalaceMap(){
   for(let y = 4; y < 32; y++){ caPut(m, 6, y, T.RUG, 'carpet:' + (y === 4 ? 't' : '')); caPut(m, 33, y, T.RUG, 'carpet:' + (y === 4 ? 't' : '')); }
   /* the hall's side walls, with doorways */
   for(let y = 2; y < 33; y++){ if(![15, 16, 27, 28].includes(y)) { caPut(m, 11, y, T.IWALL, 'iwall:top'); caPut(m, 28, y, T.IWALL, 'iwall:top'); } }
-  /* the banquet hall (north-west): a long table */
+  /* (3.97) …and the doorways themselves opened: those squares were never floor (the map starts as wall), so the banquet
+     hall, the library and the stair up the central tower could not be walked to from the hall at all */
+  [15, 16, 27, 28].forEach(y=>{ caPut(m, 11, y, T.MARBLE); caPut(m, 28, y, T.MARBLE); });
+  /* the banquet hall (north-west): two long tables laid for a feast, a sideboard either side of the runner */
   caFill(m, 3, 5, 2, 8, T.TABLE, 'marble:1'); caDeco(m, 'longTable', 2.7, 4.6, 2.6, 8.6, { z:12.5 });
   caFill(m, 8, 5, 2, 8, T.TABLE, 'marble:1'); caDeco(m, 'longTable', 7.7, 4.6, 2.6, 8.6, { z:12.5 });
   /* the library (south-east): shelves */
@@ -1238,7 +1425,23 @@ function caPalaceMap(){
   caFill(m, 18, 33, 4, 1, T.IWALL, 'iwall:plain');
   m.tags.door = { x:18, y:32, w:4, stand:{ x:19, y:31 } };
   m.tags.posts = [{ x:4, y:16 }, { x:8, y:27 }, { x:31, y:15 }, { x:35, y:29 }];   // a Chestnut Knight in each corridor
+  /* (3.97) and more in every room: candelabras at the back of the dais, palms in gold urns, suits of armour and tall
+     vases down the corridors, sideboards in the banquet hall, a settee and a grandfather clock by the stair, a reading
+     table, a globe and a rug in the library (each stands on its square: nobody walks through it) */
+  const put = (kind, x, y, w, h, dx, dy, dw, dh, o)=>{ caFill(m, x, y, w, h, T.PLANTER, 'marble:0'); caDeco(m, kind, x + dx, y + dy, dw, dh, Object.assign({ z:y + h - 0.1 }, o || {})); };
+  [[14, 2], [25, 2]].forEach(([x, y])=> put('candelabra', x, y, 1, 1, -0.1, -1.6, 1.2, 2.55));
+  [[12, 2], [27, 2], [12, 32], [27, 32], [2, 32], [10, 32], [37, 31]].forEach(([x, y], i)=> put('palm', x, y, 1, 1, -0.35, -1.7, 1.7, 2.65, { n:i }));
+  [[2, 19], [2, 25], [10, 22], [29, 8], [37, 8]].forEach(([x, y])=> put('armour', x, y, 1, 1, -0.15, -1.5, 1.3, 2.45));
+  [[2, 22], [10, 19], [10, 25], [29, 2], [29, 31]].forEach(([x, y])=> put('vase', x, y, 1, 1, -0.1, -0.9, 1.2, 1.85));
+  put('sideboard', 2, 2, 3, 1, -0.05, -0.75, 3.1, 1.7); put('sideboard', 8, 2, 3, 1, -0.05, -0.75, 3.1, 1.7);
+  put('settee', 30, 2, 2, 1, -0.1, -0.5, 2.2, 1.45);
+  put('clock', 37, 2, 1, 1, -0.05, -1.75, 1.1, 2.7);
+  put('readingTable', 30, 28, 2, 2, -0.3, -0.5, 2.6, 2.5);
+  put('globe', 37, 28, 1, 1, -0.1, -0.95, 1.2, 1.9);
+  m.tags.floor = [{ kind:'persian', x:29.25, y:27.25, w:3.5, h:3.5 }];
+  m.tags.globe = { x:37, y:28 }; m.tags.clock = { x:37, y:2 };
   for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){ const i = y * W + x; if(!m.spr[i]) m.spr[i] = caDefaultSpr(m, x, y) || 'iwall:top'; }
+  if(typeof CA_ROOM !== 'undefined') CA_ROOM.dress(m, 'palace');      // (3.97) its picture (24-room-art.js): torches lit
   m.deco.sort((a, b)=> a.z - b.z);
   _caMaps.palace = m;
   return m;
@@ -1250,9 +1453,14 @@ function caTowerMap(){
   const T = CA_T, W = 30, H = 22, m = caGrid(W, H, T.IWALL);
   caFill(m, 0, 0, W, H, T.IWALL, 'iwall:top');
   caFill(m, 2, 12, 26, 4, T.MARBLE);                                   // the gallery
+  caFill(m, 13, 16, 4, 1, T.MARBLE);                                   // (3.97) the landing at the stair's head, where you arrive (it was wall)
   for(let x = 3; x < 27; x++) caPut(m, x, 13, T.RUG, 'carpet:' + (x === 3 ? 'l' : x === 26 ? 'r' : ''));
   caFill(m, 2, 2, 9, 9, T.MARBLE); caFill(m, 13, 2, 5, 9, T.MARBLE); caFill(m, 20, 2, 8, 9, T.MARBLE);   // three rooms
-  for(let x = 2; x < 28; x++) caPut(m, x, 1, T.IWALL, 'iwall:' + (x % 4 === 0 ? 'window' : x % 4 === 2 ? 'tapestry:1' : 'plain'));
+  /* (3.97) the rooms' walls: windows, sconces by the fire, a portrait; the gallery's side of them hung with portraits and tapestries */
+  const ROW1 = { 5:'window', 8:'window', 13:'torch', 17:'torch', 20:'window', 22:'portrait', 24:'window' };
+  for(let x = 2; x < 28; x++) caPut(m, x, 1, T.IWALL, 'iwall:' + (ROW1[x] || 'plain'));
+  const ROW11 = { 3:'portrait', 8:'torch', 10:'tapestry:0', 13:'portrait', 17:'portrait', 19:'tapestry:1', 21:'torch', 26:'portrait' };
+  for(let x = 2; x < 28; x++) caPut(m, x, 11, T.IWALL, 'iwall:' + (ROW11[x] || 'plain'));
   [5, 6, 15, 23, 24].forEach(x=> caPut(m, x, 11, T.MARBLE));           // doorways
   /* the princess's room: her bed, the wardrobe she hides behind, a rug */
   caFill(m, 2, 2, 3, 3, T.BEDROYAL, 'marble:1'); caDeco(m, 'canopyBed', 1.9, 0.6, 3.2, 4.6, { z:4.9 });
@@ -1263,11 +1471,28 @@ function caTowerMap(){
   caFill(m, 14, 2, 3, 1, T.HEARTH, 'iwall:plain'); caDeco(m, 'hearth', 13.8, 0.4, 3.4, 2.8, { z:2.9, marble:true });
   /* the Dauphin's room: her armour stand, a bed */
   caFill(m, 25, 2, 3, 3, T.BEDROYAL, 'marble:1'); caDeco(m, 'canopyBed', 24.9, 0.6, 3.2, 4.6, { z:4.9, blue:true });
-  caFill(m, 21, 2, 1, 1, T.PLANTER, 'marble:0'); caDeco(m, 'armour', 20.6, 0.5, 1.8, 2.6, { z:2.8 });
+  caFill(m, 21, 2, 1, 1, T.PLANTER, 'marble:0'); caDeco(m, 'armour', 20.6, 0.5, 1.8, 2.6, { z:2.8, gold:true });
   caFill(m, 13, 17, 4, 2, T.STAIRS, 'stairs');
   m.tags.stair = { x:13, y:17, w:4, h:2, stand:{ x:14, y:16 } };
   m.tags.posts = [{ x:3, y:14 }, { x:26, y:14 }];
+  /* (3.97) more in each room: her dressing table, her toy chest and rocking horse; armchairs and tea by the fire, a
+     harp; the Dauphin's rack of swords and lances, her desk of maps, a chest; palms and vases along the gallery */
+  const put = (kind, x, y, w, h, dx, dy, dw, dh, o)=>{ caFill(m, x, y, w, h, T.PLANTER, 'marble:0'); caDeco(m, kind, x + dx, y + dy, dw, dh, Object.assign({ z:y + h - 0.1 }, o || {})); };
+  put('vanity', 6, 2, 2, 1, -0.1, -1.1, 2.2, 2.05);
+  put('toyChest', 2, 9, 1, 1, -0.15, -0.65, 1.3, 1.6);
+  put('rockingHorse', 9, 9, 1, 1, -0.2, -0.9, 1.4, 1.85);
+  put('armchair', 13, 4, 1, 1, -0.1, -0.55, 1.2, 1.5); put('armchair', 17, 4, 1, 1, -0.1, -0.55, 1.2, 1.5);
+  put('teaTable', 15, 4, 1, 1, -0.25, -0.45, 1.5, 1.4);
+  put('harp', 17, 8, 1, 1, -0.15, -1.4, 1.3, 2.35);
+  put('plantPot', 13, 8, 1, 1, -0.25, -1.55, 1.5, 2.5, { pot:'#e8e4dc' });
+  put('weaponRack', 23, 2, 1, 1, -0.15, -1.3, 1.3, 2.2);
+  put('desk', 20, 9, 2, 1, -0.1, -0.8, 2.2, 1.75);
+  put('chest', 27, 9, 1, 1, -0.1, -0.5, 1.2, 1.45);
+  [[2, 12], [27, 12]].forEach(([x, y], i)=> put('palm', x, y, 1, 1, -0.35, -1.7, 1.7, 2.65, { n:i }));
+  [[9, 12], [20, 12]].forEach(([x, y])=> put('vase', x, y, 1, 1, -0.1, -0.9, 1.2, 1.85));
+  m.tags.floor = [{ kind:'persian', x:13.25, y:3.3, w:4.5, h:2.6, col:'#7a1e2c' }, { kind:'persian', x:21.4, y:5.6, w:3.4, h:2.6, col:'#24406e' }];
   for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){ const i = y * W + x; if(!m.spr[i]) m.spr[i] = caDefaultSpr(m, x, y) || 'iwall:top'; }
+  if(typeof CA_ROOM !== 'undefined') CA_ROOM.dress(m, 'tower');
   m.deco.sort((a, b)=> a.z - b.z);
   _caMaps.tower = m;
   return m;
@@ -1280,17 +1505,29 @@ function caTavernMap(){
   const T = CA_T, W = 16, H = 12, m = caGrid(W, H, T.WOODWALL);
   caFill(m, 0, 0, W, H, T.WOODWALL, 'woodwall:plain');
   caFill(m, 1, 2, 14, 9, T.PLANK);
-  for(let x = 1; x < 15; x++) caPut(m, x, 1, T.WOODWALL, 'woodwall:' + (x === 5 || x === 10 ? 'window' : x === 7 || x === 13 ? 'shelf' : x === 3 ? 'lamp' : 'plain'));
+  /* (3.97) its north wall: the chimney breast over the hearth, lanterns, two cottage windows, a picture of the
+     mountains, shelves of jam and plates behind the bar, a cuckoo clock; herbs hung from the beam over it all */
+  const ROW1 = { 1:'chimney', 2:'chimney', 3:'chimney', 4:'lamp', 5:'window', 6:'picture', 7:'window', 8:'lamp', 9:'shelf:0', 10:'shelf:1', 11:'clock', 12:'shelf:2', 13:'shelf:3', 14:'lamp' };
+  for(let x = 1; x < 15; x++) caPut(m, x, 1, T.WOODWALL, 'woodwall:' + (ROW1[x] || 'plain'));
+  for(let x = 1; x < 4; x++) caPut(m, x, 0, T.WOODWALL, 'woodwall:chimney');
   caFill(m, 1, 2, 3, 1, T.HEARTH, 'plank:0'); caDeco(m, 'hearth', 0.8, 0.3, 3.4, 2.9, { z:2.9 });
-  caFill(m, 9, 3, 6, 1, T.COUNTER, 'counter'); caDeco(m, 'mugs', 9, 2.55, 6, 0.7, { z:3.2 });
+  caFill(m, 9, 3, 6, 1, T.COUNTER, 'counter'); caDeco(m, 'bar', 8.9, 1.95, 6.2, 2.05, { z:3.95 });   // (3.97) the bar itself (was a row of mugs)
   m.tags.keepers = [{ who:'cream', x:10, y:2 }, { who:'choux', x:13, y:2 }];
   [[3, 6], [6, 8], [3, 9]].forEach(([x, y])=>{ caPut(m, x, y, T.TABLE, 'plank:1'); caDeco(m, 'table', x - 0.3, y - 0.55, 1.6, 1.5, { z:y + 0.8 }); });
   [[2, 6], [4, 6], [5, 8], [7, 8], [2, 9], [4, 9]].forEach(([x, y])=>{ caPut(m, x, y, T.STOOL, 'plank:2'); caDeco(m, 'stool', x + 0.15, y + 0.1, 0.7, 0.8, { z:y + 0.7 }); });
   caFill(m, 9, 6, 4, 3, T.RUG, (x, y)=> 'rug:' + ((x + y) & 1));
   caPut(m, 14, 9, T.CRATE, 'plank:0'); caDeco(m, 'barrels', 13.6, 8.1, 1.8, 1.9, { z:9.9 });
+  /* (3.97) the cat asleep by the fire, logs stacked beside it, a big plant in the corner, a braided rug, a doormat */
+  caPut(m, 1, 3, T.CRATE, 'plank:0'); caDeco(m, 'cat', 0.95, 2.6, 1.1, 1.3, { z:3.9 });
+  caPut(m, 4, 2, T.CRATE, 'plank:0'); caDeco(m, 'firewood', 3.9, 1.5, 1.2, 1.45, { z:2.9 });
+  caPut(m, 14, 5, T.PLANTER, 'plank:0'); caDeco(m, 'plantPot', 13.75, 3.3, 1.5, 2.6, { z:5.9, split:true });
+  m.tags.floor = [{ kind:'braid', x:0.85, y:3.1, w:3.9, h:1.75 }, { kind:'mat', x:7.05, y:10.15, w:1.9, h:0.75 }];
+  m.tags.upper = [{ kind:'herbs', x:5, y:0, w:3 }, { kind:'herbs', x:9.5, y:0, w:4 }];
+  m.tags.cat = { x:1, y:3 };
   caFill(m, 7, 11, 2, 1, T.WOODWALL, 'woodwall:plain');
   m.tags.door = { x:7, y:10, w:2, stand:{ x:7, y:10 } };
   for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){ const i = y * W + x; if(!m.spr[i]) m.spr[i] = caDefaultSpr(m, x, y) || 'woodwall:plain'; }
+  if(typeof CA_ROOM !== 'undefined') CA_ROOM.dress(m, 'tavern');
   m.deco.sort((a, b)=> a.z - b.z);
   _caMaps.tavern = m;
   return m;
@@ -1303,20 +1540,32 @@ function caRecordsMap(){
   caFill(m, 0, 0, W, H, T.WOODWALL, 'woodwall:records');
   caFill(m, 1, 2, 12, 8, T.PLANK);
   for(let x = 1; x < 13; x++) caPut(m, x, 1, T.WOODWALL, 'woodwall:' + (x === 4 || x === 9 ? 'poster' : 'records'));
-  [[2, 4], [2, 7], [5, 5], [5, 7]].forEach(([x, y])=> caFill(m, x, y, 2, 1, T.SHELF, 'shelfrec:' + ((x + y) % 3)));
-  caFill(m, 9, 3, 4, 1, T.COUNTER, 'counter');
+  [[2, 4], [2, 7], [5, 5], [5, 7]].forEach(([x, y])=>{ caFill(m, x, y, 2, 1, T.SHELF, 'shelfrec:' + ((x + y) % 3)); caDeco(m, 'recBin', x - 0.05, y - 0.55, 2.1, 1.5, { z:y + 0.95 }); });   // (3.97) drawn: bins of records
+  caFill(m, 9, 3, 4, 1, T.COUNTER, 'counter'); caDeco(m, 'recCounter', 8.9, 1.95, 4.2, 2.05, { z:3.95 });
   m.tags.keeper = { who:'melody', x:11, y:2 };
   caPut(m, 12, 6, T.PLANTER, 'plank:0'); caDeco(m, 'gramophone', 11.7, 4.9, 1.6, 2.1, { z:6.9 });
   m.tags.gramophone = { x:12, y:6 };
+  /* (3.97) "Can you draw me the art for the record stall too please? I want it to look detailed": the store's walls
+     hung with its records (each its own sleeve, as in the shop), concert posters, gold records, a neon sign and little
+     lights; a jukebox, a corner to listen in, boxes of new records, a plant; a rug that is a record */
+  caPut(m, 1, 2, T.CRATE, 'plank:0'); caDeco(m, 'jukebox', 0.85, 0.55, 1.3, 2.4, { z:2.95 });
+  caFill(m, 6, 2, 2, 1, T.TABLE, 'plank:0'); caDeco(m, 'listen', 5.9, 1.05, 2.2, 1.9, { z:2.95 });
+  caPut(m, 1, 9, T.CRATE, 'plank:0'); caDeco(m, 'boxes', 0.85, 7.9, 1.3, 2.05, { z:9.95 });
+  caPut(m, 12, 9, T.PLANTER, 'plank:0'); caDeco(m, 'plantPot', 11.75, 7.4, 1.5, 2.55, { z:9.9, pot:'#4a2b5c', split:true });
+  m.tags.floor = [{ kind:'vinyl', x:7.55, y:5.2, w:3.5, h:2.95 }, { kind:'mat', x:6.05, y:9.15, w:1.9, h:0.75 }];
+  m.tags.upper = [{ kind:'lights', x:1, y:0, w:12 }, { kind:'neon', x:4, y:0, w:5 }, { kind:'gold', x:2, y:0 }, { kind:'gold', x:10, y:0 }, { kind:'gold', x:11, y:0 }];
+  m.tags.jukebox = { x:1, y:2 }; m.tags.listen = { x:6, y:2 };
   caFill(m, 6, 10, 2, 1, T.WOODWALL, 'woodwall:plain');
   m.tags.door = { x:6, y:9, w:2, stand:{ x:6, y:9 } };
   for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){ const i = y * W + x; if(!m.spr[i]) m.spr[i] = caDefaultSpr(m, x, y) || 'woodwall:plain'; }
+  if(typeof CA_ROOM !== 'undefined') CA_ROOM.dress(m, 'records');
   m.deco.sort((a, b)=> a.z - b.z);
   _caMaps.records = m;
   return m;
 }
 /* indoors, and the spyglass on a rampart */
 function caDrawFurniture(g, d, x, y, w, h, k, t){
+  if(typeof CA_ROOM !== 'undefined' && CA_ROOM.furn(g, d, x, y, w, h, k, t)) return;   // (3.97) drawn in full (24-room-art.js); what follows is the old, plainer set
   const gold = '#d9b247', wood = '#7a4a28', woodL = '#a56f40';
   const shadow = (cx, cy, rx, ry)=>{ g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 7); g.fill(); };
   switch(d.kind){
@@ -1457,7 +1706,10 @@ function caMakeDeck(key, o){
   const map = CA_MAPS[key];
   const d = {
     key, region:6, title:o.title, bg:o.bg || 'jungle', music:o.music || 'region6', noGhost:true,
-    get view(){ return caViewSquares(o.squares); },
+    /* (3.96) the designer: "in the castle, could you zoom in to region 5's zoom to make the castle feel more
+       immersive and its sights even prettier?" — 9 squares across on a tablet, 7 on a phone, as Region 5's
+       streets (walkView); 13 and 9 until 3.96 */
+    get view(){ return o.squares ? caViewSquares(o.squares) : walkView(); },
     backLabel:o.backLabel || 'Leave', backTo:o.backTo || CA_KEY,
     get rows(){ return caRows(map()); },
     bx:0, by:0, bs:1 / 32, nat:[1, 1],
@@ -1483,7 +1735,7 @@ CA_CORNERS.forEach(c=>{ CA_PLACES['r6_ramp_' + c] = { title:'The ' + CA_CORNER_N
 Object.entries(CA_PLACES).forEach(([k, o])=> caMakeDeck(k, o));
 /* A wall's two ends: 'a' its west (north and south walls) or north end (west and east walls), 'b' the other. */
 function caWallStand(k, end){
-  const sp = CA_WALL_SPEC[k], mid = sp.walk[0] + 1;
+  const sp = CA_WALL_SPEC[k], mid = caWallMap(k).tags.mid;
   const a = end === 'a' ? 1 : 62;
   return sp.across ? [a, mid] : [mid, a];
 }
@@ -1521,7 +1773,15 @@ function caEnter(){
 const _caThings = {};
 function caNpc(who, x, y, o){
   const c = CA_WHO[who] || {};
-  return Object.assign({ x, y, cls:'ca-npc', html:()=> caMonImg(c.sprite, WALK_T * ((o && o.scale) || 1.45), o && o.faceR, c.icon), verb:'Talk', sub:c.name, act:()=> caTalk(who, o && o.line) }, o || {});
+  return Object.assign({ x, y, cls:'ca-npc', html:()=> caMonImg(c.sprite, WALK_T * ((o && o.scale) || 1.45), false, c.icon), verb:'Talk', sub:c.name, act:()=> caTalk(who, o && o.line) }, o || {});
+}
+/* (3.97) one on lookout, by a notch on the side `side` (n s w e): his back to you on a north side, facing you on a
+   south one, turned out on the others */
+function caLookout(who, x, y, side, i, line){
+  const c = CA_WHO[who] || {};
+  const o = { line, still:true, faceR:side === 'e' || ((side === 'n' || side === 's') && i % 2 === 0) };
+  if(side === 'n') o.html = ()=> caMonImg(c.sprite, WALK_T * 1.45, false, c.icon, 'back');
+  return caNpc(who, x, y, o);
 }
 /* the counter in front of a shopkeeper: spoken to across it */
 function caCounter(who, x, y, act){ return { x, y, icon:'', verb:'Talk', sub:(CA_WHO[who] || {}).name, act }; }
@@ -1553,12 +1813,12 @@ function caThings(key){
       return sp.across ? { x:a, y:sp.walk[0], h:4 } : { x:sp.walk[0], y:a, w:4 };
     };
     ['a', 'b'].forEach(e=> T(Object.assign(end(e), { walk:true, icon:'', verb:'Go on', where:caEndLabel(k, e), arrow:sp.across ? (e === 'a' ? 'left' : 'right') : (e === 'a' ? 'up' : 'down'), act:()=> caWallEnd(k, e) })));
-    CA_LOOKOUT_AT.forEach((a, i)=> T(caNpc('knight', sp.across ? a : sp.crenel, sp.across ? sp.crenel : a, { line:'lookout', still:true, faceR:!sp.across ? sp.out[0] > sp.walk[0] : i % 2 === 0 })));
+    CA_LOOKOUT_AT.forEach((a, i)=> T(caLookout('knight', sp.across ? a : m.tags.look, sp.across ? m.tags.look : a, k, i, 'lookout')));
   } else if(key.startsWith('r6_ramp_')){
     const c = key.slice(8), m = caRampMap(c), tg = m.tags;
     T({ x:tg.stair.x, y:tg.stair.y, w:2, h:2, icon:'', verb:'Down', where:'Into the castle', arrow:'down', act:()=>{ const d = caGrounds().tags.towerDoors[c].stand; caGo(CA_KEY, [d.x, d.y]); } });
     Object.entries(tg.arches).forEach(([s, a])=> T({ x:a.x, y:a.y, w:a.w, h:a.h, walk:true, icon:'', verb:'Along', where:'The ' + CA_WALL_NAME[a.wall], arrow:{ e:'right', w:'left', n:'up', s:'down' }[s], act:()=> caGo('r6_wall_' + a.wall, caWallStand(a.wall, caEndOf(a.wall, a.end))) }));
-    tg.notches.forEach(n=> T(caNpc(n.who, n.x, n.y, { line:'rampart', still:true })));
+    tg.notches.forEach((n, i)=> T(caLookout(n.who, n.x, n.y, n.side, i, 'rampart')));
     T({ x:tg.glass.x, y:tg.glass.y, icon:'', verb:'Look out', sub:'The spyglass', act:()=> caOverview(c) });
   } else if(key === 'r6_palace'){
     const m = caPalaceMap(), tg = m.tags, ct = tg.court;
@@ -1573,6 +1833,8 @@ function caThings(key){
           verb:'Look', sub:'The sealed ' + el + ' blade', act:()=> caLook('blade-' + b.el) }); });
     tg.guards.forEach((g, i)=> T(caNpc('knight', g.x, g.y, { faceR:g.x < 20, line:'hallGuard', still:true })));
     tg.posts.forEach((g, i)=> T(caNpc('knight', g.x, g.y, { faceR:i % 2 === 0, line:'corridor' })));
+    if(tg.globe) T({ x:tg.globe.x, y:tg.globe.y, icon:'', verb:'Spin', sub:'The globe', act:()=> caLook('globe') });   // (3.97)
+    if(tg.clock) T({ x:tg.clock.x, y:tg.clock.y, icon:'', verb:'Look', sub:'The grandfather clock', act:()=> caLook('clock') });
   } else if(key === 'r6_tower'){
     const m = caTowerMap(), tg = m.tags;
     T({ x:tg.stair.x, y:tg.stair.y, w:4, h:2, icon:'', verb:'Down', where:'The palace', arrow:'down', act:()=> caGo('r6_palace', [35, 5]) });
@@ -1583,11 +1845,14 @@ function caThings(key){
     T({ x:tg.door.x, y:tg.door.y, w:2, walk:true, icon:'', verb:'Out', where:'Into the market', arrow:'down', act:()=>{ const b = caGrounds().tags.tavern; caGo(CA_KEY, [b.door[0], 32]); } });
     tg.keepers.forEach(k=>{ T(caNpc(k.who, k.x, k.y, { act:()=> caTavernTalk(k.who) })); T(caCounter(k.who, k.x, k.y + 1, ()=> caTavernTalk(k.who))); });
     T({ x:1, y:2, w:3, icon:'', verb:'Look', sub:'The fire', act:()=> caLook('hearth') });
+    if(tg.cat) T({ x:tg.cat.x, y:tg.cat.y, icon:'', verb:'Pet', sub:'The cat', act:()=> caLook('cat') });   // (3.97)
   } else if(key === 'r6_records'){
     const m = caRecordsMap(), tg = m.tags;
     T({ x:tg.door.x, y:tg.door.y, w:2, walk:true, icon:'', verb:'Out', where:'Into the market', arrow:'down', act:()=>{ const b = caGrounds().tags.records; caGo(CA_KEY, [b.door[0], 32]); } });
     T(caNpc(tg.keeper.who, tg.keeper.x, tg.keeper.y, { act:()=> caShopTalk('records') })); T(caCounter(tg.keeper.who, tg.keeper.x, tg.keeper.y + 1, ()=> caShopTalk('records')));
     T({ x:tg.gramophone.x, y:tg.gramophone.y, icon:'', verb:'Look', sub:'The gramophone', act:()=> caShopTalk('records') });
+    if(tg.jukebox) T({ x:tg.jukebox.x, y:tg.jukebox.y, icon:'', verb:'Look', sub:'The jukebox', act:()=> caLook('jukebox') });   // (3.97)
+    if(tg.listen) T({ x:tg.listen.x, y:tg.listen.y, w:2, icon:'', verb:'Listen', sub:'The listening corner', act:()=> caShopTalk('records') });
   }
   _caThings[key] = list;
   return list;
@@ -1634,29 +1899,55 @@ function caWalkerDefs(key){
     list.push({ id:k + 'd', who:'duck', n:5, along:sp.across ? 'x' : 'y', lane:l0, lo:2, hi:61, pos:14, dir:1 });
     list.push({ id:k + 'b', who:'bug', n:5, along:sp.across ? 'x' : 'y', lane:l1, lo:2, hi:61, pos:48, dir:-1 });
   } else if(key === 'r6_palace'){
-    list.push({ id:'pd', who:'duck', n:3, along:'y', lane:4, lo:4, hi:30, pos:8, dir:1 });
-    list.push({ id:'pb', who:'bug', n:3, along:'y', lane:35, lo:6, hi:30, pos:26, dir:-1 });
+    /* (3.97) down the corridors' runners: on x 4 the ducks stood on the banquet table (and could never leave it), and a
+       Chestnut Knight's post stood in the bugs' way on x 35 */
+    list.push({ id:'pd', who:'duck', n:3, along:'y', lane:6, lo:4, hi:30, pos:8, dir:1 });
+    list.push({ id:'pb', who:'bug', n:3, along:'y', lane:33, lo:6, hi:30, pos:26, dir:-1 });
     list.push({ id:'ps1', who:'servant', wander:{ x0:2, y0:14, x1:10, y1:31 }, x:8, y:20 });
     list.push({ id:'ps2', who:'servant', wander:{ x0:29, y0:6, x1:37, y1:18 }, x:31, y:9 });
     list.push({ id:'ps3', who:'servantY', wander:{ x0:12, y0:24, x1:27, y1:31 }, x:20, y:29 });
+    list.push({ id:'ps4', who:'servantY', wander:{ x0:2, y0:2, x1:10, y1:13 }, x:6, y:4 });          // (3.97) laying the banquet tables
+    list.push({ id:'ps5', who:'servant', wander:{ x0:29, y0:19, x1:37, y1:31 }, x:33, y:27 });        // dusting the library
   } else if(key === 'r6_tower'){
     list.push({ id:'ts1', who:'servant', wander:{ x0:2, y0:12, x1:27, y1:15 }, x:8, y:14 });
     list.push({ id:'ts2', who:'servantY', wander:{ x0:20, y0:5, x1:27, y1:10 }, x:22, y:7 });
   } else if(key === CA_KEY){
     /* (3.90) townsfolk about the market square, the avenue and the west garden */
-    list.push({ id:'gc', who:'townChoux',  line:'townChoux',  wander:{ x0:22, y0:44, x1:41, y1:45 }, x:24, y:45 });
-    list.push({ id:'gb', who:'townBunny',  line:'townBunny',  wander:{ x0:14, y0:37, x1:24, y1:41 }, x:20, y:39 });
-    list.push({ id:'gr', who:'townCream',  line:'townCream',  wander:{ x0:39, y0:37, x1:49, y1:41 }, x:42, y:39 });
-    list.push({ id:'gm', who:'townMelody', line:'townMelody', wander:{ x0:24, y0:32, x1:39, y1:33 }, x:30, y:33 });
+    list.push({ id:'gc', who:'townChoux',  line:'townChoux',  mode:'shop', x:24, y:45 });
+    list.push({ id:'gb', who:'townBunny',  line:'townBunny',  mode:'shop', x:20, y:39 });
+    list.push({ id:'gr', who:'townCream',  line:'townCream',  mode:'shop', x:42, y:39 });
+    list.push({ id:'gm', who:'townMelody', line:'busker',     mode:'busker', x:38, y:38 });
+    list.push({ id:'gs2', who:'shopBird',  line:'shopper',    mode:'shop', x:24, y:33 });
+    list.push({ id:'gs3', who:'shopDuck',  line:'offDuty',    mode:'shop', x:40, y:44 });
+    list.push({ id:'gp1', who:'coupleA',   line:'couple',     mode:'shop', pair:'gp2', x:33, y:44 });
+    list.push({ id:'gp2', who:'coupleB',   line:'couple',     mode:'follow', lead:'gp1', x:32, y:44 });
+    list.push({ id:'gt1', who:'resting',   line:'resting',    mode:'sit', x:26, y:36 });
     list.push({ id:'gd', who:'townDuck',   line:'townDuck',   wander:{ x0:29, y0:47, x1:34, y1:53 }, x:30, y:50 });
-    list.push({ id:'gf', who:'townBird',   line:'townBird',   wander:{ x0:6, y0:13, x1:14, y1:29 }, x:10, y:21 });
+    list.push({ id:'gf', who:'townBird',   line:'townBird',   wander:{ x0:6, y0:13, x1:14, y1:29 }, x:10, y:18 });   // (3.97) on the gravel: (10, 21) was the pond's fountain, and it never got out
+    /* (3.97) and about the rest of the grounds: little ones running in the streets and round the fountain, the
+       gardener, the orchards' pickers, a cadet on the forecourt, a greeter by the gate, strollers */
+    list.push({ id:'gk1', who:'kidChoux', line:'kid',      brisk:true, wander:{ x0:3, y0:52, x1:27, y1:53 }, x:10, y:52 });
+    list.push({ id:'gk2', who:'kidBunny', line:'kid',      brisk:true, wander:{ x0:36, y0:52, x1:60, y1:53 }, x:50, y:53 });
+    /* (3.97) the designer: "how would you do the strollers, though? I want the market square to feel warm and
+       exciting" — the market's people go somewhere (CA_MARKET): shoppers from stall to stall, the fountain, the well,
+       the notice board; a couple arm in arm, stopping to chat; two little ones playing tag round the fountain; a
+       busker singing by it, folk stopping to listen; someone resting on a bench */
+    list.push({ id:'gk3', who:'kidCream', line:'kid',      brisk:true, mode:'tag', it:true, mate:'gk4', x:25, y:37 });
+    list.push({ id:'gk4', who:'kidTag',   line:'kid',      brisk:true, mode:'tag', mate:'gk3', x:22, y:40 });
+    list.push({ id:'gg',  who:'gardener', line:'gardener', wander:{ x0:48, y0:13, x1:58, y1:29 }, x:52, y:19 });
+    list.push({ id:'go1', who:'picker',   line:'picker',   wander:{ x0:5, y0:31, x1:13, y1:45 }, x:8, y:39 });
+    list.push({ id:'go2', who:'pickerBird', line:'picker', wander:{ x0:50, y0:31, x1:58, y1:45 }, x:55, y:39 });
+    list.push({ id:'gc2', who:'cadet',    line:'townDuck', wander:{ x0:18, y0:21, x1:45, y1:25 }, x:24, y:24 });
+    list.push({ id:'gw',  who:'greeter',  line:'greeter',  wander:{ x0:10, y0:59, x1:53, y1:60 }, x:36, y:60 });
+    list.push({ id:'gs',  who:'stroller', line:'stroller', wander:{ x0:3, y0:46, x1:60, y1:46 }, x:20, y:46 });
+    list.push({ id:'ga',  who:'scholar',  line:'townBird', wander:{ x0:28, y0:26, x1:35, y1:31 }, x:30, y:28 });
   }
   list.forEach(wk=> wk.cells = caWalkerCells(wk));
   CA_WALKERS[key] = list;
   return list;
 }
 function caWalkerCells(wk){
-  if(wk.wander) return [{ x:wk.x, y:wk.y }];
+  if(wk.wander || wk.mode) return [{ x:wk.x, y:wk.y }];
   const out = [];
   for(let i = 0; i < wk.n; i++){ const a = wk.pos - wk.dir * i; out.push(wk.along === 'x' ? { x:a, y:wk.lane } : { x:wk.lane, y:a }); }
   return out;
@@ -1674,8 +1965,9 @@ function caWalkTick(key){
   const free = (x, y, me)=> !caSolidCode(caAt(m, x, y)) && !(p && p.x === x && p.y === y) &&
     !list.some(o=> o !== me && o.cells.some(c=> c.x === x && c.y === y)) && !wBlockedBy(DECKS[key], x, y);
   list.forEach(wk=>{
+    if(wk.mode){ caMarketStep(wk, list, m, free, key); caWalkerPlace(wk); return; }   // (3.97) the market's people
     if(wk.wander){
-      if(Math.random() < 0.45) return;
+      if(Math.random() < (wk.brisk ? 0.08 : 0.45)) return;             // (3.97) the little ones hardly ever stop
       const c = wk.cells[0], dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy])=>{ const x = c.x + dx, y = c.y + dy, a = wk.wander;
         return x >= a.x0 && y >= a.y0 && x <= a.x1 && y <= a.y1 && free(x, y, wk); });
       if(!dirs.length) return;
@@ -1685,17 +1977,25 @@ function caWalkTick(key){
       if(dx) wk.faceR = dx > 0;
       c.x += dx; c.y += dy;
     } else {
-      if(wk.pos + wk.dir > wk.hi || wk.pos + wk.dir < wk.lo) wk.dir = -wk.dir;
+      /* (3.97) at an end, or at something that will never move (a wall, a post), a line turns round where it stands, its
+         last now leading (at an end it used to stretch out past it); somebody passing in front of it: it waits */
+      const turn = ()=>{ wk.pos -= wk.dir * (wk.n - 1); wk.dir = -wk.dir; if(wk.els) wk.els.reverse(); wk.cells = caWalkerCells(wk); if(wk.along === 'x') wk.faceR = wk.dir > 0; };
+      if(wk.pos + wk.dir > wk.hi || wk.pos + wk.dir < wk.lo) turn();
       const next = wk.pos + wk.dir;
       const head = wk.along === 'x' ? { x:next, y:wk.lane } : { x:wk.lane, y:next };
-      if(!free(head.x, head.y, wk)) return;                                   // somebody in the way: it waits
+      if(!free(head.x, head.y, wk)){
+        if(caSolidCode(caAt(m, head.x, head.y)) || wBlockedBy(DECKS[key], head.x, head.y)){ turn(); caWalkerPlace(wk); }
+        return;
+      }
       wk.pos = next; wk.cells = caWalkerCells(wk);
       if(wk.along === 'x') wk.faceR = wk.dir > 0;
     }
     caWalkerPlace(wk);
   });
 }
-const CA_WALKER_SCALE = { servant:1.3, servantY:1.15, townChoux:1.25, townBunny:1.3, townCream:1.3, townMelody:1.35, townDuck:1.3, townBird:1.3 };
+const CA_WALKER_SCALE = { servant:1.3, servantY:1.15, townChoux:1.25, townBunny:1.3, townCream:1.3, townMelody:1.35, townDuck:1.3, townBird:1.3,
+  kidChoux:1.15, kidBunny:1.2, kidCream:1.2, gardener:1.4, picker:1.4, pickerBird:1.4, cadet:1.3, greeter:1.35, stroller:1.4, scholar:1.3,
+  shopBird:1.4, shopDuck:1.35, coupleA:1.4, coupleB:1.4, kidTag:1.15, resting:1.35 };
 function caWalkerDraw(world, key){
   const els = ui.caWalkerEls = {};
   caWalkerDefs(key).forEach(wk=>{
@@ -1718,12 +2018,208 @@ function caWalkerPlace(wk){
     el.style.transform = `translate3d(${c.x * WALK_T}px,${c.y * WALK_T}px,0)`;
     el.style.zIndex = 10 + c.y;
     faceRight(el, wk.along === 'y' ? !!wk.faceR : !!wk.faceR);
+    /* (3.97) the market's people: a back turned to you at a stall, sitting on a bench, a busker */
+    if(!!wk.back !== !!el._back){
+      el._back = !!wk.back;
+      const img = el.querySelector('img.ca-art'), who = CA_WHO[wk.who] || {};
+      if(img && who.sprite){ img.dataset.alt = ''; img.setAttribute('src', `assets/mon/${who.sprite}_${wk.back ? 'back' : 'front'}.png`); }
+    }
+    el.classList.toggle('sitting', !!wk.sitting);
+    el.classList.toggle('ca-busker', wk.mode === 'busker');
   });
 }
 /* the one beside you, if any of them is: you can speak to them */
 function caWalkerNear(key, p){
   for(const wk of caWalkerDefs(key)) for(const c of wk.cells) if(Math.abs(c.x - p.x) + Math.abs(c.y - p.y) === 1) return { wk, c };
   return null;
+}
+
+/* ============================================================
+   THE MARKET'S PEOPLE (3.97)
+   The designer: "how would you do the strollers, though? I want the market
+   square to feel warm and exciting." Each goes somewhere, by the shortest way
+   round (caPathNext): a shopper to a stall, where they stop with their back to
+   you for a few moments, a word over their head of what they are buying; on to
+   the fountain, the well, the notice board, or to stand and listen to the
+   busker. A couple stroll arm in arm, one a step behind the other, and stop to
+   chat. Two little ones play tag round the fountain: one chases, the other
+   runs, and "Tag!" they swap. Someone rests on a bench a while, then goes
+   shopping. They move on the walkers' clock (caWalkTick) and wait for anyone
+   in their way.
+   ============================================================ */
+const CA_MARKET = { spots:null, area:{ x0:14, y0:32, x1:49, y1:45 } };
+const CA_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+function caMarketSpots(){
+  if(CA_MARKET.spots) return CA_MARKET.spots;
+  const m = caGrounds(), T = CA_T, st = m.tags.stalls, out = [];
+  const bub = { retail:['🥇', '💎', '🎀', '🪙'], painter:['🎨', '🖼️', '✨'], fruit:['🍎', '🍐', '🍊', '🍇'], flower:['🌷', '🌻', '🌸', '💐'] };
+  Object.entries(st).forEach(([id, s])=>{ for(let x = s.x; x < s.x + s.w; x++) out.push({ kind:'stall', id, x, y:s.y + 1, face:'up', bub:bub[id], w:4 }); });
+  const A = CA_MARKET.area;
+  for(let y = A.y0; y <= A.y1; y++) for(let x = A.x0; x <= A.x1; x++){
+    if(caAt(m, x, y) !== T.PAVE) continue;
+    const d = CA_DIRS.find(([dx, dy])=> caAt(m, x + dx, y + dy) === T.WATER);
+    if(d) out.push({ kind:'fountain', x, y, face:d[0] ? (d[0] > 0 ? 'right' : 'left') : (d[1] > 0 ? 'down' : 'up'), bub:['✨', '💧', '😊', '🪙'], w:0.35 });
+  }
+  out.push({ kind:'well', x:23, y:44, face:'up', bub:['🪙', '💧', '🤞'], w:1.5 });
+  out.push({ kind:'board', x:40, y:44, face:'up', bub:['📜', '👀', '❓'], w:1.5 });
+  m.tags.benches = m.tags.benches || [[27, 35], [36, 35], [27, 42], [36, 42]].map(([x, y])=> ({ x, y, from:{ x, y:y + 1 } }));
+  CA_MARKET.spots = out;
+  return out;
+}
+/* the next step from `from` towards any of `goals` (a Set of y * W + x), the way one can walk; null if none */
+function caPathNext(m, from, goals, can){
+  const W = m.W, H = m.H, start = from.y * W + from.x;
+  if(goals.has(start)) return null;
+  const prev = new Int32Array(W * H).fill(-1);
+  prev[start] = start;
+  const q = [start];
+  let found = -1;
+  for(let qi = 0; qi < q.length && found < 0; qi++){
+    const c = q[qi], cx = c % W, cy = (c / W) | 0;
+    for(const [dx, dy] of CA_DIRS){
+      const nx = cx + dx, ny = cy + dy;
+      if(nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const nk = ny * W + nx;
+      if(prev[nk] !== -1) continue;
+      if(!goals.has(nk) && !can(nx, ny)) continue;
+      prev[nk] = c; q.push(nk);
+      if(goals.has(nk)){ found = nk; break; }
+    }
+  }
+  if(found < 0) return null;
+  let c = found;
+  while(prev[c] !== start) c = prev[c];
+  return { x:c % m.W, y:(c / m.W) | 0 };
+}
+function caBub(wk, text){
+  const el = wk.els && wk.els[0];
+  if(!el || !text) return;
+  let b = el.querySelector('.ca-bub');
+  if(!b){ b = document.createElement('span'); b.className = 'ca-bub'; el.appendChild(b); }
+  b.textContent = text;
+  b.classList.remove('on'); void b.offsetWidth; b.classList.add('on');
+}
+function caPick(a){ return a[Math.floor(Math.random() * a.length)]; }
+function caWkFace(wk, dir){
+  if(dir === 'left' || dir === 'right'){ wk.faceR = dir === 'right'; wk.back = false; }
+  else wk.back = dir === 'up';
+}
+function caWkFaceTo(wk, t){ const c = wk.cells[0], dx = t.x - c.x, dy = t.y - c.y; caWkFace(wk, Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up')); }
+function caMoveTo(wk, n){
+  const c = wk.cells[0];
+  wk.prev = { x:c.x, y:c.y };
+  if(n.x !== c.x){ wk.faceR = n.x > c.x; wk.back = false; }
+  else wk.back = n.y < c.y;
+  wk.cells[0] = { x:n.x, y:n.y };
+}
+function caMarketStep(wk, list, m, free, key){
+  caMarketSpots();                                                     // (and the benches)
+  const c = wk.cells[0], byId = id=> list.find(o=> o.id === id);
+  const walkable = (x, y)=> !caSolidCode(caAt(m, x, y)) && !wBlockedBy(DECKS[key], x, y);
+  const goTo = (goals)=>{
+    const n = caPathNext(m, c, goals, walkable);
+    if(!n){ wk.stuck = (wk.stuck || 0) + 1; return false; }
+    if(!free(n.x, n.y, wk)){ wk.stuck = (wk.stuck || 0) + 1; return false; }
+    wk.stuck = 0; caMoveTo(wk, n); return true;
+  };
+  const K = (x, y)=> y * m.W + x;
+  if(wk.mode === 'busker'){
+    wk.back = false;
+    if(Math.random() < 0.25) caBub(wk, caPick(['♪', '♫', '♪♪']));
+    return;
+  }
+  if(wk.mode === 'tag'){
+    const mate = byId(wk.mate);
+    if(!mate) return;
+    if(wk.wait > 0){ wk.wait--; return; }
+    const o = mate.cells[0], A = CA_MARKET.area;
+    const inArea = (x, y)=> x >= A.x0 && y >= A.y0 && x <= A.x1 && y <= A.y1;
+    if(wk.it){
+      if(Math.abs(o.x - c.x) + Math.abs(o.y - c.y) <= 1){
+        caBub(wk, 'Tag!'); caBub(mate, caPick(['Eek!', 'Hee!']));
+        wk.it = false; mate.it = true; mate.wait = 2; wk.wait = 1; caWkFaceTo(wk, o);
+        return;
+      }
+      const n = caPathNext(m, c, new Set([K(o.x, o.y)]), (x, y)=> walkable(x, y) && inArea(x, y));
+      if(n && free(n.x, n.y, wk)) caMoveTo(wk, n);
+      return;
+    }
+    if(Math.random() < 0.1) return;                                   // a breath now and then
+    const opts = CA_DIRS.map(([dx, dy])=> ({ x:c.x + dx, y:c.y + dy })).filter(q=> inArea(q.x, q.y) && free(q.x, q.y, wk));
+    if(!opts.length) return;
+    const far = q=> Math.abs(q.x - o.x) + Math.abs(q.y - o.y) + Math.random() * 1.2;
+    caMoveTo(wk, opts.sort((a, b)=> far(b) - far(a))[0]);
+    return;
+  }
+  if(wk.mode === 'follow'){
+    const lead = byId(wk.lead);
+    if(!lead) return;
+    const lc = lead.cells[0], near = Math.abs(lc.x - c.x) + Math.abs(lc.y - c.y) <= 1;
+    if(lead.dwell > 0 && near){
+      caWkFaceTo(wk, lc);
+      if(lead.dwell % 3 === 1) caBub(wk, caPick(['💬', '😊', '♪', 'Ooh!', '💕']));
+      return;
+    }
+    const t = lead.prev && !(lead.prev.x === c.x && lead.prev.y === c.y) ? lead.prev : null;
+    if(near && !t) return;
+    if(t) goTo(new Set([K(t.x, t.y)]));
+    return;
+  }
+  if(wk.mode === 'sit'){
+    if(wk.sitting){
+      if(--wk.dwell > 0){ if(wk.dwell % 6 === 3) caBub(wk, caPick(['😌', '♪', '☀️', '💤'])); return; }
+      const f = wk.bench.from;                                        // up again, and off shopping a while
+      if(!free(f.x, f.y, wk)) return;
+      wk.sitting = false; wk.bench = null; caMoveTo(wk, f); wk.shopFor = 6 + Math.floor(Math.random() * 6);
+      return;
+    }
+    if(wk.shopFor > 0){ if(wk.dwell <= 0 && !wk.goal) wk.shopFor--; }
+    else {
+      const busy = b=> list.some(o=> o !== wk && o.bench === b);
+      wk.bench = wk.bench || m.tags.benches.find(b=> !busy(b));
+      if(wk.bench){
+        const b = wk.bench, f = b.from;
+        if(c.x === f.x && c.y === f.y){
+          if(list.some(o=> o !== wk && o.cells.some(q=> q.x === b.x && q.y === b.y))) return;
+          wk.cells[0] = { x:b.x, y:b.y }; wk.sitting = true; wk.back = false; wk.dwell = 14 + Math.floor(Math.random() * 12);
+          caBub(wk, '😌');
+          return;
+        }
+        goTo(new Set([K(f.x, f.y)]));
+        return;
+      }
+    }
+  }
+  /* a shopper (and a couple's leader, and someone between rests) */
+  if(wk.dwell > 0){
+    if(--wk.dwell === 0){ wk.goal = null; wk.back = false; }
+    else if(wk.dwell % 4 === 2 && wk.goal) caBub(wk, caPick(wk.goal.bub));
+    return;
+  }
+  if(!wk.goal || wk.stuck > 5){ wk.goal = caMarketGoal(wk, list); wk.stuck = 0; }
+  const gl = wk.goal;
+  if(!gl) return;
+  if(c.x === gl.x && c.y === gl.y){
+    wk.dwell = 4 + Math.floor(Math.random() * 6);
+    if(gl.kind === 'busker'){ const bk = byId('gm'); if(bk) caWkFaceTo(wk, bk.cells[0]); } else caWkFace(wk, gl.face);
+    caBub(wk, caPick(gl.bub));
+    return;
+  }
+  if(Math.random() < 0.12) return;                                    // a stroll, not a march
+  goTo(new Set([K(gl.x, gl.y)]));
+}
+/* where to next: a stall most likely, then the fountain, the busker, the well or the board — one nobody else is making for */
+function caMarketGoal(wk, list){
+  const spots = caMarketSpots(), taken = new Set(list.filter(o=> o !== wk && o.goal).map(o=> o.goal.x + ',' + o.goal.y));
+  list.forEach(o=>{ if(o !== wk) o.cells.forEach(q=> taken.add(q.x + ',' + q.y)); });
+  const bk = list.find(o=> o.mode === 'busker');
+  const extra = [];
+  if(bk){ const b = bk.cells[0]; [[-2, 0], [2, 0], [0, 2], [-1, 2], [1, 2], [-2, 1], [2, 1]].forEach(([dx, dy])=>{ const x = b.x + dx, y = b.y + dy; if(!caSolidCode(caAt(caGrounds(), x, y))) extra.push({ kind:'busker', x, y, bub:['♪', '👏', '🎵', '😊'], w:0.6 }); }); }
+  const all = spots.concat(extra).filter(s=> !taken.has(s.x + ',' + s.y) && !(wk.goalWas && wk.goalWas === s.kind + (s.id || '')));
+  const sum = all.reduce((a, s)=> a + s.w, 0);
+  let r = Math.random() * sum;
+  for(const s of all){ r -= s.w; if(r <= 0){ wk.goalWas = s.kind + (s.id || ''); return s; } }
+  return all[0] || null;
 }
 
 /* ---------- Lucesco, at your heels here too ---------- */
@@ -1749,7 +2245,7 @@ function caStep(key, p){
   return false;
 }
 function caNearActs(key, p){
-  const acts = [{ key:'caLion', html:'🦁 Talk<small>Lucesco</small>', act:()=> caLionTalk(key) }];
+  const acts = [{ key:'caLion', cls:'lion', html:lucescoActHtml('Talk'), act:()=> caLionTalk(key) }];
   const n = caWalkerNear(key, p);
   if(n){ const who = CA_WHO[n.wk.who] || {}; acts.push({ key:'caW' + n.wk.id, at:n.c, html:`💬 Talk<small>${escapeHtml(who.name || '')}</small>`, act:()=> caTalk(n.wk.who, n.wk.line || (/^servant/.test(n.wk.who) ? 'servant' : 'patrol')) }); }
   return acts;
@@ -1762,7 +2258,7 @@ function caRender(key, world){
   const stage = $('#walkStage');
   if(stage) stage.classList.add('ca-stage', key === CA_KEY ? 'ca-out' : key.startsWith('r6_wall') || key.startsWith('r6_ramp') ? 'ca-high' : 'ca-in');
   const m = CA_MAPS[key]();
-  caPaintStart(stage, world, m, m.views || null, key.startsWith('r6_wall') || key.startsWith('r6_ramp') ? '#163a22' : key === CA_KEY ? '#3d5a30' : '#1d1a26');
+  caPaintStart(stage, world, m, m.views || null, key.startsWith('r6_wall') || key.startsWith('r6_ramp') ? '#2a3417' : key === CA_KEY ? '#3d5a30' : '#1d1a26');
   /* Lucesco: where he was, or beside you as you arrive */
   const w = walkState(), p = w.at && w.at[key];
   if(p && (!caLion.at || Math.abs(caLion.at.x - p.x) + Math.abs(caLion.at.y - p.y) > 2)){
@@ -1829,6 +2325,7 @@ const CA_LINES = {
   ],
   dauphin:[
     `<b>"Strong travellers! Good. Father says I must wait for the war council… I am very bad at waiting."</b>`,
+    `<b>"Have you seen my little sister? She has hidden in her room up in the central tower since the war began. The stairs are at the north end of the palace."</b>`,   // (3.97) where she is
     `<b>"My Steel Aegis has never been broken. Not once! …Well. Once. By the Commander. That doesn't count."</b>`,
     `<b>"Spar with me! Every day! We shall see who is stronger."</b>`,
   ],
@@ -1848,7 +2345,9 @@ const CA_LINES = {
     `<b>"Lucesco used to give me rides on his back when I was little. …Is he still fluffy?"</b>`,
   ],
   palaceGate:[ `<b>"The King's guests! Go in, go in — His Majesty is in the great hall."</b>`, `<b>"Wipe your feet. The servants have just polished the floors."</b>` ],
-  hallGuard:[ `The knight stands perfectly still and stares straight ahead.`, `<b>"Eyes front! …The throne is that way."</b>`, `The knight's eyes flick towards you, then back. Not a word.` ],
+  hallGuard:[ `The knight stands perfectly still and stares straight ahead.`,
+              `<b>"The little princess? Up the stairs at the north end, in the central tower. She's been hiding up there since the war began."</b>`,   // (3.97) the designer: "How will I be able to find her?"
+              `<b>"Eyes front! …The throne is that way."</b>`, `The knight's eyes flick towards you, then back. Not a word.` ],
   corridor:[ `<b>"Mind the floors — the servants have just polished them. I slipped twice this morning."</b>`, `<b>"The banquet hall is to the west, the library to the east. And the stairs up the tower are at the far end."</b>` ],
   lookout:[ `<b>"All quiet on the wall… for now."</b>`, `<b>"See that? An alien band, out by the lake. They never come near the walls, though."</b>`, `<b>"Stand clear of the patrols, friend. They march from end to end all day long."</b>` ],
   rampart:[ `<b>"Use the spyglass, traveller. From up here you can see this whole corner of the jungle."</b>`, `<b>"Each corner has a tribe. They never joined the castle, but they are still the King's people."</b>` ],
@@ -1861,6 +2360,16 @@ const CA_LINES = {
   townCream:[ `<b>"The aliens took some of the market folk. The Royal Commander rewards anyone who brings two of them home in a day."</b>`, `<b>"Mmm. The fountain smells of rosewater today."</b>` ],
   townMelody:[ `<b>"La la la! Have you been to the record store? My cousin sells music there."</b>`, `<b>"Every place in the kingdom has its own song. Can you hear this one?"</b>` ],
   townDuck:[ `<b>"Quack! I mean — cadet reporting! One day I'll patrol the walls too."</b>`, `<b>"Five in a row on the walls, left, right, left, right. I practise in my room."</b>` ],
+  busker:[ `<b>"♪ La la la! A song for the market! ♪"</b>`, `<b>"Every place in the kingdom has its own song. This one's the market's!"</b>`, `<b>"Have you been to the record store? My cousin sells music there."</b>` ],
+  shopper:[ `<b>"Fresh pears today! The fruit stall's are the best in the kingdom."</b>`, `<b>"I'm buying flowers for the little princess. Shh, it's a surprise!"</b>` ],
+  offDuty:[ `<b>"Day off! No patrols, no wall, just apples and sunshine."</b>`, `<b>"Quack. Don't tell the Commander you saw me buying sweets."</b>` ],
+  couple:[ `<b>"We come to the fountain every evening. It's our favourite place."</b>`, `<b>"Isn't the market lovely today? Everyone's out!"</b>` ],
+  resting:[ `<b>"Ahh. A rest in the sun after a night on the walls."</b>`, `<b>"Sit down, friend. The bench is warm."</b>` ],
+  kid:[ `<b>"Tag! You're it!"</b>`, `<b>"Can't catch me! I'm the fastest in the whole castle!"</b>`, `<b>"We're racing round the fountain. Want to race too?"</b>` ],
+  gardener:[ `<b>"The roses by the pond are blooming. The little princess loves the pink ones."</b>`, `<b>"Mind the flower beds, dear. I've only just planted the violets."</b>` ],
+  picker:[ `<b>"Apples on this side, pears on the other. Take one, the King won't mind."</b>`, `<b>"These trees are older than me. Older than the walls, even!"</b>` ],
+  greeter:[ `<b>"Welcome to the castle! The market square is straight up the avenue."</b>`, `<b>"The palace is at the very top. Look for the blue spires!"</b>` ],
+  stroller:[ `<b>"Lovely day for a walk round the houses."</b>`, `<b>"My house is the green one with the ivy. Well, one of the green ones."</b>` ],
   townBird:[ `<b>"Hoo. I'm studying to be an advisor, like the great Royal Advisor."</b>`, `<b>"The aliens took my cousin. If you see a Fairybird in one of their bands… bring him home?"</b>` ],
   duck:[ `<b>"Quack— ahem. HALT! …Oh. It's you. Carry on."</b>` ],
   bug:[ `<b>"Click-click. From up here I can see right across the jungle."</b>` ],
@@ -1925,6 +2434,11 @@ function caLook(what){
     fountain:[`The grand fountain. A golden fairy holds a star high above the spray, and coins glitter at the bottom of the basin.`],
     hearth:[`The fire crackles and pops. The whole room smells of pine wood and cinnamon buns.`],
     easel:[`A half-finished painting of the grand fountain, still wet. Beside it, a row of blank canvases, waiting.`],
+    /* (3.97) the rooms' new things */
+    globe:[`You give the globe a spin. It whirrs round and round… and stops with your finger on a tiny island you have never heard of.`],
+    clock:[`<i>Tick… tock… tick… tock…</i> The great clock's gold pendulum swings to and fro, and a painted moon peeps over its face.`],
+    cat:[`The cat stretches, purrs, and curls up again, warm as toast by the fire.`, ['cream', `<b>"That's Biscuit. She runs the place, really."</b>`]],
+    jukebox:[`A jukebox! Its lights glow and swirl through every colour, and the records wait in a row behind its glass.`, ['melody', `<b>"It plays all by itself at closing time. ♪"</b>`]],
   };
   return caLines(L[what] || [`Nothing much to see.`]);
 }
@@ -1947,7 +2461,7 @@ function caFirstLooks(key, p){
   if(ui.caTalk || ui.sceneRunning) return;
   const once = (k, seq)=>{ if(c.seen[k]) return false; c.seen[k] = true; saveProfile(); setTimeout(()=>{ if(ui.screen === key) caLines(seq); }, 450); return true; };
   if(key === CA_KEY) once('grounds', [['lion', `<b>"The Fairy King's castle. I have not walked here in two hundred years…"</b>`], ['lion', `<b>"It is even more beautiful than I remember."</b>`]]);
-  else if(key === 'r6_palace' && !c.met.court && p.y <= 11) caCourtScene();
+  else if(key === 'r6_palace' && !c.met.court && p.y <= 11 && p.x >= 12 && p.x <= 27) caCourtScene();   // (3.97) up the hall itself: its side doorways open now
   else if(key.startsWith('r6_wall_')) once('walls', [`From up here you can see the whole castle below you on one side — and the jungle stretching away on the other.`]);
   else if(key.startsWith('r6_ramp_')) once('ramparts', [['knight', CA_LINES.rampart[0]]]);
   else if(key === 'r6_tower') once('tower', [['knight', CA_LINES.tower[0]]]);
@@ -1993,7 +2507,7 @@ function caOverview(c){
   const draw = ()=>{
     raf = 0;
     const k = view.z * dpr, ox = cv.width / 2 - view.cx * k, oy = cv.height / 2 - view.cy * k;
-    ctx.fillStyle = '#163a22'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = '#2a3417'; ctx.fillRect(0, 0, cv.width, cv.height);
     const x0 = Math.max(q.x0, Math.floor(-ox / k)), y0 = Math.max(q.y0, Math.floor(-oy / k));
     const x1 = Math.min(q.x1 - 1, Math.ceil((cv.width - ox) / k)), y1 = Math.min(q.y1 - 1, Math.ceil((cv.height - oy) / k));
     for(let y = y0; y <= y1; y++) for(let x = x0; x <= x1; x++){
@@ -2177,9 +2691,9 @@ function caSparBack(){
 /* ============================================================
    THE ROYAL COMMANDER'S THANKS (3.90) — the designer: "the chestnut
    commander awards 10 tokens per day for 2 fairy kingdom citizens rescued".
-   The alien bands nearest the castle hold its people (20-jungle.js,
-   jgZoneOf); once you have met the court, each day's first 2 of them freed
-   pay 10 Skill Tokens (jgWon), with his thanks.
+   The alien bands hold its people (since 3.95 any band, anywhere in the
+   jungle: jgCaptivePick); once you have met the court, each day's first 2
+   of them freed pay 10 Skill Tokens (jgWon), with his thanks.
    ============================================================ */
 const CA_RESCUE = { need:2, tokens:10 };
 function caCommanderMet(){ return !!(state && state.progress && state.progress.region6 && caState().met.court); }
@@ -2200,7 +2714,7 @@ function caCommanderTalk(){
     c.met.rescue = true; saveProfile();
     return caLines([
       ['commander', `<b>"A word, travellers. The aliens have taken some of our own people — townsfolk, knights, even the young ones."</b>`],
-      ['commander', `<b>"The bands closest to the castle hold them. Free ${CA_RESCUE.need} of our people in a day, and I will pay you ${CA_RESCUE.tokens} Skill Tokens. Every day."</b>`],
+      ['commander', `<b>"The bands all over the jungle hold them. Free ${CA_RESCUE.need} of our people in a day, and I will pay you ${CA_RESCUE.tokens} Skill Tokens. Every day."</b>`],
     ]);
   }
   const said = j.paid.castle ? `<b>"You have brought ${CA_RESCUE.need} of our people home today. Thank you. Rest now."</b>`
@@ -2290,27 +2804,43 @@ function caCss(){
   s.textContent = `
   .walk-stage.ca-stage{ background:#2b2a33; }
   .ca-ground{ position:absolute; inset:0; width:100%; height:100%; display:block; z-index:0; pointer-events:none; }
+  .ca-over{ position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; z-index:2; }   /* over the world (z-index 1), under the stage's buttons */
+  /* (3.97) the market's people: a word over a head, sitting on a bench, a busker's notes */
+  .walk-ent.ca-walker .ca-bub{ position:absolute; left:50%; bottom:122%; translate:-50% 0; z-index:5; pointer-events:none; white-space:nowrap;
+    background:#fffdf6; color:#4a3a2a; border-radius:10px; padding:2px 7px; font:800 calc(var(--wt, 40px) * .26)/1.25 system-ui, sans-serif;
+    box-shadow:0 2px 6px rgba(0,0,0,.28); opacity:0; }
+  .walk-ent.ca-walker .ca-bub::after{ content:''; position:absolute; left:50%; top:100%; translate:-50% 0; border:5px solid transparent; border-top-color:#fffdf6; }
+  .walk-ent.ca-walker .ca-bub.on{ animation:caBub 2.3s ease forwards; }
+  @keyframes caBub{ 0%{ opacity:0; transform:translateY(6px) scale(.8); } 12%{ opacity:1; transform:none; } 78%{ opacity:1; } 100%{ opacity:0; transform:translateY(-6px); } }
+  .walk-ent.ca-walker.sitting > img{ transform-origin:50% 100%; scale:1 .88; translate:-50% calc(var(--feet, 0%) - 14%); }
+  .walk-ent.ca-walker.sitting.face-r > img{ scale:-1 .88; }
+  .walk-ent.ca-walker.ca-busker::before, .walk-ent.ca-walker.ca-busker::after{ position:absolute; bottom:105%; pointer-events:none; z-index:4;
+    font:900 calc(var(--wt, 40px) * .34)/1 serif; text-shadow:0 1px 2px rgba(255,255,255,.9); animation:caNote 2.6s ease-in-out infinite; opacity:0; }
+  .walk-ent.ca-walker.ca-busker::before{ content:'♪'; left:62%; color:#7a4ad0; }
+  .walk-ent.ca-walker.ca-busker::after{ content:'♫'; left:18%; color:#e0558a; animation-delay:1.3s; }
+  @keyframes caNote{ 0%{ opacity:0; transform:translate(0, 8px) rotate(-10deg); } 20%{ opacity:1; } 100%{ opacity:0; transform:translate(14px, -34px) rotate(14deg); } }
+  @media (prefers-reduced-motion: reduce){ .walk-ent.ca-walker .ca-bub.on{ animation:none; opacity:1; } .walk-ent.ca-walker.ca-busker::before, .walk-ent.ca-walker.ca-busker::after{ animation:none; opacity:.8; } }
   .ca-stage .walk-world{ z-index:1; }
   .walk-ent.ca-npc, .walk-ent.ca-walker{ overflow:visible; }
-  .walk-ent .ca-art{ position:absolute; left:50%; bottom:0; transform:translateX(-50%); image-rendering:pixelated; pointer-events:none;
-    filter:drop-shadow(0 3px 2px rgba(0,0,0,.35)); }
-  .walk-ent.face-r .ca-art{ transform:translateX(-50%) scaleX(-1); }
+  /* (3.96) centred with translate (see the jungle's .jg-art): face-r's scale:-1 1 now turns it on the spot */
+  .walk-ent .ca-art{ position:absolute; left:50%; bottom:0; translate:-50% var(--feet, 0); transform:none; image-rendering:pixelated; pointer-events:none;
+    filter:drop-shadow(0 3px 2px rgba(0,0,0,.35)); }   /* transform:none: its own size, as before 3.96 */
   .walk-ent.ca-walker{ transition:transform .44s linear; pointer-events:none; }
   .walk-ent.ca-lion{ transition:transform .2s linear; }
   .walk-ent.ca-hiding .ca-art{ opacity:.85; animation:caTremble 1.4s ease-in-out infinite; }
-  .walk-ent.ca-blade .ca-art{ bottom:16%; filter:drop-shadow(0 0 5px rgba(236,226,255,.9)); animation:caBladeBob 3.2s ease-in-out infinite; }
+  .walk-ent.ca-blade .ca-art{ bottom:16%; translate:-50% 0; filter:drop-shadow(0 0 5px rgba(236,226,255,.9)); animation:caBladeBob 3.2s ease-in-out infinite; }
   .walk-ent.ca-blade::after{ content:''; position:absolute; left:50%; bottom:44%; width:86%; height:24%; border:2px solid rgba(244,236,255,.85); border-radius:50%;
     transform:translateX(-50%) rotate(-14deg); box-shadow:0 0 6px rgba(220,200,255,.9), inset 0 0 4px rgba(220,200,255,.7); pointer-events:none; animation:caSeal 2.6s ease-in-out infinite; }
   @keyframes caSeal{ 0%,100%{ opacity:.5; } 50%{ opacity:1; } }
   @keyframes caBladeBob{ 0%,100%{ margin-bottom:0; } 50%{ margin-bottom:2px; } }
   @keyframes caTremble{ 0%,100%{ margin-left:0; } 25%{ margin-left:-1px; } 75%{ margin-left:1px; } }
-  .walk-ent .walk-emoji{ position:absolute; left:50%; bottom:6%; transform:translateX(-50%); filter:drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
+  .ca-stage .walk-ent .walk-emoji{ position:absolute; left:50%; bottom:6%; translate:-50% 0; filter:drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
   .ca-choose .ca-opts{ display:flex; flex-direction:column; gap:8px; align-items:stretch; }
   .ca-choose .ca-opts .btn{ width:100%; }
   .ca-ov{ position:fixed; inset:0; z-index:400; background:rgba(10,16,24,.72); display:flex; align-items:center; justify-content:center; }
   .ca-ov-card{ background:#1e2a22; border:2px solid #d9b247; border-radius:16px; padding:12px; color:#fff; box-shadow:0 10px 40px rgba(0,0,0,.6); text-align:center; }
   .ca-ov-title{ font-weight:900; margin-bottom:8px; }
-  .ca-ov canvas{ display:block; border-radius:10px; touch-action:none; cursor:grab; background:#163a22; }
+  .ca-ov canvas{ display:block; border-radius:10px; touch-action:none; cursor:grab; background:#2a3417; }
   .ca-ov-key{ font-size:12px; opacity:.85; margin:8px 0; }
   .ca-ov-btns{ display:flex; gap:8px; } .ca-ov-btns .btn{ flex:1; }
   .ca-shop{ position:fixed; inset:0; z-index:380; background:rgba(20,14,10,.6); display:flex; align-items:center; justify-content:center; padding:12px; }
@@ -2341,6 +2871,33 @@ function caCss(){
   .rec-hint{ font-size:12px; opacity:.75; margin:6px 0; }
   .rec-row{ display:flex; align-items:center; gap:8px; padding:4px 0; border-top:1px solid #f0e4c8; font-size:14px; }
   .rec-nm{ flex:1; font-weight:700; } .rec-ck{ font-size:12px; white-space:nowrap; }
+  .rec-thumb{ width:30px; height:30px; border-radius:3px; vertical-align:middle; margin-right:8px; box-shadow:0 1px 3px rgba(0,0,0,.35); }
+  /* (3.97) the record store: plum and gold, a neon sign, sleeves on show */
+  .ca-recs .ca-shop-card{ width:min(620px, 100%); background:linear-gradient(180deg, #2e1b3a 0%, #1c1124 100%); border-color:#c9a24a; color:#f6ecff;
+    box-shadow:0 12px 40px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.04); }
+  .ca-recs-sign{ text-align:center; margin:0 0 10px; font:italic 900 28px/1.1 Georgia, 'Times New Roman', serif; color:#ffd8ea; text-shadow:0 0 4px #ff5fa8, 0 0 14px #ff5fa8, 0 0 28px rgba(255,95,168,.6); }
+  .ca-recs-sign b{ margin-left:10px; font:900 20px/1 system-ui, sans-serif; letter-spacing:4px; color:#dcfaff; text-shadow:0 0 4px #5fe0ff, 0 0 14px #5fe0ff, 0 0 28px rgba(95,224,255,.6); vertical-align:3px; }
+  .ca-recs .ca-shop-say{ background:#3a2548; border-color:#5c3a72; color:#f6ecff; }
+  .ca-recs .ca-shop-purse{ color:#f6ecff; }
+  .ca-recs .ca-rec-tab{ background:#3a2548; color:#e9dcf4; border-color:#5c3a72; }
+  .ca-recs .ca-rec-tab.on{ background:#f07aa6; border-color:#f07aa6; color:#2b1a36; }
+  .ca-recs .ca-rec-list{ display:grid; grid-template-columns:repeat(auto-fill, minmax(148px, 1fr)); gap:12px 10px; }
+  .ca-recs .ca-rec{ display:flex; flex-direction:column; align-items:stretch; gap:6px; background:#24162e; border:1px solid #4a2f5e; border-radius:12px; padding:10px 8px 8px; color:#f6ecff; }
+  .ca-recs .ca-rec.on{ border-color:#f07aa6; box-shadow:0 0 0 2px rgba(240,122,166,.35), 0 0 18px rgba(240,122,166,.25); }
+  .ca-rec-art{ position:relative; width:100%; aspect-ratio:1.22 / 1; cursor:pointer; }
+  .ca-rec-cover{ position:absolute; left:0; top:0; height:100%; width:auto; aspect-ratio:1 / 1; border-radius:3px; z-index:2; box-shadow:2px 3px 8px rgba(0,0,0,.55); }
+  .ca-rec-vinyl{ position:absolute; top:3%; left:14%; height:94%; width:auto; aspect-ratio:1 / 1; z-index:1; filter:drop-shadow(1px 2px 3px rgba(0,0,0,.5)); transition:left .45s ease; }
+  .ca-rec:hover .ca-rec-vinyl{ left:19%; }
+  .ca-rec.on .ca-rec-vinyl{ left:23%; animation:caSpin 1.8s linear infinite; }
+  @keyframes caSpin{ to{ transform:rotate(360deg); } }
+  .ca-rec-sticker{ position:absolute; z-index:3; left:-5px; top:-5px; background:#f2c23a; color:#2b1a36; font-weight:900; font-size:12px; line-height:1; border-radius:999px; padding:4px 6px; box-shadow:0 2px 4px rgba(0,0,0,.45); transform:rotate(-10deg); }
+  .ca-recs .ca-rec-nm{ font-weight:800; font-size:13px; line-height:1.2; min-height:2.4em; }
+  .ca-rec-btns{ display:flex; gap:6px; align-items:center; }
+  .ca-recs .ca-rec .mini-btn{ flex:1 1 auto; min-width:0; padding:6px 4px; margin:0; }
+  .ca-recs .ca-rec-own{ flex:1 1 auto; min-width:0; color:#8ff0b0; }
+  .ca-recs .ca-rec-note{ color:#d8c8e8; }
+  .ca-recs #caShopClose{ color:#f6ecff; border-color:#7a5a8e; }
+  @media (prefers-reduced-motion: reduce){ .ca-rec.on .ca-rec-vinyl{ animation:none; } .ca-rec-vinyl{ transition:none; } }
   `;
   document.head.appendChild(s);
 }
@@ -2526,7 +3083,11 @@ function caRecordsOpen(){
     const m = state.medals || {}, r = recState();
     const shown = REC_LIST.filter(x=> x.group === group);
     const playing = recSampling() ? audio.musicEl.dataset.track : null;
+    /* (3.97) the designer: "Can you draw me the art for the record stall too please? I want it to look detailed" —
+       each record its own sleeve (24-room-art.js draws them), its disc peeping out; the one playing slides out and turns */
+    const art = typeof CA_ROOM !== 'undefined';
     ov.innerHTML = `<div class="ca-shop-card">
+      <div class="ca-recs-sign" aria-hidden="true">Melody's<b>RECORDS</b></div>
       <div class="ca-shop-head"><div class="ca-shop-faces">${caFace('melody')}</div>
         <div class="ca-shop-say"><b>Melody Fairy's Records</b><br>${said || '♪ Listen to any record you like — and take home the ones you love!'}</div></div>
       <div class="ca-shop-purse"><span>${medalIcon('silver')} ${m.silver || 0}</span><span>🎵 ${r.owned.length} of ${REC_LIST.length} records</span></div>
@@ -2534,10 +3095,15 @@ function caRecordsOpen(){
       <div class="ca-rec-list">${shown.map(x=>{
         const own = r.owned.includes(x.key), on = playing === x.key;
         return `<div class="ca-rec${own ? ' own' : ''}${on ? ' on' : ''}">
-          <span class="ca-rec-disc">${on ? '💿' : '📀'}</span>
+          <div class="ca-rec-art" data-play="${x.key}" title="${on ? 'Stop' : 'Listen'}">
+            ${art ? `<img class="ca-rec-vinyl" src="${CA_ROOM.disc(x.key)}" alt=""><img class="ca-rec-cover" src="${CA_ROOM.cover(x.key)}" alt="">` : `<span class="ca-rec-disc">${on ? '💿' : '📀'}</span>`}
+            ${own ? `<span class="ca-rec-sticker">✓</span>` : ''}
+          </div>
           <span class="ca-rec-nm">${escapeHtml(x.title)}</span>
-          <button class="mini-btn" data-play="${x.key}">${on ? '⏹ Stop' : '▶ Listen'}</button>
-          ${own ? `<span class="ca-rec-own">✓ Yours</span>` : `<button class="mini-btn ca-rec-buy" data-buy="${x.key}">${curIcon(REC_PRICE.cur)} ${REC_PRICE.cost}</button>`}
+          <div class="ca-rec-btns">
+            <button class="mini-btn" data-play="${x.key}">${on ? '⏹ Stop' : '▶ Listen'}</button>
+            ${own ? `<span class="ca-rec-own">✓ Yours</span>` : `<button class="mini-btn ca-rec-buy" data-buy="${x.key}">${curIcon(REC_PRICE.cur)} ${REC_PRICE.cost}</button>`}
+          </div>
         </div>`; }).join('')}</div>
       <div class="ca-rec-note">Your records are in your bag: <b>Storage → Items → Records</b>. Choose which play in place of each place's music, and which play during eye breaks.</div>
       <button class="btn btn-ghost" id="caShopClose">Leave</button></div>`;
@@ -2577,7 +3143,7 @@ function recStorageHtml(){
   if(!r.owned.length) return '';
   const rows = REC_LIST.filter(x=> r.owned.includes(x.key)).map(x=> `
     <div class="rec-row">
-      <span class="rec-nm">🎵 ${escapeHtml(x.title)}</span>
+      <span class="rec-nm">${typeof CA_ROOM !== 'undefined' ? `<img class="rec-thumb" src="${CA_ROOM.cover(x.key)}" alt="">` : '🎵 '}${escapeHtml(x.title)}</span>
       <label class="rec-ck"><input type="checkbox" data-rl="${x.key}" ${r.list.includes(x.key) ? 'checked' : ''}> Playlist</label>
       <label class="rec-ck"><input type="checkbox" data-re="${x.key}" ${r.eye.includes(x.key) ? 'checked' : ''}> Eye break</label>
     </div>`).join('');

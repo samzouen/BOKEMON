@@ -23,6 +23,31 @@ let WALK_T = 44;                         // recomputed to fit the stage
    and the buttons can never disagree. */
 /* A picture that will not load must still show something. An invisible thing
    that blocks four tiles is the worst of both worlds. */
+/* (3.97) A figure's feet on its square's floor: most pictures have some empty rows under the feet (a quarter of the
+   picture, some of them), so the figure stood that high above its square ("chestnut knights are not well placed").
+   Measured once a picture (its lowest row with anything in it), it is let down that far: --feet, read by the
+   figures' CSS (.jg-art and .ca-art, translate:-50% var(--feet)). Where a picture cannot be read (opened from a
+   file), it stays as it was. */
+const SPRITE_FEET = {};
+function spriteFeet(img){
+  const src = img && img.getAttribute('src');
+  if(!src) return;
+  if(SPRITE_FEET[src] == null){
+    try {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      if(!w || !h) return;
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const g = c.getContext('2d', { willReadFrequently:true });
+      g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, w, h).data;
+      let low = -1;                                                   // the row under the lowest one with anything in it
+      for(let y = h - 1; y >= 0 && low < 0; y--) for(let x = 0; x < w; x++) if(d[(y * w + x) * 4 + 3] > 24){ low = y + 1; break; }
+      SPRITE_FEET[src] = low < 0 ? 0 : (h - low) / h;
+    } catch(e){ SPRITE_FEET[src] = 0; }
+  }
+  const f = SPRITE_FEET[src];
+  if(f > 0.005) img.style.setProperty('--feet', (f * 100).toFixed(1) + '%');
+}
 function walkArtMissing(img, icon, px, rot){
   const s = document.createElement('span');
   s.className = 'walk-emoji';                    // (2.95) it turns, as the picture would have
@@ -396,12 +421,30 @@ function swimTick(){
    nobody's reason but curiosity. Each is claimed once, ever.
    ------------------------------------------------------------ */
 const PRIZE_TOKENS = 10;
-/* Each region keeps its own finds: the ship's in r4(), the catacombs' in r5(). */
+/* Each region keeps its own finds: the ship's in r4(), the catacombs' in r5(), (3.96) the jungle's in r6(). */
 function prizeBook(deck){
   const d = DECKS[deck];
-  const g = (d && d.region === 5 && typeof r5 === 'function') ? r5() : r4();
+  const g = (d && d.region === 6 && typeof r6 === 'function') ? r6()
+          : (d && d.region === 5 && typeof r5 === 'function') ? r5() : r4();
   g.found = g.found || {};
   return g.found;
+}
+/* (3.96) A find glints now and then. The designer: "Make all of these do a
+   subtle twinkle occasionally. Make all previous tickets in Region 4 and 5
+   do the same twinkle too, please." Still nothing to point at most of the
+   time: a small star that flashes for a moment every six to ten seconds,
+   each at its own pace, somewhere on its square. */
+const WALK_TWINKLE_SVG = '<svg viewBox="-10 -10 20 20" aria-hidden="true"><path d="M0-10C1-3 3-1 10 0C3 1 1 3 0 10C-1 3-3 1-10 0C-3-1-1-3 0-10Z" fill="#fffbe2"/><circle r="2.4" fill="#fff"/></svg>';
+function walkTwinkleEl(x, y, i){
+  const h = k=>{ const v = Math.sin(x * 127.1 + y * 311.7 + (i || 0) * 74.7 + k * 19.3) * 43758.5453; return v - Math.floor(v); };
+  const el = document.createElement('i');
+  el.className = 'walk-twinkle';
+  el.setAttribute('aria-hidden', 'true');
+  const T = WALK_T, sz = Math.max(10, Math.round(T * 0.42));
+  el.style.cssText = `left:${((x + 0.28 + 0.44 * h(1)) * T).toFixed(1)}px;top:${((y + 0.3 + 0.42 * h(2)) * T).toFixed(1)}px;width:${sz}px;height:${sz}px;` +
+    `z-index:${10 + y};--tw:${(6 + 4 * h(3)).toFixed(2)}s;--td:${(-(h(4) * 10)).toFixed(2)}s;`;
+  el.innerHTML = WALK_TWINKLE_SVG;
+  return el;
 }
 function prizeTaken(deck, i){
   return !!(prizeBook(deck)[deck] || {})[i];
@@ -574,6 +617,16 @@ function walkCss(){
        top of whatever else it is doing */
     .walk-ent.face-r > img, .walk-ent.face-r > .walk-emoji, .walk-ent.face-r > .crowned-wrap,
     .scene-actor.face-r .sa-in > *, .walk-fish.face-r > *{scale:-1 1;}
+    /* (3.96) a find's glint: a star that flashes for a moment, now and then */
+    .walk-twinkle{position:absolute;display:block;pointer-events:none;translate:-50% -50%;opacity:0;transform:scale(.2);
+      filter:drop-shadow(0 0 3px rgba(255,236,150,.95)) drop-shadow(0 0 7px rgba(255,210,90,.55));
+      animation:walkTwinkle var(--tw, 7s) ease-in-out var(--td, 0s) infinite;}
+    .walk-twinkle svg{display:block;width:100%;height:100%;}
+    @keyframes walkTwinkle{0%,85%,100%{opacity:0;transform:scale(.2) rotate(0deg);}
+      89%{opacity:.95;transform:scale(1) rotate(28deg);} 93%{opacity:.5;transform:scale(.55) rotate(56deg);}
+      96%{opacity:.85;transform:scale(.8) rotate(78deg);}}
+    @media (prefers-reduced-motion: reduce){.walk-twinkle{animation-name:walkTwinkleSoft;}
+      @keyframes walkTwinkleSoft{0%,88%,100%{opacity:0;transform:scale(.7);} 93%{opacity:.75;transform:scale(.7);}}}
     /* (3.31) a piece of the painting that stands up in front of a street (the
        Old Town's church roof), laid back over whoever walks behind it — and
        see-through while you are near it (walkOverlays) */
@@ -730,6 +783,9 @@ function renderWalkDeck(id){
       world.appendChild(mk);
     }
   });
+  /* (3.96) the finds not yet found, glinting now and then (walkTwinkleEl) —
+     a deck with very many draws its own, near you (the jungle: ownTwinkles) */
+  if(d.prizes && !d.ownTwinkles) d.prizes.forEach((q, i)=>{ if(!prizeTaken(id, i)) world.appendChild(walkTwinkleEl(q[0], q[1], i)); });
   /* Every wall tile, shaded. Drawn a pixel oversized so neighbours meet with
      no seam, which makes the walkable deck read as one continuous path without
      a single line being drawn on it. Off by default; the painting is the view. */
@@ -1189,7 +1245,7 @@ function walkFaceEachOther(){
   walkFaceToward(q.x + 0.5);
   walkGhostFaceToward(p.x + 0.5);
 }
-const WALK_MIN = 150, WALK_HOLD = 110, WALK_REP = 230;
+const WALK_MIN = 150, WALK_HOLD = 110, WALK_REP = 200;   // (3.96) a step every 0.2 s while held: as long as a step takes to draw (.walk-world, .walk-ent)
 function walkMove(dir){
   const w = walkState(); if(w.busy) return;
   const d = DECKS[w.deck]; if(!d) return;
@@ -1235,21 +1291,70 @@ let _keyTimers = [];
 function releaseKeys(){
   _keyTimers.forEach(t=>{ clearTimeout(t); clearInterval(t); });
   _keyTimers = [];
+  walkHoldEnd(null);                                   // (3.96) and any key still held
 }
+/* (3.96) HOLDING A KEY. The designer: "Walking feels stuttery, and holding
+   down is not smooth (jerky and slightly slow) … My sons often jam the
+   buttons somehow and the sprite goes into a locked direction that cannot
+   be turned off." Until 3.96 a press stepped, waited 110 ms, then stepped
+   every 230 ms on a timer of its own: the first two steps stopped and
+   started, the timer drifted against the 0.23 s glide, and if the finger's
+   lifting never arrived (a long press the phone took for selecting text, a
+   second finger, the page losing focus) the timer walked on for ever.
+   Now a press steps at once, and while it is held a step follows as each
+   one finishes (every WALK_REP, 0.2 s, the length of a step's glide), on
+   the screen's own clock, so it glides on without a stop. Slide the thumb
+   onto another key and it turns. And it stops however the finger leaves:
+   lifted anywhere, cancelled, the last finger off the glass, the page
+   hidden or left, the pad gone. */
+const _walkHeld = new Map();                           // pointerId → the way it is held
+let _walkRaf = 0, _walkLastStep = 0;
+function walkHoldLoop(now){
+  _walkRaf = 0;
+  if(!_walkHeld.size) return;
+  if(!document.querySelector('.walk-dpad [data-d]')){ _walkHeld.clear(); return; }   // the pad is gone: nobody can be holding it
+  const dir = [..._walkHeld.values()].pop();          // the latest press wins
+  if(now - _walkLastStep >= WALK_REP - 8){ _walkLastStep = now; walkMove(dir); }
+  _walkRaf = requestAnimationFrame(walkHoldLoop);
+}
+function walkHoldStart(id, dir){
+  _walkHeld.set(id, dir);
+  _walkLastStep = performance.now();
+  walkMove(dir);
+  if(!_walkRaf && typeof requestAnimationFrame === 'function') _walkRaf = requestAnimationFrame(walkHoldLoop);
+}
+function walkHoldEnd(id){
+  if(id == null) _walkHeld.clear(); else _walkHeld.delete(id);
+  if(!_walkHeld.size && _walkRaf){ cancelAnimationFrame(_walkRaf); _walkRaf = 0; }
+}
+function walkHolding(){ return _walkHeld.size > 0; }
+(function walkHoldGuards(){
+  if(typeof document === 'undefined') return;
+  const all = ()=> walkHoldEnd(null);
+  ['pointerup', 'pointercancel'].forEach(ev=> document.addEventListener(ev, e=>{ if(_walkHeld.has(e.pointerId)) walkHoldEnd(e.pointerId); }, true));
+  document.addEventListener('touchend', e=>{ if(!e.touches || !e.touches.length) all(); }, true);
+  document.addEventListener('touchcancel', e=>{ if(!e.touches || !e.touches.length) all(); }, true);
+  window.addEventListener('blur', all);
+  window.addEventListener('pagehide', all);
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) all(); });
+})();
 function wireWalkKeys(){
   releaseKeys();
   screenEl.querySelectorAll('[data-d]').forEach(k=>{
-    let delay=null, rep=null;
-    const go1 = ()=> walkMove(k.dataset.d);
     k.addEventListener('pointerdown', e=>{
-      e.preventDefault(); k.setPointerCapture(e.pointerId); go1();
-      delay = setTimeout(()=>{
-        rep = setInterval(go1, WALK_REP); _keyTimers.push(rep);
-      }, WALK_HOLD);
-      _keyTimers.push(delay);
+      e.preventDefault();
+      try { k.setPointerCapture(e.pointerId); } catch(err){}
+      walkHoldStart(e.pointerId, k.dataset.d);
     });
-    const stop = ()=>{ clearTimeout(delay); clearInterval(rep); };
-    ['pointerup','pointercancel','pointerleave'].forEach(ev=>k.addEventListener(ev, stop));
+    /* slid onto another key: that way now */
+    k.addEventListener('pointermove', e=>{
+      if(!_walkHeld.has(e.pointerId)) return;
+      const el = document.elementFromPoint(e.clientX, e.clientY), to = el && el.closest && el.closest('.walk-dpad [data-d]');
+      if(to && to.dataset.d !== _walkHeld.get(e.pointerId)){ _walkHeld.set(e.pointerId, to.dataset.d); _walkLastStep = performance.now(); walkMove(to.dataset.d); }
+    });
+    const stop = e=> walkHoldEnd(e.pointerId);
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev=> k.addEventListener(ev, stop));
+    k.addEventListener('contextmenu', e=> e.preventDefault());
   });
 }
 

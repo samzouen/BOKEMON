@@ -89,7 +89,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '3.93';
+const GAME_VERSION = '3.97';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -807,7 +807,7 @@ const ELEMENT_PASSIVES = {
   /* (3.76) "change wildfire to work when the holder is off-field too. it also damages the holder from
      off-field when overheat is active. set values to 0.08/0.16/0.25 for Overheat base/+/star." */
   Fire:  { vh:   { name:'Wildfire', sym:'🔥',
-                   text:'While your Overheat is up, each turn it scorches every enemy for <b>0.08× / 0.16× / 0.25×</b> its ATK (by the Overheat\'s tier: base, + or ✦), and itself too, never below half its health — on the field or off it. Damage buffs count, as on Overheat ✦\'s burn.' },
+                   text:'While your Overheat is up, each turn it scorches every enemy for <b>0.08× / 0.16× / 0.25×</b> its ATK (by the Overheat\'s tier: base, + or ✦), and itself too, never below half its health — on the field or off it. Damage buffs count, as on Overheat ✦\'s burn. With several holders in your team, only the one whose scorch would hit hardest burns.' },
            ultra:{ name:'Consume', sym:'🕯️',
                    text:'It deals <b>1% more</b> damage for every 1% of health it has lost, up to <b>+50%</b> at half health or below.' } },
   /* (3.76) the designer's two new ones */
@@ -840,12 +840,12 @@ const ELEMENT_PASSIVES = {
   /* (3.76) "deadly combo (previously very high) is now the ultra passive effect. focused fury is now
      the very high passive …" */
   Physical: { vh:   { name:'Focused Fury', sym:'😡',
-                      text:'While it is on the field, your Counter stacks become <b>Deflect</b> stacks: each turns away <b>90%</b> of an attack, not 80%. If your Counter is + or ✦, each one\'s Combo and Enrage come at once, as it turns (✦: 2 stacks → 2 Deflect, 2 Combo, and +40% ATK to the one who cast it). Stacks that come while it is off the field stay Counter stacks until it is back.' },
+                      text:'While it is on the field, your Counter stacks become <b>Deflect</b> stacks: each turns away <b>90%</b> of an attack, not 80%. If your Counter is + or ✦, each one\'s Combo and Enrage come at once, as it turns — to this monster, the one that turns them (✦: 2 stacks → 2 Deflect, and its next attack +50%, its ATK +40% for the battle). Stacks that come while it is off the field stay Counter stacks until it is back, and turn as it arrives.' },
               ultra:{ name:'Deadly Combo', sym:'🤜',
                       text:'Each hit it lands (its quick attacks and afterimages too) makes its attacks <b>10%</b> stronger, up to <b>+30%</b>, for the rest of the battle.' } },
   /* (3.86) "rework curse very high passive: binding curse" — and Vicious Hex's debuffs */
   Ghost:    { vh:   { name:'Binding Curse', sym:'🔗',
-                      text:'While it is in your team, on the field or off it, your Curse can be cast through their Diamond Dust. Each time your Curse is cast, or would be stopped, swept away or run out, it lasts <b>1 more turn</b> instead, and this monster and every cursed enemy on the field lose <b>11%</b> of this monster\'s max HP — straight from their health, past every shield and cut. All of it works only while this monster is above <b>34%</b> of its health: at 34% or below, nothing holds the Curse and nobody loses any health, until it is above 34% again.' },
+                      text:'While it is in your team, on the field or off it, your Curse can be cast through their Diamond Dust. Each time your Curse is cast, or would be stopped, swept away or run out, it lasts <b>1 more turn</b> instead, and this monster and every cursed enemy on the field lose <b>11%</b> of this monster\'s max HP — straight from their health, past every shield and cut. All of it works only while this monster is above <b>34%</b> of its health: at 34% or below, nothing holds the Curse and nobody loses any health, until it is above 34% again. With several holders, the one with the most max HP above 34% holds it, and the next takes over when it falls to 34% or below. Each pulse counts as a hit for Gathering Wrath.' },
               ultra:{ name:'Vicious Hex', sym:'🕸️',
                       text:'Every time it deals damage, on the field or off it (its afterimages, a Whalelord\'s Haunting Aria from the bench, its Binding Curse too), the enemy it hits gets a random debuff until the end of that turn, each <b>15%</b>: it takes more damage, dodges less, has its hits cut (with any Ice Barrier and Ice Tomb\'s chill, each cutting what the others leave), deals less damage (taken off its damage bonuses), lands fewer critical hits, or its damage cuts are weaker. Each one that runs out counts for Unstable Magic.' } },
   Dragon:   { vh:   { name:'Violent Dance', sym:'🐲',
@@ -1543,6 +1543,28 @@ async function runProfileMigrations(){
     if(refund > 0){
       state.medals.silver = (state.medals.silver || 0) + refund * 3;
       setTimeout(()=>toast(`🥈 ${refund * 3} Silver Medals back for ${refund} Element Stone${refund > 1 ? 's' : ''} — they are found now, not bought.`), 5600);
+    }
+    changed = true;
+  }
+  /* (3.94) The jungle's folk are wild now (the designer: "no crowns if I have
+     not uploaded them, i.e. these are all wild tier monsters"; they were
+     elites). One crowned before gives its Crown back, and any protein past a
+     wild one's 6 comes back too. */
+  if(!state._jgFolkWild394 && typeof JG_FOLK !== 'undefined'){
+    state._jgFolkWild394 = true;
+    let crowns = 0, protein = 0;
+    (state.party || []).concat(state.storage || []).forEach(m=>{
+      if(!m || !JG_FOLK[m.species]) return;
+      if(m.crowned){ m.crowned = false; crowns++; }
+      const cap = proteinCap(m.species, m);
+      if((m.supplements || 0) > cap){ protein += m.supplements - cap; m.supplements = cap; }
+      if(m.currentHp > monMaxHp(m)) m.currentHp = monMaxHp(m);
+    });
+    if(crowns) state.inventory.crowns = (state.inventory.crowns || 0) + crowns;
+    if(protein) state.inventory.protein = (state.inventory.protein || 0) + protein;
+    if(crowns || protein){
+      const back = [crowns ? `${crowns} Crown${crowns > 1 ? 's' : ''}` : '', protein ? `${protein} Protein Supplement${protein > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ');
+      setTimeout(()=> toast(`🌿 The jungle's folk are wild monsters — ${back} back.`), 6400);
     }
     changed = true;
   }
@@ -2560,6 +2582,63 @@ function noteAttempt(text){
   text = phraseKey(text);
   state.wordAttempts = state.wordAttempts || {};
   state.wordAttempts[text] = (state.wordAttempts[text] || 0) + 1;
+  const R = wordRecentList(); R.push(text); if(R.length > 400) R.splice(0, R.length - 400);   // (3.95) for drawPhrases
+  state.wordRound = state.wordRound || {}; state.wordRound[text] = 1;
+}
+/* ---------- WHICH PHRASES COME UP (3.95) ----------
+   The designer: "my past gold and silver words seem to be rather
+   repetitive … Is the algorithm for pseudo random selection causing this,
+   and should we make it prioritise words that are less-tested?" Until 3.95
+   every move shuffled its whole pool afresh and took what it needed: even
+   over months, but with no memory, so a phrase could come up three moves
+   running while another went unseen for weeks (on the Papa save's 253
+   learned phrases, 350 draws met only about 190 of them, 40-odd three times
+   or more). Now the phrases go round: once written, a phrase waits
+   (state.wordRound) until every other phrase of its pool has come up, and
+   then a new round begins. Within a round the least tested come first:
+   each is weighed by how often it has been written (its attempts, or its
+   mastery where that is more) against the middle of its pool — 5 fewer,
+   twice as likely; 10 fewer, four times; 15 fewer, eight (the most); 5
+   more, half as likely, down to a tenth. A phrase 10 or more behind the
+   middle may come round again within a round, but not until half the pool
+   has been written since; and at the turn of a round, none of the last
+   half-pool written comes straight back. One move never asks a phrase
+   twice until its pool runs out. */
+const WORD_PICK = { halfLife:5, maxW:8, minW:0.1, behind:10, recent:40, recentW:0.1 };
+let _wordRecent = [], _wordRecentOf = null;
+function wordRecentList(){ if(_wordRecentOf !== state){ _wordRecentOf = state; _wordRecent = []; } return _wordRecent; }
+function wordTested(text){ return Math.max(attemptsOf(text), state ? masteryOf(text) : 0); }
+/* Phrases from `pool`: `n` of them, or until `enough(out, chars)` says so. */
+function drawPhrases(pool, n, enough){
+  const out = [];
+  if(!pool || !pool.length) return out;
+  const key = t=> phraseKey(t);
+  const round = (state && (state.wordRound = state.wordRound || {})) || {};
+  const tested = new Map(pool.map(t=> [t, wordTested(t)]));
+  const sorted = [...tested.values()].sort((a, b)=> a - b), mid = sorted[sorted.length >> 1];
+  const R = wordRecentList(), half = Math.max(1, Math.floor(pool.length / 2));
+  const just = new Set(R.slice(-Math.min(WORD_PICK.recent, half))), lately = new Set(R.slice(-half));
+  const weight = t=>{
+    const w = Math.max(WORD_PICK.minW, Math.min(WORD_PICK.maxW, Math.pow(2, (mid - tested.get(t)) / WORD_PICK.halfLife)));
+    return just.has(key(t)) ? w * WORD_PICK.recentW : w;
+  };
+  const behind = t=> tested.get(t) <= mid - WORD_PICK.behind && !lately.has(key(t));
+  let used = new Set(), chars = 0;
+  for(let guard = 0; guard < 500 && (enough ? !enough(out, chars) : out.length < n); guard++){
+    let cand = pool.filter(t=> !used.has(t) && !lately.has(key(t)) && (!round[key(t)] || behind(t)));
+    if(!cand.length && !pool.some(t=> !used.has(t) && !round[key(t)])){
+      pool.forEach(t=>{ delete round[key(t)]; });                    // every phrase of the pool has come up: a new round…
+      cand = pool.filter(t=> !used.has(t) && !lately.has(key(t)));   // …but not straight back to one just written
+    }
+    if(!cand.length) cand = pool.filter(t=> !used.has(t) && !round[key(t)]);   // only phrases just written left: one of them, then
+    if(!cand.length) cand = pool.filter(t=> !used.has(t));
+    if(!cand.length){ used = new Set(); cand = pool.slice(); }      // a pool smaller than one move: round again within it
+    const wts = cand.map(weight);
+    let r = Math.random() * wts.reduce((a, b)=> a + b, 0), k = 0;
+    while(k < wts.length - 1 && (r -= wts[k]) >= 0) k++;
+    out.push(cand[k]); used.add(cand[k]); chars += (cand[k] || '').length;
+  }
+  return out;
 }
 
 function masteryOf(text){ return (state.wordMastery && state.wordMastery[phraseKey(text)]) || 0; }

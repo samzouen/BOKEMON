@@ -848,13 +848,10 @@ function futureCapture(p, run){
   /* the fight's slips first, then the learned words (as every quiz in the rift) */
   const mistakes = ((ui.battle && ui.battle.fightMistakes) || []).slice();
   const all = revisionPool();
-  let pool = shuffle(all.filter(t=> !mistakes.includes(t)));
+  const rest = all.filter(t=> !mistakes.includes(t));
   const words = [];
   mistakes.forEach(t=>{ if(words.length < FUTURE.words) words.push(t); });
-  while(words.length < FUTURE.words){
-    if(!pool.length){ if(!all.length) break; pool = shuffle(all.slice()); }
-    words.push(pool.pop());
-  }
+  if(words.length < FUTURE.words && all.length) words.push(...drawPhrases(rest.length ? rest : all, FUTURE.words - words.length));   // (3.95) the least tested first
   if(!words.length){ toast('No words selected, please select to proceed.'); return futureResults(run); }
   preloadSfx(['catch_success', 'catch_miss'], true);
   startQuiz({
@@ -1014,7 +1011,7 @@ function foeForesightCrit(e, def){
 
 /* ---- your blows on them (computeDamage, yours attacking; landStrike) ---- */
 function foeElusiveOwn(e, mir){
-  const cl = getESide('clones'), tac = tachyOf(e);
+  const cl0 = getESide('clones'), cl = cl0 && (!cl0.owner || cl0.owner === e) ? cl0 : null, tac = tachyOf(e);   // (3.96) the caster's alone
   const best = Math.max(stanceEvasion(e),
     (mir.window && mir.step < mir.window.length) ? mir.window[mir.step] : (mir.chance || 0.20),
     (cl && cl.evade) || 0, tac ? tachyDodgeChance(tac) : 0);
@@ -1111,7 +1108,12 @@ function foeTemperingGuards(){ return foeHolders('Steel', 'vh').length > 0; }
    the field lose 11% of the holder's max HP — HP lost, past shields and
    cuts. Their Vicious Hex counts each as its damage. ---- */
 function foeBindingWorks(e){ return !!(e && !e.uid && e.hp > 0 && foeHolds(e, 'Ghost', 'vh') && e.hp > BINDING.floor * e.maxHp); }
-function foeBinder(){ return ui.battle ? (livingEnemies().find(foeBindingWorks) || null) : null; }
+/* (3.94) the strongest of theirs who can (the most max HP), chosen afresh each time, as yours */
+function foeBinder(){
+  if(!ui.battle) return null;
+  const able = livingEnemies().filter(foeBindingWorks);
+  return able.length ? able.slice().sort((x, y)=> (y.maxHp || 0) - (x.maxHp || 0))[0] : null;
+}
 function foeBindingPulse(h, why){
   const b = ui.battle;
   if(!b || !h) return '';
@@ -1120,13 +1122,16 @@ function foeBindingPulse(h, why){
   drainHp('enemyHp-' + idx, was, h.hp, h.maxHp);
   showDamageNumber('enemy-' + idx, was - h.hp);
   const mine = livingField();
+  let hurt = false;
   mine.forEach(m=>{
     const before = m.currentHp;
     m.currentHp = Math.max(hpFloorOf(m), m.currentHp - loss);
+    if(m.currentHp < before) hurt = true;
     drainHp(pid('playerHp', m), before, m.currentHp, monMaxHp(m));
     showDamageNumber(pid('playerBob', m), before - m.currentHp);
     if(foeHolds(h, 'Ghost', 'ultra')) giveHexDebuff(m, 'enemy');   // their Vicious Hex: its damage
   });
+  if(hurt && typeof noteWrath === 'function') noteWrath();          // (3.94) a hit, for your Gathering Wrath
   logBattle(`Their Binding Curse (${SPECIES[h.species].name}, ${why}): ${loss} HP from it and from ${mine.length} of yours`);
   return `🔗 Their ${foeNm(h)}'s <b>Binding Curse</b> — ${why}: it holds one more turn, and it and every one of yours on the field lose <b>${loss}</b> HP.` +
     (foeBindingWorks(h) ? '' : ` Their ${foeNm(h)} is too weak to hold it any longer.`);
@@ -1200,6 +1205,11 @@ function foeStrikeYours(e, pct, all, opts){
     return { me, dmg:before - me.currentHp, broke };
   });
 }
+/* Theirs whose Wildfire would hit hardest: its ATK and its own multipliers. */
+function foeWildfireHolder(){
+  const hs = foeHolders('Fire', 'vh').filter(e=> e.hp > 0);
+  return hs.length ? hs.slice().sort((x, y)=> enemyAtk(y) * enemyBuffMultiplier(y) * foeSelfAmp(y) - enemyAtk(x) * enemyBuffMultiplier(x) * foeSelfAmp(x))[0] : null;
+}
 function foeWildfire(e, oh){
   if(!e || e.hp <= 0 || !livingField().length) return '';
   const p = wildfirePct(oh);
@@ -1236,7 +1246,11 @@ function foeUpkeepPassives(done){
   const jobs = [];
   if(battleDistortion('dust')) jobs.push(()=> futureEndlessDust());
   const oh = getESide('overheat');
-  if(oh) foeHolders('Fire', 'vh').forEach(e=> jobs.push(()=> getESide('overheat') ? foeWildfire(e, getESide('overheat')) : ''));
+  /* (3.94) the strongest of their holders only, as yours (wildfireHolder) */
+  if(oh && foeHolders('Fire', 'vh').length) jobs.push(()=>{
+    const o = getESide('overheat'), e = foeWildfireHolder();
+    return (o && e) ? foeWildfire(e, o) : '';
+  });
   const dd = getESide('dragonDance');
   if(dd){
     const n = Math.max(0, vhTier(dd)) + 1;
