@@ -46,7 +46,7 @@
        in the north-west and on round clockwise (22-war.js: the ancestor's
        battle, the invaders at the 2nd, 3rd and 4th).
      · After the fourth, his gift, and then the spent King hears the castle
-       has been invaded: the final battle, still to be designed.
+       has been invaded: (4.00) the battle for the castle, 26-invasion.js.
    Old saves (asked: "Replay the new quest"): everything earned stays —
    monsters, medals, stones, calmed ancestors — but the quest starts again
    from the King's fifty, and the tribes are found again.
@@ -449,13 +449,25 @@ async function questKingFifty(){
   toast(`🥉 +${QUEST.fifty} bronze medals!`);
   return questCouncil();
 }
+/* (4.00) The designer: "the backstory should be explained in the war council after the player has defeated 50
+   aliens for the king" — the tribes' centuries of war, the ancestors sealed two hundred years ago, the castle built
+   for peace, the tribes that would not join; then the royal conference (the Commander for the ancestors, the
+   Advisor for the tribes first), where it differs from the earlier plan, as 3.99 has it. */
 async function questCouncil(){
   const q = questState();
   await caLines([
-    ['advisor', `<b>"Hoo. Your Majesty, we cannot win this war alone. We must enlist the four tribes."</b>`],
-    ['king', `<b>"Would that we could. My scouts have searched for them ever since the fairy uprising ended and this kingdom was founded. Not one of them has ever been found."</b>`],
-    ['king', `<b>"The tribes are angry with me, and they are right to be. To end their wars, I sealed their ancestors in these four blades behind me."</b>`],
-    ['king', `<b>"So they hid themselves with magic, and walled off every path that leads to them — three walls deep and more, thicker than any Lucesco could leap."</b>`],
+    ['king', `<b>"Sit, my friends. Before we go on, you should know how this kingdom began — and why the tribes will not come when I call."</b>`],
+    ['king', `<b>"For hundreds of years, four tribes fought over this jungle: Water, Fire, Earth and Grass. Each was led by a legendary ancestor, and not one of them would ever give way."</b>`],
+    ['king', `<b>"Their wars burned the forest and flooded the valleys. And it was always the innocent fairies, the ones who only wanted to live in peace, who suffered most."</b>`],
+    ['king', `<b>"Two hundred years ago, I could bear it no longer. I called on every fairy who was tired of the fighting, and together we stood against the ancestors."</b>`],
+    ['king', `<b>"They would not stop. Not for peace, not even for their own people. Only spite, and hundreds of years of revenge. So one by one we defeated them, and sealed each of them into a blade."</b> He looks up at the four blades behind his throne.`],
+    ['king', `<b>"Here, in the middle of the jungle, we built this castle: a kingdom where every fairy could live together in peace. Many came. But some of every tribe never forgave me for their ancestors, and would not join us."</b>`],
+    ['king', `<b>"Now the aliens hunt them too, and I fear they cannot hold out alone."</b>`],
+    ['commander', `<b>"Then unseal the ancestors, Your Majesty! Four legendary warriors against the aliens — they would sweep the jungle clean in a week!"</b>`],
+    ['advisor', `<b>"Hoo. And who would hold them, once they were free? They swore revenge on this castle. No: first we must win over the tribes. Only their own people can calm their ancestors."</b>`],
+    ['dauphin', `<b>"And the tribes will never come to us, Father. Someone will have to go to them."</b>`],
+    ['king', `<b>"Would that we could. My scouts have searched for them for two hundred years. Not one of them has ever been found."</b>`],
+    ['king', `<b>"They hid themselves with magic, and walled off every path that leads to them — three walls deep and more, thicker than any Lucesco could leap."</b>`],
     ['lion', `<b>"…If the blades hold their ancestors, then the blades must smell of their tribes. Give me one, and I will follow its scent to its people."</b>`],
     ['king', `<b>"Yes… yes! But I cannot come with you. If a tribe senses me near, it will only hide deeper. You must go as my ambassadors."</b>`],
     ['king', `He rises, and lifts one of the blades down from the wall behind his throne. It is cold, and frost creeps over the stone.<br><br><b>"Take this one: the Water Tribe's, in the north-east. They were always the most peaceable of the four. If any tribe will listen, it is them."</b>`],
@@ -518,8 +530,17 @@ function questHudBits(){
   const q = questState(), bits = [];
   if(q.stage === 'fifty') bits.push(`<span class="jg-chip${q.fifty >= QUEST.fifty ? ' done' : ''}" title="Aliens beaten for the King">👑 ${q.fifty >= QUEST.fifty ? '✓' : q.fifty + '/' + QUEST.fifty}</span>`);
   if(q.wk) bits.push(`<span class="jg-chip${q.wk.paid ? ' done' : ''}" title="This week's challenge: a bronze medal for each alien, up to ${QUEST.weekly}">🛡️ ${q.wk.paid ? '✓' : (q.wk.n || 0) + '/' + QUEST.weekly}</span>`);
-  if(questPulseOn()) bits.push(`<button class="jg-chip q-track" type="button" title="What Lucesco is sniffing out">👃 ${escapeHtml(questTrackLabel(questTrack()))}</button>`);
+  if(questPulseOn()) bits.push(`<button class="jg-chip q-track" type="button" title="What Lucesco is sniffing out">${questPinSvg(15)} ${escapeHtml(questTrackLabel(questTrack()))}</button>`);
   return bits;
+}
+/* (4.00) the designer: "please also remove the nose emoticon … a red GPS symbol would be better" — a map pin, drawn
+   here: a red drop with a white heart, a darker rim and a glint */
+function questPinSvg(px){
+  const s = Math.round(px || 15);
+  return `<svg class="q-pin" viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true" focusable="false">` +
+    `<path d="M12 1.6c-4.5 0-8 3.5-8 7.9 0 5.8 7 12.4 7.4 12.8a.9.9 0 0 0 1.2 0C13 21.9 20 15.3 20 9.5c0-4.4-3.5-7.9-8-7.9z" fill="#e3262b" stroke="#9e1219" stroke-width="1.1" stroke-linejoin="round"/>` +
+    `<circle cx="12" cy="9.5" r="3.3" fill="#fff"/>` +
+    `<path d="M7.1 6.9c.8-1.7 2.4-2.8 4.3-3" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.3" stroke-linecap="round"/></svg>`;
 }
 function questKnightLine(){
   const q = questState();
@@ -945,10 +966,11 @@ async function questAlarm(){
     ['commander', `<b>"To arms! Every knight to the walls!"</b>`],
     ['dauphin', `<b>"Father, stay here. We will hold them!"</b>`],
     ['lion', `<b>"Then we fight for the castle. Together."</b>`],
-    `<b>To be continued…</b><br><br><i>The battle for the castle is still to come.</i>`,
   ]);
   q.stage = 'end';
   saveProfile();
+  /* (4.00) the battle for the castle (26-invasion.js): the Commander takes you out into the market */
+  if(typeof invMuster === 'function' && ui.screen === 'r6_palace') invMuster();
 }
 
 /* ============================================================
@@ -1057,6 +1079,7 @@ function questCss(){
   @media (prefers-reduced-motion: reduce){ .q-pulse i{ animation:none; opacity:.6; transform:scale(.7); } .q-pulse i:nth-of-type(n+2){ display:none; } .q-pulse b{ animation:none; } }
   button.jg-chip.q-track{ border:0; cursor:pointer; background:rgba(110,78,20,.82); color:#ffefc4; }
   button.jg-chip.q-track:active{ transform:translateY(1px); }
+  button.jg-chip.q-track .q-pin{ vertical-align:-3px; margin-right:1px; filter:drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
   .q-sniff .q-sniff-face img{ width:64px; height:64px; object-fit:contain; display:block; margin:0 auto 4px; }
   .q-sniff .btn.jg-go.q-on{ border-color:#c99a3f; background:rgba(201,154,63,.16); }
   .walk-ent.q-bar{ overflow:visible; pointer-events:none; }

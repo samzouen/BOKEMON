@@ -504,7 +504,7 @@ function tickStatuses(){
   /* (3.86) Vicious Hex's debuffs on them: a turn's each — each that runs
      out counts for Unstable Magic (one on a fallen one simply goes). */
   (b.enemies || []).forEach(e=> eStatuses(e).slice().forEach(st=>{
-    if(!st.hexDebuff) return;
+    if(!st.hexDebuff && !st.byRound) return;                 // (4.03) and anything else that counts the rounds (a Pulsar Glare)
     st.turnsLeft--;
     if(st.turnsLeft <= 0){ removeEStatus(e, st.type); if(e.hp > 0) ranOut++; }
   }));
@@ -774,6 +774,8 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     dmg *= steelSoulAmp(attacker, false);                    // theirs hits harder too (2.90; every shield, 2.91)
     const softE = getEStatus(attacker,'softened');          // your weaken on it
     if(softE) dmg *= (1 - (softE.amount || 0.5));
+    const glE = getEStatus(attacker, 'glared');             // (4.03) Lucesco's Pulsar Glare: its first turns a quarter weaker (20-jungle.js)
+    if(glE) dmg *= (1 - (glE.amount || 0.25));
     dmg *= playerTerrorizeFactor();                          // yours frightens them (2.87)
     /* (3.76) a future monster's element passives, as yours above (17-region6.js) */
     if(typeof foeAttackAmp === 'function'){
@@ -2870,6 +2872,7 @@ const STATUS_KIND = {
   nourish:'buff',                                     // (3.76) Nourish's ATK
   /* debuffs: the side that put them there benefits */
   stunned:'debuff', paralysed:'debuff', softened:'debuff', charmed:'debuff', forgot:'debuff', taunted:'debuff',   // (3.38) a taunt
+  glared:'debuff',                                                    // (4.03) Lucesco's Pulsar Glare, still in its eyes
   charm:'debuff', disrupt:'debuff', disruptField:'debuff', asleep:'debuff',
   discombobulate:'debuff', iceTomb:'debuff', curse:'debuff', chill:'debuff',
   leechSeed:'debuff', dot:'debuff', jaws:'debuff', bogged:'debuff',
@@ -9665,7 +9668,7 @@ function renderBattle(){
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
         <button class="side-btn" id="switchBtn" ${(switchShut() || !canAct)?'disabled':''}${b.movedThisRound && !b.switchedThisTurn ? ' title="No switching after a move this turn"' : ''}>🔄 Switch</button>
-        <button class="side-btn" id="fleeBtn" ${((b.noFlee && !b.arenaChallenge) || !canAct)?'disabled':''}>${(b.arena || b.arenaChallenge)?'🚪 Exit':(b.coreSpar || b.caSpar)?'🏳️ Give up':b.tear?'🚪 Save & leave':b.future?'🚪 Leave':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
+        <button class="side-btn" id="fleeBtn" ${((b.noFlee && !b.arenaChallenge) || !canAct || (typeof fleeShut === 'function' && fleeShut(b)))?'disabled':''}>${(b.arena || b.arenaChallenge)?'🚪 Exit':(b.coreSpar || b.caSpar)?'🏳️ Give up':b.tear?'🚪 Save & leave':b.future?'🚪 Leave':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
         <button class="side-btn" id="skipBtn" ${canAct?'':'disabled'}>⏭️ Skip turn</button>
         ${(b.arena || b.arenaChallenge)?'<button class="side-btn" id="arenaMoveBtn" style="background:var(--gold);color:#fff;" '+(canAct?'':'disabled')+'>🧪 Test move</button>':''}
       </div>
@@ -9743,6 +9746,8 @@ const STATUS_LABELS = {
   taunted:'🥱 Taunted', overpower:'🏋️ Overpower', nourish:'🌿 Nourish',
   /* (3.86) Vicious Hex's debuffs */
   hxWeak:'🕸️ Exposed', hxDodge:'🕸️ Clumsy', hxAtk:'🕸️ Feeble', hxDmg:'🕸️ Dulled', hxCrit:'🕸️ Unlucky', hxDr:'🕸️ Brittle',
+  /* (4.03) Lucesco's Pulsar Glare (20-jungle.js): Weakened's own symbol, for a weakening that lasts three turns */
+  glared:'📉 Pulsar Glare',
 };
 /* A Very High stone's own symbol, by its type: its status's. */
 function veryHighSymbol(type){ return ((STATUS_LABELS[veryHighStatusKey(type)] || '').split(' ')[0]) || '💎'; }
@@ -10215,6 +10220,8 @@ function statusTipText(key, st, c, pill){
     case 'machDragon': return `Extreme speed: ${c.w} moves before anyone without Mach Dragon.` +
       ((s.tier || 1) > 1 ? ` ✦ is faster still: it moves ahead of a plain Mach Dragon too.` : '');
     case 'softened': return `${c.W}'s next attack deals <b>${pc(s.amount || 0.5)}% less</b> damage.`;
+    case 'glared': return `Lucesco's Pulsar Glare still burns in ${c.its} eyes: ${c.its} attacks deal <b>${pc(s.amount || 0.25)}% less</b> damage` +
+      ` (${s.turnsLeft} more turn${s.turnsLeft === 1 ? '' : 's'}).`;
     case 'evadeTurns': return `${c.W} is perfectly still: it dodges every attack.`;
     case 'asleep': return `${c.W} is asleep: it does nothing on its turn, and wakes at the end of that turn.`;
     case 'discombobulate': { const n = m ? confusionHit(m, s) : 0;

@@ -280,8 +280,7 @@ function warJungleThings(list, P){
     warBands(k).forEach(b=>{
       const dx = b.knight.x - b.x, dy = b.knight.y - b.y;
       list.push({ x:b.x, y:b.y, get cls(){ return 'jg-npc war-alien war-' + b.rank; },
-        html:()=> `<div class="war-fig">${jgMonImg(b.lead, WALK_T * (b.rank === 'commander' ? 1.9 : 1.6), dx > 0)}</div>` +
-                  `<span class="war-spark" style="left:${50 + dx * 50}%;top:${30 + dy * 50}%;">💥</span>`,
+        html:()=> `<div class="war-fig">${jgMonImg(b.lead, WALK_T * (b.rank === 'commander' ? 1.9 : 1.6), dx > 0)}</div>` + warSlashHtml(dx, dy),
         verb:'Fight', sub:b.rank === 'commander' ? "Commander Octopus's army" : "Captain Humanoid's band",
         when:()=> warStage() === k && !warState().beaten[b.id], act:()=> warFight(b) });
       list.push({ x:b.knight.x, y:b.knight.y, still:true, get cls(){ return 'jg-npc war-knight' + (warState().beaten[b.id] ? ' war-won' : ''); },
@@ -497,6 +496,18 @@ async function warGift(){
   if(typeof questAlarm === 'function' && ui.screen === 'r6_palace') setTimeout(()=>{ if(ui.screen === 'r6_palace') questAlarm(); }, 500);
 }
 
+/* (4.00) The clash between a band and the knight holding it: two blades' swipes, crossing by turns, and the sparks
+   where they meet — drawn, where a 💥 stood in (3.92–3.99). The designer: "sprites clashing with slashes and swipes
+   that I need you to help me animate". Placed half-way to the knight (dx, dy: the knight's square from the band's). */
+function warSlashHtml(dx, dy, o){
+  o = o || {};
+  const left = o.left != null ? o.left : 50 + dx * 50, top = o.top != null ? o.top : 30 + dy * 50;
+  return `<svg class="war-slash" viewBox="0 0 100 100" style="left:${left}%;top:${top}%;" aria-hidden="true">` +
+    `<defs><linearGradient id="warSlashGlow" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9fe3ff" stop-opacity=".2"/><stop offset=".5" stop-color="#e9fbff" stop-opacity=".95"/><stop offset="1" stop-color="#ffd27a" stop-opacity=".25"/></linearGradient></defs>` +
+    `<g class="ws-a"><path class="ws-glow" d="M14 76 Q44 22 88 30"/><path class="ws-core" d="M14 76 Q44 22 88 30"/></g>` +
+    `<g class="ws-b"><path class="ws-glow" d="M16 26 Q50 80 88 70"/><path class="ws-core" d="M16 26 Q50 80 88 70"/></g>` +
+    `<circle class="ws-s1" cx="50" cy="50" r="5"/><circle class="ws-s2" cx="58" cy="44" r="3.2"/><circle class="ws-s3" cx="43" cy="57" r="2.6"/></svg>`;
+}
 let _warCss = false;
 function warCss(){
   if(_warCss || typeof document === 'undefined') return;
@@ -511,8 +522,18 @@ function warCss(){
   .walk-ent.war-knight.war-won .war-fig{ animation:warCheer 1.6s ease-in-out infinite; }
   @keyframes warLunge{ 0%,100%{ transform:translateY(0) scale(1); } 35%{ transform:translateY(-3px) scale(1.04); } 50%{ transform:translateY(1px) scale(.98); } }
   @keyframes warCheer{ 0%,100%{ transform:translateY(0); } 30%{ transform:translateY(-6px); } 45%{ transform:translateY(0); } }
-  .walk-ent .war-spark{ position:absolute; transform:translate(-50%,-50%); font-size:18px; pointer-events:none; animation:warSpark 1.1s steps(1) infinite; }
-  @keyframes warSpark{ 0%{ opacity:0; } 40%{ opacity:1; } 60%{ opacity:0; } }
+  .walk-ent .war-slash{ position:absolute; width:150%; height:150%; translate:-50% -50%; pointer-events:none; overflow:visible; z-index:2; }
+  .war-slash path{ fill:none; stroke-linecap:round; stroke-dasharray:130; stroke-dashoffset:130; opacity:0; animation:warSwipe 1.1s linear infinite; }
+  .war-slash .ws-b path{ animation-delay:-.55s; }
+  .war-slash .ws-core{ stroke:#fffdf2; stroke-width:4; }
+  .war-slash .ws-glow{ stroke:url(#warSlashGlow); stroke-width:11; filter:blur(1.5px); }
+  .war-slash circle{ fill:#fff6c8; opacity:0; transform-box:fill-box; transform-origin:center; }
+  .war-slash .ws-s1{ animation:warSpark 1.1s ease-out infinite; animation-delay:-.86s; }
+  .war-slash .ws-s2{ animation:warSpark 1.1s ease-out infinite; animation-delay:-.31s; }
+  .war-slash .ws-s3{ animation:warSpark 1.1s ease-out infinite; animation-delay:-.6s; }
+  @keyframes warSwipe{ 0%{ stroke-dashoffset:130; opacity:0; } 6%{ opacity:1; } 22%{ stroke-dashoffset:0; opacity:1; } 40%{ stroke-dashoffset:-130; opacity:0; } 100%{ stroke-dashoffset:-130; opacity:0; } }
+  @keyframes warSpark{ 0%{ opacity:0; transform:scale(.3); } 12%{ opacity:1; transform:scale(1.2); } 40%{ opacity:0; transform:scale(.2) translate(0,-6px); } 100%{ opacity:0; } }
+  @media (prefers-reduced-motion: reduce){ .war-slash path, .war-slash circle{ animation:none !important; opacity:.6; stroke-dashoffset:0; } }
   .walk-ent.war-anc .jg-art{ filter:drop-shadow(0 0 10px rgba(255,240,190,.7)); }
   `;
   document.head.appendChild(s);

@@ -304,13 +304,15 @@ function caGrounds(){
   fill(14, 32, 36, 14, T.PAVE);
   const fc = { x:31.5, y:38.5 };
   m.tags.fountain = fc;
+  const mosaic = (x, y)=> 'mosaic:' + Math.floor((Math.atan2(y + 0.5 - fc.y, x + 0.5 - fc.x) + Math.PI) / (Math.PI / 4)) % 8;
   for(let y = 32; y < 46; y++) for(let x = 14; x < 50; x++){
-    const d = Math.hypot((x + 0.5 - fc.x) / 1.15, y + 0.5 - fc.y);
-    if(d < 3.6) caPut(m, x, y, T.WATER);
-    else if(d < 5.6) caPut(m, x, y, T.PAVE, 'mosaic:' + Math.floor((Math.atan2(y + 0.5 - fc.y, x + 0.5 - fc.x) + Math.PI) / (Math.PI / 4)) % 8);
+    if(Math.hypot((x + 0.5 - fc.x) / 1.15, y + 0.5 - fc.y) < 5.6) caPut(m, x, y, T.PAVE, mosaic(x, y));
   }
+  /* (4.02) its pool an oval (caPool), the squares it touches water (until 4.02, the squares within 3.6 of the middle:
+     a pool of steps), the mosaic going on under it; the fountain moved up half a square, to stand in its middle */
+  caPool(m, fc.x, fc.y, 3.95, 3.3, mosaic);
   fill(31, 38, 2, 2, T.FOUNT);
-  caDeco(m, 'fountGrand', 28.5, 34.2, 6, 6.2, { z:41 });
+  caDeco(m, 'fountGrand', 28.5, 33.7, 6, 6.2, { z:41 });
   /* its stalls: the two open-air shops (west, east), the fruit and flower sellers */
   m.tags.stalls = {
     retail: { x:16, y:35, w:5, scheme:'rose', keepers:[{ who:'bunnyA', x:17, y:34 }, { who:'bunnyB', x:19, y:34 }], stand:{ x:18, y:36 } },
@@ -360,8 +362,6 @@ function caGrounds(){
     if(b.chimney) caDeco(m, 'chimney', x + w - 2.2, y - 0.9, 0.9, 1.6, { z:y });
     return b;
   };
-  m.tags.tavern = house(14, 25, 8, 7, 'tavern', { door:[17, 18], sign:'🍺', chimney:true, front:3 });
-  m.tags.records = house(42, 25, 8, 7, 'records', { door:[45, 46], sign:'🎵', front:3 });
   /* the palace: the King's hall, its two front towers, the central tower over it all */
   for(let y = 8; y < 20; y++) for(let x = 18; x < 46; x++){
     const ix = x - 18, iy = y - 8;
@@ -381,8 +381,8 @@ function caGrounds(){
   fill(18, 20, 28, 6, T.PAVE);
   fill(30, 20, 4, 1, T.PAVE, (x)=> 'steps:' + (x - 30));
   [[20, 21], [41, 21]].forEach(([x, y])=>{
-    fill(x, y, 3, 3, T.WATER, 'water'); caPut(m, x + 1, y + 1, T.FOUNT, 'water');
-    caDeco(m, 'fountSmall', x - 0.15, y - 1.1, 3.3, 4.2, { z:y + 2.6 });
+    caPool(m, x + 1.5, y + 1.5, 1.3, 1.3, T.PAVE); caPut(m, x + 1, y + 1, T.FOUNT, 'water');   // (4.02) round, in its 3 × 3 squares
+    caDeco(m, 'fountSmall', x - 0.15, y - 1.94, 3.3, 4.2, { z:y + 2.6 });                       // (4.02) standing in its middle (y - 1.1)
   });
   m.tags.palaceGuards = [{ x:29, y:20 }, { x:34, y:20 }];
   /* the gardens: west and east of the palace and the avenue — box hedges,
@@ -396,12 +396,12 @@ function caGrounds(){
     const bed = (bx, by, bw, bh, c)=> fill(bx, by, bw, bh, T.BED, 'bed:' + c);
     bed(x0 + 1, y0 + 2, gx - x0 - 2, 2, 'pink'); bed(gx + 3, y0 + 2, x0 + w - gx - 5, 2, 'gold');
     bed(x0 + 1, y0 + h - 4, gx - x0 - 2, 2, 'violet'); bed(gx + 3, y0 + h - 4, x0 + w - gx - 5, 2, 'white');
-    /* a round pond where the walks cross, its fountain in the middle, the gravel going round it */
+    /* a round pond where the walks cross, its fountain in the middle, the gravel going round it — (4.02) round indeed
+       (caPool: its 4 × 4 squares; until 4.02 a cross of squares), the fountain moved up to stand in its middle */
     fill(gx - 2, cy - 2, 6, 6, T.PATH);
-    fill(gx - 1, cy - 1, 4, 4, T.WATER, 'water');
-    [[gx - 1, cy - 1], [gx + 2, cy - 1], [gx - 1, cy + 2], [gx + 2, cy + 2]].forEach(([x, y])=> caPut(m, x, y, T.PATH));
+    caPool(m, gx + 1, cy + 1, 1.72, 1.72, T.PATH);
     caPut(m, gx, cy, T.FOUNT, 'water'); caPut(m, gx + 1, cy, T.FOUNT, 'water'); caPut(m, gx, cy + 1, T.FOUNT, 'water'); caPut(m, gx + 1, cy + 1, T.FOUNT, 'water');
-    caDeco(m, 'fountSmall', gx - 0.65, cy - 1.6, 3.3, 4.2, { z:cy + 2.1 });
+    caDeco(m, 'fountSmall', gx - 0.65, cy - 2.44, 3.3, 4.2, { z:cy + 2.1 });
     [[x0 + 2, y0 + 5], [x0 + w - 3, y0 + 5], [x0 + 2, y0 + h - 6], [x0 + w - 3, y0 + h - 6]].forEach(([tx, ty], i)=>{
       if(caAt(m, tx, ty) === T.GRASS){ caPut(m, tx, ty, T.TREE); caDeco(m, 'tree', tx - 0.5, ty - 1.25, 2, 2.2, { variant:(i + (mirror ? 1 : 0)) % 2 ? 'blossom' : 'cypress', z:ty + 0.9 }); }
     });
@@ -410,6 +410,12 @@ function caGrounds(){
   garden(48, 12, 11, 19, true);
   /* hedges and gaps: the gardens open onto the ring road and the forecourt */
   [[5, 21], [5, 22], [15, 21], [15, 22], [58, 21], [58, 22], [48, 21], [48, 22], [10, 12], [11, 12], [53, 12], [54, 12], [10, 30], [11, 30], [53, 30], [54, 30]].forEach(([x, y])=> caPut(m, x, y, T.PATH));
+  /* the tavern and the record store, fronting the square's north side — (4.02) built after the forecourt and the
+     gardens: the forecourt's paving (rows 20–25) had taken the top row of their roofs, the tavern's chimney left
+     standing on the paving (the designer: "some of the houses are hidden by the floor tiles, and the chimney sticks
+     out above the floor but the roof is hidden by the floor"), and each garden two of their columns */
+  m.tags.tavern = house(14, 25, 8, 7, 'tavern', { door:[17, 18], sign:'🍺', chimney:true, front:3 });
+  m.tags.records = house(42, 25, 8, 7, 'records', { door:[45, 46], sign:'🎵', front:3 });
   /* topiary beside the palace */
   for(let x = 10; x < 18; x += 3){ caPut(m, x, 7, T.HEDGE, 'topiary'); caPut(m, x + 36, 7, T.HEDGE, 'topiary'); }
   fill(10, 5, 8, 1, T.PATH); fill(46, 5, 8, 1, T.PATH);
@@ -434,7 +440,8 @@ function caGrounds(){
   row(5, 28, 47, 5); row(36, 59, 47, 5);
   row(10, 28, 54, 5); row(36, 54, 54, 5);                              // between the corner towers
   /* the avenue's planters and the gate court's */
-  [[26, 55], [37, 55], [26, 59], [37, 59]].forEach(([x, y], i)=>{ caPut(m, x, y, T.PLANTER, 'pave:' + i); caDeco(m, 'planter', x - 0.05, y - 1.0, 1.1, 2.0, { n:i, z:y + 0.9 }); });   // (3.97) stone urns, something growing in each
+  /* (4.02) the upper two by the avenue (they were at x 26 and 37, on the roofs of the houses either side of the court) */
+  [[28, 55], [35, 55], [26, 59], [37, 59]].forEach(([x, y], i)=>{ caPut(m, x, y, T.PLANTER, 'pave:' + i); caDeco(m, 'planter', x - 0.05, y - 1.0, 1.1, 2.0, { n:i, z:y + 0.9 }); });   // (3.97) stone urns, something growing in each
   /* anything walkable that can't be reached from the gate goes back to grass with a bush on it */
   const reach = new Uint8Array(W * H), q = [m.tags.gate.y * W + m.tags.gate.x];
   reach[q[0]] = 1;
@@ -685,6 +692,7 @@ function caSeeKey(){
 function caEdges(ctx, m, x, y, t, px, py, pw, ph){
   const T = CA_T;
   if(t === T.WATER){
+    if(m.spr[y * m.W + x] !== 'water') return;                       // (4.02) a round pool's square (caPool): its own picture
     const e = Math.max(1, Math.round(pw * 0.14));
     ctx.fillStyle = '#d9d2c3';
     const isW = (a, b)=>{ const u = caAt(m, a, b); return u === T.WATER || u === T.FOUNT; };
@@ -738,7 +746,7 @@ function caDrawView(ctx, v, k, ox, oy, x0, y0, x1, y1, frame, now){
       else {
         if(sx < 0 || sy < 0 || sx >= gm.W || sy >= gm.H) continue;
         let key = gm.spr[sy * gm.W + sx];
-        if(key === 'water') key = 'water:' + frame;
+        if(key === 'water' || gm.g[sy * gm.W + sx] === CA_T.WATER) key = 'water:' + frame;   // (4.02) a round pool's squares too
         if(key && /^(bld|pal):/.test(key)) CA_ART.bldSlice(ctx, key, kk, px, py, pw, ph);   // (3.97) its picture, small
         else if(key) ctx.drawImage(caSpr(key), px, py, pw, ph);
       }
@@ -1090,6 +1098,284 @@ function caDrawSprite(g, key, S){
 }
 
 /* ---------- what stands up over the ground ---------- */
+/* ---------- (4.00, 4.01, 4.02) THE FOUNTAINS' WATER ----------
+   A basin brimming over all round: a bell-shaped sheet of water from its rim (an ellipse, cx/yy, rw × rh) out and
+   down to the water it falls into (cx/yb, rl × rlh) — its front half, the half you see. caDomeP: a point on it, v 0 at
+   the rim and 1 where it lands, a round the front from 0 (its right edge) to π (its left).
+   (4.01) One thick band of light round it, rippling like a sound wave and quivering where it is (caDomeBand), in place
+   of 4.00's wavering line riding up and down it.
+   (4.02) The designer, of 4.01's: "the flying sparkling droplets should not come from the top but from the bottom
+   where the water meets the pool, and the ripples where the water meets the pool should also be wider and more
+   diffused, and more frequent to simulate the relative opacity where water becomes turbulent. the vertical
+   downflowing ripples are wrong - they were meant to be diffused broader and less white horizontal wavy ripples
+   flowing down … keep the bright horizontal reflective band you have but please smoothen it out, not quite so
+   jagged! the vibrations should be more wavy than distorted too"; and of their video, "look only at the water flowing
+   down from the dolphin fountain's mouth". So over the bell now: broad, soft bands of paler water, each with a wavy
+   upper edge, carried down it one after another as the dolphin's water is (caDomeSheets); the band, smooth now, its
+   waves rocking to and fro along it and swelling (caDomeBand); a few shimmers. Where it lands, the water churned
+   white: a soft band of foam with froth flickering along it, rings going out wide, soft and often (caDomeRings), and
+   little sparkling drops thrown up from it (caFountDrops). Until 4.02: little streaks of light down its sides, the
+   band's crests pointed and trembling, one ring at a time, and the drops leaping off the jet at the top. */
+function caDomeP(o){
+  const { cx, yy, rw, rh, yb, rl, rlh } = o, len = yb - yy;
+  const R = v=> rw + (rl - rw) * (1 - Math.pow(1 - v, 2.2)) + rw * 0.07 * Math.sin(Math.PI * Math.min(1, v * 1.4));
+  return (v, a)=> [cx + R(v) * Math.cos(a), yy + len * v + (rh + (rlh - rh) * v) * Math.sin(a)];
+}
+/* the band: where on the bell it lies (v), from where to where round it (a0…a1, of π), points to a wave, its crests'
+   height and its thickness (both in squares: 4.00's line was 0.075 thick, its waves 0.045 high, two across) */
+const CA_BAND = { v:0.34, a0:0.13, a1:0.87, per:10, amp:0.08, wid:0.125, glow:0.27 };
+function caDomeBand(o){
+  const P = caDomeP(o), { k, t, seed, rl } = o, B = CA_BAND;
+  const cycles = Math.max(5, Math.min(11, Math.round(rl / k * 3.2)));          // the wider the bell, the more waves
+  const n = cycles * B.per, v = B.v + 0.004 * Math.sin(t * 0.9 + seed);        // where it lies: very nearly still
+  /* (4.02) its quiver, smooth: the waves rocking quickly to and fro along it, and swelling and settling */
+  const rock = 0.85 * Math.sin(t * 11 + seed) + 0.25 * Math.sin(t * 17 + seed * 2);
+  const swell = 0.84 + 0.16 * Math.sin(t * 8.3 + seed * 3);
+  const pts = [];
+  for(let i = 0; i <= n; i++){
+    const u = i / n, a = Math.PI * (B.a0 + (B.a1 - B.a0) * u);
+    const hgt = 0.6 + 0.4 * Math.sin(u * Math.PI * 3.4 + seed * 1.3);         // its crests rising and falling along it, as a sound wave's
+    const [px, py] = P(v, a);
+    pts.push([px, py + k * B.amp * Math.sqrt(Math.sin(Math.PI * u)) * hgt * swell * Math.sin(u * cycles * Math.PI * 2 + rock)]);
+  }
+  return pts;
+}
+/* (4.02) the water running down the bell: three broad, soft bands of paler water, each with a wavy upper edge and a
+   gentler lower one, carried down from the rim to where it lands, one after another. Each: its upper edge and its
+   lower one (points round the front, right to left), how far down its upper edge is (v), how strongly it shows (a). */
+const CA_SHEETS = { n:3, T:2.6, depth:0.22, wave:0.05, alpha:0.44 };
+function caDomeSheets(o){
+  const P = caDomeP(o), { k, t, seed, rl } = o, S = CA_SHEETS, out = [];
+  const waves = Math.max(3, Math.min(7, Math.round(rl / k * 2.4)));
+  for(let j = 0; j < S.n; j++){
+    const q = (((t / S.T + j / S.n + seed * 0.13) % 1) + 1) % 1;
+    const top = -0.22 + 1.3 * q, depth = S.depth + 0.05 * Math.sin(j * 2.1 + seed);
+    const up = [], low = [];
+    for(let i = 0; i <= 28; i++){
+      const u = i / 28, a = Math.PI * u;
+      const wv = S.wave * Math.sin(u * Math.PI * 2 * waves + j * 1.7 + t * 1.6) + 0.022 * Math.sin(u * Math.PI * 2 * (waves + 2) - t * 2.3 + j);
+      up.push(P(Math.max(0, Math.min(1, top + wv)), a));
+      low.push(P(Math.max(0, Math.min(1, top + depth + wv * 0.35)), a));
+    }
+    out.push({ up, low, v:top, a:Math.max(0, Math.min(1, (q - 0.02) / 0.12, (1 - q) / 0.18)) });
+  }
+  return out;
+}
+/* (4.02) the rings going out from where it lands: four at a time, each wide and soft, a new one about every third of a
+   second. Each: its size (1 at the foot of the bell; `spread` more at the last, to stay in the water round it), its
+   thickness (in squares) and its brightness. */
+function caDomeRings(o, spread){
+  const { t, seed } = o, n = 4, C = 1.3, out = [];
+  for(let i = 0; i < n; i++){
+    const p = (((t / C + i / n + seed * 0.1) % 1) + 1) % 1;
+    out.push({ s:1 + spread * p, w:0.06 + 0.15 * p, a:0.32 * Math.pow(1 - p, 1.2) * Math.min(1, p / 0.08) });
+  }
+  return out;
+}
+function caWaterDome(g, o){
+  const { cx, yy, rw, rh, yb, rl, rlh, k, t, seed } = o;
+  const P = caDomeP(o), spread = o.spread != null ? o.spread : 0.3;
+  const rings = caDomeRings(o, spread);
+  const ringArc = (r, a0, a1)=>{
+    g.strokeStyle = `rgba(255,255,255,${r.a})`; g.lineWidth = Math.max(1, k * r.w);
+    g.beginPath(); g.ellipse(cx, yb + rlh * 0.05, rl * r.s, rlh * r.s * 1.06, 0, a0, a1); g.stroke();
+  };
+  g.save();
+  /* (4.02) where it lands, the water turned white and cloudy: a soft haze out round it (the bell stands in front of
+     its far side), then the rings' far halves */
+  if(spread > 0.1){
+    g.save(); g.translate(cx, yb); g.scale(1, rlh / rl);
+    const hz = g.createRadialGradient(0, 0, rl * 0.9, 0, 0, rl * (1 + spread * 0.75));
+    hz.addColorStop(0, 'rgba(255,255,255,.34)'); hz.addColorStop(0.45, 'rgba(240,250,255,.16)'); hz.addColorStop(1, 'rgba(240,250,255,0)');
+    g.fillStyle = hz; g.beginPath(); g.arc(0, 0, rl * (1 + spread * 0.75), 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+  g.shadowColor = 'rgba(255,255,255,.85)'; g.shadowBlur = k * 0.18;
+  rings.forEach(r=> ringArc(r, Math.PI, Math.PI * 2));
+  g.shadowBlur = 0;
+  const outline = ()=>{
+    g.beginPath();
+    for(let i = 0; i <= 12; i++){ const [px, py] = P(i / 12, Math.PI); i ? g.lineTo(px, py) : g.moveTo(px, py); }
+    g.ellipse(cx, yb, rl, rlh, 0, Math.PI, 0, true);                     // the front of where it lands, left to right
+    for(let i = 12; i >= 0; i--){ const [px, py] = P(i / 12, 0); g.lineTo(px, py); }
+    g.ellipse(cx, yy, rw, rh, 0, 0, Math.PI, false);                     // the front of the rim, right to left
+    g.closePath();
+  };
+  const grd = g.createLinearGradient(0, yy, 0, yb + rlh);
+  grd.addColorStop(0, 'rgba(176,224,252,.78)'); grd.addColorStop(0.35, 'rgba(118,190,240,.6)');      // (4.02) a little bluer between,
+  grd.addColorStop(0.8, 'rgba(150,212,248,.55)'); grd.addColorStop(1, 'rgba(236,249,255,.8)');       // so its paler water shows
+  outline(); g.fillStyle = grd; g.fill();
+  g.save();
+  g.clip();
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  /* (4.02) the paler water running down it, in broad soft bands with wavy tops */
+  caDomeSheets(o).forEach(s=>{
+    if(s.a <= 0) return;
+    const ys = s.up.map(p=> p[1]).concat(s.low.map(p=> p[1])), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const gr = g.createLinearGradient(0, y0, 0, y1 + 1);
+    gr.addColorStop(0, `rgba(226,246,255,${CA_SHEETS.alpha * s.a})`); gr.addColorStop(0.55, `rgba(214,240,255,${CA_SHEETS.alpha * 0.6 * s.a})`); gr.addColorStop(1, 'rgba(210,238,255,0)');
+    g.beginPath();
+    s.up.forEach(([px, py], i)=> i ? g.lineTo(px, py) : g.moveTo(px, py));
+    for(let i = s.low.length - 1; i >= 0; i--) g.lineTo(s.low[i][0], s.low[i][1]);
+    g.closePath(); g.fillStyle = gr; g.fill();
+    g.strokeStyle = `rgba(240,251,255,${0.3 * s.a})`; g.lineWidth = Math.max(1, k * 0.03);    // its wavy top, softly
+    g.beginPath(); s.up.forEach(([px, py], i)=> i ? g.lineTo(px, py) : g.moveTo(px, py)); g.stroke();
+  });
+  /* the band: one thick, smooth ripple of light, quivering where it is; faded at its two ends */
+  const band = caDomeBand(o), x0 = band[0][0], x1 = band[band.length - 1][0];
+  const fade = al=>{ const gr = g.createLinearGradient(x0, 0, x1, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.15, `rgba(255,255,255,${al})`); gr.addColorStop(0.85, `rgba(255,255,255,${al})`); gr.addColorStop(1, 'rgba(255,255,255,0)'); return gr; };
+  const path = ()=>{ g.beginPath(); band.forEach(([px, py], i)=> i ? g.lineTo(px, py) : g.moveTo(px, py)); };
+  path(); g.strokeStyle = fade(0.32); g.lineWidth = k * CA_BAND.glow; g.shadowColor = 'rgba(255,255,255,.9)'; g.shadowBlur = k * 0.22; g.stroke();
+  g.shadowBlur = 0;
+  path(); g.strokeStyle = fade(0.96); g.lineWidth = k * CA_BAND.wid; g.stroke();
+  /* shimmers: a glint here and there, flashing and gone */
+  for(let i = 0; i < 4; i++){
+    const c = t * 0.75 + i * 0.37 + seed * 0.13, n = Math.floor(c), p = c - n;
+    if(p > 0.34) continue;
+    const a = Math.PI * (0.15 + 0.7 * jgHash(i, n, 7)), v = 0.12 + 0.72 * jgHash(n, i, 8), [px, py] = P(v, a);
+    g.fillStyle = `rgba(255,255,255,${0.9 * Math.sin(p / 0.34 * Math.PI)})`;
+    g.beginPath(); g.ellipse(px, py, k * 0.1, k * 0.028, Math.cos(a) * 0.5, 0, 7); g.fill();
+  }
+  g.restore();
+  /* (4.02) where it lands, the water churned white: a soft band of foam, its bright edge, froth flickering along it */
+  g.strokeStyle = 'rgba(255,255,255,.42)'; g.lineWidth = k * 0.17; g.shadowColor = 'rgba(255,255,255,.9)'; g.shadowBlur = k * 0.22;
+  g.beginPath(); g.ellipse(cx, yb, rl * 1.02, rlh * 1.06, 0, Math.PI * 0.02, Math.PI * 0.98); g.stroke();
+  g.shadowBlur = 0;
+  g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = Math.max(1, k * 0.045);
+  g.beginPath(); g.ellipse(cx, yb, rl * 1.01, rlh * 1.02, 0, Math.PI * 0.04, Math.PI * 0.96); g.stroke();
+  for(let i = 0; i < 9; i++){
+    const a = Math.PI * (0.06 + 0.88 * (i + 0.5) / 9) + 0.05 * Math.sin(t * 3 + i), f = 0.5 + 0.5 * Math.sin(t * 6.3 + i * 2.3 + seed);
+    g.fillStyle = `rgba(255,255,255,${0.18 + 0.32 * f})`;
+    g.beginPath(); g.ellipse(cx + rl * 1.03 * Math.cos(a), yb + rlh * 1.05 * Math.sin(a), k * (0.09 + 0.06 * f), k * (0.04 + 0.025 * f), 0, 0, 7); g.fill();
+  }
+  /* the rings' near halves, in front of the bell */
+  g.shadowColor = 'rgba(255,255,255,.85)'; g.shadowBlur = k * 0.18;
+  rings.forEach(r=> ringArc(r, 0, Math.PI));
+  g.restore();
+  /* sparkles on the foam, and the drops thrown up from it */
+  for(let i = 0; i < 5; i++){
+    const tw = Math.sin(t * 2.6 + i * 1.9 + seed);
+    if(tw < 0.35) continue;
+    const a = Math.PI * (0.12 + 0.76 * jgHash(i, Math.floor(t * 0.4 + i * 0.3), 9));
+    caSparkle(g, cx + rl * Math.cos(a), yb + rlh * Math.sin(a) - k * 0.04, k * 0.13 * tw, (tw - 0.35) / 0.65);
+  }
+  caFountSparkles(g, o, o.drops || 0);
+}
+/* the water welling up at the top: a little crown spilling into the basin below it */
+function caWaterBubble(g, cx, y0, y1, rw, k, t){
+  g.save();
+  for(let i = 0; i < 5; i++){
+    const a = (i - 2) / 2, wob = Math.sin(t * 4 + i * 1.3) * k * 0.02;
+    g.strokeStyle = `rgba(225,246,255,${0.65 + 0.2 * Math.sin(t * 3 + i)})`; g.lineWidth = Math.max(1, k * 0.05);
+    g.beginPath(); g.moveTo(cx, y0 + k * 0.02);
+    g.quadraticCurveTo(cx + a * rw * 0.6, y0 - k * 0.14 + wob, cx + a * rw, y1 - k * 0.03);
+    g.stroke();
+  }
+  g.fillStyle = 'rgba(240,252,255,.85)'; g.beginPath(); g.ellipse(cx, y0 - k * 0.02, k * 0.09, k * 0.05, 0, 0, 7); g.fill();
+  g.restore();
+}
+/* a four-pointed sparkle, s across, a its brightness */
+function caSparkle(g, x, y, s, a){
+  if(s <= 0 || a <= 0) return;
+  g.save();
+  g.globalAlpha = Math.max(0, Math.min(1, a));
+  g.fillStyle = '#ffffff'; g.shadowColor = 'rgba(200,240,255,.95)'; g.shadowBlur = s * 0.9;
+  g.beginPath();
+  g.moveTo(x, y - s / 2); g.quadraticCurveTo(x, y, x + s / 2, y); g.quadraticCurveTo(x, y, x, y + s / 2);
+  g.quadraticCurveTo(x, y, x - s / 2, y); g.quadraticCurveTo(x, y, x, y - s / 2);
+  g.fill();
+  g.restore();
+}
+/* (4.01, 4.02) little sparkling drops. The designer: "Will there be little sparkling droplets as requested?" — and of
+   4.01's, off the jet at the top: "the flying sparkling droplets should not come from the top but from the bottom where
+   the water meets the pool". Now and then a few leap up off the foam where the bell lands, out and back down into the
+   water, each twinkling as it goes: a burst about every 0.9 seconds, 1 to n drops (n: the dome's `drops`), each a
+   little early or late. caFountDrops says where they are (o: the dome): x, y, size (r), brightness (a), twinkle (tw),
+   which burst (b), and the place on the foam it leapt from (x0, y0). */
+function caFountDrops(o, n){
+  const { cx, yb, rl, rlh, k, t, seed } = o, s = Math.round(seed * 10), out = [];
+  if(!n) return out;
+  const cyc = 0.9, c = t / cyc + seed * 0.37, b0 = Math.floor(c);
+  for(let b = b0 - 1; b <= b0; b++){
+    const lt = (c - b) * cyc - 0.35 * jgHash(b, s, 40), m = 1 + Math.floor(jgHash(b, s, 41) * n);
+    for(let i = 0; i < m; i++){
+      const fly = 0.6 + 0.35 * jgHash(b, i, 42);
+      if(lt < 0 || lt > fly) continue;
+      const q = lt / fly, a = Math.PI * (0.08 + 0.84 * jgHash(b, i + s, 43));
+      const away = k * (0.15 + 0.3 * jgHash(b, i, 44)), up = k * (0.3 + 0.35 * jgHash(i, b, 45));
+      const x0 = cx + rl * 1.03 * Math.cos(a), y0 = yb + rlh * 1.05 * Math.sin(a);
+      out.push({ b, x0, y0, x:x0 + Math.cos(a) * away * q, y:y0 + Math.sin(a) * away * q * (rlh / rl) - up * 4 * q * (1 - q),
+                 r:k * 0.05, tw:Math.max(0, Math.sin(q * Math.PI * 2.5 + i * 1.7)), a:Math.max(0, Math.min(1, (1 - q) / 0.25, q / 0.05 + 0.4)) });
+    }
+  }
+  return out;
+}
+function caFountSparkles(g, o, n){
+  caFountDrops(o, n).forEach(d=>{
+    g.save(); g.globalAlpha = d.a;
+    g.fillStyle = 'rgba(222,244,255,.96)'; g.strokeStyle = 'rgba(96,170,222,.85)'; g.lineWidth = Math.max(1, d.r * 0.3);
+    g.beginPath(); g.arc(d.x, d.y, d.r, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(d.x - d.r * 0.32, d.y - d.r * 0.32, d.r * 0.36, 0, 7); g.fill();
+    g.restore();
+    if(d.tw > 0.2) caSparkle(g, d.x, d.y, d.r * 4.2 * d.tw, d.a * d.tw);
+  });
+}
+/* ---------- (4.02) THE POOLS, ROUND ----------
+   The designer: "for the pools both in the castle and in the jungle, could you make the shape ovoid or circular? this
+   may mean that some tiles are locked out from walking even if most of the tile is not the pool but appears to be
+   land. the square blocky pool shape just doesn't look pleasing." An oval of water (cx, cy, rx × ry, in squares) in a
+   rim of stone (`rim` wide): every square it touches is water, which nobody walks on, though its picture is the
+   ground's (`land`: a tile type, or (x, y)=> a picture); the oval itself is drawn over them all ('pool': under
+   everything else that stands about). The squares' own water still shows from far off (a wall's views). */
+function caLandSpr(t, x, y){
+  const v = Math.floor(caHash(x, y, 1) * 6);
+  return t === CA_T.PATH ? 'path:' + (v % 3) : t === CA_T.GRASS ? 'grass:' + (v % 4) : t === CA_T.COBBLE ? 'cobble:' + v : 'pave:' + (v % 4);
+}
+function caPool(m, cx, cy, rx, ry, land, o){
+  o = o || {};
+  const rim = o.rim != null ? o.rim : 0.17, RX = rx + rim, RY = ry + rim;
+  for(let y = Math.floor(cy - RY); y < Math.ceil(cy + RY); y++) for(let x = Math.floor(cx - RX); x < Math.ceil(cx + RX); x++){
+    const nx = Math.max(x, Math.min(cx, x + 1)), ny = Math.max(y, Math.min(cy, y + 1));             // its nearest point to the middle
+    if(((nx - cx) / RX) ** 2 + ((ny - cy) / RY) ** 2 >= 1 || x < 0 || y < 0 || x >= m.W || y >= m.H) continue;
+    const i = y * m.W + x;
+    if(m.g[i] === CA_T.FOUNT) continue;
+    m.g[i] = CA_T.WATER;
+    m.spr[i] = typeof land === 'function' ? land(x, y) : caLandSpr(land, x, y);
+  }
+  caDeco(m, 'pool', cx - RX, cy - RY, RX * 2, RY * 2, { cx, cy, rx, ry, rim, z:-1000 + cy });
+  (m.tags.pools || (m.tags.pools = [])).push({ cx, cy, rx, ry, rim });
+}
+/* its picture: the stone rim and its shadow, the water deeper under the rim's far side, ripples drifting, a glint */
+function caDrawPool(g, d, x, y, w, h, k, t){
+  const cx = x + w / 2, cy = y + h / 2, rx = d.rx * k, ry = d.ry * k, R = (d.rx + d.rim) * k, Ry = (d.ry + d.rim) * k;
+  g.save();
+  g.fillStyle = 'rgba(0,0,0,.15)'; g.beginPath(); g.ellipse(cx, cy + k * 0.07, R + k * 0.02, Ry + k * 0.04, 0, 0, 7); g.fill();
+  g.fillStyle = '#ddd5c4'; g.beginPath(); g.ellipse(cx, cy, R, Ry, 0, 0, 7); g.fill();
+  g.strokeStyle = 'rgba(118,104,84,.5)'; g.lineWidth = Math.max(1, k * 0.03); g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = Math.max(1, k * 0.025);
+  g.beginPath(); g.ellipse(cx, cy - k * 0.02, R - k * 0.03, Ry - k * 0.03, 0, Math.PI * 1.08, Math.PI * 1.92); g.stroke();
+  const gr = g.createLinearGradient(0, cy - ry, 0, cy + ry);
+  gr.addColorStop(0, '#2f7fb4'); gr.addColorStop(0.4, '#4596c9'); gr.addColorStop(1, '#5aaad8');
+  g.fillStyle = gr; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 7); g.fill();
+  g.clip();
+  g.strokeStyle = 'rgba(16,52,86,.32)'; g.lineWidth = k * 0.18;                                   // the basin's far wall, in shadow
+  g.beginPath(); g.ellipse(cx, cy + k * 0.1, rx, ry, 0, Math.PI * 1.04, Math.PI * 1.96); g.stroke();
+  g.strokeStyle = 'rgba(220,245,255,.42)'; g.lineWidth = Math.max(1, k * 0.035);
+  const n = Math.max(3, Math.round(d.rx * d.ry * 1.6));
+  for(let i = 0; i < n; i++){
+    const a = jgHash(i, 3, 61) * Math.PI * 2, r = Math.sqrt(jgHash(i, 5, 62)) * 0.78, px = cx + Math.cos(a) * rx * r, py = cy + Math.sin(a) * ry * r;
+    const ph = t * 1.4 + i * 1.7, len = k * (0.22 + 0.12 * jgHash(i, 7, 63));
+    g.globalAlpha = 0.45 + 0.4 * Math.sin(ph);
+    g.beginPath(); g.moveTo(px - len, py + k * 0.03 * Math.sin(ph)); g.quadraticCurveTo(px, py - k * 0.06, px + len, py + k * 0.03 * Math.cos(ph)); g.stroke();
+  }
+  g.globalAlpha = 1;
+  for(let i = 0; i < 2; i++){
+    const tw = Math.sin(t * 1.9 + i * 2.6 + d.cx);
+    if(tw > 0.4){ const a = jgHash(i, Math.floor(t * 0.5 + i), 64) * Math.PI * 2, r = 0.6 * Math.sqrt(jgHash(Math.floor(t * 0.5 + i), i, 65));
+      caSparkle(g, cx + Math.cos(a) * rx * r, cy + Math.sin(a) * ry * r, k * 0.14 * tw, (tw - 0.4) / 0.6); }
+  }
+  g.restore();
+}
 function caDrawDeco(g, d, x, y, w, h, now){
   const k = w / (d.w || 1);                                           // one square, here
   const t = now / 1000;
@@ -1167,34 +1453,43 @@ function caDrawDeco(g, d, x, y, w, h, now){
       return;
     }
     case 'fountGrand': case 'fountSmall': {
+      /* (4.00) The designer: "could you do dome sheets of water cascading down each tier and make the domes look like
+         running water by adding a main wavering reflection line that loops in its wavering movement? Add shimmers and
+         sparkles too! this replaces the current flying pixels. You can change the flying pixels to fewer, occasional
+         only sparkles that fly off the top." Each basin brims over all round its rim: a bell of water falls from it to
+         the water below (caWaterDome) — the small fountains' one basin the same. Up top, the water bubbles out under
+         the fairy's feet ("You nailed the mushroom jet dome though!"). (4.02) The little sparkling drops leap up where
+         the water lands in the pool (caWaterDome's `drops`): off the jet at the top in 4.01, off her star in 4.00. Each
+         dome's rings spread as far as the water round it lets them (`spread`): wide in the pool, a little in a basin. */
       const grand = d.kind === 'fountGrand', cx = x + w / 2, base = y + h * (grand ? 0.78 : 0.82);
-      const stone = '#e8e2d6', sh = '#bdb5a6';
-      const tier = (yy, rw, rh)=>{ g.fillStyle = sh; g.beginPath(); g.ellipse(cx, yy + rh * 0.35, rw, rh, 0, 0, 7); g.fill(); g.fillStyle = stone; g.beginPath(); g.ellipse(cx, yy, rw, rh, 0, 0, 7); g.fill(); g.fillStyle = '#6fb6e0'; g.beginPath(); g.ellipse(cx, yy, rw * 0.82, rh * 0.68, 0, 0, 7); g.fill(); };
+      const stone = '#e8e2d6', sh = '#bdb5a6', seed = d.x * 1.7 + d.y;
+      const tier = (yy, rw, rh)=>{ g.fillStyle = sh; g.beginPath(); g.ellipse(cx, yy + rh * 0.35, rw, rh, 0, 0, 7); g.fill(); g.fillStyle = stone; g.beginPath(); g.ellipse(cx, yy, rw, rh, 0, 0, 7); g.fill(); g.fillStyle = '#6fb6e0'; g.beginPath(); g.ellipse(cx, yy, rw * 0.82, rh * 0.68, 0, 0, 7); g.fill();
+        g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = Math.max(1, k * 0.03); g.beginPath(); g.ellipse(cx + Math.sin(t * 1.7 + yy) * rw * 0.05, yy, rw * 0.55, rh * 0.38, 0, Math.PI * 1.1, Math.PI * 1.75); g.stroke(); };
       const column = (y0, y1, cw)=>{ g.fillStyle = stone; g.fillRect(cx - cw / 2, y1, cw, y0 - y1); g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(cx + cw * 0.15, y1, cw * 0.35, y0 - y1); };
-      const sheet = (yy, rw, len)=>{ for(let i = 0; i < 9; i++){ const a = i / 8, px = cx - rw + a * rw * 2; g.strokeStyle = `rgba(200,235,255,${0.45 + 0.25 * Math.sin(t * 6 + i)})`; g.lineWidth = Math.max(1, k * 0.04); g.beginPath(); g.moveTo(px, yy); g.quadraticCurveTo(px + (a - 0.5) * k * 0.3, yy + len * 0.6, px + (a - 0.5) * k * 0.4, yy + len); g.stroke(); } };
+      const dome = (yy, rw, rh, yb, rl, rlh, n, spread, drops)=> caWaterDome(g, { cx, yy, rw, rh, yb, rl, rlh, k, t, seed:seed + n * 3.1, spread, drops });
       if(grand){
         column(base, base - h * 0.42, w * 0.12);
-        tier(base - h * 0.4, w * 0.3, h * 0.07); sheet(base - h * 0.37, w * 0.28, h * 0.33);
+        tier(base - h * 0.4, w * 0.3, h * 0.07);
+        dome(base - h * 0.4, w * 0.3, h * 0.07, base - h * 0.005, w * 0.37, h * 0.085, 1, 0.48, 3);
         column(base - h * 0.42, base - h * 0.66, w * 0.08);
-        tier(base - h * 0.64, w * 0.18, h * 0.045); sheet(base - h * 0.62, w * 0.17, h * 0.2);
+        tier(base - h * 0.64, w * 0.18, h * 0.045);
+        dome(base - h * 0.64, w * 0.18, h * 0.045, base - h * 0.395, w * 0.225, h * 0.052, 2, 0.06, 0);
         column(base - h * 0.66, base - h * 0.82, w * 0.05);
+        caWaterBubble(g, cx, base - h * 0.82, base - h * 0.645, w * 0.13, k, t);
         /* the top: a fairy holding a star up, gold */
         g.fillStyle = '#e2bf55'; g.beginPath(); g.ellipse(cx, base - h * 0.86, w * 0.035, h * 0.05, 0, 0, 7); g.fill();
         g.beginPath(); g.ellipse(cx - w * 0.05, base - h * 0.88, w * 0.05, h * 0.025, -0.5, 0, 7); g.ellipse(cx + w * 0.05, base - h * 0.88, w * 0.05, h * 0.025, 0.5, 0, 7); g.fill();
         g.fillStyle = '#fff3b0'; g.beginPath(); for(let i = 0; i < 10; i++){ const r = i % 2 ? w * 0.02 : w * 0.05, a = i / 10 * Math.PI * 2 - Math.PI / 2; g.lineTo(cx + Math.cos(a) * r, base - h * 0.96 + Math.sin(a) * r); } g.fill();
       } else {
         column(base, base - h * 0.4, w * 0.12);
-        tier(base - h * 0.38, w * 0.24, h * 0.06); sheet(base - h * 0.35, w * 0.22, h * 0.3);
-      }
-      /* the spray, falling back into the basin */
-      for(let i = 0; i < (grand ? 26 : 12); i++){
-        const ph = ((t * 0.9 + i / (grand ? 26 : 12)) % 1), side = i % 2 ? 1 : -1, sp = jgHash(i, d.x, 5);
-        const top = base - h * (grand ? 0.9 : 0.62);
-        const px = cx + side * (0.05 + sp * 0.35) * w * ph, py = top + (base - top) * ph * ph - h * 0.12 * Math.sin(ph * Math.PI);
-        g.fillStyle = `rgba(220,245,255,${0.85 - ph * 0.6})`; g.beginPath(); g.arc(px, py, Math.max(1, k * (0.05 - ph * 0.02)), 0, 7); g.fill();
+        tier(base - h * 0.38, w * 0.24, h * 0.06);
+        dome(base - h * 0.38, w * 0.24, h * 0.06, base - h * 0.005, w * 0.3, h * 0.07, 1, 0.28, 2);
+        column(base - h * 0.38, base - h * 0.5, w * 0.06);
+        caWaterBubble(g, cx, base - h * 0.5, base - h * 0.385, w * 0.12, k, t);
       }
       return;
     }
+    case 'pool': return caDrawPool(g, d, x, y, w, h, k, t);           // (4.02) a pool, round (caPool)
     case 'palaceTower': case 'cornerTower': case 'keep': return CA_ART.tower(g, d, x, y, w, h, k, t);   // (3.97) was caDrawTower
     case 'stall': return CA_ART.stall(g, d, x, y, w, h, k);            // (3.97) the market's stalls, their keepers behind
     case 'planter': return CA_ART.planter(g, d, x, y, w, h, k);
@@ -1779,7 +2074,7 @@ function caEnter(){
 const _caThings = {};
 function caNpc(who, x, y, o){
   const c = CA_WHO[who] || {};
-  return Object.assign({ x, y, cls:'ca-npc', html:()=> caMonImg(c.sprite, WALK_T * ((o && o.scale) || 1.45), false, c.icon), verb:'Talk', sub:c.name, act:()=> caTalk(who, o && o.line) }, o || {});
+  return Object.assign({ who, x, y, cls:'ca-npc', html:()=> caMonImg(c.sprite, WALK_T * ((o && o.scale) || 1.45), false, c.icon), verb:'Talk', sub:c.name, act:()=> caTalk(who, o && o.line) }, o || {});   // (4.00) `who`: the invasion knows who to stand aside
 }
 /* (3.97) one on lookout, by a notch on the side `side` (n s w e): his back to you on a north side, facing you on a
    south one, turned out on the others */
@@ -1862,6 +2157,7 @@ function caThings(key){
     if(tg.jukebox) T({ x:tg.jukebox.x, y:tg.jukebox.y, icon:'', verb:'Look', sub:'The jukebox', act:()=> caLook('jukebox') });   // (3.97)
     if(tg.listen) T({ x:tg.listen.x, y:tg.listen.y, w:2, icon:'', verb:'Listen', sub:'The listening corner', act:()=> caShopTalk('records') });
   }
+  if(typeof invThings === 'function') invThings(key, list, T);   // (4.00) the battle for the castle, and the rift's perimeter after it (26-invasion.js)
   _caThings[key] = list;
   return list;
 }
@@ -1898,6 +2194,7 @@ function caChoose(faces, name, html, options){
 /* ---------- who walks about: the walls' patrols, the palace's servants and patrols ---------- */
 const CA_WALKERS = {};
 function caWalkerDefs(key){
+  if(typeof invNoWalkers === 'function' && invNoWalkers(key)) return [];   // (4.00) the castle invaded: everyone indoors (26-invasion.js)
   if(CA_WALKERS[key]) return CA_WALKERS[key];
   const list = [];
   if(key.startsWith('r6_wall_')){
@@ -2250,6 +2547,7 @@ function caLionStep(p){
 function caStep(key, p){
   caLionStep(p);
   caFirstLooks(key, p);
+  if(typeof invStep === 'function' && invStep(key, p)) return true;   // (4.00) a band that sees you, the hall, the princess at your heels
   return false;
 }
 function caNearActs(key, p){
@@ -2285,6 +2583,7 @@ function caRender(key, world){
   caWalkerDraw(world, key);
   caWalkStart(key);
   if(p) caFirstLooks(key, p);
+  if(typeof invRender === 'function') invRender(key, world, p);   // (4.00) the invasion's sky and smoke, the rift, its scenes (26-invasion.js)
 }
 
 /* ============================================================
@@ -2389,6 +2688,7 @@ const CA_LINES = {
 };
 function caTalk(who, line){
   if(ui.caTalk) return;
+  if(typeof invTalk === 'function'){ const r = invTalk(who, line); if(r) return r; }   // (4.00) during the invasion, and after it (26-invasion.js)
   if(who === 'king' || who === 'commander' || who === 'advisor' || who === 'dauphin'){ if(!caState().met.court) return caCourtScene(); }
   if(who === 'princess') return caPrincessTalk();
   if(who === 'king' && typeof questKingTalk === 'function') return questKingTalk();   // (3.99) his fifty, the council, the tribes, then the war (25-quest.js)

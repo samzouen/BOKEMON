@@ -504,12 +504,30 @@ function monsterChooser(title, options, onPick, dismissable=true, onCancel=null,
   scrim.querySelectorAll('.sw-opt').forEach(b=>b.addEventListener('click',()=>{ close(); onPick(+b.dataset.i); }));
 }
 
+/* (4.03) A fight with an alien in it (the jungle's bands, the invasion's, the wild ones after it): getting away works
+   30% of the time, one try a round (onFlee; the Run button shut until the next round: fleeShut, renderBattle). */
+const ALIEN_FLEE = { chance:0.3 };
+function alienFight(b){ return !!b && !b.arena && !b.arenaChallenge && (b.waves || []).some(w=> (w || []).some(s=> s && /^alien_/.test(s.species || ''))); }
+function fleeShut(b){ return !!b && alienFight(b) && b.fleeTried != null && b.fleeTried === roundNo(); }
 function onFlee(){
   if(ui.battle.arena){ ui.arenaUnlocked=true; go('arena'); return; }
   if(ui.battle.arenaChallenge) return arenaChallengeOver('left');   // (3.11) a Test Arena challenge: out, as it was
   if(ui.battle.coreSpar) return coreSparEnded('left');        // giving up a spar (2.86)
   if(ui.battle.tear) return tearEnded('left');                // stepping out of the past (2.94)
   if(ui.battle.future) return futureEnded('left');            // (3.75) stepping back from the future
+  /* (4.03) the designer: "Prevent fleeing an alien challenge with a 70% chance. A flee attempt is limited to once per
+     round." A failed try costs nothing else: you choose your move as before, and Run comes back next round. */
+  if(alienFight(ui.battle)){
+    const b = ui.battle;
+    if(fleeShut(b)) return;
+    b.fleeTried = roundNo();
+    if(Math.random() >= ALIEN_FLEE.chance){
+      playSfx('move_miss');
+      renderBattle();
+      battleMsg('The aliens close in around you. There is no way past them! (You can try again next round.)');
+      return;
+    }
+  }
   if(ui.battle.jungle && typeof jgFled === 'function') return jgFled();   // (3.84) the jungle: the band lets you go
   if(ui.battle.caSpar && typeof caSparEnded === 'function') return caSparEnded('left');   // (3.90) giving up the Dauphin's spar
   if(ui.battle.noFlee) return;

@@ -439,10 +439,14 @@ function jgGround(){
   /* the lakes: water with a shore of open ground all round it, and ways onto the shore from every side the maze reaches */
   places.lakes.forEach(L=>{
     fillOval(L.cx, L.cy, L.rx, L.ry, JG_T.SHORE);
-    const wx = L.rx - 2.4, wy = L.ry - 2.4;
+    /* (4.02) its water an oval indeed (the designer: "for the pools both in the castle and in the jungle, could you make
+       the shape ovoid or circular? … the square blocky pool shape just doesn't look pleasing"): every square the oval
+       touches is water, and the oval itself is drawn over them (jgDrawLakes) — until 4.02 the squares within a
+       wobbling oval (jgLakeWaterOld), drawn square by square. Its middle and its reach, in squares (mx, my, ex, ey). */
+    L.mx = L.cx + 0.5; L.my = L.cy + 0.5; L.ex = (L.rx - 2.4) * JG_LAKE.fit; L.ey = (L.ry - 2.4) * JG_LAKE.fit;
     for(let yy = L.y; yy < L.y + L.h; yy++) for(let xx = L.x; xx < L.x + L.w; xx++){
-      const d = ((xx - L.cx) / wx) ** 2 + ((yy - L.cy) / wy) ** 2;
-      if(d < 0.86 + 0.14 * Math.sin(xx * 0.9 + yy * 1.3)) g[yy * W + xx] = JG_T.WATER;
+      const nx = Math.max(xx, Math.min(L.mx, xx + 1)), ny = Math.max(yy, Math.min(L.my, yy + 1));
+      if(((nx - L.mx) / L.ex) ** 2 + ((ny - L.my) / L.ey) ** 2 < 1) g[yy * W + xx] = JG_T.WATER;
     }
     const inL = (x, y)=> oval(x, y, L.cx, L.cy, L.rx, L.ry);
     [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy])=> gate(L.cx, L.cy, dx, dy, inL, 3));
@@ -506,10 +510,17 @@ function jgZoneOf(x, y){ return jgTribeOf(x, y); }
    ============================================================ */
 let _jgBands = null, _jgBandsDay = null;
 function jgDaySeed(day){ let h = 2166136261; const s = String(day); for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+/* (4.00) After the battle for the castle the designer: "there will still be aliens in the forest for the player to
+   hunt albeit a third the number before" — 120 of the 360, in the same shares (26-invasion.js: invAfter). */
+function jgAlienCounts(){
+  const A = JG.aliens;
+  if(!(typeof invAfter === 'function' && invAfter())) return A;
+  return Object.assign({}, A, { total:Math.round(A.total / 3), commander:Math.round(A.commander / 3), captain:Math.round(A.captain / 3) });
+}
 function jgBands(){
-  const day = today();
-  if(_jgBands && _jgBandsDay === day) return _jgBands;
-  const G = jgGround(), { W, H, places } = G, A = JG.aliens;
+  const day = today(), A = jgAlienCounts(), key = day + ':' + A.total;
+  if(_jgBands && _jgBandsDay === key) return _jgBands;
+  const G = jgGround(), { W, H, places } = G;
   const R = jgRng((JG.seed ^ 0x51ed ^ jgDaySeed(day)) >>> 0), ri = n=> Math.floor(R() * n);
   const mix = list=>{ for(let i = list.length - 1; i > 0; i--){ const j = ri(i + 1); const t = list[i]; list[i] = list[j]; list[j] = t; } return list; };
   const C = places.castle, ccx = C.x + C.w / 2, ccy = C.y + C.h / 2, far = Math.hypot(ccx, ccy);
@@ -571,7 +582,7 @@ function jgBands(){
     taken[y * W + x] = bands.length;
     bands.push(band);
   }
-  _jgBands = bands; _jgBandsDay = day;
+  _jgBands = bands; _jgBandsDay = key;
   return bands;
 }
 function jgBandBeaten(b){ return b.intro ? !!(typeof questIntroWon === 'function' && questIntroWon(b.id)) : jgState().beaten[b.id] === today(); }   // (3.99) the first three: for good
@@ -602,6 +613,7 @@ const JG_DECK = {
   ownTwinkles:true,
   get prizeLines(){ return JG_FIND_LINES; },
   nearActs:(d, p)=> jgNearActs(p),
+  youArt:()=> jgRiding() ? jgRideArt() : null,                       // (4.03) on Lucesco's back (walkYouArt, 13-walkmap.js)
   onStep:(p, d)=> jgStep(p, d),
   onRender:(world, d)=> jgRender(world, d),
   sideAct:()=> ({ html:'🗺️ Map', act:()=> jgMapOpen() }),
@@ -697,6 +709,7 @@ function jgLionPlace(){
 function jgLionStep(p){
   const trail = (ui.jgTrail || []).concat([{ x:p.x, y:p.y }]).slice(-3);
   ui.jgTrail = trail;
+  if(jgRiding()){ jgMountSync(); return; }                              // (4.03) you are on his back: where you are, he is
   const to = trail[trail.length - 2];
   if(to){
     const at = ui.jgLion;
@@ -711,6 +724,7 @@ function jgStep(p, d){
   jgSeeThrough();                                                       // (3.96) (again, if he did not move)
   const j = jgState();
   if(j.jumpIn > 0) j.jumpIn--;                      // (3.96) Lucesco gets his breath back: a step at a time
+  if(j.glareIn > 0) j.glareIn--;                    // (4.03) …and his eyes their fire (Pulsar Glare)
   jgSave(false);
   jgExplore(p.x, p.y);
   jgDiscover(p.x, p.y);
@@ -792,6 +806,7 @@ function jgRender(world, d){
   lion.innerHTML = riftLucescoImg(WALK_T);
   world.appendChild(lion);
   jgLionPlace();
+  jgMountSync();                                    // (4.03) riding: his own picture put away, you on his back (youArt)
   /* the awake portal you came through, at the east edge */
   const pt = jgGround().places.entry.portal;
   const por = document.createElement('div');
@@ -943,10 +958,15 @@ function seeCut(g, cx, cy, hw, hh){
 function jgSeePoints(){
   const W = walkState(), p = W.at && W.at[JG_KEY], L = ui.jgLion;
   if(!p) return null;
+  /* (4.03) riding: one window, round the two of you together */
+  if(jgRiding()){
+    const fr = jgRideFigure() || [0.5, 0.2, 0.72, 0.78];
+    return [[p.x + fr[0], p.y + fr[1], fr[2], fr[3]]].concat(jgZapWindows());
+  }
   const fy = seeFigure(document.getElementById('walkYou')) || [0.49, 0.55, 0.31, 0.59];
   const pts = [[p.x + fy[0], p.y + fy[1], fy[2], fy[3]]];
   if(L){ const fl = seeFigure(document.getElementById('jgLion')) || [0.5, 0.35, 0.65, 0.71]; pts.push([L.x + fl[0], L.y + fl[1], fl[2], fl[3]]); }
-  return pts;
+  return pts.concat(jgZapWindows());
 }
 function jgSeeThrough(now){
   const ov = JG_P.ov, w = JG_P.win;
@@ -994,14 +1014,66 @@ function jgOverPatch(was, now){
 }
 /* (3.96) the water's next ripple, its squares alone (the rest of the layer as it was) */
 function jgPaintWater(ctx, w, k, frame){
-  for(let y = w.y0; y <= w.y1; y++){
-    const py = Math.round((y - w.y0) * k), ph = Math.round((y + 1 - w.y0) * k) - py;
-    for(let x = w.x0; x <= w.x1; x++){
-      if(jgTile(x, y) !== JG_T.WATER) continue;
-      const px = Math.round((x - w.x0) * k), pw = Math.round((x + 1 - w.x0) * k) - px;
-      jgPaintTile(ctx, x, y, px, py, pw, ph, frame, 1);
+  jgDrawLakes(ctx, w.x0, w.y0, w.x1, w.y1, k, frame);                  // (4.02) the lakes, round (until 4.02 their squares, one by one)
+}
+/* ---------- (4.02) THE LAKES, ROUND ----------
+   The designer: "for the pools both in the castle and in the jungle, could you make the shape ovoid or circular? this
+   may mean that some tiles are locked out from walking even if most of the tile is not the pool but appears to be
+   land. the square blocky pool shape just doesn't look pleasing." A lake's squares are water (which
+   nobody walks on; jgGround: every square the oval touches), but drawn as its shore, and the lake itself over them,
+   the oval: a rim of wet sand round it, the shallows, the deep water, ripples and a glint (jgLakeShape: its outline). */
+/* fit: how far the oval reaches, of the old wobbling one's (squares within 0.86–1 of it were water); rim: its wet
+   sand, round it */
+const JG_LAKE = { fit:0.84, rim:0.32, rays:96 };
+const _jgLakes = new Map();
+/* its outline: points (in squares) round the oval (`water`) and round its wet sand (`rim`); (x, y) its middle */
+function jgLakeShape(L){
+  let r = _jgLakes.get(L);
+  if(r) return r;
+  const n = JG_LAKE.rays, ring = (ex, ey)=> [...Array(n)].map((_, i)=>{ const a = i / n * Math.PI * 2; return [L.mx + Math.cos(a) * ex, L.my + Math.sin(a) * ey]; });
+  r = { x:L.mx, y:L.my, water:ring(L.ex, L.ey), rim:ring(L.ex + JG_LAKE.rim, L.ey + JG_LAKE.rim) };
+  _jgLakes.set(L, r);
+  return r;
+}
+/* (4.02) a square was water before 4.02 (the finds were laid out on that jungle: jgFinds) */
+function jgLakeWaterOld(x, y){
+  return jgGround().places.lakes.some(L=>{
+    if(x < L.x || y < L.y || x >= L.x + L.w || y >= L.y + L.h) return false;
+    const d = ((x - L.cx) / (L.rx - 2.4)) ** 2 + ((y - L.cy) / (L.ry - 2.4)) ** 2;
+    return d < 0.86 + 0.14 * Math.sin(x * 0.9 + y * 1.3);
+  });
+}
+/* the lakes in the squares x0…x1, y0…y1 onto a layer whose corner is square (x0, y0), k pixels to a square */
+function jgDrawLakes(ctx, x0, y0, x1, y1, k, frame){
+  const G = jgGround();
+  G.places.lakes.forEach((L, li)=>{
+    if(L.x > x1 + 1 || L.y > y1 + 1 || L.x + L.w < x0 - 1 || L.y + L.h < y0 - 1) return;
+    const S = jgLakeShape(L);
+    const shape = (pts, scale)=>{                                                            // scale: toward its middle
+      ctx.beginPath();
+      pts.forEach(([X, Y], i)=>{ const px = (S.x + (X - S.x) * scale - x0) * k, py = (S.y + (Y - S.y) * scale - y0) * k; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+      ctx.closePath();
+    };
+    shape(S.rim, 1); ctx.fillStyle = '#86955a'; ctx.fill();                                  // its rim of wet sand
+    shape(S.water, 1); ctx.fillStyle = '#4f9bc8'; ctx.fill();                                // the shallows
+    [['#4189bb', 0.86], ['#3478aa', 0.72], ['#2d6f9c', 0.58]].forEach(([c, sc])=>{ shape(S.water, sc); ctx.fillStyle = c; ctx.fill(); });   // deeper
+    ctx.save();
+    shape(S.water, 1); ctx.clip();
+    const ph = frame / 4 * Math.PI * 2, cx = (S.x - x0) * k, cy = (S.y - y0) * k, rx = L.ex * k, ry = L.ey * k;
+    ctx.strokeStyle = 'rgba(220,245,255,.45)'; ctx.lineWidth = Math.max(1, k * 0.045); ctx.lineCap = 'round';
+    for(let i = 0; i < 14; i++){                                                             // ripples drifting
+      const a = jgHash(i, li, 71) * Math.PI * 2, r = Math.sqrt(jgHash(li, i, 72)) * 0.8;
+      const px = cx + Math.cos(a) * rx * r + Math.sin(ph + i) * k * 0.08, py = cy + Math.sin(a) * ry * r, len = k * (0.3 + 0.2 * jgHash(i, li, 73));
+      ctx.beginPath(); ctx.moveTo(px - len, py + k * 0.04 * Math.sin(ph + i)); ctx.quadraticCurveTo(px, py - k * 0.08, px + len, py + k * 0.04 * Math.cos(ph + i)); ctx.stroke();
     }
-  }
+    ctx.fillStyle = 'rgba(255,255,255,.75)';                                                 // a glint or two
+    for(let i = 0; i < 3; i++){
+      if((frame + i) % 4 > 1) continue;
+      const a = jgHash(i, li + frame, 74) * Math.PI * 2, r = Math.sqrt(jgHash(li + frame, i, 75)) * 0.6;
+      ctx.beginPath(); ctx.arc(cx + Math.cos(a) * rx * r, cy + Math.sin(a) * ry * r, k * 0.05, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  });
 }
 /* the squares x0…x1, y0…y1 onto a layer whose corner is square (x0, y0); says whether any water was drawn.
    (3.96) `ov`: a second layer, over everyone, for what of the trees reaches out over the paths */
@@ -1021,6 +1093,7 @@ function jgPaintLayer(ctx, x0, y0, x1, y1, k, frame, lw, lh, ov){
       if(JG_SOLID[t]) solid.push([px, py, pw, ph]);
     }
   }
+  if(water) jgDrawLakes(ctx, x0, y0, x1, y1, k, frame);                 // (4.02) the lakes, round, over their squares
   /* (3.96) the designer: "Can we allow the trees to rise up to half a tile and include dark shadowy trunks at the bottom
      of each row? Make it look like real trees please. The round tops of the trees can protrude up to 1/3 or even 1/2 a
      tile on top tile into the empty path" — and of the mockups, "Round olive trees are amazing!". A round olive tree
@@ -1158,7 +1231,7 @@ function jgPaintTile(ctx, x, y, px, py, pw, ph, frame, pass){
     case JG_T.GLADE: floor = true; spr = jgSprite('glade', Math.floor(v * 4)); break;
     case JG_T.TREE: { const vk = jgVillageAt(x, y); if(vk) spr = jgSprite('village-' + vk, Math.floor(v * 3)); else { floor = true; spr = jgSprite('glade', Math.floor(v * 4)); } break; }
     case JG_T.SHORE: spr = jgSprite('shore', Math.floor(v * 3)); break;
-    case JG_T.WATER: spr = jgSprite('water', (frame + Math.floor(v * 4)) % 4); break;
+    case JG_T.WATER: spr = pass === 1 ? jgSprite('shore', Math.floor(v * 3)) : jgSprite('water', (frame + Math.floor(v * 4)) % 4); break;   // (4.02) the lake drawn over them, round
     case JG_T.VILLAGE: spr = jgSprite('village-' + (jgVillageAt(x, y) || 'grass'), Math.floor(v * 3)); break;
     case JG_T.HUT: {                                                  // (3.96) a flowering grass mound, sliced square by square
       const vk = jgVillageAt(x, y) || 'grass', r = jgHutRect(x, y, vk), S = JG_P.S || 48;
@@ -1179,7 +1252,7 @@ function jgPaintTile(ctx, x, y, px, py, pw, ph, frame, pass){
     const n = jgTile(x, y - 1), w = jgTile(x - 1, y);
     if(n === JG_T.HEDGE || n === JG_T.CASTLE) ctx.drawImage(jgSprite('shadeN', 0), px, py, pw, ph);   // (3.96) a mound throws its own round shadow
     if(w === JG_T.HEDGE) ctx.drawImage(jgSprite('shadeW', 0), px, py, pw, ph);
-  } else if(t === JG_T.WATER){
+  } else if(t === JG_T.WATER && pass !== 1){
     ctx.fillStyle = 'rgba(232,222,170,.6)';
     const e = Math.max(1, Math.round(pw * 0.12));
     if(jgTile(x, y - 1) !== JG_T.WATER) ctx.fillRect(px, py, pw, e);
@@ -1541,6 +1614,7 @@ function jgShowBands(){
       world.appendChild(el);
       els[b.id] = el;
       jgBandPlace(b);
+      if(jgBandStunned(b)) jgZapStart(b, false);                       // (4.03) still paralysed as it comes back into view
     } else if(!near && el){ el.remove(); delete els[b.id]; }
   });
 }
@@ -1561,7 +1635,7 @@ function jgBandPlace(b){
   faceRight(el.querySelector('.jg-alien-art'), b.face === 'r');
   const cone = el.querySelector('.jg-cone'), n = jgSight(b), [dx, dy] = JG_DIR[b.face];
   if(cone){
-    cone.style.display = n ? '' : 'none';
+    cone.style.display = n && !jgBandStunned(b) && !b._pounced ? '' : 'none';   // (4.03) no sight while paralysed
     cone.style.left = (dx > 0 ? T : dx < 0 ? -n * T : 0) + 'px';
     cone.style.top = (dy > 0 ? T : dy < 0 ? -n * T : 0) + 'px';
     cone.style.width = (dx ? n * T : T) + 'px';
@@ -1805,7 +1879,9 @@ function jgFinds(){
   jgThings().forEach(t=>{ for(let y = t.y - 1; y <= t.y + (t.h || 1); y++) for(let x = t.x - 1; x <= t.x + (t.w || 1); x++) avoid.add(y * W + x); });   // where somebody stands, or something is
   Object.values(places.villages).forEach(v=>{ for(let y = v.stand.y - 1; y <= v.stand.y + 1; y++) for(let x = v.stand.x - 1; x <= v.stand.x + 1; x++) avoid.add(y * W + x); });
   const ok = v=>{
-    const x = v % W, y = (v - x) / W, t = g[v];
+    const x = v % W, y = (v - x) / W;
+    /* (4.02) as the jungle was before its lakes were made round, so every find stays where it was (jgLakeWaterOld) */
+    const t = g[v] === JG_T.WATER || g[v] === JG_T.SHORE ? (jgLakeWaterOld(x, y) ? JG_T.WATER : JG_T.SHORE) : g[v];
     if(JG_SOLID[t] || t === JG_T.ROAD || t === JG_T.ENTRY || avoid.has(v)) return false;
     if(x >= rd.x - 1 && x <= rd.x + rd.w && y >= rd.y - 1 && y <= rd.y + rd.h) return false;   // the castle and the road round it
     if(x >= E.x - 3 && y >= E.y - 3 && y <= E.y + E.h + 3) return false;                       // the way in
@@ -1824,7 +1900,21 @@ function jgFinds(){
   cells.forEach(list=>{ if(list.length) place(list); else spare++; });
   const roomiest = cells.filter(l=> l.length).sort((a, b)=> b.length - a.length);
   for(let s = 0; s < spare && roomiest.length; s++) place(roomiest[s % roomiest.length]);
-  _jgFinds = picks.slice(0, JG_FINDS.n).map(v=> [v % W, Math.floor(v / W)]);
+  /* (4.02) …and one that the rounder lake now covers steps out of the water to the nearest square one can stand on */
+  const dry = v=>{
+    if(!JG_SOLID[g[v]]) return v;
+    const seen = new Set([v]), q = [v];
+    for(let h = 0; h < q.length; h++){
+      const u = q[h], x = u % W;
+      for(const w of [u - W, u + W, x > 0 ? u - 1 : -1, x < W - 1 ? u + 1 : -1]){
+        if(w < 0 || w >= W * H || seen.has(w)) continue;
+        if(!JG_SOLID[g[w]]) return w;
+        seen.add(w); q.push(w);
+      }
+    }
+    return v;
+  };
+  _jgFinds = picks.slice(0, JG_FINDS.n).map(dry).map(v=> [v % W, Math.floor(v / W)]);
   _jgFindIx = new Map(_jgFinds.map(([x, y], i)=> [y * W + x, i]));
   return _jgFinds;
 }
@@ -1872,8 +1962,14 @@ const JG_FIND_LINES = [
    forest's trees: not water, a hut, the castle's walls, or two trees deep.
    ============================================================ */
 const JG_JUMP = { steps:50, ms:900, high:1.05 };
-/* how much of each picture is legs — what is cut away as you sit on him (the rest: 44%) */
-const JG_RIDE_CUT = { m2:0.4, m3:0.5, f2:0.45, f5:0.42 };
+/* how much of each picture is legs — what is cut away as you sit on him (the rest: 44%).
+   (4.03) All ten looked at on his back, now that you ride him everywhere: the two smallest (m5, f5) stand low in their
+   squares and showed little more than a head, so they are cut at the waist; m3's raised boot stuck out in front of
+   you, so his cut goes round it (JG_RIDE_CLIP, a polygon in percent of his picture). */
+const JG_RIDE_CUT = { m2:0.42, m3:0.55, m5:0.36, f2:0.45, f5:0.36 };
+const JG_RIDE_CLIP = { m3:'0 0, 100% 0, 100% 45%, 34% 45%, 34% 27%, 0 27%' };
+/* (4.03) where his eyes are in his picture (lucesco_front.png, 96 × 96): the middle of the blue band across his face */
+const JG_EYES = { x:30.5 / 96, y:31.5 / 96, w:0.3, h:0.17 };
 function jgJumpIn(){ return Math.max(0, jgState().jumpIn | 0); }
 function jgJumpFrom(p, dir){
   const v = JG_DIR[dir];
@@ -1889,10 +1985,21 @@ function jgJumpHtml(mark){
   const T = WALK_T, LS = 1.577 * T, av = (state && state.avatar) || 'm1', cut = JG_RIDE_CUT[av] != null ? JG_RIDE_CUT[av] : 0.44;
   /* his picture as he is on the map (1.577 × a square, lifted a tenth); you astride his back, behind the mane */
   const RS = Math.round(1.2 * T), backX = -0.2885 * T + 0.63 * LS, backY = -0.4465 * T + 0.45 * LS;
+  const lx = 0.5 * T - LS / 2, ly = 0.342 * T - LS / 2;
+  const clip = JG_RIDE_CLIP[av] ? `polygon(${JG_RIDE_CLIP[av]})` : `inset(0 0 ${Math.round(cut * 100)}% 0)`;
+  /* (4.03) his eyes, for Pulsar Glare: a red fire laid over them, out until he glares (jgGlare) */
+  const ew = JG_EYES.w * LS, eh = JG_EYES.h * LS;
+  /* (4.03) Rift Ambush: each picture's shape filled with stars, over it gone black (.jg-starry) */
+  const stars = (src, l, t, s, c)=> `<i class="jg-stars" style="left:${Math.round(l)}px;top:${Math.round(t)}px;width:${Math.round(s)}px;height:${Math.round(s)}px;` +
+    `-webkit-mask-image:url(${src});mask-image:url(${src});${c ? `clip-path:${c};` : ''}"></i>`;
+  const yl = backX - RS / 2, yt = backY - (1 - cut) * RS;
   return `<i class="jg-ride-shadow"></i><div class="jg-ride-arc">` +
-    `<img class="jg-ride-lion" src="assets/mon/lucesco_front.png" alt="" style="width:${Math.round(LS)}px;height:${Math.round(LS)}px;left:${Math.round(0.5 * T - LS / 2)}px;top:${Math.round(0.342 * T - LS / 2)}px">` +
+    `<img class="jg-ride-lion" src="assets/mon/lucesco_front.png" alt="" style="width:${Math.round(LS)}px;height:${Math.round(LS)}px;left:${Math.round(lx)}px;top:${Math.round(ly)}px">` +
+    stars('assets/mon/lucesco_front.png', lx, ly, LS) +
+    `<i class="jg-eyes" style="width:${Math.round(ew)}px;height:${Math.round(eh)}px;left:${Math.round(lx + JG_EYES.x * LS - ew / 2)}px;top:${Math.round(ly + JG_EYES.y * LS - eh / 2)}px"></i>` +
     `<img class="jg-ride-you" src="assets/avatar/${av}.png" alt="" onerror="avatarFallback(this)" data-px="${RS}" data-id="${av}" data-bare="1" ` +
-      `style="width:${RS}px;height:${RS}px;left:${Math.round(backX - RS / 2)}px;top:${Math.round(backY - (1 - cut) * RS)}px;clip-path:inset(0 0 ${Math.round(cut * 100)}% 0)">` +
+      `style="width:${RS}px;height:${RS}px;left:${Math.round(yl)}px;top:${Math.round(yt)}px;clip-path:${clip}">` +
+    stars(`assets/avatar/${av}.png`, yl, yt, RS, clip) +
     `</div>`;
 }
 async function jgJump(J){
@@ -1945,7 +2052,8 @@ async function jgJump(J){
     .find(q=> !jgSolidAt(q.x, q.y) && !wBlockedBy(JG_DECK, q.x, q.y) && !jgBandAt(q.x, q.y) && !jgFolkAt(q.x, q.y));
   ui.jgLion = free ? { x:free.x, y:free.y, faceR:free.x !== J.x ? free.x < J.x : faceR } : { x:J.x, y:J.y, faceR };
   ui.jgTrail = [{ x:J.x, y:J.y }];
-  if(lion){ lion.classList.add('jg-fresh'); jgLionPlace(); requestAnimationFrame(()=> requestAnimationFrame(()=>{ lion.classList.remove('jg-fresh', 'jg-riding'); })); }
+  if(jgRiding()){ if(lion) lion.classList.remove('jg-riding'); jgMountSync(); }    // (4.03) you stay on his back: he lands under you
+  else if(lion){ lion.classList.add('jg-fresh'); jgLionPlace(); requestAnimationFrame(()=> requestAnimationFrame(()=>{ lion.classList.remove('jg-fresh', 'jg-riding'); })); }
   const j = jgState();
   j.jumpIn = JG_JUMP.steps;
   j.jumps = (j.jumps || 0) + 1;
@@ -1971,7 +2079,348 @@ function jgJumpAct(p){
   return { key:'jgJump', cls:'lion leap', html:lucescoActHtml('Jump!', 'over the trees'), act:()=> jgJump(J) };
 }
 
-/* ---------- their clock: a step every 0.7 s, for those near you ---------- */
+/* ============================================================
+   (4.03) ON LUCESCO'S BACK
+   The designer: "I ADORE the way the sprites currently ride on Lucesco … Can you make riding him the default in the
+   jungle? It's a lovely feeling." Once he has come to you on your first walk in (jgArrive), you ride him everywhere
+   in the jungle: your picture on the map (#walkYou, from the deck's youArt) is the leap's — him, and you astride his
+   back from the waist up; his own picture beside you (#jgLion) is put away, and where he stands is where you stand.
+   ============================================================ */
+function jgRiding(){ return !!(typeof state !== 'undefined' && state && state.progress && jgState().seen) && !ui.jgAfoot; }
+function jgRideArt(){ return `<div class="jg-ride jg-mount">${jgJumpHtml()}</div>`; }
+function jgMountSync(){
+  const w = walkState(), p = w.at && w.at[JG_KEY], lion = document.getElementById('jgLion'), on = jgRiding();
+  if(lion) lion.classList.toggle('jg-off', on);
+  if(on && p) ui.jgLion = { x:p.x, y:p.y, faceR:w.faceX === 'r' };
+}
+/* the first walk in: he comes onto your square, and you are on his back with a little hop */
+async function jgMount(){
+  const w = walkState(), p = w.at && w.at[JG_KEY], lion = document.getElementById('jgLion');
+  if(!p || !$('#walkYou')) return;
+  if(lion && !lion.classList.contains('jg-off')){
+    ui.jgLion = { x:p.x, y:p.y, faceR:w.faceX === 'r' };
+    jgLionPlace();
+    await new Promise(r=> setTimeout(r, 260));
+  }
+  walkYouRefresh();
+  jgMountSync();
+  jgSeeThrough(true);
+  const arc = document.querySelector('#walkYou .jg-ride-arc');
+  if(arc && typeof arc.animate === 'function' && !jgReduced())
+    arc.animate([{ transform:'translateY(0)' }, { transform:`translateY(${(-0.35 * WALK_T).toFixed(1)}px)`, offset:0.4 }, { transform:'translateY(0)' }], { duration:420, easing:'ease-out' });
+}
+function jgReduced(){ return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; }
+/* the two of you, for the see-through window: [cx, cy, half w, half h] in squares, from your square's corner */
+function jgRideFigure(){
+  const me = document.getElementById('walkYou');
+  if(!me) return null;
+  const er = me.getBoundingClientRect(), T = er.width, li = me.querySelector('.jg-ride-lion'), yi = me.querySelector('.jg-ride-you');
+  if(!T || !li) return null;
+  const lr = li.getBoundingClientRect();
+  if(!lr.width) return null;
+  let x0 = lr.left + lr.width * 10 / 96, x1 = lr.left + lr.width * 87 / 96, y0 = lr.top + lr.height * 5 / 96;
+  const y1 = lr.top + lr.height * 90 / 96;
+  if(yi){ const yr = yi.getBoundingClientRect(); if(yr.width){ x0 = Math.min(x0, yr.left + yr.width * 21 / 80); x1 = Math.max(x1, yr.left + yr.width * 58 / 80); y0 = Math.min(y0, yr.top + yr.height * 7 / 80); } }
+  return [((x0 + x1) / 2 - er.left) / T, ((y0 + y1) / 2 - er.top) / T, (x1 - x0) / 2 / T, (y1 - y0) / 2 / T];
+}
+
+/* ============================================================
+   (4.03) PULSAR GLARE AND RIFT AMBUSH
+   The designer: "can you give him two more moves? When an alien is nearby and even if obscured by trees, can you allow
+   him to face the alien and fire a stunning red laser from his eyes towards the alien? Label it Pulsar Glare. Max range
+   two squares in any direction including diagonal. This laser disables the alien for 5 seconds from moving and they
+   vibrate and have a forward tilt to simulate getting electrocuted and paralysed … This stops them from moving and
+   disables their sight cone so they cannot approach or start battle with the player … When battle is initiated on an
+   alien in this state, the alien of the first wave (not the full wave) starts the battle 25% weakened for 3 turns and
+   with 15% HP lost. The lost HP only happens if the battle is started with the alien in this state and cannot stack
+   with repeated lasers. Cooldown on this ability, 50 steps. When this move animates, make the laser initiate instantly
+   and stop the movement of all sprites even if they were mid animation crossing between tiles. Please create a fierce
+   red glow around Lucesco's eyes as the beam fires and radiates and pulses brightly for 1s. also turn the alien's
+   silhouette black as it rapidly vibrates and flips between a range of forward and backward tilt (say between 5 to 20
+   degrees in either direction) with dramatic and rapid electric lines to simulate the intense electrocution when the
+   beam is firing, before it enters the less intense paralysed stage."
+   "Then, Lucesco can also execute "Rift Ambush" on an alien within two steps in any direction including diagonal. This
+   replaces the challenge button. Lucesco can ambush through trees in this manner. He and the player turn into a starry
+   silhouette, then reddish flashes and flies rapidly towards the alien's position but fades out and reappears on the
+   alien's location with a reddish flash on a quick gash on the landing tile through spacetime … When pounced upon, the
+   alien falls horizontal towards the bottom of its tile and Lucesco stands on top of it. When battle is initiated in
+   this manner, the first wave's enemy alien starts the battle stunned for 1 turn and with 15% HP lost. HP lost stacks
+   with pulsar glare." And: "Rift ambush no cooldown but its HP loss effect cannot stack via fleeing and ambushing
+   again" — every fight builds its waves afresh at full health (jgWaves), so each fight takes its 15% (or 30%) once.
+   The effects on the fight: jgEdgeApply, at its first wave (jgWaveStart).
+   ============================================================ */
+const JG_GLARE = { reach:2, steps:50, ms:5000, beam:1000, hp:0.15, weak:0.25, turns:3 };
+const JG_AMBUSH = { reach:2, hp:0.15, stun:1 };
+function jgGlareIn(){ return Math.max(0, jgState().glareIn | 0); }
+function jgBandStunned(b){ return !!(b && b.zapUntil && b.zapUntil > Date.now()); }
+function jgBandName(b){ const nm = SPECIES[b.lead] ? SPECIES[b.lead].name : 'alien'; return b.rank === 'alien' ? nm : (b.rank === 'captain' ? 'Captain ' : 'Commander ') + nm; }
+/* the bands within his reach of p: two squares any way, diagonals too, trees or no trees — nearest first, then the one
+   you are facing */
+function jgReachable(p, reach){
+  const fx = walkState().faceX === 'r' ? 1 : -1;
+  return jgBands().filter(b=> !jgBandBeaten(b) && !(b.x === p.x && b.y === p.y) && Math.max(Math.abs(b.x - p.x), Math.abs(b.y - p.y)) <= reach)
+    .map(b=> ({ b, d:Math.hypot(b.x - p.x, b.y - p.y), ahead:Math.sign(b.x - p.x) === fx ? 0 : 1 }))
+    .sort((a, c)=> a.d - c.d || a.ahead - c.ahead).map(o=> o.b);
+}
+/* his glare: the nearest that is not already twitching; his ambush: one he has glared first, else the nearest — never
+   into or out of a tribe's village while its magic walls it off (questSealedAt, 25-quest.js) */
+function jgGlareTarget(p){ const all = jgReachable(p, JG_GLARE.reach); return all.find(b=> !jgBandStunned(b)) || all[0] || null; }
+function jgAmbushable(p, b){ return !(typeof questSealedAt === 'function' && (questSealedAt(b.x, b.y) || questSealedAt(p.x, p.y))); }
+function jgAmbushTarget(p){ const all = jgReachable(p, JG_AMBUSH.reach).filter(b=> jgAmbushable(p, b)); return all.find(b=> jgBandStunned(b)) || all[0] || null; }
+/* the buttons (jgNearActs) */
+function jgLucescoActs(p){
+  const acts = [];
+  if(!jgRiding()) return acts;
+  const g = jgGlareTarget(p);
+  if(g){
+    const n = jgGlareIn();
+    acts.push(n ? { key:'jgGlareIn' + n, cls:'lion off', html:lucescoActHtml('Pulsar Glare', `in ${n} step${n === 1 ? '' : 's'}`),
+                    act:()=> toast(`Lucesco's eyes are still dim. ${n} more step${n === 1 ? '' : 's'}.`) }
+                : { key:'jgGlare:' + g.id, cls:'lion glare', at:{ x:g.x, y:g.y }, html:lucescoActHtml('Pulsar Glare', jgBandName(g)), act:()=> jgGlare(g) });
+  }
+  const a = jgAmbushTarget(p);
+  if(a) acts.push({ key:'jgAmb:' + a.id, cls:'lion ambush', at:{ x:a.x, y:a.y }, html:lucescoActHtml('Rift Ambush', jgBandName(a)), act:()=> jgAmbush(a) });
+  return acts;
+}
+
+/* Time stops: the world and everyone in it held where they are drawn this instant — a band halfway between two squares
+   stays halfway — and everything they were doing (a throb, a hover) paused, but `keep`'s own. The function it gives
+   back lets them all go on from there. */
+function jgFreeze(keep){
+  const world = $('#walkWorld');
+  if(!world) return ()=>{};
+  const keepEl = keep && ui.jgBandEls && ui.jgBandEls[keep.id];
+  const held = [world].concat(Array.from(world.querySelectorAll('.walk-ent'))).map(el=>{
+    const tf = getComputedStyle(el).transform;
+    const was = { tr:el.style.transition, tf:el.style.transform };
+    el.style.transition = 'none';
+    if(tf && tf !== 'none') el.style.transform = tf;
+    return { el, was };
+  });
+  world.classList.add('jg-frozen');
+  if(keepEl) keepEl.classList.add('jg-fx-on');
+  return ()=>{
+    world.classList.remove('jg-frozen');
+    if(keepEl) keepEl.classList.remove('jg-fx-on');
+    held.forEach(({ el, was })=>{ el.style.transition = was.tr; });
+    void world.offsetWidth;                                             // from where they are held, on to where they were going
+    held.forEach(({ el, was })=>{ el.style.transform = was.tf; });
+  };
+}
+/* where an element of the world is drawn this instant (its transform's offset, in the world's own pixels) */
+function jgDrawnAt(el){
+  try { const m = new DOMMatrixReadOnly(getComputedStyle(el).transform); return { x:m.m41, y:m.m42 }; } catch(e){ return null; }
+}
+async function jgGlare(b){
+  const w = walkState(), p = w.at && w.at[JG_KEY];
+  if(!p || !b || w.busy || ui.jgAlert || ui.jgTalk || ui.jgFx || ui.jgFighting || jgGlareIn() || jgBandBeaten(b) || !jgRiding()) return;
+  const world = $('#walkWorld'), me = $('#walkYou');
+  if(!world || !me) return;
+  releaseKeys();
+  w.busy = true; ui.jgFx = 'glare';
+  const thaw = jgFreeze(b);
+  /* he turns to it, and fires at once */
+  if(b.x !== p.x){ w.faceX = b.x > p.x ? 'r' : 'l'; faceRight(me, w.faceX === 'r'); }
+  const j = jgState();
+  j.glareIn = JG_GLARE.steps; j.glares = (j.glares || 0) + 1;
+  b.zapUntil = Date.now() + JG_GLARE.ms;
+  playSfx('timestop');
+  setTimeout(()=> playSfx('spark'), 60);
+  const beam = jgBeam(b);
+  const eyes = me.querySelector('.jg-eyes');
+  if(eyes){ eyes.classList.remove('on'); void eyes.offsetWidth; eyes.classList.add('on'); }
+  jgZapStart(b, true);
+  jgSeeThrough(true);
+  try { await new Promise(r=> setTimeout(r, JG_GLARE.beam)); }
+  finally {
+    if(beam){ beam.classList.add('out'); setTimeout(()=> beam.remove(), 220); }
+    if(eyes) eyes.classList.remove('on');
+    if(ui.jgBandEls && ui.jgBandEls[b.id]) jgZapStart(b, false);         // the beam gone: paralysed, for the rest of its 5 s
+    thaw();
+    ui.jgFx = null; w.busy = false;
+    w.actSig = null;                                                     // his button: "in 50 steps" now
+    jgSave(false);
+    if(ui.screen === JG_KEY) refreshWalk();
+    clearTimeout(b._zapEndT);
+    b._zapEndT = setTimeout(()=> jgZapEnd(b), Math.max(0, b.zapUntil - Date.now()) + 40);
+  }
+}
+/* the laser: from his eyes (as he is drawn, mirrored when he faces right) to the alien, at full length at once */
+function jgBeam(b){
+  const world = $('#walkWorld'), me = $('#walkYou'), el = ui.jgBandEls && ui.jgBandEls[b.id];
+  if(!world || !me) return null;
+  const T = WALK_T, LS = 1.577 * T, lx = 0.5 * T - LS / 2, ly = 0.342 * T - LS / 2;
+  const yo = jgDrawnAt(me) || { x:0, y:0 }, at = (el && jgDrawnAt(el)) || { x:b.x * T, y:b.y * T };
+  let ex = lx + JG_EYES.x * LS;
+  const ey = ly + JG_EYES.y * LS;
+  if(me.classList.contains('face-r')) ex = T - ex;
+  const fx = yo.x + ex, fy = yo.y + ey, tx = at.x + 0.5 * T, ty = at.y + 0.42 * T;
+  const len = Math.hypot(tx - fx, ty - fy), ang = Math.atan2(ty - fy, tx - fx) * 180 / Math.PI;
+  const beam = document.createElement('div');
+  beam.className = 'jg-beam';
+  beam.style.cssText = `left:${fx.toFixed(1)}px;top:${fy.toFixed(1)}px;width:${len.toFixed(1)}px;transform:rotate(${ang.toFixed(2)}deg)`;
+  beam.innerHTML = '<i></i><b></b><em></em>';
+  world.appendChild(beam);
+  return beam;
+}
+/* the alien under the beam (hard: black, flipping between tilts, crackling) and after it (paralysed: tipped forward,
+   shaking, sparking red); its cone out while it lasts */
+function jgZapStart(b, hard){
+  const el = ui.jgBandEls && ui.jgBandEls[b.id];
+  if(!el) return;
+  el.classList.toggle('jg-zap', !!hard);
+  el.classList.add('jg-stun');
+  const cone = el.querySelector('.jg-cone'); if(cone) cone.style.display = 'none';
+  let svg = el.querySelector('.jg-bolts');
+  if(!svg){ svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'jg-bolts'); svg.setAttribute('viewBox', '0 0 180 180'); svg.setAttribute('aria-hidden', 'true'); el.appendChild(svg); }
+  jgBoltsRun(b, el, svg);
+}
+/* a bolt of lightning: from somewhere on the alien, in jagged steps, outward (the bolts' box: 1.8 squares, the square
+   itself at 40–140 across and 60–160 down, the alien's middle about 90, 100) */
+function jgBoltPts(hard){
+  const a = Math.random() * Math.PI * 2, r = (hard ? 34 : 28) * Math.sqrt(Math.random()), n = 4 + Math.floor(Math.random() * 3);
+  let x = 90 + Math.cos(a) * r, y = 102 + Math.sin(a) * r * 0.95;
+  const pts = [[x, y]], dir = a + (Math.random() - 0.5) * 1.3, step = (hard ? 62 : 40) / n;
+  for(let i = 0; i < n; i++){ const t = dir + (Math.random() - 0.5) * 1.7; x += Math.cos(t) * step; y += Math.sin(t) * step; pts.push([x, y]); }
+  return pts.map(([x, y])=> x.toFixed(1) + ',' + y.toFixed(1)).join(' ');
+}
+function jgBoltsRun(b, el, svg){
+  clearTimeout(b._boltT);
+  const tick = ()=>{
+    if(!svg.isConnected || !jgBandStunned(b)){ svg.innerHTML = ''; return; }
+    const hard = el.classList.contains('jg-zap');
+    const n = hard ? 6 : 1 + Math.floor(Math.random() * 2.4);
+    let h = '';
+    for(let i = 0; i < n; i++){ const pts = jgBoltPts(hard); h += `<polyline class="g" points="${pts}"></polyline><polyline class="c" points="${pts}"></polyline>`; }
+    svg.innerHTML = h;
+    b._boltT = setTimeout(tick, hard ? 45 : 70 + Math.random() * 90);
+  };
+  tick();
+}
+function jgZapEnd(b){
+  if(jgBandStunned(b)) return;                                      // glared again meanwhile: its own end comes later
+  b.zapUntil = 0;
+  clearTimeout(b._boltT);
+  const el = ui.jgBandEls && ui.jgBandEls[b.id];
+  if(el && !b._pounced){ el.classList.remove('jg-zap', 'jg-stun'); const svg = el.querySelector('.jg-bolts'); if(svg) svg.remove(); }
+  /* not in the middle of one of his moves, or of a fight beginning: those set out the picture as they want it */
+  if(ui.screen !== JG_KEY || ui.jgFx || ui.jgFighting || b._pounced) return;
+  jgBandPlace(b);
+  jgSeeThrough(true);
+  walkState().actSig = null; refreshWalk();
+}
+/* the windows in the crowns over a twitching or pounced-on alien, as over you (jgSeePoints) */
+function jgZapWindows(){
+  const out = [];
+  jgBands().forEach(b=>{
+    if(!jgBandStunned(b) && !b._pounced) return;
+    const el = ui.jgBandEls && ui.jgBandEls[b.id], img = el && el.querySelector('.jg-art');
+    if(!el || !img) return;
+    const er = el.getBoundingClientRect(), T = er.width, r = img.getBoundingClientRect();
+    if(!T || !r.width) return;
+    out.push([b.x + (r.left - er.left + r.width / 2) / T, b.y + (r.top - er.top + r.height * 0.55) / T, r.width * 0.38 / T, r.height * 0.44 / T]);
+  });
+  return out;
+}
+
+/* ---------- Rift Ambush ---------- */
+async function jgAmbush(b){
+  const w = walkState(), p = w.at && w.at[JG_KEY];
+  if(!p || !b || w.busy || ui.jgAlert || ui.jgTalk || ui.jgFx || ui.jgFighting || jgBandBeaten(b) || !jgRiding() || !jgAmbushable(p, b)) return;
+  if(!battleParty().some(m=> m.currentHp > 0)){ toast('Your team needs healing first.'); return; }
+  const world = $('#walkWorld'), me = $('#walkYou'), el = ui.jgBandEls && ui.jgBandEls[b.id];
+  if(!world || !me) return;
+  releaseKeys();
+  w.busy = true; ui.jgFx = 'ambush';
+  const glared = jgBandStunned(b);
+  const T = WALK_T, from = jgDrawnAt(me) || { x:p.x * T, y:p.y * T }, to = { x:b.x * T, y:b.y * T - 0.34 * T };   // (raised: he stands on it)
+  const at = q=> `translate3d(${q.x.toFixed(1)}px,${q.y.toFixed(1)}px,0)`;
+  const wait = ms=> new Promise(r=> setTimeout(r, ms));
+  const reduce = jgReduced();
+  if(b.x !== p.x){ w.faceX = b.x > p.x ? 'r' : 'l'; faceRight(me, w.faceX === 'r'); }
+  me.style.transition = 'none';
+  me.style.transform = at(from);
+  me.style.zIndex = 12 + Math.max(p.y, b.y);
+  let gash = null;
+  try {
+    /* 1. the two of you go to starlight; 2. red flashes */
+    me.classList.add('jg-starry');
+    playSfx('rip');
+    await wait(reduce ? 120 : 340);
+    me.classList.add('jg-redflash');
+    await wait(reduce ? 80 : 330);
+    /* 3. you fly at it, fading out of this place on the way */
+    if(typeof me.animate === 'function' && !reduce){
+      const mid = { x:from.x + (to.x - from.x) * 0.55, y:from.y + (to.y - from.y) * 0.55 };
+      const fly = me.animate([{ transform:at(from), opacity:1 }, { transform:at(mid), opacity:0.85, offset:0.5 }, { transform:at(to), opacity:0 }],
+                             { duration:260, easing:'cubic-bezier(.55,0,.85,.45)', fill:'forwards' });
+      await fly.finished.catch(()=>{});
+      fly.cancel();
+    }
+    me.style.opacity = '0';
+    me.style.transform = at(to);
+    /* 4. a gash in spacetime on its square, a red flash — and out of it you come, onto it */
+    gash = document.createElement('div');
+    gash.className = 'jg-gash';
+    gash.style.cssText = `left:${(b.x * T).toFixed(1)}px;top:${(b.y * T).toFixed(1)}px;width:${T}px;height:${T}px;z-index:${13 + b.y}`;
+    gash.innerHTML = `<i class="jg-gash-flash"></i><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M10,80 L30,63 L25,56 L50,45 L46,38 L71,26 L90,13 L72,29 L76,36 L51,50 L55,57 L30,70 Z"></path></svg>`;
+    world.appendChild(gash);
+    await wait(reduce ? 60 : 150);
+    /* 5. the pounce: it falls flat at the bottom of its square, and he stands on it */
+    b._pounced = true;
+    if(el){
+      el.classList.remove('jg-zap', 'jg-stun'); clearTimeout(b._boltT);
+      const svg = el.querySelector('.jg-bolts'); if(svg) svg.remove();
+      el.classList.add('jg-pounced'); const cone = el.querySelector('.jg-cone'); if(cone) cone.style.display = 'none';
+    }
+    me.classList.remove('jg-redflash');
+    me.style.opacity = '';
+    me.classList.add('jg-landing');
+    playSfx('hit_dealt');
+    jgSeeThrough(true);
+    await wait(reduce ? 120 : 260);
+    me.classList.remove('jg-starry');
+    await wait(reduce ? 200 : 520);
+  } catch(e){}
+  if(gash) gash.remove();
+  me.classList.remove('jg-starry', 'jg-redflash', 'jg-landing');
+  ui.jgFx = null;
+  /* the fight — with what his moves did to its first alien (jgEdgeApply). Where you stand stays where you leapt from
+     until it is won (jgWon puts you on its square): a flight, or a fight lost, leaves you where you were */
+  const go = jgFight(b, true, { ambush:true, glare:glared });
+  if(go === false){                                                     // (it did not begin: all back as it was)
+    b._pounced = false;
+    if(el) el.classList.remove('jg-pounced');
+    me.style.transition = ''; me.style.zIndex = ''; w.busy = false;
+    jgBandPlace(b);
+    refreshWalk();
+  }
+}
+/* What his moves did to the fight's first alien, as its first wave comes on (jgWaveStart): Rift Ambush — stunned for
+   its first turn, 15% of its health gone; Pulsar Glare (if it was still twitching when the fight began) — 15% more, and
+   its attacks a quarter weaker for its first three turns (the `glared` status, 04-battle.js). Only that one alien:
+   a captain's or a commander's waves after it come on whole. */
+function jgEdgeApply(bt){
+  const edge = bt && bt.jgEdge;
+  if(!edge || (!edge.glare && !edge.ambush)) return;
+  const e = bt.enemies.find(x=> x && x.jg && x.jg.alien && x.hp > 0);
+  if(!e) return;
+  const cut = (edge.glare ? JG_GLARE.hp : 0) + (edge.ambush ? JG_AMBUSH.hp : 0);
+  e.hp = Math.max(1, Math.round(e.maxHp * (1 - cut)));
+  const arr = eStatuses(e);
+  if(edge.glare && !arr.some(s=> s.type === 'glared')) arr.push({ type:'glared', turnsLeft:JG_GLARE.turns, amount:JG_GLARE.weak, byRound:true });
+  if(edge.ambush && !arr.some(s=> s.type === 'paralysed')) arr.push({ type:'paralysed', turnsLeft:JG_AMBUSH.stun });
+  const what = edge.glare && edge.ambush ? 'Pulsar Glare and Rift Ambush!' : edge.ambush ? 'Rift Ambush!' : 'Pulsar Glare!';
+  const said = `${what} The ${SPECIES[e.species].name} starts the fight${edge.ambush ? ' stunned,' : ''} with ${Math.round(cut * 100)}% of its HP gone` +
+    (edge.glare ? `, and its attacks ${Math.round(JG_GLARE.weak * 100)}% weaker for ${JG_GLARE.turns} turns.` : '.');
+  bt.jgEdgeSaid = said;
+  setTimeout(()=>{
+    if(ui.battle !== bt) return;
+    renderBattle();
+    if(typeof floatOver === 'function') floatOver(e, edge.ambush ? 'STUNNED' : 'WEAKENED');
+    battleMsg(said);
+  }, 1500);
+}
 let _jgTick = null;
 function jgTickStart(){
   clearInterval(_jgTick);
@@ -1979,7 +2428,7 @@ function jgTickStart(){
 }
 function jgTickOnce(){
   if(ui.screen !== JG_KEY){ clearInterval(_jgTick); _jgTick = null; return; }
-  if(ui.jgAlert || ui.jgTalk || ui.sceneRunning || walkState().busy || document.querySelector('.scene-say') || (typeof eyeBreakActive === 'function' && eyeBreakActive())) return;
+  if(ui.jgAlert || ui.jgTalk || ui.jgFx || ui.sceneRunning || walkState().busy || document.querySelector('.scene-say') || (typeof eyeBreakActive === 'function' && eyeBreakActive())) return;
   const w = walkState(), p = w.at && w.at[JG_KEY];
   if(!p) return;
   const R = JG.aliens.active, rad = JG.aliens.radius;
@@ -1987,6 +2436,7 @@ function jgTickOnce(){
   jgBands().forEach(b=>{
     if(jgBandBeaten(b) || Math.abs(b.x - p.x) > R || Math.abs(b.y - p.y) > R) return;
     if(b.calm && b.calm > Date.now()) return;
+    if(jgBandStunned(b)) return;                                      // (4.03) paralysed by his Pulsar Glare
     const r = Math.random();
     if(r < 0.25){                                                     // stands a moment, looking about
       if(r < 0.08){ const opts = jgOpenDirs(b, p); if(opts.length) b.face = opts[Math.floor(r * 100) % opts.length]; jgBandPlace(b); }
@@ -2018,7 +2468,7 @@ function jgLook(){
   if(!p) return false;
   const now = Date.now();
   const b = jgBands().find(b=>{
-    if(jgBandBeaten(b) || (b.calm && b.calm > now) || Math.abs(b.x - p.x) + Math.abs(b.y - p.y) > JG.aliens.sight) return false;
+    if(jgBandBeaten(b) || (b.calm && b.calm > now) || jgBandStunned(b) || Math.abs(b.x - p.x) + Math.abs(b.y - p.y) > JG.aliens.sight) return false;   // (4.03) a paralysed one sees nothing
     const [dx, dy] = JG_DIR[b.face], n = jgSight(b);
     for(let k = 1; k <= n; k++) if(b.x + dx * k === p.x && b.y + dy * k === p.y) return true;
     return false;
@@ -2067,8 +2517,14 @@ function jgNearActs(p){
   if(jump) acts.push(jump);
   const f = jgFolkNear(p);                                                                            // (3.96) one of the villagers beside you
   if(f) acts.push({ key:'jgF' + f.id, at:{ x:f.x, y:f.y }, html:`💬 Talk<small>${escapeHtml(jgFolkName(f.sprite))}</small>`, act:()=> jgFolkTalk(f) });
+  /* (4.03) his Pulsar Glare and Rift Ambush, at an alien within two squares; the ambush is the challenge now — a plain
+     Challenge is left only for a band beside you that he cannot ambush (across a tribe's sealed wall) */
+  const lu = jgLucescoActs(p);
+  acts.push(...lu);
+  const ambushing = jgRiding();
   jgBands().forEach(b=>{
     if(jgBandBeaten(b) || Math.abs(b.x - p.x) + Math.abs(b.y - p.y) !== 1) return;
+    if(ambushing && jgAmbushable(p, b)) return;
     const nm = SPECIES[b.lead].name;
     acts.push({ key:'jgB' + b.id, cls:'jg-fight', at:{ x:b.x, y:b.y },
       html:`⚔️ Challenge<small>${escapeHtml(b.rank === 'alien' ? nm : (b.rank === 'captain' ? 'Captain ' : 'Commander ') + nm)}</small>`,
@@ -2179,25 +2635,32 @@ function jgWaves(b){
    and encounterMusic): battle_region6 — the designer: "regular battle sounds
    alien" — else the walking meetings' own, else the wild theme. */
 const JG_FIGHT_MUSIC = ['battle_region6', 'battle_encounter', 'battle_wild'];
-function jgFight(b, seen){
-  if(!b || jgBandBeaten(b) || ui.jgFighting) return;
-  if(!battleParty().some(m=> m.currentHp > 0)){ b.calm = Date.now() + 10000; walkState().busy = false; toast('Your team needs healing first.'); return; }
+function jgFight(b, seen, opts){
+  if(!b || jgBandBeaten(b) || ui.jgFighting) return false;
+  if(!battleParty().some(m=> m.currentHp > 0)){ b.calm = Date.now() + 10000; walkState().busy = false; toast('Your team needs healing first.'); return false; }
   ui.jgFighting = true;
   releaseKeys();
   jgSave(true);
   const waves = jgWaves(b), lead = SPECIES[b.lead].name;
   const name = b.rank === 'commander' ? `Commander ${lead}'s band` : b.rank === 'captain' ? `Captain ${lead}'s band` : `${lead} and its captives`;
+  /* (4.03) what Lucesco's moves did to it, as the fight begins: still twitching from his Pulsar Glare, or ambushed
+     (jgEdgeApply, on its first wave) */
+  const edge = { id:b.id, glare:!!((opts && opts.glare) || jgBandStunned(b)), ambush:!!(opts && opts.ambush) };
   const begin = ()=>{
     ui.jgFighting = false;
+    b._pounced = false;                                                  // (its jungle is drawn afresh after the fight)
     ui.jgFight = { id:b.id, rank:b.rank, tribe:b.tribe, waves:waves.length };
+    ui.jgEdge = edge;
     beginBattle({ waves, isNpc:false, allowCatch:true, name, bgKey:'battle_jungle', foeRegion:6, encounter:true, encounterMusic:JG_FIGHT_MUSIC,
       onWaveStart:(i)=> jgWaveStart(i),
       onWin:(levelUps)=> jgWon(b, levelUps),
       onLose:()=>{ ui.jgFight = null; go('region'); } });          // lost, as any fight: the region's page, to recover
+    ui.jgEdge = null;
     if(ui.battle) ui.battle.jungle = b.id;
     if(ui.battle && typeof questFightLines === 'function') questFightLines(b, ui.battle);   // (3.99) Lucesco's words in the first three
   };
   if(typeof walkEncounter === 'function') walkEncounter(begin, JG_FIGHT_MUSIC); else begin();
+  return true;
 }
 /* A wave on the field: what each of them is (their spec's `jg`), their glow;
    the fairies at Lv 100 for a moment, then the alien's grip takes them. */
@@ -2228,6 +2691,7 @@ function jgWaveStart(i){
       e.talentFx = jgBoostFx(p);
     }
   });
+  if(i === 0 && ui.jgEdge){ b.jgEdge = ui.jgEdge; ui.jgEdge = null; jgEdgeApply(b); }   // (4.03) Lucesco's Pulsar Glare, his Rift Ambush
   setTimeout(()=> jgEnrage(b), 520);
 }
 function jgEnrage(b){
@@ -2292,6 +2756,13 @@ function jgWon(b, levelUps){
   const j = jgState(), bt = ui.battle;
   j.beaten[b.id] = today();
   j.tally = (j.tally || 0) + 1;
+  /* (4.03) a Rift Ambush won: you come back standing where you pounced on it (until it is won, where you leapt from) */
+  const edge = bt && bt.jgEdge;
+  if(edge && edge.ambush && edge.id === b.id){
+    const w = walkState(); w.at = w.at || {};
+    w.at[JG_KEY] = { x:b.x, y:b.y }; j.at = { x:b.x, y:b.y };
+    ui.jgLion = null; ui.jgTrail = null;
+  }
   /* every wave's captives are free now — counted for their tribes; each kind of them can be caught */
   const freed = {}, kinds = new Set();
   let citizens = 0;
@@ -2576,8 +3047,10 @@ async function jgArrive(){
     await jgSay([riftLucescoFace()], 'Lucesco', `<b>"Rrrr… The forest has grown so thick since I last came to the Fairy King's lands. I hardly know it."</b>`);
     await jgSay([riftLucescoFace()], 'Lucesco', `<b>"But I still know the smell of his castle — it lies that way. And where the trees stand only one deep, I can leap them with you on my back."</b>`);
     await jgSay([riftLucescoFace()], 'Lucesco', `<b>"Stay close. These paths wind and split, and many go nowhere. I will take you to the King."</b>`);
+    await jgSay([riftLucescoFace()], 'Lucesco', `<b>"Climb onto my back. My paws know these paths better than your feet."</b>`);   // (4.03)
     j.seen = true;
     saveProfile();
+    await jgMount();                                    // (4.03) he comes onto your square: from here on you ride him
   } finally {
     if(gh) gh.remove();
     ui.jgTalk = false;
@@ -2684,6 +3157,85 @@ function jgCss(){
   .jg-ride .jg-ride-lion{ filter:drop-shadow(0 0 5px rgba(255,140,60,.6)); }
   .jg-ride .jg-ride-shadow{ position:absolute; left:4%; right:4%; bottom:-10%; height:26%; border-radius:50%; background:rgba(0,0,0,.3); }
   .wact.lion.leap{ background:#c0702c; border-color:#8e4f1a; color:#fff; }
+  /* (4.03) riding him: you astride his back as you walk (#walkYou, the deck's youArt); his own picture put away */
+  .walk-ent.jg-lion.jg-off{ display:none !important; }
+  .walk-you .jg-mount{ position:absolute; inset:0; pointer-events:none; }
+  .walk-you.face-r .jg-mount .jg-ride-arc{ scale:-1 1; }
+  .jg-ride .jg-stars{ display:none; }
+  /* Pulsar Glare: his eyes ablaze for the second the beam lasts, the beam itself (over the crowns: it goes through trees) */
+  .jg-ride .jg-eyes{ position:absolute; border-radius:50%; pointer-events:none; opacity:0; z-index:1;
+    background:radial-gradient(ellipse closest-side, #fff 0 14%, rgba(255,110,90,1) 30%, rgba(255,25,25,.85) 55%, rgba(255,0,0,0) 100%); }
+  .jg-ride .jg-eyes.on{ animation:jgEyes 1s ease-out both; }
+  .jg-ride .jg-eyes.on::after{ content:''; position:absolute; left:-90%; right:-90%; top:-150%; bottom:-150%; border-radius:50%;
+    background:radial-gradient(ellipse closest-side, rgba(255,50,30,.6), rgba(255,0,0,.18) 60%, rgba(255,0,0,0)); animation:jgEyesHalo .16s ease-in-out infinite alternate; }
+  @keyframes jgEyes{ 0%{ opacity:0; transform:scale(.4); } 7%{ opacity:1; transform:scale(1.6); } 18%{ transform:scale(1.05); } 30%{ transform:scale(1.7); } 44%{ transform:scale(1.1); }
+    58%{ transform:scale(1.75); } 74%{ opacity:1; transform:scale(1.2); } 100%{ opacity:0; transform:scale(2); } }
+  @keyframes jgEyesHalo{ from{ transform:scale(.8); opacity:.75; } to{ transform:scale(1.3); opacity:1; } }
+  .jg-beam{ position:absolute; height:0; z-index:1003; pointer-events:none; transform-origin:0 0; }
+  .jg-beam i{ position:absolute; left:0; right:0; top:-8px; height:16px; border-radius:8px; font-style:normal;
+    background:linear-gradient(180deg, rgba(255,0,0,0), rgba(255,30,30,.7) 30%, rgba(255,110,90,.95) 50%, rgba(255,30,30,.7) 70%, rgba(255,0,0,0));
+    box-shadow:0 0 16px 5px rgba(255,20,20,.6); animation:jgBeamThrob .07s linear infinite alternate; }
+  .jg-beam b{ position:absolute; left:0; right:0; top:-2px; height:4px; border-radius:2px; background:#fff; box-shadow:0 0 6px #fff, 0 0 12px #ff5040; }
+  .jg-beam em{ position:absolute; right:-22px; top:-22px; width:44px; height:44px; border-radius:50%; font-style:normal;
+    background:radial-gradient(circle closest-side, #fff 0 16%, rgba(255,90,70,.95) 38%, rgba(255,0,0,.4) 66%, rgba(255,0,0,0) 100%); animation:jgBeamHit .09s ease-in-out infinite alternate; }
+  .jg-beam::before{ content:''; position:absolute; left:-14px; top:-14px; width:28px; height:28px; border-radius:50%;
+    background:radial-gradient(circle closest-side, #fff 0 20%, rgba(255,70,50,.85) 45%, rgba(255,0,0,0)); }
+  @keyframes jgBeamThrob{ from{ transform:scaleY(.75); opacity:.85; } to{ transform:scaleY(1.3); opacity:1; } }
+  @keyframes jgBeamHit{ from{ transform:scale(.75); } to{ transform:scale(1.35); } }
+  .jg-beam.out{ opacity:0; transition:opacity .2s ease-out; }
+  /* the alien under the beam: black, flipping between tilts, lightning all over it; after it, paralysed: tipped
+     forward and shaking, red sparks (jgBoltsRun) — forward is the way it faces (--fw) */
+  .jg-band.jg-zap .jg-alien-art .jg-art{ filter:brightness(0) drop-shadow(0 0 2px #ff3a3a) drop-shadow(0 0 8px rgba(255,0,0,.95)) !important;
+    animation:jgZapTilt .32s steps(1, end) infinite !important; transform-origin:50% 92%; }
+  @keyframes jgZapTilt{ 0%{ rotate:-18deg; translate:-2px 0; } 12.5%{ rotate:14deg; translate:2px -1px; } 25%{ rotate:-7deg; translate:-1px 1px; } 37.5%{ rotate:19deg; translate:2px 0; }
+    50%{ rotate:-12deg; translate:-2px -1px; } 62.5%{ rotate:6deg; translate:1px 1px; } 75%{ rotate:-20deg; translate:-2px 0; } 87.5%{ rotate:9deg; translate:2px -1px; } }
+  .jg-band.jg-stun:not(.jg-zap) .jg-alien-art .jg-art{ --fw:-1; filter:drop-shadow(0 0 3px #000) drop-shadow(0 0 9px rgba(255,30,30,.95)) !important;
+    animation:jgStunShake .12s linear infinite !important; transform-origin:50% 94%; }
+  .jg-band.jg-stun:not(.jg-zap) .jg-alien-art.face-r .jg-art{ --fw:1; }
+  @keyframes jgStunShake{ 0%{ rotate:calc(var(--fw) * 11deg); translate:-1px 0; } 25%{ rotate:calc(var(--fw) * 13.5deg); translate:1px 0; }
+    50%{ rotate:calc(var(--fw) * 10deg); translate:0 1px; } 75%{ rotate:calc(var(--fw) * 12.5deg); translate:-1px -1px; } 100%{ rotate:calc(var(--fw) * 11deg); translate:-1px 0; } }
+  .jg-band .jg-bolts{ position:absolute; left:-40%; top:-60%; width:180%; height:180%; overflow:visible; pointer-events:none; z-index:3; }
+  .jg-bolts polyline{ fill:none; stroke-linecap:round; stroke-linejoin:round; }
+  .jg-bolts .g{ stroke:#ff2626; stroke-width:5; opacity:.5; }
+  .jg-bolts .c{ stroke:#ffd9d9; stroke-width:1.4; }
+  .jg-band.jg-zap .jg-bolts .g{ stroke-width:6; opacity:.75; }
+  .jg-band.jg-zap .jg-bolts .c{ stroke:#fff; stroke-width:1.8; }
+  .jg-band.jg-stun .jg-mark{ display:none; }
+  /* time stopped: everything held where it is drawn, its own motions paused too — but his eyes and the struck alien's */
+  .walk-world.jg-frozen .walk-ent:not(.walk-you):not(.jg-fx-on), .walk-world.jg-frozen .walk-ent:not(.walk-you):not(.jg-fx-on) *{ animation-play-state:paused !important; }
+  /* Rift Ambush: you both go to starlight, flash red, fly and fade, come out of a gash on its square onto it */
+  .walk-you.jg-starry .jg-ride-lion, .walk-you.jg-starry .jg-ride-you{ filter:brightness(0) !important; }
+  .walk-you.jg-starry .jg-ride-arc{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)) drop-shadow(0 0 9px rgba(120,90,255,.6)); }
+  .walk-you.jg-starry .jg-stars{ display:block; position:absolute; pointer-events:none; font-style:normal;
+    -webkit-mask-size:100% 100%; mask-size:100% 100%; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
+    background:radial-gradient(1.6px 1.6px at 20% 30%, #fff, rgba(255,255,255,0) 70%), radial-gradient(1.2px 1.2px at 70% 20%, #fff, rgba(255,255,255,0) 70%),
+      radial-gradient(1.8px 1.8px at 45% 65%, #fff, rgba(255,255,255,0) 70%), radial-gradient(1.1px 1.1px at 80% 75%, #dfe8ff, rgba(255,255,255,0) 70%),
+      radial-gradient(1.4px 1.4px at 15% 80%, #fff, rgba(255,255,255,0) 70%), radial-gradient(1.1px 1.1px at 55% 40%, #e6dcff, rgba(255,255,255,0) 70%),
+      linear-gradient(160deg, #1d0f52, #43208a 45%, #140838);
+    background-size:17px 17px, 23px 23px, 29px 29px, 13px 13px, 19px 19px, 11px 11px, 100% 100%;
+    animation:jgStarDrift 1.1s linear infinite; }
+  @keyframes jgStarDrift{ from{ background-position:0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; } to{ background-position:17px -17px, -23px 23px, 29px 29px, -13px -13px, 19px -19px, 11px 11px, 0 0; } }
+  .walk-you.jg-redflash .jg-ride-arc{ animation:jgRedFlash .33s steps(1, end) 1 both; }
+  @keyframes jgRedFlash{ 0%{ filter:drop-shadow(0 0 8px #ff2020) drop-shadow(0 0 16px rgba(255,0,0,.9)) brightness(1.6); } 25%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)); }
+    50%{ filter:drop-shadow(0 0 10px #ff3030) drop-shadow(0 0 22px rgba(255,0,0,.9)) brightness(1.8); } 75%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)); }
+    100%{ filter:drop-shadow(0 0 6px #ff3030) drop-shadow(0 0 14px rgba(255,0,0,.8)) brightness(1.3); } }
+  .walk-you.jg-landing .jg-ride-arc{ animation:jgLand .3s ease-out both; }
+  @keyframes jgLand{ 0%{ transform:translateY(-30%) scale(1.08); opacity:0; } 45%{ opacity:1; } 70%{ transform:translateY(4%) scaleY(.92); } 100%{ transform:none; } }
+  .jg-gash{ position:absolute; pointer-events:none; overflow:visible; }
+  .jg-gash svg{ position:absolute; left:-15%; top:-15%; width:130%; height:130%; overflow:visible; transform-origin:50% 50%; animation:jgGash .5s cubic-bezier(.2,.8,.3,1) forwards; }
+  .jg-gash path{ fill:#12052c; stroke:#ff4a3a; stroke-width:2.2; stroke-linejoin:round; filter:drop-shadow(0 0 3px #ff2020) drop-shadow(0 0 7px rgba(255,60,60,.9)); }
+  @keyframes jgGash{ 0%{ transform:scale(.3, 0); opacity:1; } 30%{ transform:scale(1.12, 1.25); } 55%{ transform:scale(1, 1); opacity:1; } 100%{ transform:scale(1.05, 0); opacity:0; } }
+  .jg-gash-flash{ position:absolute; left:-80%; top:-80%; width:260%; height:260%; border-radius:50%; font-style:normal;
+    background:radial-gradient(circle closest-side, rgba(255,255,255,.95) 0 8%, rgba(255,80,60,.75) 26%, rgba(255,0,0,.25) 52%, rgba(255,0,0,0) 72%); animation:jgGashFlash .42s ease-out forwards; }
+  @keyframes jgGashFlash{ 0%{ transform:scale(.25); opacity:1; } 100%{ transform:scale(1.25); opacity:0; } }
+  /* pounced on: it falls flat along the bottom of its square, backwards, and he stands on it */
+  .jg-band.jg-pounced .jg-alien-art .jg-art{ animation:none !important; rotate:90deg; translate:-50% -8%; transform-origin:50% 100%;
+    transition:rotate .18s ease-in, translate .18s ease-in; filter:drop-shadow(0 0 3px #000) drop-shadow(0 0 7px rgba(210,20,30,.9)) brightness(.9) !important; }
+  .jg-band.jg-pounced .jg-alien-art.face-r .jg-art{ rotate:-90deg; translate:50% -8%; }
+  .jg-band.jg-pounced .jg-mark, .jg-band.jg-pounced .jg-cone{ display:none !important; }
+  .wact.lion.glare{ background:#8e1d22; border-color:#5e1014; color:#fff; }
+  .wact.lion.ambush{ background:#3b2a7a; border-color:#251a52; color:#fff; }
+  @media (prefers-reduced-motion: reduce){ .jg-band.jg-zap .jg-alien-art .jg-art, .jg-band.jg-stun .jg-alien-art .jg-art, .walk-you.jg-starry .jg-stars, .jg-beam i, .jg-beam em{ animation:none !important; } }
   .walk-ent.jg-band{ transition:transform .3s linear; overflow:visible; pointer-events:none; }
   .jg-band .jg-alien-art{ position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center; }
   .jg-band .jg-alien-art .jg-art{ image-rendering:pixelated; flex:0 0 auto; margin-bottom:-6%;
@@ -2719,6 +3271,10 @@ function jgCss(){
   /* the fight */
   .enemy-card.jg-foe-alien .avatar-layer .mon-sprite{ filter:drop-shadow(0 0 3px #000) drop-shadow(0 0 3px #000) drop-shadow(0 0 10px rgba(220,20,30,1)) !important; }
   .enemy-card.jg-foe-mind .avatar-layer .mon-sprite{ filter:sepia(.7) saturate(3.4) hue-rotate(-30deg) brightness(.95) drop-shadow(0 0 7px rgba(255,40,40,1)) !important; }
+  /* (4.03) the designer: "The red glow of sprites should be allowed to overlap/bleed out of their spot in the battle UI
+     as it is currently cut off in a square". A card clips what it holds (index.html), so that a fallen one sinks out of
+     sight behind its plate; while an alien or a captive stands, its glow spills over the edges, onto its neighbours */
+  .enemy-card.jg-foe-alien:not(.fainted), .enemy-card.jg-foe-mind:not(.fainted){ overflow:visible; }
   .enemy-card.jg-enraging .avatar-layer{ animation:jgEnrage 1.2s ease-out; }
   @keyframes jgEnrage{ 0%{ transform:scale(1); filter:brightness(1); } 30%{ transform:scale(1.22); filter:brightness(2.2) drop-shadow(0 0 16px #ff2020); } 100%{ transform:scale(1); filter:none; } }
   @media (prefers-reduced-motion: reduce){ .jg-band .jg-alien-art .jg-art, .enemy-card.jg-enraging .avatar-layer, .walk-ent.jg-folk .jg-folk-art{ animation:none !important; } }

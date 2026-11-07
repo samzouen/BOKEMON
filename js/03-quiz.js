@@ -1005,13 +1005,26 @@ function resolveWord(passed, timedOut){
        where it is, and Continue is just above it, where the thumb is. */
     const zone = $('#qzZone'); if(zone) zone.classList.add('done', passed ? 'ok' : 'bad');
     const db = $('#defBox'); if(db) db.textContent = '';                // its meaning is in the result now: not twice
+    /* (4.03) a word missed: what was written of it goes lifeless (its strokes grey-yellow and still: .char-bad) */
+    const wb = document.getElementById(WRITE_BOX_ID); if(wb && !passed){ wb.classList.remove('char-done'); wb.classList.add('char-bad'); }
+    /* (4.03) the designer: "A completed move should read 'Ready!' with an exciting button design … A failed move reads
+       continue with a simpler and less flashy button design". Ready! (their pick: glowing glass, a bloom passing under
+       it), at once; a move failed: Continue in plain glass; anything else as before */
+    const c = q.config, ends = quizWillEnd(passed);
+    const need = c.stopAt || (c.move && c.move.words) || c.wordTarget;
+    const ready = passed && ends && !!c.wordTarget && (q.wordsDone || 0) >= need;
+    const btn = ready
+      ? `<button class="btn qz-next qz-ready" id="quizNext"><span class="qz-bloom"></span>` +
+          [[9, .1], [24, 1.3], [41, .7], [58, 1.8], [76, .4], [90, 1.5]].map(([l, d])=> `<i class="qz-lift" style="left:${l}%;animation-delay:${d}s"></i>`).join('') +
+          `<span class="qz-word">Ready!</span></button>`
+      : `<button class="btn qz-next${ends && !passed ? ' qz-quiet' : ''}" id="quizNext">${ends ? 'Continue' : 'Next word'}</button>`;
     rb.innerHTML = `
       <div class="qz-res ${passed ? 'ok' : 'bad'}">
         <div class="qz-res-word">${escapeHtml(word)}</div>
         <div class="qz-res-def">${escapeHtml(definitionFor(word)||'')}</div>
         ${(passed && !q.config.relaxed) ? masteryChip(word) : ''}
       </div>
-      <button class="btn qz-next" id="quizNext">${quizWillEnd(passed) ? 'Continue' : 'Next word'}</button>
+      ${btn}
     `;
     /* (3.80) one tap: a quick second one used to run the end of the quiz
        twice — a move resolved twice, two bonus offers stacked */
@@ -1028,6 +1041,10 @@ function quizWillEnd(passed){
   const q = ui.quiz;
   if(q.index+1 >= q.config.words.length) return true;
   if(q.config.stopAtFirstMiss && !passed) return true;
+  /* (4.03) as advanceQuiz ends it: a move's words all written (it said "Next word" over a move already powered), or
+     one miss too many */
+  if(q.config.wordTarget && (q.wordsDone || 0) >= q.config.wordTarget) return true;
+  if(q.config.endAfterMistakes && !passed && q.results.filter(r=> !r.passed).length >= q.config.endAfterMistakes) return true;
   return false;
 }
 
