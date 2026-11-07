@@ -542,12 +542,18 @@
   /* (4.03) the designer: "can we also remove the red and green square tints for correct and wrong words? instead,
      correct words now continually pulse gold from the base white word, while incorrect words take on a grey-yellow tint
      without pulsing, looking lifeless (the strokes that were there)". The square stays as it is, its glow gone; the
-     strokes themselves pulse gold (a character done, and the word) or go dull (the word missed: .char-bad) */
+     strokes go dull for a word missed (.char-bad).
+     (4.06) "the correct word became too gaudy. could you have it take on the same light yellow font colour of the listen
+     and meaning, and run the exact same bloom pulse from ready all the way down such that both the word and the ready
+     blooms at the same time and frequency?" A word (or a character of it) done: its strokes in the light yellow of
+     Listen and Meaning (--qz-acc-l), and Ready!'s bloom swept across them too, together (#qzBloomPaint) */
   body.writing .write-box.char-done, body.writing .write-box.char-bad{ box-shadow:0 0 0 1px rgba(0,0,0,.25), inset 0 0 36px rgba(0,0,0,.22); }
-  body.writing .write-box.char-done svg path{ animation:qzStrokeGold 1.5s ease-in-out infinite; }
-  body.writing .write-box.char-done svg{ animation:qzStrokeGlow 1.5s ease-in-out infinite; }
-  @keyframes qzStrokeGold{ 0%, 100%{ stroke:#ffffff; } 50%{ stroke:#ffc94a; } }
-  @keyframes qzStrokeGlow{ 0%, 100%{ filter:drop-shadow(0 0 1px rgba(255,255,255,.4)); } 50%{ filter:drop-shadow(0 0 9px rgba(255,190,60,.9)) drop-shadow(0 0 2px rgba(255,220,140,.9)); } }
+  body.writing .write-box.char-done svg path{ stroke:url(#qzBloomPaint) !important; animation:none; }
+  body.writing .write-box.char-done svg{ filter:drop-shadow(0 0 2px rgba(255,214,120,.28)); animation:qzStrokeBloom 3.2s cubic-bezier(.35,.1,.45,1) infinite; }
+  @keyframes qzStrokeBloom{ 0%{ filter:drop-shadow(0 0 2px rgba(255,214,120,.28)); } 18%{ filter:drop-shadow(0 0 7px rgba(255,226,150,.55)); }
+    36%, 100%{ filter:drop-shadow(0 0 2px rgba(255,214,120,.28)); } }
+  .qz-defs .qz-bl-base{ stop-color:var(--qz-acc-l, #fff0b5); }
+  .qz-defs .qz-bl-hot{ stop-color:#ffffff; }
   body.writing .write-box.char-bad svg path{ stroke:#a39a70 !important; animation:none !important; }
   body.writing .write-box.char-bad svg{ opacity:.8; filter:none; animation:none; }
   body.writing .write-loading{ color:rgba(255,255,255,.7); }
@@ -596,7 +602,7 @@
   .qz-status{ text-align:center; font-size:14px; font-weight:700; min-height:20px; margin-top:6px; text-shadow:0 1px 6px rgba(0,0,0,.95); }
   @media (prefers-reduced-motion: reduce){ .qz-res, .qz-fill::after, .qz-wave, .qz-tip, .qz-halo, .qz-tip b, .qz-meter.filling .qz-tip, .qz-meter.filling .qz-halo{ animation:none !important; } .qz-tip b{ opacity:0 !important; }
     .qz-gauge.full .qz-tip, .qz-gauge.full .qz-halo, .qz-gauge.full .qz-tip b, .qz-gauge.full .qz-fill::after, .qz-ready .qz-bloom::before, .qz-ready .qz-lift, body.writing .qz-next.qz-ready{ animation:none !important; }
-    body.writing .write-box.char-done svg path, body.writing .write-box.char-done svg{ animation:none !important; } body.writing .write-box.char-done svg path{ stroke:#ffd877 !important; } }
+    body.writing .write-box.char-done svg path, body.writing .write-box.char-done svg{ animation:none !important; } body.writing .write-box.char-done svg path{ stroke:var(--qz-acc-l, #fff0b5) !important; } }
   .btn.pill.sel{background:var(--cinnabar);color:#fff;box-shadow:0 3px 0 var(--cinnabar-dark);}
   .pc-summary{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;
     background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:11px;margin-bottom:12px;}
@@ -1785,6 +1791,17 @@
 </style>
 </head>
 <body>
+<!-- (4.06) the correct word's paint (.write-box.char-done): the light yellow of Listen and Meaning, a bright band swept
+     across it every 3.2 s with Ready!'s bloom, begun with it (qzBloomSync, 03-quiz.js). In character units (0–1024). -->
+<svg class="qz-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+  <defs>
+    <linearGradient id="qzBloomPaint" gradientUnits="userSpaceOnUse" x1="-900" y1="0" x2="0" y2="0">
+      <stop class="qz-bl-base" offset="0"/><stop class="qz-bl-base" offset="0.3"/><stop class="qz-bl-hot" offset="0.5"/><stop class="qz-bl-base" offset="0.7"/><stop class="qz-bl-base" offset="1"/>
+      <animateTransform id="qzBloomAnim" attributeName="gradientTransform" type="translate" values="71 0; 1945 0; 1945 0" keyTimes="0; 0.36; 1"
+        calcMode="spline" keySplines=".35 .1 .45 1; 0 0 1 1" dur="3.2s" begin="indefinite" repeatCount="indefinite"/>
+    </linearGradient>
+  </defs>
+</svg>
 <div id="app">
   <div class="topbar">
     <div class="brand-wrap">
