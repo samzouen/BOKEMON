@@ -349,6 +349,10 @@
     body.left-handed .quiz-layout{flex-direction:row-reverse;}
     .quiz-controls{flex:0 0 300px;}
     .quiz-write{flex:1;align-items:center;}
+    /* (3.98) the square's row takes the column's whole width, so the square is sized to it (it was sized to
+       itself, and stayed at its smallest: 220 pixels on an iPad on its side) */
+    .quiz-write .write-wrap{align-self:stretch;}
+    body.writing #app{max-width:1160px;}
     .listen-row-2{flex-direction:column;}
   }
   .write-wrap{display:flex;justify-content:center;margin-bottom:10px;}
@@ -413,93 +417,138 @@
   .char-pip.todo{opacity:0.5;}
   /* ---- (3.97) the spelling screen at night: a battle screen on black (03-quiz.js). The designer, of the
      mockups: "I think A is great, but perhaps with a black background? I find the references to paper
-     background out of place in this game." The move's colour (--tc, --tc-l, --tc-d) is set on the screen. ---- */
-  body.writing{ background:radial-gradient(ellipse at 50% 0%, #1c1630 0%, #0c0a14 55%, #050409 100%) fixed; color:#f2eefc; }
+     background out of place in this game." The move's colour (--tc, --tc-l, --tc-d, --tc-glow) is set on the screen.
+     (3.98) "the galaxy region 6 backsplash animation you did would be good. can we use it along with a black square
+     and white writing? writing square nearly translucent but still enough to show that it is the area within which
+     to write … make the banner and the listen and meaning buttons as translucent as the writing square": Region 6's
+     turning sky behind it all (body.qz-sky, quizSkyOn), and everything on it dark glass (--qz-glass). ---- */
+  body.writing{ background:#02040c; color:#f2eefc;
+    /* (3.98) one colour for the Listen and Meaning buttons and the power meter (the designer: "let's standardise the
+       colours of the listen, meaning, and power bar"; "i agree gold looks good!"); .qz-silver for silver */
+    --qz-acc:#e9b949; --qz-acc-l:#fff0b5; --qz-acc-d:#a0701a; --qz-ink:#3a2600; --qz-glow:rgba(255,200,90,.8); --qz-glow2:rgba(255,170,60,.32);
+    --qz-glass:rgba(5,7,20,.44); --qz-edge:rgba(255,255,255,.17); }
+  body.writing.qz-silver{ --qz-acc:#c8d0de; --qz-acc-l:#ffffff; --qz-acc-d:#7a8496; --qz-ink:#1c2230; --qz-glow:rgba(225,236,255,.85); --qz-glow2:rgba(170,195,255,.3); }
   body.writing .screen-bg{ opacity:0 !important; }
-  body.writing .topbar{ background:linear-gradient(#0c0a14, rgba(12,10,20,.85)); }
-  body.writing .brand-name{ color:#f6f1ff; }
-  body.writing .brand-sub{ color:#a99cc8; }
-  body.writing .hamburger{ background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.14); }
-  body.writing .hamburger span{ background:#e6e0f6; }
+  /* (3.98) "can we remove the top bar with bokemon and the hamburger menu which is unusable during this spelling test?" */
+  body.writing .topbar{ display:none !important; }
+  body.writing .screen{ padding-top:max(14px, env(safe-area-inset-top)); }
   body.writing .back-link{ color:#c9bfe6; }
   .qz-top{ display:flex; align-items:center; justify-content:space-between; min-height:20px; margin-bottom:6px; }
-  .qz-lock{ font-size:13px; font-weight:800; color:#8f86a8; }
   .qz-count{ font-weight:800; color:#a99cc8; font-size:13px; }
-  body.writing .qz-title{ color:#fff; font-size:22px; }
-  body.writing .qz-subtitle{ color:#b9b0d4; margin-bottom:10px; }
+  body.writing .qz-title{ color:#fff; font-size:22px; text-shadow:0 2px 10px rgba(0,0,0,.8); }
+  body.writing .qz-subtitle{ color:#cfc8ea; margin-bottom:10px; text-shadow:0 1px 6px rgba(0,0,0,.9); }
   .qz-party{ display:flex; gap:5px; margin-bottom:10px; } .qz-party > div{ flex:1; } .qz-party .hpbar{ height:6px; }
-  .qz-banner{ position:relative; display:flex; align-items:center; gap:10px; padding:8px 14px 8px 8px; margin:0 0 12px; border-radius:18px; overflow:hidden; color:#fff;
-    background:linear-gradient(100deg, var(--tc-l, #ffb33a) 0%, var(--tc, #e0553f) 48%, var(--tc-d, #8a2a2a) 100%);
-    box-shadow:0 5px 0 var(--tc-d, #8a2a2a), 0 12px 30px rgba(0,0,0,.55); }
-  .qz-banner::before{ content:''; position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(115deg, rgba(255,255,255,0) 0 22px, rgba(255,255,255,.1) 22px 30px); }
-  .qz-me{ position:relative; flex:0 0 auto; width:76px; height:76px; display:flex; align-items:center; justify-content:center; }
-  .qz-me img{ filter:drop-shadow(0 3px 0 rgba(0,0,0,.3)); }
-  .qz-mv{ position:relative; min-width:0; flex:1 1 auto; }
-  .qz-name{ font-family:'Baloo 2', system-ui, sans-serif; font-weight:800; font-size:30px; line-height:1; text-shadow:0 3px 0 rgba(0,0,0,.25); }
-  .qz-sub{ font-size:12px; font-weight:800; opacity:.94; margin-top:5px; line-height:1.3; }
-  .qz-vs{ position:relative; display:flex; flex-direction:column; align-items:center; gap:2px; flex:0 0 auto; }
-  .qz-vs small{ font-size:10px; font-weight:900; letter-spacing:1px; opacity:.88; }
-  .qz-foes{ display:flex; gap:4px; } .qz-foe{ display:flex; flex-direction:column; align-items:center; gap:3px; }
-  .qz-hp{ display:block; width:56px; height:7px; border-radius:4px; background:rgba(0,0,0,.35); overflow:hidden; }
-  .qz-foes .qz-foe:not(:only-child) .qz-hp{ width:40px; }
-  .qz-hp i{ display:block; height:100%; background:linear-gradient(90deg, #8fe68a, #3fbf5a); }
-  body.writing #listenBtn{ background:linear-gradient(180deg, var(--tc-l, #3fbf8a), var(--tc, #2f8f6f)); box-shadow:0 5px 0 var(--tc-d, #1f6b52); color:#fff; border:none; }
-  body.writing #defBtn{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.18); color:#e6e0f6; box-shadow:none; }
-  .qz-def{ text-align:center; font-size:13px; color:#c9bfe6; font-weight:700; min-height:18px; margin:6px 0; }
-  .qz-gauge{ background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:11px 13px 12px; margin:8px 0 12px; }
-  .qz-gh{ display:flex; justify-content:space-between; align-items:baseline; font-weight:900; font-size:13px; letter-spacing:.5px; color:#e6e0f6; margin-bottom:8px; }
-  .qz-gh b{ font-size:20px; color:#ffd36a; text-shadow:0 0 10px rgba(255,190,80,.6); }
-  .qz-segs{ display:flex; gap:5px; }
-  .qz-segs i{ flex:1; height:20px; border-radius:5px; transform:skewX(-16deg); background:rgba(255,255,255,.08); box-shadow:inset 0 0 0 1px rgba(255,255,255,.1); position:relative; }
-  .qz-segs i.on{ background:linear-gradient(180deg, #fff3b0, var(--tc-l, #ffb33a) 35%, var(--tc, #e0553f) 72%, var(--tc-d, #8a2a2a)); box-shadow:0 0 12px var(--tc, #e0553f), inset 0 2px 0 rgba(255,255,255,.55); }
-  .qz-segs i.on.new{ animation:qzSeg .6s ease; }
-  @keyframes qzSeg{ 0%{ transform:skewX(-16deg) scaleY(1.6); filter:brightness(2); } 100%{ transform:skewX(-16deg); filter:none; } }
-  .qz-segs i.goal{ box-shadow:inset 0 0 0 2px #ffd36a; }
-  .qz-segs i.on.goal{ box-shadow:0 0 12px var(--tc, #e0553f), inset 0 0 0 2px #fff3b0; }
-  .qz-segs i.goal::after, .qz-segs i.max::after{ position:absolute; left:50%; top:50%; transform:translate(-50%, -50%) skewX(16deg); font-size:12px; line-height:1; font-style:normal; }
-  .qz-segs i.goal::after{ content:'⚡'; } .qz-segs i.max::after{ content:'★'; color:#ffd36a; }
-  .qz-marks{ display:flex; justify-content:space-between; gap:8px; font-size:10.5px; font-weight:900; color:#ffcf9a; margin-top:6px; letter-spacing:.3px; }
-  .qz-carry{ font-size:11px; font-weight:800; color:#8fe0b8; margin-top:5px; }
-  .qz-stop{ width:100%; margin-top:10px; border:0; border-radius:10px; padding:9px; font:900 12.5px system-ui, sans-serif; background:rgba(255,255,255,.07); color:rgba(255,255,255,.45); }
-  .qz-stop.ready{ background:linear-gradient(180deg, #ffd36a, #e0a83c); color:#3a2400; box-shadow:0 4px 0 #a8762a; cursor:pointer; }
-  .qz-fuse{ position:relative; height:14px; border-radius:8px; background:rgba(255,255,255,.1); box-shadow:inset 0 2px 3px rgba(0,0,0,.45); margin:6px 8px 8px 0; }
-  .qz-fuse > div{ position:absolute; left:0; top:0; bottom:0; border-radius:8px; transition:width .25s linear; background:linear-gradient(90deg, #2f9a4a, #8fd84a); }
+  /* the move's card: your monster, its name, its target, the power meter under them — dark glass */
+  .qz-banner{ position:relative; padding:6px 12px 11px 6px; margin:0 0 10px; border-radius:18px; color:#fff;
+    background:var(--qz-glass); border:1px solid var(--qz-edge); box-shadow:0 10px 26px rgba(0,0,0,.32); }
+  .qz-banner.qz-solo{ padding:12px 12px 12px 6px; }
+  .qz-row{ display:flex; align-items:center; gap:10px; }
+  .qz-me{ flex:0 0 auto; width:64px; height:64px; display:flex; align-items:center; justify-content:center; }
+  .qz-me img{ filter:drop-shadow(0 2px 6px rgba(0,0,0,.55)); }
+  .qz-mv{ min-width:0; flex:1 1 auto; }
+  .qz-name{ font-family:'Baloo 2', system-ui, sans-serif; font-weight:800; font-size:30px; line-height:1; color:#fff;
+    text-shadow:0 0 16px var(--tc-glow, rgba(224,85,63,.6)), 0 2px 0 rgba(0,0,0,.35); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  body.writing #listenBtn, body.writing #defBtn{ background:var(--qz-glass); color:var(--qz-acc-l); border:1px solid rgba(255,214,120,.42);
+    box-shadow:0 6px 18px rgba(0,0,0,.25); font-weight:900; text-shadow:0 0 10px var(--qz-glow2); }
+  body.writing #listenBtn:active, body.writing #defBtn:active{ background:rgba(255,214,120,.14); }
+  body.writing #exitRecoveryBtn{ background:var(--qz-glass); color:#e6e0f6; border:1px solid var(--qz-edge); box-shadow:none; }
+  .qz-def{ text-align:center; font-size:13px; color:#ded7f5; font-weight:700; min-height:18px; margin:6px 0; text-shadow:0 1px 6px rgba(0,0,0,.95); }
+  /* (3.98) the power meter: liquid gold filling with each word; at its tip a bright point, pulsing in a soft halo,
+     throwing sparks; while it rises, all of it burns hotter and a wave of light runs down it */
+  .qz-gauge{ display:flex; align-items:center; gap:10px; margin:6px 0 0 8px; }
+  .qz-num{ flex:0 0 auto; min-width:34px; text-align:right; font-weight:900; font-size:16px; letter-spacing:.5px; color:var(--qz-acc-l); text-shadow:0 0 10px var(--qz-glow); }
+  .qz-meter{ position:relative; flex:1 1 auto; height:14px; border-radius:8px; margin-right:12px; background:rgba(255,255,255,.08);
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.07); }
+  .qz-fill{ position:absolute; left:0; top:0; bottom:0; border-radius:8px;
+    background:linear-gradient(180deg, rgba(255,255,255,.72) 0 13%, rgba(255,255,255,.1) 38%, rgba(255,255,255,0) 58%, rgba(110,60,0,.28) 100%), linear-gradient(90deg, var(--qz-acc-d), var(--qz-acc) 52%, var(--qz-acc-l));
+    box-shadow:0 0 8px var(--qz-glow), 0 0 22px var(--qz-glow2); transition:box-shadow .5s, filter .5s; }
+  /* now and then a slow shimmer crosses it, as light on something liquid */
+  .qz-fill::after{ content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    background:linear-gradient(100deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.18) 30%, rgba(255,255,255,.75) 50%, rgba(255,255,255,.18) 70%, rgba(255,255,255,0) 100%) no-repeat;
+    background-size:34% 100%; background-position:-60% 0; animation:qzSheen 6.4s ease-in-out 1.2s infinite; }
+  @keyframes qzSheen{ 0%{ background-position:-60% 0; } 24%{ background-position:160% 0; } 100%{ background-position:160% 0; } }
+  /* and as it fills, a bright wave runs down it */
+  .qz-wave{ position:absolute; inset:0; border-radius:inherit; pointer-events:none; opacity:0; font-style:normal;
+    background:linear-gradient(100deg, rgba(255,255,255,0) 0%, rgba(255,250,220,.55) 35%, #fff 50%, rgba(255,250,220,.55) 65%, rgba(255,255,255,0) 100%) no-repeat;
+    background-size:28% 100%; background-position:-50% 0; }
+  .qz-wave.go{ animation:qzWave .8s cubic-bezier(.3,.1,.5,1) 2; }
+  @keyframes qzWave{ 0%{ opacity:1; background-position:-50% 0; } 85%{ opacity:1; } 100%{ opacity:0; background-position:150% 0; } }
+  .qz-tip{ position:absolute; right:-17px; top:50%; width:34px; height:34px; margin-top:-17px; border-radius:50%; pointer-events:none; font-style:normal;
+    background:radial-gradient(circle closest-side, #fff 0 24%, var(--qz-acc-l) 40%, rgba(255,214,120,.7) 57%, rgba(255,190,80,.22) 80%, rgba(255,190,80,0) 100%);
+    filter:blur(.6px); animation:qzTip 1.3s ease-in-out infinite; }
+  @keyframes qzTip{ 0%, 100%{ transform:scale(.86); opacity:.82; } 50%{ transform:scale(1.14); opacity:1; } }
+  .qz-halo{ position:absolute; left:50%; top:50%; width:76px; height:76px; margin:-38px 0 0 -38px; border-radius:50%; pointer-events:none; font-style:normal;
+    background:radial-gradient(circle closest-side, rgba(255,212,115,.5) 0%, rgba(255,190,85,.2) 45%, rgba(255,170,60,0) 100%); animation:qzHalo 1.3s ease-in-out -.65s infinite; }
+  @keyframes qzHalo{ 0%, 100%{ transform:scale(.78); opacity:.5; } 50%{ transform:scale(1.16); opacity:1; } }
+  .qz-tip b{ position:absolute; left:50%; top:50%; width:5px; height:5px; margin:-2.5px 0 0 -2.5px; border-radius:50%; background:#fff; opacity:0;
+    box-shadow:0 0 5px #fff, 0 0 10px var(--qz-glow); animation:qzSpk .95s linear infinite; animation-delay:var(--d, 0s); }
+  .qz-tip b:nth-child(odd){ background:var(--qz-acc-l); width:4px; height:4px; margin:-2px 0 0 -2px; }
+  .qz-tip b.hot{ display:none; }
+  @keyframes qzSpk{ 0%{ opacity:1; transform:rotate(var(--a)) translateX(4px) scale(1.15); } 70%{ opacity:.85; } 100%{ opacity:0; transform:rotate(var(--a)) translateX(34px) translateY(8px) scale(.3); } }
+  /* rising: the tip swells and burns white-hot, its halo flares, twice the sparks fly faster and further */
+  .qz-meter.filling .qz-fill{ filter:brightness(1.18) saturate(1.1); box-shadow:0 0 12px var(--qz-glow), 0 0 34px var(--qz-glow2), 0 0 60px rgba(255,170,60,.3); }
+  .qz-meter.filling .qz-tip{ animation:qzTipHot .38s ease-in-out infinite alternate; }
+  @keyframes qzTipHot{ from{ transform:scale(1.3); filter:blur(.4px) brightness(1.25); } to{ transform:scale(1.75); filter:blur(.8px) brightness(1.7); } }
+  .qz-meter.filling .qz-halo{ animation:qzHaloHot .38s ease-in-out infinite alternate; }
+  @keyframes qzHaloHot{ from{ transform:scale(1.25); opacity:.85; } to{ transform:scale(1.7); opacity:1; } }
+  .qz-meter.filling .qz-tip b{ animation:qzSpkHot .52s linear infinite; animation-delay:var(--d, 0s); }
+  .qz-meter.filling .qz-tip b.hot{ display:block; }
+  @keyframes qzSpkHot{ 0%{ opacity:1; transform:rotate(var(--a)) translateX(6px) scale(1.5); } 60%{ opacity:1; } 100%{ opacity:0; transform:rotate(var(--a)) translateX(58px) translateY(10px) scale(.35); } }
+  /* a word wrong: the charge dies away — its tip out, its glow gone, the fill draining and dulling (quizMeterDown) */
+  .qz-meter.dying .qz-tip, .qz-meter.dying .qz-halo{ animation:qzTipOut .5s ease-out forwards; }
+  .qz-meter.dying .qz-tip b{ animation:none; opacity:0; }
+  .qz-meter.dying .qz-wave{ opacity:0; }
+  @keyframes qzTipOut{ from{ opacity:1; transform:scale(1); } to{ opacity:0; transform:scale(.35); } }
+  .qz-meter.dying .qz-fill{ box-shadow:none; transition:box-shadow 1.2s; }
+  .qz-meter.dying .qz-fill::after{ animation:none; opacity:0; }
+  .qz-gauge.full .qz-meter{ box-shadow:inset 0 2px 4px rgba(0,0,0,.6), 0 0 0 2px var(--qz-acc-l), 0 0 20px var(--qz-glow); }
+  .qz-carry{ font-size:11px; font-weight:800; color:#8fe0b8; margin:5px 0 0 8px; }
+  /* (3.98) "'stop here' for incinerate max' should also be translucent like the listen and meaning buttons" */
+  .qz-stop{ width:100%; margin:2px 0 8px; border:1px solid var(--qz-edge); border-radius:12px; padding:10px; font:900 13px system-ui, sans-serif; background:var(--qz-glass); color:rgba(255,255,255,.42); box-shadow:0 6px 18px rgba(0,0,0,.25); }
+  .qz-stop.ready{ color:var(--qz-acc-l); border-color:rgba(255,214,120,.55); text-shadow:0 0 10px var(--qz-glow2); cursor:pointer; }
+  .qz-stop.ready:active{ background:rgba(255,214,120,.14); }
+  .qz-fuse{ position:relative; height:10px; border-radius:6px; background:rgba(255,255,255,.1); box-shadow:inset 0 2px 3px rgba(0,0,0,.45); margin:4px 2px 8px; }
+  .qz-fuse > div{ position:absolute; left:0; top:0; bottom:0; border-radius:7px; transition:width .25s linear; background:linear-gradient(90deg, #2f9a4a, #8fd84a); }
   .qz-fuse > div[data-t="mid"]{ background:linear-gradient(90deg, #b9a83a, #ffc23a); }
   .qz-fuse > div[data-t="low"]{ background:linear-gradient(90deg, #c8453a, #ff8a3a); }
-  .qz-spark{ position:absolute; right:-14px; top:50%; width:30px; height:30px; transform:translateY(-50%); border-radius:50%; pointer-events:none;
-    background:radial-gradient(circle, #fffbe0 0 18%, #ffd04a 30%, rgba(255,140,40,.6) 52%, rgba(255,120,40,0) 72%); animation:qzSpark .35s ease-in-out infinite alternate; }
-  .qz-spark::after{ content:'✦'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:15px; font-style:normal; text-shadow:0 0 6px #ff9a2a; }
-  @keyframes qzSpark{ from{ transform:translateY(-50%) scale(.85) rotate(-10deg); } to{ transform:translateY(-50%) scale(1.12) rotate(10deg); } }
-  .qz-hearts{ display:flex; justify-content:center; gap:6px; margin:8px 0 4px; }
-  .qz-heart{ font-size:19px; line-height:1; color:#ff4f6a; text-shadow:0 0 8px rgba(255,80,110,.6); transition:color .2s, transform .2s; }
-  .qz-heart.lost{ color:rgba(255,255,255,.16); text-shadow:none; transform:scale(.85); }
-  body.writing .char-pip{ min-width:40px; height:40px; border-radius:20px; font-size:19px; border:0; background:rgba(255,255,255,.08); color:#cfc6e8; }
-  body.writing .char-pip.done{ background:radial-gradient(circle at 35% 30%, #fff8d0, #ffc94a 55%, #d0861e); color:#4a2a00; box-shadow:0 0 14px rgba(255,200,80,.75); }
-  body.writing .char-pip.now{ background:#fff; color:var(--tc, #c8453a); box-shadow:0 0 0 3px var(--tc, #c8453a), 0 0 16px var(--tc, #c8453a); font-size:15px; }
-  body.writing .write-box{ background-color:#ffffff; border:4px solid var(--tc, #c8453a); border-radius:22px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cg stroke='rgba(120,100,150,.32)' stroke-width='0.5' stroke-dasharray='2.2 1.6' fill='none'%3E%3Cline x1='50' y1='3' x2='50' y2='97'/%3E%3Cline x1='3' y1='50' x2='97' y2='50'/%3E%3Cline x1='4' y1='4' x2='96' y2='96'/%3E%3Cline x1='96' y1='4' x2='4' y2='96'/%3E%3C/g%3E%3C/svg%3E"); background-size:100% 100%;
-    box-shadow:0 0 0 5px rgba(255,255,255,.06), 0 0 34px var(--tc, #c8453a), 0 14px 30px rgba(0,0,0,.6); }
+  /* (3.98) "please revert the hearts back to the 5 red dots" */
+  .qz-dots{ display:flex; justify-content:center; gap:9px; margin:9px 0 5px; }
+  .qz-dot{ width:11px; height:11px; border-radius:50%; background:rgba(255,255,255,.16); box-shadow:inset 0 1px 2px rgba(0,0,0,.5); transition:background .2s, box-shadow .2s, transform .2s; }
+  .qz-dot.hit{ background:radial-gradient(circle at 35% 30%, #ff8a7a, #ff3434 55%, #c41414); box-shadow:0 0 9px rgba(255,60,60,.85); transform:scale(1.12); }
+  /* (3.98) "just fill up the words in the dark circles as they are written. no red fill on the one being written" */
+  body.writing .char-pip{ width:42px; min-width:42px; height:42px; padding:0; border-radius:21px; font-size:21px; border:1px solid var(--qz-edge); background:var(--qz-glass); color:var(--qz-acc-l); opacity:1; }
+  body.writing .char-pip.done{ border-color:rgba(255,214,120,.45); text-shadow:0 0 10px var(--qz-glow2); }
+  body.writing .char-pip.now{ border-color:rgba(255,255,255,.55); box-shadow:0 0 12px rgba(255,255,255,.14); }
+  /* the square: dark glass, just enough to show where to write; a faint cross to place the strokes by (the
+     designer: "should we take away the cross in the centre?" — the diagonals went, the cross stays, faintly) */
+  body.writing .write-box{ background-color:var(--qz-glass); border:2px solid rgba(255,255,255,.28); border-radius:22px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cg stroke='rgba(255,255,255,.1)' stroke-width='0.3' stroke-dasharray='1.6 2.2' fill='none'%3E%3Cline x1='50' y1='4' x2='50' y2='96'/%3E%3Cline x1='4' y1='50' x2='96' y2='50'/%3E%3C/g%3E%3C/svg%3E"); background-size:100% 100%;
+    box-shadow:0 0 0 1px rgba(0,0,0,.25), 0 0 30px var(--tc-glow, rgba(200,69,58,.35)), inset 0 0 36px rgba(0,0,0,.22); }
   body.writing .write-box::before, body.writing .write-box::after{ display:none; }
-  body.writing .write-box.char-done{ border-color:#3fbf5a; background-color:#f4fff6; box-shadow:0 0 0 5px rgba(63,191,90,.2), 0 0 40px #3fbf5a, 0 14px 30px rgba(0,0,0,.6); }
+  body.writing .write-box.char-done{ border-color:#6fe39a; background-color:rgba(18,70,40,.46); box-shadow:0 0 0 4px rgba(63,191,90,.2), 0 0 36px rgba(63,191,90,.7); }
+  body.writing .write-loading{ color:rgba(255,255,255,.7); }
+  body.writing .write-stall{ background:rgba(8,8,24,.92); color:#e6e0f6; }
   body.writing .write-wrap{ position:relative; }
-  .qz-streak{ position:absolute; z-index:6; top:-16px; left:50%; translate:calc(var(--bw, 300px) / 2 - 70%) 0; rotate:6deg; pointer-events:none;
-    background:linear-gradient(180deg, #ffcf3a, #ff7a2a); color:#fff; font:900 15px/1 'Baloo 2', system-ui, sans-serif; padding:8px 12px; border-radius:20px;
-    box-shadow:0 4px 0 #c24a1e, 0 6px 14px rgba(200,80,30,.45); text-shadow:0 1px 0 rgba(0,0,0,.25); white-space:nowrap; animation:qzPop .4s cubic-bezier(.2,1.5,.4,1) both; }
-  @keyframes qzPop{ 0%{ transform:scale(.3); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
-  .qz-stamp{ position:absolute; right:-12px; bottom:-12px; z-index:6; width:72px; height:72px; border-radius:10px; background:#c8343a; color:#fff3e6; pointer-events:none;
-    display:flex; align-items:center; justify-content:center; font:900 42px/1 'Noto Serif SC', 'Noto Sans SC', serif;
-    box-shadow:inset 0 0 0 4px #c8343a, inset 0 0 0 6px #fff3e6, 0 4px 12px rgba(0,0,0,.45); transform:rotate(-10deg); animation:qzStamp .42s cubic-bezier(.2,1.5,.4,1) both; }
-  @keyframes qzStamp{ 0%{ opacity:0; transform:rotate(-24deg) scale(2.2); } 60%{ opacity:1; } 100%{ opacity:1; transform:rotate(-10deg) scale(1); } }
-  .qz-res{ text-align:center; margin-top:10px; padding:14px; border-radius:14px; }
-  .qz-res.ok{ background:rgba(63,191,90,.12); border:1px solid rgba(63,191,90,.45); }
-  .qz-res.bad{ background:rgba(224,85,63,.12); border:1px solid rgba(224,85,63,.45); }
-  .qz-res-head{ font-family:'Baloo 2', system-ui, sans-serif; font-weight:800; font-size:19px; }
-  .qz-res.ok .qz-res-head{ color:#7fe39a; } .qz-res.bad .qz-res-head{ color:#ff8a7a; }
-  .qz-res-streak{ font-size:14px; color:#ffd36a; }
-  .qz-res-word{ font-family:'Noto Sans SC', sans-serif; font-size:28px; font-weight:700; margin-top:4px; color:#fff; }
-  .qz-res-def{ font-size:12px; color:#c9bfe6; font-weight:700; margin-top:2px; }
-  body.writing .qz-res > div[style]{ color:#c9bfe6 !important; }
-  .qz-status{ text-align:center; font-size:14px; font-weight:700; min-height:20px; margin-top:6px; }
-  @media (prefers-reduced-motion: reduce){ .qz-spark, .qz-segs i.on.new, .qz-stamp, .qz-streak{ animation:none !important; } }
+  /* (3.98) the timer, the dots and the circles in a box of fixed height above the square; a word done, the phrase, its
+     meaning and Continue take their place in it — "i don't want it to move anymore … the continue button which can
+     remain where it is for convenience of the thumb movement. can we lock in relative positions" */
+  .qz-zone{ position:relative; height:138px; display:flex; flex-direction:column; justify-content:flex-end; }
+  .qz-live{ display:flex; flex-direction:column; justify-content:flex-end; transition:opacity .25s; }
+  .qz-live .char-progress{ margin:2px 0 10px; }
+  .qz-zone.done .qz-live{ opacity:0; visibility:hidden; }
+  .qz-result{ position:absolute; inset:0; display:flex; flex-direction:column; justify-content:flex-end; gap:8px; padding-bottom:8px; }
+  .qz-result:empty{ display:none; }
+  .qz-res{ text-align:center; padding:0 4px; animation:qzResIn .35s ease-out both; }
+  @keyframes qzResIn{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:none; } }
+  .qz-res-word{ font-family:'Noto Sans SC', sans-serif; font-size:28px; font-weight:700; line-height:1.2; }
+  .qz-res-def{ font-size:13px; font-weight:800; margin-top:3px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .qz-res.ok .qz-res-word, .qz-res.ok .qz-res-def{ color:var(--qz-acc-l); text-shadow:0 0 12px var(--qz-glow2), 0 1px 6px rgba(0,0,0,.9); }
+  .qz-res.bad .qz-res-word, .qz-res.bad .qz-res-def{ color:#b4adc8; text-shadow:0 1px 6px rgba(0,0,0,.9); }
+  body.writing .qz-res > div[style]{ color:var(--qz-acc-l) !important; opacity:.8; margin-top:3px !important; }
+  body.writing .qz-next{ width:100%; margin:0; background:var(--qz-glass); color:var(--qz-acc-l); border:1px solid rgba(255,214,120,.42); box-shadow:0 6px 18px rgba(0,0,0,.25); font-weight:900; text-shadow:0 0 10px var(--qz-glow2); }
+  body.writing .qz-next:active{ background:rgba(255,214,120,.14); }
+  .qz-status{ text-align:center; font-size:14px; font-weight:700; min-height:20px; margin-top:6px; text-shadow:0 1px 6px rgba(0,0,0,.95); }
+  @media (prefers-reduced-motion: reduce){ .qz-res, .qz-fill::after, .qz-wave, .qz-tip, .qz-halo, .qz-tip b, .qz-meter.filling .qz-tip, .qz-meter.filling .qz-halo{ animation:none !important; } .qz-tip b{ opacity:0 !important; } }
   .btn.pill.sel{background:var(--cinnabar);color:#fff;box-shadow:0 3px 0 var(--cinnabar-dark);}
   .pc-summary{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;
     background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:11px;margin-bottom:12px;}
