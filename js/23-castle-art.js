@@ -1241,5 +1241,5 @@ function picClear(){ PICS.forEach(e=>{ e.cv.width = e.cv.height = 0; }); PICS.cl
 return { bldSlice, tower, chimney:drawChimney, sign:drawSign, banner:drawBanner, lamp:drawLamp, cobble:drawCobble, house:drawHouse, palace:drawPalace,
   stall:stallPic, planter:planterPic, bench:benchPic, well:wellPic, board:boardPic, easel:easelPic, picStats, picClear,
   /* the rooms inside (24-room-art.js) draw with these too */
-  util:{ rng, sh, L, mix, GOLD, GOLD_L, GOLD_D, archPath, grain, speckle, pic, still, PIC_MAX_S } };
+  util:{ rng, sh, L, mix, GOLD, GOLD_L, GOLD_D, archPath, grain, speckle, pic, still, PIC_MAX_S, stones, moss } };
 })();

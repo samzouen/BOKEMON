@@ -179,9 +179,17 @@ function ancCss(){
    Lost — to a band or an ancestor — the knights carry you back to the
    castle, by the tavern fire, to heal and come again: the King waits.
    Calmed, an ancestor stays at its village, gruff but no longer hostile.
+   (3.99) The King's quest (25-quest.js) comes first now: his fifty aliens,
+   a council of its own, and the four tribes found, one blade at a time.
+   Only then does he unseal them, the north-west first and on round
+   clockwise — Grass (no invaders), Water (2 captains, 1 commander), Fire
+   (4, 1), Earth (5, 2) — and after his gift the castle itself is invaded.
    ============================================================ */
-const WAR_ORDER = ['water', 'fire', 'earth', 'grass'];          // NE, SE, SW, NW
-const WAR_FORCES = { water:{ captains:0, commanders:0 }, fire:{ captains:2, commanders:1 }, earth:{ captains:4, commanders:1 }, grass:{ captains:5, commanders:2 } };
+/* (3.99) The designer: "The King agrees to unseal each ancestor, but in its village … starting top-left, then
+   clockwise. The alien invasion happens on the 2nd, 3rd and 4th unsealing." So the north-west first, and the forces
+   grow as before, by turn (3.92–3.98: north-east first, round the other way). */
+const WAR_ORDER = ['grass', 'water', 'fire', 'earth'];          // NW, NE, SE, SW
+const WAR_FORCES = { grass:{ captains:0, commanders:0 }, water:{ captains:2, commanders:1 }, fire:{ captains:4, commanders:1 }, earth:{ captains:5, commanders:2 } };
 const WAR_BAND_LV = 175;
 /* ---------- the save: r6().war ----------
    council (held), calmed{} (each tribe's ancestor), beaten{} (each war band
@@ -315,26 +323,14 @@ async function warLines(seq){
 }
 
 /* ---------- the council: the throne room, the next talk with the King once the court has met you ---------- */
+/* (3.99) Since the King's quest (25-quest.js), `council` is set once the four guardians have stood before him and he
+   has agreed to unseal their ancestors: from then on, this is his talk. (3.92–3.98 held a council of its own here.) */
 async function warKingCastle(){
   const w = warState(), st = warStage();
-  if(!w.council){
-    await caLines([
-      ['king', `<b>"My friends. Sit with us — the war council will not wait any longer."</b>`],
-      ['commander', `<b>"Every day the aliens bring more of their kind through the torn sky. We free our people, and they take more. The walls will not hold forever."</b>`],
-      ['king', `<b>"Two hundred years ago, the four tribal ancestors fought each other until the jungle burned. I sealed them in those blades behind me, to make the peace."</b>`],
-      ['advisor', `<b>"Hoo. And now we need them. One ancestor is worth a hundred knights. But they will not wake gently, Your Majesty."</b>`],
-      ['dauphin', `<b>"Then we fight them until they listen! Our friends here have beaten every alien band they have met."</b>`],
-      ['king', `<b>"The guardians remember them. If an ancestor is beaten, its guardian may yet calm it. We wake them one by one — the north-east first, where the Water tribe lives."</b>`],
-      ['commander', `<b>"The aliens will hear of it, and try to stop us. After the first, expect them at every village."</b>`],
-      ['lion', `<b>"Then we will be there first. I know the way to every corner of this jungle."</b>`],
-    ]);
-    w.council = true;
-    if(typeof jgState === 'function') jgState().found.water = true;
-    saveProfile();
-    return warOfferRide('water');
-  }
+  if(!w.council) return caLines([['king', `<b>"Welcome, my friends."</b>`]]);
   if(st && st !== 'done') return warOfferRide(st);
   if(st === 'done' && !w.stone) return warGift();
+  if(typeof questAlarmDue === 'function' && questAlarmDue()) return questAlarm();   // (3.99) after the gift: the alarm
   return caLines([['king', caTurn('kingAfter', [
     `<b>"The four ancestors are awake, and with us. Whatever comes through that sky now, we will meet it together."</b>`,
     `<b>"The tribes have not stood with the castle in two hundred years. You did that, my friends."</b>`])]]);
@@ -342,6 +338,7 @@ async function warKingCastle(){
 /* the King's "!" in the throne room: the council to hold, a ride to take, the gift to give */
 function warKingDue(){
   if(!state || !state.progress || !state.progress.region6 || !caState().met.court) return false;
+  if(typeof questKingDue === 'function') return questKingDue();      // (3.99) the quest knows
   const w = warState(), st = warStage();
   return !w.council || (st === 'done' && !w.stone);
 }
@@ -380,9 +377,12 @@ function warKnightTalk(k, b){
 }
 async function warUnseal(k){
   const w = warState(), first = !w.said['unseal-' + k];
-  w.said['unseal-' + k] = true; saveProfile();
+  w.said['unseal-' + k] = true;
+  const carried = typeof questBladeCarried === 'function' && questBladeCarried(k);
+  if(typeof questBladeHandOver === 'function') questBladeHandOver(k);   // (3.99) the blade you carried, to the King
+  saveProfile();
   const seq = first ? [
-    ['king', `The King lifts the ${k} blade from its sheath. Its chains of light tremble.<br><br><b>"Ancestor of ${JG_TRIBES[k].name.replace(/^the /, 'the ')}. Two hundred years you have slept. Wake now — your people need you."</b>`],
+    ['king', `${carried ? `You hand the King the sealed ${k} blade. ` : ''}The King lifts it high. Its chains of light tremble.<br><br><b>"Ancestor of ${JG_TRIBES[k].name.replace(/^the /, 'the ')}. Two hundred years you have slept. Wake now — your people need you."</b>`],
     [['guardian', k], `<b>"Careful, Your Majesty. It will not know us."</b>`],
     [['anc', k], WAR_WAKE[k]],
   ] : [
@@ -492,6 +492,9 @@ async function warGift(){
   w.stone = true;
   if(!had){ addStone('psychicStone', 1); toast('🔮 You received the Psychic Stone!'); playSfx('stone_high'); }
   saveProfile();
+  /* (3.99) the designer: "Then the spent King gets an urgent message that invaders have invaded the castle, beginning
+     the final battle" — after his gift (the designer, asked where it should go: "Before the alarm") */
+  if(typeof questAlarm === 'function' && ui.screen === 'r6_palace') setTimeout(()=>{ if(ui.screen === 'r6_palace') questAlarm(); }, 500);
 }
 
 let _warCss = false;

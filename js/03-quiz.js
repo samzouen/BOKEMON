@@ -409,37 +409,150 @@ function quizPic(m, px){
 function quizBannerHtml(q){
   const c = q.config, mv = c.move, att = c.attacker;
   if(!mv || !att) return '';
-  let foes = c.target ? [c.target] : ((ui.battle && typeof livingEnemies === 'function') ? livingEnemies().slice(0, 3) : []);
-  foes = foes.filter(f=> f && f.species);
-  const hp = t=>{ const max = t.maxHp || (typeof monMaxHp === 'function' ? monMaxHp(t) : 1), now = t.hp != null ? t.hp : t.currentHp; return Math.max(0, Math.min(1, now / Math.max(1, max))); };
+  /* (3.98) The designer: "please remove the details e.g. 'basic move, write 2 words to power it up'. also remove the
+     banner … make the banner and the listen and meaning buttons as translucent as the writing square" — and of the
+     meter, "under the name of the move and the sprite of the monster using it is a great idea". A card of dark glass:
+     your monster, the move's name, the power meter under them. And then: "please remove the target enemy because it
+     would be awkward for aoe situations. just the name of the move would be great." */
   return `<div class="qz-banner">
-    <span class="qz-me">${quizPic(att, 76)}</span>
-    <div class="qz-mv"><div class="qz-name">${escapeHtml(c.title || mv.name || '')}</div><div class="qz-sub">${escapeHtml(c.subtitle || '')}</div></div>
-    ${foes.length ? `<div class="qz-vs"><small>${foes.length > 1 ? 'TARGETS' : 'TARGET'}</small><div class="qz-foes">${foes.map(t=> `<span class="qz-foe">${quizPic(t, foes.length > 1 ? 40 : 56)}<span class="qz-hp"><i style="width:${(hp(t) * 100).toFixed(0)}%"></i></span></span>`).join('')}</div></div>` : ''}
+    <div class="qz-row">
+      <span class="qz-me">${quizPic(att, 64)}</span>
+      <div class="qz-mv"><div class="qz-name">${escapeHtml(c.title || mv.name || '')}</div></div>
+    </div>
+    ${c.wordTarget ? quizGaugeHtml(q) : ''}
   </div>`;
 }
+/* (3.98) The designer: "instead of a bar split between words, can we have a meter that glows and releases sparks at
+   the tip of the current charge to simulate power growing with each spelt word? … that filled up with every correct
+   word". One meter, in the screen's own gold (not the move's colour: "let's standardise the colours of the listen,
+   meaning, and power bar"; "i agree gold looks good!"): it fills a share with each word written; a notch where the
+   move is powered. Then: "Please make the glow on the tip of the power bar slightly bigger than the bar itself and
+   more diffused and pulsing … Can we have the bar movement animated as it fills after writing instead of
+   instantaneously jumping? make the glow and sparkles much more intense as it fills and send a wave of shimmer down
+   the bar as it fills. the wave of shimmer would be nice to have occasionally to give the sense of a liquid,
+   reflective bar." So the fill is eased up from where it stood (quizMeterAnim), never set; while it rises the meter
+   is .filling (its tip swells and burns brighter, sparks fly faster and further, more of them) and a wave of light
+   runs down it (.qz-wave); at rest, now and then, a slower shimmer crosses it (.qz-fill::after). */
+const QUIZ_SPARKS = [[-62, 0], [-38, .12], [-18, .3], [0, .05], [16, .22], [34, .4], [55, .16], [-80, .5], [74, .34], [-6, .62]];
+const QUIZ_SPARKS_HOT = [[-50, .08], [-28, .2], [-8, .36], [8, .14], [24, .28], [44, .02], [64, .44], [-70, .26], [88, .1], [-90, .38]];   // only while it fills
 function quizGaugeHtml(q){
   const c = q.config, n = c.wordTarget, done = Math.min(q.wordsDone || 0, n);
-  const need = c.stopAt || (c.move && c.move.words) || n, scale = c.move && c.move.scale;
-  const segs = [];
-  for(let i = 1; i <= n; i++) segs.push(`<i class="${i <= done ? 'on' : ''}${i === done && q.index > 0 ? ' new' : ''}${i === need && need < n ? ' goal' : ''}${i === n && scale ? ' max' : ''}"></i>`);
-  const ready = c.stopAt && (q.wordsDone || 0) >= c.stopAt;
-  return `<div class="qz-gauge">
-    <div class="qz-gh"><span>⚡ POWER</span><b><span id="wordCount">${done}</span> / ${n}</b></div>
-    <div class="qz-segs">${segs.join('')}</div>
-    <div class="qz-marks"><span>${need} word${need === 1 ? '' : 's'}${need < n ? ': powered' : ''}</span>${scale ? `<span>${n} words: ${scale.max}×</span>` : ''}</div>
-    ${(c.startingWords || 0) > 0 ? `<div class="qz-carry">+${c.startingWords} carried over</div>` : ''}
-    ${c.stopAt ? `<button class="qz-stop${ready ? ' ready' : ''}" id="stopEarly" ${ready ? '' : 'disabled'}>⏹ Stop here${ready ? ` — ${q.wordsDone} words` : ` (${c.stopAt} needed)`}</button>` : ''}
-  </div>`;
+  const need = c.stopAt || (c.move && c.move.words) || n;
+  const pct = n ? done / n * 100 : 0;
+  const A = q._meterA, shown = A && A.shown != null && A.shown <= pct ? A.shown : pct;   // it rises from where it stood
+  return `<div class="qz-gauge${done >= need ? ' powered' : ''}${done >= n ? ' full' : ''}">
+    <div class="qz-meter${pct > shown + 0.05 ? ' surge' : ''}" id="qzMeter" data-to="${pct.toFixed(2)}">
+      <div class="qz-fill" id="qzFill" style="width:${shown.toFixed(2)}%"><i class="qz-wave"></i>${shown > 0.05 || pct > 0 ? quizTipHtml() : ''}</div>
+    </div>
+    <b class="qz-num"><span id="wordCount">${done}</span>/${n}</b>
+  </div>
+  ${(c.startingWords || 0) > 0 ? `<div class="qz-carry">+${c.startingWords} carried over</div>` : ''}`;
 }
-/* a red seal stamped on the square as a character is done */
-const QUIZ_STAMPS = ['好', '棒', '对', '妙'];
-function quizStamp(box){
-  if(!box) return;
-  const st = document.createElement('div');
-  st.className = 'qz-stamp';
-  st.textContent = QUIZ_STAMPS[Math.floor(Math.random() * QUIZ_STAMPS.length)];
-  box.appendChild(st);
+/* the stop button of a move whose words scale it (under Listen and Meaning) */
+function quizStopHtml(q){
+  const c = q.config;
+  if(!c.stopAt) return '';
+  const ready = (q.wordsDone || 0) >= c.stopAt;
+  return `<button class="qz-stop${ready ? ' ready' : ''}" id="stopEarly" ${ready ? '' : 'disabled'}>⏹ Stop here${ready ? ` — ${q.wordsDone} words` : ` (${c.stopAt} needed)`}</button>`;
+}
+function quizTipHtml(){
+  return `<i class="qz-tip"><i class="qz-halo"></i>${QUIZ_SPARKS.map(([a, d])=> `<b style="--a:${a}deg;--d:${d}s"></b>`).join('')}${QUIZ_SPARKS_HOT.map(([a, d])=> `<b class="hot" style="--a:${a}deg;--d:${d}s"></b>`).join('')}</i>`;
+}
+/* a word written: the meter rises (and surges) at once — it used to wait for the next word's screen */
+function quizMeterUpdate(q){
+  const c = q.config, n = c.wordTarget, m = $('#qzMeter'), f = $('#qzFill');
+  if(!n || !m || !f) return;
+  const done = Math.min(q.wordsDone || 0, n), need = c.stopAt || (c.move && c.move.words) || n, pct = done / n * 100;
+  const wc = $('#wordCount'); if(wc) wc.textContent = done;
+  if(done > 0 && !f.querySelector('.qz-tip')) f.insertAdjacentHTML('beforeend', quizTipHtml());
+  m.classList.remove('surge'); void m.offsetWidth; m.classList.add('surge');
+  clearTimeout(q._surgeT); q._surgeT = setTimeout(()=>{ const mm = $('#qzMeter'); if(mm) mm.classList.remove('surge'); }, 1300);
+  m.dataset.to = pct.toFixed(2);
+  quizMeterAnim(q);
+  const gauge = m.closest('.qz-gauge');
+  if(gauge){ gauge.classList.toggle('powered', done >= need); gauge.classList.toggle('full', done >= n); }
+  const se = $('#stopEarly');                                          // a scaling move powered: you may stop now
+  if(se && c.stopAt && (q.wordsDone || 0) >= c.stopAt){ se.classList.add('ready'); se.disabled = false; se.textContent = `⏹ Stop here — ${q.wordsDone} words`; }
+}
+/* after the screen is drawn: the meter goes on rising from where it stood to where it is now */
+function quizMeterGo(q){
+  const m = $('#qzMeter');
+  if(!m) return;
+  quizMeterAnim(q);
+  if(m.classList.contains('surge')){ clearTimeout(q._surgeT); q._surgeT = setTimeout(()=>{ const mm = $('#qzMeter'); if(mm) mm.classList.remove('surge'); }, 1300); }
+}
+/* the fill eased toward data-to: from wherever it is shown now (across a move's word screens too), never jumping */
+function quizMeterAnim(q){
+  const m = $('#qzMeter'), f = $('#qzFill');
+  if(!m || !f) return;
+  const to = parseFloat(m.dataset.to) || 0;
+  const A = q._meterA || (q._meterA = { shown:parseFloat(f.style.width) || 0, raf:0 });
+  cancelAnimationFrame(A.raf); A.raf = 0;
+  const from = Math.min(A.shown, to);
+  const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(to - from < 0.05 || reduce || typeof requestAnimationFrame !== 'function'){ A.shown = to; f.style.width = to.toFixed(2) + '%'; m.classList.remove('filling'); return; }
+  const D = Math.max(900, Math.min(1700, (to - from) * 38)), t0 = performance.now();
+  m.classList.add('filling');
+  const w = f.querySelector('.qz-wave'); if(w){ w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); }
+  const step = now=>{
+    const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3);   // quick to start, settling softly
+    A.shown = from + (to - from) * e;
+    const fl = $('#qzFill'); if(fl) fl.style.width = A.shown.toFixed(2) + '%';
+    if(k < 1 && ui.quiz === q){ A.raf = requestAnimationFrame(step); return; }
+    A.raf = 0; A.shown = to;
+    const mm = $('#qzMeter'); if(mm) mm.classList.remove('filling');
+  };
+  A.raf = requestAnimationFrame(step);
+}
+
+/* (3.98) a word wrong: "show the gold bar powering down with no more glowing pulse and sparkles, and the bar
+   depleting and turning duller in colour by the second". Its tip goes out at once; the fill drains away over six
+   seconds, dulling as it goes. */
+function quizMeterDown(q){
+  const m = $('#qzMeter'), f = $('#qzFill');
+  if(!m || !f) return;
+  const A = q._meterA || (q._meterA = { shown:parseFloat(f.style.width) || 0, raf:0 });
+  cancelAnimationFrame(A.raf); A.raf = 0;
+  clearTimeout(q._surgeT);
+  m.classList.remove('surge', 'filling'); m.classList.add('dying');
+  const from = A.shown, t0 = performance.now(), D = 6000;
+  const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const at = k=>{ const fl = $('#qzFill'); if(!fl) return; fl.style.width = (from * (1 - k)).toFixed(2) + '%'; fl.style.filter = `saturate(${(1 - 0.85 * k).toFixed(3)}) brightness(${(1 - 0.45 * k).toFixed(3)})`; };
+  if(reduce || typeof requestAnimationFrame !== 'function'){ at(0.5); return; }
+  const step = now=>{
+    const k = Math.min(1, (now - t0) / D);
+    at(k);
+    A.raf = (k < 1 && ui.quiz === q && $('#qzMeter')) ? requestAnimationFrame(step) : 0;
+  };
+  A.raf = requestAnimationFrame(step);
+}
+
+/* (3.98) The designer: "the galaxy region 6 backsplash animation you did would be good. can we use it along with a
+   black square and white writing?" The spelling screen is drawn over Region 6's turning sky (riftPageShow,
+   18-rift.js) wherever it is — and goes back to how it was when the writing ends (the sky stays on if it was the
+   page's own before). */
+function quizSkyOn(){
+  if(typeof riftPageShow !== 'function') return;
+  if(!ui.quizSky){
+    const pending = typeof _riftHideT !== 'undefined' && !!_riftHideT;          // going already: it was not the page's own
+    ui.quizSky = { had:document.body.classList.contains('r6-sky') && !pending };
+  }
+  document.body.classList.add('qz-sky');
+  riftPageShow();
+  quizSkyWatch();
+}
+function quizSkyOff(){
+  const s = ui.quizSky;
+  document.body.classList.remove('qz-sky');
+  if(!s) return;
+  ui.quizSky = null;
+  if(!s.had && typeof riftPageHide === 'function') riftPageHide(true);         // a moment later: the next page may keep it
+}
+let _qzSkyObs = null;
+function quizSkyWatch(){
+  if(_qzSkyObs || typeof MutationObserver !== 'function') return;
+  _qzSkyObs = new MutationObserver(()=>{ if(ui.quizSky && !document.body.classList.contains('writing')) quizSkyOff(); });
+  _qzSkyObs.observe(document.body, { attributes:true, attributeFilter:['class'] });
 }
 
 function renderQuiz(){
@@ -463,19 +576,19 @@ function renderQuiz(){
      designer: "doesn't need to be shown as it doesn't make sense either. The spelling bar is sufficient").
      (3.97) The designer, of the mockups: "I think A is great, but perhaps with a black background? I find the
      references to paper background out of place in this game." A battle's spelling is a battle screen now: the
-     move's banner (yours, its name, its target), a power gauge that lights a segment a word, a burning fuse for
-     the clock, hearts for the slips, a white card to write on with a glowing edge in the move's colour, a red
-     stamp on each character done and a streak of words written clean — on black (body.writing, index.html). */
+     move's banner (yours, its name, its target), a power meter that fills with each word, a burning fuse for the
+     clock, hearts for the slips, a white card to write on with a glowing edge in the move's colour — on black
+     (body.writing, index.html). (3.98) No stamp on each character and no streak: the designer, "please remove the
+     streak and 'bang4' (chinese stamp for good at the bottom right)". */
   const tc = quizColour(q.config);
   screenEl.style.setProperty('--tc', tc); screenEl.style.setProperty('--tc-l', quizShade(tc, 0.35)); screenEl.style.setProperty('--tc-d', quizShade(tc, -0.35));
+  { const n = parseInt(String(tc).slice(1), 16); if(!isNaN(n)) screenEl.style.setProperty('--tc-glow', `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},.42)`); }   // (3.98) its glow, softly
   const banner = quizBannerHtml(q);
+  quizSkyOn();                                                         // (3.98) over Region 6's sky
+  /* (3.98) "committed does not need to be written on the top left with a lock, it's assumed" */
+  const top = (q.config.lockExit ? '' : `<button class="back-link" id="quizExit">← Exit</button>`) + (q.config.wordTarget ? '' : `<div class="qz-count">Word ${q.index+1} / ${total}</div>`);
   screenEl.innerHTML = `
-    <div class="qz-top">
-      ${q.config.lockExit
-        ? `<span class="qz-lock">🔒 Committed</span>`
-        : `<button class="back-link" id="quizExit">← Exit</button>`}
-      ${q.config.wordTarget ? '' : `<div class="qz-count">Word ${q.index+1} / ${total}</div>`}
-    </div>
+    ${top ? `<div class="qz-top">${top}</div>` : ''}
 
     <div class="quiz-layout">
       <div class="quiz-controls">
@@ -489,18 +602,21 @@ function renderQuiz(){
           <button class="btn btn-ghost" id="defBtn">📖 Meaning</button>
         </div>
         <div id="defBox" class="qz-def"></div>
-        ${q.config.wordTarget ? quizGaugeHtml(q) : ''}
+        ${banner ? quizStopHtml(q) : (q.config.wordTarget ? `<div class="qz-banner qz-solo">${quizGaugeHtml(q)}</div>` + quizStopHtml(q) : '')}
 
-        ${q.config.relaxed ? '' : `
-        <div id="timerBar" class="qz-fuse"><div id="timerFill"><i class="qz-spark"></i></div></div>
-        <div id="mistakeDots" class="qz-hearts"></div>`}
+        <div id="qzZone" class="qz-zone">
+          <div class="qz-live">
+            ${q.config.relaxed ? '' : `
+            <div id="timerBar" class="qz-fuse"><div id="timerFill"></div></div>
+            <div id="mistakeDots" class="qz-dots"></div>`}
+            <div id="charProgress" class="char-progress"></div>
+          </div>
+          <div id="quizResult" class="qz-result"></div>
+        </div>
       </div>
 
       <div class="quiz-write">
-        <!-- result/next sits ABOVE the box so it needs no scrolling -->
-        <div id="quizResult"></div>
-        <div id="charProgress" class="char-progress"></div>
-        <div id="charsRow" class="write-wrap">${(q.streak || 0) >= 2 ? `<div class="qz-streak">🔥 ×${q.streak} streak</div>` : ''}</div>
+        <div id="charsRow" class="write-wrap"></div>
         <div id="quizStatus" class="qz-status"></div>
       </div>
     </div>
@@ -532,6 +648,7 @@ function renderQuiz(){
   $('#charsRow').appendChild(box);
 
   renderMistakeDots();
+  quizMeterGo(q);                                                      // (3.98) the power meter sweeps up
   initQuizChar(0);
   /* The stroke data is fetched asynchronously. Starting the clock here meant a
      slow character could time out before it ever appeared — failing a word the
@@ -568,9 +685,9 @@ function renderMistakeDots(){
   if(q.config.relaxed) return;   // no attempt limit in practice mode
   const el = $('#mistakeDots');
   if(!el) return;
-  /* (3.97) hearts: a slip in a row empties one, from the right */
+  /* (3.98) "please revert the hearts back to the 5 red dots": a slip in a row fills one, from the left */
   let h = '';
-  for(let i=0;i<MISTAKE_LIMIT;i++) h += `<span class="qz-heart${i >= MISTAKE_LIMIT - q.consecutiveMistakes ? ' lost' : ''}">♥</span>`;
+  for(let i=0;i<MISTAKE_LIMIT;i++) h += `<span class="qz-dot${i < q.consecutiveMistakes ? ' hit' : ''}"></span>`;
   el.innerHTML = h;
 }
 
@@ -652,9 +769,11 @@ function renderCharProgress(){
   const q = ui.quiz;
   const el = $('#charProgress');
   if(!el) return;
+  /* (3.98) "remove the hand and pencil emoticon, just fill up the words in the dark circles as they are written. no
+     red fill on the one being written" */
   el.innerHTML = q.chars.map((ch,i)=>{
     const state = i < q.charIndex ? 'done' : (i === q.charIndex ? 'now' : 'todo');
-    return `<span class="char-pip ${state}">${state==='done' ? escapeHtml(ch) : (state==='now' ? '✍️' : '•')}</span>`;
+    return `<span class="char-pip ${state}">${state==='done' ? escapeHtml(ch) : ''}</span>`;
   }).join('');
 }
 
@@ -753,7 +872,7 @@ function loadCharData(ch, onComplete, onError){
 function buildWriter(i, box){
   const q = ui.quiz;
   const size = writeBoxSize();
-  if(box){ box.style.width = size+'px'; box.style.height = size+'px'; const row = box.parentNode; if(row && row.style) row.style.setProperty('--bw', size + 'px'); }   // (3.97) where the streak sits
+  if(box){ box.style.width = size+'px'; box.style.height = size+'px'; }
   // Practice ("relaxed") mode is a low-pressure learning space: no timer, no
   // attempt cap, and Hanzi Writer's own hint appears after 3 misses on a stroke.
   // Battle / catch / recovery keep the strict rules — no hints there, ever.
@@ -773,8 +892,9 @@ function buildWriter(i, box){
   const writer = HanziWriter.create(box, q.chars[i], {
     width:size, height:size, padding:Math.round(size*0.05),
     showCharacter:false, showOutline:false, showHintAfterMisses:false,
-    strokeColor:'#232019', drawingColor:'#232019', drawingWidth:Math.max(24, Math.round(size*0.075)),
-    highlightColor:'#c8453a',
+    /* (3.98) white writing on a dark square (the designer: "a black square and white writing") */
+    strokeColor:'#ffffff', drawingColor:'#ffffff', drawingWidth:Math.max(24, Math.round(size*0.075)),
+    highlightColor:'#ffd66a',
     /* Stroke data comes off a CDN. A character the browser has never seen needs
        a live fetch, and with no handling a slow or failed request left the pad
        blank and unresponsive — which is why it stalled on NEW words and why
@@ -832,7 +952,6 @@ function buildWriter(i, box){
     },
     onComplete:function(){
       if(q.locked) return;
-      quizStamp(box);                                                  // (3.97) 好!
       if(i+1 < q.chars.length){
         // brief green flash, then the same big box takes the next character
         if(box) box.classList.add('char-done');
@@ -840,7 +959,7 @@ function buildWriter(i, box){
           if(box) box.classList.remove('char-done');
           initQuizChar(i+1);
           holdTimerForLoad();       // pause while the next character's strokes arrive
-        }, 520);                                                       // (3.97) long enough to see the stamp
+        }, 280);                                                       // (3.98) as before 3.97: no stamp to wait for
       } else {
         if(box) box.classList.add('char-done');
         resolveWord(true,false);
@@ -870,22 +989,29 @@ function resolveWord(passed, timedOut){
     saveProfile();
   }
   playSfx(passed ? 'answer_correct' : 'answer_wrong');
-  if(passed) q.wordsDone = (q.wordsDone||0) + countWords(word);
-  q.streak = (passed && !(q.wordMistakes > 0)) ? (q.streak || 0) + 1 : 0;   // (3.97) words in a row without a slip
+  if(passed){ q.wordsDone = (q.wordsDone||0) + countWords(word); quizMeterUpdate(q); }
+  else if(q.config.wordTarget) quizMeterDown(q);                       // (3.98) the charge dies away
   q.results.push({ text:word, passed, mistakes:q.wordMistakes||0, timedOut, words:countWords(word) });
 
   const st = $('#quizStatus');
   const rb = $('#quizResult');
   if(st) st.textContent = '';
   if(rb){
+    /* (3.98) The designer: "for a correctly spelt phrase, remove 'correct' and the tick, and for a wrong one, remove the
+       cross and not quite … still show the correct words and definition. for a correct one, show the phrase and
+       definition in the same font colour as 'listen and meaning' with the 'continue' in translucent black too …
+       completion or getting the word wrong should remove the circles … i don't want it to move anymore." The timer,
+       the dots and the circles give way, in the same box, to the phrase, its meaning and Continue: the square stays
+       where it is, and Continue is just above it, where the thumb is. */
+    const zone = $('#qzZone'); if(zone) zone.classList.add('done', passed ? 'ok' : 'bad');
+    const db = $('#defBox'); if(db) db.textContent = '';                // its meaning is in the result now: not twice
     rb.innerHTML = `
       <div class="qz-res ${passed ? 'ok' : 'bad'}">
-        <div class="qz-res-head">${passed?'✓ Correct!':(timedOut?'⏱ Out of time':'✗ Not quite')}${passed && q.streak >= 2 ? ` <span class="qz-res-streak">🔥 ×${q.streak}</span>` : ''}</div>
         <div class="qz-res-word">${escapeHtml(word)}</div>
         <div class="qz-res-def">${escapeHtml(definitionFor(word)||'')}</div>
         ${(passed && !q.config.relaxed) ? masteryChip(word) : ''}
       </div>
-      <button class="btn btn-primary" id="quizNext" style="margin-top:12px;">${quizWillEnd(passed) ? 'Continue' : 'Next word'}</button>
+      <button class="btn qz-next" id="quizNext">${quizWillEnd(passed) ? 'Continue' : 'Next word'}</button>
     `;
     /* (3.80) one tap: a quick second one used to run the end of the quiz
        twice — a move resolved twice, two bonus offers stacked */

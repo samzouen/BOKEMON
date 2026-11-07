@@ -17,7 +17,7 @@
    One name outside: CA_ROOM.
    ============================================================ */
 const CA_ROOM = (function(){
-const { rng, sh, L, mix, GOLD, GOLD_L, GOLD_D, archPath, grain, speckle, pic, still, PIC_MAX_S } = CA_ART.util;
+const { rng, sh, L, mix, GOLD, GOLD_L, GOLD_D, archPath, grain, speckle, pic, still, PIC_MAX_S, stones, moss } = CA_ART.util;
 const T = CA_T;
 const WALLS = new Set([T.IWALL, T.WOODWALL, T.VOID]);
 const wallAt = (m, x, y)=> WALLS.has(caAt(m, x, y));                 // off the map is wall too
@@ -866,6 +866,7 @@ function fairyLights(g, x0, x1, y, s){
    ============================================================ */
 const FLOORLESS = new Set([T.STAIRS]);
 function paint(g, m, s, R0){
+  if(m.walk) return walkPaint(g, m, s, R0);                            // (3.98) a wall's walk, a rampart (below)
   const I = info(m), room = m.room;
   const inR = (r)=> r.x + r.w >= R0.x0 && r.x <= R0.x1 && r.y + r.h >= R0.y0 && r.y <= R0.y1;
   const xa = Math.max(0, R0.x0), xb = Math.min(m.W - 1, R0.x1), ya = Math.max(0, R0.y0), yb = Math.min(m.H - 1, R0.y1);
@@ -2097,6 +2098,8 @@ const LIVE = { blade:bladeGlow, column:columnReflect, longTable:banquetFlames, c
 const UNDER = new Set(['blade', 'column']);
 function furn(g, d, x, y, w, h, k, t){
   if(d.kind === 'flame'){ flameAt(g, x + w / 2, y + h, k * (d.r || 0.05), t, d.x * 7 + d.y); return true; }
+  const WK = WALL_KEEP[d.kind], WL = WALL_LIVE[d.kind];                 // (3.98) the walls' and ramparts' things
+  if(WK || WL){ if(WK) WK(g, d, x, y, w, h, k); if(WL) WL(g, d, x, y, w, h, k, t); return true; }
   const P = KEEP[d.kind];
   if(!P) return false;
   const Lv = LIVE[d.kind];
@@ -2121,6 +2124,583 @@ function dress(m, room){
     if(d.kind === 'table') glows.push({ x:d.x + d.w / 2, y:d.y + d.h * 0.5, r:1.1, c:'rgba(255,200,110,.16)' });
     if(d.kind === 'jukebox') glows.push({ x:d.x + d.w / 2, y:d.y + d.h, r:1.8, c:'rgba(255,120,200,.16)' });
   });
+  m.deco.sort((a, b)=> a.z - b.z);
+  return m;
+}
+
+/* ============================================================
+   THE WALLS' WALKS AND THE RAMPARTS (3.98)
+   The designer: "yes please upgrade the castle's walkways and battlements". Each wall's walk is paved with great
+   flagstones laid in courses along it, worn paler down the middle where the patrols march, moss in the joints and
+   the jungle's leaves blown up onto them; along its forest side the battlements — merlons as tall as a man, an arrow
+   loop in each, the gaps between them at a man's waist (lower where a lookout stands) — and along the castle's side
+   a low parapet under its coping; braziers burning on the parapet, the King's banners hanging on whichever side
+   faces you, pennants along the walls that run north and south. A rampart is paved round a compass rose, its stair
+   winding down into the tower, its spyglass on a brass tripod, its flag flying from its outer corner, and through
+   each arch the walk going on to its wall. What stands up (the battlements, the parapets, what is on them) is set
+   out as things standing on the walk (walkDress): what stands in front of you hides you behind it (the see-through
+   layer, 21-castle.js) and the merlons reach up over the far views; the floor is painted in pieces as a room's is
+   (slice → walkPaint).
+   ============================================================ */
+/* the sizes, in squares: a battlement's or parapet's depth seen from above (D, walls across), a battlement's and a
+   parapet's thickness (DV, DPV, walls down); the sill's height (HS; HN at a lookout's notch), a merlon's (HM), the
+   parapet's (HP); how far a wall's face is seen going down below a wall in front (DROP); a merlon's share of its square */
+const WG = { D:0.36, DV:0.5, DPV:0.4, HS:0.42, HN:0.27, HM:0.86, HP:0.38, DROP:0.72, MER:0.62 };
+const WS = { mortar:'#7d788c', flags:['#aca6b4', '#a39eae', '#b3adb9', '#9d98a8', '#a8a2ae', '#b0abb8', '#9a96a6', '#aea7b0'],
+  face:'#928da9', faceD:'#76718e', cap:'#d4d0e0', capL:'#f0eef6', worn:'#ddd8e6', mortarF:'#5c5872', iron:'#2c2a33', ironL:'#4a4754' };
+const wFloorT = new Set([T.WALK, T.PLANTER, T.STAIRS]);
+const wFloor = (m, x, y)=> wFloorT.has(caAt(m, x, y));
+const wCell = (m, x, y)=> (x < 0 || y < 0 || x >= m.W || y >= m.H || !m.walk) ? null : (m.walk.cell.get(y * m.W + x) || null);
+
+/* ---------- the floor ---------- */
+function flagStone(g, X, Y, W, H, s, seed, tone){
+  const R = rng(seed), j = Math.max(1, s * 0.02);
+  const x = X + j / 2, y = Y + j / 2, w = W - j, h = H - j;
+  if(w < 2 || h < 2) return;
+  const r = Math.min(s * 0.05, h * 0.28, w * 0.28);
+  g.fillStyle = tone; rr(g, x, y, w, h, r); g.fill();
+  /* lit from the upper left */
+  g.fillStyle = lin(g, x, y, x + w * 0.45, y + h, [[0, 'rgba(255,255,255,.14)'], [0.55, 'rgba(255,255,255,0)'], [1, 'rgba(40,30,70,.09)']]); rr(g, x, y, w, h, r); g.fill();
+  speckle(g, x + r * 0.5, y + r * 0.5, w - r, h - r, R, Math.max(4, Math.round(w * h / (s * s) * 30)), ['rgba(255,255,255,.2)', 'rgba(64,54,96,.15)', 'rgba(255,255,255,.1)', 'rgba(48,40,80,.12)'], s * 0.017);
+  const e = L(s, 0.014);
+  g.fillStyle = 'rgba(255,255,255,.24)'; g.fillRect(x + r * 0.6, y, w - r * 1.2, e); g.fillRect(x, y + r * 0.6, e, h - r * 1.2);
+  g.fillStyle = 'rgba(44,36,70,.2)'; g.fillRect(x + r * 0.6, y + h - e, w - r * 1.2, e); g.fillRect(x + w - e, y + r * 0.6, e, h - r * 1.2);
+  if(R() < 0.45){ const cx = x + w * R(), cy = y + h * R(); ell(g, cx, cy, w * (0.25 + R() * 0.3), h * (0.2 + R() * 0.3), R() < 0.5 ? 'rgba(255,250,240,.05)' : 'rgba(40,30,60,.05)'); }   // clouds in the stone
+  const f = R();
+  if(f < 0.07){                                                         // a crack
+    let cx = x + w * (0.15 + R() * 0.3), cy = y + h * R();
+    g.strokeStyle = 'rgba(40,32,64,.45)'; g.lineWidth = L(s, 0.01); g.beginPath(); g.moveTo(cx, cy);
+    for(let i = 0; i < 4; i++){ cx += w * (0.08 + R() * 0.12); cy += (R() - 0.5) * h * 0.4; cy = Math.max(y + 2, Math.min(y + h - 2, cy)); g.lineTo(cx, cy); }
+    g.stroke();
+  } else if(f < 0.17){                                                  // a corner knocked off
+    const cxr = R() < 0.5, cyr = R() < 0.5, c = Math.min(w, h) * (0.16 + R() * 0.12);
+    const ax = cxr ? x + w : x, ay = cyr ? y + h : y;
+    g.fillStyle = WS.mortar; g.beginPath(); g.moveTo(ax, ay); g.lineTo(ax + (cxr ? -c : c), ay); g.lineTo(ax, ay + (cyr ? -c : c)); g.closePath(); g.fill();
+  } else if(f < 0.3){                                                   // a worn hollow
+    ell(g, x + w * (0.3 + R() * 0.4), y + h * (0.35 + R() * 0.3), w * 0.22, h * 0.24, 'rgba(46,36,80,.07)');
+  }
+  if(R() < 0.3){                                                        // lichen
+    const lx = x + w * (0.1 + R() * 0.8), ly = y + h * (0.15 + R() * 0.7), col = R() < 0.7 ? 'rgba(214,214,150,.5)' : 'rgba(226,170,90,.42)';
+    for(let i = 0; i < 6; i++) circ(g, lx + (R() - 0.5) * s * 0.07, ly + (R() - 0.5) * s * 0.05, s * (0.008 + R() * 0.012), col);
+  }
+  if(R() < 0.2){                                                        // moss in the joint below it
+    const n = 2 + Math.floor(R() * 4);
+    for(let i = 0; i < n; i++) ell(g, x + w * R(), y + h + j * 0.2, s * (0.02 + R() * 0.025), s * (0.012 + R() * 0.01), WS_MOSS[i % 3]);
+  }
+}
+const WS_MOSS = ['rgba(98,128,58,.75)', 'rgba(132,158,74,.7)', 'rgba(78,104,46,.72)'];
+function leaf(g, x, y, s, R){
+  const len = s * (0.06 + R() * 0.05), wd = len * (0.38 + R() * 0.2), a = R() * Math.PI * 2;
+  const col = ['#6f8f3a', '#8a9a3c', '#a07a3a', '#7a5a2a', '#5e7f34', '#b08a3e'][Math.floor(R() * 6)];
+  g.save(); g.translate(x, y); g.rotate(a);
+  g.fillStyle = 'rgba(20,14,30,.22)'; g.beginPath(); g.moveTo(-len + 1.5, 1.5); g.quadraticCurveTo(1.5, -wd + 1.5, len + 1.5, 1.5); g.quadraticCurveTo(1.5, wd + 1.5, -len + 1.5, 1.5); g.fill();
+  g.fillStyle = col; g.beginPath(); g.moveTo(-len, 0); g.quadraticCurveTo(0, -wd, len, 0); g.quadraticCurveTo(0, wd, -len, 0); g.fill();
+  g.strokeStyle = 'rgba(40,30,10,.4)'; g.lineWidth = Math.max(0.6, s * 0.006); g.beginPath(); g.moveTo(-len * 1.15, 0); g.lineTo(len * 0.9, 0); g.stroke();
+  g.restore();
+}
+function puddle(g, cx, cy, s, R){
+  const rx = s * (0.16 + R() * 0.12), ry = rx * 0.55;
+  g.fillStyle = 'rgba(60,64,96,.3)';
+  g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, TAU); g.ellipse(cx + rx * 0.5, cy + ry * 0.3, rx * 0.6, ry * 0.7, 0, 0, TAU); g.fill();
+  g.fillStyle = lin(g, cx - rx, cy - ry, cx + rx, cy + ry, [[0, 'rgba(190,206,236,.5)'], [1, 'rgba(120,140,190,.32)']]);
+  g.beginPath(); g.ellipse(cx, cy, rx * 0.86, ry * 0.8, 0, 0, TAU); g.ellipse(cx + rx * 0.5, cy + ry * 0.3, rx * 0.5, ry * 0.58, 0, 0, TAU); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = L(s, 0.012); g.beginPath(); g.ellipse(cx - rx * 0.2, cy - ry * 0.25, rx * 0.4, ry * 0.25, -0.2, Math.PI * 1.1, Math.PI * 1.7); g.stroke();
+}
+/* a compass rose let into the rampart's floor */
+function compassRose(g, cx, cy, r, s){
+  g.fillStyle = 'rgba(30,24,50,.25)'; g.beginPath(); g.arc(cx + s * 0.03, cy + s * 0.04, r * 1.06, 0, TAU); g.fill();
+  g.fillStyle = '#58536f'; g.beginPath(); g.arc(cx, cy, r * 1.04, 0, TAU); g.fill();
+  g.fillStyle = lin(g, cx - r, cy - r, cx + r, cy + r, [[0, '#d9d4e4'], [1, '#aba6bd']]); g.beginPath(); g.arc(cx, cy, r * 0.94, 0, TAU); g.fill();
+  g.strokeStyle = '#58536f'; g.lineWidth = L(s, 0.02); g.beginPath(); g.arc(cx, cy, r * 0.8, 0, TAU); g.stroke();
+  for(let i = 0; i < 32; i++){ const a = i / 32 * TAU, r0 = r * (i % 4 ? 0.86 : 0.82); g.strokeStyle = 'rgba(70,64,96,.7)'; g.lineWidth = L(s, i % 4 ? 0.008 : 0.016); g.beginPath(); g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); g.lineTo(cx + Math.cos(a) * r * 0.92, cy + Math.sin(a) * r * 0.92); g.stroke(); }
+  const point = (a, len, wd, c1, c2)=>{
+    const tx = cx + Math.cos(a) * len, ty = cy + Math.sin(a) * len, lx = cx + Math.cos(a - Math.PI / 2) * wd, ly = cy + Math.sin(a - Math.PI / 2) * wd, qx = cx + Math.cos(a + Math.PI / 2) * wd, qy = cy + Math.sin(a + Math.PI / 2) * wd;
+    g.fillStyle = c1; g.beginPath(); g.moveTo(cx, cy); g.lineTo(lx, ly); g.lineTo(tx, ty); g.closePath(); g.fill();
+    g.fillStyle = c2; g.beginPath(); g.moveTo(cx, cy); g.lineTo(qx, qy); g.lineTo(tx, ty); g.closePath(); g.fill();
+  };
+  for(let i = 0; i < 4; i++) point(Math.PI / 4 + i * Math.PI / 2, r * 0.56, r * 0.12, '#8f8aa6', '#6f6a86');
+  for(let i = 0; i < 4; i++) point(-Math.PI / 2 + i * Math.PI / 2, r * 0.78, r * 0.17, i === 0 ? '#c8343a' : '#4a4660', i === 0 ? '#e0606a' : '#77728f');
+  circ(g, cx, cy, r * 0.09, GOLD); circ(g, cx - r * 0.025, cy - r * 0.025, r * 0.035, GOLD_L);
+  g.fillStyle = '#3a3550'; g.font = `900 ${Math.round(r * 0.2)}px 'Baloo 2', system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('N', cx, cy - r * 0.68 - r * 0.0); 
+}
+/* the stair down into the tower: round, winding down past its newel into the dark */
+function spiralStair(g, r, s, stand){
+  const cx = (r.x + r.w / 2) * s, cy = (r.y + r.h / 2) * s, R = Math.min(r.w, r.h) * s * 0.47, r0 = R * 0.2;
+  const a0 = stand ? Math.atan2((stand.y + 0.5) * s - cy, (stand.x + 0.5) * s - cx) : Math.PI;
+  g.fillStyle = 'rgba(30,24,50,.3)'; g.beginPath(); g.arc(cx + s * 0.04, cy + s * 0.05, R * 1.1, 0, TAU); g.fill();
+  /* the kerb round it */
+  g.fillStyle = '#c6c1d4'; g.beginPath(); g.arc(cx, cy, R * 1.08, 0, TAU); g.fill();
+  for(let i = 0; i < 12; i++){ const a = i / 12 * TAU; g.strokeStyle = 'rgba(70,64,96,.45)'; g.lineWidth = L(s, 0.012); g.beginPath(); g.moveTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); g.lineTo(cx + Math.cos(a) * R * 1.08, cy + Math.sin(a) * R * 1.08); g.stroke(); }
+  g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.arc(cx, cy, R * 1.08, Math.PI * 0.95, Math.PI * 1.6); g.arc(cx, cy, R * 1.0, Math.PI * 1.6, Math.PI * 0.95, true); g.fill();
+  /* the well */
+  g.fillStyle = '#100e18'; g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.fill();
+  /* the steps, winding down from where you go in: each a wedge, darker as it goes */
+  const n = 11, step = TAU * 0.072;
+  for(let i = n - 1; i >= 0; i--){
+    const a = a0 + i * step, f = i / n;
+    const tone = mix('#d9d4e4', '#1c1a26', Math.min(1, f * 1.15));
+    g.fillStyle = tone; g.beginPath(); g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); g.arc(cx, cy, R * 0.98, a, a + step * 1.02); g.lineTo(cx + Math.cos(a + step) * r0, cy + Math.sin(a + step) * r0); g.closePath(); g.fill();
+    g.strokeStyle = `rgba(0,0,0,${0.35 + f * 0.3})`; g.lineWidth = L(s, 0.018); g.beginPath(); g.moveTo(cx + Math.cos(a + step) * r0, cy + Math.sin(a + step) * r0); g.lineTo(cx + Math.cos(a + step) * R * 0.98, cy + Math.sin(a + step) * R * 0.98); g.stroke();
+    if(i < 3){ g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = L(s, 0.01); g.beginPath(); g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); g.lineTo(cx + Math.cos(a) * R * 0.98, cy + Math.sin(a) * R * 0.98); g.stroke(); }
+  }
+  g.fillStyle = rad(g, cx, cy, R * 0.3, R, [[0, 'rgba(8,6,14,0)'], [1, 'rgba(8,6,14,.35)']]); g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.fill();
+  /* the newel */
+  circ(g, cx, cy, r0 * 1.05, '#8f8aa6'); circ(g, cx - r0 * 0.2, cy - r0 * 0.25, r0 * 0.6, '#c9c4d8');
+  /* a rope rail round the inside of the kerb */
+  g.strokeStyle = '#a07a3a'; g.lineWidth = L(s, 0.03); g.beginPath(); g.arc(cx, cy, R * 0.95, a0 + 0.35, a0 + TAU - 0.35); g.stroke();
+  g.strokeStyle = 'rgba(255,230,170,.5)'; g.lineWidth = L(s, 0.01); g.beginPath(); g.arc(cx, cy, R * 0.95 - L(s, 0.008), a0 + 0.35, a0 + TAU - 0.35); g.stroke();
+}
+/* the shade the walls throw on the walk (light from the upper left): the parts of a wall square's shadow on (x, y) */
+function wShadeOn(g, m, x, y, s){
+  const polys = [];
+  const add = (pts)=> polys.push(pts);
+  const M = (1 - WG.MER) / 2;
+  /* a wall north of the walk (its faces toward you): its shadow falls on the squares below it */
+  for(const wx of [x - 1, x]){
+    const c = wCell(m, wx, y - 1);
+    if(!c || c.side !== 'n') continue;
+    const hs = c.k === 'o' ? WG.HN : c.k === 'r' ? WG.HP : WG.HS, Y0 = y;
+    add([[wx, Y0], [wx + 1, Y0], [wx + 1 + 0.3 * hs, Y0 + 0.6 * hs], [wx + 0.3 * hs, Y0 + 0.6 * hs]]);
+    if(c.k === 'm' || c.k === 'k' || c.k === 'p'){
+      const hm = WG.HM + (c.k === 'p' ? 0.22 : 0), u0 = c.k === 'm' ? wx + M : wx + 0.05, u1 = c.k === 'm' ? wx + 1 - M : wx + 0.95;
+      add([[u0, Y0], [u1, Y0], [u1 + 0.3 * hm, Y0 + 0.6 * hm], [u0 + 0.3 * hm, Y0 + 0.6 * hm]]);
+    }
+  }
+  /* a wall west of the walk: its shadow falls to its right, a little down */
+  for(const wy of [y - 1, y]){
+    const c = wCell(m, x - 1, wy);
+    if(!c || c.side !== 'w') continue;
+    const hs = c.k === 'o' ? WG.HN : c.k === 'r' ? WG.HP : WG.HS, X0 = x;
+    add([[X0, wy], [X0, wy + 1], [X0 + 0.3 * hs, wy + 1 + 0.6 * hs], [X0 + 0.3 * hs, wy + 0.6 * hs]]);
+    if(c.k === 'm' || c.k === 'p'){
+      const hm = WG.HM + (c.k === 'p' ? 0.22 : 0), u0 = c.k === 'm' ? wy + M : wy + 0.05, u1 = c.k === 'm' ? wy + 1 - M : wy + 0.95;
+      add([[X0, u0], [X0, u1], [X0 + 0.3 * hm, u1 + 0.6 * hm], [X0 + 0.3 * hm, u0 + 0.6 * hm]]);
+    }
+  }
+  if(polys.length){
+    g.save(); g.beginPath(); g.rect(x * s, y * s, s, s); g.clip();
+    /* each shadow darkest at the wall's foot, fading as it falls away (light from the upper left) */
+    polys.forEach(p=>{
+      const fx = (p[0][0] + p[1][0]) / 2 * s, fy = (p[0][1] + p[1][1]) / 2 * s, tx = (p[2][0] + p[3][0]) / 2 * s, ty = (p[2][1] + p[3][1]) / 2 * s;
+      g.fillStyle = lin(g, fx, fy, tx, ty, [[0, 'rgba(26,20,52,.26)'], [0.7, 'rgba(26,20,52,.12)'], [1, 'rgba(26,20,52,.02)']]);
+      g.beginPath(); g.moveTo(p[0][0] * s, p[0][1] * s); for(let i = 1; i < p.length; i++) g.lineTo(p[i][0] * s, p[i][1] * s); g.closePath(); g.fill();
+    });
+    g.restore();
+  }
+  /* where the walk meets a wall: a line of shade at its foot */
+  const X = x * s, Y = y * s, ao = s * 0.09;
+  const at = (dx, dy)=> wCell(m, x + dx, y + dy);
+  if(at(0, -1)){ g.fillStyle = lin(g, 0, Y, 0, Y + ao, [[0, 'rgba(26,20,52,.32)'], [1, 'rgba(26,20,52,0)']]); g.fillRect(X, Y, s, ao); }
+  if(at(0, 1)){ g.fillStyle = lin(g, 0, Y + s, 0, Y + s - ao, [[0, 'rgba(26,20,52,.24)'], [1, 'rgba(26,20,52,0)']]); g.fillRect(X, Y + s - ao, s, ao); }
+  if(at(-1, 0)){ g.fillStyle = lin(g, X, 0, X + ao, 0, [[0, 'rgba(26,20,52,.28)'], [1, 'rgba(26,20,52,0)']]); g.fillRect(X, Y, ao, s); }
+  if(at(1, 0)){ g.fillStyle = lin(g, X + s, 0, X + s - ao, 0, [[0, 'rgba(26,20,52,.2)'], [1, 'rgba(26,20,52,0)']]); g.fillRect(X + s - ao, Y, ao, s); }
+}
+function walkPaint(g, m, s, R0){
+  const W = m.walk, xa = Math.max(0, R0.x0), xb = Math.min(m.W - 1, R0.x1), ya = Math.max(0, R0.y0), yb = Math.min(m.H - 1, R0.y1);
+  g.save(); g.beginPath();
+  let any = false;
+  for(let y = ya; y <= yb; y++) for(let x = xa; x <= xb; x++) if(wFloor(m, x, y)){ g.rect(x * s, y * s, s, s); any = true; }
+  if(!any){ g.restore(); return; }
+  g.clip();
+  g.fillStyle = WS.mortar; g.fillRect(xa * s, ya * s, (xb - xa + 1) * s, (yb - ya + 1) * s);
+  /* the flagstones: great slabs of every size, in courses along the walk (a rampart's across it) — each course its
+     own depth, each slab its own length and shade, and here and there a slab split in two */
+  const along = W.kind === 'ramp' || W.across;
+  const lo = along ? ya : xa, hi = (along ? yb : xb) + 1, aLo = along ? xa : ya, aHi = (along ? xb : yb) + 1;
+  const slab = (a0, len, c0, dep, sd)=>{
+    const tone = WS.flags[sd % WS.flags.length];
+    if(along) flagStone(g, a0 * s, c0 * s, len * s, dep * s, s, sd, tone); else flagStone(g, c0 * s, a0 * s, dep * s, len * s, s, sd, tone);
+  };
+  const Rc = rng(66000 + W.seed * 53);
+  for(let c0 = 0, ci = 0; c0 < hi; ci++){
+    const dep = 0.48 + Rc() * 0.5, c1 = c0 + dep;
+    if(c1 > lo){
+      const R = rng(77000 + ci * 7919 + W.seed * 31);
+      let at = -R() * 1.5;
+      while(at < aHi){
+        const len = 0.6 + R() * 0.95, sd = Math.floor(R() * 1e9), sp = R();
+        if(at + len > aLo - 0.01){
+          if(sp < 0.16 && dep > 0.7){ const d1 = dep * (0.4 + R() * 0.2); slab(at, len, c0, d1, sd); slab(at, len, c0 + d1, dep - d1, sd + 1); }   // two, one behind the other
+          else if(sp < 0.3 && len > 1){ const l1 = len * (0.35 + R() * 0.3); slab(at, l1, c0, dep, sd); slab(at + l1, len - l1, c0, dep, sd + 3); }   // two, side by side
+          else slab(at, len, c0, dep, sd);
+        }
+        at += len;
+      }
+    }
+    c0 = c1;
+  }
+  /* worn paler down the middle, where the patrols march */
+  if(W.kind === 'wall'){
+    const sp = m.tags.sp, mid = (sp.walk[0] + sp.walk[1]) / 2;
+    if(sp.across){ const y0 = (mid - 1.1) * s, y1 = (mid + 1.1) * s; g.fillStyle = lin(g, 0, y0, 0, y1, [[0, 'rgba(255,255,255,0)'], [0.5, 'rgba(255,252,240,.09)'], [1, 'rgba(255,255,255,0)']]); g.fillRect(xa * s, y0, (xb - xa + 1) * s, y1 - y0); }
+    else { const x0 = (mid - 1.1) * s, x1 = (mid + 1.1) * s; g.fillStyle = lin(g, x0, 0, x1, 0, [[0, 'rgba(255,255,255,0)'], [0.5, 'rgba(255,252,240,.09)'], [1, 'rgba(255,255,255,0)']]); g.fillRect(x0, ya * s, x1 - x0, (yb - ya + 1) * s); }
+  }
+  /* the rampart's compass rose, its stair */
+  if(W.kind === 'ramp'){
+    if(7 + 1.6 >= xa && 7 - 1.6 <= xb + 1 && 7 + 1.6 >= ya && 7 - 1.6 <= yb + 1) compassRose(g, 7 * s, 7 * s, s * 1.3, s);
+    const st = m.tags.stair;
+    if(st && st.x + st.w + 1 >= xa && st.x - 1 <= xb && st.y + st.h + 1 >= ya && st.y - 1 <= yb) spiralStair(g, st, s, st.stand);
+  }
+  /* what the jungle blew up here: leaves; and here and there a puddle from the last rain */
+  for(let y = ya; y <= yb; y++) for(let x = xa; x <= xb; x++){
+    if(!wFloor(m, x, y) || caAt(m, x, y) === T.STAIRS) continue;
+    const R = rng(5150 + x * 977 + y * 131 + W.seed * 7);
+    const near = (cx, cy)=> W.kind === 'ramp' && Math.hypot(cx - 7, cy - 7) < 1.5;
+    if(R() < 0.035 && !near(x + 0.5, y + 0.5)) puddle(g, (x + 0.3 + R() * 0.4) * s, (y + 0.3 + R() * 0.4) * s, s, R);
+    const nl = R() < 0.22 ? (R() < 0.3 ? 2 : 1) : 0;
+    for(let i = 0; i < nl; i++){ const lx = x + 0.1 + R() * 0.8, ly = y + 0.1 + R() * 0.8; if(!near(lx, ly)) leaf(g, lx * s, ly * s, s, R); }
+  }
+  /* the walls' shade on it */
+  for(let y = ya; y <= yb; y++) for(let x = xa; x <= xb; x++) if(wFloor(m, x, y)) wShadeOn(g, m, x, y, s);
+  g.restore();
+}
+
+/* ---------- what stands up: the battlements, the parapets ---------- */
+/* a face of the walls' stone between y0 and y1, its courses counted from `foot` so the pieces of one face meet; lit
+   from the left; `drop`: the face going on down below a wall in front of you, into the shadow at its foot */
+function wFace(g, x, y0, w, y1, k, foot, seed, o){
+  o = o || {};
+  if(y1 - y0 < 0.5 || w < 0.5) return;
+  g.save(); g.beginPath(); g.rect(x, y0, w, y1 - y0); g.clip();
+  g.fillStyle = WS.mortarF; g.fillRect(x, y0, w, y1 - y0);
+  const ch = k * 0.2, gap = Math.max(0.8, k * 0.014), e = Math.max(1, k * 0.012);
+  const first = Math.floor((y0 - foot) / ch) - 1, last = Math.ceil((y1 - foot) / ch) + 1;
+  for(let c = first; c <= last; c++){
+    const cy = foot + c * ch, Rc = rng(seed * 7 + (c + 50) * 131);
+    let bx = x - Rc() * k * 0.4;
+    while(bx < x + w){
+      const bw = k * (0.26 + Rc() * 0.3);
+      g.fillStyle = sh(o.base || WS.face, (Rc() - 0.5) * 0.16);
+      g.fillRect(bx + gap, cy + gap, bw - gap * 2, ch - gap * 2);
+      g.fillStyle = 'rgba(255,255,255,.14)'; g.fillRect(bx + gap, cy + gap, bw - gap * 2, e);
+      g.fillStyle = 'rgba(30,24,52,.16)'; g.fillRect(bx + gap, cy + ch - gap - e, bw - gap * 2, e);
+      bx += bw;
+    }
+  }
+  g.fillStyle = lin(g, x, 0, x + w, 0, [[0, 'rgba(255,255,255,.12)'], [0.45, 'rgba(255,255,255,0)'], [1, 'rgba(30,20,60,.14)']]); g.fillRect(x, y0, w, y1 - y0);
+  if(o.drop){
+    /* below the walk's level the face goes on down out of the light */
+    const yt = Math.max(y0, o.drop);
+    g.fillStyle = lin(g, 0, yt, 0, y1, [[0, 'rgba(14,10,30,.1)'], [0.6, 'rgba(14,10,30,.55)'], [1, 'rgba(14,10,30,.8)']]); g.fillRect(x, yt, w, y1 - yt);
+    g.globalCompositeOperation = 'destination-out';
+    g.fillStyle = lin(g, 0, y1 - (y1 - yt) * 0.45, 0, y1, [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,1)']]); g.fillRect(x, y1 - (y1 - yt) * 0.45, w, (y1 - yt) * 0.45);
+    g.globalCompositeOperation = 'source-over';
+  } else if(!o.noFoot){
+    g.fillStyle = lin(g, 0, y1 - k * 0.24, 0, y1, [[0, 'rgba(20,14,40,0)'], [1, 'rgba(20,14,40,.26)']]); g.fillRect(x, y1 - k * 0.24, w, k * 0.24);
+  }
+  g.restore();
+}
+/* a coping stone's top, seen from above: (x, y) its far corner, d its depth on the screen */
+function wCap(g, x, y, w, d, k, seed, o){
+  o = o || {};
+  if(d < 0.5 || w < 0.5) return;
+  const R = rng(seed), ov = o.flush ? 0 : k * 0.022, e = Math.max(1, k * 0.016);
+  g.fillStyle = o.base || WS.cap; g.fillRect(x - ov, y, w + ov * 2, d);
+  speckle(g, x, y, w, d, R, Math.max(3, Math.round(w * d / (k * k) * 46)), ['rgba(255,255,255,.26)', 'rgba(60,50,92,.14)', 'rgba(60,50,92,.1)'], k * 0.016);
+  if(o.joints) for(let jx = x + o.joints * k * (0.3 + R() * 0.5); jx < x + w - k * 0.15; jx += o.joints * k * (0.7 + R() * 0.5)){ g.fillStyle = 'rgba(60,52,90,.35)'; g.fillRect(jx, y, Math.max(1, k * 0.012), d); }
+  g.fillStyle = 'rgba(255,255,255,.42)'; g.fillRect(x - ov, y, w + ov * 2, e);                         // its far edge, catching the light
+  g.fillStyle = 'rgba(255,255,255,.22)'; g.fillRect(x - ov, y, Math.max(1, k * 0.022), d);              // its left
+  g.fillStyle = 'rgba(40,30,72,.2)'; g.fillRect(x + w + ov - Math.max(1, k * 0.022), y, Math.max(1, k * 0.022), d);
+  g.fillStyle = WS.capL; g.fillRect(x - ov, y + d - Math.max(1.2, k * 0.026), w + ov * 2, Math.max(1.2, k * 0.026));   // its near arris
+  if(!o.flush){ g.fillStyle = 'rgba(28,20,50,.32)'; g.fillRect(x - ov, y + d, w + ov * 2, Math.max(1, k * 0.034)); }   // the shadow under its lip
+}
+/* an arrow loop through a merlon: a cross of slits, round-ended */
+function arrowLoop(g, cx, top, h, k){
+  const w = Math.max(1.5, k * 0.05);
+  g.fillStyle = 'rgba(255,255,255,.12)'; rr(g, cx - w * 1.6, top - w * 0.6, w * 3.2, h + w * 1.2, w * 1.4); g.fill();   // its splay, catching the light
+  g.fillStyle = 'rgba(30,24,52,.35)'; rr(g, cx - w * 1.1, top - w * 0.2, w * 2.2, h + w * 0.4, w); g.fill();
+  g.fillStyle = '#19161f'; rr(g, cx - w / 2, top, w, h, w / 2); g.fill();
+  circ(g, cx, top + h - w * 0.3, w * 0.8, '#19161f');
+}
+/* a piece of the battlements (d.side: which side of the walk it stands on; d.cells: m merlon, o a lookout's notch,
+   k a corner's great merlon, p a post beside an opening) */
+function drawBattlement(g, d, x, y, w, h, k){
+  const X = tx=> x + (tx - d.x) * k, Y = ty=> y + (ty - d.y) * k, M = (1 - WG.MER) / 2, cells = d.cells, seed = d.seed || 1;
+  const merl = c=> c === 'm' || c === 'k' || c === 'p';
+  const span = (a, c)=> c === 'm' ? [a + M, a + 1 - M] : c === 'k' ? [a + 0.04, a + 0.96] : [a + 0.06, a + 0.94];
+  const hOf = c=> WG.HM + (c === 'p' ? 0.22 : c === 'k' ? 0.08 : 0);
+  if(d.side === 'n' || d.side === 's'){
+    const near = d.side === 's', r = d.r, far = near ? r : r + 1 - WG.D, front = far + WG.D;
+    const bottom = near ? front + WG.DROP : front;
+    for(let i = 0; i < cells.length; i++){
+      const a = d.a0 + i, c = cells[i], hs = c === 'o' ? WG.HN : WG.HS;
+      wFace(g, X(a), Y(front - hs), X(a + 1) - X(a), Y(bottom), k, Y(front), seed, { drop:near ? Y(front) : 0 });
+      wCap(g, X(a), Y(far - hs), X(a + 1) - X(a), Y(front - hs) - Y(far - hs), k, seed + a * 11, { base:c === 'o' ? WS.worn : WS.cap, flush:true });
+    }
+    for(let i = 0; i < cells.length; i++){
+      const a = d.a0 + i, c = cells[i];
+      if(!merl(c)) continue;
+      const [u0, u1] = span(a, c), hm = hOf(c);
+      if(!near){                                                        // its shadow across the sill's top, to its right
+        g.fillStyle = 'rgba(26,20,52,.24)'; g.beginPath();
+        g.moveTo(X(u1), Y(far - WG.HS)); g.lineTo(X(u1 + 0.16), Y(far - WG.HS)); g.lineTo(X(u1 + 0.16), Y(front - WG.HS)); g.lineTo(X(u1), Y(front - WG.HS)); g.closePath(); g.fill();
+      }
+      wFace(g, X(u0), Y(front - hm), X(u1) - X(u0), Y(bottom), k, Y(front), seed + 3, { drop:near ? Y(front) : 0 });
+      wCap(g, X(u0), Y(far - hm), X(u1) - X(u0), Y(front - hm) - Y(far - hm), k, seed + a * 17);
+      if(c === 'p') postBall(g, (X(u0) + X(u1)) / 2, (Y(far - hm) + Y(front - hm)) / 2, k);
+      else arrowLoop(g, (X(u0) + X(u1)) / 2, Y(front - hm) + k * 0.1, (hm - WG.HS) * k * 0.95, k);
+    }
+    return;
+  }
+  /* down the side of the walk */
+  const c0 = d.r, fx0 = d.side === 'w' ? c0 + 1 - WG.DV : c0, fx1 = fx0 + WG.DV;
+  for(let i = 0; i < cells.length; i++){
+    const a = d.a0 + i, c = cells[i], hs = c === 'o' ? WG.HN : WG.HS;
+    wFace(g, X(fx0), Y(a + 1 - hs), X(fx1) - X(fx0), Y(a + 1), k, Y(a + 1), seed + a * 5);
+    wCap(g, X(fx0), Y(a - hs), X(fx1) - X(fx0), Y(a + 1 - hs) - Y(a - hs), k, seed + a * 9, { base:c === 'o' ? WS.worn : WS.cap, flush:true });
+  }
+  for(let i = 0; i < cells.length; i++){
+    const a = d.a0 + i, c = cells[i];
+    if(!merl(c)) continue;
+    const [u0, u1] = span(a, c), hm = hOf(c);
+    wFace(g, X(fx0), Y(u1 - hm), X(fx1) - X(fx0), Y(u1 - WG.HS), k, Y(u1), seed + a * 3, { noFoot:true });
+    wCap(g, X(fx0), Y(u0 - hm), X(fx1) - X(fx0), Y(u1 - hm) - Y(u0 - hm), k, seed + a * 19);
+    if(c === 'p') postBall(g, (X(fx0) + X(fx1)) / 2, (Y(u0 - hm) + Y(u1 - hm)) / 2, k);
+  }
+}
+/* a stone ball on a post beside an opening in the battlements */
+function postBall(g, cx, cy, k){
+  shadow(g, cx + k * 0.04, cy + k * 0.05, k * 0.17, k * 0.07, 0.3);
+  g.fillStyle = WS.face; g.fillRect(cx - k * 0.13, cy - k * 0.06, k * 0.26, k * 0.08);
+  g.fillStyle = rad(g, cx - k * 0.05, cy - k * 0.2, k * 0.02, k * 0.18, [[0, WS.capL], [0.6, WS.cap], [1, WS.faceD]]);
+  g.beginPath(); g.arc(cx, cy - k * 0.16, k * 0.15, 0, TAU); g.fill();
+}
+/* a piece of the parapet on the castle's side: a low wall under its coping */
+function drawParapetW(g, d, x, y, w, h, k){
+  const X = tx=> x + (tx - d.x) * k, Y = ty=> y + (ty - d.y) * k, seed = d.seed || 1, len = d.cells.length;
+  if(d.side === 'n' || d.side === 's'){
+    const near = d.side === 's', r = d.r, far = near ? r : r + 1 - WG.D, front = far + WG.D;
+    const bottom = near ? front + WG.DROP : front;
+    wFace(g, X(d.a0), Y(front - WG.HP), X(d.a0 + len) - X(d.a0), Y(bottom), k, Y(front), seed, { drop:near ? Y(front) : 0 });
+    wCap(g, X(d.a0), Y(far - WG.HP), X(d.a0 + len) - X(d.a0), Y(front - WG.HP) - Y(far - WG.HP), k, seed + 5, { joints:0.95, flush:true });
+    return;
+  }
+  const c0 = d.r, fx0 = d.side === 'w' ? c0 + 1 - WG.DPV : c0, fx1 = fx0 + WG.DPV;
+  wCap(g, X(fx0), Y(d.a0 - WG.HP), X(fx1) - X(fx0), Y(d.a0 + len - WG.HP) - Y(d.a0 - WG.HP), k, seed + 7, { flush:true });
+  /* its coping's joints, across it */
+  const R = rng(seed + 13);
+  for(let jy = d.a0 + 0.4 + R() * 0.5; jy < d.a0 + len; jy += 0.75 + R() * 0.45){ g.fillStyle = 'rgba(60,52,90,.35)'; g.fillRect(X(fx0), Y(jy - WG.HP), X(fx1) - X(fx0), Math.max(1, k * 0.012)); }
+}
+/* the King's banner, hanging on the face toward you (LIVE: it stirs) */
+function drawWBanner(g, d, x, y, w, h, k, t){
+  const blue = d.n % 2 === 1, C = blue ? ['#2f4f9a', '#22397a', '#4a6ab8'] : ['#a3263b', '#7c1a2b', '#c23a50'];
+  const bx = x + w * 0.12, bw = w * 0.76, top = y + k * 0.1, bh = h - k * 0.32, sw = Math.sin(t * 1.6 + d.x * 0.7) * k * 0.025;
+  /* its rod and rings */
+  g.fillStyle = '#3a2a1a'; g.fillRect(x + w * 0.04, top - k * 0.05, w * 0.92, Math.max(2, k * 0.05));
+  circ(g, x + w * 0.04, top - k * 0.025, k * 0.04, GOLD); circ(g, x + w * 0.96, top - k * 0.025, k * 0.04, GOLD);
+  /* the cloth, its tail cut in two points */
+  const path = ()=>{ g.beginPath(); g.moveTo(bx, top); g.lineTo(bx + bw, top); g.quadraticCurveTo(bx + bw + sw, top + bh * 0.5, bx + bw + sw * 1.6, top + bh); g.lineTo(bx + bw / 2 + sw, top + bh - k * 0.2); g.lineTo(bx + sw * 1.6, top + bh); g.quadraticCurveTo(bx + sw, top + bh * 0.5, bx, top); g.closePath(); };
+  g.fillStyle = 'rgba(10,6,20,.3)'; g.save(); g.translate(k * 0.04, k * 0.05); path(); g.fill(); g.restore();
+  path(); g.fillStyle = lin(g, bx, 0, bx + bw, 0, [[0, C[2]], [0.35, C[0]], [1, C[1]]]); g.fill();
+  g.save(); path(); g.clip();
+  g.strokeStyle = GOLD; g.lineWidth = Math.max(1.5, k * 0.035); path(); g.stroke();
+  g.fillStyle = lin(g, 0, top, 0, top + bh, [[0, 'rgba(255,255,255,.12)'], [0.5, 'rgba(255,255,255,0)'], [1, 'rgba(0,0,0,.2)']]); g.fillRect(bx - k, top, bw + 2 * k, bh);
+  /* a fold or two */
+  g.fillStyle = 'rgba(0,0,0,.12)'; g.fillRect(bx + bw * 0.62 + sw * 0.5, top, bw * 0.08, bh);
+  g.restore();
+  /* the crest: a crown over a star */
+  const cx = bx + bw / 2 + sw * 0.6, cy = top + bh * 0.36, cr = bw * 0.24;
+  g.fillStyle = GOLD; g.beginPath(); g.moveTo(cx - cr, cy + cr * 0.35); g.lineTo(cx - cr * 1.05, cy - cr * 0.45); g.lineTo(cx - cr * 0.5, cy - cr * 0.05); g.lineTo(cx, cy - cr * 0.7); g.lineTo(cx + cr * 0.5, cy - cr * 0.05); g.lineTo(cx + cr * 1.05, cy - cr * 0.45); g.lineTo(cx + cr, cy + cr * 0.35); g.closePath(); g.fill();
+  g.fillStyle = GOLD_L; g.fillRect(cx - cr, cy + cr * 0.22, cr * 2, cr * 0.16);
+  const sy = cy + cr * 1.25, sr = cr * 0.55;
+  g.fillStyle = GOLD; g.beginPath(); for(let i = 0; i < 10; i++){ const a = -Math.PI / 2 + i * Math.PI / 5, rr2 = i % 2 ? sr * 0.42 : sr; g.lineTo(cx + Math.cos(a) * rr2, sy + Math.sin(a) * rr2); } g.closePath(); g.fill();
+}
+/* an iron brazier on the parapet, burning (the fire LIVE) */
+function drawBrazier(g, d, x, y, w, h, k){
+  const cx = x + w / 2, foot = y + h - k * 0.04, bowl = foot - k * 0.42, bw = w * 0.86;
+  shadow(g, cx + k * 0.05, foot, bw * 0.42, k * 0.06, 0.3);
+  g.strokeStyle = WS.iron; g.lineWidth = Math.max(1.5, k * 0.045); g.lineCap = 'round';
+  [[-0.36, 0], [0.36, 0], [0, 0.05]].forEach(([dx, dy])=>{ g.beginPath(); g.moveTo(cx + dx * bw * 0.5, bowl + k * 0.06); g.lineTo(cx + dx * bw * 1.05, foot - dy * k); g.stroke(); });
+  g.beginPath(); g.moveTo(cx - bw * 0.3, foot - k * 0.14); g.lineTo(cx + bw * 0.3, foot - k * 0.14); g.stroke();
+  /* the bowl: a band of iron, riveted, its rim catching the light */
+  g.fillStyle = lin(g, cx - bw / 2, 0, cx + bw / 2, 0, [[0, WS.ironL], [0.35, WS.iron], [1, '#1a1920']]);
+  g.beginPath(); g.moveTo(cx - bw / 2, bowl - k * 0.08); g.lineTo(cx + bw / 2, bowl - k * 0.08); g.lineTo(cx + bw * 0.36, bowl + k * 0.12); g.lineTo(cx - bw * 0.36, bowl + k * 0.12); g.closePath(); g.fill();
+  for(let i = 0; i < 5; i++) circ(g, cx - bw * 0.36 + i * bw * 0.18, bowl + k * 0.015, Math.max(0.8, k * 0.014), '#6a6676');
+  g.fillStyle = '#5a5664'; g.fillRect(cx - bw / 2, bowl - k * 0.1, bw, Math.max(1.5, k * 0.03));
+  /* its coals */
+  g.fillStyle = '#3a1608'; g.beginPath(); g.ellipse(cx, bowl - k * 0.085, bw * 0.46, k * 0.05, 0, 0, TAU); g.fill();
+  const R = rng(Math.round(d.x * 31 + d.y * 7));
+  for(let i = 0; i < 9; i++) circ(g, cx + (R() - 0.5) * bw * 0.8, bowl - k * 0.09 + (R() - 0.5) * k * 0.05, k * (0.02 + R() * 0.02), ['#ff8a2a', '#ffb347', '#c8341a'][i % 3]);
+}
+function brazierFire(g, d, x, y, w, h, k, t){
+  const cx = x + w / 2, foot = y + h - k * 0.04, bowl = foot - k * 0.42;
+  const prev = g.globalCompositeOperation;
+  g.globalCompositeOperation = 'lighter';
+  const gl = 0.85 + 0.15 * Math.sin(t * 7 + d.x);
+  g.fillStyle = rad(g, cx, bowl - k * 0.2, 0, k * 1.1, [[0, `rgba(255,170,70,${0.32 * gl})`], [0.5, `rgba(255,120,40,${0.1 * gl})`], [1, 'rgba(255,120,40,0)']]); g.fillRect(cx - k * 1.1, bowl - k * 1.3, k * 2.2, k * 2.2);
+  g.globalCompositeOperation = prev;
+  for(let i = 0; i < 3; i++) flameAt(g, cx + (i - 1) * w * 0.2, bowl - k * 0.07, k * (i === 1 ? 0.2 : 0.13), t, d.x * 3 + i);
+}
+/* a pennant on a short pole on the parapet (LIVE: it flies) */
+function drawPennant(g, d, x, y, w, h, k, t){
+  const px = x + k * 0.1, foot = y + h, top = y + k * 0.06;
+  g.strokeStyle = '#3a2a1a'; g.lineWidth = Math.max(1.5, k * 0.04); g.beginPath(); g.moveTo(px, foot); g.lineTo(px, top); g.stroke();
+  circ(g, px, top, k * 0.04, GOLD);
+  const C = d.n % 2 ? '#2f4f9a' : '#a3263b', len = k * 0.62, f = (u)=> Math.sin(t * 3.2 + u * 5 + d.y) * k * 0.05 * u;
+  g.fillStyle = C; g.beginPath(); g.moveTo(px, top + k * 0.04);
+  for(let i = 0; i <= 8; i++){ const u = i / 8; g.lineTo(px + len * u, top + k * 0.04 + k * 0.1 * u + f(u)); }
+  for(let i = 8; i >= 0; i--){ const u = i / 8; g.lineTo(px + len * u, top + k * 0.32 - k * 0.12 * u + f(u)); }
+  g.closePath(); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.moveTo(px, top + k * 0.04); for(let i = 0; i <= 8; i++){ const u = i / 8; g.lineTo(px + len * u, top + k * 0.04 + k * 0.1 * u + f(u)); } for(let i = 8; i >= 0; i--){ const u = i / 8; g.lineTo(px + len * u, top + k * 0.1 + k * 0.08 * u + f(u)); } g.closePath(); g.fill();
+}
+/* the flag on a rampart's outer corner (LIVE) */
+function drawFlagpole(g, d, x, y, w, h, k, t){
+  const px = x + k * 0.5, foot = y + h - k * 0.05, top = y + k * 0.1;
+  g.strokeStyle = '#3a2a1a'; g.lineWidth = Math.max(2, k * 0.06); g.beginPath(); g.moveTo(px, foot); g.lineTo(px, top); g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,.25)'; g.lineWidth = Math.max(1, k * 0.018); g.beginPath(); g.moveTo(px - k * 0.015, foot); g.lineTo(px - k * 0.015, top); g.stroke();
+  circ(g, px, top, k * 0.07, GOLD); circ(g, px - k * 0.02, top - k * 0.02, k * 0.025, GOLD_L);
+  const len = k * 1.15, f = (u)=> Math.sin(t * 2.6 + u * 4.2 + d.x) * k * 0.09 * u;
+  const yt = top + k * 0.08;
+  g.fillStyle = '#2f4f9a'; g.beginPath(); g.moveTo(px, yt);
+  for(let i = 0; i <= 10; i++){ const u = i / 10; g.lineTo(px + len * u, yt + k * 0.14 * u + f(u)); }
+  for(let i = 10; i >= 0; i--){ const u = i / 10; g.lineTo(px + len * u, yt + k * 0.5 - k * 0.2 * u + f(u)); }
+  g.closePath(); g.fill();
+  g.fillStyle = GOLD; for(let i = 1; i <= 10; i++){ const u = i / 10; if(i % 2) continue; circ(g, px + len * u, yt + k * 0.14 * u + f(u), k * 0.018, GOLD); }
+  g.fillStyle = 'rgba(255,255,255,.16)'; g.beginPath(); g.moveTo(px, yt); for(let i = 0; i <= 10; i++){ const u = i / 10; g.lineTo(px + len * u, yt + k * 0.14 * u + f(u)); } for(let i = 10; i >= 0; i--){ const u = i / 10; g.lineTo(px + len * u, yt + k * 0.22 * u + f(u) + k * 0.05); } g.closePath(); g.fill();
+  /* a crown on it */
+  const u = 0.32, cx = px + len * u, cy = yt + k * 0.25 + f(u) - k * 0.02, cr = k * 0.09;
+  g.fillStyle = GOLD; g.beginPath(); g.moveTo(cx - cr, cy + cr * 0.4); g.lineTo(cx - cr, cy - cr * 0.4); g.lineTo(cx - cr * 0.45, cy); g.lineTo(cx, cy - cr * 0.6); g.lineTo(cx + cr * 0.45, cy); g.lineTo(cx + cr, cy - cr * 0.4); g.lineTo(cx + cr, cy + cr * 0.4); g.closePath(); g.fill();
+}
+/* the spyglass at a rampart's outer corner: brass on a wooden tripod, looking out over the jungle */
+function drawSpyglass(g, d, x, y, w, h, k){
+  const cx = x + w * 0.5, hub = y + h * 0.5, foot = y + h * 0.95;
+  const dir = d.corner === 'nw' ? [-1, -1] : d.corner === 'ne' ? [1, -1] : d.corner === 'sw' ? [-1, 1] : [1, 1];
+  shadow(g, cx + k * 0.08, foot, w * 0.34, k * 0.08, 0.28);
+  /* the tripod's legs: the far one first */
+  const leg = (fx, fy, far)=>{ g.strokeStyle = far ? '#5a3a20' : '#7a4f2a'; g.lineWidth = Math.max(1.5, k * 0.05); g.lineCap = 'round'; g.beginPath(); g.moveTo(cx, hub); g.lineTo(fx, fy); g.stroke(); g.strokeStyle = 'rgba(255,230,190,.25)'; g.lineWidth = Math.max(0.8, k * 0.014); g.beginPath(); g.moveTo(cx - k * 0.012, hub); g.lineTo(fx - k * 0.012, fy); g.stroke(); circ(g, fx, fy, k * 0.03, '#3a2a1a'); };
+  leg(cx + w * 0.04, foot - k * 0.2, true);
+  leg(cx - w * 0.34, foot, false); leg(cx + w * 0.34, foot, false);
+  circ(g, cx, hub, k * 0.07, GOLD_D); circ(g, cx, hub, k * 0.05, GOLD); circ(g, cx - k * 0.015, hub - k * 0.015, k * 0.02, GOLD_L);
+  /* the glass: tapering brass in three draws, a leather grip, its lens toward the jungle */
+  const ang = Math.atan2(dir[1] * 0.42 - 0.35, dir[0]);
+  g.save(); g.translate(cx, hub - k * 0.06); g.rotate(ang);
+  const seg = (x0, x1, r0, r1, c)=>{ g.fillStyle = lin(g, 0, -r0, 0, r0, [[0, GOLD_L], [0.35, c], [1, GOLD_D]]); g.beginPath(); g.moveTo(x0, -r0); g.lineTo(x1, -r1); g.lineTo(x1, r1); g.lineTo(x0, r0); g.closePath(); g.fill(); };
+  seg(-k * 0.34, -k * 0.12, k * 0.045, k * 0.055, GOLD);
+  g.fillStyle = '#4a2a18'; g.fillRect(-k * 0.12, -k * 0.065, k * 0.14, k * 0.13);
+  seg(k * 0.02, k * 0.3, k * 0.06, k * 0.075, GOLD);
+  seg(k * 0.3, k * 0.5, k * 0.085, k * 0.095, '#c9a24a');
+  g.fillStyle = '#2a2a3a'; g.beginPath(); g.ellipse(k * 0.5, 0, k * 0.025, k * 0.09, 0, 0, TAU); g.fill();
+  g.fillStyle = 'rgba(170,220,255,.8)'; g.beginPath(); g.ellipse(k * 0.505, -k * 0.02, k * 0.012, k * 0.04, 0, 0, TAU); g.fill();
+  g.fillStyle = GOLD_D; g.fillRect(-k * 0.38, -k * 0.035, k * 0.05, k * 0.07);
+  g.restore();
+}
+/* past a rampart's arch, the walk going on along its wall (over the far view), fading away */
+function drawWallStub(g, d, x, y, w, h, k){
+  const X = tx=> x + (tx - d.x) * k, Y = ty=> y + (ty - d.y) * k, s = k, o = d.o;   // o: the passage's squares {x0, y0, x1, y1}, its way out (dir)
+  g.save();
+  g.fillStyle = WS.mortar; g.fillRect(X(o.x0), Y(o.y0), X(o.x1) - X(o.x0), Y(o.y1) - Y(o.y0));
+  g.beginPath(); g.rect(X(o.x0), Y(o.y0), X(o.x1) - X(o.x0), Y(o.y1) - Y(o.y0)); g.clip();
+  const across = o.dir === 'e' || o.dir === 'w', R = rng(4242 + Math.round(o.x0 * 13 + o.y0 * 7));
+  for(let c = 0; c < (across ? (o.y1 - o.y0) * 2 : (o.x1 - o.x0) * 2); c++){
+    let at = -R() * 1.2; const end = across ? o.x1 - o.x0 : o.y1 - o.y0;
+    while(at < end){ const len = 0.55 + R() * 0.8, tone = WS.flags[Math.floor(R() * WS.flags.length)], sd = Math.floor(R() * 1e9);
+      if(across) flagStone(g, X(o.x0 + at), Y(o.y0 + c * 0.5), len * s, 0.5 * s, s, sd, tone); else flagStone(g, X(o.x0 + c * 0.5), Y(o.y0 + at), 0.5 * s, len * s, s, sd, tone);
+      at += len; }
+  }
+  g.restore();
+  /* its low walls either side */
+  if(across){
+    wFace(g, X(o.x0), Y(o.y0 - WG.HP + WG.D * 0), X(o.x1) - X(o.x0), Y(o.y0), k, Y(o.y0), 77, {});
+    wCap(g, X(o.x0), Y(o.y0 - WG.D - WG.HP), X(o.x1) - X(o.x0), WG.D * k, k, 78, { joints:0.95, flush:true });
+    wCap(g, X(o.x0), Y(o.y1 - WG.HP), X(o.x1) - X(o.x0), WG.D * k, k, 79, { joints:0.95, flush:true });
+    wFace(g, X(o.x0), Y(o.y1 - WG.HP + WG.D), X(o.x1) - X(o.x0), Y(o.y1 + WG.D + 0.5), k, Y(o.y1 + WG.D), 80, { drop:Y(o.y1 + WG.D) });
+  } else {
+    wCap(g, X(o.x0 - WG.DPV), Y(o.y0 - WG.HP), WG.DPV * k, Y(o.y1) - Y(o.y0), k, 81, { flush:true });
+    wCap(g, X(o.x1), Y(o.y0 - WG.HP), WG.DPV * k, Y(o.y1) - Y(o.y0), k, 82, { flush:true });
+  }
+  /* fading out as it goes */
+  g.save(); g.globalCompositeOperation = 'destination-out';
+  const gx0 = o.dir === 'e' ? X(o.x0) : o.dir === 'w' ? X(o.x1) : 0, gx1 = o.dir === 'e' ? X(o.x1) : o.dir === 'w' ? X(o.x0) : 0;
+  const gy0 = o.dir === 's' ? Y(o.y0) : o.dir === 'n' ? Y(o.y1) : 0, gy1 = o.dir === 's' ? Y(o.y1) : o.dir === 'n' ? Y(o.y0) : 0;
+  g.fillStyle = across ? lin(g, gx0, 0, gx1, 0, [[0, 'rgba(0,0,0,0)'], [0.35, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,1)']]) : lin(g, 0, gy0, 0, gy1, [[0, 'rgba(0,0,0,0)'], [0.35, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,1)']]);
+  g.fillRect(x - k, y - k, w + 2 * k, h + 2 * k);
+  g.restore();
+}
+const WALL_KEEP = { battlement:still(drawBattlement, 0.3), parapetW:still(drawParapetW, 0.3), brazier:still(drawBrazier, 0.3), spyglass:still(drawSpyglass, 0.4), wallStub:still(drawWallStub, 0.6) };
+const WALL_LIVE = { wbanner:drawWBanner, brazier:brazierFire, pennant:drawPennant, flagpole:drawFlagpole };
+
+/* ---------- a wall's or a rampart's things, set out once ---------- */
+function walkDress(m, kind, id){
+  const W = m.W, walk = m.walk = { kind, id, seed:(kind === 'ramp' ? 300 : 100) + ['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'].indexOf(id) * 17, cell:new Map() };
+  m.room = kind + '_' + id;                                            // its own pieces of picture (slice)
+  m._ri = null;
+  const put = (x, y, side, k)=> walk.cell.set(y * W + x, { side, k });
+  if(kind === 'wall'){
+    const sp = m.tags.sp; walk.across = sp.across;
+    const bs = sp.across ? (sp.crenel < sp.walk[0] ? 'n' : 's') : (sp.crenel < sp.walk[0] ? 'w' : 'e');
+    const ps = sp.across ? (sp.parapet < sp.walk[0] ? 'n' : 's') : (sp.parapet < sp.walk[0] ? 'w' : 'e');
+    for(let a = 0; a < 64; a++){
+      const bx = sp.across ? a : sp.crenel, by = sp.across ? sp.crenel : a, px = sp.across ? a : sp.parapet, py = sp.across ? sp.parapet : a;
+      put(bx, by, bs, caAt(m, bx, by) === T.NOTCH ? 'o' : 'm');
+      put(px, py, ps, 'r');
+    }
+  } else {
+    for(let i = 2; i <= 11; i++){
+      [[i, 2, 'n'], [i, 11, 's'], [2, i, 'w'], [11, i, 'e']].forEach(([x, y, side])=>{
+        if((side === 'w' || side === 'e') && (y === 2 || y === 11)) return;   // the corners go with the rows
+        const t = caAt(m, x, y);
+        if(t !== T.CRENEL && t !== T.NOTCH) return;                    // an opening: an arch onto a wall
+        let k = t === T.NOTCH ? 'o' : 'm';
+        if((x === 2 || x === 11) && (y === 2 || y === 11)) k = 'k';
+        else if(k === 'm'){ const hz = side === 'n' || side === 's', n1 = hz ? caAt(m, x - 1, y) : caAt(m, x, y - 1), n2 = hz ? caAt(m, x + 1, y) : caAt(m, x, y + 1); if(n1 === T.WALK || n2 === T.WALK) k = 'p'; }
+        put(x, y, side, k);
+      });
+    }
+  }
+  /* the pieces: along each line of wall, up to four squares, cut where it is broken */
+  const lines = new Map();
+  walk.cell.forEach((c, i)=>{
+    const x = i % W, y = (i - x) / W, hz = c.side === 'n' || c.side === 's', key = c.side + ':' + (hz ? y : x) + ':' + (c.k === 'r' ? 'r' : 'b');
+    if(!lines.has(key)) lines.set(key, []);
+    lines.get(key).push({ a:hz ? x : y, k:c.k });
+  });
+  lines.forEach((list, key)=>{
+    const [side, rS, what] = key.split(':'), r = +rS, par = what === 'r';
+    list.sort((p, q)=> p.a - q.a);
+    let run = [];
+    const flush = ()=>{
+      if(!run.length) return;
+      const a0 = run[0].a, len = run.length, cells = run.map(p=> p.k).join('');
+      const H_ = par ? WG.HP : WG.HM + 0.25;
+      const o = { side, r, a0, cells, seed:walk.seed * 101 + r * 7 + a0 * 13, n:`${m.room}:${side}:${r}:${a0}` };
+      if(side === 'n') caDeco(m, par ? 'parapetW' : 'battlement', a0, r + 1 - WG.D - H_ - 0.05, len, WG.D + H_ + 0.05, Object.assign(o, { z:r + 0.99 }));
+      else if(side === 's') caDeco(m, par ? 'parapetW' : 'battlement', a0, r - H_ - 0.05, len, H_ + WG.D + WG.DROP + 0.07, Object.assign(o, { z:r + 0.5 }));
+      else { const th = par ? WG.DPV : WG.DV, fx = side === 'w' ? r + 1 - th : r;
+        caDeco(m, par ? 'parapetW' : 'battlement', fx, a0 - H_ - 0.05, th, len + H_ + 0.05, Object.assign(o, { z:a0 + len - 0.01 })); }
+      run = [];
+    };
+    list.forEach(p=>{ if(run.length && (p.a !== run[run.length - 1].a + 1 || p.a % 4 === 0)) flush(); run.push(p); });
+    flush();
+  });
+  /* what stands on them, and what hangs from them */
+  if(kind === 'wall'){
+    const sp = m.tags.sp, A = (a, b)=> sp.across ? [a, b] : [b, a];
+    const bs = walk.cell.get((sp.across ? sp.crenel * W + 0 : 0 * W + sp.crenel)).side;
+    const ps = walk.cell.get((sp.across ? sp.parapet * W + 0 : 0 * W + sp.parapet)).side;
+    [6, 18, 30, 42, 54].forEach((a, i)=>{
+      if(ps === 's') caDeco(m, 'wbanner', a + 0.08, sp.parapet - WG.HP + WG.D - 0.1, 0.84, 1.75, { z:sp.parapet + 0.6, n:i });            // down the parapet's face, over the castle
+      else if(bs === 's' && caAt(m, a, sp.crenel) === T.CRENEL) caDeco(m, 'wbanner', a + 0.12, sp.crenel - WG.HM + WG.D - 0.1, 0.76, 1.75, { z:sp.crenel + 0.6, n:i });   // down the battlements' face, over the jungle
+      else if(!sp.across){ const [x, y] = A(a, sp.parapet); caDeco(m, 'pennant', (ps === 'w' ? x + 1 - WG.DPV / 2 : x + WG.DPV / 2) - 0.1, y + 0.5 - WG.HP - 1.2, 0.9, 1.2, { z:Math.floor(y / 4) * 4 + 4 - 0.005, n:i }); }
+    });
+    [12, 24, 36, 48, 60].forEach(a=>{
+      const [x, y] = A(a, sp.parapet);
+      if(ps === 's') caDeco(m, 'brazier', x + 0.2, y - WG.HP + WG.D * 0.55 - 0.9, 0.6, 0.9, { z:y + 0.55 });
+      else if(ps === 'n') caDeco(m, 'brazier', x + 0.2, y + 1 - WG.D * 0.45 - WG.HP - 0.9, 0.6, 0.9, { z:y + 0.995 });
+      else { const cx = ps === 'w' ? x + 1 - WG.DPV / 2 : x + WG.DPV / 2; caDeco(m, 'brazier', cx - 0.3, y + 0.5 - WG.HP - 0.9, 0.6, 0.9, { z:Math.floor(y / 4) * 4 + 4 - 0.005 }); }
+    });
+  } else {
+    const c = id, R = CA_RAMP[c];
+    /* the flag on the outer corner, standing on its great merlon */
+    const fx = c[1] === 'w' ? 2 : 11, fy = c[0] === 'n' ? 2 : 11;
+    const footY = (c[0] === 'n' ? fy + 1 - WG.D : fy) - (WG.HM + 0.08) + WG.D / 2;
+    caDeco(m, 'flagpole', fx, footY - 2.25, 1.7, 2.3, { z:fy + (c[0] === 'n' ? 0.995 : 0.6) });
+    /* past each arch, the walk going on */
+    Object.keys(R.walls).forEach(s=>{
+      const o = s === 'e' ? { x0:12, y0:6, x1:14, y1:8, dir:'e' } : s === 'w' ? { x0:0, y0:6, x1:2, y1:8, dir:'w' } : s === 'n' ? { x0:6, y0:0, x1:8, y1:2, dir:'n' } : { x0:6, y0:12, x1:8, y1:14, dir:'s' };
+      caDeco(m, 'wallStub', o.x0 - 0.5, o.y0 - 0.8, o.x1 - o.x0 + 1, o.y1 - o.y0 + 1.6, { o, z:s === 's' ? 13 : s === 'n' ? 1.5 : 7.5, n:m.room + ':' + s });
+    });
+  }
   m.deco.sort((a, b)=> a.z - b.z);
   return m;
 }
@@ -2501,6 +3081,6 @@ function artURL(kind, key, px){
   return url;
 }
 
-return { slice, furn, dress, info,
+return { slice, furn, dress, info, walkDress, geo:WG,
   cover:(key, px)=> artURL('cover', key, px || 220), disc:(key, px)=> artURL('disc', key, px || 200), coverArt, discArt, label:(key)=> LABEL[key] || '#f2c23a' };
 })();

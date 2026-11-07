@@ -520,7 +520,7 @@ function renderPartyList(){
       <div class="pair-foot">🤝 ${escapeHtml(displayName(c))} fights beside ${escapeHtml(displayName(m))} · on a tie, ${escapeHtml(displayName(L))} (left) goes first</div>
       ${open}
     </div>`;
-  }).join('');
+  }).join('') + ((typeof questPassengersHtml === 'function') ? questPassengersHtml() : '');   // (3.99) the sealed blades you carry for the Fairy King: passengers
 
   list.querySelectorAll('[data-tap]').forEach(el=>el.addEventListener('click', ()=>{
     const uid = el.dataset.tap;

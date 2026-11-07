@@ -51,7 +51,7 @@
    ============================================================ */
 const RIFT_SKY = {
   turn: -0.0015,           // radians a second, the whole sky round its one centre: a turn in about 70 minutes
-  fps: 30, moveFps: 60, behindFps: 12,
+  fps: 30, moveFps: 60, behindFps: 12, writeFps: 20,   // (3.98) behind the spelling screen: a little slower, the strokes come first
   dust: 5.4e-4,            // faint, still stars, per square pixel
   stars: 1.35e-4,          // twinkling ones, per square pixel…
   bright: 0.13,            // …this share of them big, glowing and coloured
@@ -553,6 +553,7 @@ function riftSkyTick(now){
     } else {
       s.behind = mapOn;
       if(mapOn) fps = RIFT_SKY.behindFps;
+      else if(document.body.classList.contains('writing')) fps = RIFT_SKY.writeFps;
     }
     if(now - s.last >= 1000 / fps - 4){
       s.last = now;

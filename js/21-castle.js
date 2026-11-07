@@ -103,7 +103,9 @@ const CA_WHO = {
    except the king and princess, tribal guardians, sealed blades and tribal
    ancestors can be caught via the alien fights" — at Lv 98, as the tribes'
    fairies are. Each kit: Basic, Power1, Power2, Ultimate, Max, built from
-   mechanics the game already has (their words come with them).
+   mechanics the game already has (their words come with them). (3.98) No
+   Max for the wild ones — the designer: "max moves only come on starter,
+   elite and legendary tier monsters. wild monsters never learn a max move."
      · the knights: Chestnut Knight (elite, Grass/Physical, tanky damage),
        Duck Knight (Physical/Flying, tank), Bug Knight (Physical/Grass, tank);
      · the townsfolk: Fairybird (elite, support), Cream Fairy (elite, buffs
@@ -128,14 +130,12 @@ const CA_FOLK = {
     ['Basic', 'Leek Swipe', 0.25, 'Single', 2, 1],
     ['Power1', 'Quack Challenge', 0.4, 'AOE', 4, 5, { taunt:{ turns:1 } }],
     ['Power2', 'Down Padding', null, 'Passive', 0, 18, { passive:{ block:2, armour:0.15 } }],
-    ['Ultimate', 'Leek Flurry', 0.6, 'Single', 8, 25, { hits:2 }],
-    ['Max', 'Leek Flurry Max', 0.75, 'Single', 8, 51, { hits:2 }]] },
+    ['Ultimate', 'Leek Flurry', 0.6, 'Single', 8, 25, { hits:2 }]] },
   bug_knight:     { name:'Bug Knight', tier:'wild', types:['Physical', 'Grass'], evo:[115], evoMult:1.5, glyph:'甲', color:'#3f6b4a', citizen:true, moves:[
     ['Basic', 'Horn Poke', 0.25, 'Single', 2, 1],
     ['Power1', 'Carapace Roll', 0.5, 'AOE', 4, 5, { shieldGain:1.5 }],
     ['Power2', 'Chitin Plates', null, 'Passive', 0, 18, { passive:{ block:2, shakeOff:1 } }],
-    ['Ultimate', 'Beetle Ram', 1.25, 'Single', 8, 25, { stunHit:0.2 }],
-    ['Max', 'Beetle Ram Max', 1.5, 'Single', 8, 51, { stunHit:0.25 }]] },
+    ['Ultimate', 'Beetle Ram', 1.25, 'Single', 8, 25, { stunHit:0.2 }]] },
   fairybird:      { name:'Fairybird', tier:'elite', types:['Fairy', 'Flying'], evo:[115], evoMult:1.5, glyph:'雀', color:'#8ec8ec', citizen:true, moves:[
     ['Basic', 'Cloud Peck', 0.3, 'Single', 2, 1],
     ['Power1', 'Cloud Cushion', null, 'Self', 4, 1, { barrier:{ shields:2, on:'partner', worth:1, icon:'☁️' } }],
@@ -152,28 +152,23 @@ const CA_FOLK = {
     ['Basic', 'Puff Pop', 0.25, 'Single', 2, 1],
     ['Power1', 'Pastry Shield', null, 'Self', 4, 5, { barrier:{ shields:1, on:'partner', worth:2, icon:'🧁' } }],
     ['Power2', 'Powdered Sugar', null, 'Passive', 0, 18, { passive:{ terrorize:0.1 } }],
-    ['Ultimate', 'Choux Burst', 0.8, 'AOE', 8, 25, { softenHit:{ chance:0.35, amount:0.5 } }],
-    ['Max', 'Choux Burst Max', 1.0, 'AOE', 8, 51, { softenHit:{ chance:0.5, amount:0.5 } }]] },
+    ['Ultimate', 'Choux Burst', 0.8, 'AOE', 8, 25, { softenHit:{ chance:0.35, amount:0.5 } }]] },
   fairybunny:     { name:'Fairybunny', tier:'wild', types:['Fairy'], evo:[115], evoMult:1.5, glyph:'兔', color:'#f2a6c2', citizen:true, moves:[
     ['Basic', 'Bunny Hop', 0.25, 'Single', 2, 1],
     ['Power1', 'Bunny Eyes', null, 'Single', 4, 5, { charm:{ turns:3, chance:0.2 } }],
     ['Power2', 'Lucky Paw', null, 'Passive', 0, 18, { passive:{ evadeAlways:0.2 } }],
-    ['Ultimate', 'Lucky Comet', 0.8, 'AOE', 8, 25, { confuseHit:{ chance:0.25, ffPower:0.6 } }],   // (3.96) on every foe, a support's (1.25× on one until 3.96)
-    ['Max', 'Lucky Comet Max', 1.0, 'AOE', 8, 51, { confuseHit:{ chance:0.3, ffPower:0.6 } }]] },
+    ['Ultimate', 'Lucky Comet', 0.8, 'AOE', 8, 25, { confuseHit:{ chance:0.25, ffPower:0.6 } }]] },   // (3.96) on every foe, a support's (1.25× on one until 3.96)
   melody_fairy:   { name:'Melody Fairy', tier:'wild', types:['Fairy'], evo:[], glyph:'乐', color:'#c69ae6', citizen:true, moves:[
     ['Basic', 'Note Tap', 0.25, 'Single', 2, 1],
     ['Power1', 'Encore', null, 'Self', 4, 5, { enchant:{ deal:1.25, turns:3 } }],
     ['Power2', 'Rousing Rhythm', null, 'Passive', 0, 18, { passive:{ speed:1, cleanseEnd:1 } }],
-    ['Ultimate', 'Crescendo', 0.8, 'AOE', 8, 25],
-    ['Max', 'Crescendo Max', 1.0, 'AOE', 8, 51, { softenHit:{ chance:0.35, amount:0.5 } }]] },
+    ['Ultimate', 'Crescendo', 0.8, 'AOE', 8, 25]] },
   mantis:         { name:'Mantis', tier:'wild', types:['Grass', 'Psychic'], evo:[115], evoMult:1.5, glyph:'螳', color:'#e7809e', citizen:true, moves:[
     ['Basic', 'Petal Scythe', 0.25, 'Single', 2, 1],
     ['Power1', 'Sleep Pollen', 0.4, 'AOE', 4, 5, { sleepHit:0.2 }],
     ['Power2', 'Hypnotic Sway', null, 'Passive', 0, 18, { passive:{ hypnosis:0.15 } }],
     ['Ultimate', 'Mesmerise', 0.8, 'AOE', 8, 25, { lunacy:{ chance:0.25, turns:1, ffPower:1, label:'Mesmerise',
-      them:'🌀 The swaying scythes mesmerise them — confused!', you:' The swaying scythes mesmerise you — confused!' } }],
-    ['Max', 'Mesmerise Max', 1.0, 'AOE', 8, 51, { lunacy:{ chance:0.3, turns:1, ffPower:1, label:'Mesmerise',
-      them:'🌀 The swaying scythes mesmerise them — confused!', you:' The swaying scythes mesmerise you — confused!' }, sleepHit:0.15 }]] },
+      them:'🌀 The swaying scythes mesmerise them — confused!', you:' The swaying scythes mesmerise you — confused!' } }]] },
   /* the royal family: never caught */
   fairy_king:     { name:'Fairy King', tier:'legendary', types:['Fairy', 'Psychic'], evo:[], evoMult:1.5, bonusStages:1, glyph:'王', color:'#d6b2f0', royal:true,
     fixedLook:'fairy_king_mounted_c', moves:[
@@ -207,7 +202,7 @@ const CA_CITIZENS = Object.keys(CA_FOLK).filter(id=> CA_FOLK[id].citizen);
     ['evoMult', 'bonusStages', 'fixedLook', 'citizen'].forEach(k=>{ if(f[k] != null) sp[k] = f[k]; });
     if(f.royal){ sp.royal = true; sp.noCatch = true; }
     SPECIES[id] = sp;
-    MOVES[id] = f.moves.map(r=> r.slice());
+    MOVES[id] = f.moves.map(r=> r.slice()).filter(r=> f.tier !== 'wild' || r[0] !== 'Max');   // (3.98) a wild one never learns a Max
   });
 })();
 /* a captive of the castle's people: the townsfolk twice as often as the knights' and the elites' kind (since 3.95 jgCaptivePool weighs them so, with the tribes') */
@@ -494,7 +489,9 @@ const CA_P = { cv:null, ov:null, stage:null, world:null, raf:0, key:'', last:0, 
 const CA_OVER_KINDS = new Set(['tree', 'lamp', 'palaceTower', 'keep', 'cornerTower', 'fountSmall', 'fountGrand', 'chimney', 'column', 'bookcase', 'stall', 'planter', 'well',
   /* (3.97) and indoors: whatever stands up high enough to hide someone behind it, and the counters with their keepers behind */
   'candelabra', 'palm', 'armour', 'vase', 'clock', 'globe', 'readingTable', 'harp', 'plantPot', 'desk', 'rockingHorse', 'teaTable', 'armchair',
-  'bar', 'table', 'barrels', 'recCounter', 'recBin', 'gramophone', 'jukebox', 'boxes']);
+  'bar', 'table', 'barrels', 'recCounter', 'recBin', 'gramophone', 'jukebox', 'boxes',
+  /* (3.98) and on the walls: the battlements and the parapet in front of you, what hangs and stands on them */
+  'battlement', 'parapetW', 'wbanner', 'brazier', 'pennant', 'flagpole', 'spyglass']);
 function caPaintStart(stage, world, m, views, bg){
   if(!stage || !world) return;
   let cv = stage.querySelector('canvas.ca-ground');
@@ -606,15 +603,13 @@ function caPaintOver(m, k, ox, oy, x0, y0, x1, y1, dpr, now){
   if(CA_P.fast) any = true;
   CA_P.overAny = any;
   if(!any) return;
-  const st = CA_P.stage, sr = st.getBoundingClientRect(), R = k * JG_SEE.r;
+  /* (3.98) the window cut to each figure, head to feet (seeFigure, seeCut: 20-jungle.js) */
+  const sr = CA_P.stage.getBoundingClientRect();
   g.globalCompositeOperation = 'destination-out';
   caSeeEls().forEach(el=>{
-    const r = el.getBoundingClientRect();
-    if(!r.width) return;
-    const cx = (r.left + r.width / 2 - sr.left) * dpr, cy = (r.top + r.height * 0.6 - sr.top) * dpr;
-    const gr = g.createRadialGradient(cx, cy, k * JG_SEE.inner, cx, cy, R);
-    gr.addColorStop(0, `rgba(0,0,0,${JG_SEE.cut})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = gr; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);
+    const r = el.getBoundingClientRect(), f = seeFigure(el), T = r.width;
+    if(!f || !T) return;
+    seeCut(g, (r.left + f[0] * T - sr.left) * dpr, (r.top + f[1] * T - sr.top) * dpr, f[2] * T * dpr, f[3] * T * dpr);
   });
   g.globalCompositeOperation = 'source-over';
 }
@@ -1305,15 +1300,22 @@ function caWallMap(k){
   const inSrcEdge = { n:3, s:60, w:3, e:60 }[k], inSrcOut = { n:1, s:-1, w:1, e:-1 }[k];
   const outSrcEdge = { n:jc.y - 1, s:jc.y + 64, w:jc.x - 1, e:jc.x + 64 }[k], outSrcOut = { n:-1, s:1, w:-1, e:1 }[k];
   const rect = (r)=> sp.across ? { x0:0, y0:r[0], x1:L, y1:r[1] } : { x0:r[0], y0:0, x1:r[1], y1:L };
+  /* (3.98) the views reach in under the parapet and the battlements (drawn standing on the walk now, 24-room-art.js):
+     between the merlons, over the parapet, you see down; each begins at the foot of its wall's outer face */
+  const G = typeof CA_ROOM !== 'undefined' && CA_ROOM.geo;
+  const under = (r)=> G ? (r[0] === 0 ? [0, r[1] + 1] : [r[0] - 1, r[1]]) : r;
+  const inFace = !G ? inEdge : sp.inn[0] === 0 ? sp.parapet + 1 - (sp.across ? G.D : G.DPV) : sp.parapet + (sp.across ? G.D : G.DPV);
+  const outFace = !G ? outEdge : sp.out[0] === 0 ? sp.crenel + 1 - (sp.across ? G.D : G.DV) : sp.crenel + (sp.across ? G.D : G.DV);
   m.views = [
-    Object.assign(rect(sp.inn), { src:'castle', along, at0:0, src0:0, edge:inEdge, srcEdge:inSrcEdge, out:inOut, srcOut:inSrcOut, f:0.6 }),
-    Object.assign(rect(sp.out), { src:'jungle', along, at0:0, src0:sp.across ? jc.x : jc.y, edge:outEdge, srcEdge:outSrcEdge, out:outOut, srcOut:outSrcOut, f:0.6 }),
+    Object.assign(rect(under(sp.inn)), { src:'castle', along, at0:0, src0:0, edge:inFace, srcEdge:inSrcEdge, out:inOut, srcOut:inSrcOut, f:0.6 }),
+    Object.assign(rect(under(sp.out)), { src:'jungle', along, at0:0, src0:sp.across ? jc.x : jc.y, edge:outFace, srcEdge:outSrcEdge, out:outOut, srcOut:outSrcOut, f:0.6 }),
   ];
   /* (3.97) the designer: "chestnut knights are not well placed" — they stood in the battlements themselves, half over
      the drop. Now each stands on the walkway's square by his notch, looking out; the square behind him is yours to
      pass by; the patrols march in the two rows behind that */
   const look = sp.crenel < sp.walk[0] ? sp.walk[0] : sp.walk[1] - 1, inward = sp.crenel < sp.walk[0] ? 1 : -1;
   m.tags = { sp, look, mid:look + inward, lanes:[look + 2 * inward, look + 3 * inward] };
+  if(G) CA_ROOM.walkDress(m, 'wall', k);                               // (3.98) its flagstones, battlements, parapet, banners, braziers
   _caMaps['wall_' + k] = m;
   return m;
 }
@@ -1334,17 +1336,20 @@ function caRampMap(c){
   /* the views: the sides beyond the battlements */
   const jc = caJc(), tw = caGrounds().tags.towers[c];
   const side = (s)=> ({ n:{ x0:0, y0:0, x1:N, y1:2 }, s:{ x0:0, y0:12, x1:N, y1:N }, w:{ x0:0, y0:2, x1:2, y1:12 }, e:{ x0:12, y0:2, x1:N, y1:12 } })[s];
+  /* (3.98) each view reaches in under the battlements, from the foot of their outer face (as the walls' do) */
+  const G = typeof CA_ROOM !== 'undefined' && CA_ROOM.geo;
+  const under = (s, r)=> !G ? r : Object.assign({}, r, s === 'n' ? { y1:r.y1 + 1 } : s === 's' ? { y0:r.y0 - 1 } : s === 'w' ? { x1:r.x1 + 1 } : { x0:r.x0 - 1 });
   m.views = ['n', 's', 'w', 'e'].map(s=>{
     const outer = R.out.includes(s), along = (s === 'n' || s === 's') ? 'x' : 'y', r = side(s);
     for(let y = r.y0; y < r.y1; y++) for(let x = r.x0; x < r.x1; x++) caPut(m, x, y, outer ? T.VIEWOUT : T.VIEWIN);
-    const edge = { n:2, s:12, w:2, e:12 }[s], out = (s === 'n' || s === 'w') ? -1 : 1;
+    const edge = !G ? { n:2, s:12, w:2, e:12 }[s] : { n:3 - G.D, s:11 + G.D, w:3 - G.DV, e:11 + G.DV }[s], out = (s === 'n' || s === 'w') ? -1 : 1;
     const towerMid = along === 'x' ? tw.x + 4 : tw.y + 4;
     if(outer){
       const srcEdge = { n:jc.y - 1, s:jc.y + 64, w:jc.x - 1, e:jc.x + 64 }[s];
-      return Object.assign(r, { src:'jungle', along, at0:7, src0:(along === 'x' ? jc.x : jc.y) + towerMid, edge, srcEdge, out, srcOut:out, f:0.6 });
+      return Object.assign(under(s, r), { src:'jungle', along, at0:7, src0:(along === 'x' ? jc.x : jc.y) + towerMid, edge, srcEdge, out, srcOut:out, f:0.6 });
     }
     const srcEdge = { n:tw.y - 1, s:tw.y + 10, w:tw.x - 1, e:tw.x + 10 }[s];
-    return Object.assign(r, { src:'castle', along, at0:7, src0:towerMid, edge, srcEdge, out, srcOut:out, f:0.6 });
+    return Object.assign(under(s, r), { src:'castle', along, at0:7, src0:towerMid, edge, srcEdge, out, srcOut:out, f:0.6 });
   });
   /* the arches to the walls, and the stair down (in the inner corner) */
   m.tags = { arches:{}, notches:[] };
@@ -1374,6 +1379,7 @@ function caRampMap(c){
   m.tags.glass = { x:sx, y:sy };
   caPut(m, sx, sy, T.PLANTER, 'wtop:0');
   caDeco(m, 'spyglass', sx - 0.1, sy - 0.9, 1.2, 1.9, { z:sy + 0.5, corner:c });
+  if(G) CA_ROOM.walkDress(m, 'ramp', c);                               // (3.98) its flagstones, compass rose, stair, battlements, flag
   _caMaps['ramp_' + c] = m;
   return m;
 }
@@ -1830,7 +1836,9 @@ function caThings(key){
     T(caNpc('commander', ct.commander.x, ct.commander.y, { scale:1.6 }));
     tg.blades.forEach(b=>{ const el = ({ fire:'fire', ground:'earth', water:'water', grass:'grass' })[b.el];
       T({ x:b.x, y:b.y, icon:'', cls:'ca-npc ca-blade', still:true, html:()=> caMonImg('sealed_blade_' + el, WALK_T * 1.3, false, '🗡️'),   // (3.90) its picture
-          verb:'Look', sub:'The sealed ' + el + ' blade', act:()=> caLook('blade-' + b.el) }); });
+          verb:'Look', sub:'The sealed ' + el + ' blade', act:()=> caLook('blade-' + b.el),
+          when:()=> typeof questBladeOnWall !== 'function' || questBladeOnWall(el) }); });   // (3.99) gone from the wall once the King hands it to you
+    if(typeof questPalaceThings === 'function') questPalaceThings(T, tg);   // (3.99) the four guardians, before the throne
     tg.guards.forEach((g, i)=> T(caNpc('knight', g.x, g.y, { faceR:g.x < 20, line:'hallGuard', still:true })));
     tg.posts.forEach((g, i)=> T(caNpc('knight', g.x, g.y, { faceR:i % 2 === 0, line:'corridor' })));
     if(tg.globe) T({ x:tg.globe.x, y:tg.globe.y, icon:'', verb:'Spin', sub:'The globe', act:()=> caLook('globe') });   // (3.97)
@@ -2285,9 +2293,13 @@ function caRender(key, world){
 function caFaceOf(who){
   if(who === 'you') return facePlayer();
   if(who === 'lion') return riftLucescoFace();
+  if(typeof who === 'string' && who.startsWith('g_') && JG_TRIBES[who.slice(2)]) return jgFace(JG_TRIBES[who.slice(2)].guardian);   // (3.99) a tribe's guardian, in the throne room
   return caFace(who);
 }
-function caNameOf(who){ return who === 'you' ? 'You' : who === 'lion' ? 'Lucesco' : (CA_WHO[who] || {}).name || ''; }
+function caNameOf(who){
+  if(typeof who === 'string' && who.startsWith('g_') && JG_TRIBES[who.slice(2)]) return JG_TRIBES[who.slice(2)].short + ' Guardian';
+  return who === 'you' ? 'You' : who === 'lion' ? 'Lucesco' : (CA_WHO[who] || {}).name || '';
+}
 function caSay(faces, name, html){
   return new Promise(res=>{
     let done = false, t = null;
@@ -2379,6 +2391,7 @@ function caTalk(who, line){
   if(ui.caTalk) return;
   if(who === 'king' || who === 'commander' || who === 'advisor' || who === 'dauphin'){ if(!caState().met.court) return caCourtScene(); }
   if(who === 'princess') return caPrincessTalk();
+  if(who === 'king' && typeof questKingTalk === 'function') return questKingTalk();   // (3.99) his fifty, the council, the tribes, then the war (25-quest.js)
   if(who === 'king' && typeof warKingCastle === 'function') return warKingCastle();   // (3.92) the war: the council, the rides, the gift
   if(who === 'dauphin') return caDauphinTalk();          // (3.90) her spar
   if(who === 'commander') return caCommanderTalk();      // (3.90) the castle's people
@@ -2387,18 +2400,19 @@ function caTalk(who, line){
   return caLines([[who, caTurn(line || who, set)]]);
 }
 /* "an elite royal army commander … whom the player funnily mistakes for the king due to his regal appearance" */
+/* (3.99) …and the King, found at last (the designer): "He says Lucesco is welcome, but his attention is needed for
+   the dire situation, and asks the player to clear 50 aliens. Lucesco suggests using his nose to locate aliens." */
 function caCourtScene(){
   caState().met.court = true; saveProfile();
+  const king = typeof questKingAsks === 'function' ? questKingAsks(true) : [
+    ['king', `<b>"Lucesco has told me everything. You have been freeing my people from the aliens. The whole kingdom thanks you."</b>`]];
   return caLines([
     ['you', `You walk up the long hall, past the rows of knights, to the most magnificent fairy you have ever seen — tall, shining, a great plume on his helmet. You bow low.<br><br><b>"Your Majesty! We came as fast as we could!"</b>`],
     ['commander', `<b>"…Ahem."</b> The magnificent fairy coughs. <b>"I am honoured. Truly. But I am only the Royal Commander."</b>`],
     ['advisor', `<b>"Hoo-hoo-hoo! It happens every time. It's the helmet, Commander. You polish it far too much."</b>`],
     ['dauphin', `<b>"Ha! They thought Sir Chestnut was Father! I am never letting him forget this."</b>`],
     ['king', `A warm laugh comes from the throne. <b>"Over here, my friends. The one with the crown."</b>`],
-    ['king', `<b>"Lucesco has told me everything. You have been freeing my people from the aliens. The whole kingdom thanks you."</b>`],
-    ['king', `<b>"Rest. Explore my castle. Soon we must talk about the four blades behind me — and about what we may have to do with them."</b>`],
-    ['lion', `<b>"He is a good king. He has always been a good king."</b>`],
-  ]);
+  ].concat(king)).then(()=>{ if(typeof questKingAsked === 'function') questKingAsked(); });
 }
 function caPrincessTalk(){
   const c = caState();
@@ -2488,9 +2502,12 @@ function caOverview(c){
   const ov = document.createElement('div');
   ov.className = 'ca-ov';
   const side = Math.min(window.innerWidth - 32, window.innerHeight - 190, 640);
+  /* (3.99) the designer: "The rampart lookouts fade to black in the corners in a circular pattern so the tribes can't
+     be found. They reveal the tribe positions after all 4 are found and the barricades lifted." */
+  const hid = typeof questLookoutHidden === 'function' && questLookoutHidden();
   ov.innerHTML = `<div class="ca-ov-card"><div class="ca-ov-title">🔭 The ${escapeHtml(CA_CORNER_NAME[c])}: the jungle's ${{ nw:'north-west', ne:'north-east', sw:'south-west', se:'south-east' }[c]}</div>
       <canvas id="caOvCv" style="width:${side}px;height:${side}px;"></canvas>
-      <div class="ca-ov-key">Drag to look about · 🏰 you are here · 🔴 an alien band</div>
+      <div class="ca-ov-key">Drag to look about · 🏰 you are here · 🔴 an alien band${hid ? ' · the far corner is lost in a strange, dark magic' : ''}</div>
       <div class="ca-ov-btns"><button class="btn btn-ghost" id="caOvZoom">🔍 Closer</button><button class="btn btn-primary" id="caOvClose">Close</button></div></div>`;
   document.body.appendChild(ov);
   const cv = ov.querySelector('#caOvCv'), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -2524,7 +2541,14 @@ function caOverview(c){
       ctx.beginPath(); ctx.arc(ox + (b.x + 0.5) * k, oy + (b.y + 0.5) * k, (b.rank === 'alien' ? 4 : 6) * dpr, 0, 7); ctx.fill(); ctx.stroke();
     });
     ctx.font = `${Math.round(20 * dpr)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    JG_TRIBE_KEYS.forEach(t=>{
+    if(hid){
+      /* black round the jungle's own corner, out past its maze, then fading */
+      const X = ox + (c[1] === 'w' ? 0 : JG.W) * k, Y = oy + (c[0] === 'n' ? 0 : JG.H) * k;
+      const gr = ctx.createRadialGradient(X, Y, 96 * k, X, Y, 138 * k);
+      gr.addColorStop(0, 'rgba(4,6,3,1)'); gr.addColorStop(0.55, 'rgba(4,6,3,.82)'); gr.addColorStop(1, 'rgba(4,6,3,0)');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, cv.width, cv.height);
+    }
+    if(!hid) JG_TRIBE_KEYS.forEach(t=>{
       const v = P.villages[t];
       if(v.x + v.w < q.x0 || v.x > q.x1 || v.y + v.h < q.y0 || v.y > q.y1) return;
       const vx = ox + (v.x + v.w / 2) * k, vy = oy + (v.y + v.h / 2) * k;
@@ -2554,8 +2578,7 @@ function caOverview(c){
 async function caGateOpens(){
   const face = [jgFace(JG_GATE_KNIGHT + '_front', 'fairy_knight_front')];
   await jgLines(face, JG_GATE_KNIGHT_NAME, [
-    `The knights stand to attention as you come near.<br><br><b>"Good news, travellers! His Majesty the Fairy King has come home from the front!"</b>`,
-    `<b>"He has heard what you have done for our people. By his order, the gates of the castle are open to you."</b>`,
+    `The knights stand to attention as you come near.<br><br><b>"By order of His Majesty, the gates are open to Lucesco and his friends!"</b>`,
   ]);
   caState().open = true; saveProfile();
   toast('🏰 The great gates swing open!');
