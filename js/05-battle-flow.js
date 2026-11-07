@@ -310,8 +310,11 @@ function onSwitchPressed(){
   if(switchShut()) return;                               // (3.76) or after a move of yours this turn
   const options = sendOutOptions(b.activeIndex);        // (3.52) a pair whose companion can still fight, too
   if(options.length===0){ toast('No other monster can fight.'); return; }
-  monsterChooser('Switch to…', options, (i)=> switchInPair(i));
+  monsterChooser(switchLocked() ? 'Switch to… (Locked Switch: it ends your turn)' : 'Switch to…', options, (i)=> switchInPair(i));
 }
+/* (4.04) the future's Locked Switch: a switch ends the turn of both of yours on the field (not a send-out after a fall,
+   nor the wake of the Whalelord's Vengeance — neither comes by switchInPair) */
+function switchLocked(){ return typeof battleDistortion === 'function' && battleDistortion('locked'); }
 /* The switch itself: party monster `i` (and its companion) out, the pair on
    the field back. Free: the turn is kept, and no other switch this round.
    (3.66) Dragon Legacy switches by this road too, with what it says
@@ -325,6 +328,7 @@ function switchInPair(i, note){
     ui.battle.activeIndex=i; ui.battle.switchedThisTurn=true;
     carryBlockOnSwitch(outgoing, leaderMon());   // the shield walks with your side
     ui.battle.phase = 'player';        // a free switch never hands the turn over
+    const locked = switchLocked();     // (4.04) …unless the future has locked it
     /* Entry passives fire on a swap as well as on the opening monster — a
        Dragon Dance + carrier brought in mid-fight takes the initiative at once,
        and a Steel Aegis carrier arrives with shields for the team (3.64). */
@@ -336,6 +340,25 @@ function switchInPair(i, note){
        place in this round. The choice is still yours — the newcomer's, or
        (3.52) its companion's if the newcomer itself is down. */
     pairSwitched(outgoing);
+    /* (4.04) Locked Switch: the pair that came in has had its turn this round, both of them; the order moves on */
+    const lockedEnd = ()=>{
+      const b = ui.battle;
+      if(!b) return;
+      playerField().forEach(m=> markActed(m));
+      b.control = null;
+      b.phase = 'resolving';
+      setFocus(null);
+      renderBattle();
+      battleMsg((note ? note + ' ' : '') + '<b>Locked Switch</b> — the switch ends your turn, for both of yours on the field.');
+      logBattle('Locked Switch: the switch ended the turn');
+      setTimeout(()=>{ if(ui.battle === b) advanceTurn(); }, 1100);
+    };
+    if(locked){
+      const back = leaderMon();
+      const owed = back && back.currentHp > 0 && (MOVES[back.species]||[]).some(m=>m[6] && m[6].wrath) && wrathStacks() > 0;
+      if(owed){ ui.battle.phase = 'resolving'; renderBattle(); return vengefulWrath(back, ()=> livingEnemies().length === 0 ? setTimeout(onWaveCleared, 500) : lockedEnd()); }
+      return lockedEnd();
+    }
     /* (3.60) the turn the switch hands over: to whichever of the pair goes
        first — initiative, then the one on the left — not always the leader */
     const first = pairHandOver();

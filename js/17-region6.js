@@ -31,12 +31,15 @@
    · CHALLENGE THE FUTURE — once a week (the tear's week, from Monday): one
      wave of the week's three future monsters (future_<element>, FUTURE_KIT),
      level 200, crowned, each with its element's ✦ Very High and ✦ Ultra
-     stones, both of its element's passives (3.76) and its whole sky. Over
-     every four weeks all twelve elements come round once, three a week
-     (futureWeek); a lost fight meets the same three again. SPACETIME
-     DISTORTION (3.76: DISTORTION_POOL): three drawn for the week, each
-     switched on or off before the fight; a win pays FUTURE_STAR_BASE × the
-     multipliers of those on, the week's best win only. A win also
+     stones and its whole sky — (4.04) at one of three tiers (FUTURE_TIERS:
+     Corona, no element passives; Event Horizon, both of its element's;
+     Singularity, those and 7 more of every minor node). Over every four
+     weeks all twelve elements come round once, three a week (futureWeek); a
+     lost fight meets the same three again. SPACETIME DISTORTION
+     (DISTORTION_POOL): (4.04) seven of eleven drawn for the week, each
+     switched on or off before the fight; a win pays the tier's Starlight ×
+     the multipliers of those on (at most ×2.5), the week's best win only,
+     and each distortion's first win at a tier 10 medals. A win also
      offers ONE legacy a week: a 10-phrase quiz, two slips and it slips back
      into the future (win again to try again). A loss costs no XP; the fight
      can be left.
@@ -120,12 +123,15 @@ function talentsUnlocked(){ return r6Met() || legacyCount() > 0 || (typeof isDev
    Minor nodes are a stat (TALENT_STATS); a major node is one or two effects
    ({ k, v }), each described by talentFxText. Stat effects add up within
    their stat (+4% ATK and +15% ATK make +19%); every damage bonus adds up
-   into one multiplier, and every damage cut into another (at most 60% off).
+   into one multiplier, and every damage cut into another (4.04: no longer at most 60% off).
    ============================================================ */
 const TALENT_STEP = 5;                 // a point every 5 levels past 100 (and one at 101)
 const TALENT_COST = { minor:1, major:2 };
 const TALENT_CRIT_MULT = 1.5;          // a critical from a talent, unless a node raises it
-const TALENT_CRIT_CAP = 0.5, TALENT_DODGE_CAP = 0.30, TALENT_CUT_MAX = 0.60;
+/* (4.04) no caps (the designer: "there should not be a cap on talent passive numbers. We can control talent trees to
+   naturally prevent overachieving a stat"): until 4.04 a talent's critical chance stopped at 50%, its dodge at 30% and
+   its damage cuts at 60% off — now only a chance's own 100% (and all of a blow) bound them */
+const TALENT_CRIT_CAP = 1, TALENT_DODGE_CAP = 1, TALENT_CUT_MAX = 1;
 const TALENT_STATS = {
   atk:  { short:'ATK',   name:'Attack',    v:0.04 },
   hp:   { short:'HP',    name:'Vitality',  v:0.05 },
@@ -435,7 +441,7 @@ function talentDealMult(att, def, isPlayer, peek, opts){
   add -= hexCut(a || att, 'hxDmg');               // (3.86) a Vicious Hex Dulled: off its damage bonuses
   return add ? Math.max(0.1, 1 + add) : 1;
 }
-/* …and the defender's: its damage cuts, all added up (60% at most). */
+/* …and the defender's: its damage cuts, all added up (60% at most until 4.04). */
 function talentTakeMult(def, att){
   if(!ui.battle) return 1;
   const d = talentHolder(def);
@@ -596,37 +602,81 @@ const FUTURE = {
    DISTORTION_POOL are drawn by the week's number; each is the player's to
    switch on or off before a fight. A win pays FUTURE_STAR_BASE × the
    multipliers of those switched on (rounded) — the week's best only, so a
-   better one later pays the difference. The base and the multipliers are
-   placeholders ("we can set the base starlight value and the multipliers
-   later"). The six levels of 3.75 are gone. */
-const FUTURE_STAR_BASE = 10;
+   better one later pays the difference. The six levels of 3.75 are gone.
+   (4.04: the base is the tier's — FUTURE_TIERS — and seven of eleven are drawn.) */
+const FUTURE_STAR_BASE = 10;          // Corona's
+/* (4.04) THE THREE TIERS — the designer: "There are 3 tiers of difficulty. Corona (10 starlight) … Event Horizon (15
+   starlight): monsters also gain very high and ultra passives corresponding to their own type. Singularity (30
+   starlight): monsters gain 7 minor nodes' worth of every type of talent nodes, both offensive and defensive"; and, of
+   the passives the future had always carried: "Make [Event Horizon] the stage where they gain the very high and ultra
+   passives". So Corona is the fight without them, Event Horizon the fight as it was, and Singularity that and seven of
+   each minor node more (+28% ATK, +35% HP, +28% damage, +21% damage cut, +21% dodge, +28% critical chance). A win
+   pays the tier's Starlight × its distortions (at most ×2.5); a distortion's first win at a tier pays 10 of its medal
+   — "let a first clear on a higher difficulty tier also give all the ones in tiers below". */
+const FUTURE_TIERS = {
+  corona:     { name:'Corona',        star:10, medal:'bronze', passives:false, nodes:0,
+                text:'No element passives.' },
+  horizon:    { name:'Event Horizon', star:15, medal:'silver', passives:true,  nodes:0,
+                text:'Each with its own element\'s Very High and Ultra passives.' },
+  singularity:{ name:'Singularity',   star:30, medal:'gold',   passives:true,  nodes:7,
+                text:'Each with its own element\'s Very High and Ultra passives, and 7 more of every minor talent node: +28% ATK, +35% HP, +28% damage, +21% damage cut, +21% dodge, +28% critical chance.' },
+};
+const FUTURE_TIER_IDS = ['corona', 'horizon', 'singularity'];
+const FUTURE_MULT_CAP = 2.5;          // "the maximum multiplier is 2.5x starlight"
+const FUTURE_FIRST = 10;              // medals for a distortion's first win at a tier
+function futureTier(id){ return FUTURE_TIERS[id] || FUTURE_TIERS.corona; }
+/* The pool: 11 (4.04: the designer's two new ones, and "Random 7. Please tweak destiny bond to be much lower; say 1.4,
+   and silenced, endless dust to each be 2.1 so that any additional distortion guarantees 2.5 max. Ahead of time
+   deserves 1.6 because it nearly always results in 1HKOs. Locked switch 1.7. Let's keep the four plain stat ones please,
+   for easier stacking of low level multipliers."), 7 of them offered each week. */
 const DISTORTION_POOL = {
-  silence: { name:'Silenced',      mult:1.6, text:'Your Very High stones are sealed for the whole fight.' },
-  dust:    { name:'Endless Dust',  mult:1.6, text:'A fresh Diamond Dust of theirs settles at the start of every turn.' },
-  ahead:   { name:'Ahead of Time', mult:1.3, text:'They always move first — sooner than any Mach Dragon ✦.' },
+  silence: { name:'Silenced',      mult:2.1, text:'Your Very High stones are sealed for the whole fight.' },
+  dust:    { name:'Endless Dust',  mult:2.1, text:'A fresh Diamond Dust of theirs settles at the start of every turn.' },
+  locked:  { name:'Locked Switch', mult:1.7, text:'Switching out ends your turn, for both of yours on the field (not bringing one in after a fall, nor the Whalelord\'s Max).' },
+  ahead:   { name:'Ahead of Time', mult:1.6, text:'They always move first — sooner than any Mach Dragon ✦.' },
   rewind:  { name:'Rewind',        mult:1.5, text:'Time rewinds once for each of them: the first time it falls, it stands again at half health.' },
   immune:  { name:'Untouchable',   mult:1.5, text:'No debuff of yours takes hold on them — no freeze, curse, seed, muddle or mark.' },
-  ripple:  { name:'Ripple',        mult:1.2, hp:0.25,     text:'Their health +25%.' },
+  bond:    { name:'Destiny Bond',  mult:1.4, text:'Whenever one of theirs falls, one of yours falls with it: the one that struck the blow (a fall to pre-turn damage takes one on your field at random, else one in your team).' },
   surge:   { name:'Surge',         mult:1.3, atk:0.25,    text:'Their attack +25%.' },
   echo:    { name:'Echo',          mult:1.3, regen:0.05,  text:'They heal 5% of their health at the end of every turn.' },
+  ripple:  { name:'Ripple',        mult:1.2, hp:0.25,     text:'Their health +25%.' },
   bulwark: { name:'Bulwark',       mult:1.2, shields:2,   text:'Each arrives with 2 shields.' },
 };
 const DISTORTION_IDS = Object.keys(DISTORTION_POOL);
-/* The week's three, the same all week. */
+const DISTORTION_WEEK = 7;
+/* The week's seven, the same all week (until 4.04, three of nine). */
 function futureDistortions(d){
   const rnd = seededRandom(7919 * (futureWeekNo(d) + 2048));
   for(let k = 0; k < 5; k++) rnd();
   const ids = DISTORTION_IDS.slice();
   for(let i = ids.length - 1; i > 0; i--){ const j = Math.floor(rnd() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
-  return ids.slice(0, 3);
+  const week = ids.slice(0, DISTORTION_WEEK);
+  return DISTORTION_IDS.filter(id=> week.includes(id));             // in the pool's own order: the biggest first
 }
-/* Which of the week's three are switched on (futureState().dist). */
+/* Which of the week's seven are switched on (futureState().dist). */
 function distortionChosen(){
   const f = futureState(), on = f.dist || {};
   return futureDistortions().filter(id=> !!on[id]);
 }
-function distortionMult(ids){ return (ids || []).reduce((p, id)=> p * ((DISTORTION_POOL[id] || {}).mult || 1), 1); }
-function distortionPay(ids){ return Math.round(FUTURE_STAR_BASE * distortionMult(ids)); }
+/* (4.04) the product, at most ×2.5 */
+function distortionRaw(ids){ return (ids || []).reduce((p, id)=> p * ((DISTORTION_POOL[id] || {}).mult || 1), 1); }
+function distortionMult(ids){ return Math.min(FUTURE_MULT_CAP, distortionRaw(ids)); }
+function distortionPay(ids, tier){ return Math.round(futureTier(tier || futureState().tier).star * distortionMult(ids)); }
+/* (4.04) the first wins: r6().futureFirst[tier][distortion] — for good, not the week's */
+function futureFirsts(){
+  const r = r6();
+  if(!r.futureFirst || typeof r.futureFirst !== 'object') r.futureFirst = {};
+  FUTURE_TIER_IDS.forEach(t=>{ if(!r.futureFirst[t] || typeof r.futureFirst[t] !== 'object') r.futureFirst[t] = {}; });
+  return r.futureFirst;
+}
+/* What a win at `tier` with `ids` would pay in medals, the first time: each distortion, at that tier and every one below
+   it not won before — [{ tier, id, medal }] */
+function futureFirstDue(ids, tier){
+  const F = futureFirsts(), upto = FUTURE_TIER_IDS.indexOf(tier in FUTURE_TIERS ? tier : 'corona');
+  const due = [];
+  (ids || []).forEach(id=> FUTURE_TIER_IDS.slice(0, upto + 1).forEach(t=>{ if(!F[t][id]) due.push({ tier:t, id, medal:FUTURE_TIERS[t].medal }); }));
+  return due;
+}
 /* (3.82) the designer: "multipliers to difficulty (spacetime distortion) should multiply the ticket
    drop and the XP as well". A win's XP, in fights' worth; its tickets (Skill Tokens): the base and
    the usual drop together (each whole one certain, what is left a chance of one more), × the same. */
@@ -713,27 +763,39 @@ function futureWeek(d){
 function futureState(){
   const r = r6(), wk = tearWeekKey();
   if(!r.future || typeof r.future !== 'object' || r.future.week !== wk)
-    r.future = { week:wk, wins:0, tries:0, paid:0, pending:false, captured:null, dist:{} };
+    r.future = { week:wk, wins:0, tries:0, paid:0, pending:false, captured:null, dist:{},
+                 tier:(r.future && typeof FUTURE_TIERS !== 'undefined' && FUTURE_TIERS[r.future.tier]) ? r.future.tier : 'corona' };   // (4.04) the tier stays chosen
   if(typeof r.future.paid !== 'number' || r.future.paid < 0) r.future.paid = 0;      // (3.76) Starlight paid this week (it was a level)
   if(!r.future.dist || typeof r.future.dist !== 'object') r.future.dist = {};
+  if(!FUTURE_TIERS[r.future.tier]) r.future.tier = 'corona';           // (4.04) the tier chosen (kept across weeks: see below)
   return r.future;
 }
-function futureFoeSpec(p){
-  const k = FUTURE_KIT[p.type] || {};
-  return { species:p.species, level:FUTURE.level, ai:k.ai || 'best', crowned:true, nerfed:false, anyLevel:true,
+function futureFoeSpec(p, tier){
+  const k = FUTURE_KIT[p.type] || {}, T = FUTURE_TIERS[tier] || FUTURE_TIERS.horizon;   // no tier named (the arena, a map's index): the fight as it was
+  const spec = { species:p.species, level:FUTURE.level, ai:k.ai || 'best', crowned:true, nerfed:false, anyLevel:true,
            veryHigh:{ type:p.type, plus:FUTURE.stonePlus, cast:true },
-           vhPassive:p.type, ultraPassive:p.type,            // (3.76) "all the buyable passives": both of its element's
            talents:talentNodesOf(p.type).map(n=> n.id), legacy:p.type };
+  /* (3.76) "all the buyable passives": both of its element's — (4.04) from Event Horizon up */
+  if(T.passives){ spec.vhPassive = p.type; spec.ultraPassive = p.type; }
+  return spec;
 }
 function futureBegin(){
   if(!ensurePool()) return;
-  const f = futureState(), ids = distortionChosen();
+  const f = futureState(), ids = distortionChosen(), tier = f.tier;
   f.tries = (f.tries || 0) + 1;
   ui.futureDist = ids.slice();                   // for futureWaveStart, which runs inside beginBattle
-  beginBattle({ waves:[futureWeek().picks.map(futureFoeSpec)], isNpc:true, future:true, bgKey:'battle_future', foeRegion:6,
-                name:`The future${ids.length ? ' · ' + ids.map(id=> DISTORTION_POOL[id].name).join(' · ') : ''}`, onWaveStart:(i)=> futureWaveStart(i) });
+  ui.futureTier = tier;                          // (4.04) likewise
+  beginBattle({ waves:[futureWeek().picks.map(p=> futureFoeSpec(p, tier))], isNpc:true, future:true, bgKey:'battle_future', foeRegion:6,
+                name:`The future · ${futureTier(tier).name}${ids.length ? ' · ' + ids.map(id=> DISTORTION_POOL[id].name).join(' · ') : ''}`, onWaveStart:(i)=> futureWaveStart(i) });
   ui.battle.distortion = ids.slice();
+  ui.battle.futureTier = tier;
   saveProfile();
+}
+/* (4.04) Singularity: seven more of each minor node, over its own sky's (a set of its own, as an alien's: talentFxOf) */
+function futurePlusFx(fx, n){
+  const out = fx ? Object.assign({}, fx) : talentFxSum([{ fx:[] }]);
+  Object.keys(TALENT_STATS).forEach(k=> out[k] = (out[k] || 0) + n * TALENT_STATS[k].v);
+  return out;
 }
 /* As they walk on (loadWave, before their entry passives): their sky's
    share of ATK and HP, the distortions', FUTURE.power — (3.76) and both of
@@ -743,6 +805,8 @@ function futureWaveStart(i){
   const b = ui.battle;
   if(!b) return;
   if(!Array.isArray(b.distortion)) b.distortion = Array.isArray(ui.futureDist) ? ui.futureDist.slice() : [];
+  if(!b.futureTier && b.future) b.futureTier = ui.futureTier || 'corona';
+  const T = futureTier(b.futureTier || (b.arenaChallenge === 'r6_future' ? 'horizon' : 'corona'));
   const spec = b.waves[i] || [], dr = distortionRules(b.distortion);
   b.enemies.forEach((e, k)=>{
     const s = spec[k] || {};
@@ -751,6 +815,7 @@ function futureWaveStart(i){
     if(s.vhPassive) e.vhPassive = s.vhPassive;
     if(s.ultraPassive) e.ultraPassive = s.ultraPassive;
     if(s.legacy) e.futureUltra = { type:s.legacy, plus:FUTURE.stonePlus, used:false };   // (3.76) once a battle, its second action
+    if(T.nodes){ e.talentFx = null; e.talentFx = futurePlusFx(talentFxOf(e), T.nodes); }    // (4.04) Singularity
     const fx = talentFxOf(e);
     e.atk = Math.max(1, Math.ceil(e.atk * (1 + (fx ? fx.atk : 0)) * (1 + dr.atk) * FUTURE.power));
     e.maxHp = e.hp = Math.max(1, Math.ceil(e.maxHp * (1 + (fx ? fx.hp : 0)) * (1 + dr.hp) * FUTURE.power));
@@ -775,8 +840,120 @@ function futureUltraFor(e){
 function futureRewindReady(t){ return !!(t && !t.uid && !t._rewound && battleDistortion('rewind')); }
 function futureRewind(t){
   t._rewound = true;
+  if(battleDistortion('bond')) t._bondRewinds = (t._bondRewinds || 0) + 1;   // (4.04) a fall all the same, for Destiny Bond
   return Math.max(1, Math.ceil(t.maxHp * 0.5));
 }
+/* (4.04) DESTINY BOND — the designer: when one of theirs faints, the one of yours that struck it faints too; one felled
+   by the damage before anyone moves (a burn, a curse: nobody's blow) takes one of yours on the field at random, else
+   one in your team; a Rebirth or a Life Transfusion can still save it, as any of yours that falls; and a Rewind's fall
+   counts ("that's rewind's combo with destiny bond"). One of yours for each fall of theirs: the first of an action's
+   falls takes the one whose action it is (already down with its blow, it is the one taken); any more, one on the field
+   at random, else one in your team. Looked at wherever the fight moves on: a turn handed on (advanceTurn), a fall of
+   yours dealt with (onMonFainted), a wave down (onWaveCleared), the start of a round after its pre-turn damage
+   (beginRound, 04-battle.js). */
+function bondFalls(){
+  const out = [];
+  (ui.battle.enemies || []).forEach(e=>{
+    if(!e) return;
+    if(e.hp > 0 && e._bondDown) e._bondDown = false;           // raised since: another fall counts again
+    let n = e._bondRewinds || 0;
+    e._bondRewinds = 0;
+    if(e.hp <= 0 && !e._bondDown){ e._bondDown = true; n++; }
+    for(let k = 0; k < n; k++) out.push(e);
+  });
+  return out;
+}
+/* Whose blow: the one of yours whose action it is — nobody's once a turn of theirs or a new round has begun since its
+   action did (b.bondQuiet: the action count then), nor for an ally's (actionMon null) */
+function bondStriker(){
+  const b = ui.battle;
+  if(!b || b.bondQuiet === b.actionSeq) return null;
+  const m = b.actionMon;
+  return m && m.uid ? m : null;
+}
+function bondTeam(){
+  const all = battleParty().concat((typeof companionsAllowed === 'function' && companionsAllowed()) ? bondedCompanions() : []);
+  return all.filter((m, i)=> m && all.indexOf(m) === i && !isPassenger(m));
+}
+/* Takes those owed and returns true (it carries the fight on itself, with `cont`), or false: nothing owed. `end`: the
+   fight is over (the last wave down) — they fall, and nothing is offered. */
+function bondSettle(cont, end){
+  const b = ui.battle;
+  if(!b || b._bondBusy || !battleDistortion('bond')) return false;
+  const falls = bondFalls();
+  if(!falls.length || b.allyUnkillable) return false;                  // (a fight where yours cannot fall: the arena's, a test's)
+  const striker = bondStriker(), gone = [];
+  const pick = list=> list.length ? list[Math.floor(Math.random() * list.length)] : null;
+  falls.forEach((e, k)=>{
+    if(k === 0 && striker && striker.currentHp <= 0) return;      // it went down with its own blow: that is the one
+    let v = (k === 0 && striker) ? striker : null;
+    const free = m=> m.currentHp > 0 && !gone.some(g=> g.m === m);
+    if(!v) v = pick(livingField().filter(free));
+    if(!v) v = pick(bondTeam().filter(m=> free(m) && !playerField().includes(m)));
+    if(v) gone.push({ m:v, foe:e });
+  });
+  if(!gone.length) return false;
+  b._bondBusy = true;
+  b.phase = 'resolving';
+  gone.forEach(({ m })=>{
+    const max = monMaxHp(m), was = m.currentHp;
+    m.currentHp = 0;
+    if(playerField().includes(m)){
+      try { flashHit(document.getElementById(pid('playerBob', m))); drainHp(pid('playerHp', m), was, 0, max); } catch(err){}
+      floatOver(m, 'DESTINY BOND');
+    }
+  });
+  try { playEffect('Destiny Bond', { type:'Ghost' }); } catch(err){}
+  const nm = e=> escapeHtml(SPECIES[e.species].name);
+  battleMsg(`<b>Destiny Bond</b> — ${gone.map(({ m, foe })=> `${escapeHtml(displayName(m))} falls with their ${nm(foe)}`).join('; ')}!`);
+  logBattle(`Destiny Bond: ${gone.map(({ m, foe })=> `${displayName(m)} fell with ${SPECIES[foe.species].name}`).join('; ')}`);
+  /* off the field: the phoenix's Rebirth (or the princess's Transfusion) may still save it — not once the fight is won */
+  const bench = end ? [] : gone.map(g=> g.m).filter(m=> !playerField().includes(m));
+  const saves = ()=>{
+    if(ui.battle !== b) return;
+    const m = bench.shift();
+    if(m && rebirthDue(m)) return offerRebirth(saves, saves, m);
+    if(m) return saves();
+    b._bondBusy = false;
+    cont();
+  };
+  setTimeout(()=>{ if(ui.battle !== b) return; renderBattle(); saves(); }, 1400);
+  return true;
+}
+if(typeof advanceTurn === 'function'){
+  const _bondAdvance = advanceTurn;
+  advanceTurn = function(){
+    const a = arguments, me = this;
+    if(bondSettle(()=> fieldNeedsFaint() ? onMonFainted() : _bondAdvance.apply(me, a))) return;
+    return _bondAdvance.apply(this, arguments);
+  };
+}
+if(typeof onMonFainted === 'function'){
+  const _bondFainted = onMonFainted;
+  onMonFainted = function(){
+    const a = arguments, me = this;
+    if(bondSettle(()=> _bondFainted.apply(me, a))) return;
+    return _bondFainted.apply(this, arguments);
+  };
+}
+if(typeof onWaveCleared === 'function'){
+  const _bondCleared = onWaveCleared;
+  onWaveCleared = function(){
+    const a = arguments, me = this, b = ui.battle;
+    if(bondSettle(()=> _bondCleared.apply(me, a), !!b && b.waveIndex >= (b.waves || []).length - 1)) return;
+    return _bondCleared.apply(this, arguments);
+  };
+}
+/* a turn of theirs, or a new round: nobody of yours is striking now */
+if(typeof runSingleEnemyTurn === 'function'){
+  const _bondEnemyTurn = runSingleEnemyTurn;
+  runSingleEnemyTurn = function(){ if(ui.battle) ui.battle.bondQuiet = ui.battle.actionSeq; return _bondEnemyTurn.apply(this, arguments); };
+}
+['beginRound', 'endRound'].forEach(k=>{
+  const f = window[k];
+  if(typeof f !== 'function') return;
+  window[k] = function(){ if(ui.battle) ui.battle.bondQuiet = ui.battle.actionSeq; return f.apply(this, arguments); };
+});
 /* Won: XP for the whole team, this week's Starlight (the difference, if a
    smaller win was paid already), then — once a week — a legacy. */
 function futureWon(){
@@ -785,8 +962,14 @@ function futureWon(){
   b.futureDone = true;
   b.phase = 'resolving';
   const f = futureState(), ids = Array.isArray(b.distortion) ? b.distortion.slice() : [];
-  const worth = distortionPay(ids);
+  const tier = b.futureTier || 'corona';
+  const worth = distortionPay(ids, tier);
   f.wins = (f.wins || 0) + 1;
+  /* (4.04) each distortion's first win at this tier, and at every tier below it not won before: 10 of its medal */
+  const due = futureFirstDue(ids, tier), F = futureFirsts(), medals = { bronze:0, silver:0, gold:0 };
+  due.forEach(d=>{ F[d.tier][d.id] = true; medals[d.medal] += FUTURE_FIRST; });
+  state.medals = state.medals || {};
+  Object.keys(medals).forEach(k=>{ if(medals[k]) state.medals[k] = (state.medals[k] || 0) + medals[k]; });
   let star = 0;
   if(worth > (f.paid || 0)){
     star = worth - (f.paid || 0);
@@ -802,7 +985,7 @@ function futureWon(){
   saveProfile();
   stopMusic();
   playSfx('victory');
-  const run = { ids, worth, star, levelUps, xp, tickets, mult:distortionMult(ids) };
+  const run = { ids, worth, star, levelUps, xp, tickets, mult:distortionMult(ids), tier, medals, firsts:due };
   const finish = ()=> f.pending ? futureChoose(run) : futureResults(run);
   const evolvers = levelUps.filter(e=> e.evos && e.evos.length);
   if(evolvers.length) playEvolutions(evolvers, finish); else finish();
@@ -888,8 +1071,10 @@ function futureResults(run){
     if(e.ready) g.ready = e.ready;
   });
   const p = run.legacy, s = run.slipped;
-  const said = ids=> ids && ids.length ? ids.map(id=> escapeHtml(DISTORTION_POOL[id].name)).join(', ') : 'no distortion';
+  const said = ids=> (run.tier ? escapeHtml(futureTier(run.tier).name) + ', ' : '') + (ids && ids.length ? ids.map(id=> escapeHtml(DISTORTION_POOL[id].name)).join(', ') : 'no distortion');
+  const md = run.medals || {}, mdOn = ['gold', 'silver', 'bronze'].filter(k=> md[k] > 0);
   const lines = [
+    mdOn.length ? `<div><b>First wins:</b> ${mdOn.map(k=> `${medalIcon(k)} <b>+${md[k]} ${k}</b>`).join(' · ')} (${(run.firsts || []).length} distortion-and-tier first${(run.firsts || []).length === 1 ? '' : 's'}).</div>` : '',
     run.star ? `<div>✨ <b>+${run.star} Starlight</b> (a win worth ${run.worth}: ${said(run.ids)}). You have <b>${starlight()}</b>.</div>`
              : run.worth != null ? `<div>A win worth ✨ ${run.worth} (${said(run.ids)}) — you were paid as much or more this week already. Switch more distortions on for more.</div>` : '',
     run.tickets ? `<div>${tokenIcon(18)} <b>+${run.tickets} Skill Token${run.tickets === 1 ? '' : 's'}</b>${run.mult > 1 ? ` (×${+run.mult.toFixed(2)} for the distortions)` : ''}. You have <b>${state.inventory.tokens || 0}</b>.</div>` : '',   // (3.87) "should not read tickets but tokens"
@@ -904,13 +1089,13 @@ function futureResults(run){
 }
 
 /* The Test Arena's card (08-screens2.js): this week's three — with none of
-   the week's distortions, each alone, or all three — nothing paid, nothing
-   captured, for the grown-ups to try. */
+   the week's distortions, each alone, or all of them (4.04: seven; fought as
+   at Event Horizon) — nothing paid, nothing captured, for the grown-ups to try. */
 function futureArenaVariants(V){
   const wk = futureDistortions();
   const sets = [[]].concat(wk.map(id=> [id]), [wk.slice()]);
   return sets.map(ids=> V(()=> ({
-    waves:[futureWeek().picks.map(futureFoeSpec)], isNpc:true, bgKey:'battle_future', name:`The future${ids.length ? ' · ' + ids.map(id=> DISTORTION_POOL[id].name).join(' · ') : ''}`,
+    waves:[futureWeek().picks.map(p=> futureFoeSpec(p, 'horizon'))], isNpc:true, bgKey:'battle_future', name:`The future${ids.length ? ' · ' + ids.map(id=> DISTORTION_POOL[id].name).join(' · ') : ''}`,
     onWaveStart:(i)=>{ if(ui.battle && !Array.isArray(ui.battle.distortion)) ui.battle.distortion = ids.slice(); futureWaveStart(i); },
   }), ids.length ? ids.map(id=> DISTORTION_POOL[id].name).join(' + ') + ` (×${+distortionMult(ids).toFixed(2)})` : 'No distortion'));
 }
@@ -1472,7 +1657,7 @@ function renderChallengeR6(){
   const status = f.pending ? '<b>Won!</b> A legacy is waiting to be captured.'
     : f.captured ? `This week's legacy: <b>${escapeHtml(f.captured)}</b>. New monsters on <b>${day}</b>.`
     : 'Beat all three to capture one legacy this week.';
-  const paid = f.paid >= 0 ? ` · ✨ paid for Distortion ${f.paid}` : '';
+  const paid = f.paid > 0 ? ` · ✨ ${f.paid} Starlight paid this week (at most ${Math.round(FUTURE_TIERS.singularity.star * FUTURE_MULT_CAP)})` : '';   // (4.04; it read "paid for Distortion 0", a 3.75 level's words)
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← Region</button>
     <div class="screen-title">Challenge</div>
@@ -1509,7 +1694,13 @@ function renderFuture(){
   $('#brandSub').textContent = 'Challenge the future';
   const f = futureState(), wk = futureWeek(), week3 = futureDistortions(), on = distortionChosen();
   const day = escapeHtml(tearDayName(tearNextWeek()));
-  const worth = distortionPay(on), more = Math.max(0, worth - (f.paid || 0));
+  const worth = distortionPay(on, f.tier), more = Math.max(0, worth - (f.paid || 0));
+  /* (4.04) the tier, and what a win at it pays: the tier's Starlight × the distortions (at most ×2.5), and each
+     distortion's first win at it (and below) 10 medals */
+  const T = futureTier(f.tier), raw = distortionRaw(on), mult = distortionMult(on), capped = raw > FUTURE_MULT_CAP + 1e-9;
+  const due = futureFirstDue(on, f.tier), dueM = { gold:0, silver:0, bronze:0 }; due.forEach(d=> dueM[d.medal] += FUTURE_FIRST);
+  const F = futureFirsts();
+  const marks = id=> FUTURE_TIER_IDS.map(t=> `<i class="fu-md ${FUTURE_TIERS[t].medal}${F[t][id] ? ' won' : ''}" title="${escapeHtml(FUTURE_TIERS[t].name)}: ${F[t][id] ? 'won' : 'not yet won'}"></i>`).join('');
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← ${ui.futureBack ? 'The Rift' : 'Challenge'}</button>
     <div class="fu-screen">
@@ -1522,27 +1713,36 @@ function renderFuture(){
           <div class="fu-foe-pic">${monPortrait(p.species, 64, { view:'front', bare:true, crowned:true })}</div>
           <div class="fu-foe-txt">
             <div class="fu-foe-name">${escapeHtml(SPECIES[p.species].name)} <span class="type-badge" style="background:${TYPE_COLORS[p.type]};">${escapeHtml(p.type)}</span></div>
-            <div>Lv ${FUTURE.level} · crowned · <b>${escapeHtml(vh.name || '')} ✦</b> · <b>${escapeHtml(stoneName(p.type, 'ultra'))} ✦</b> once · its whole sky</div>
+            <div>Lv ${FUTURE.level} · crowned · <b>${escapeHtml(vh.name || '')} ✦</b> · <b>${escapeHtml(stoneName(p.type, 'ultra'))} ✦</b> once · its whole sky${T.nodes ? ` and ${T.nodes} more of every minor node` : ''}</div>
             <div><b>${escapeHtml(k.passive[0])}:</b> ${escapeHtml(FUTURE_PASSIVE_TEXT[p.type])}</div>
-            <div>Passives: <b>${escapeHtml(pv ? pv.name : '')}</b> and <b>${escapeHtml(pu ? pu.name : '')}</b>.</div>
+            <div>${T.passives ? `Passives: <b>${escapeHtml(pv ? pv.name : '')}</b> and <b>${escapeHtml(pu ? pu.name : '')}</b>.`
+                              : `No element passives at ${escapeHtml(T.name)} (from Event Horizon: ${escapeHtml(pv ? pv.name : '')} and ${escapeHtml(pu ? pu.name : '')}).`}</div>
             <div>${escapeHtml(futureMaxText(p.type))}</div>
             <div class="fu-leg">${legacyOpen(p.type) ? `Its sky is open — capturing it again pays ✨ ${LEGACY_ECHO}.` : `Its legacy would open the <b>${escapeHtml(p.type)}</b> sky.`}</div>
           </div>
         </div>`; }).join('')}</div>
       <div class="fu-dist">
-        <div class="fu-dist-head">🌀 This week's spacetime distortions</div>
-        <div class="fu-dist-sub">Switch each on or off. Each one switched on multiplies what a win pays.</div>
+        <div class="fu-dist-head">The future's tier</div>
+        <div class="fu-tier-row">${FUTURE_TIER_IDS.map(t=>{ const x = FUTURE_TIERS[t], y = f.tier === t;
+          return `<button class="fu-tier${y ? ' on' : ''}" data-tier="${t}" aria-pressed="${y}">
+            <b>${escapeHtml(x.name)}</b><i>✨ ${x.star}</i><span class="fu-tier-md">${medalIcon(x.medal)} ${x.medal}</span></button>`; }).join('')}</div>
+        <div class="fu-tier-say"><b>${escapeHtml(T.name)}:</b> ${escapeHtml(T.text)} A win pays ✨ ${T.star} × the distortions; each one's first win here pays 10 ${T.medal} medals.</div>
+      </div>
+      <div class="fu-dist">
+        <div class="fu-dist-head">This week's spacetime distortions</div>
+        <div class="fu-dist-sub">Switch on as many as you like: they multiply what a win pays, up to ×${FUTURE_MULT_CAP}. Each one's dots are its first wins at the three tiers (bronze, silver, gold), filled once won; a first win at a higher tier pays the lower tiers' medals too.</div>
         <div class="fu-dt-row">${week3.map(id=>{ const d = DISTORTION_POOL[id], y = on.includes(id);
           return `<button class="fu-dt${y ? ' on' : ''}" data-dt="${id}" aria-pressed="${y}">
             <span class="fu-dt-top"><b>${escapeHtml(d.name)}</b><i>×${d.mult}</i></span>
             <span class="fu-dt-txt">${escapeHtml(d.text)}</span>
-            <span class="fu-dt-sw">${y ? 'On' : 'Off'}</span></button>`; }).join('')}</div>
-        <div class="fu-dist-note">A win now is worth ✨ <b>${worth}</b> (${FUTURE_STAR_BASE}${on.length ? ' × ' + on.map(id=> DISTORTION_POOL[id].mult).join(' × ') : ''}).
-          ${f.paid > 0 ? `This week ✨ <b>${f.paid}</b> is paid already, so it pays ${more ? `✨ <b>${more}</b> more` : 'nothing more — switch more on for more'}.` : ''}
-          Every win also pays about ${tokenIcon(16)} <b>${Math.round(futureTicketChance(on, wk.picks.map(p=> ({ species:p.species }))))}</b> Skill Tokens and <b>${futureXp(on)}</b> fights' worth of XP${on.length ? ', multiplied the same way' : ''}.</div>
+            <span class="fu-dt-foot"><span class="fu-dt-sw">${y ? 'On' : 'Off'}</span><span class="fu-mds">${marks(id)}</span></span></button>`; }).join('')}</div>
+        <div class="fu-dist-note">A win now is worth ✨ <b>${worth}</b> (${escapeHtml(T.name)}: ${T.star}${on.length ? ' × ' + (capped ? `${FUTURE_MULT_CAP} — ${on.map(id=> DISTORTION_POOL[id].mult).join(' × ')} is ×${+raw.toFixed(2)}, held to ×${FUTURE_MULT_CAP}` : on.map(id=> DISTORTION_POOL[id].mult).join(' × ')) : ''}).
+          ${due.length ? `First wins with these: ${['gold', 'silver', 'bronze'].filter(k=> dueM[k]).map(k=> `${medalIcon(k)} <b>+${dueM[k]} ${k}</b>`).join(' · ')}.` : ''}
+          ${f.paid > 0 ? `This week ✨ <b>${f.paid}</b> is paid already, so it pays ${more ? `✨ <b>${more}</b> more` : 'nothing more: a higher tier or more distortions for more'}.` : ''}
+          Every win also pays about ${tokenIcon(16)} <b>${Math.round(futureTicketChance(on, wk.picks.map(p=> ({ species:p.species }))))}</b> Skill Tokens and <b>${futureXp(on)}</b> fights' worth of XP${on.length ? `, multiplied the same way (×${+mult.toFixed(2)})` : ''}.</div>
       </div>
       ${f.pending ? `<button class="btn btn-primary fu-btn" id="fuCapture">Capture a legacy</button>` : ''}
-      <button class="btn ${f.pending ? 'btn-ghost' : 'btn-primary'} fu-btn" id="fuFight">Fight${on.length ? ` — ${on.length} distortion${on.length > 1 ? 's' : ''}` : ''}</button>
+      <button class="btn ${f.pending ? 'btn-ghost' : 'btn-primary'} fu-btn" id="fuFight">Fight: ${escapeHtml(T.name)}${on.length ? `, ${on.length} distortion${on.length > 1 ? 's' : ''}` : ''}</button>
       <div class="fu-note">${f.captured ? `This week's legacy is captured (<b>${escapeHtml(f.captured)}</b>). You can still fight for Starlight. ` : 'One legacy a week, on a win. '}
         New monsters and distortions on <b>${day}</b>. Lose, and nothing is taken — not even XP — and the same three wait for you. Every move here asks for your <b>silver and gold words</b>.
         You hold ✨ <b>${starlight()}</b> Starlight.</div>
@@ -1552,6 +1752,10 @@ function renderFuture(){
   screenEl.querySelectorAll('[data-dt]').forEach(bt=> bt.addEventListener('click', ()=>{
     const id = bt.dataset.dt, d = futureState().dist;
     if(d[id]) delete d[id]; else d[id] = 1;
+    saveProfile(); renderFuture();
+  }));
+  screenEl.querySelectorAll('[data-tier]').forEach(bt=> bt.addEventListener('click', ()=>{   // (4.04)
+    futureState().tier = bt.dataset.tier;
     saveProfile(); renderFuture();
   }));
   $('#fuFight').addEventListener('click', ()=> futureBegin());
@@ -1751,8 +1955,24 @@ function r6Css(){
   .fu-dist{ margin-top:12px; background:rgba(255,255,255,.05); border:1px solid rgba(200,170,255,.25); border-radius:14px; padding:10px; }
   .fu-dist-head{ font-weight:800; font-size:14px; color:#f0e6ff; margin-bottom:8px; }
   .fu-dist-sub{ font-size:11.5px; font-weight:600; color:#cdb8f0; margin:-4px 0 8px; }
-  /* (3.76) the week's three, each switched on or off */
-  .fu-dt-row{ display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+  /* (3.76) the week's three, each switched on or off — (4.04) seven, two to a row on a phone */
+  .fu-dt-row{ display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:6px; }
+  /* (4.04) the three tiers */
+  .fu-tier-row{ display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+  .fu-tier{ border:1.5px solid rgba(200,170,255,.35); background:rgba(255,255,255,.06); color:#efe6ff; border-radius:12px; padding:8px 6px 7px; cursor:pointer;
+    font-family:'Nunito',sans-serif; display:flex; flex-direction:column; align-items:center; gap:3px; text-align:center; min-width:0; }
+  .fu-tier b{ font-family:'Baloo 2',cursive; font-size:14px; line-height:1.1; }
+  .fu-tier i{ font-style:normal; font-weight:900; font-size:12px; color:#ffe08a; }
+  .fu-tier.on{ background:linear-gradient(180deg, #8a3f9e, #4a1f6e); border-color:#ffd8a8; box-shadow:0 0 12px rgba(255,180,120,.5); }
+  .fu-tier:active{ transform:translateY(2px); }
+  .fu-tier-md{ font-size:10.5px; font-weight:800; color:#e8d6ff; }
+  .fu-tier-say{ margin-top:7px; font-size:12px; font-weight:700; line-height:1.45; color:#e8dcff; }
+  .fu-dt-foot{ display:flex; justify-content:space-between; align-items:center; gap:4px; }
+  .fu-mds{ display:flex; gap:3px; }
+  .fu-md{ width:9px; height:9px; border-radius:50%; border:1.5px solid currentColor; opacity:.55; }
+  .fu-md.bronze{ color:#d59a62; } .fu-md.silver{ color:#d8dde6; } .fu-md.gold{ color:#ffd04a; }
+  .fu-md.won{ background:currentColor; opacity:1; }
+
   .fu-dt{ border:1.5px solid rgba(200,170,255,.35); background:rgba(255,255,255,.06); color:#efe6ff; border-radius:12px; padding:7px 7px 6px; cursor:pointer;
     font-family:'Nunito',sans-serif; display:flex; flex-direction:column; align-items:stretch; gap:4px; text-align:left; min-width:0; }
   .fu-dt-top{ display:flex; justify-content:space-between; align-items:baseline; gap:4px; }

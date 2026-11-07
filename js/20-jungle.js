@@ -1968,6 +1968,44 @@ const JG_JUMP = { steps:50, ms:900, high:1.05 };
    you, so his cut goes round it (JG_RIDE_CLIP, a polygon in percent of his picture). */
 const JG_RIDE_CUT = { m2:0.42, m3:0.55, m5:0.36, f2:0.45, f5:0.36 };
 const JG_RIDE_CLIP = { m3:'0 0, 100% 0, 100% 45%, 34% 45%, 34% 27%, 0 27%' };
+/* (4.05) The designer: "i actually propose not truncating the player sprite but instead cutting out one leg of the player
+   where appropriate to intimate that that leg has gone behind lucesco's torso, and rely on the mane to partly obscure
+   and make the cut part look less obvious. there can be a fade in over the cut part". So the whole picture sits on his
+   back — the row that was the cut (JG_RIDE_SEAT, of the picture's 80) on his back, as before — and the leg on the
+   mane's side is cut away with a soft edge (JG_RIDE_LEG: a polygon in the picture's 80 × 80); the other hangs down his
+   side. And: "the girls' ones need a bit of work with placement, f1 and f2's upper bodies might need shifting to the left
+   and up, f4 and f5 can be higher too" (JG_RIDE_X: px of 80 to the left; their seats 4 rows lower, so they sit 4 higher);
+   "m5 is troublesome because he's looking over his back … shall we flip his sprite?" (JG_RIDE_FLIP). Over the rider, his
+   head and mane (JG_MANE: a polygon of his picture), through which the rider shows faintly. */
+const JG_RIDE_SEAT = { m1:44.8, m2:46.4, m3:36, m4:44.8, m5:51.2, f1:48.8, f2:48, f3:44.8, f4:48.8, f5:56 };
+const JG_RIDE_X = { f1:-6, f2:-3 };
+const JG_RIDE_FLIP = { m5:true };
+const JG_RIDE_LEG = {
+  m1:'18,52 35.5,52 35.5,80 18,80',
+  m2:'25,49 43.5,48 43.5,62 25,62',
+  m3:'12,26 28.5,26 28.5,33 35,37 35,47 12,47',
+  m4:'21,51 38.5,51 38.5,80 21,80',
+  m5:'38.5,59 52,59 52,80 38.5,80',
+  f1:'30,49 45.5,49 45.5,80 30,80',
+  f2:'30,57 42.5,57 42.5,80 30,80',
+  f3:'21,49 34,49 34,66 21,66',
+  f4:'26,55 39.5,55 39.5,80 26,80',
+  f5:'30,66 37.5,66 37.5,80 30,80',
+};
+const JG_MANE = '0 0, 54% 0, 54% 40%, 66% 42%, 77% 41%, 77% 46%, 62.5% 48%, 58.5% 64.5%, 41.5% 69%, 10.5% 69%, 0 62.5%';
+const JG_MANE_SHOW = 0.68;            // the mane over the rider: the rider through it at about a third
+const _jgLegMasks = {};
+function jgLegMask(av){
+  if(_jgLegMasks[av] != null) return _jgLegMasks[av];
+  const pts = JG_RIDE_LEG[av];
+  if(!pts) return (_jgLegMasks[av] = '');
+  /* the picture, but for the leg, its edge feathered: opaque where the rider shows (an alpha mask) */
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80' width='80' height='80'><defs><filter id='f' x='-10%' y='-10%' width='120%' height='120%'>` +
+    `<feGaussianBlur stdDeviation='1.7'/></filter></defs><path fill='black' fill-rule='evenodd' filter='url(#f)' d='M-20 -20H100V100H-20Z M${pts.split(' ').join(' L')}Z'/></svg>`;
+  /* (unquoted, every quote and bracket escaped: it goes inside a style="…") */
+  const data = encodeURIComponent(svg).replace(/'/g, '%27').replace(/\(/g, '%28').replace(/\)/g, '%29');
+  return (_jgLegMasks[av] = `url(data:image/svg+xml,${data})`);
+}
 /* (4.03) where his eyes are in his picture (lucesco_front.png, 96 × 96): the middle of the blue band across his face */
 const JG_EYES = { x:30.5 / 96, y:31.5 / 96, w:0.3, h:0.17 };
 function jgJumpIn(){ return Math.max(0, jgState().jumpIn | 0); }
@@ -1992,14 +2030,23 @@ function jgJumpHtml(mark){
   /* (4.03) Rift Ambush: each picture's shape filled with stars, over it gone black (.jg-starry) */
   const stars = (src, l, t, s, c)=> `<i class="jg-stars" style="left:${Math.round(l)}px;top:${Math.round(t)}px;width:${Math.round(s)}px;height:${Math.round(s)}px;` +
     `-webkit-mask-image:url(${src});mask-image:url(${src});${c ? `clip-path:${c};` : ''}"></i>`;
-  const yl = backX - RS / 2, yt = backY - (1 - cut) * RS;
+  /* (4.05) the whole picture, its seat on his back, one leg cut away (jgLegMask), flipped if it looks back; his head and
+     mane over it, the rider through them faintly (.jg-ride-mane) */
+  const k = RS / 80, seat = JG_RIDE_SEAT[av] != null ? JG_RIDE_SEAT[av] : (1 - cut) * 80;
+  const yl = backX - RS / 2 + (JG_RIDE_X[av] || 0) * k, yt = backY - seat * k;
+  const leg = jgLegMask(av), flip = JG_RIDE_FLIP[av] ? 'scale:-1 1;' : '';
+  const box = `left:${Math.round(yl)}px;top:${Math.round(yt)}px;width:${RS}px;height:${RS}px;`;
+  const masked = leg ? `-webkit-mask-image:${leg};mask-image:${leg};-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;` : '';
+  void clip;
   return `<i class="jg-ride-shadow"></i><div class="jg-ride-arc">` +
     `<img class="jg-ride-lion" src="assets/mon/lucesco_front.png" alt="" style="width:${Math.round(LS)}px;height:${Math.round(LS)}px;left:${Math.round(lx)}px;top:${Math.round(ly)}px">` +
     stars('assets/mon/lucesco_front.png', lx, ly, LS) +
     `<i class="jg-eyes" style="width:${Math.round(ew)}px;height:${Math.round(eh)}px;left:${Math.round(lx + JG_EYES.x * LS - ew / 2)}px;top:${Math.round(ly + JG_EYES.y * LS - eh / 2)}px"></i>` +
-    `<img class="jg-ride-you" src="assets/avatar/${av}.png" alt="" onerror="avatarFallback(this)" data-px="${RS}" data-id="${av}" data-bare="1" ` +
-      `style="width:${RS}px;height:${RS}px;left:${Math.round(yl)}px;top:${Math.round(yt)}px;clip-path:${clip}">` +
-    stars(`assets/avatar/${av}.png`, yl, yt, RS, clip) +
+    `<div class="jg-ride-rider" style="${box}${flip}${masked}">` +
+      `<img class="jg-ride-you" src="assets/avatar/${av}.png" alt="" onerror="avatarFallback(this)" data-px="${RS}" data-id="${av}" data-bare="1" style="left:0;top:0;width:${RS}px;height:${RS}px">` +
+      stars(`assets/avatar/${av}.png`, 0, 0, RS) +
+    `</div>` +
+    `<img class="jg-ride-mane" src="assets/mon/lucesco_front.png" alt="" style="width:${Math.round(LS)}px;height:${Math.round(LS)}px;left:${Math.round(lx)}px;top:${Math.round(ly)}px;clip-path:polygon(${JG_MANE});opacity:${JG_MANE_SHOW}">` +
     `</div>`;
 }
 async function jgJump(J){
@@ -2150,7 +2197,7 @@ function jgRideFigure(){
    The effects on the fight: jgEdgeApply, at its first wave (jgWaveStart).
    ============================================================ */
 const JG_GLARE = { reach:2, steps:50, ms:5000, beam:1000, hp:0.15, weak:0.25, turns:3 };
-const JG_AMBUSH = { reach:2, hp:0.15, stun:1 };
+const JG_AMBUSH = { reach:2, hp:0.15, stun:1, dark:420, fly:260, fadeIn:330, after:620 };   // (4.05) its timings, ms
 function jgGlareIn(){ return Math.max(0, jgState().glareIn | 0); }
 function jgBandStunned(b){ return !!(b && b.zapUntil && b.zapUntil > Date.now()); }
 function jgBandName(b){ const nm = SPECIES[b.lead] ? SPECIES[b.lead].name : 'alien'; return b.rank === 'alien' ? nm : (b.rank === 'captain' ? 'Captain ' : 'Commander ') + nm; }
@@ -2225,7 +2272,7 @@ async function jgGlare(b){
   j.glareIn = JG_GLARE.steps; j.glares = (j.glares || 0) + 1;
   b.zapUntil = Date.now() + JG_GLARE.ms;
   playSfx('timestop');
-  setTimeout(()=> playSfx('spark'), 60);
+  playSfx('pulsar');                                                    // (4.05) the laser's own sound (was 'spark')
   const beam = jgBeam(b);
   const eyes = me.querySelector('.jg-eyes');
   if(eyes){ eyes.classList.remove('on'); void eyes.offsetWidth; eyes.classList.add('on'); }
@@ -2341,49 +2388,65 @@ async function jgAmbush(b){
   me.style.transition = 'none';
   me.style.transform = at(from);
   me.style.zIndex = 12 + Math.max(p.y, b.y);
-  let gash = null;
+  /* (4.05) the designer: "remove the rift animation, and the moment cosmic silhouette lucesco shift and fades, apply a fade
+     in simultaneously that completes just shortly after the moment the previous silhouette fadeout completes. keep it as
+     a cosmic silhouette that fades in, then it with a bright red pulse flash lucesco and the player's sprite appears in
+     place of the silhouette and the monster is already lying down. do not flash the player's sprite … instead, leave a
+     trailing slow purple cosmic shockwave aura … from the centre of lucesco's sprite. also do not make the red aura before
+     the ambush flash, instead, just let lucesco darken into cosmic silhouette with a faintly swirling red glow around his
+     silhouette"; "play the 'hit' sfx from battles at the moment when lucesco's reappearance causes a flash"; and "a
+     yiu-yiu-yiu pulsing sound that gradually increases in volume as Lucesco fades into cosmic silhouette and plays until
+     the 'hit' sound" (the `ambush` sound, stopped as the hit plays) */
+  const DARK = reduce ? 120 : JG_AMBUSH.dark, FLY = JG_AMBUSH.fly, IN = JG_AMBUSH.fadeIn;
+  let ghost = null, fx = [];
   try {
-    /* 1. the two of you go to starlight; 2. red flashes */
-    me.classList.add('jg-starry');
-    playSfx('rip');
-    await wait(reduce ? 120 : 340);
-    me.classList.add('jg-redflash');
-    await wait(reduce ? 80 : 330);
-    /* 3. you fly at it, fading out of this place on the way */
-    if(typeof me.animate === 'function' && !reduce){
-      const mid = { x:from.x + (to.x - from.x) * 0.55, y:from.y + (to.y - from.y) * 0.55 };
-      const fly = me.animate([{ transform:at(from), opacity:1 }, { transform:at(mid), opacity:0.85, offset:0.5 }, { transform:at(to), opacity:0 }],
-                             { duration:260, easing:'cubic-bezier(.55,0,.85,.45)', fill:'forwards' });
-      await fly.finished.catch(()=>{});
-      fly.cancel();
-    }
-    me.style.opacity = '0';
-    me.style.transform = at(to);
-    /* 4. a gash in spacetime on its square, a red flash — and out of it you come, onto it */
-    gash = document.createElement('div');
-    gash.className = 'jg-gash';
-    gash.style.cssText = `left:${(b.x * T).toFixed(1)}px;top:${(b.y * T).toFixed(1)}px;width:${T}px;height:${T}px;z-index:${13 + b.y}`;
-    gash.innerHTML = `<i class="jg-gash-flash"></i><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M10,80 L30,63 L25,56 L50,45 L46,38 L71,26 L90,13 L72,29 L76,36 L51,50 L55,57 L30,70 Z"></path></svg>`;
-    world.appendChild(gash);
-    await wait(reduce ? 60 : 150);
-    /* 5. the pounce: it falls flat at the bottom of its square, and he stands on it */
+    /* 1. the two of you darken into starlight, a faint red glow swirling round you */
+    playSfx('ambush');
+    me.classList.add('jg-starry', 'jg-swirl');
+    await wait(DARK);
+    /* 2. the silhouette flies at it, fading as it goes; another fades in on its square as it does, done just after — and
+       under it the alien already lies flat */
+    ghost = me.cloneNode(true);
+    ghost.removeAttribute('id');
+    ghost.classList.add('jg-ghost');
+    ghost.style.transition = 'none';
+    ghost.style.transform = at(to);
+    ghost.style.opacity = '0';
+    world.appendChild(ghost);
     b._pounced = true;
     if(el){
       el.classList.remove('jg-zap', 'jg-stun'); clearTimeout(b._boltT);
       const svg = el.querySelector('.jg-bolts'); if(svg) svg.remove();
       el.classList.add('jg-pounced'); const cone = el.querySelector('.jg-cone'); if(cone) cone.style.display = 'none';
     }
-    me.classList.remove('jg-redflash');
+    if(typeof me.animate === 'function' && !reduce){
+      const mid = { x:from.x + (to.x - from.x) * 0.55, y:from.y + (to.y - from.y) * 0.55 };
+      me.animate([{ transform:at(from), opacity:1 }, { transform:at(mid), opacity:0.7, offset:0.5 }, { transform:at(to), opacity:0 }],
+                 { duration:FLY, easing:'cubic-bezier(.55,0,.85,.45)', fill:'forwards' });
+      const arrive = ghost.animate([{ opacity:0 }, { opacity:1 }], { duration:IN, easing:'cubic-bezier(.3,0,.6,1)', fill:'forwards' });
+      await arrive.finished.catch(()=>{});
+    } else { ghost.style.opacity = '1'; await wait(80); }
+    /* 3. a bright red pulse — and there you both are, on it: no flash on you; a slow purple shockwave from his middle */
+    me.getAnimations().forEach(a=> a.cancel());
     me.style.opacity = '';
-    me.classList.add('jg-landing');
+    me.style.transform = at(to);
+    me.classList.remove('jg-starry', 'jg-swirl');
+    ghost.remove(); ghost = null;
+    const cx = to.x + 0.5 * T, cy = to.y + 0.342 * T, z = (parseInt(me.style.zIndex, 10) || 12) - 1;
+    const ring = (cls, size)=>{ const e = document.createElement('i'); e.className = cls;
+      e.style.cssText = `left:${(cx - size / 2).toFixed(1)}px;top:${(cy - size / 2).toFixed(1)}px;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;z-index:${z}`;
+      world.appendChild(e); fx.push(e); return e; };
+    ring('jg-pulse', 2.7 * T);
+    if(!reduce) ring('jg-wave', 1.2 * T);
+    stopSfx('ambush', 60);
     playSfx('hit_dealt');
     jgSeeThrough(true);
-    await wait(reduce ? 120 : 260);
-    me.classList.remove('jg-starry');
-    await wait(reduce ? 200 : 520);
+    await wait(reduce ? 200 : JG_AMBUSH.after);
   } catch(e){}
-  if(gash) gash.remove();
-  me.classList.remove('jg-starry', 'jg-redflash', 'jg-landing');
+  if(ghost) ghost.remove();
+  fx.forEach(e=> setTimeout(()=> e.remove(), 900));
+  stopSfx('ambush', 60);
+  me.classList.remove('jg-starry', 'jg-swirl');
   ui.jgFx = null;
   /* the fight — with what his moves did to its first alien (jgEdgeApply). Where you stand stays where you leapt from
      until it is won (jgWon puts you on its square): a flight, or a fight lost, leaves you where you were */
@@ -3153,7 +3216,8 @@ function jgCss(){
   .walk-ent.jg-ride{ overflow:visible; pointer-events:none; }
   .jg-ride .jg-ride-arc{ position:absolute; inset:0; transform-origin:50% 100%; }
   .jg-ride.face-r .jg-ride-arc{ scale:-1 1; }
-  .jg-ride .jg-ride-lion, .jg-ride .jg-ride-you{ position:absolute; image-rendering:pixelated; pointer-events:none; max-width:none; transform:none; object-fit:fill; }
+  .jg-ride .jg-ride-lion, .jg-ride .jg-ride-you, .jg-ride .jg-ride-mane{ position:absolute; image-rendering:pixelated; pointer-events:none; max-width:none; transform:none; object-fit:fill; }
+  .jg-ride .jg-ride-rider{ position:absolute; pointer-events:none; }
   .jg-ride .jg-ride-lion{ filter:drop-shadow(0 0 5px rgba(255,140,60,.6)); }
   .jg-ride .jg-ride-shadow{ position:absolute; left:4%; right:4%; bottom:-10%; height:26%; border-radius:50%; background:rgba(0,0,0,.3); }
   .wact.lion.leap{ background:#c0702c; border-color:#8e4f1a; color:#fff; }
@@ -3203,8 +3267,11 @@ function jgCss(){
   .jg-band.jg-stun .jg-mark{ display:none; }
   /* time stopped: everything held where it is drawn, its own motions paused too — but his eyes and the struck alien's */
   .walk-world.jg-frozen .walk-ent:not(.walk-you):not(.jg-fx-on), .walk-world.jg-frozen .walk-ent:not(.walk-you):not(.jg-fx-on) *{ animation-play-state:paused !important; }
-  /* Rift Ambush: you both go to starlight, flash red, fly and fade, come out of a gash on its square onto it */
-  .walk-you.jg-starry .jg-ride-lion, .walk-you.jg-starry .jg-ride-you{ filter:brightness(0) !important; }
+  /* Rift Ambush: (4.05) you both darken into starlight, a faint red glow swirling round you; fly and fade as another
+     silhouette fades in on its square; a red pulse, and there you are on it, a slow purple shockwave going out */
+  .walk-you.jg-starry .jg-ride-lion{ filter:drop-shadow(0 0 5px rgba(255,140,60,0)) brightness(0) !important; transition:filter .4s cubic-bezier(.2,.55,.45,1); }
+  .walk-you.jg-starry .jg-ride-you{ filter:brightness(0) !important; transition:filter .4s cubic-bezier(.2,.55,.45,1); }
+  .walk-you.jg-starry .jg-ride-mane{ opacity:0 !important; }
   .walk-you.jg-starry .jg-ride-arc{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)) drop-shadow(0 0 9px rgba(120,90,255,.6)); }
   .walk-you.jg-starry .jg-stars{ display:block; position:absolute; pointer-events:none; font-style:normal;
     -webkit-mask-size:100% 100%; mask-size:100% 100%; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
@@ -3213,21 +3280,33 @@ function jgCss(){
       radial-gradient(1.4px 1.4px at 15% 80%, #fff, rgba(255,255,255,0) 70%), radial-gradient(1.1px 1.1px at 55% 40%, #e6dcff, rgba(255,255,255,0) 70%),
       linear-gradient(160deg, #1d0f52, #43208a 45%, #140838);
     background-size:17px 17px, 23px 23px, 29px 29px, 13px 13px, 19px 19px, 11px 11px, 100% 100%;
-    animation:jgStarDrift 1.1s linear infinite; }
+    animation:jgStarDrift 1.1s linear infinite, jgStarsIn .42s cubic-bezier(.25,.4,.5,1) both; }
   @keyframes jgStarDrift{ from{ background-position:0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; } to{ background-position:17px -17px, -23px 23px, 29px 29px, -13px -13px, 19px -19px, 11px 11px, 0 0; } }
-  .walk-you.jg-redflash .jg-ride-arc{ animation:jgRedFlash .33s steps(1, end) 1 both; }
-  @keyframes jgRedFlash{ 0%{ filter:drop-shadow(0 0 8px #ff2020) drop-shadow(0 0 16px rgba(255,0,0,.9)) brightness(1.6); } 25%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)); }
-    50%{ filter:drop-shadow(0 0 10px #ff3030) drop-shadow(0 0 22px rgba(255,0,0,.9)) brightness(1.8); } 75%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)); }
-    100%{ filter:drop-shadow(0 0 6px #ff3030) drop-shadow(0 0 14px rgba(255,0,0,.8)) brightness(1.3); } }
-  .walk-you.jg-landing .jg-ride-arc{ animation:jgLand .3s ease-out both; }
-  @keyframes jgLand{ 0%{ transform:translateY(-30%) scale(1.08); opacity:0; } 45%{ opacity:1; } 70%{ transform:translateY(4%) scaleY(.92); } 100%{ transform:none; } }
-  .jg-gash{ position:absolute; pointer-events:none; overflow:visible; }
-  .jg-gash svg{ position:absolute; left:-15%; top:-15%; width:130%; height:130%; overflow:visible; transform-origin:50% 50%; animation:jgGash .5s cubic-bezier(.2,.8,.3,1) forwards; }
-  .jg-gash path{ fill:#12052c; stroke:#ff4a3a; stroke-width:2.2; stroke-linejoin:round; filter:drop-shadow(0 0 3px #ff2020) drop-shadow(0 0 7px rgba(255,60,60,.9)); }
-  @keyframes jgGash{ 0%{ transform:scale(.3, 0); opacity:1; } 30%{ transform:scale(1.12, 1.25); } 55%{ transform:scale(1, 1); opacity:1; } 100%{ transform:scale(1.05, 0); opacity:0; } }
-  .jg-gash-flash{ position:absolute; left:-80%; top:-80%; width:260%; height:260%; border-radius:50%; font-style:normal;
-    background:radial-gradient(circle closest-side, rgba(255,255,255,.95) 0 8%, rgba(255,80,60,.75) 26%, rgba(255,0,0,.25) 52%, rgba(255,0,0,0) 72%); animation:jgGashFlash .42s ease-out forwards; }
-  @keyframes jgGashFlash{ 0%{ transform:scale(.25); opacity:1; } 100%{ transform:scale(1.25); opacity:0; } }
+  @keyframes jgStarsIn{ from{ opacity:0; } to{ opacity:1; } }
+  /* the faint red glow swirling round the silhouette: a red shadow going round it, under its purple rim */
+  .walk-you.jg-swirl .jg-ride-arc{ animation:jgSwirl 1.05s linear infinite; }
+  .walk-you.jg-ghost .jg-stars{ animation:jgStarDrift 1.1s linear infinite !important; }   /* the one fading in: starry from the first */
+  @keyframes jgSwirl{
+    0%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)) drop-shadow(0 0 9px rgba(120,90,255,.6)) drop-shadow(4px 0 8px rgba(255,40,40,.58)); }
+    12.5%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)) drop-shadow(0 0 9px rgba(120,90,255,.6)) drop-shadow(2.8px 2.8px 7px rgba(255,40,40,.5)); }
+    25%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)) drop-shadow(0 0 9px rgba(120,90,255,.6)) drop-shadow(0 4px 8px rgba(255,40,40,.58)); }
+    37.5%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)) drop-shadow(0 0 9px rgba(120,90,255,.6)) drop-shadow(-2.8px 2.8px 7px rgba(255,40,40,.5)); }
+    50%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)) drop-shadow(0 0 9px rgba(120,90,255,.6)) drop-shadow(-4px 0 8px rgba(255,40,40,.58)); }
+    62.5%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)) drop-shadow(0 0 9px rgba(120,90,255,.6)) drop-shadow(-2.8px -2.8px 7px rgba(255,40,40,.5)); }
+    75%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)) drop-shadow(0 0 9px rgba(120,90,255,.6)) drop-shadow(0 -4px 8px rgba(255,40,40,.58)); }
+    87.5%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)) drop-shadow(0 0 9px rgba(120,90,255,.6)) drop-shadow(2.8px -2.8px 7px rgba(255,40,40,.5)); }
+    100%{ filter:drop-shadow(0 0 3px rgba(170,140,255,.95)) drop-shadow(0 0 9px rgba(120,90,255,.6)) drop-shadow(4px 0 8px rgba(255,40,40,.58)); } }
+  /* the reveal: a bright red pulse under you both, then a slow purple shockwave from his middle */
+  .jg-pulse, .jg-wave{ position:absolute; pointer-events:none; border-radius:50%; font-style:normal; }
+  .jg-pulse{ background:radial-gradient(circle closest-side, rgba(255,240,235,.95) 0 16%, rgba(255,80,60,1) 32%, rgba(255,25,25,.8) 50%, rgba(255,0,0,.3) 64%, rgba(255,0,0,0) 76%);
+    animation:jgPulse .46s cubic-bezier(.1,.75,.35,1) forwards; }
+  @keyframes jgPulse{ 0%{ transform:scale(.62); opacity:1; } 28%{ transform:scale(1.02); opacity:1; } 100%{ transform:scale(1.42); opacity:0; } }
+  .jg-wave{ border:3px solid rgba(200,165,255,.9); box-shadow:0 0 10px 3px rgba(150,100,255,.75), inset 0 0 14px 3px rgba(150,100,255,.6);
+    background:radial-gradient(1.4px 1.4px at 22% 30%, #fff, rgba(255,255,255,0) 70%), radial-gradient(1.2px 1.2px at 74% 62%, #e9e0ff, rgba(255,255,255,0) 70%),
+      radial-gradient(1.6px 1.6px at 40% 80%, #fff, rgba(255,255,255,0) 70%), radial-gradient(circle closest-side, rgba(120,80,255,0) 55%, rgba(120,80,255,.28) 82%, rgba(120,80,255,0) 100%);
+    background-size:13px 13px, 17px 17px, 21px 21px, 100% 100%;
+    animation:jgWave 1.15s cubic-bezier(.18,.55,.3,1) .06s both; }
+  @keyframes jgWave{ 0%{ transform:scale(.18); opacity:0; } 8%{ opacity:1; } 100%{ transform:scale(2.5); opacity:0; } }
   /* pounced on: it falls flat along the bottom of its square, backwards, and he stands on it */
   .jg-band.jg-pounced .jg-alien-art .jg-art{ animation:none !important; rotate:90deg; translate:-50% -8%; transform-origin:50% 100%;
     transition:rotate .18s ease-in, translate .18s ease-in; filter:drop-shadow(0 0 3px #000) drop-shadow(0 0 7px rgba(210,20,30,.9)) brightness(.9) !important; }
@@ -3235,7 +3314,7 @@ function jgCss(){
   .jg-band.jg-pounced .jg-mark, .jg-band.jg-pounced .jg-cone{ display:none !important; }
   .wact.lion.glare{ background:#8e1d22; border-color:#5e1014; color:#fff; }
   .wact.lion.ambush{ background:#3b2a7a; border-color:#251a52; color:#fff; }
-  @media (prefers-reduced-motion: reduce){ .jg-band.jg-zap .jg-alien-art .jg-art, .jg-band.jg-stun .jg-alien-art .jg-art, .walk-you.jg-starry .jg-stars, .jg-beam i, .jg-beam em{ animation:none !important; } }
+  @media (prefers-reduced-motion: reduce){ .jg-band.jg-zap .jg-alien-art .jg-art, .jg-band.jg-stun .jg-alien-art .jg-art, .walk-you.jg-starry .jg-stars, .walk-you.jg-swirl .jg-ride-arc, .jg-beam i, .jg-beam em{ animation:none !important; } }
   .walk-ent.jg-band{ transition:transform .3s linear; overflow:visible; pointer-events:none; }
   .jg-band .jg-alien-art{ position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center; }
   .jg-band .jg-alien-art .jg-art{ image-rendering:pixelated; flex:0 0 auto; margin-bottom:-6%;

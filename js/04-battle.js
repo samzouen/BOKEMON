@@ -6804,9 +6804,14 @@ function beginRound(msg){
       go();
     };
     /* the phoenix may rise again first (Rebirth) */
-    const lead = leaderMon();
-    if(lead && lead.currentHp <= 0 && rebirthDue(lead)) return offerRebirth(fallen, fallen, lead);
-    fallen();
+    const settle = ()=>{
+      const lead = leaderMon();
+      if(lead && lead.currentHp <= 0 && rebirthDue(lead)) return offerRebirth(fallen, fallen, lead);
+      fallen();
+    };
+    /* (4.04) the future's Destiny Bond: each of theirs the pre-turn's damage felled takes one of yours with it first */
+    if(typeof bondSettle === 'function' && bondSettle(settle)) return;
+    settle();
   })))));
   /* (3.15) a Sylph's Grace: who nods off — after the ice has had its say */
   const drowse = ()=>{

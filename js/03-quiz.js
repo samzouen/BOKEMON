@@ -968,6 +968,12 @@ function buildWriter(i, box){
   });
 }
 
+/* (4.06) The bloom across a spelt word's strokes (#qzBloomPaint, index.html): begun now, so that it and the bloom under
+   Ready! (a CSS animation, begun as the button is drawn) sweep together, every 3.2 s */
+function qzBloomSync(){
+  const a = document.getElementById('qzBloomAnim');
+  try { if(a && typeof a.beginElement === 'function') a.beginElement(); } catch(e){}
+}
 function resolveWord(passed, timedOut){
   const q = ui.quiz;
   if(q.resolved) return;
@@ -1026,6 +1032,8 @@ function resolveWord(passed, timedOut){
       </div>
       ${btn}
     `;
+    /* (4.06) the word spelt: Ready!'s bloom across its strokes too, begun with Ready!'s (as it is drawn, now), every 3.2 s */
+    if(passed) qzBloomSync();
     /* (3.80) one tap: a quick second one used to run the end of the quiz
        twice — a move resolved twice, two bonus offers stacked */
     $('#quizNext').addEventListener('click', e=>{ const bt = e.currentTarget; if(bt.disabled) return; bt.disabled = true; advanceQuiz(); });

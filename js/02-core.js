@@ -37,6 +37,8 @@ const SFX_MAP = {
   rewind:           'rewind.mp3',         // (3.19) time turned back — Cyborg's rewind, in the vault
   rip:              'rip.mp3',            // (3.20) the Guardian's sword tearing the air open
   timestop:         'timestop.mp3',       // (3.20) Nemesis stops time
+  pulsar:           'pulsar_glare.mp3',   // (4.05) Lucesco's Pulsar Glare: "an intense, smoking/sizzling" laser pulse, a second long — (4.06) its high pitch held, in pulses
+  ambush:           'rift_ambush.mp3',    // (4.05) Rift Ambush: "a yiu-yiu-yiu pulsing sound that gradually increases in volume … until the 'hit'" (stopped then) — (4.06) at about 150 Hz
   // quiz feedback
   answer_correct:   'answer_correct.mp3',
   answer_wrong:     'answer_wrong.mp3',
@@ -89,7 +91,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.03';
+const GAME_VERSION = '4.06';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -313,7 +315,7 @@ function playBackSfx(){
    fanfare); the long ones (the stone roll, the evolution, the defeat) last. */
 const SFX_PRELOAD_ORDER = ['answer_correct', 'answer_wrong', 'ui_click', 'ui_back', 'hit_dealt', 'hit_taken', 'victory', 'level_up',
   'catch_success', 'catch_miss', 'power_up', 'stone_ultra', 'stone_veryhigh', 'stone_high', 'stone_mid', 'stone_low', 'recovery_heal',
-  'core_tinkle', 'evolution', 'stone_roll', 'core_blast', 'defeat'];
+  'core_tinkle', 'evolution', 'stone_roll', 'core_blast', 'defeat', 'pulsar', 'ambush'];
 const SFX_TRIES = 3;                                   // a decode that fails is tried again, up to three times
 /* Can this file still be fetched? (never asked, or failed with tries left) */
 function sfxWanted(file){
