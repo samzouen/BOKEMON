@@ -446,7 +446,11 @@
   .qz-me{ flex:0 0 auto; width:64px; height:64px; display:flex; align-items:center; justify-content:center; }
   .qz-me img{ filter:drop-shadow(0 2px 6px rgba(0,0,0,.55)); }
   .qz-mv{ min-width:0; flex:1 1 auto; }
-  .qz-name{ font-family:'Baloo 2', system-ui, sans-serif; font-weight:800; font-size:30px; line-height:1; color:#fff;
+  /* (4.07) the designer: "introduce a max length for move names and keep name sizes consistent for all moves at a length
+     that will never change even with the attack now button on an iPhone's narrower screen". One size for every move's
+     name, 22px (30px until 4.07, a long one cut short with an ellipsis): at 375px across, every name of up to 20 characters
+     fits on one line (tools/v407-test.js measures them all). */
+  .qz-name{ font-family:'Baloo 2', system-ui, sans-serif; font-weight:800; font-size:22px; line-height:1.05; color:#fff;
     text-shadow:0 0 16px var(--tc-glow, rgba(224,85,63,.6)), 0 2px 0 rgba(0,0,0,.35); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   body.writing #listenBtn, body.writing #defBtn{ background:var(--qz-glass); color:var(--qz-acc-l); border:1px solid rgba(255,214,120,.42);
     box-shadow:0 6px 18px rgba(0,0,0,.25); font-weight:900; text-shadow:0 0 10px var(--qz-glow2); }
@@ -457,6 +461,16 @@
      throwing sparks; while it rises, all of it burns hotter and a wave of light runs down it */
   .qz-gauge{ display:flex; align-items:center; gap:10px; margin:6px 0 0 8px; }
   .qz-num{ flex:0 0 auto; min-width:34px; text-align:right; font-weight:900; font-size:16px; letter-spacing:.5px; color:var(--qz-acc-l); text-shadow:0 0 10px var(--qz-glow); }
+  /* (4.07) Attack now, where the count stands: dim until the move is powered, then lit as Ready! is, its power under it.
+     Its height is let into the card's padding (the negative margins), so the card is no taller for it. */
+  .qz-gauge .qz-attack{ flex:0 0 auto; margin:-9px 0 -9px 0; height:38px; min-width:96px; padding:0 10px; border-radius:11px; background:rgba(8,10,28,.55);
+    border:1.5px solid rgba(255,214,120,.3); color:rgba(255,246,216,.45); font:800 13.5px system-ui, sans-serif; letter-spacing:.2px; line-height:1.05;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; white-space:nowrap; }
+  .qz-gauge .qz-attack small{ font:800 10.5px system-ui, sans-serif; margin-top:3px; }
+  .qz-gauge .qz-attack.ready{ border-color:#ffd76f; color:#fff6d8; cursor:pointer; text-shadow:0 0 10px rgba(255,205,100,.95), 0 0 20px rgba(255,170,60,.5);
+    box-shadow:0 0 14px rgba(255,200,90,.35), inset 0 0 12px rgba(255,200,90,.12); }
+  .qz-gauge .qz-attack.ready small{ color:#ffe7a6; text-shadow:0 0 8px rgba(255,190,80,.7); }
+  .qz-gauge .qz-attack.ready:active{ background:rgba(255,214,120,.16); }
   .qz-meter{ position:relative; flex:1 1 auto; height:14px; border-radius:8px; margin-right:12px; background:rgba(255,255,255,.08);
     box-shadow:inset 0 2px 4px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.07); }
   .qz-fill{ position:absolute; left:0; top:0; bottom:0; border-radius:8px;
@@ -517,10 +531,7 @@
     background-size:30% 100%; animation:qzSheenReady 3.2s cubic-bezier(.3,.1,.5,1) 1.6s infinite; }
   @keyframes qzSheenReady{ 0%{ background-position:-60% 0; } 25%{ background-position:160% 0; } 100%{ background-position:160% 0; } }
   .qz-carry{ font-size:11px; font-weight:800; color:#8fe0b8; margin:5px 0 0 8px; }
-  /* (3.98) "'stop here' for incinerate max' should also be translucent like the listen and meaning buttons" */
-  .qz-stop{ width:100%; margin:2px 0 8px; border:1px solid var(--qz-edge); border-radius:12px; padding:10px; font:900 13px system-ui, sans-serif; background:var(--qz-glass); color:rgba(255,255,255,.42); box-shadow:0 6px 18px rgba(0,0,0,.25); }
-  .qz-stop.ready{ color:var(--qz-acc-l); border-color:rgba(255,214,120,.55); text-shadow:0 0 10px var(--qz-glow2); cursor:pointer; }
-  .qz-stop.ready:active{ background:rgba(255,214,120,.14); }
+  /* (3.98–4.06) the full-width "Stop here" bar was here: Attack now, on the meter's row, since 4.07 (.qz-attack) */
   .qz-fuse{ position:relative; height:10px; border-radius:6px; background:rgba(255,255,255,.1); box-shadow:inset 0 2px 3px rgba(0,0,0,.45); margin:4px 2px 8px; }
   .qz-fuse > div{ position:absolute; left:0; top:0; bottom:0; border-radius:7px; transition:width .25s linear; background:linear-gradient(90deg, #2f9a4a, #8fd84a); }
   .qz-fuse > div[data-t="mid"]{ background:linear-gradient(90deg, #b9a83a, #ffc23a); }
@@ -599,6 +610,24 @@
   /* (4.03) a move failed: Continue, plain ("Quiet glass") */
   body.writing .qz-next.qz-quiet{ color:#e4def3; border:1px solid rgba(255,255,255,.2); text-shadow:none; font-weight:700; }
   body.writing .qz-next.qz-quiet:active{ background:rgba(255,255,255,.08); }
+  /* (4.07) a bonus to offer: Ready! (or Continue) and "+N bonus words · its reward" side by side where Ready! stands
+     (the designer's pick, A), the bonus in starlight violet; and, in the bonus round, a violet meter beside the move's
+     full one (quizStartBonus, 03-quiz.js) */
+  .qz-split{ display:flex; gap:10px; }
+  .qz-split > .btn{ flex:1 1 0; width:auto !important; min-width:0; }
+  body.writing .qz-next.qz-bonus{ height:54px; padding:0 6px; border-radius:14px; background:rgba(14,10,36,.6); border:1.5px solid rgba(196,170,255,.8);
+    color:#f1eaff; text-shadow:0 0 10px rgba(170,140,255,.85); display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.08;
+    box-shadow:0 0 14px rgba(150,120,255,.3), inset 0 0 12px rgba(150,120,255,.12); }
+  body.writing .qz-next.qz-bonus:active{ background:rgba(170,140,255,.16); }
+  .qz-bonus b{ font:800 17px 'Baloo 2', system-ui, sans-serif; letter-spacing:.2px; }
+  .qz-bonus small{ font:800 11.5px system-ui, sans-serif; color:#d9ccff; margin-top:2px; }
+  .qz-gauge.bonus .qz-meter{ margin-right:10px; }
+  .qz-gauge .qz-bmeter{ position:relative; flex:0 0 30%; height:14px; border-radius:8px; overflow:hidden; background:rgba(190,160,255,.12);
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.6), 0 0 0 1.5px rgba(196,170,255,.55); }
+  .qz-gauge .qz-bfill{ position:absolute; left:0; top:0; bottom:0; border-radius:8px; background:linear-gradient(90deg, #8f6bff, #d7c6ff);
+    box-shadow:0 0 12px rgba(170,140,255,.8); transition:width .9s cubic-bezier(.2,.7,.3,1), filter 1.2s; }
+  .qz-gauge .qz-bmeter.dying .qz-bfill{ filter:saturate(.2) brightness(.55); }
+  .qz-gauge .qz-bnum{ flex:0 0 auto; margin-left:8px; font-weight:900; font-size:14px; letter-spacing:.3px; color:#e3d8ff; text-shadow:0 0 10px rgba(170,140,255,.8); }
   .qz-status{ text-align:center; font-size:14px; font-weight:700; min-height:20px; margin-top:6px; text-shadow:0 1px 6px rgba(0,0,0,.95); }
   @media (prefers-reduced-motion: reduce){ .qz-res, .qz-fill::after, .qz-wave, .qz-tip, .qz-halo, .qz-tip b, .qz-meter.filling .qz-tip, .qz-meter.filling .qz-halo{ animation:none !important; } .qz-tip b{ opacity:0 !important; }
     .qz-gauge.full .qz-tip, .qz-gauge.full .qz-halo, .qz-gauge.full .qz-tip b, .qz-gauge.full .qz-fill::after, .qz-ready .qz-bloom::before, .qz-ready .qz-lift, body.writing .qz-next.qz-ready{ animation:none !important; }
