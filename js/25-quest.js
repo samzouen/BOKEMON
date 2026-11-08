@@ -106,7 +106,7 @@ const questTribeCap = k=> JG_TRIBES[k].name.replace(/^the /, 'The ');
 const QUEST_GUARD_KITS = {
   water:[['Basic', 'Staff of Rain', 0.3, 'Single', 2, 1], ['Power1', 'Rain Mask', 0.5, 'AOE', 4, 1, { softenHit:{ chance:0.25, amount:0.5 } }],
          ['Power2', 'Still Waters', null, 'Passive', 0, 21, { passive:{ cleanseEnd:1 } }],
-         ['Ultimate', 'Tide of Judgement', 0.9, 'AOE', 8, 41, { blindHit:{ miss:0.25, turns:2 } }], ['Max', 'Tide of Judgement Max', 1.1, 'AOE', 8, 51, { blindHit:{ miss:0.25, turns:2 } }]],
+         ['Ultimate', 'Tidal Judgement', 0.9, 'AOE', 8, 41, { blindHit:{ miss:0.25, turns:2 } }], ['Max', 'Tidal Judgement Max', 1.1, 'AOE', 8, 51, { blindHit:{ miss:0.25, turns:2 } }]],
   fire: [['Basic', 'Torch Staff', 0.3, 'Single', 2, 1], ['Power1', 'Flame Mask', 0.5, 'AOE', 4, 1],
          ['Power2', 'War Drums', null, 'Passive', 0, 21, { passive:{ empower:0.15 } }],
          ['Ultimate', 'Bonfire Dance', 0.9, 'AOE', 8, 41, { confuseHit:{ chance:0.25, ffPower:0.6 } }], ['Max', 'Bonfire Dance Max', 1.1, 'AOE', 8, 51, { confuseHit:{ chance:0.3, ffPower:0.6 } }]],
@@ -494,22 +494,27 @@ function questNextTribe(){
 }
 
 /* ---------- the count: the first three, his fifty, the week's ---------- */
+/* (4.08) The designer: "For the purposes of defeating aliens, captains should count as 3 and commanders as 6 due to
+   the number of waves too" — a band counts for its rank (until 4.08, one a band whatever its size) */
+const QUEST_COUNT = { alien:1, captain:3, commander:6 };
+function questCountOf(b){ return (b && QUEST_COUNT[b.rank]) || 1; }
 function questTally(b){
   if(!questOn()) return null;
   const q = questState(), notes = [], thanks = [];
   if(b && b.intro){ questIntroBeat(b); return { notes, thanks }; }
+  const n = questCountOf(b), as = n > 1 ? ` (+${n}: ${b.rank === 'commander' ? "a commander's" : "a captain's"} band)` : '';
   if(q.stage === 'fifty' && q.fifty < QUEST.fifty){
-    q.fifty++;
-    notes.push(`👑 Aliens beaten for the King: ${q.fifty}/${QUEST.fifty}.`);
+    q.fifty = Math.min(QUEST.fifty, q.fifty + n);
+    notes.push(`👑 Aliens beaten for the King: ${q.fifty}/${QUEST.fifty}${as}.`);
     if(q.fifty >= QUEST.fifty){ q.track = 'castle'; thanks.push(()=> questFiftyDone()); }
   }
   if(q.wk && !q.wk.paid){
-    q.wk.n = Math.min(QUEST.weekly, (q.wk.n || 0) + 1);
+    q.wk.n = Math.min(QUEST.weekly, (q.wk.n || 0) + n);
     if(q.wk.n >= QUEST.weekly){
       q.wk.paid = true;
       state.medals = state.medals || {}; state.medals.bronze = (state.medals.bronze || 0) + QUEST.weekly;
       thanks.push(()=> questWeekPaid(QUEST.weekly, true));
-    } else notes.push(`🛡️ This week's challenge: ${q.wk.n}/${QUEST.weekly} (a bronze medal each, paid when the week turns).`);
+    } else notes.push(`🛡️ This week's challenge: ${q.wk.n}/${QUEST.weekly}${as} (a bronze medal each, paid when the week turns).`);
   }
   return { notes, thanks };
 }

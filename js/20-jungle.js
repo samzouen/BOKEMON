@@ -720,11 +720,12 @@ function jgLionStep(p){
 
 /* ---------- a step ---------- */
 function jgStep(p, d){
+  jgZoomStep();                                     // (4.08) the third step after his move: the camera back out
   jgLionStep(p);
   jgSeeThrough();                                                       // (3.96) (again, if he did not move)
   const j = jgState();
   if(j.jumpIn > 0) j.jumpIn--;                      // (3.96) Lucesco gets his breath back: a step at a time
-  if(j.glareIn > 0) j.glareIn--;                    // (4.03) …and his eyes their fire (Pulsar Glare)
+  if(j.glareIn > 0) j.glareIn = Math.min(JG_GLARE.steps, j.glareIn) - 1;   // (4.03) …and his eyes their fire (Pulsar Glare); (4.08) 15 steps at most
   jgSave(false);
   jgExplore(p.x, p.y);
   jgDiscover(p.x, p.y);
@@ -887,7 +888,10 @@ function jgPaintTick(now){
 function jgPaintDraw(cam, now){
   const cv = JG_P.cv, view = typeof sceneCamView === 'function' ? sceneCamView() : null;
   if(!cv || !view) return;
-  const T = WALK_T, dpr = Math.min(1.5, window.devicePixelRatio || 1), k = T * dpr;
+  /* (4.08) drawn as sharp as the camera is close: Lucesco's zoom (walkZoomS) — the layer's pixels to a square, `k`, go
+     up with it, its size on the page (in the world's own pixels) does not */
+  const zz = ui.walkZoom, zs = Math.max(1, zz && zz.deck === JG_KEY ? (zz.to || zz.s || 1) : 1);
+  const T = WALK_T, dpr = Math.min(1.5, window.devicePixelRatio || 1), k = T * dpr * zs;
   const S = Math.max(8, Math.round(k));
   if(!JG_P.atlas || JG_P.S !== S){ JG_P.atlas = new Map(); JG_P.S = S; JG_P.layerKey = ''; }
   const frame = Math.floor((now || 0) / 420) % 4, key = T + ':' + k.toFixed(3);
@@ -905,7 +909,7 @@ function jgPaintDraw(cam, now){
   [cv].concat(fresh && ov ? [ov] : []).forEach(c=>{
     if(c.width !== pw || c.height !== ph){ c.width = pw; c.height = ph; }
     c.style.left = (w.x0 * T) + 'px'; c.style.top = (w.y0 * T) + 'px';
-    c.style.width = (pw / dpr) + 'px'; c.style.height = (ph / dpr) + 'px';
+    c.style.width = (pw / (dpr * zs)) + 'px'; c.style.height = (ph / (dpr * zs)) + 'px';
   });
   JG_P.k = k;
   if(!fresh){ jgPaintWater(cv.getContext('2d'), w, k, frame); w.frame = frame; return; }   // (3.96) only the water rippling: only its squares
@@ -943,8 +947,8 @@ function seeReach(hw, hh){ return [hw * JG_SEE.grow[0] / JG_SEE.solid, hh * JG_S
 /* the window itself, cut into a layer over everyone (its context already cutting: destination-out): an oval round a
    figure at (cx, cy) of half-size (hw, hh), all in the layer's pixels — clear to JG_SEE.cut out a little past the
    figure, then fading to nothing */
-function seeCut(g, cx, cy, hw, hh){
-  const [a, b] = seeReach(hw, hh), c = JG_SEE.cut, s = JG_SEE.solid;
+function seeCut(g, cx, cy, hw, hh, cut){
+  const [a, b] = seeReach(hw, hh), c = cut != null ? cut : JG_SEE.cut, s = JG_SEE.solid;   // (4.08) `cut`: a fainter window (the castle's low things, CA_BEHIND)
   if(!(a > 0 && b > 0)) return;
   g.save();
   g.translate(cx, cy); g.scale(1, b / a);
@@ -2196,9 +2200,14 @@ function jgRideFigure(){
    again" — every fight builds its waves afresh at full health (jgWaves), so each fight takes its 15% (or 30%) once.
    The effects on the fight: jgEdgeApply, at its first wave (jgWaveStart).
    ============================================================ */
-const JG_GLARE = { reach:2, steps:50, ms:5000, beam:1000, hp:0.15, weak:0.25, turns:3 };
+/* (4.08) the designer: "please reduce the cooldown of pulsar glare to 15 steps" (50 until 4.08) */
+const JG_GLARE = { reach:2, steps:15, ms:5000, beam:1000, hp:0.15, weak:0.25, turns:3 };
 const JG_AMBUSH = { reach:2, hp:0.15, stun:1, dark:420, fly:260, fadeIn:330, after:620 };   // (4.05) its timings, ms
-function jgGlareIn(){ return Math.max(0, jgState().glareIn | 0); }
+function jgGlareIn(){
+  const j = jgState();
+  if((j.glareIn | 0) > JG_GLARE.steps) j.glareIn = JG_GLARE.steps;     // (4.08) a save's wait from the old 50: 15 at most
+  return Math.max(0, j.glareIn | 0);
+}
 function jgBandStunned(b){ return !!(b && b.zapUntil && b.zapUntil > Date.now()); }
 function jgBandName(b){ const nm = SPECIES[b.lead] ? SPECIES[b.lead].name : 'alien'; return b.rank === 'alien' ? nm : (b.rank === 'captain' ? 'Captain ' : 'Commander ') + nm; }
 /* the bands within his reach of p: two squares any way, diagonals too, trees or no trees — nearest first, then the one
@@ -2233,11 +2242,12 @@ function jgLucescoActs(p){
 /* Time stops: the world and everyone in it held where they are drawn this instant — a band halfway between two squares
    stays halfway — and everything they were doing (a throb, a hover) paused, but `keep`'s own. The function it gives
    back lets them all go on from there. */
-function jgFreeze(keep){
+function jgFreeze(keep, camera){
   const world = $('#walkWorld');
   if(!world) return ()=>{};
   const keepEl = keep && ui.jgBandEls && ui.jgBandEls[keep.id];
-  const held = [world].concat(Array.from(world.querySelectorAll('.walk-ent'))).map(el=>{
+  /* (4.08) `camera` false: everyone held but the world itself, free to zoom (jgZoomIn) */
+  const held = (camera === false ? [] : [world]).concat(Array.from(world.querySelectorAll('.walk-ent'))).map(el=>{
     const tf = getComputedStyle(el).transform;
     const was = { tr:el.style.transition, tf:el.style.transform };
     el.style.transition = 'none';
@@ -2254,6 +2264,95 @@ function jgFreeze(keep){
     held.forEach(({ el, was })=>{ el.style.transform = was.tf; });
   };
 }
+/* (4.08) LUCESCO'S MOVES, CLOSE UP
+   The designer: "When using Lucesco's attack moves on the map, please pause the sprites to zoom in on Lucesco as centre
+   in a half second until the screen is 7 tiles high and wide, then execute his move. Keep the zoom in for 5 seconds or
+   until he moves up down left right more than 2 steps. If already zoomed in, execute the moves without delay. This is
+   to give a better view of the action to my sons". Everyone is held where they are drawn (jgFreeze, the camera left
+   free) while it comes in over 0.5 s, the two of you in the middle, until the stage is 7 squares across (from about 9
+   on a phone, 13 on a tablet); then the move. The camera follows you so (walkZoomS, 13-walkmap.js) and goes back out
+   over 0.5 s, 5 s after the move or at your third step. A move made meanwhile goes off at once and starts the 5 s
+   again. */
+const JG_ZOOM = { squares:7, ms:500, hold:5000, steps:2 };
+function jgZoomed(){ const z = ui.walkZoom; return !!(z && z.deck === JG_KEY); }
+/* how much nearer: the stage's squares across, down to 7 (1 if it shows no more than that already) */
+function jgZoomScale(){
+  const st = $('#walkStage');
+  if(!st || !WALK_T) return 1;
+  return Math.max(1, Math.min(st.clientWidth, st.clientHeight) / WALK_T / JG_ZOOM.squares);
+}
+/* back out: the camera to where it should be now (refreshWalk), gliding there over `ms` (as you may be walking meanwhile,
+   a glide the steps' own glides join) — the ground drawn first for where it is going (jgPaintDraw) */
+function jgZoomGlide(ms){
+  try { jgPaintDraw(null, performance.now()); } catch(e){}
+  const world = $('#walkWorld');
+  if(world) world.style.transition = `transform ${ms}ms ease-in-out`;
+  refreshWalk();
+  clearTimeout(ui._jgZoomGlide);
+  ui._jgZoomGlide = setTimeout(()=>{ const wd = $('#walkWorld'); if(wd) wd.style.transition = ''; }, ms + 40);
+}
+/* in, before one of his moves: a promise that resolves once it is in — or null, in already (or nothing to do), so the
+   move goes off that very instant. The camera is moved frame by frame on the clock (eased in and out), not left to a
+   CSS glide: on a busy tablet the glide could start late, and the move went off with the camera hardly in. However
+   the frames fall, at 0.5 s it is exactly in. */
+function jgZoomIn(){
+  if(jgZoomed()){ clearTimeout(ui.walkZoom.t); ui.walkZoom.steps = 0; return null; }
+  const to = jgZoomScale();
+  if(to <= 1.001 || ui.screen !== JG_KEY){ ui.walkZoom = { deck:JG_KEY, s:1, to:1, steps:0, t:0 }; return null; }
+  const thaw = jgFreeze(null, false);
+  ui.walkZoom = { deck:JG_KEY, s:1, to, steps:0, t:0 };
+  try { jgPaintDraw(null, performance.now()); } catch(e){}               // the ground for where it is going, sharp there, first
+  const world = $('#walkWorld');
+  if(world) world.style.transition = 'none';
+  clearTimeout(ui._jgZoomGlide);
+  return new Promise(r=>{
+    const t0 = performance.now(), ease = u=> u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u);
+    const frame = ()=>{
+      const z = ui.walkZoom;
+      if(!z || z.deck !== JG_KEY || ui.screen !== JG_KEY){ thaw(); return r(); }
+      const u = Math.min(1, (performance.now() - t0) / JG_ZOOM.ms);
+      z.s = 1 + (to - 1) * ease(u);
+      jgCamApply();
+      if(u < 1) return requestAnimationFrame(frame);
+      z.s = to;
+      jgCamApply();
+      /* the last of it laid down (a reflow) before the walk's own glide is back on, or that glide would run from the
+         last frame drawn to here — after the move had begun */
+      const wd = $('#walkWorld'); if(wd){ void wd.offsetWidth; wd.style.transition = ''; }
+      refreshWalk();
+      thaw(); r();
+    };
+    requestAnimationFrame(frame);
+  });
+}
+/* the world where the camera says, this instant (refreshWalk's own transform, nothing else) */
+function jgCamApply(){
+  const world = $('#walkWorld'), c = typeof walkCamXY === 'function' ? walkCamXY() : null;
+  if(world && c) world.style.transform = `translate3d(${c.tx}px, ${c.ty}px, 0)` + (c.s !== 1 ? ` scale(${c.s.toFixed(4)})` : '');
+}
+/* the move done: in for 5 s more, or until the third step (jgStep) */
+function jgZoomHold(){
+  const z = ui.walkZoom;
+  if(!z || z.deck !== JG_KEY) return;
+  z.steps = 0;
+  clearTimeout(z.t);
+  z.t = setTimeout(()=> jgZoomOut(), JG_ZOOM.hold);
+}
+function jgZoomOut(){
+  const z = ui.walkZoom;
+  if(!z || z.deck !== JG_KEY) return;
+  clearTimeout(z.t);
+  if(ui.screen === JG_KEY && (ui.jgFx || ui.jgFighting || walkState().busy)){ z.t = setTimeout(()=> jgZoomOut(), 300); return; }   // in the middle of something: after it
+  ui.walkZoom = null;
+  if(ui.screen === JG_KEY) jgZoomGlide(JG_ZOOM.ms);
+}
+/* a step of yours: the third since his move takes the camera back out */
+function jgZoomStep(){
+  const z = ui.walkZoom;
+  if(!z || z.deck !== JG_KEY || ui.jgFx) return;
+  z.steps = (z.steps || 0) + 1;
+  if(z.steps > JG_ZOOM.steps) jgZoomOut();
+}
 /* where an element of the world is drawn this instant (its transform's offset, in the world's own pixels) */
 function jgDrawnAt(el){
   try { const m = new DOMMatrixReadOnly(getComputedStyle(el).transform); return { x:m.m41, y:m.m42 }; } catch(e){ return null; }
@@ -2265,7 +2364,9 @@ async function jgGlare(b){
   if(!world || !me) return;
   releaseKeys();
   w.busy = true; ui.jgFx = 'glare';
-  const thaw = jgFreeze(b);
+  const closeUp = jgZoomIn();                                           // (4.08) close up first (at once if it is already)
+  if(closeUp){ await closeUp; if(ui.screen !== JG_KEY || jgBandBeaten(b)){ ui.jgFx = null; w.busy = false; return; } }
+  const thaw = jgFreeze(b, closeUp ? false : undefined);                // (4.08) just come in: the camera still, nothing of it to hold
   /* he turns to it, and fires at once */
   if(b.x !== p.x){ w.faceX = b.x > p.x ? 'r' : 'l'; faceRight(me, w.faceX === 'r'); }
   const j = jgState();
@@ -2290,6 +2391,7 @@ async function jgGlare(b){
     if(ui.screen === JG_KEY) refreshWalk();
     clearTimeout(b._zapEndT);
     b._zapEndT = setTimeout(()=> jgZapEnd(b), Math.max(0, b.zapUntil - Date.now()) + 40);
+    jgZoomHold();                                                        // (4.08) close up 5 s more, or until your third step
   }
 }
 /* the laser: from his eyes (as he is drawn, mirrored when he faces right) to the alien, at full length at once */
@@ -2379,6 +2481,8 @@ async function jgAmbush(b){
   if(!world || !me) return;
   releaseKeys();
   w.busy = true; ui.jgFx = 'ambush';
+  const closeUp = jgZoomIn();                                           // (4.08) close up first (at once if it is already)
+  if(closeUp){ await closeUp; if(ui.screen !== JG_KEY || jgBandBeaten(b)){ ui.jgFx = null; w.busy = false; return; } }
   const glared = jgBandStunned(b);
   const T = WALK_T, from = jgDrawnAt(me) || { x:p.x * T, y:p.y * T }, to = { x:b.x * T, y:b.y * T - 0.34 * T };   // (raised: he stands on it)
   const at = q=> `translate3d(${q.x.toFixed(1)}px,${q.y.toFixed(1)}px,0)`;
@@ -2451,6 +2555,7 @@ async function jgAmbush(b){
   /* the fight — with what his moves did to its first alien (jgEdgeApply). Where you stand stays where you leapt from
      until it is won (jgWon puts you on its square): a flight, or a fight lost, leaves you where you were */
   const go = jgFight(b, true, { ambush:true, glare:glared });
+  jgZoomHold();                                                         // (4.08) 5 s more (the fight, if it begins, takes the screen meanwhile)
   if(go === false){                                                     // (it did not begin: all back as it was)
     b._pounced = false;
     if(el) el.classList.remove('jg-pounced');
@@ -2818,7 +2923,7 @@ if(typeof futureUltraFor === 'function'){
 function jgWon(b, levelUps){
   const j = jgState(), bt = ui.battle;
   j.beaten[b.id] = today();
-  j.tally = (j.tally || 0) + 1;
+  j.tally = (j.tally || 0) + (typeof questCountOf === 'function' ? questCountOf(b) : 1);   // (4.08) a captain's band 3, a commander's 6
   /* (4.03) a Rift Ambush won: you come back standing where you pounced on it (until it is won, where you leapt from) */
   const edge = bt && bt.jgEdge;
   if(edge && edge.ambush && edge.id === b.id){
@@ -3050,6 +3155,12 @@ function jgPortal(){
    "explore offers starting from the last point, or from one of the 5
    civilizations once discovered"). From Region 6's Explore it offers the Rift too. */
 function jgChooser(withRift){
+  /* (4.07) the designer: "The explore screen in region 6 is too large and pushes options off screen. Can we make it
+     mirror the UI of interacting directly with the portal?" Opened from Region 6's Explore before the jungle (or the
+     Rift, whose awake portal brings them) had been drawn this visit, the list had none of its styles: each picture at
+     its full size, the card 1,442px tall. Its styles first, wherever it is opened from. */
+  jgCss();
+  if(typeof riftCss === 'function') riftCss();
   const j = jgState(), opts = [];
   /* (3.97) the designer: "include the portal itself as a quick travel destination. Replace the emoticons that show
      each destination with the guardians' pictures and the king's picture for the tribes and castle respectively. For
@@ -3346,6 +3457,8 @@ function jgCss(){
     margin:-4px 0; filter:drop-shadow(0 1px 1px rgba(0,0,0,.3)); }
   .jg-choose .jg-go-emoji{ font-size:30px; }
   .jg-choose .jg-go-portal svg{ width:100%; height:100%; overflow:visible; filter:hue-rotate(80deg) saturate(1.3); }
+  /* (4.07) never taller than the screen: the list scrolls inside the card on a short phone */
+  .jg-choose .refine-card{ max-height:calc(100vh - 44px); max-height:calc(100dvh - 44px); overflow-y:auto; overscroll-behavior:contain; }
   .jg-king-light svg{ display:block; }
   /* the fight */
   .enemy-card.jg-foe-alien .avatar-layer .mon-sprite{ filter:drop-shadow(0 0 3px #000) drop-shadow(0 0 3px #000) drop-shadow(0 0 10px rgba(220,20,30,1)) !important; }

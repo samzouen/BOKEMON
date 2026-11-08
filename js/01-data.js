@@ -762,8 +762,8 @@ const MOVES = {
   hydra:           [['Basic','Bite',0.3,'Single',2,1,{hits:3, split:true}],
                     ['Power1','Venom Spray',0.6,'AOE',4,1,{hits:3, split:true}],
                     ['Power2','Feeding Frenzy',null,'Passive',0,21,{passive:{exploit:1.4, crit:{chance:0.15, mult:2}}}],
-                    ['Ultimate','Many-Headed Strike',1.2,'Single',8,41,{hits:3, split:true}],
-                    ['Max','Many-Headed Strike Max',1.5,'Single',8,51,{hits:5, split:true}]],
+                    ['Ultimate','Many-Head Strike',1.2,'Single',8,41,{hits:3, split:true}],
+                    ['Max','Many-Head Strike Max',1.5,'Single',8,51,{hits:5, split:true}]],
   /* "support companion: healing + status debuffs" — (3.24) a wild one now,
      evolving once at 18. (3.26) "put ram on a wild monster timetable, no max
      move (keep the ultimate damage at 0.8 every foe)": Baa-rage at 18,

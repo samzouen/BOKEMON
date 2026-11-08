@@ -878,6 +878,7 @@ function runMoveQuiz(mv, target){
     move:mv, attacker:activeMon(), target:target || null,             // (3.97) the spelling screen's banner
     wordTarget: ceilWords,
     stopAt: mv.scale ? mv.words : 0,     // scaling moves may be ended once powered
+    bonus: mv.bonus ? Object.assign({}, mv.bonus) : null,   // (4.07) its bonus words, offered on the spelling screen (quizStartBonus)
     startingWords: carry,
     onComplete:(results)=>resolveBattleMove(mv,target,results),
     onExit:()=>{ go('battle'); },
@@ -944,7 +945,8 @@ function bankWordSpill(mv){
      designer: "Incinerate max keeps bonus words into the next round. It
      should not do so since those words gave a bonus to its damage." */
   if(mv && mv.scale){ ui.battle.wordCarry = 0; return 0; }
-  const done = (ui.quiz && ui.quiz.wordsDone) || 0;
+  const q = ui.quiz;
+  const done = (q && (q.bonusPhase ? q.bonusWordsFrom : q.wordsDone)) || 0;   // (4.07) bonus words never spill into the next move
   const spill = Math.max(0, done - mv.words);
   ui.battle.wordCarry = spill;
   return spill;
@@ -1074,6 +1076,7 @@ function applyBonusWin(mv, won){
   if(!b || !mv.bonus) return;
   if(mv.bonus.aftershock){ if(won) layAftershock(activeMon(), null, false); }
   else if(mv.bonus.sacredFlame){ if(won) laySacredFlame(activeMon(), false); }
+  else if(mv.bonus.portent){ b._portentWon = !!won; }   // (4.07) the princess's Comet Augury: its Portent (castComet)
   else b.bonusMult = won ? mv.bonus.mult : 1;
 }
 /* The offer, and the words: calls back with whether they were all written. */
@@ -1489,7 +1492,10 @@ function resolveBattleMove(mv, target, results, opts){
      fed to the meter the first time through. Re-reading them now read the
      BONUS quiz instead — the carry-over was lost and the meter fed twice. */
   const reentry = !pre && !!(ui.battle && ui.battle._bonusResolved);
-  const bonusDone = reentry;                          // no bonus round to offer again
+  /* (4.07) the bonus words decided on the spelling screen (quizMarkBonus): no window after them — and the move's own
+     words are the first `main` of the results; the bonus ones only feed the meter */
+  const pick = (!pre && !reentry && results && results.bonusPick) || null;
+  const bonusDone = reentry || !!pick;                // no bonus round to offer again
   const tally = pre ? { correct:pre.correct, spill:0 } : reentry ? (ui.battle._bonusTally || null) : null;
   if(ui.battle){ ui.battle._bonusResolved = false; ui.battle._bonusTally = null; }
   if(ui.battle && !reentry){ ui.battle._sacredFlameLaid = false; ui.battle._aftershockLaid = null; }
@@ -1497,15 +1503,17 @@ function resolveBattleMove(mv, target, results, opts){
   results.filter(r=>!r.passed).forEach(r=>{ if(!ui.battle.fightMistakes.includes(r.text)) ui.battle.fightMistakes.push(r.text); });
   // Scored in WORDS now: sum the characters of every phrase written correctly,
   // plus any spill carried in from the previous move.
+  const own = pick ? results.slice(0, pick.main) : results;
   const correct = noQuiz ? mv.words
                 : tally ? tally.correct
-                : results.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0)
+                : own.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0)
                 + (ui.quiz && ui.quiz.config ? (ui.quiz.config.startingWords||0) : 0);
   const spill = noQuiz ? 0 : tally ? tally.spill : bankWordSpill(mv);
   // Feed the second-wind meter with everything written this turn, right or wrong
   const written = (noQuiz || tally) ? 0 : results.reduce((n,r)=>n+(r.words||countWords(r.text)),0);
   const recharged = feedRecharge(written);
-  if(ui.battle){ ui.battle.lastMove = mv; ui.battle.lastFactor = null; }   // (3.00) the clones' half of the blow, set as it lands
+  if(pick && mv.bonus) applyBonusWin(mv, !!pick.won);   // (4.07) what the bonus words won, laid now (×2 on this blow, an Aftershock, a Sacred Flame, a Portent)
+  if(ui.battle){ ui.battle.lastMove = mv; ui.battle.lastFactor = null; ui.battle._replan = null; }   // (3.00) the clones' half of the blow, set as it lands; (4.07) its repeat's plan, set as it is planned
   go('battle');
   if(recharged) secondWindSoon();
   /* (3.66) A quick move that failed no longer spends the turn (quickMissed):
@@ -1553,6 +1561,18 @@ function resolveBattleMove(mv, target, results, opts){
   if(mv.overgrowth){
     if(correct < mv.words) return quickMissed(mv, mon, correct);   // (3.66) no turn spent
     return castOvergrowth(mon, mv);
+  }
+  /* (4.07) The Fairy Princess's own moves (26-invasion.js) — none of them a blow: Charm (her Basic), Dazzling
+     Benevolence (Power 1), Lithification (Power 2: its five shields), Comet Augury (her Ultimate and Max, quick). */
+  if(mv.charmAtk || mv.dazzle || mv.lithify || mv.comet){
+    if(correct < mv.words){
+      if(mv.comet) return quickMissed(mv, mon, correct);            // a quick move that fails costs no turn (3.66)
+      playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn, 900);
+    }
+    if(mv.charmAtk) return castPrincessCharm(mon, mv, target);
+    if(mv.dazzle) return castDazzle(mon, mv);
+    if(mv.lithify) return castLithify(mon, mv);
+    return castComet(mon, mv);
   }
   /* (3.55) Overpower — a Tricerarmor of yours: two turns of +25%, and a
      quarter again on anything with less ATK. Until now only theirs worked;
@@ -1931,13 +1951,15 @@ function resolveBattleMove(mv, target, results, opts){
   if(mv.target === 'SingleAOE' && mv.splash){
     const main = (target && target.hp>0) ? target : livingEnemies()[0];
     if(main){
-      const all = livingEnemies().map(t=>{
+      const planSplash = m0=> livingEnemies().map(t=>{
         const idx = ui.battle.enemies.indexOf(t);
         if(rollDodge(t, idx, 240, ignoresEvasion(mv, mon))) return { t, idx, dmg:0, oldHp:t.hp, newHp:t.hp, dodged:true };
-        const f = (t === main) ? factor : factor * mv.splash;
-        const dmg = enemyGuard(t, computeDamage(f, atk, monRef(mon), t, true));   // their Counter reads it too
+        const f = (t === m0) ? factor : factor * mv.splash;
+        const dmg = enemyGuard(t, computeDamage(f, monAtk(mon), monRef(mon), t, true));   // their Counter reads it too
         return { t, idx, dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
       });
+      const all = planSplash(main);
+      setReplan(mon, ()=> ({ hits:planSplash(replanTarget(main)) }), hs=> blowRiders(mv, mon, hs, main));   // (4.07)
       battleMsg(`${mv.name}!` + takePsyNote());
       bob($('#' + pid('playerBob')), +1);
       playEffect(mv.name, { type: SPECIES[mon.species].types[0] });
@@ -1958,10 +1980,12 @@ function resolveBattleMove(mv, target, results, opts){
       battleMsg(`${mv.name}! But there was nothing to give back.`);
       return setTimeout(()=> afterPlayerAttack(mon, []), 800);
     }
-    const ti = ui.battle.enemies.indexOf(t);
-    const h = rollDodge(t, ti, 240, ignoresEvasion(mv, mon))
-      ? [{ t, idx:ti, dmg:0, oldHp:t.hp, newHp:t.hp, dodged:true }]
-      : [{ t, idx:ti, dmg:enemyGuard(t, back), oldHp:t.hp, newHp:Math.max(0,t.hp-back) }];
+    const planBack = t1=>{ const ti = ui.battle.enemies.indexOf(t1);
+      return rollDodge(t1, ti, 240, ignoresEvasion(mv, mon))
+        ? [{ t:t1, idx:ti, dmg:0, oldHp:t1.hp, newHp:t1.hp, dodged:true }]
+        : [{ t:t1, idx:ti, dmg:enemyGuard(t1, back), oldHp:t1.hp, newHp:Math.max(0,t1.hp-back) }]; };
+    const h = planBack(t);
+    setReplan(mon, ()=>{ const t1 = replanTarget(t); return { hits:t1 ? planBack(t1) : [] }; }, ()=> '');   // (4.07)
     battleMsg(`${mv.name}! Their own force is turned against them.`);
     bob($('#' + pid('playerBob')), +1);
     return setTimeout(()=>{ applyHits(h); reportHits(h); setTimeout(()=> afterPlayerAttack(mon, h), 700); }, 380);
@@ -1999,7 +2023,7 @@ function resolveBattleMove(mv, target, results, opts){
     if(mv.target !== 'AOE') return resolveSplitHits(mv, mon, factor, atk, targets[0]);
     return resolveAoeHits(mv, mon, factor, atk, targets);
   }
-  const hits = targets.map(t=>{
+  const planBlows = tg=> tg.map(t=>{
     // an airborne, unseen or lurking defender is hard to touch — unless the mind is read
     if(rollDodge(t, ui.battle.enemies.indexOf(t), 240, ignoresEvasion(mv, mon))){
       return { t, idx:ui.battle.enemies.indexOf(t), oldHp:t.hp, newHp:t.hp, dmg:0, dodged:true };
@@ -2010,6 +2034,11 @@ function resolveBattleMove(mv, target, results, opts){
     enemyCounter(t, idx, dmg, 520);      // Silk Reeling / Scaled Stance
     return { t, idx, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg), dmg, pierce:!!mv.pierce };   // Wraithblade: through any block (2.97)
   });
+  const hits = planBlows(targets);
+  /* (4.07) an Overcharge repeat: the blow again, from the top — its dodges and criticals rolled afresh, an area blow
+     on every one of them standing, a single one on its target or (fallen) on another; its riders roll again */
+  setReplan(mon, ()=> ({ hits:planBlows(mv.target === 'AOE' ? livingEnemies() : [replanTarget(targets[0])].filter(Boolean)) }),
+            hs=> blowRiders(mv, mon, hs, target));
   let effMsg=''; hits.forEach(h=>{ const m=typeMultFor(monRef(mon), h.t); if(m!==1) effMsg=effectivenessLabel(m); });   // (3.69) Destruction too
   logBattle(`${displayName(mon)} used ${mv.name} (${correct}/${mv.words} words${spill?`, +${spill} spill`:''}) — factor ${factor.toFixed(2)}x ATK ${atk}`);
   hits.forEach(h=>logBattle(`  → ${SPECIES[h.t.species].name} took ${h.dmg} (${h.oldHp}→${h.newHp})`));
@@ -2028,90 +2057,7 @@ function resolveBattleMove(mv, target, results, opts){
   setTimeout(()=>{
     applyHits(hits);
     reportHits(hits);
-    const zap = stunRiders(mv, hits);
-    if(zap) setTimeout(()=> battleMsg(zap), 650);
-    /* (3.15) a blow that may send to sleep (Lullaby Cloud, Riptide, Counting
-       Sheep, Abyssal Tide Max) — each one it hit, on its own roll */
-    if(mv.sleepHit){
-      const zs = [];
-      hits.forEach(h=>{
-        if(h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged && Math.random() < mv.sleepHit){ const z = putToSleep(h.t, mv.name); if(z) zs.push(z); }
-      });
-      if(zs.length){ renderStatusBadges(); setTimeout(()=> battleMsg(zs.join(' ')), 900); }
-    }
-    /* (3.25) Blinding Beam: each one it got through to is blinded — a
-       quarter of its own attacks miss, this turn and the next (blindMark) */
-    if(mv.blindHit){
-      const bl = [];
-      hits.forEach(h=>{
-        if(h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged){ const s = blindMark(h.t, mv.blindHit); if(s) bl.push(s); }
-      });
-      if(bl.length){ renderStatusBadges(); setTimeout(()=> battleMsg(bl.join(' ')), 750); }
-    }
-    /* (3.38) Mocking Yawn: every one it got through to is taunted — its next
-       turn its strongest attack, at this monster (tauntMark) */
-    if(mv.taunt){
-      const got = [], kept = [];
-      hits.forEach(h=>{
-        if(!(h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged) || got.includes(h.t) || kept.includes(h.t)) return;
-        (tauntMark(h.t, mon, mv.taunt) ? got : kept).push(h.t);
-      });
-      const nm = a=> a.map(t=> SPECIES[t.species].name).join(' and '), many = got.length > 1;
-      const said = (got.length ? `🥱 ${nm(got)} ${many ? 'are' : 'is'} taunted — next turn ${many ? 'they' : 'it'} must hit ` +
-                                 `${escapeHtml(displayName(mon))} with ${many ? 'their' : 'its'} strongest move!` : '') +
-                   (kept.length ? ` ✨ The diamond dust keeps ${nm(kept)} calm.` : '');
-      if(said){ renderStatusBadges(); setTimeout(()=> battleMsg(said.trim()), 850); }
-    }
-    /* (3.26) the Squid's Abyssal Gaze Max: a muddle on the one it hits — its
-       next swing turns on its own side (markConfused; Iron Will and their
-       dust keep it out) */
-    const cfh = mv.confuseHit;
-    if(cfh){
-      const cz = [];
-      hits.forEach(h=>{
-        if(!(h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged) || getEStatus(h.t,'discombobulate') || !(Math.random() < (cfh.chance || 0.25))) return;
-        markConfused(h.t, cfh.ffPower || 1.0, true);
-        if(getEStatus(h.t,'discombobulate')) cz.push(SPECIES[h.t.species].name);
-      });
-      if(cz.length){ renderStatusBadges(); setTimeout(()=> battleMsg(`🌀 ${cz.join(' and ')} ${cz.length > 1 ? 'are' : 'is'} confused — ${cz.length > 1 ? 'their' : 'its'} next swing turns on its own side!`), 800); }
-    }
-    /* (3.15) Random Access: a Glitch on top of the blow */
-    if(mv.glitch && mv.mult != null && hits.some(h=> h.t && !h.dodged)){
-      const t0 = (target && target.hp > 0) ? target : livingEnemies()[0];
-      const kind = glitchPick(true);
-      const said = t0 ? applyGlitch('player', mon, t0, kind) : '';
-      if(said){ renderStatusBadges(); setTimeout(()=> battleMsg(said), 1000); }
-    }
-    /* Boo! and Wail: a blow that weakens THEM — their next attack lands soft. */
-    const sfp = mv.softenHit;
-    if(sfp){
-      let weak = 0;
-      hits.forEach(h=>{
-        if(h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged && !getEStatus(h.t,'softened') && Math.random() < sfp.chance){
-          addEStatus(h.t, { type:'softened', turnsLeft:2, amount:sfp.amount || 0.5 });
-          if(getEStatus(h.t,'softened')) weak++;
-        }
-      });
-      if(weak){ renderStatusBadges(); setTimeout(()=> battleMsg(`🌀 ${weak === 1 ? 'Its' : 'Their'} next attack will be weakened!`), 650); }
-    }
-    /* Lunacy (the Moon Swan), in your hands as in theirs: a quarter of the
-       time the moonlight gets into their heads — every one of them muddled for
-       its next swing (this round or the next), turned on its own side at full
-       power. Their dust keeps it out (addEStatus). */
-    const lun = mv.lunacy;
-    if(lun && hits.some(h=> h.t && !h.dodged) && Math.random() < (lun.chance || 0.25)){
-      let caught = 0;
-      livingEnemies().forEach(x=>{ markConfused(x, lun.ffPower || 1.0, true); if(getEStatus(x,'discombobulate')) caught++; });
-      /* (3.24) the Ladybird's Dazzle is a Lunacy in light: its own words */
-      if(caught){ renderStatusBadges(); setTimeout(()=> battleMsg(lun.them || (lun.glow ? '✨ The flash leaves them seeing spots — confused!' : '🌙 The moonlight gets into their heads!')), 650); }   // (3.90) or its own words (the Mantis's, the King's)
-    }
-    /* Nova (the Phoenix), in your hands as in theirs (2.90): a small Diamond
-       Dust — one of their buffs swept away, one of their marks on your side
-       burnt off — whenever it reaches one of them. */
-    if(mv.purge && hits.some(h=> h.t && !h.dodged)){
-      const said = novaPurge('player', mv.purge);
-      if(said){ renderStatusBadges(); setTimeout(()=> battleMsg(said), 650); }
-    }
+    blowRiders(mv, mon, hits, target);      // (4.07) gathered into one, for an Overcharge repeat to roll again
     if(mv.shell) applyShell(mv, mon);       // Slag Eruption leaves molten armour
     // resolves AFTER Leech Seed, so the field heal lands first
     const drain = applyPartyDrain(mv, mon, hits);
@@ -2149,6 +2095,96 @@ function resolveBattleMove(mv, target, results, opts){
   }, 330);
 }
 
+/* (4.07) What a blow of yours sets off on the ones it reached — a stun, a sleep, a blinding, a taunt, a muddle, a
+   Glitch, a weakening, the moonlight, a Nova's sweep — each on its own roll. Gathered out of resolveBattleMove so an
+   Overcharge repeat (the blow again) rolls them again: the designer, "overcharge should repeat an entire attack". */
+function blowRiders(mv, mon, hits, target){
+  const zap = stunRiders(mv, hits);
+  if(zap) setTimeout(()=> battleMsg(zap), 650);
+  /* (3.15) a blow that may send to sleep (Lullaby Cloud, Riptide, Counting
+     Sheep, Abyssal Tide Max) — each one it hit, on its own roll */
+  if(mv.sleepHit){
+    const zs = [];
+    hits.forEach(h=>{
+      if(h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged && Math.random() < mv.sleepHit){ const z = putToSleep(h.t, mv.name); if(z) zs.push(z); }
+    });
+    if(zs.length){ renderStatusBadges(); setTimeout(()=> battleMsg(zs.join(' ')), 900); }
+  }
+  /* (3.25) Blinding Beam: each one it got through to is blinded — a
+     quarter of its own attacks miss, this turn and the next (blindMark) */
+  if(mv.blindHit){
+    const bl = [];
+    hits.forEach(h=>{
+      if(h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged){ const s = blindMark(h.t, mv.blindHit); if(s) bl.push(s); }
+    });
+    if(bl.length){ renderStatusBadges(); setTimeout(()=> battleMsg(bl.join(' ')), 750); }
+  }
+  /* (3.38) Mocking Yawn: every one it got through to is taunted — its next
+     turn its strongest attack, at this monster (tauntMark) */
+  if(mv.taunt){
+    const got = [], kept = [];
+    hits.forEach(h=>{
+      if(!(h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged) || got.includes(h.t) || kept.includes(h.t)) return;
+      (tauntMark(h.t, mon, mv.taunt) ? got : kept).push(h.t);
+    });
+    const nm = a=> a.map(t=> SPECIES[t.species].name).join(' and '), many = got.length > 1;
+    const said = (got.length ? `🥱 ${nm(got)} ${many ? 'are' : 'is'} taunted — next turn ${many ? 'they' : 'it'} must hit ` +
+                               `${escapeHtml(displayName(mon))} with ${many ? 'their' : 'its'} strongest move!` : '') +
+                 (kept.length ? ` ✨ The diamond dust keeps ${nm(kept)} calm.` : '');
+    if(said){ renderStatusBadges(); setTimeout(()=> battleMsg(said.trim()), 850); }
+  }
+  /* (3.26) the Squid's Abyssal Gaze Max: a muddle on the one it hits — its
+     next swing turns on its own side (markConfused; Iron Will and their
+     dust keep it out) */
+  const cfh = mv.confuseHit;
+  if(cfh){
+    const cz = [];
+    hits.forEach(h=>{
+      if(!(h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged) || getEStatus(h.t,'discombobulate') || !(Math.random() < (cfh.chance || 0.25))) return;
+      markConfused(h.t, cfh.ffPower || 1.0, true);
+      if(getEStatus(h.t,'discombobulate')) cz.push(SPECIES[h.t.species].name);
+    });
+    if(cz.length){ renderStatusBadges(); setTimeout(()=> battleMsg(`🌀 ${cz.join(' and ')} ${cz.length > 1 ? 'are' : 'is'} confused — ${cz.length > 1 ? 'their' : 'its'} next swing turns on its own side!`), 800); }
+  }
+  /* (3.15) Random Access: a Glitch on top of the blow */
+  if(mv.glitch && mv.mult != null && hits.some(h=> h.t && !h.dodged)){
+    const t0 = (target && target.hp > 0) ? target : livingEnemies()[0];
+    const kind = glitchPick(true);
+    const said = t0 ? applyGlitch('player', mon, t0, kind) : '';
+    if(said){ renderStatusBadges(); setTimeout(()=> battleMsg(said), 1000); }
+  }
+  /* Boo! and Wail: a blow that weakens THEM — their next attack lands soft. */
+  const sfp = mv.softenHit;
+  if(sfp){
+    let weak = 0;
+    hits.forEach(h=>{
+      if(h.t && h.t.hp > 0 && h.dmg > 0 && !h.dodged && !getEStatus(h.t,'softened') && Math.random() < sfp.chance){
+        addEStatus(h.t, { type:'softened', turnsLeft:2, amount:sfp.amount || 0.5 });
+        if(getEStatus(h.t,'softened')) weak++;
+      }
+    });
+    if(weak){ renderStatusBadges(); setTimeout(()=> battleMsg(`🌀 ${weak === 1 ? 'Its' : 'Their'} next attack will be weakened!`), 650); }
+  }
+  /* Lunacy (the Moon Swan), in your hands as in theirs: a quarter of the
+     time the moonlight gets into their heads — every one of them muddled for
+     its next swing (this round or the next), turned on its own side at full
+     power. Their dust keeps it out (addEStatus). */
+  const lun = mv.lunacy;
+  if(lun && hits.some(h=> h.t && !h.dodged) && Math.random() < (lun.chance || 0.25)){
+    let caught = 0;
+    livingEnemies().forEach(x=>{ markConfused(x, lun.ffPower || 1.0, true); if(getEStatus(x,'discombobulate')) caught++; });
+    /* (3.24) the Ladybird's Dazzle is a Lunacy in light: its own words */
+    if(caught){ renderStatusBadges(); setTimeout(()=> battleMsg(lun.them || (lun.glow ? '✨ The flash leaves them seeing spots — confused!' : '🌙 The moonlight gets into their heads!')), 650); }   // (3.90) or its own words (the Mantis's, the King's)
+  }
+  /* Nova (the Phoenix), in your hands as in theirs (2.90): a small Diamond
+     Dust — one of their buffs swept away, one of their marks on your side
+     burnt off — whenever it reaches one of them. */
+  if(mv.purge && hits.some(h=> h.t && !h.dodged)){
+    const said = novaPurge('player', mv.purge);
+    if(said){ renderStatusBadges(); setTimeout(()=> battleMsg(said), 650); }
+  }
+  return '';
+}
 /* A blow of yours that may stun (Psyshock, Volt Wave, Volt Concussion, Tesla
    Bolt…). Every strike of it that got through rolls its own chance; one that
    was dodged, or that their block soaked entirely, stuns nobody (as theirs
@@ -2157,7 +2193,7 @@ function resolveBattleMove(mv, target, results, opts){
    barrage of yours never rolled at all: its strikes are played by
    resolveSplitHits, resolveAoeHits and resolveMultiHit, and only the single
    blow's path asked. All four ask here now. Their Iron Will and their dust
-   keep it out (addEStatus). An Overcharge repeat rolls nothing, as before.
+   keep it out (addEStatus). (4.07) An Overcharge repeat rolls them again: it is the attack again.
    Returns the line to say ('' if nobody was stunned). */
 function stunRiders(mv, hits){
   const pct = mv && (mv.paralyse || mv.stunHit || mv.stun);   // (3.63) `stun` too, as theirs reads it
@@ -2398,6 +2434,7 @@ function applyHits(hits, opts){
    `hits` carries the per-target damage so a repeat re-applies the real amount. */
 function afterPlayerAttack(mon, hits){
   const b = ui.battle;
+  if(typeof noteDealtDirect === 'function') noteDealtDirect(mon, hits);   // (4.07) a princess who struck this round makes no stone at its end
   /* Once per action, however many repeats and echoes follow: your Cunning and
      Greed, a lifesteal passive, and what THEY do about being hit — their
      spikes prick you, their Goblin Knights riposte. */
@@ -2656,6 +2693,26 @@ function runCloneEchoes(mon, mv, done){
   }, true);
 }
 
+/* (4.07) THE OVERCHARGE REPEAT, PLANNED AGAIN. The designer: "overcharge has a bug with multihit moves like ultra.
+   instead of starting a new ultra chain with random hits to the enemy, it just doubles whatever damage the enemy had
+   taken from the first ultra. overcharge should repeat an entire attack and all hits of a multihit move. it should
+   rerandomise the number of hits of an ultra as well as the targets." Until 4.07 a repeat played the first attack's
+   own strikes again — the same ones, at the same figures, on the same targets. Now each attack leaves, as it is
+   planned, the way to plan it again (`plan`: its strikes, rolled afresh — count, targets, dodges, criticals) and
+   what it sets off on the ones it reaches (`riders`: a stun, a sleep, a blinding… rolled again). For this action
+   only (its actionSeq). An attack that leaves none (a rarer path) is repeated as before. */
+function setReplan(mon, plan, riders){
+  const b = ui.battle;
+  if(b) b._replan = { seq:b.actionSeq, mon, plan, riders };
+}
+/* The one a single blow's repeat goes for: the same one, if it is standing — else the one their Steel Soul makes
+   every blow come to, or any of them at random. */
+function replanTarget(t){
+  if(t && t.hp > 0) return t;
+  const alive = livingEnemies();
+  const g = soulGuardian('enemy');
+  return (g && g.hp > 0) ? g : (alive[Math.floor(Math.random() * alive.length)] || null);
+}
 function afterPlayerAttackReal(mon, hits){
   setTimeout(()=>{
     /* What this action laid, for an Overcharge repeat to lay again: read once
@@ -2679,6 +2736,37 @@ function afterPlayerAttackReal(mon, hits){
     if(canRepeat) spendOverchargeFirst(oc);
     /* ocChance honours the ✦ tier's certain first strike; oc.chance alone was
        using the base rate for every repeat. */
+    const rp = (b0 && b0._replan && b0._replan.seq === b0.actionSeq && b0._replan.mon === mon) ? b0._replan : null;
+    if(b0) b0._replan = null;
+    if(canRepeat && rolled && rp){
+      /* (4.07) the attack again, planned afresh (setReplan) */
+      const fresh = rp.plan() || {};
+      const list = (fresh.hits || []).filter(Boolean);
+      if(!list.length){ battleMsg('⚡ Overcharge triggers — but the attack finds nobody to strike.'); return setTimeout(()=> endPlayerAction(mon), 850); }
+      battleMsg('⚡ Overcharge triggers — the attack comes again!');
+      if(flame) setTimeout(()=> laySacredFlame(mon, true), 450);
+      if(shock) setTimeout(()=> layAftershock(mon, shock.pct, true), 450);
+      bob($('#' + pid('playerBob')), +1);
+      if(fresh.ultra) invertScreen();
+      const finish = ()=>{
+        if(!ui.battle) return;
+        if(fresh.ultra) releaseInvert();
+        reportHits(list);
+        const said = rp.riders ? (rp.riders(list) || '') : '';
+        /* Amnesia (2.97): a repeat that lands makes them forget one more */
+        const forgot = mindPassivesLanded(mon, [...new Set(list.filter(h=> h.dmg > 0 && !h.dodged).map(h=> h.t))], true);
+        const line = [said, forgot.join(' ')].filter(Boolean).join(' ');
+        if(line) setTimeout(()=> battleMsg(line), 450);
+        setTimeout(()=> endPlayerAction(mon), line ? 1500 : 850);
+      };
+      setTimeout(()=>{
+        if(!ui.battle) return;
+        if(fresh.volleys) return playVolleys(fresh.volleys, 0, finish);
+        if(fresh.successive) return playSuccessiveHits(list, 0, finish, true);
+        applyHits(list); finish();
+      }, 300);
+      return;
+    }
     if(canRepeat && rolled){
       /* A blow that KILLED its target used to leave nothing to repeat — the
          filter dropped the dead and the echo fizzled. It now falls on somebody
@@ -3125,19 +3213,17 @@ function finishPlayerTurn(){
 /* An Ultimate that strikes the same target repeatedly. */
 /* Every enemy takes `hits` separate strikes, resolved one after another so the
    per-hit effects (Steel Soul's flat bonus, Leech Seed) apply to each. */
-function resolveAoeHits(mv, mon, factor, atk, targets){
+/* (4.07) An area barrage: a volley a strike, every one of them in each, each on its own dodge — split out of
+   resolveAoeHits so an Overcharge repeat throws it again at every one standing. */
+function planAoeHits(mv, mon, factor, atk, targets){
   const b = ui.battle;
-  // a successful power-up adds a strike this cast; each Aftershock stack adds one more
-  // Rampage always lands its own strikes; aftershocks arrive separately.
-  const extra = 0;
-  const totalHits = mv.hits;
   const per = mv.split ? factor / mv.hits : factor;
   const sim = new Map(targets.map(t=>[t, t.hp]));
   const soak = blockPlanner();                 // their block, strike by strike
   const all = [], volleys = [];
-  all.missed = [];                             // (3.61) the strikes they dodged, for an Overcharge repeat to throw again
+  all.missed = [];                             // (3.61) the strikes they dodged
   let dodged = 0;
-  for(let k=0;k<totalHits;k++){
+  for(let k=0;k<mv.hits;k++){
     const volley = [];
     targets.forEach(t=>{
       if(sim.get(t) <= 0) return;
@@ -3153,6 +3239,17 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
     });
     volleys.push(volley);
   }
+  all.dodgedCount = dodged;
+  return { all, volleys };
+}
+function resolveAoeHits(mv, mon, factor, atk, targets){
+  const b = ui.battle;
+  // a successful power-up adds a strike this cast; each Aftershock stack adds one more
+  // Rampage always lands its own strikes; aftershocks arrive separately.
+  const extra = 0;
+  const totalHits = mv.hits;
+  const { all, volleys } = planAoeHits(mv, mon, factor, atk, targets), dodged = all.dodgedCount;
+  setReplan(mon, ()=>{ const p = planAoeHits(mv, mon, factor, monAtk(mon), livingEnemies()); return { hits:p.all, volleys:p.volleys }; }, hs=> stunRiders(mv, hs));   // (4.07) every one standing, again
   logBattle(`${displayName(mon)} used ${mv.name} — ${totalHits} strikes on ${targets.length} target(s)`);
   battleMsg(`${mv.name}!` + takePsyNote());
   bob($('#' + pid('playerBob')), +1);
@@ -3347,7 +3444,7 @@ function mindControl(e, done){
             const idx = b.enemies.indexOf(v);
             let dmg = total(pick.r) * enemyAtk(e) * typeMultiplier(e.types, v.types) * hexAmp(v);
             const cur = getEStatus(v, 'curse');
-            if(cur) dmg *= 1 + (cur.extra != null ? cur.extra : 0.25);
+            dmg *= curseBucket(cur, 'enemy');   // (4.07) a Portent too
             dmg = Math.max(1, Math.ceil(dmg));
             const before = v.hp;
             v.hp = Math.max(0, v.hp - dmg);
@@ -3444,12 +3541,14 @@ function noteFutureDodge(t, delay){
   setTimeout(()=>{ battleMsg(`⏳ Futuresight — it saw that coming. <b>Spacetime Fracture ×${n}</b>.`); renderStatusBadges(); }, (delay || 0) + 250);
 }
 
-function resolveSplitHits(mv, mon, factor, atk, target){
+/* (4.07) A barrage on one: each strike dodged or not on its own roll, at a share of the blow (split) or the whole of
+   it — split out of resolveSplitHits so an Overcharge repeat throws it again (at another, if this one has fallen). */
+function planSplitHits(mv, mon, factor, atk, target){
   const n = mv.hits;
   const per = mv.split ? factor / n : factor;   // split shares the total; others hit full each time
   const tIdx = ui.battle.enemies.indexOf(target);
   const hits = [];
-  hits.missed = [];                            // (3.61) the strikes they dodged, for an Overcharge repeat to throw again
+  hits.missed = [];                            // (3.61) the strikes they dodged
   let simHp = target.hp;
   const soak = blockPlanner();                 // their block, strike by strike
   let dodged = 0;
@@ -3463,6 +3562,13 @@ function resolveSplitHits(mv, mon, factor, atk, target){
     enemyCounter(target, tIdx, dmg, 520 + i*350);   // each strike is answered
     hits.push({ t:target, idx:tIdx, dmg, oldHp, newHp });
   }
+  hits.dodgedCount = dodged;
+  return hits;
+}
+function resolveSplitHits(mv, mon, factor, atk, target){
+  const tIdx = ui.battle.enemies.indexOf(target);
+  const hits = planSplitHits(mv, mon, factor, atk, target), dodged = hits.dodgedCount;
+  setReplan(mon, ()=>{ const t = replanTarget(target); return { hits:t ? planSplitHits(mv, mon, factor, monAtk(mon), t) : [], successive:true }; }, hs=> stunRiders(mv, hs));
   logBattle(`${displayName(mon)} used ${mv.name} — ${hits.length} strikes on ${SPECIES[target.species].name}`);
   hits.forEach((h,i)=>logBattle(`  strike ${i+1}: ${h.dmg} (${h.oldHp}→${h.newHp})`));
   battleMsg(`${mv.name}!` + takePsyNote());
@@ -3481,12 +3587,10 @@ function resolveSplitHits(mv, mon, factor, atk, target){
   }, true), 330);
 }
 
-/* High tier: hit 2 different living enemies at 0.8x each (or the single enemy once if only 1 exists) */
-function resolveMulti2(mv, mon, correct, target){
-  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${wordsTag(correct, mv)} words)`); setTimeout(advanceTurn,900); return; }
-  breakCover(mon, mv.spendLurk);
-  const atk=monAtk(mon);
-  const living = livingEnemies();
+/* (4.07) A High move's blows: the one you aimed at (or, fallen, the first standing) and one other at random — split out
+   of resolveMulti2 so an Overcharge repeat draws its second one again. */
+function planMulti2(mv, mon, target){
+  const atk = monAtk(mon), living = livingEnemies();
   let targets;
   if(living.length >= 2){
     const first = (target && target.hp>0) ? target : living[0];
@@ -3495,12 +3599,20 @@ function resolveMulti2(mv, mon, correct, target){
   } else {
     targets = living.slice(0,1);
   }
-  const hits = targets.map(t=>{
+  return targets.map(t=>{
     const idx = ui.battle.enemies.indexOf(t);
     if(rollDodge(t, idx, 330, ignoresEvasion(mv, mon))) return { t, idx, oldHp:t.hp, newHp:t.hp, dmg:0, dodged:true };
     const dmg = enemyGuard(t, computeDamage(mv.mult, atk, monRef(mon), t, true));
     return { t, idx, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg), dmg };
   });
+}
+/* High tier: hit 2 different living enemies at 0.8x each (or the single enemy once if only 1 exists) */
+function resolveMulti2(mv, mon, correct, target){
+  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${wordsTag(correct, mv)} words)`); setTimeout(advanceTurn,900); return; }
+  breakCover(mon, mv.spendLurk);
+  const atk=monAtk(mon);
+  const hits = planMulti2(mv, mon, target);
+  setReplan(mon, ()=> ({ hits:planMulti2(mv, mon, target), successive:true }), ()=> '');   // (4.07) its second one drawn again
   logBattle(`${displayName(mon)} used ${mv.name} (High, ${mv.mult}x ATK ${atk}) on ${hits.length} target(s)`);
   hits.forEach(h=>logBattle(`  → ${SPECIES[h.t.species].name} took ${h.dmg} (${h.oldHp}→${h.newHp})`));
   battleMsg(`${mv.name}!` + takePsyNote());
@@ -3515,11 +3627,11 @@ function resolveMulti2(mv, mon, correct, target){
   }, true), 330);
 }
 
-/* Ultra tier: 5-7 random hits (45/35/20) spread across enemies, may repeat a target.
-   Screen inverts briefly on use; hits animate at 2x speed in succession. */
-function resolveMultiHit(mv, mon, correct, driveTarget){
-  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${wordsTag(correct, mv)} words)`); setTimeout(advanceTurn,900); return; }
-  breakCover(mon, mv.spendLurk);
+/* (4.07) An Ultra's (or a drive move's) strikes: its count rolled (5–7, 6–8, 7–9 as the stone is refined, 45/35/20;
+   a drive move's fixed), each at one of them at random (a drive's first where you aimed), each dodged or not on its
+   own roll — against a working copy of their health, so a strike never goes to one already down. Split out of
+   resolveMultiHit so an Overcharge repeat rolls a new chain. */
+function planMultiHit(mv, mon, driveTarget){
   /* Hit count widens as the stone is refined: 5-7 → 6-8 → 7-9. */
   /* A drive move has a fixed count; an Ultra stone widens as it is refined. */
   const range = mv.ultraStone ? ultraHitRange(mv.ultraStone) : { min:5, max:7 };
@@ -3532,7 +3644,8 @@ function resolveMultiHit(mv, mon, correct, driveTarget){
   const sim = new Map(ui.battle.enemies.map(e=>[e, e.hp]));
   const soak = blockPlanner();                 // their block, strike by strike
   const hits=[];
-  hits.missed = [];                            // (3.61) the strikes they dodged, for an Overcharge repeat to throw again
+  hits.missed = [];                            // (3.61) the strikes they dodged
+  hits.n = n;
   let dodged = 0;
   for(let i=0;i<n;i++){
     const alive = ui.battle.enemies.filter(e=>sim.get(e)>0);
@@ -3555,6 +3668,20 @@ function resolveMultiHit(mv, mon, correct, driveTarget){
     enemyCounter(t, idx, dmg, 520 + i*350);
     hits.push({ t, idx, oldHp, newHp, dmg });
   }
+  hits.dodgedCount = dodged;
+  return hits;
+}
+/* Ultra tier: 5-7 random hits (45/35/20) spread across enemies, may repeat a target.
+   Screen inverts briefly on use; hits animate at 2x speed in succession. */
+function resolveMultiHit(mv, mon, correct, driveTarget){
+  if(correct<mv.words){ battleMsg(`${mv.name} missed! (${wordsTag(correct, mv)} words)`); setTimeout(advanceTurn,900); return; }
+  breakCover(mon, mv.spendLurk);
+  const atk=monAtk(mon);
+  const hits = planMultiHit(mv, mon, driveTarget), n = hits.n;
+  /* (4.07) the designer: "overcharge has a bug with multihit moves like ultra. instead of starting a new ultra chain
+     with random hits to the enemy, it just doubles whatever damage the enemy had taken from the first ultra … it
+     should rerandomise the number of hits of an ultra as well as the targets." Its repeat is planned again. */
+  setReplan(mon, ()=> ({ hits:planMultiHit(mv, mon, driveTarget), successive:true, ultra:!mv.drive }), hs=> stunRiders(mv, hs));
   invertScreen();
   logBattle(`${displayName(mon)} used ${mv.name} (Ultra) — rolled ${n} hits, landed ${hits.length}`);
   hits.forEach((h,i)=>logBattle(`  hit ${i+1} → ${SPECIES[h.t.species].name} took ${h.dmg} (${h.oldHp}→${h.newHp})`));
@@ -5197,8 +5324,9 @@ function enemyFollowUps(i, e, move, ctx, next){
     const pierce = !!(repeatOf && move && move[6] && move[6].pierce);     // a Wraithblade repeated still passes through (2.97)
     for(let k = 0; k < (times || 1); k++){
       if(me.currentHp <= 0 && !ui.battle.allyUnkillable) break;
-      const through = capHit(me, pierce ? amount : applyBlock(me, amount, pid('playerBlk')));   // (3.15) a Carapace
-      soaked += amount - through;
+      const hit = repeatOf ? Math.ceil(amount * critStrike(e, me)) : amount;   // (4.07) a repeat's strikes: their criticals rolled afresh
+      const through = capHit(me, pierce ? hit : applyBlock(me, hit, pid('playerBlk')));   // (3.15) a Carapace
+      soaked += hit - through;
       dropHp(me, through);
       if(through > 0){ spikeRiderTheirs(e, me); fed += theirSeedsDrink(e); }   // their ✦ spikes (3.16) and seeds ride on these too
     }
@@ -5227,8 +5355,17 @@ function enemyFollowUps(i, e, move, ctx, next){
     const go = Math.random() < ocP;
     spendOverchargeFirst(oc);
     if(!go) return then();
-    const each = k=> k >= defs.length ? then()
-      : strike(defs[k], defs[k].dmg, `⚡ Their Overcharge — ${name} strikes again`, ()=> each(k + 1), Math.max(1, defs[k].hitCount), true);
+    /* (4.07) the attack again, as yours is (setReplan): who it goes for planned afresh — an Ultra's count rolled
+       again and scattered again over yours, an area blow on every one of yours standing (one that slipped it the
+       first time too) — each strike's critical rolled again (strike). Each of yours takes the figure planned for it
+       (one never reached: the least planned for any). */
+    const mv2 = enemyFreshMove(move), ex2 = (mv2 && mv2[6]) || {};
+    const plan = enemyTargetPlan(e, mv2).filter(st=> standing({ mon:st.mon }));
+    const planned = defs.map(d=> d.dmg).filter(x=> x > 0);
+    const amountFor = m=>{ const d = defs.find(x=> x.mon === m); return d ? d.dmg : (planned.length ? Math.min(...planned) : 0); };
+    const timesFor = st=> st.hits || Math.max(1, (moveHitsFor(e, ex2) && !ex2.reflect && !ex2.grudge) ? moveHitsFor(e, ex2) : 1);
+    const each = k=> k >= plan.length ? then()
+      : strike({ mon:plan[k].mon }, amountFor(plan[k].mon), `⚡ Their Overcharge — ${name} strikes again`, ()=> each(k + 1), timesFor(plan[k]), true);
     each(0);
   };
   const cl = getESide('clones');

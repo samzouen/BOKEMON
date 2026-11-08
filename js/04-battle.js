@@ -776,6 +776,8 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     if(softE) dmg *= (1 - (softE.amount || 0.5));
     const glE = getEStatus(attacker, 'glared');             // (4.03) Lucesco's Pulsar Glare: its first turns a quarter weaker (20-jungle.js)
     if(glE) dmg *= (1 - (glE.amount || 0.25));
+    const adE = getEStatus(attacker, 'adored');             // (4.07) the princess's Charm: its attacks 30% weaker for 3 turns (26-invasion.js)
+    if(adE) dmg *= (1 - (adE.cut || 0.3));
     dmg *= playerTerrorizeFactor();                          // yours frightens them (2.87)
     /* (3.76) a future monster's element passives, as yours above (17-region6.js) */
     if(typeof foeAttackAmp === 'function'){
@@ -801,7 +803,7 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     /* (3.16: a frozen one is no harder to hurt — Ice Tomb's `taken` went with
        the deep freeze) */
     const cur = getEStatus(defender,'curse');
-    if(cur) dmg *= (1 + (cur.extra != null ? cur.extra : 0.25));
+    dmg *= curseBucket(cur, 'enemy');                 // (4.07) and a Portent on their side, in the same bucket
     dmg *= hexAmp(defender);                          // (3.86) Vicious Hex's Exposed (its marks, 3.68–3.85)
     /* Their side's own armour — the mirror of yours below. */
     const ohE = getESide('overheat');
@@ -846,7 +848,7 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
       if(dm){ cut *= (1 - elusiveReduce(dm)); } }   // (3.76) Bedrock's cut gone; (3.86) Tempering's too
     /* What their side has put on yours: a Curse makes you softer. */
     const curP = getPStatus(0,'curse');
-    if(curP && isEnemyOwned('curse', curP)) dmg *= (1 + (curP.extra != null ? curP.extra : 0.25));
+    dmg *= curseBucket((curP && isEnemyOwned('curse', curP)) ? curP : null, 'player');   // (4.07) and a Portent on yours
   }
   if(typeof talentTakeMult === 'function') cut *= talentTakeMult(defender, attacker);   // (3.75) its talents' cuts, either side's
   if(cut < 1 && hexDebuffOn(defender, 'hxDr')) cut = Math.min(1, cut + HEX_DEBUFF.pct);   // (3.86) Brittle: 15 points of its cuts gone
@@ -1396,7 +1398,7 @@ function wildfireScorch(me, oh){
   const hits = livingEnemies().map(t=>{
     let dmg = Math.ceil(base * elemAttackAmp(monRef(me), t) * hexAmp(t));
     const cur = getEStatus(t, 'curse');
-    if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
+    dmg = Math.ceil(dmg * curseBucket(cur, 'enemy'));
     return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) };
   });
   return { base, hits, total:hits.reduce((s, h)=> s + h.dmg, 0) };
@@ -1423,7 +1425,7 @@ function runWildfire(done){
        fire), never below half — off the field too (3.76) */
     let self = Math.ceil(base * elemSelfAmp(me));
     const curP = getPStatus(0, 'curse');
-    if(curP && isEnemyOwned('curse', curP)) self = Math.ceil(self * (1 + (curP.extra != null ? curP.extra : 0.25)));
+    self = Math.ceil(self * curseBucket((curP && isEnemyOwned('curse', curP)) ? curP : null, 'player'));
     const floor = Math.ceil(monMaxHp(me) * WILDFIRE.floor);
     const took = Math.max(0, Math.min(self, me.currentHp - floor));
     if(took > 0){
@@ -1526,7 +1528,7 @@ function spikeStrike(me, pct){
   const t = foes[Math.floor(Math.random() * foes.length)];
   let dmg = Math.ceil((pct || SPIKE_FORM.pct[0]) * monAtk(me) * ownBuffMultiplier(me) * elemAttackAmp(monRef(me), t) * hexAmp(t));
   const cur = getEStatus(t, 'curse');
-  if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
+  dmg = Math.ceil(dmg * curseBucket(cur, 'enemy'));
   const hits = [{ t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }];
   applyHits(hits, { noLeech:true, by:me });
   reportHits(hits);
@@ -1934,7 +1936,7 @@ function runViolentDance(done){
     const broke = sh0 - shieldsOn(t);
     let dmg = Math.ceil(VIOLENT_DANCE.pct * monAtk(me) * ownBuffMultiplier(me) * elemAttackAmp(monRef(me), t) * hexAmp(t));
     const cur = getEStatus(t, 'curse');
-    if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
+    dmg = Math.ceil(dmg * curseBucket(cur, 'enemy'));
     const hits = [{ t, idx, dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }];
     applyHits(hits, { noLeech:true, by:me });       // an upkeep strike: no Leech Seed — its own (3.70)
     reportHits(hits);
@@ -2082,7 +2084,7 @@ function detonateNow(){
   const burstOf = (me, t)=>{
     let dmg = Math.ceil(DETONATE_PCT * n * monAtk(me) * ownBuffMultiplier(me) * elemAttackAmp(monRef(me), t) * hexAmp(t));
     const cur = getEStatus(t, 'curse');
-    if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
+    dmg = Math.ceil(dmg * curseBucket(cur, 'enemy'));
     return dmg;
   };
   const holders = detonateHolders().filter(m=> m.currentHp > 0);
@@ -2873,6 +2875,7 @@ const STATUS_KIND = {
   /* debuffs: the side that put them there benefits */
   stunned:'debuff', paralysed:'debuff', softened:'debuff', charmed:'debuff', forgot:'debuff', taunted:'debuff',   // (3.38) a taunt
   glared:'debuff',                                                    // (4.03) Lucesco's Pulsar Glare, still in its eyes
+  adored:'debuff',                                                    // (4.07) the princess's Charm
   charm:'debuff', disrupt:'debuff', disruptField:'debuff', asleep:'debuff',
   discombobulate:'debuff', iceTomb:'debuff', curse:'debuff', chill:'debuff',
   leechSeed:'debuff', dot:'debuff', jaws:'debuff', bogged:'debuff',
@@ -2960,6 +2963,12 @@ function overheatSays(st, foes){
 }
 function removeESide(type){ if(ui.battle) delete enemySideStatuses()[type]; }
 
+/* (4.07) What a blow on one side gains from what makes it softer, added up in one bucket: a Curse's +25% (more at + or
+   ✦) and the princess's Portent (+25% or +50% on the side it has come to, 26-invasion.js) — the designer: "increased
+   damage (curse's bucket)". `st`: the Curse on it, if one counts. */
+function curseBucket(st, side){
+  return 1 + (st ? (st.extra != null ? st.extra : 0.25) : 0) + ((typeof portentAmp === 'function') ? portentAmp(side) : 0);
+}
 /* Whose Diamond Dust is in the air decides what may land. */
 function playerDust(){ return ui.battle ? getPStatus(0,'diamondDust') : null; }
 function enemyDust(){ return ui.battle ? getESide('diamondDust') : null; }
@@ -4109,7 +4118,16 @@ function enemyUltraMove(type, plus){
   const t = ULTRA_TIERS[p];
   const r = Math.random();
   const n = r < 0.45 ? t.min : (r < 0.80 ? t.min + 1 : t.max);
-  return ['UltraStone', stoneName(type, 'ultra') + UPGRADE_MARKS[p], t.mult, 'MultiHit', 0, 0, { hits:n }];
+  return ['UltraStone', stoneName(type, 'ultra') + UPGRADE_MARKS[p], t.mult, 'MultiHit', 0, 0, { hits:n, ultraTier:p }];   // (4.07) its tier, for an Overcharge repeat to roll its count again
+}
+/* (4.07) Their attack, for an Overcharge repeat: an Ultra's count rolled again (enemyFollowUps). */
+function enemyFreshMove(move){
+  const ex = move && move[6];
+  if(!ex || ex.ultraTier == null || !ULTRA_TIERS[ex.ultraTier]) return move;
+  const t = ULTRA_TIERS[ex.ultraTier], r = Math.random();
+  const m2 = move.slice();
+  m2[6] = Object.assign({}, ex, { hits:r < 0.45 ? t.min : (r < 0.80 ? t.min + 1 : t.max) });
+  return m2;
 }
 /* A carrier's passive on taking the field, the mirror of applyStonePassives:
    refined Diamond Dust sweeps, refined Dragon Dance lays Mach Dragon, refined
@@ -5057,6 +5075,8 @@ function overheatBurnTurns(side){
 }
 /* A side's Overheat, if it has one up. */
 function overheatOn(side){ return side === 'enemy' ? getESide('overheat') : getPStatus(0, 'overheat'); }
+/* (4.07) …and then the princess's comets, landing (26-invasion.js: runComets) */
+function runPreHitsAndComets(done){ runPreHits(()=> (typeof runComets === 'function') ? runComets(done) : done()); }
 /* Resolve everything queued, then hand control back. */
 function runPreHits(done){
   const b = ui.battle;
@@ -5088,7 +5108,7 @@ function runPreHits(done){
       if(!mine.length) return step();
       let dmg = Math.ceil(p.pct * p.atk * enemyBuffMultiplier());
       const curP = getPStatus(0,'curse');
-      if(curP && isEnemyOwned('curse', curP)) dmg = Math.ceil(dmg * (1 + (curP.extra != null ? curP.extra : 0.25)));
+      dmg = Math.ceil(dmg * curseBucket((curP && isEnemyOwned('curse', curP)) ? curP : null, 'player'));   // (4.07) a Portent too
       mine.forEach(me=>{
         const before = me.currentHp;
         const through = capHit(me, applyBlock(me, dmg, pid('playerBlk', me)));   // (3.15) a Carapace
@@ -5106,7 +5126,7 @@ function runPreHits(done){
     const hits = foes.map(t=>{
       let dmg = Math.ceil(p.pct * p.atk * buff * hexAmp(t));   // (3.68) and Vicious Hex's marks
       const cur = getEStatus(t,'curse');
-      if(cur) dmg = Math.ceil(dmg * (1 + (cur.extra != null ? cur.extra : 0.25)));
+      dmg = Math.ceil(dmg * curseBucket(cur, 'enemy'));
       return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
     });
     applyHits(hits, { noLeech:true });   // upkeep damage never feeds Leech Seed
@@ -5267,19 +5287,35 @@ function grantBlock(holder, n, atkAt){
    own shields first — they can only ever help it — then (3.64) its team's. */
 function applyBlock(holder, dmg, barId){
   if(!holder) return dmg;
+  const amp = shieldAmp(sideOfMon(holder));          // (4.07) the princess's Lithification: yours soak 1.2×
   if(holder.blockStacks > 0){
     const before = holder.blockStacks;
     holder.blockStacks--;
     if(barId) drainBlock(barId, before, holder.blockStacks);
-    const absorbed = holder.blockValue || 0;
+    const absorbed = Math.round((holder.blockValue || 0) * amp);
     return Math.max(0, dmg - absorbed);
   }
   const side = sideOfMon(holder), tb = teamBlock(side);
   if(!tb || !(tb.stacks > 0)) return dmg;
+  const vals = teamVals(tb);                          // (4.07) each its own value: the oldest first
+  const v = vals.length ? vals.shift() : (tb.value || 0);
   const before = tb.stacks;
   tb.stacks--;
   drainBlock('teamBlk-' + side, before, tb.stacks);
-  return Math.max(0, dmg - (tb.value || 0));
+  return Math.max(0, dmg - Math.round(v * amp));
+}
+/* (4.07) How much more a side's shields soak: yours 1.2× while a princess of yours has Lithification (her Power 2's
+   passive, on the field or off it — 26-invasion.js). Every shield of yours, its own or the team's. */
+function shieldAmp(side){ return (side === 'player' && typeof lithifyAmp === 'function') ? lithifyAmp() : 1; }
+/* (4.07) The team's shields, each with the value it was made at — the designer's princess adds hers to the pool Steel
+   Aegis fills, and hers must never lower an Aegis's (until 4.07 the pool had one value, the last given). Anything
+   that takes shields off the pool by its count (a Dragon Dance, a Nova, Greed) takes the oldest. */
+function teamVals(tb){
+  if(!tb) return [];
+  tb.vals = Array.isArray(tb.vals) ? tb.vals : [];
+  while(tb.vals.length > tb.stacks) tb.vals.shift();
+  while(tb.vals.length < tb.stacks) tb.vals.unshift(tb.value || 0);
+  return tb.vals;
 }
 
 /* ============================================================
@@ -5308,27 +5344,33 @@ function teamBlock(side){
   return b.teamBlock[side] || (b.teamBlock[side] = { stacks:0, value:0 });
 }
 function teamStacks(side){ const tb = teamBlock(side); return tb ? tb.stacks : 0; }
-function teamValue(side){ const tb = teamBlock(side); return tb ? (tb.value || 0) : 0; }
+function teamValue(side){ const tb = teamBlock(side); if(!tb) return 0; const v = teamVals(tb); return Math.round((v.length ? v[0] : (tb.value || 0)) * shieldAmp(side)); }   // (4.07) the next one's, as it would soak
 /* Every shield between `holder` and a blow: its own and its team's. */
 function shieldsOn(holder){ return holder ? blockStacksOf(holder) + teamStacks(sideOfMon(holder)) : 0; }
 /* What its shields would take off a run of blows, for an estimate: its own at
    their value, then the team's at theirs. */
-function shieldSoak(holder){ return holder ? blockStacksOf(holder) * (holder.blockValue || 0) + teamStacks(sideOfMon(holder)) * teamValue(sideOfMon(holder)) : 0; }
+function shieldSoak(holder){
+  if(!holder) return 0;
+  const side = sideOfMon(holder), tb = teamBlock(side), amp = shieldAmp(side);
+  return Math.round(blockStacksOf(holder) * (holder.blockValue || 0) * amp + (tb ? teamVals(tb).reduce((a, v)=> a + v, 0) : 0) * amp);   // (4.07) each at its own value
+}
 function grantTeamBlock(side, n, atkAt){
   const tb = teamBlock(side);
   if(!tb || !(n > 0)) return;
+  teamVals(tb);
   tb.stacks += n;
   tb.value = atkAt || tb.value || 0;             // minted at its caster's ATK, as a monster's are
+  for(let k = 0; k < n; k++) tb.vals.push(tb.value);   // (4.07) each keeps it
   setTimeout(()=>{ if(ui.battle) renderStatusBadges(); }, 0);   // its bar, on the side's row
 }
 /* The team's bar: the block bar's shape, in silver (.team-blk, companionCss). */
 function teamBlockBarHtml(side){
   const tb = teamBlock(side), n = tb ? tb.stacks : 0;
   if(!n) return '';
-  return `<div class="blk-wrap team-blk" id="teamBlk-${side}" data-max="${n}" title="The team's shields: Steel Aegis">` +   // (its silver: companionCss)
+  return `<div class="blk-wrap team-blk" id="teamBlk-${side}" data-max="${n}" title="The team's shields">` +   // (its silver: companionCss)
          `<span class="blk-shield">🔩</span><span class="blk-count">×${n}</span>` +
          `<span class="blk-track"><i></i></span>` +   // (3.70) one bar: the number says how many
-         `<span class="blk-val">${tb.value || 0}</span></div>`;
+         `<span class="blk-val">${teamValue(side)}</span></div>`;   // (4.07) what the next one soaks
 }
 function refreshTeamBar(side){
   const el = document.getElementById('teamBlk-' + side);
@@ -5339,7 +5381,7 @@ function refreshTeamBar(side){
   el.dataset.max = n;
   el.innerHTML = `<span class="blk-shield">🔩</span><span class="blk-count">×${n}</span>` +
                  `<span class="blk-track"><i></i></span>` +
-                 `<span class="blk-val">${tb.value || 0}</span>`;
+                 `<span class="blk-val">${teamValue(side)}</span>`;
 }
 
 /* ============================================================
@@ -5541,7 +5583,7 @@ function leechHealParty(amount, mon){
 function blockBar(id, holder){
   const n = blockStacksOf(holder);
   if(!n) return `<div class="blk-wrap" id="${id}" style="display:none;"></div>`;
-  const val = holder.blockValue || 0;
+  const val = Math.round((holder.blockValue || 0) * shieldAmp(sideOfMon(holder)));   // (4.07) as it soaks
   return `<div class="blk-wrap" id="${id}" data-max="${n}">
     <span class="blk-shield">🛡</span>
     <span class="blk-count">×${n}</span>
@@ -5563,7 +5605,7 @@ function refreshBlockBar(id, holder){
     `<span class="blk-shield">🛡</span>` +
     `<span class="blk-count">×${n}</span>` +
     `<span class="blk-track"><i></i></span>` +
-    `<span class="blk-val">${holder.blockValue||0}</span>`;
+    `<span class="blk-val">${Math.round((holder.blockValue || 0) * shieldAmp(sideOfMon(holder)))}</span>`;
 }
 function refreshAllBlockBars(){
   const b = ui.battle;
@@ -6769,7 +6811,7 @@ function beginRound(msg){
      Haunting Aria's roll — here, not at the end of the round, so it still
      comes when the last round ended with a wave knocked out — Vita's light,
      and last the quick attacks (2.73). */
-  const preAction = ()=> runPreHits(()=> runUpkeepPassives(()=> ariaRetaliate(()=> vitaPulse(()=> runQuickAttacks(()=>{   // (3.67) Wildfire beside Overheat's burn; a Capacitor's leftovers
+  const preAction = ()=> runPreHitsAndComets(()=> runUpkeepPassives(()=> ariaRetaliate(()=> vitaPulse(()=> runQuickAttacks(()=>{   // (3.67) Wildfire beside Overheat's burn; a Capacitor's leftovers
     if(!ui.battle) return;
     if(livingEnemies().length === 0) return setTimeout(onWaveCleared, 500);
     /* Their burn (or their afterimages last round) can fell whoever you have
@@ -7225,7 +7267,8 @@ function endRound(){
   { const mm = frost;
     const said = [mm.length ? `${mm.join(' and ')} grows: <b>+${Math.round(METAMORPH.per * 100)}%</b> damage.` : '',
                   (typeof foeMetamorphTurn === 'function') ? foeMetamorphTurn() : '',             // (3.76) theirs
-                  (typeof talentRoundEnd === 'function') ? talentRoundEnd() : ''].filter(Boolean).join(' ');   // (3.75) what heals itself: a constellation, the distortion's Echo
+                  (typeof talentRoundEnd === 'function') ? talentRoundEnd() : '',                    // (3.75) what heals itself: a constellation, the distortion's Echo
+                  (typeof lithifyRoundEnd === 'function') ? lithifyRoundEnd() : ''].filter(Boolean).join(' ');   // (4.07) the princess's Lithification: a shield, and 5% back
     if(said) battleMsg(said); }
   livingEnemies().forEach(e=>{
     tickRage(e); tickOverpower(e);
@@ -7910,6 +7953,7 @@ function onWaveCleared(){
   // a scripted ally keeps fighting across waves — don't hand the party back yet
 
   const b = ui.battle;
+  if(!b) return;                       // (4.07) a timer that outlived its fight (the fight left before it fired)
   hexSweep();                          // (3.68) Vicious Hex: the marks of the last to fall wait for the next wave
   if(b.arena){
     /* No more respawning — immortality is the way to keep a test running now,
@@ -8173,7 +8217,7 @@ function fieldOrder(){
 function standsLeft(m){ const f = fieldOrder(); return !f.length || f[0] === m; }
 /* A move that never spends the turn: a Very High stone's cast, the Aria, or
    (2.93) Steel Soul. */
-function isQuickMove(mv){ return !!(mv && ((mv.isStone && mv.stoneTier === 'veryhigh') || mv.aria || mv.soul || mv.iceBarrier || mv.overgrowth || mv.tachy || mv.legacyGive || mv.stargaze)); }   // (3.87) the Firefox's Stargazer   // (3.66) Dragon Legacy   // (3.63) Tachypsychia   // (3.16) Ice Barrier too; (3.55) Overgrowth
+function isQuickMove(mv){ return !!(mv && ((mv.isStone && mv.stoneTier === 'veryhigh') || mv.aria || mv.soul || mv.iceBarrier || mv.overgrowth || mv.tachy || mv.legacyGive || mv.stargaze || mv.comet)); }   // (4.07) the princess's Comet Augury   // (3.87) the Firefox's Stargazer   // (3.66) Dragon Legacy   // (3.63) Tachypsychia   // (3.16) Ice Barrier too; (3.55) Overgrowth
 /* (3.66) An instant move that fails costs no turn (the designer: "Instant
    moves that fail should not cost the turn"): the words fell short, nothing
    happens, and it is still that monster's turn. It is spent as a cast would
@@ -8850,6 +8894,10 @@ function unlockedMoves(m){
   base.forEach(mv=>{
     if(mv.soul && mv.available && ui.battle && ui.battle.usedSoul && ui.battle.usedSoul[m.uid]){ mv.available = false; mv.spent = true; }
     if(mv.tachy && mv.available && tachySpent(m)){ mv.available = false; mv.spent = true; }   // (3.63) the same, Tachypsychia
+    /* (4.07) the princess: Lithification's five shields once until the meter fills; Comet Augury not again while her
+       comet is still falling */
+    if(mv.lithify && mv.available && ui.battle && ui.battle.usedSoul && ui.battle.usedSoul['lithify:' + m.uid]){ mv.available = false; mv.spent = true; }
+    if(mv.comet && mv.available && typeof cometFalling === 'function' && cometFalling(m)){ mv.available = false; mv.cometWait = cometFalling(m); }
   });
   /* The ghost phoenix's gift: Nova and Incinerate may leave a Sacred Flame. */
   base.forEach(mv=>{ const sf = sacredFlameBonus(m, mv); if(sf) mv.bonus = sf; });
@@ -9290,6 +9338,30 @@ function moveEffectText(mv, mon, atk){
     (mv.mend.fleece ? ` Then for <b>${mv.mend.fleece.turns || 3} turns</b> your side takes <b>${pc(mv.mend.fleece.reduce || 0.15)}% less</b>.` : ''));
   if(mv.transfuse) out.push(
     `<b>${escapeHtml(mv.name)}.</b> Gives its partner its own health: up to ${ofHp(mv.transfuse.pct || 0.3)}.`);
+  /* (4.07) the Fairy Princess's kit (26-invasion.js) */
+  if(mv.charmAtk) out.push(
+    `<b>${escapeHtml(mv.name)}.</b> On one of them: its attacks deal <b>${pc(mv.charmAtk.cut)}% less</b> for <b>${mv.charmAtk.turns} turns</b>, ` +
+    `and a <b>${pc(mv.charmAtk.sleep)}%</b> chance it falls asleep for its next turn. No damage.`);
+  if(mv.dazzle) out.push(
+    `<b>${escapeHtml(mv.name)}.</b> Every one of them is blinded for its next turn: <b>${pc(mv.dazzle.miss)}%</b> of its attacks miss. ` +
+    `Under their Diamond Dust it gets through all the same, at <b>${pc(mv.dazzle.dust)}%</b>, and nothing can clear it.`);
+  if(mv.always && mv.always.lifeGift) out.push(
+    `<b>Life Transfusion.</b> While she stands, on the field or off it: when one of yours would fall, she gives it half her health ` +
+    `(<b>${mon ? Math.ceil((mon.currentHp || 0) / 2) : 0} HP</b> now), and it stands again with that much, every mark of theirs lifted off it and your side. ` +
+    `Given her last, she falls with it — unless Metamorph holds her on 1 HP.`);
+  if(mv.lithify) out.push(
+    `<b>${escapeHtml(mv.name)}.</b> Once until the meter fills: <b>${mv.lithify.shields} shields</b> for your whole team, each soaking up to ` +
+    `<b>${Math.round(atk * ((typeof shieldAmp === 'function') ? shieldAmp('player') : 1))}</b> off a hit.`);
+  if(mv.always && mv.always.lithStone) out.push(
+    `<b>Always.</b> Each round she deals no damage herself, on the field or off it: at its end, <b>1 shield</b> more for your team and ` +
+    `<b>5%</b> of her health back. Every shield of yours soaks <b>20% more</b> while she stands.`);
+  if(mv.comet) out.push(
+    `<b>${escapeHtml(mv.name)}.</b> Quick: it doesn't use her turn. A comet lands as the third round from now begins: <b>${mv.comet.hit}×</b> her ATK ` +
+    `(<b>${val(mv.comet.hit)}</b>) on every one of them, and its blast wave <b>${mv.comet.blast}×</b> (<b>${val(mv.comet.blast)}</b>) the round after — ` +
+    `no dodge, straight through their shields, never critical, and it falls even if she has left the field. Not again until it lands.`);
+  if(mv.bonus && mv.bonus.portent) out.push(
+    `Then write <b>${mv.bonus.words}</b> bonus words for a <b>Portent</b>: your side takes <b>+50%</b>, then <b>+25%</b> damage for two rounds, ` +
+    `then theirs <b>+25%</b>, <b>+50%</b>, <b>+50%</b> — the comet falls in the first +50%. Nothing can lift it.`);
   if(mv.kindle) out.push(
     `<b>${escapeHtml(mv.name)}.</b> For <b>${mv.kindle.turns} turns</b> your side deals <b>${mv.kindle.deal}×</b> damage.`);
   /* (3.36) the Firefox's Grand Enchantment (castEnchant) */
@@ -9535,6 +9607,11 @@ function moveMeta(mv, mon){
     const n = Math.max(0, ibUp.turnsLeft - 1);
     return `${mv.words}字 · Up · ${n} turn${n === 1 ? '' : 's'} left`;
   }
+  /* (4.07) the Fairy Princess's: what each does, as no figure can say it */
+  if(mv.charmAtk) return `${mv.words}字 · ATK −${Math.round(mv.charmAtk.cut * 100)}%`;
+  if(mv.dazzle) return `${mv.words}字 · Blinds all`;
+  if(mv.lithify) return `${mv.words}字 · ${mv.lithify.shields} shields`;
+  if(mv.comet) return `${mv.words}字 · Quick · lands in 3`;
   const bits = [`${mv.words}字`];
   const dmg = estimateHit(mv, mon);
   if(dmg != null){
@@ -9667,8 +9744,8 @@ function renderBattle(){
           return `
           <button class="move-btn ${ok?'':'locked'} ${mv.slot==='UltraStone'?'ultra-btn':''} ${mv.stonePlus?'refined-'+mv.stonePlus:''}" data-move="${i}" ${ok?'':'disabled'}>
             ${mv.slot==='UltraStone' ? ultraFizz(mv.stonePlus||0) : ''}
-            <div class="mv-name">${mv.isStone && mv.stoneType && ELEMENT_SYMBOLS[mv.stoneType] ? elemIcon(mv.stoneType, 16, { title:false }) + ' ' : ''}${mv.available || mv.chargeMore || mv.spent || mv.forgotten || mv.taunted || mv.ogFull || mv.ogDone || mv.tried || mv.legacyGive ? escapeHtml(mv.name) : '???'}</div>
-            <div class="mv-meta">${mv.available ? moveMeta(mv, ctlMon) : (mv.chargeMore ? 'Full' : mv.silenced ? '🔇 Sealed by the distortion' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : mv.ogFull ? `Full · ATK +${Math.round(FOREST_GIFT.maxStacks * FOREST_GIFT.step * 100)}%` : mv.ogDone ? 'Grown this turn' : mv.tried ? 'Missed · next turn' : mv.legacyGive ? (mv.legacyWhy || 'Nobody to give to') : 'Locked')}</div>
+            <div class="mv-name">${mv.isStone && mv.stoneType && ELEMENT_SYMBOLS[mv.stoneType] ? elemIcon(mv.stoneType, 16, { title:false }) + ' ' : ''}${mv.available || mv.chargeMore || mv.spent || mv.forgotten || mv.taunted || mv.ogFull || mv.ogDone || mv.tried || mv.legacyGive || mv.cometWait ? escapeHtml(mv.name) : '???'}</div>
+            <div class="mv-meta">${mv.available ? moveMeta(mv, ctlMon) : (mv.chargeMore ? 'Full' : mv.silenced ? '🔇 Sealed by the distortion' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.cometWait ? `Falling · lands in ${mv.cometWait}` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : mv.ogFull ? `Full · ATK +${Math.round(FOREST_GIFT.maxStacks * FOREST_GIFT.step * 100)}%` : mv.ogDone ? 'Grown this turn' : mv.tried ? 'Missed · next turn' : mv.legacyGive ? (mv.legacyWhy || 'Nobody to give to') : 'Locked')}</div>
           </button>`; })}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
@@ -9753,6 +9830,7 @@ const STATUS_LABELS = {
   hxWeak:'🕸️ Exposed', hxDodge:'🕸️ Clumsy', hxAtk:'🕸️ Feeble', hxDmg:'🕸️ Dulled', hxCrit:'🕸️ Unlucky', hxDr:'🕸️ Brittle',
   /* (4.03) Lucesco's Pulsar Glare (20-jungle.js): Weakened's own symbol, for a weakening that lasts three turns */
   glared:'📉 Pulsar Glare',
+  adored:'💗 Charm',                                                  // (4.07) the princess's
 };
 /* A Very High stone's own symbol, by its type: its status's. */
 function veryHighSymbol(type){ return ((STATUS_LABELS[veryHighStatusKey(type)] || '').split(' ')[0]) || '💎'; }
@@ -10015,6 +10093,7 @@ function renderStatusBadges(){
     if(pc) out.push(`<span class="status-pill"${pillAt('combo', 'ps')}>💪 Combo ×${pc}</span>`);
     const mir1 = getPStatus(0,'mirage');
     if(mir1 && mir1.pending) out.push(`<span class="status-pill"${pillAt('mirageImages', 'ps')}>👥 Afterimages ×${mir1.pending}</span>`);
+    if(typeof portentPillHtml === 'function'){ const pp = portentPillHtml('player'); if(pp) out.push(pp); }   // (4.07) the princess's Portent, while it is on your side
     /* (3.64) the team's shields, in silver — (3.65) pinned at the row's left,
        outside its scroll, so they are always in sight (the designer: "Pin
        steel aegis shields to the leftmost side of the bar") */
@@ -10043,6 +10122,8 @@ function renderStatusBadges(){
       /* (3.01) their Counter stacks and Combo are their side's, as yours are */
       + counterPill(foeCounters(), 'foe')
       + siphonPills()                                  // (3.43) the tower's siphons
+      + ((typeof portentPillHtml === 'function') ? portentPillHtml('enemy') : '')   // (4.07) the princess's Portent, come to their side
+      + ((typeof cometPillHtml === 'function') ? cometPillHtml() : '')             // (4.07) her comet, falling (not a status: a countdown)
       + (ec ? `<span class="status-pill foe"${pillAt('combo', 'fs')}>💪 Combo ×${ec}</span>` : '');
     symbolizePills(fr);
   }
@@ -10225,6 +10306,10 @@ function statusTipText(key, st, c, pill){
     case 'machDragon': return `Extreme speed: ${c.w} moves before anyone without Mach Dragon.` +
       ((s.tier || 1) > 1 ? ` ✦ is faster still: it moves ahead of a plain Mach Dragon too.` : '');
     case 'softened': return `${c.W}'s next attack deals <b>${pc(s.amount || 0.5)}% less</b> damage.`;
+    case 'adored': return `The Little Princess's Charm: ${c.its} attacks deal <b>${pc(s.cut || 0.3)}% less</b> damage` +
+      (s.turnsLeft > 0 ? ` (${s.turnsLeft} more turn${s.turnsLeft === 1 ? '' : 's'}, this one counted).` : '.');
+    case 'portent': return (typeof portentTip === 'function') ? portentTip(c) : '';     // (4.07) the princess's Portent
+    case 'comet': return (typeof cometTip === 'function') ? cometTip() : '';            // (4.07) her comet, falling
     case 'glared': return `Lucesco's Pulsar Glare still burns in ${c.its} eyes: ${c.its} attacks deal <b>${pc(s.amount || 0.25)}% less</b> damage` +
       ` (${s.turnsLeft} more turn${s.turnsLeft === 1 ? '' : 's'}).`;
     case 'evadeTurns': return `${c.W} is perfectly still: it dodges every attack.`;
@@ -10306,10 +10391,11 @@ function statusTipText(key, st, c, pill){
     case 'taunted': { const t = m ? tauntOf(m) : null, tn = t ? escapeHtml(tauntName(t)) : '';
       return tn ? `${c.W} is taunted by ${tn}: on its next turn it must use its strongest attack on ${tn}.` : ''; }
     case 'block': { const n = m ? blockStacksOf(m) : 0;
-      return n ? `Each shield takes up to <b>${m.blockValue || 0}</b> off one hit. Any hit it blocks uses one up, so a flurry uses one a strike.` : ''; }
+      return n ? `Each shield takes up to <b>${Math.round((m.blockValue || 0) * shieldAmp(c.yours ? 'player' : 'enemy'))}</b> off one hit. Any hit it blocks uses one up, so a flurry uses one a strike.` : ''; }
     case 'teamBlock': { const side = c.yours ? 'player' : 'enemy', n = teamStacks(side);   // (3.64) Steel Aegis's, the team's
-      return n ? `${c.yours ? 'Your' : 'Their'} Steel Aegis's shields belong to ${c.yours ? 'your' : 'their'} whole team. Whichever of ${c.yours ? 'yours' : 'theirs'} is struck, ` +
-        `one takes up to <b>${teamValue(side)}</b> off the hit — once that one's own shields are gone. A flurry uses one a strike.` : ''; }
+      return n ? `${c.yours ? 'Your' : 'Their'} team's shields (a Steel Aegis's${c.yours ? ', a Lithification\'s' : ''}) belong to ${c.yours ? 'your' : 'their'} whole team. Whichever of ${c.yours ? 'yours' : 'theirs'} is struck, ` +
+        `one takes up to <b>${teamValue(side)}</b> off the hit — once that one's own shields are gone. A flurry uses one a strike.` +
+        (c.yours && shieldAmp('player') > 1 ? ` Your princess's Lithification makes every shield of yours soak <b>${Math.round((shieldAmp('player') - 1) * 100)}%</b> more.` : '') : ''; }
     case 'meditate': { const p = m ? passiveOf(m) : null, n = m ? meditateStacks(m) : 0;
       return (p && p.meditate) ? `${c.W} deals <b>+${pc(p.meditate * n)}%</b> damage. It grows <b>${pc(p.meditate)}%</b> each turn nothing hits it ` +
         `(up to <b>+${pc(p.meditate * (p.meditateMax || 4))}%</b>), and starts again when it is hit.` : ''; }

@@ -438,28 +438,122 @@ const QUIZ_SPARKS_HOT = [[-50, .08], [-28, .2], [-8, .36], [8, .14], [24, .28], 
 function quizGaugeHtml(q){
   const c = q.config, n = c.wordTarget, done = Math.min(q.wordsDone || 0, n);
   const need = c.stopAt || (c.move && c.move.words) || n;
-  const pct = n ? done / n * 100 : 0;
+  const bonus = !!q.bonusPhase;                                        // (4.07) the move is powered: its meter stays full
+  const pct = bonus ? 100 : n ? done / n * 100 : 0;
   const A = q._meterA, shown = A && A.shown != null && A.shown <= pct ? A.shown : pct;   // it rises from where it stood
-  return `<div class="qz-gauge${done >= need ? ' powered' : ''}${done >= n ? ' full' : ''}">
+  return `<div class="qz-gauge${done >= need || bonus ? ' powered' : ''}${done >= n || bonus ? ' full' : ''}${bonus ? ' bonus' : ''}">
     <div class="qz-meter${pct > shown + 0.05 ? ' surge' : ''}" id="qzMeter" data-to="${pct.toFixed(2)}">
       <div class="qz-fill" id="qzFill" style="width:${shown.toFixed(2)}%"><i class="qz-wave"></i>${shown > 0.05 || pct > 0 ? quizTipHtml() : ''}</div>
     </div>
-    <b class="qz-num"><span id="wordCount">${done}</span>/${n}</b>
+    ${bonus ? quizBonusMeterHtml(q) : c.stopAt ? quizAttackHtml(q) : `<b class="qz-num"><span id="wordCount">${done}</span>/${n}</b>`}
   </div>
   ${(c.startingWords || 0) > 0 ? `<div class="qz-carry">+${c.startingWords} carried over</div>` : ''}`;
 }
-/* the stop button of a move whose words scale it (under Listen and Meaning) */
-function quizStopHtml(q){
-  const c = q.config;
-  if(!c.stopAt) return '';
-  const ready = (q.wordsDone || 0) >= c.stopAt;
-  return `<button class="qz-stop${ready ? ' ready' : ''}" id="stopEarly" ${ready ? '' : 'disabled'}>⏹ Stop here${ready ? ` — ${q.wordsDone} words` : ` (${c.stopAt} needed)`}</button>`;
+/* (4.07) A move whose words scale it (Incinerate, Incinerate Max): "Attack now" at the end of its power meter, where
+   the count stands for every other move — the designer: "change from 'stop here' to 'Attack now'. where does that
+   button live? there might be space on the right side of the label" and "I like how the attack now states the
+   multiplier". Beside the name it left a 375px iPhone about 150px for the name, so (the designer: "keep name sizes
+   consistent for all moves at a length that will never change even with the attack now button on an iPhone's narrower
+   screen") it sits on the meter's row: lit, and tappable, once the move is powered, saying what it would strike at.
+   (It was a full-width "⏹ Stop here" bar under Listen and Meaning, 3.98–4.06: quizStopHtml.) */
+function quizStopHtml(q){ return ''; }
+function quizAttackSub(q){
+  const c = q.config, mv = c.move, done = q.wordsDone || 0;
+  if(done < c.stopAt) return `${c.stopAt} words needed`;
+  const f = (mv && mv.scale && typeof scaledFactor === 'function') ? (done > mv.words ? scaledFactor(mv, done) : mv.mult) : null;
+  return `${done} words` + (f != null ? ` · ${+f.toFixed(2)}×` : '');
+}
+function quizAttackHtml(q){
+  const ready = (q.wordsDone || 0) >= q.config.stopAt;
+  return `<button class="qz-attack${ready ? ' ready' : ''}" id="stopEarly" ${ready ? '' : 'disabled'}>Attack now<small>${quizAttackSub(q)}</small></button>`;
+}
+/* ============================================================
+   (4.07) THE BONUS WORDS, ON THE SPELLING SCREEN
+   The designer: "I feel the bonus quizzes should live on the spelling UI screen. when bonus quizzes are available,
+   instead of the 'ready' button, should we have a pop up … or should we have 2 buttons where the ready stands, split
+   half half across the width?" — and of the mockups, "Let's go with A!", with the reward stated on it ("I like how
+   the attack now states the multiplier"). A move with a bonus (Heavensplitter's ×2, Rampage Max's Aftershock, the
+   phoenix's Sacred Flame, the princess's Portent) has it in its quiz (`config.bonus`: words, reward). Its words
+   written and the move powered, Ready! stands at the left and "+N bonus words · its reward" at the right. Ready!
+   strikes now. The other draws the bonus words — from every word learned to silver or gold, or the whole list until
+   the first is — onto this same screen, with no hints: the move's meter stays full and burning, and a violet one
+   fills beside it. All of them right, Ready! strikes with the bonus; a slip, Continue, and the move still lands at
+   full strength without it. (Until 4.07: a parchment window over the fight once the words were done, then a quiz of
+   their own — askBonusRound, still there for a copied move, which has no words.) The quiz's results go to the move
+   with `bonusPick`: { tried, won, main } (main: how many of them are the move's own). */
+function quizBonusOpen(q, powered){ return !!(q.config.bonus && !q.bonusPhase && powered); }
+function quizBonusReward(bn){
+  return bn.mult ? `for ×${bn.mult} damage` : bn.aftershock ? 'for an Aftershock' : bn.sacredFlame ? 'for a Sacred Flame' : bn.portent ? 'for a Portent' : 'for more';
+}
+function quizBonusBtnHtml(q){
+  const bn = q.config.bonus;
+  return `<button class="btn qz-next qz-bonus" id="quizBonus"><b>+${bn.words} bonus words</b><small>${quizBonusReward(bn)}</small></button>`;
+}
+function quizBonusDone(q){ return Math.max(0, Math.min(q.config.bonusWords || 0, (q.wordsDone || 0) - (q.bonusWordsFrom || 0))); }
+function quizBonusMeterHtml(q){
+  const n = q.config.bonusWords || 1, d = quizBonusDone(q);
+  return `<div class="qz-bmeter" id="qzBMeter"><div class="qz-bfill" id="qzBFill" style="width:${(d / n * 100).toFixed(2)}%"></div></div>` +
+         `<b class="qz-bnum" id="qzBNum">+${d}/${n}</b>`;
+}
+/* the bonus round begins: its words after this one (a word left half-written by Attack now is left) */
+function quizStartBonus(q){
+  if(!q || q._ended || q.bonusPhase) return;
+  const c = q.config, bn = c.bonus;
+  const learned = typeof revisionWords === 'function' ? revisionWords() : [];
+  const pool = learned.length ? learned : (typeof masterWords !== 'undefined' ? masterWords.slice() : []);
+  const words = [];
+  let chars = 0, bag = shuffle(pool), guard = 0;
+  while(chars < bn.words && guard++ < 200 && pool.length){
+    if(!bag.length) bag = shuffle(pool);
+    const w = bag.pop(); words.push(w); chars += countWords(w);
+  }
+  q.bonusPhase = true;
+  q.bonusFrom = q.results.length;                 // the results from here are the bonus words'
+  q.bonusWordsFrom = q.wordsDone || 0;
+  c.bonusWords = bn.words;
+  c.words = c.words.slice(0, q.index + 1).concat(words);
+  c.wordTarget = (q.wordsDone || 0) + bn.words;
+  c.stopAt = 0;                                   // no Attack now in the bonus round
+  c.noHints = true;                               // "No hints" (a gamble should not be handheld)
+  q.locked = false;
+  q.index++;
+  renderQuiz();
+}
+/* How the bonus went, for the move (set as the quiz ends). */
+function quizMarkBonus(q){
+  if(!q || !q.config.bonus) return;
+  const tried = !!q.bonusPhase;
+  const won = tried && q.results.slice(q.bonusFrom).length > 0 && q.results.slice(q.bonusFrom).every(r=> r.passed) && (q.wordsDone || 0) >= q.config.wordTarget;
+  q.results.bonusPick = { tried, won, main:tried ? q.bonusFrom : q.results.length };
+}
+/* Attack now, with a bonus to offer: the words stop here, and the two buttons stand where Ready! would. */
+function quizOfferNow(q){
+  stopTimer();
+  q.locked = true;
+  const zone = $('#qzZone'); if(zone) zone.classList.add('done', 'ok');
+  const rb = $('#quizResult');
+  if(!rb){ q._ended = true; quizMarkBonus(q); if(q.config.onComplete) q.config.onComplete(q.results); return; }
+  rb.innerHTML = `<div class="qz-split">${quizReadyHtml()}${quizBonusBtnHtml(q)}</div>`;
+  qzBloomSync();
+  $('#quizNext').addEventListener('click', e=>{ const bt = e.currentTarget; if(bt.disabled || q._ended) return; bt.disabled = true; q._ended = true; quizMarkBonus(q); if(q.config.onComplete) q.config.onComplete(q.results); });
+  $('#quizBonus').addEventListener('click', e=>{ const bt = e.currentTarget; if(bt.disabled) return; bt.disabled = true; quizStartBonus(q); });
+}
+function quizReadyHtml(){
+  return `<button class="btn qz-next qz-ready" id="quizNext"><span class="qz-bloom"></span>` +
+    [[9, .1], [24, 1.3], [41, .7], [58, 1.8], [76, .4], [90, 1.5]].map(([l, d])=> `<i class="qz-lift" style="left:${l}%;animation-delay:${d}s"></i>`).join('') +
+    `<span class="qz-word">Ready!</span></button>`;
 }
 function quizTipHtml(){
   return `<i class="qz-tip"><i class="qz-halo"></i>${QUIZ_SPARKS.map(([a, d])=> `<b style="--a:${a}deg;--d:${d}s"></b>`).join('')}${QUIZ_SPARKS_HOT.map(([a, d])=> `<b class="hot" style="--a:${a}deg;--d:${d}s"></b>`).join('')}</i>`;
 }
 /* a word written: the meter rises (and surges) at once — it used to wait for the next word's screen */
 function quizMeterUpdate(q){
+  if(q.bonusPhase){                                                    // (4.07) the bonus words: the violet meter rises
+    const bf = $('#qzBFill'), bnum = $('#qzBNum'), d = quizBonusDone(q), n = q.config.bonusWords || 1;
+    if(bf) bf.style.width = (d / n * 100).toFixed(2) + '%';
+    if(bnum) bnum.textContent = `+${d}/${n}`;
+    return;
+  }
   const c = q.config, n = c.wordTarget, m = $('#qzMeter'), f = $('#qzFill');
   if(!n || !m || !f) return;
   const done = Math.min(q.wordsDone || 0, n), need = c.stopAt || (c.move && c.move.words) || n, pct = done / n * 100;
@@ -471,8 +565,12 @@ function quizMeterUpdate(q){
   quizMeterAnim(q);
   const gauge = m.closest('.qz-gauge');
   if(gauge){ gauge.classList.toggle('powered', done >= need); gauge.classList.toggle('full', done >= n); }
-  const se = $('#stopEarly');                                          // a scaling move powered: you may stop now
-  if(se && c.stopAt && (q.wordsDone || 0) >= c.stopAt){ se.classList.add('ready'); se.disabled = false; se.textContent = `⏹ Stop here — ${q.wordsDone} words`; }
+  const se = $('#stopEarly');                                          // (4.07) Attack now: lit once the move is powered, its power on it
+  if(se && c.stopAt){
+    const ready = (q.wordsDone || 0) >= c.stopAt;
+    se.classList.toggle('ready', ready); se.disabled = !ready;
+    const sm = se.querySelector('small'); if(sm) sm.textContent = quizAttackSub(q);
+  }
 }
 /* after the screen is drawn: the meter goes on rising from where it stood to where it is now */
 function quizMeterGo(q){
@@ -628,10 +726,12 @@ function renderQuiz(){
   if(erb) erb.addEventListener('click', ()=>{ if(q._ended) return; q._ended = true; stopTimer(); document.body.classList.remove('writing'); if(q.config.onExit) q.config.onExit(); });
   const se = $('#stopEarly');
   if(se) se.addEventListener('click', ()=>{
-    if(q._ended) return;                             // (3.80) once
+    if(q._ended || se.disabled) return;              // (3.80) once
+    if(quizBonusOpen(q, true)) return quizOfferNow(q);   // (4.07) a bonus to offer first: Ready! and it, side by side
     q._ended = true;
     stopTimer();
     q.locked = true;
+    quizMarkBonus(q);
     if(q.config.onComplete) q.config.onComplete(q.results);
   });
   $('#listenBtn').addEventListener('click', ()=> speakWord(word));
@@ -996,6 +1096,7 @@ function resolveWord(passed, timedOut){
   }
   playSfx(passed ? 'answer_correct' : 'answer_wrong');
   if(passed){ q.wordsDone = (q.wordsDone||0) + countWords(word); quizMeterUpdate(q); }
+  else if(q.bonusPhase){ const bm = $('#qzBMeter'); if(bm) bm.classList.add('dying'); }   // (4.07) the bonus is lost; the move is not
   else if(q.config.wordTarget) quizMeterDown(q);                       // (3.98) the charge dies away
   q.results.push({ text:word, passed, mistakes:q.wordMistakes||0, timedOut, words:countWords(word) });
 
@@ -1018,12 +1119,13 @@ function resolveWord(passed, timedOut){
        it), at once; a move failed: Continue in plain glass; anything else as before */
     const c = q.config, ends = quizWillEnd(passed);
     const need = c.stopAt || (c.move && c.move.words) || c.wordTarget;
-    const ready = passed && ends && !!c.wordTarget && (q.wordsDone || 0) >= need;
-    const btn = ready
-      ? `<button class="btn qz-next qz-ready" id="quizNext"><span class="qz-bloom"></span>` +
-          [[9, .1], [24, 1.3], [41, .7], [58, 1.8], [76, .4], [90, 1.5]].map(([l, d])=> `<i class="qz-lift" style="left:${l}%;animation-delay:${d}s"></i>`).join('') +
-          `<span class="qz-word">Ready!</span></button>`
+    const powered = ends && !!c.wordTarget && (q.wordsDone || 0) >= need;
+    const ready = passed && powered;
+    const btn0 = ready
+      ? quizReadyHtml()
       : `<button class="btn qz-next${ends && !passed ? ' qz-quiet' : ''}" id="quizNext">${ends ? 'Continue' : 'Next word'}</button>`;
+    /* (4.07) a bonus to offer: it stands beside Ready! (or beside Continue, a scaling move's slip once powered) */
+    const btn = quizBonusOpen(q, powered) ? `<div class="qz-split">${btn0}${quizBonusBtnHtml(q)}</div>` : btn0;
     rb.innerHTML = `
       <div class="qz-res ${passed ? 'ok' : 'bad'}">
         <div class="qz-res-word">${escapeHtml(word)}</div>
@@ -1037,6 +1139,8 @@ function resolveWord(passed, timedOut){
     /* (3.80) one tap: a quick second one used to run the end of the quiz
        twice — a move resolved twice, two bonus offers stacked */
     $('#quizNext').addEventListener('click', e=>{ const bt = e.currentTarget; if(bt.disabled) return; bt.disabled = true; advanceQuiz(); });
+    const qb = $('#quizBonus');                                        // (4.07) the bonus words, here
+    if(qb) qb.addEventListener('click', e=>{ const bt = e.currentTarget; if(bt.disabled) return; bt.disabled = true; const nx = $('#quizNext'); if(nx) nx.disabled = true; quizStartBonus(q); });
   } else {
     /* (3.80) The quiz is not on the screen (something drew over it): it must
        still go on — the next word, or its end — never wait for a button
@@ -1070,7 +1174,7 @@ function masteryChip(word){
 function advanceQuiz(){
   const q = ui.quiz;
   if(!q || q._ended) return;                         // (3.80) a quiz ends once
-  const end = how=>{ q._ended = true; stopTimer(); if(how === 'exit'){ if(q.config.onExit) q.config.onExit(); } else if(q.config.onComplete) q.config.onComplete(q.results); };
+  const end = how=>{ q._ended = true; stopTimer(); if(how === 'exit'){ if(q.config.onExit) q.config.onExit(); } else { quizMarkBonus(q); if(q.config.onComplete) q.config.onComplete(q.results); } };   // (4.07) and how its bonus went
   if(q.masteryReward){ announceMastery(q.masteryReward); q.masteryReward = null; }
   if(q.dailyReward){ const r = q.dailyReward; q.dailyReward = null; setTimeout(()=>announceDaily(r), 1200); }
   const last = q.results[q.results.length-1];

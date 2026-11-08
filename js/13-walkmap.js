@@ -1038,6 +1038,9 @@ function walkCam(centre, mapPx, stagePx){
    and sceneCamFree gives the camera back to you. ui.sayHook (a deck's own)
    is told who is speaking as each line comes up, so a scene can turn to
    them. */
+/* (4.08) A zoom that follows you about (ui.walkZoom: { deck, s }): the jungle's, as Lucesco's moves are seen close up
+   (20-jungle.js, jgZoomIn). 1 where there is none. */
+function walkZoomS(deck){ const z = ui.walkZoom; return (z && z.deck === deck && z.s > 0) ? z.s : 1; }
 function walkCamXY(){
   const w = walkState(), d = DECKS[w.deck];
   if(!d) return null;
@@ -1046,7 +1049,7 @@ function walkCamXY(){
   const SW = (stageEl && stageEl.clientWidth)  || WALK_VIEW * WALK_T;
   const SH = (stageEl && stageEl.clientHeight) || WALK_VIEW * WALK_T;
   const cols = d.rows[0].length, rows = d.rows.length, cam = ui.sceneCam, T = WALK_T;
-  const s = cam ? (cam.zoom || 1) : 1;
+  const s = cam ? (cam.zoom || 1) : walkZoomS(w.deck);                // (4.08) or a zoom that follows you (Lucesco's moves)
   const cx = cam ? cam.x * T : p.x * T + T / 2, cy = cam ? cam.y * T : p.y * T + T / 2;
   return { s, SW, SH, cols, rows, tx:walkCam(cx * s, cols * T * s, SW), ty:walkCam(cy * s, rows * T * s, SH) };
 }

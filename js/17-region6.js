@@ -1368,7 +1368,7 @@ function foeStrikeYours(e, pct, all, opts){
   const mine = livingField();
   if(!mine.length || !e) return [];
   const targets = all ? mine : [mine[Math.floor(Math.random() * mine.length)]];
-  const curP = getPStatus(0, 'curse'), cur = (curP && isEnemyOwned('curse', curP)) ? 1 + (curP.extra != null ? curP.extra : 0.25) : 1;
+  const curP = getPStatus(0, 'curse'), cur = curseBucket((curP && isEnemyOwned('curse', curP)) ? curP : null, 'player');   // (4.07) a Portent too
   return targets.map(me=>{
     let broke = 0;
     if(opts && opts.breakKey){
@@ -1401,7 +1401,7 @@ function foeWildfire(e, oh){
   foeStrikeYours(e, p, true);
   let self = Math.ceil(p * enemyAtk(e) * enemyBuffMultiplier(e) * foeSelfAmp(e));
   const cur = getEStatus(e, 'curse');
-  if(cur) self = Math.ceil(self * (1 + (cur.extra != null ? cur.extra : 0.25)));
+  self = Math.ceil(self * curseBucket(cur, 'enemy'));   // (4.07) a Portent too
   const took = Math.max(0, Math.min(self, e.hp - Math.ceil(e.maxHp * WILDFIRE.floor)));
   if(took > 0){ const was = e.hp; e.hp -= took; drainHp('enemyHp-' + foeIdx(e), was, e.hp, e.maxHp); showDamageNumber('enemy-' + foeIdx(e), took); }
   return `🔥 Their ${foeNm(e)}'s Wildfire scorches your side${took > 0 ? ' — and itself' : ''}!`;

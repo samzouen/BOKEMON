@@ -1148,12 +1148,19 @@ function princessSource(exclude){
 }
 function transfuseDue(m){
   const b = ui.battle;
-  if(!b || !m || m.currentHp > 0 || b.transfuseUsed) return false;
+  if(!b || !m || m.currentHp > 0) return false;
   if(typeof isAllyMon === 'function' && isAllyMon(m)) return false;
+  /* (4.07) one of your team: her Life Transfusion is Dazzling Benevolence's always-on part — as often as one of yours
+     falls (the designer: "No longer once per recharge meter") */
+  if(!princessAllyHere()) return !!giftGiver(m);
+  if(b.transfuseUsed) return false;                       // the Wadjet fight's ally: as in 4.00, once a meter
   const src = princessSource(m);
   return !!src && src !== m;
 }
+/* the Wadjet fight's princess, at your side (4.00) — she keeps her song and 4.00's Life Transfusion */
+function princessAllyHere(){ const A = typeof battleAlly === 'function' ? battleAlly() : null; return !!(A && A.kind === 'princess' && A.mon); }
 function doTransfuse(m, rise){
+  if(!princessAllyHere()) return giveLife(m, rise);      // (4.07)
   const b = ui.battle, src = princessSource(m);
   b.transfuseUsed = true;
   const max = monMaxHp(m);
@@ -1194,7 +1201,8 @@ function princessRegen(){
   b._princessRegen = b.roundNo;
   const A = battleAlly(), list = [];
   if(A && A.kind === 'princess' && A.mon) list.push(A.mon);
-  (battleParty() || []).forEach(m=>{ if(m && m.species === PRINCESS.species && m.currentHp > 0 && !list.includes(m)) list.push(m); });
+  /* (4.07) one of your team heals by her Lithification now (5% a round she deals no damage: lithifyRoundEnd), the
+     designer: "Fold a 5% of her own HP healing effect into lithification's passive proc for herself" */
   let any = false;
   list.forEach(m=>{
     const max = monMaxHp(m);
@@ -1266,6 +1274,323 @@ function princessAllyTurn(){
     }, 900);
   }, 420);
 }
+
+/* ============================================================
+   (4.07) THE FAIRY PRINCESS'S OWN MOVES — the designer's kit for her, one of your team (21-castle.js has the rows;
+   the Wadjet fight's ally above keeps 4.00's song and Life Transfusion):
+   · Charm (Basic): "Reduces a monster's atk by 30% and has a 30% chance of putting it to sleep" — no damage ("No
+     attack multiplier"). Its attacks 30% weaker for 3 turns (a refresh, never a stack: 'adored', 04-battle.js).
+   · Dazzling Benevolence (Power 1): "blinds all enemies for 1 turn: 50% miss chance. if enemies are protected by diamond
+     dust this effect instead increases to 75% miss chance and cannot be dispelled" — each for its next turn.
+     Its always-on part, Life Transfusion: "when a player's monster would faint, fairy princess transfuses 50% of her
+     max HP to heal the monster for an equal amount, and removes all debuffs on the monster (including party wide
+     debuffs)" — "No longer once per recharge meter", and "pair with rock's ultra passive which caps her at 1HP. She
+     will continually transfuse half of 1HP rounded up and retain 1HP herself, making other monsters on her party
+     survive for that whole turn no matter what attacks they take." So: half her health, rounded up (at full health,
+     half her max); given her last, Metamorph's last stand holds her on 1 HP if it is ready (or its hold does), or she
+     falls with it.
+   · Lithification (Power 2): "can be used actively once per recharge meter to summon 5 party-wide damage block stacks"
+     — the team's pool, Steel Aegis's; its always-on part: "each turn she does not deal direct damage (spike armour
+     spikes still work), she grants the party a party-wide damage block stack in the end phase. also increases party's
+     damage block effectiveness by 20% whether on the field or the bench", with "a 5% of her own HP healing effect" —
+     "from the bench too".
+   · Comet Augury (Ultimate 3.0× / 1.5×, Max 4.0× / 2.0×), quick: "Summons a comet that lands 3 turns later (not a
+     status, don't count it as such) … deals 4.0x aoe damage. in the fifth turn deals a blast wave for 2.0x aoe damage.
+     the comet lands even if fairy princess is not on the field. comet augury cannot be recast until the comet lands"
+     — it lands in the pre-turn ("Earliest recast R+3 as comet lands in the pre-turn"), "not count as her direct
+     damage", never critical, "No dodge, hits through shields", and like every pre-turn strike no type or resistance.
+     Its 4 bonus words: "a 5 turn undispellable debuff labelled 'portent' where immediately the player's own side
+     takes increased damage (curse's bucket) for 2 turns, but then the effect then switches to the enemies' side for
+     the last 3 turns … 50% … then 25% … then 25% … then 50% … for 2 turns", "two portents can coexist but cannot stack
+     beyond the effect of one portent"; and "this move can benefit from overcharge (2 comets, 2 blast waves)".
+   ============================================================ */
+const PRINCESS_KIT = { give:0.5, lithHeal:0.05, lithAmp:0.2, cometDelay:3,
+  portent:[{ side:'player', amp:0.5 }, { side:'player', amp:0.25 }, { side:'enemy', amp:0.25 }, { side:'enemy', amp:0.5 }, { side:'enemy', amp:0.5 }] };
+/* Yours with one of her always-on parts (`key`: lifeGift, lithStone), standing — out front, waiting, or a companion
+   beside one of yours. A ✦ Curse of theirs quiets them, as any passive (passiveOf). */
+function kitHolders(key){
+  if(!ui.battle) return [];
+  const seen = new Set(), out = [];
+  const pool = playerField().concat(battleParty(),
+    (typeof companionsAllowed === 'function' && companionsAllowed() && typeof bondedCompanions === 'function') ? bondedCompanions() : []);
+  pool.forEach(m=>{
+    if(!m || !m.uid || seen.has(m.uid) || !(m.currentHp > 0)) return;
+    seen.add(m.uid);
+    const p = passiveOf(m);
+    if(p && p[key]) out.push(m);
+  });
+  return out;
+}
+
+/* ---- Charm ---- */
+function castPrincessCharm(mon, mv, target){
+  const b = ui.battle, d = mv.charmAtk;
+  const t = (target && target.hp > 0) ? target : livingEnemies()[0];
+  if(!t) return setTimeout(()=> afterPlayerAttack(mon, []), 600);
+  const nm = escapeHtml(SPECIES[t.species].name), idx = b.enemies.indexOf(t);
+  bob($('#' + pid('playerBob')), +1);
+  try { playEffect(mv.name, { type:'Fairy', at:'enemy-' + idx }); } catch(e){}
+  addEStatus(t, { type:'adored', turnsLeft:d.turns, byRound:true, cut:d.cut, mine:true });   // a refresh, never a stack
+  const took = !!getEStatus(t, 'adored');
+  let line = took ? `💗 ${escapeHtml(mv.name)} — ${nm} is charmed: its attacks deal <b>${Math.round(d.cut * 100)}% less</b> for ${d.turns} turns.`
+           : enemyDust() ? `✨ ${escapeHtml(mv.name)} — their diamond dust keeps ${nm} from being charmed.`
+           : `${escapeHtml(mv.name)} — ${nm} will not be charmed.`;
+  if(took && t.hp > 0 && Math.random() < d.sleep){ const z = putToSleep(t, mv.name); if(z) line += ' ' + z; }
+  renderStatusBadges();
+  battleMsg(line);
+  logBattle(`${displayName(mon)} used ${mv.name} on ${SPECIES[t.species].name}: ${took ? 'charmed' : 'not charmed'}${getEStatus(t, 'asleep') ? ', asleep' : ''}`);
+  setTimeout(()=> afterPlayerAttack(mon, []), 1000);
+}
+
+/* ---- Dazzling Benevolence ---- */
+function castDazzle(mon, mv){
+  const b = ui.battle, d = mv.dazzle, foes = livingEnemies();
+  const dust = !!enemyDust(), miss = dust ? d.dust : d.miss;
+  bob($('#' + pid('playerBob')), +1);
+  try { playEffect(mv.name, { type:'Fairy' }); } catch(e){}
+  let n = 0;
+  foes.forEach(t=>{
+    /* for its next turn: this round's, if it is still to come, else the next round's */
+    const st = { type:'blinded', until:roundNo() + (turnStillToCome(t) ? 0 : 1), miss, mine:true };
+    const was = getEStatus(t, 'blinded');
+    if(was && (was.until == null || was.until >= roundNo())){
+      st.until = Math.max(st.until, was.until == null ? st.until : was.until);
+      st.miss = Math.max(st.miss, was.miss || BLIND_MISS);
+      if(was.unsweepable) st.unsweepable = st.through = true;
+    }
+    if(dust) st.unsweepable = st.through = true;              // through their dust, and nothing clears it
+    addEStatus(t, st);
+    if(blindOf(t)) n++;
+  });
+  renderStatusBadges();
+  const who = n === foes.length ? (foes.length > 1 ? 'Every one of them is' : `${escapeHtml(SPECIES[foes[0].species].name)} is`) : `${n} of them are`;
+  battleMsg(!n ? `${escapeHtml(mv.name)} — but none of them is dazzled.`
+    : dust ? `✨ ${escapeHtml(mv.name)}! Their diamond dust only scatters her light further — ${who.toLowerCase()} blinded: <b>${Math.round(miss * 100)}%</b> of their attacks will miss on their next turn, and nothing can clear it.`
+           : `🔆 ${escapeHtml(mv.name)}! ${who} blinded: <b>${Math.round(miss * 100)}%</b> of their attacks will miss on their next turn.`);
+  logBattle(`${displayName(mon)} used ${mv.name}: ${n} of ${foes.length} blinded at ${miss}${dust ? ' (through their dust)' : ''}`);
+  setTimeout(()=> afterPlayerAttack(mon, []), 1000);
+}
+
+/* ---- Life Transfusion (Dazzling Benevolence's always-on part) ---- */
+function giftGiver(m){ return kitHolders('lifeGift').find(p=> p !== m && p.uid !== (m && m.uid)) || null; }
+/* every mark of theirs on it and on your side, lifted (not what cannot be: a Portent, a bog — unsweepable — nor a
+   Binding Curse of theirs, which holds) */
+function giftCleanse(m){
+  let n = 0;
+  const ps = partyStatuses();
+  Object.keys(ps).forEach(k=>{
+    const st = ps[k];
+    if(!st || st.unsweepable || statusOwner(k, st, 'player') !== 'enemy') return;
+    if(k === 'curse' && typeof foeBinder === 'function' && foeBinder()) return;
+    delete ps[k]; afterStatusGone(k, 'player'); n++;
+  });
+  monStatuses(m).slice().forEach(st=>{
+    if(st.unsweepable || statusOwner(st.type, st, 'player') !== 'enemy') return;
+    const list = monStatuses(m), i = list.indexOf(st);
+    if(i >= 0){ list.splice(i, 1); afterStatusGone(st.type, 'player'); n++; }
+  });
+  return n;
+}
+function giveLife(m, rise){
+  const src = giftGiver(m);
+  if(!src) return rise();
+  const give = Math.max(1, Math.ceil((src.currentHp || 0) * PRINCESS_KIT.give));
+  const max = monMaxHp(m);
+  m.currentHp = Math.min(max, give);
+  const before = src.currentHp;
+  let left = before - give, how = '';
+  if(left <= 0){
+    if(endureActive(src)){ left = 1; how = 'hold'; }                    // Metamorph's hold, this turn and the next
+    else if(bedrockReady(src)){ bedrockSave(src); left = 1; how = 'stand'; }   // its last stand: 1 HP, a shield, and the hold
+    else { left = 0; how = 'fall'; }
+  }
+  src.currentHp = Math.max(0, left);
+  const lifted = giftCleanse(m);
+  renderBattle();
+  try { drainHp(pid('playerHp', m), 0, m.currentHp, max); } catch(e){}
+  try { playEffect('Life Transfusion', { type:'Fairy' }); } catch(e){}
+  const who = escapeHtml(displayName(src)), nm = escapeHtml(displayName(m));
+  battleMsg(`💗 ${who} catches ${nm} as it falls — Life Transfusion! She gives it <b>${give} HP</b>, and it stands again` +
+    (lifted ? ` with ${lifted === 1 ? 'a mark' : `${lifted} marks`} of theirs lifted` : '') + '.' +
+    (how === 'stand' ? ` 🦋 <b>Metamorph!</b> ${who} holds on at 1 HP — a shield forms, and she holds on through the next turn.`
+     : how === 'hold' ? ` ${who} holds on at 1 HP.`
+     : how === 'fall' ? ` It was the last of her light: ${who} falls.` : ''));
+  logBattle(`Life Transfusion: ${displayName(m)} → ${m.currentHp}/${max}; ${displayName(src)} gave ${give} (${before}→${src.currentHp})${how ? ' · ' + how : ''}`);
+  setTimeout(()=>{
+    if(!ui.battle) return;
+    if(how === 'fall' && src === companionOnField()) companionFalls(src);   // out front beside one of yours: she leaves the field
+    rise();
+  }, 1100);
+}
+
+/* ---- Lithification ---- */
+function castLithify(mon, mv){
+  const b = ui.battle, d = mv.lithify;
+  (b.usedSoul || (b.usedSoul = {}))['lithify:' + mon.uid] = true;        // back when the meter fills (feedRecharge)
+  grantTeamBlock('player', d.shields, monAtk(mon));
+  bob($('#' + pid('playerBob')), +1);
+  try { playEffect(mv.name, { type:'Ground' }); } catch(e){}
+  playSfx('power_up');
+  battleMsg(`🪨 ${escapeHtml(mv.name)}! Stone grows over your whole team: <b>${d.shields} shields</b>, each soaking up to <b>${Math.round(monAtk(mon) * shieldAmp('player'))}</b>.`);
+  logBattle(`${displayName(mon)} used ${mv.name}: ${d.shields} team shields at ${monAtk(mon)}`);
+  setTimeout(()=> afterPlayerAttack(mon, []), 1000);
+}
+/* every shield of yours soaks 20% more while she stands, on the field or off it (applyBlock, 04-battle.js) */
+function lithifyAmp(){ return kitHolders('lithStone').length ? 1 + PRINCESS_KIT.lithAmp : 1; }
+/* a blow of hers that reached them this round: no stone at its end (Spike Armour's spikes, the comet: not hers) */
+function noteDealtDirect(mon, hits){
+  const b = ui.battle;
+  if(!b || !mon || !mon.uid) return;
+  if((hits || []).some(h=> h && h.t && !h.dodged && ((h.raw != null ? h.raw : h.dmg) > 0))) (b._dealt || (b._dealt = {}))[mon.uid] = roundNo();
+}
+/* the end phase (endRound): each of hers that dealt no damage this round, a shield for your team and 5% of her health */
+function lithifyRoundEnd(){
+  const b = ui.battle;
+  if(!b || livingEnemies().length === 0) return '';
+  const r = roundNo(), said = [];
+  kitHolders('lithStone').forEach(m=>{
+    if(b._dealt && b._dealt[m.uid] === r) return;
+    grantTeamBlock('player', 1, monAtk(m));
+    const max = monMaxHp(m), before = m.currentHp;
+    m.currentHp = Math.min(max, before + Math.max(1, Math.ceil(max * PRINCESS_KIT.lithHeal)));
+    const healed = m.currentHp - before;
+    if(healed > 0 && playerField().includes(m)){ try { drainHp(pid('playerHp', m), before, m.currentHp, max); showDamageNumber(pid('playerBob', m), healed, { heal:true }); } catch(e){} }
+    said.push(`🪨 ${escapeHtml(displayName(m))}'s Lithification: a shield for your team${healed > 0 ? `, and <b>${healed} HP</b> back for her` : ''}.`);
+  });
+  return said.join(' ');
+}
+
+/* ---- Comet Augury, and the Portent ---- */
+function castComet(mon, mv){
+  const b = ui.battle, d = mv.comet, r = roundNo();
+  /* Overcharge, rolled as it is cast (as a charge's): up, two comets and two blast waves — one Portent */
+  const oc = getPStatus(0, 'overcharge');
+  const surge = !!(oc && livingEnemies().length && Math.random() < overchargeChance());
+  if(oc) spendOverchargeFirst(oc);
+  b.comets = (b.comets || []).filter(c=> c.blastRound >= r);
+  b.comets.push({ owner:mon.uid, name:mv.name, atk:monAtk(mon), hit:d.hit, blast:d.blast, n:surge ? 2 : 1,
+                  landRound:r + PRINCESS_KIT.cometDelay, blastRound:r + PRINCESS_KIT.cometDelay + 1 });
+  const won = !!b._portentWon;
+  b._portentWon = false;
+  if(won) b.portents = (b.portents || []).filter(p=> r - p.from < PRINCESS_KIT.portent.length).concat([{ from:r, owner:mon.uid }]);
+  try { playEffect(mv.name, { type:'Fairy' }); } catch(e){}
+  playSfx('power_up');
+  logBattle(`${displayName(mon)} used ${mv.name} (quick): ${surge ? 2 : 1} comet(s) at ${monAtk(mon)} ATK, landing round ${r + PRINCESS_KIT.cometDelay}${won ? ', with a Portent' : ''}`);
+  b.phase = 'player';
+  renderBattle();
+  battleMsg(`☄️ ${escapeHtml(mv.name)}! ${surge ? 'Two comets are' : 'A comet is'} called down out of the sky — ${surge ? 'they land' : 'it lands'} as the third round from now begins.` +
+    (surge ? ' ⚡ The Overcharge doubled it.' : '') +
+    (won ? ` 🔮 A <b>Portent</b> hangs over the field: your side takes <b>+50%</b> damage this round, <b>+25%</b> the next, and then it turns on them.` : '') +
+    ` It cost no turn — choose your move.`);
+}
+/* how many rounds until a comet of hers lands (0: none falling) — and Comet Augury waits for it */
+function cometFalling(m){
+  const b = ui.battle;
+  if(!b || !b.comets || !m) return 0;
+  const r = roundNo(), mine = b.comets.filter(c=> c.owner === m.uid && c.landRound > r);
+  return mine.length ? Math.min(...mine.map(c=> c.landRound - r)) : 0;
+}
+/* the pre-turn (beginRound, after the pre-hits): the comets that land this round, and the blast waves of last round's */
+function runComets(done){
+  const b = ui.battle;
+  if(!b || !b.comets || !b.comets.length) return done();
+  const r = roundNo(), queue = [];
+  b.comets.forEach(c=>{
+    for(let k = 0; k < (c.n || 1); k++){
+      if(c.landRound === r) queue.push({ c, mult:c.hit, land:true });
+      if(c.blastRound === r) queue.push({ c, mult:c.blast, land:false });
+    }
+  });
+  b.comets = b.comets.filter(c=> c.blastRound > r);
+  if(!queue.length) return done();
+  let i = 0;
+  const step = ()=>{
+    if(!ui.battle) return;
+    const foes = livingEnemies();
+    if(i >= queue.length || !foes.length) return done();
+    const q = queue[i++];
+    const owner = tipOwner(q.c.owner);
+    const buff = ownBuffMultiplier(owner || { uid:q.c.owner });        // her damage buffs, her Feeble — as a pre-hit's
+    const hits = foes.map(t=>{
+      const dmg = Math.ceil(q.mult * q.c.atk * buff * hexAmp(t) * curseBucket(getEStatus(t, 'curse'), 'enemy'));   // a Curse and a Portent, one bucket
+      return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg), pierce:true };   // through every shield
+    });
+    cometFlash(q.land);
+    applyHits(hits, { noLeech:true, by:owner || null });                // no dodge, never critical, not her direct damage
+    reportHits(hits);
+    renderStatusBadges();
+    const sum = hits.reduce((a, h)=> a + (h.dmg || 0), 0);
+    battleMsg(q.land ? `☄️ The comet falls on them — <b>${sum}</b> in all!` : `💥 Its blast wave rolls over them — <b>${sum}</b> in all!`);
+    logBattle(`${q.c.name}: ${q.land ? 'lands' : 'blast wave'} ${q.mult}× ${q.c.atk} → ${hits.map(h=> h.dmg).join(', ')}`);
+    setTimeout(step, 1000);
+  };
+  step();
+}
+/* the sky, lit for a moment as it lands (white-violet), a softer pulse for its blast wave */
+function cometFlash(land){
+  try {
+    const f = document.createElement('div');
+    f.className = 'comet-flash' + (land ? '' : ' wave');
+    document.body.appendChild(f);
+    setTimeout(()=> f.remove(), 1100);
+  } catch(e){}
+}
+/* the Portent: what it adds to the blows on `side` this round (0 if nothing) — never more than one Portent's */
+function portentAmp(side){
+  const b = ui.battle;
+  if(!b || !b.portents || !b.portents.length) return 0;
+  const r = roundNo();
+  let best = 0;
+  b.portents.forEach(p=>{ const st = PRINCESS_KIT.portent[r - p.from]; if(st && st.side === side) best = Math.max(best, st.amp); });
+  return best;
+}
+function portentPillHtml(side){
+  const a = portentAmp(side);
+  if(!a) return '';
+  return `<span class="status-pill ${side === 'player' ? 'foe' : 'mine'}"${pillAt('portent', side === 'player' ? 'ps' : 'fs')}>🔮 Portent +${Math.round(a * 100)}%</span>`;
+}
+function portentTip(c){
+  const side = c.yours ? 'player' : 'enemy', a = portentAmp(side);
+  return `The princess's Portent: ${c.yours ? 'your' : 'their'} side takes <b>${Math.round(a * 100)}% more</b> damage this round, in one bucket with a Curse's. ` +
+    `It passes from your side (+50%, then +25%) to theirs (+25%, then +50% for two rounds) — her comet falls in the first +50% — and nothing can lift it.`;
+}
+/* her comet, falling: a countdown on their row (not a status: nothing counts it, sweeps it or steals it) */
+function cometPillHtml(){
+  const b = ui.battle;
+  if(!b || !b.comets || !b.comets.length) return '';
+  const r = roundNo(), c = b.comets.filter(x=> x.blastRound > r - 1).sort((x, y)=> x.landRound - y.landRound)[0];
+  if(!c) return '';
+  const left = Math.max(0, c.landRound - r);
+  return `<span class="status-pill mine"${pillAt('comet', 'fs')}>☄️ Comet${c.n > 1 ? ' ×' + c.n : ''} ${left}</span>`;
+}
+function cometTip(){
+  const b = ui.battle;
+  if(!b || !b.comets || !b.comets.length) return '';
+  const r = roundNo();
+  return b.comets.map(c=>{
+    const left = c.landRound - r, o = tipOwner(c.owner);
+    const hit = Math.ceil(c.hit * c.atk), wave = Math.ceil(c.blast * c.atk);
+    return (left > 0 ? `${c.n > 1 ? 'Two comets land' : 'A comet lands'} in <b>${left}</b> round${left === 1 ? '' : 's'}` : `${c.n > 1 ? 'Their' : 'Its'} blast wave rolls out next round`) +
+      ` (${o ? escapeHtml(displayName(o)) + "'s " : ''}${escapeHtml(c.name)}): <b>${c.hit}×</b> her ATK (<b>${hit}</b>) on every one of them, then a blast wave of <b>${c.blast}×</b> (<b>${wave}</b>). ` +
+      `No dodge, through every shield, never critical.`;
+  }).join(' ');
+}
+let _kitCss = false;
+function princessKitCss(){
+  if(_kitCss || typeof document === 'undefined') return;
+  _kitCss = true;
+  const s = document.createElement('style');
+  s.id = 'princessKitCss';
+  s.textContent = `
+  .comet-flash{ position:fixed; inset:0; z-index:91; pointer-events:none; background:radial-gradient(circle at 50% 28%, rgba(255,255,255,.95), rgba(214,196,255,.6) 30%, rgba(120,90,255,0) 70%);
+    animation:cometFlash 1s ease-out both; }
+  .comet-flash.wave{ background:radial-gradient(circle at 50% 30%, rgba(214,196,255,.0) 20%, rgba(190,160,255,.55) 34%, rgba(150,120,255,0) 60%); animation:cometWave 1s ease-out both; }
+  @keyframes cometFlash{ 0%{ opacity:0; } 12%{ opacity:1; } 100%{ opacity:0; } }
+  @keyframes cometWave{ 0%{ opacity:0; transform:scale(.5); } 25%{ opacity:1; } 100%{ opacity:0; transform:scale(1.6); } }
+  @media (prefers-reduced-motion: reduce){ .comet-flash{ animation-duration:.4s; } }`;
+  document.head.appendChild(s);
+}
+if(typeof document !== 'undefined') princessKitCss();
 
 /* ============================================================
    AFTERWARDS: THE RIFT'S PERIMETER (r6_perimeter)

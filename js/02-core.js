@@ -91,7 +91,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.06';
+const GAME_VERSION = '4.08';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -315,7 +315,7 @@ function playBackSfx(){
    fanfare); the long ones (the stone roll, the evolution, the defeat) last. */
 const SFX_PRELOAD_ORDER = ['answer_correct', 'answer_wrong', 'ui_click', 'ui_back', 'hit_dealt', 'hit_taken', 'victory', 'level_up',
   'catch_success', 'catch_miss', 'power_up', 'stone_ultra', 'stone_veryhigh', 'stone_high', 'stone_mid', 'stone_low', 'recovery_heal',
-  'core_tinkle', 'evolution', 'stone_roll', 'core_blast', 'defeat', 'pulsar', 'ambush'];
+  'core_tinkle', 'evolution', 'stone_roll', 'core_blast', 'pulsar', 'ambush', 'defeat'];   // (4.07) the 2¼-minute defeat last again: 4.05's two came after it
 const SFX_TRIES = 3;                                   // a decode that fails is tried again, up to three times
 /* Can this file still be fetched? (never asked, or failed with tries left) */
 function sfxWanted(file){

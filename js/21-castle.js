@@ -175,8 +175,8 @@ const CA_FOLK = {
     ['Basic', 'Royal Decree', 0.3, 'Single', 2, 1],
     ['Power1', 'Sovereign Glare', 0.5, 'AOE', 4, 1, { softenHit:{ chance:0.5, amount:0.5 } }],
     ['Power2', 'Fairy Majesty', null, 'Passive', 0, 21, { passive:{ terrorize:0.15, exploit:1.3 } }],
-    ['Ultimate', 'Judgement of the Glade', 1.25, 'Single', 8, 41, { confuseHit:{ chance:0.35, ffPower:1 } }],
-    ['Max', 'Judgement of the Glade Max', 1.0, 'AOE', 8, 51, { softenHit:{ chance:0.5, amount:0.5 }, lunacy:{ chance:0.3, turns:1, ffPower:1, label:'Royal Judgement',
+    ['Ultimate', 'Glade Judgement', 1.25, 'Single', 8, 41, { confuseHit:{ chance:0.35, ffPower:1 } }],
+    ['Max', 'Glade Judgement Max', 1.0, 'AOE', 8, 51, { softenHit:{ chance:0.5, amount:0.5 }, lunacy:{ chance:0.3, turns:1, ffPower:1, label:'Royal Judgement',
       them:'👑 The royal judgement shakes their minds — confused!', you:' The royal judgement shakes your minds — confused!' } }]] },
   fairy_dauphin:  { name:'The Dauphin', tier:'legendary', types:['Fairy', 'Steel'], evo:[110, 130], glyph:'储', color:'#ee89b2', royal:true,
     fixedLook:'fairy_dauphin2', moves:[
@@ -185,12 +185,18 @@ const CA_FOLK = {
     ['Power2', "Heir's Resolve", null, 'Passive', 0, 21, { passive:{ guardian:true, armour:0.2 } }],
     ['Ultimate', 'Crown Hammer', 1.25, 'Single', 8, 41, { stunHit:0.2, shieldGain:0.75 }],
     ['Max', 'Crown Hammer Max', 1.5, 'Single', 8, 51, { stunHit:0.25, shieldGain:0.75 }]] },
+  /* (4.07) the designer's kit for her (26-invasion.js has its workings): "Basic - Charm: Reduces a monster's atk by 30%
+     and has a 30% chance of putting it to sleep" (no damage: "No attack multiplier"); Power 1, Dazzling Benevolence —
+     every one of them blinded for its next turn, and her Life Transfusion always on; Power 2, Lithification — five
+     shields at once, once a meter, and one a round while she deals no damage, with 5% of her health; Comet Augury, quick,
+     "8 words + 4 words bonus challenge like MK" for a Portent. (Gem Spark, Jewel Ward, Royal Grace and Prism Lullaby
+     until 4.07.) */
   fairy_princess: { name:'Fairy Princess', tier:'legendary', types:['Ground', 'Fairy'], evo:[100], evoMult:1.5, glyph:'姬', color:'#b4ddf0', royal:true, moves:[
-    ['Basic', 'Gem Spark', 0.3, 'Single', 2, 1],
-    ['Power1', 'Jewel Ward', null, 'Self', 4, 1, { barrier:{ shields:2, on:'partner', worth:2, icon:'💎' } }],
-    ['Power2', 'Royal Grace', null, 'Passive', 0, 21, { passive:{ ward:0.2, wardName:'Royal Grace', cleanseEnd:1 } }],
-    ['Ultimate', 'Prism Lullaby', 0.8, 'AOE', 8, 41, { softenHit:{ chance:1, amount:0.5 } }],
-    ['Max', 'Prism Lullaby Max', 1.0, 'AOE', 8, 51, { softenHit:{ chance:1, amount:0.5 }, sleepHit:0.15 }]] },
+    ['Basic', 'Charm', null, 'Single', 2, 1, { charmAtk:{ cut:0.3, turns:3, sleep:0.3 } }],
+    ['Power1', 'Dazzling Benevolence', null, 'AOE', 4, 1, { dazzle:{ miss:0.5, dust:0.75 }, always:{ lifeGift:true } }],
+    ['Power2', 'Lithification', null, 'Self', 4, 21, { lithify:{ shields:5 }, always:{ lithStone:true } }],
+    ['Ultimate', 'Comet Augury', null, 'AOE', 8, 41, { comet:{ hit:3.0, blast:1.5 }, bonus:{ words:4, portent:true } }],
+    ['Max', 'Comet Augury Max', null, 'AOE', 8, 51, { comet:{ hit:4.0, blast:2.0 }, bonus:{ words:4, portent:true } }]] },
 };
 const CA_CITIZENS = Object.keys(CA_FOLK).filter(id=> CA_FOLK[id].citizen);
 (function caSpecies(){
@@ -499,6 +505,12 @@ const CA_OVER_KINDS = new Set(['tree', 'lamp', 'palaceTower', 'keep', 'cornerTow
   'bar', 'table', 'barrels', 'recCounter', 'recBin', 'gramophone', 'jukebox', 'boxes',
   /* (3.98) and on the walls: the battlements and the parapet in front of you, what hangs and stands on them */
   'battlement', 'parapetW', 'wbanner', 'brazier', 'pennant', 'flagpole', 'spyglass']);
+/* (4.08) The designer: "going behind the fountain and stalls doesn't fade out the player and Lucesco sprites to show
+   that they are behind, not floating above". The window round you and Lucesco (85% clear) is for the tall things that
+   would hide you whole — a tree's crown, a spire. These lower ones, the market's, stay over you, a little see-through
+   (CA_BEHIND.cut): you are drawn faded behind them, as their keepers are behind their counters. */
+const CA_BEHIND_KINDS = new Set(['fountGrand', 'fountSmall', 'stall', 'well', 'planter']);
+const CA_BEHIND = { cut:0.42 };
 function caPaintStart(stage, world, m, views, bg){
   if(!stage || !world) return;
   let cv = stage.querySelector('canvas.ca-ground');
@@ -515,7 +527,15 @@ function caPaintStart(stage, world, m, views, bg){
     ov.setAttribute('aria-hidden', 'true');
     world.after(ov);                                                  // over the world (everyone in it), under the stage's buttons
   }
-  Object.assign(CA_P, { cv, ov, stage, world, key:'', last:0, map:m, views:views || null, bg:bg || '#2b2a33' });
+  /* (4.08) the low things one walks behind (CA_BEHIND_KINDS), on a layer of their own between the world and that one */
+  let bh = stage.querySelector('canvas.ca-behind');
+  if(!bh){
+    bh = document.createElement('canvas');
+    bh.className = 'ca-behind';
+    bh.setAttribute('aria-hidden', 'true');
+    world.after(bh);
+  }
+  Object.assign(CA_P, { cv, ov, bh, stage, world, key:'', last:0, map:m, views:views || null, bg:bg || '#2b2a33' });
   if(!CA_P.raf && typeof requestAnimationFrame === 'function') CA_P.raf = requestAnimationFrame(caPaintTick);
 }
 function caPaintTick(now){
@@ -587,36 +607,50 @@ function caPaintOver(m, k, ox, oy, x0, y0, x1, y1, dpr, now){
   if(ov.width !== cv.width || ov.height !== cv.height){ ov.width = cv.width; ov.height = cv.height; }
   const g = ov.getContext('2d');
   g.clearRect(0, 0, ov.width, ov.height);
-  let any = false;
+  /* (4.08) the low things (CA_BEHIND_KINDS) on their own layer, under this one */
+  const bh = CA_P.bh && CA_P.bh.isConnected ? CA_P.bh : null;
+  if(bh && (bh.width !== cv.width || bh.height !== cv.height)){ bh.width = cv.width; bh.height = cv.height; }
+  const gb = bh ? bh.getContext('2d') : null;
+  if(gb) gb.clearRect(0, 0, bh.width, bh.height);
+  let any = false, anyB = false;
   m.deco.forEach(d=>{
-    if(!CA_OVER_KINDS.has(d.kind)) return;
+    if(!CA_OVER_KINDS.has(d.kind) && !CA_BEHIND_KINDS.has(d.kind)) return;
     if(d.x + d.w < x0 - 1 || d.x > x1 + 1 || d.y + d.h < y0 - 1 || d.y > y1 + 1) return;
+    const low = CA_BEHIND_KINDS.has(d.kind), c = low ? gb : g;
+    if(!c) return;
     const base = Math.floor(d.z != null ? d.z : d.y + d.h);           // the row it stands in
     const sx0 = Math.max(x0, Math.floor(d.x)), sx1 = Math.min(x1, Math.ceil(d.x + d.w) - 1);
     const sy0 = Math.max(y0, Math.floor(d.y)), sy1 = Math.min(y1, base - 1);
     let squares = 0;
-    g.save(); g.beginPath();
+    c.save(); c.beginPath();
     for(let y = sy0; y <= sy1; y++) for(let x = sx0; x <= sx1; x++){
       if(caSolidCode(caAt(m, x, y))) continue;
       const px = Math.round(ox + x * k), py = Math.round(oy + y * k);
-      g.rect(px, py, Math.round(ox + (x + 1) * k) - px, Math.round(oy + (y + 1) * k) - py);
+      c.rect(px, py, Math.round(ox + (x + 1) * k) - px, Math.round(oy + (y + 1) * k) - py);
       squares++;
     }
-    if(squares){ g.clip(); caDrawDeco(g, d, ox + d.x * k, oy + d.y * k, d.w * k, d.h * k, now); any = true; }
-    g.restore();
+    if(squares){ c.clip(); caDrawDeco(c, d, ox + d.x * k, oy + d.y * k, d.w * k, d.h * k, now); if(low) anyB = true; else any = true; }
+    c.restore();
   });
+  /* (4.08) behind them you are drawn faded: a fainter window round you and Lucesco */
+  if(anyB) caSeeCut(gb, dpr, CA_BEHIND.cut);
+  CA_P.behindAny = anyB;
   if(m.tags && m.tags.bunting && caBunting(g, m.tags.bunting, k, ox, oy, x0, y0, x1, y1, now)) any = true;   // (3.97) overhead, over everyone
   CA_P.fast = caPetals(g, m, k, ox, oy, x0, y0, x1, y1, now);
   if(CA_P.fast) any = true;
   CA_P.overAny = any;
   if(!any) return;
   /* (3.98) the window cut to each figure, head to feet (seeFigure, seeCut: 20-jungle.js) */
+  caSeeCut(g, dpr);
+}
+/* the windows round you and Lucesco, cut into layer `g` — (4.08) `cut`: how clear (JG_SEE.cut, 85%, if not given) */
+function caSeeCut(g, dpr, cut){
   const sr = CA_P.stage.getBoundingClientRect();
   g.globalCompositeOperation = 'destination-out';
   caSeeEls().forEach(el=>{
     const r = el.getBoundingClientRect(), f = seeFigure(el), T = r.width;
     if(!f || !T) return;
-    seeCut(g, (r.left + f[0] * T - sr.left) * dpr, (r.top + f[1] * T - sr.top) * dpr, f[2] * T * dpr, f[3] * T * dpr);
+    seeCut(g, (r.left + f[0] * T - sr.left) * dpr, (r.top + f[1] * T - sr.top) * dpr, f[2] * T * dpr, f[3] * T * dpr, cut);
   });
   g.globalCompositeOperation = 'source-over';
 }
@@ -1335,8 +1369,10 @@ function caPool(m, cx, cy, rx, ry, land, o){
   o = o || {};
   const rim = o.rim != null ? o.rim : 0.17, RX = rx + rim, RY = ry + rim;
   for(let y = Math.floor(cy - RY); y < Math.ceil(cy + RY); y++) for(let x = Math.floor(cx - RX); x < Math.ceil(cx + RX); x++){
-    const nx = Math.max(x, Math.min(cx, x + 1)), ny = Math.max(y, Math.min(cy, y + 1));             // its nearest point to the middle
-    if(((nx - cx) / RX) ** 2 + ((ny - cy) / RY) ** 2 >= 1 || x < 0 || y < 0 || x >= m.W || y >= m.H) continue;
+    /* (4.08) the designer: "enable more tiles to be stepped on around the fountain as long as it is more than half tile
+       vs water" — a square is water only if half of it or more is (caPoolWet); until 4.08, every square the pool's rim
+       touched */
+    if(caPoolWet(x, y, cx, cy, rx, ry) < 0.5 || x < 0 || y < 0 || x >= m.W || y >= m.H) continue;
     const i = y * m.W + x;
     if(m.g[i] === CA_T.FOUNT) continue;
     m.g[i] = CA_T.WATER;
@@ -1344,6 +1380,15 @@ function caPool(m, cx, cy, rx, ry, land, o){
   }
   caDeco(m, 'pool', cx - RX, cy - RY, RX * 2, RY * 2, { cx, cy, rx, ry, rim, z:-1000 + cy });
   (m.tags.pools || (m.tags.pools = [])).push({ cx, cy, rx, ry, rim });
+}
+/* (4.08) how much of square (x, y) the pool's water covers, 0 to 1 (16 × 16 points over it) */
+function caPoolWet(x, y, cx, cy, rx, ry){
+  let n = 0;
+  for(let i = 0; i < 16; i++) for(let j = 0; j < 16; j++){
+    const px = x + (i + 0.5) / 16, py = y + (j + 0.5) / 16;
+    if(((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2 < 1) n++;
+  }
+  return n / 256;
 }
 /* its picture: the stone rim and its shadow, the water deeper under the rim's far side, ripples drifting, a glint */
 function caDrawPool(g, d, x, y, w, h, k, t){
@@ -2105,7 +2150,8 @@ function caThings(key){
     T({ x:tg.stalls.painter.easel.x, y:tg.stalls.painter.easel.y, icon:'', verb:'Look', sub:"The painter's easel", act:()=> caLook('easel') });
     T({ x:tg.well.x, y:tg.well.y, icon:'', verb:'Look', sub:'The wishing well', act:()=> caLook('well') });
     T({ x:tg.board.x, y:tg.board.y, icon:'', verb:'Read', sub:'The notice board', act:()=> caLook('board') });
-    T({ x:28, y:35, w:8, h:8, walk:true, icon:'', verb:'Look', sub:'The grand fountain', act:()=> caLook('fountain') });
+    T({ x:28, y:35, w:8, h:8, walk:true, icon:'', act:()=> ui.caFountView ? caFountainBack() : caFountainView(),   // (4.08) the whole of it, until you are done
+        get verb(){ return ui.caFountView ? 'Done' : 'Look'; }, get sub(){ return ui.caFountView ? 'Looking at the fountain' : 'The grand fountain'; } });
     tg.palaceGuards.forEach((g, i)=> T(caNpc('knight', g.x, g.y, { faceR:i === 0, line:'palaceGate' })));
   } else if(key.startsWith('r6_wall_')){
     const k = key.slice(8), m = caWallMap(k), sp = m.tags.sp;
@@ -2545,6 +2591,7 @@ function caLionStep(p){
 
 /* ---------- a step, the buttons beside you ---------- */
 function caStep(key, p){
+  if(ui.caFountView) caFountainBack();                                // (4.08) a step: the camera back to you
   caLionStep(p);
   caFirstLooks(key, p);
   if(typeof invStep === 'function' && invStep(key, p)) return true;   // (4.00) a band that sees you, the hall, the princess at your heels
@@ -2561,6 +2608,7 @@ function caNearActs(key, p){
 function caRender(key, world){
   caCss(); sceneCss();
   ui.caTalk = false;
+  ui.caFountView = false;                                             // (4.08) a place starts with the camera on you (ui.sceneCam too)
   const stage = $('#walkStage');
   if(stage) stage.classList.add('ca-stage', key === CA_KEY ? 'ca-out' : key.startsWith('r6_wall') || key.startsWith('r6_ramp') ? 'ca-high' : 'ca-in');
   const m = CA_MAPS[key]();
@@ -2767,6 +2815,32 @@ async function caTavernTalk(who){
   try { yes = await r5Ask([caFace(who)], caNameOf(who), lines, '🔥 Rest by the fire', 'Not now'); }
   finally { ui.caTalk = false; }
   if(yes) leaveDeck('recover');
+}
+
+/* ---------- (4.08) the grand fountain, the whole of it ----------
+   The designer: "Make looking at the fountain zoom out and centre of the fountain until cancelled." Look draws the
+   camera back over 0.9 s to about 13 squares across (from 7 on a phone, 9 on a tablet), the fountain and its basin in
+   the middle, and its words come up; it stays there — the people about the square going on with their day — until
+   you tap Done (the same button) or take a step. */
+const CA_FOUNT_VIEW = { box:{ x:27.2, y:33.5, w:8.6, h:8.7 }, across:13, ms:900, back:700 };
+async function caFountainView(){
+  if(ui.caTalk || ui.caFountView || ui.screen !== CA_KEY || typeof sceneLook !== 'function') return;
+  releaseKeys();
+  ui.caFountView = true;
+  const st = $('#walkStage'), across = st && WALK_T ? Math.min(st.clientWidth, st.clientHeight) / WALK_T : WALK_VIEW;
+  const V = CA_FOUNT_VIEW;
+  walkState().actSig = null;
+  const there = sceneLook(V.box, { zoom:Math.min(1, across / V.across), ms:V.ms });
+  refreshWalk();
+  await there;
+  if(ui.caFountView && ui.screen === CA_KEY) caLook('fountain');
+}
+function caFountainBack(ms){
+  if(!ui.caFountView) return;
+  ui.caFountView = false;
+  walkState().actSig = null;
+  if(ui.screen === CA_KEY && typeof sceneCamFree === 'function') sceneCamFree(ms != null ? ms : CA_FOUNT_VIEW.back);
+  else ui.sceneCam = null;
 }
 
 /* ---------- the first look at each place ---------- */
@@ -3128,6 +3202,7 @@ function caCss(){
   .walk-stage.ca-stage{ background:#2b2a33; }
   .ca-ground{ position:absolute; inset:0; width:100%; height:100%; display:block; z-index:0; pointer-events:none; }
   .ca-over{ position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; z-index:2; }   /* over the world (z-index 1), under the stage's buttons */
+  .ca-behind{ position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; z-index:2; }   /* (4.08) the low things over you, under .ca-over (before it in the page) */
   /* (3.97) the market's people: a word over a head, sitting on a bench, a busker's notes */
   .walk-ent.ca-walker .ca-bub{ position:absolute; left:50%; bottom:122%; translate:-50% 0; z-index:5; pointer-events:none; white-space:nowrap;
     background:#fffdf6; color:#4a3a2a; border-radius:10px; padding:2px 7px; font:800 calc(var(--wt, 40px) * .26)/1.25 system-ui, sans-serif;
