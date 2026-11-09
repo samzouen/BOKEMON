@@ -858,8 +858,16 @@ function jgPaintStart(stage, world){
     ov.setAttribute('aria-hidden', 'true');
     world.appendChild(ov);
   }
+  /* (4.10) the villages' trees on a layer of their own, under that one: you are drawn faded behind them (JG_BEHIND) */
+  let bh = world.querySelector(':scope > canvas.jg-behind');
+  if(!bh){
+    bh = document.createElement('canvas');
+    bh.className = 'jg-behind';
+    bh.setAttribute('aria-hidden', 'true');
+    world.insertBefore(bh, ov);
+  }
   jgRays(stage);
-  Object.assign(JG_P, { cv, ov, stage, world, key:'', last:0, layerKey:'', win:null, holes:null, seeRaf:0 });
+  Object.assign(JG_P, { cv, ov, bh, stage, world, key:'', last:0, layerKey:'', win:null, holes:null, seeRaf:0 });
   if(!JG_P.raf && typeof requestAnimationFrame === 'function') JG_P.raf = requestAnimationFrame(jgPaintTick);
 }
 /* (3.95) "slowly shifting, cascading rays of golden light from the top
@@ -878,9 +886,15 @@ function jgRays(stage){
 }
 function jgPaintTick(now){
   JG_P.raf = 0;
-  if(!JG_P.cv || !JG_P.cv.isConnected) return;          // the map is gone: the clock stops
+  if(!JG_P.cv || !JG_P.cv.isConnected){ jgPaintFree(); return; }   // the map is gone: the clock stops
   try { jgPaintDraw(null, now); } catch(e){ console.error('jungle paint:', e); }
   JG_P.raf = requestAnimationFrame(jgPaintTick);
+}
+/* (4.09) …and its layers give their pixels back at once: a tablet counts every canvas's memory, and is slow to notice
+   one that has gone (the drawn sky of a fight after the jungle is one more canvas) */
+function jgPaintFree(){
+  [JG_P.cv, JG_P.ov, JG_P.bh].forEach(c=>{ if(c && !c.isConnected){ c.width = 0; c.height = 0; } });
+  JG_P.win = null; JG_P.layerKey = '';
 }
 /* Paints the ground if the view needs it (the camera's own view, where it
    is going: sceneCamView); otherwise does nothing. `cam` is not needed (the
@@ -906,14 +920,15 @@ function jgPaintDraw(cam, now){
   const fresh = !inside || JG_P.layerKey !== key;                       // new squares (not only the water's ripple): the crowns over the paths too
   const cols = w.x1 - w.x0 + 1, rows = w.y1 - w.y0 + 1, pw = Math.ceil(cols * k), ph = Math.ceil(rows * k);
   const ov = JG_P.ov && JG_P.ov.isConnected ? JG_P.ov : null;
-  [cv].concat(fresh && ov ? [ov] : []).forEach(c=>{
+  const bh = JG_P.bh && JG_P.bh.isConnected ? JG_P.bh : null;       // (4.10) the villages' trees
+  [cv].concat(fresh && ov ? [ov] : [], fresh && bh ? [bh] : []).forEach(c=>{
     if(c.width !== pw || c.height !== ph){ c.width = pw; c.height = ph; }
     c.style.left = (w.x0 * T) + 'px'; c.style.top = (w.y0 * T) + 'px';
     c.style.width = (pw / (dpr * zs)) + 'px'; c.style.height = (ph / (dpr * zs)) + 'px';
   });
   JG_P.k = k;
   if(!fresh){ jgPaintWater(cv.getContext('2d'), w, k, frame); w.frame = frame; return; }   // (3.96) only the water rippling: only its squares
-  w.water = jgPaintLayer(cv.getContext('2d'), w.x0, w.y0, w.x1, w.y1, k, frame, pw, ph, fresh ? ov : null);
+  w.water = jgPaintLayer(cv.getContext('2d'), w.x0, w.y0, w.x1, w.y1, k, frame, pw, ph, fresh ? ov : null, fresh ? bh : null);
   w.frame = frame;
   JG_P.layerKey = key;
   if(fresh){ JG_P.holes = null; jgSeeThrough(true); }                   // the see-through, cut again in the new layer
@@ -928,6 +943,10 @@ function jgPaintDraw(cam, now){
    same tree is drawn under you on the ground layer, so the window never shows as a hole: only whoever is in it.
    `fig`: where in its picture's box a figure is drawn (centre x, centre y, half width, half height, as fractions of
    the box), from the pictures themselves (the avatars 21–58 × 7–79 of 80; Lucesco 10–87 × 5–90 of 96). */
+/* (4.10) The designer: "in the tribal villages please turn the player and Lucesco sprites translucent behind … trees".
+   The villages' trees stay over you, a little see-through, as the castle's fountain and stalls do (CA_BEHIND, 4.08):
+   you are drawn faded behind them. The woods' crowns over the paths keep the clear window (JG_SEE.cut). */
+const JG_BEHIND = { cut:0.42 };
 const JG_SEE = { cut:0.85, solid:0.66, grow:[1.16, 1.08],
   fig:{ you:[0.49, 0.54, 0.24, 0.46], lion:[0.51, 0.5, 0.41, 0.45], emoji:[0.5, 0.5, 0.42, 0.46] } };
 /* the figure a walker draws, in squares from its own square's top-left corner: [cx, cy, half w, half h], measured
@@ -1009,12 +1028,26 @@ function jgOverPatch(was, now){
     if(jgTile(x, y) !== JG_T.HEDGE) continue;
     g.drawImage(jgSprite('tree3', jgTreeKey(x, y)), Math.round((x - w.x0 - 0.2) * k), Math.round((y - w.y0 - 0.6) * k), Math.round(1.4 * k), Math.round(1.6 * k));
   }
-  jgVillageTreesOver(g, X0, Y0, X1, Y1, w.x0, w.y0, k);               // (3.97) the villages' trees too
+  const bh = JG_P.bh && JG_P.bh.isConnected ? JG_P.bh : null;
+  if(!bh) jgVillageTreesOver(g, X0, Y0, X1, Y1, w.x0, w.y0, k);       // (3.97) the villages' trees too — (4.10) on their own layer
   g.globalCompositeOperation = 'destination-out';                       // only over the paths, as the layer is
   g.fillStyle = '#000';
   for(let y = Y0; y < Y1; y++) for(let x = X0; x < X1; x++) if(JG_SOLID[jgTile(x, y)]) g.fillRect(px(x), py(y), px(x + 1) - px(x), py(y + 1) - py(y));
   (now || []).forEach(q=>{ if(q && q.length >= 4) seeCut(g, (q[0] - w.x0) * k, (q[1] - w.y0) * k, q[2] * k, q[3] * k); });   // (3.98) round each figure
   g.restore();
+  /* (4.10) the villages' trees, the same patch: a fainter window, so you are drawn faded behind them */
+  if(bh){
+    const gb = bh.getContext('2d');
+    gb.save();
+    gb.beginPath(); gb.rect(rx, ry, rw, rh); gb.clip();
+    gb.clearRect(rx, ry, rw, rh);
+    jgVillageTreesOver(gb, X0, Y0, X1, Y1, w.x0, w.y0, k);
+    gb.globalCompositeOperation = 'destination-out';
+    gb.fillStyle = '#000';
+    for(let y = Y0; y < Y1; y++) for(let x = X0; x < X1; x++) if(JG_SOLID[jgTile(x, y)]) gb.fillRect(px(x), py(y), px(x + 1) - px(x), py(y + 1) - py(y));
+    (now || []).forEach(q=>{ if(q && q.length >= 4) seeCut(gb, (q[0] - w.x0) * k, (q[1] - w.y0) * k, q[2] * k, q[3] * k, JG_BEHIND.cut); });
+    gb.restore();
+  }
 }
 /* (3.96) the water's next ripple, its squares alone (the rest of the layer as it was) */
 function jgPaintWater(ctx, w, k, frame){
@@ -1081,7 +1114,7 @@ function jgDrawLakes(ctx, x0, y0, x1, y1, k, frame){
 }
 /* the squares x0…x1, y0…y1 onto a layer whose corner is square (x0, y0); says whether any water was drawn.
    (3.96) `ov`: a second layer, over everyone, for what of the trees reaches out over the paths */
-function jgPaintLayer(ctx, x0, y0, x1, y1, k, frame, lw, lh, ov){
+function jgPaintLayer(ctx, x0, y0, x1, y1, k, frame, lw, lh, ov, bh){
   ctx.fillStyle = '#2a3417'; ctx.fillRect(0, 0, lw, lh);
   let water = false;
   const trees = [];                                                   // the tree squares in view, as drawn: [px, py, pw, ph]
@@ -1123,11 +1156,20 @@ function jgPaintLayer(ctx, x0, y0, x1, y1, k, frame, lw, lh, ov){
     const og = ov.getContext('2d');
     og.clearRect(0, 0, ov.width, ov.height);
     drawTrees(og);
-    jgVillageTreesOver(og, x0, y0, x1, y1, x0, y0, k);                // (3.97) and the villages' tall trees
+    if(!bh) jgVillageTreesOver(og, x0, y0, x1, y1, x0, y0, k);       // (3.97) and the villages' tall trees — (4.10) on their own layer
     og.globalCompositeOperation = 'destination-out';
     og.fillStyle = '#000';
     solid.forEach(r=> og.fillRect(r[0], r[1], r[2], r[3]));
     og.globalCompositeOperation = 'source-over';
+  }
+  if(bh){
+    const gb = bh.getContext('2d');
+    gb.clearRect(0, 0, bh.width, bh.height);
+    jgVillageTreesOver(gb, x0, y0, x1, y1, x0, y0, k);
+    gb.globalCompositeOperation = 'destination-out';
+    gb.fillStyle = '#000';
+    solid.forEach(r=> gb.fillRect(r[0], r[1], r[2], r[3]));
+    gb.globalCompositeOperation = 'source-over';
   }
   /* trees stand up over the ground round them (the villages') */
   for(let y = y0; y <= y1 + 1; y++) for(let x = x0; x <= x1; x++){
@@ -3282,6 +3324,7 @@ function jgCss(){
   @media (prefers-reduced-motion: reduce){ .jg-rays i, .jg-rays i::before, .jg-rays i::after{ animation:none; } .jg-rays i{ transform:rotate(26deg); } }
   .jg-ground{ position:absolute; left:0; top:0; display:block; z-index:0; pointer-events:none; }   /* (3.96) inside the world: placed and sized as it is painted */
   .jg-over{ position:absolute; left:0; top:0; display:block; z-index:1000; pointer-events:none; }   /* (3.96) the crowns over the paths: over everyone */
+  .jg-behind{ position:absolute; left:0; top:0; display:block; z-index:999; pointer-events:none; }   /* (4.10) the villages' trees: over everyone, faintly see-through */
   .jg-stage .walk-world{ z-index:1; }
   .walk-ent.jg-lion{ transition:transform .2s linear, opacity .5s; }
   .walk-ent.jg-lion.jg-hidden{ opacity:0; }

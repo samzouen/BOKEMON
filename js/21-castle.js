@@ -509,7 +509,10 @@ const CA_OVER_KINDS = new Set(['tree', 'lamp', 'palaceTower', 'keep', 'cornerTow
    that they are behind, not floating above". The window round you and Lucesco (85% clear) is for the tall things that
    would hide you whole — a tree's crown, a spire. These lower ones, the market's, stay over you, a little see-through
    (CA_BEHIND.cut): you are drawn faded behind them, as their keepers are behind their counters. */
-const CA_BEHIND_KINDS = new Set(['fountGrand', 'fountSmall', 'stall', 'well', 'planter']);
+/* (4.10) The designer: "In the castle palace and in the tribal villages please turn the player and Lucesco sprites
+   translucent behind two tile pillars, knight armours, and trees" — the palace hall's columns and the suits of armour
+   join them (the villages' trees: JG_BEHIND, 20-jungle.js). */
+const CA_BEHIND_KINDS = new Set(['fountGrand', 'fountSmall', 'stall', 'well', 'planter', 'column', 'armour']);
 const CA_BEHIND = { cut:0.42 };
 function caPaintStart(stage, world, m, views, bg){
   if(!stage || !world) return;
@@ -538,9 +541,14 @@ function caPaintStart(stage, world, m, views, bg){
   Object.assign(CA_P, { cv, ov, bh, stage, world, key:'', last:0, map:m, views:views || null, bg:bg || '#2b2a33' });
   if(!CA_P.raf && typeof requestAnimationFrame === 'function') CA_P.raf = requestAnimationFrame(caPaintTick);
 }
+/* (4.09) the grounds left: the layers give their pixels back at once (as the jungle's, jgPaintFree) */
+function caPaintFree(){
+  [CA_P.cv, CA_P.ov, CA_P.bh].forEach(c=>{ if(c && !c.isConnected){ c.width = 0; c.height = 0; } });
+  CA_P.key = '';
+}
 function caPaintTick(now){
   CA_P.raf = 0;
-  if(!CA_P.cv || !CA_P.cv.isConnected) return;
+  if(!CA_P.cv || !CA_P.cv.isConnected){ caPaintFree(); return; }
   const cam = riftCam(CA_P.world);
   const key = cam.key + caSeeKey();                                   // (3.97) you or Lucesco moving redraws the see-through
   if(key !== CA_P.key || now - CA_P.last > (CA_P.fast ? 60 : 160)){   // (3.97) a little oftener while petals are in the air

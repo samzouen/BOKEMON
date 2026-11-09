@@ -633,7 +633,10 @@ function quizSkyOn(){
   if(typeof riftPageShow !== 'function') return;
   if(!ui.quizSky){
     const pending = typeof _riftHideT !== 'undefined' && !!_riftHideT;          // going already: it was not the page's own
-    ui.quizSky = { had:document.body.classList.contains('r6-sky') && !pending };
+    /* (4.09) …unless the page under the spelling asked for it (riftWishOn, 18-rift.js): the spelling page's own
+       "no backdrop" on its way in is what set it going */
+    const own = typeof riftWishOn === 'function' && riftWishOn();
+    ui.quizSky = { had:(document.body.classList.contains('r6-sky') && !pending) || own };
   }
   document.body.classList.add('qz-sky');
   riftPageShow();
@@ -644,7 +647,9 @@ function quizSkyOff(){
   document.body.classList.remove('qz-sky');
   if(!s) return;
   ui.quizSky = null;
-  if(!s.had && typeof riftPageHide === 'function') riftPageHide(true);         // a moment later: the next page may keep it
+  /* a moment later: the next page may keep it — and (4.09) not at all if the page now showing has asked for it already
+     (a fight drawn again before this tidying-up came round) */
+  if(!s.had && typeof riftPageHide === 'function' && !(typeof riftWishOn === 'function' && riftWishOn(ui.screen))) riftPageHide(true);
 }
 let _qzSkyObs = null;
 function quizSkyWatch(){

@@ -107,7 +107,10 @@ function setScreenBg(key){
   const el = document.getElementById('screenBg');
   if(!el) return;
   const seq = ++_bgSeq;
-  const live = typeof riftSkyLive === 'function' ? riftSkyLive : null;
+  /* (4.09) the page's own answer about the rift's sky, kept for the spelling screen (riftWishFor, 18-rift.js) */
+  const scr = ui.screen;
+  if(typeof riftWishFor === 'function') riftWishFor(scr);
+  const live = typeof riftSkyLive === 'function' ? (k, src)=> riftSkyLive(k, src, scr) : null;
   el.classList.toggle('fit-h', FIT_HEIGHT_BGS.includes(key));
   const cands = bgCandidates(key).filter(u=>!bgMissing[u]);
   const clear = ()=>{ el.style.backgroundImage=''; el.classList.remove('on'); document.body.classList.remove('has-bg'); if(live) live(null); };
@@ -905,8 +908,22 @@ function feedRecharge(words){
   /* A refined stone's free passive re-arms with the same bar that restores a
      cast — so it fires again the next time its carrier takes the field. */
   b.passiveFired = {};
+  b.refillSaid = rechargeFieldPassives();   // (4.09) …and at once, for a carrier already out
   allyRecharge();                      // (3.19) the Monkey King's stones, every one again
   return true;
+}
+/* (4.09) The designer: "when the recharge meter resets, can we have the very high auto proc passives from steel, fairy
+   and dragon proc immediately again if the holder is already on field?" The refined Very High stones that work by
+   themselves — Steel Aegis + / ✦ (its shields for the team), Diamond Dust + / ✦ (swept up again, its turns new) and
+   Dragon Dance + / ✦ (Mach Dragon) — carried by one of yours standing on the field work again the moment the meter
+   fills, rather than waiting for the carrier to come in again (a carrier on the bench still has its firing waiting for
+   when it does: once a meter, as ever). What they did is said with the second wind (secondWindMsg). */
+function rechargeFieldPassives(){
+  const b = ui.battle;
+  if(!b || typeof livingField !== 'function' || typeof applyStonePassives !== 'function') return [];
+  const said = [];
+  livingField().forEach(m=>{ said.push(...applyStonePassives(m, { refill:true, quiet:true })); });
+  return said;
 }
 
 /* (3.80) The second wind's line, a moment after the words that filled the
@@ -932,10 +949,16 @@ function secondWindMsg(){
   const extra = [soul ? 'Steel Soul' : '', tachy ? 'Tachypsychia' : '', reborn ? 'Rebirth' : ''].filter(Boolean);
   /* (3.59) …and a refined stone's free cast on taking the field (Diamond
      Dust + / ✦ above all: bring its carrier in to renew the dust) */
-  const free = [...new Set(battleParty().concat(bondedCompanions()).flatMap(m=> m ? [m.equippedStone, m.power1Stone] : [])
+  /* (4.09) those whose carriers stand on the field have worked already (rechargeFieldPassives): what they did; the rest,
+     on the bench, as they come in */
+  const b = ui.battle, did = (b && b.refillSaid) || [];
+  if(b) b.refillSaid = null;
+  const out = new Set(typeof livingField === 'function' ? livingField().map(m=> m.uid) : []);
+  const free = [...new Set(battleParty().concat(bondedCompanions()).filter(m=> m && !out.has(m.uid)).flatMap(m=> [m.equippedStone, m.power1Stone])
     .filter(st=> st && st.tier === 'veryhigh' && (veryHighDef(st.type, stonePlus(st)) || {}).passive).map(st=> stoneDisplayName(st)))];
   const freeLine = free.length ? ` ${free.join(' and ')} work${free.length === 1 ? 's' : ''} again as ${free.length === 1 ? 'its carrier comes' : 'their carriers come'} in.` : '';
-  return `⚡ Second wind! Very High and Ultra moves${extra.length ? ', and ' + extra.join(' and ') + ',' : ''} restored.${freeLine}`;
+  const didLine = did.length ? '<br>' + did.join('<br>') : '';
+  return `⚡ Second wind! Very High and Ultra moves${extra.length ? ', and ' + extra.join(' and ') + ',' : ''} restored.${freeLine}${didLine}`;
 }
 
 function bankWordSpill(mv){
@@ -2423,8 +2446,10 @@ function applyHits(hits, opts){
     mon.currentHp = Math.min(max, mon.currentHp + healed);
     drainHp(pid('playerHp'), before, mon.currentHp, max);
     const others = healableAllies().filter(m=>m.currentHp>0 && m!==mon).length;   // (3.76) companions off the field too
-    battleMsg(`🌱 The seed drinks deep — <b>${mon.currentHp-before} HP</b> to ${displayName(mon)}` +
-      (others ? ` and every one of your other ${others} monster${others>1?'s':''}.` : '.'));
+    const line = `🌱 The seed drinks deep — <b>${mon.currentHp-before} HP</b> to ${displayName(mon)}` +
+      (others ? ` and every one of your other ${others} monster${others>1?'s':''}.` : '.');
+    if(opts && opts.sayLater && ui.battle) ui.battle._seedSaid = line;   // (4.09) the caller says it, with its own line (Violent Dance)
+    else battleMsg(line);
   }
   saveProfile();
   hits.forEach(h=>{ if(h.t && h.t.hp<=0){ const el=document.getElementById('enemy-'+h.idx); if(el) el.classList.add('fainted'); } });

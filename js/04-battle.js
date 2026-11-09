@@ -688,11 +688,12 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
      the target softer, and the attacker's own strength, still count. */
   const pure = !!(opts && opts.pure);
   /* (3.96) The designer: "Pre turn phase attacks should not crit. This
-     includes wildfire, violent dance." Wildfire, Violent Dance, Spike
-     Formation, a Capacitor's release, the pre-hits and the Aria's answer
-     never roll one (their damage is reckoned without this); the quick
-     attacks, which come here, say `preTurn`, and no critical of any kind
-     is rolled for them. */
+     includes wildfire, violent dance." Wildfire, Spike Formation, a
+     Capacitor's release, the pre-hits and the Aria's answer never roll one
+     (their damage is reckoned without this); the quick attacks, which come
+     here, say `preTurn`, and no critical of any kind is rolled for them.
+     (4.09) Violent Dance comes here now too, and may (runViolentDance): the
+     designer, "in exchange it can crit". */
   const noCrit = !!(opts && (opts.rider || opts.preTurn));
   let fc = 1;                                      // (3.70) Foresight's critical, for the Hydra's to add to
   dmg *= typeMultFor(attacker, defender);          // (3.69) with Destruction and Fortress
@@ -1390,11 +1391,14 @@ function wildfirePct(st){ return WILDFIRE.pct[Math.max(0, vhTier(st))] || WILDFI
    only the one whose scorch would hit hardest burns — them and itself — as
    only the strongest holder's Unstable Magic bursts. (Every holder burned,
    one after another, until 3.94.) */
-function wildfireScorch(me, oh){
+function wildfireScorch(me, oh){ return burnScorch(me, wildfirePct(oh)); }
+/* (4.09) One scorch of `pct` × this monster's ATK on every one of them — Wildfire's, and Overheat ✦'s burn's
+   (overheatBurnBest): the two reckoned alike. */
+function burnScorch(me, pct){
   const b = ui.battle;
   /* its own multipliers count too (Consume, Burgeon — and Shatter on a
      chilled one), as they do on any blow of its */
-  const base = wildfirePct(oh) * monAtk(me) * ownBuffMultiplier(me);
+  const base = pct * monAtk(me) * ownBuffMultiplier(me);
   const hits = livingEnemies().map(t=>{
     let dmg = Math.ceil(base * elemAttackAmp(monRef(me), t) * hexAmp(t));
     const cur = getEStatus(t, 'curse');
@@ -1402,6 +1406,26 @@ function wildfireScorch(me, oh){
     return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) };
   });
   return { base, hits, total:hits.reduce((s, h)=> s + h.dmg, 0) };
+}
+/* (4.09) The designer: "overheat star is not hitting as hard as wildfire even though i think both should be identical
+   (overheat star's burn and off-field pre-turn hits should take the highest damage instance based on anyone who
+   possesses overheat star/diamond dust star)". Your Overheat ✦'s burn was its share (0.25×) of the ATK its caster had
+   when it was cast, with your buffs — and none of a monster's own multipliers (Consume, Burgeon, Shatter…), which
+   Wildfire's scorch counts. Now it is reckoned as Wildfire's is (burnScorch), by whichever of your team carrying an
+   Overheat ✦ or a Diamond Dust ✦ (which can cast one) would burn hardest — on the field or off it, its ATK as it is
+   now: at ✦ (0.25×) the two burn alike. With none of them standing (a stolen Overheat, say), the burn's own figure. */
+function overheatBurnBest(pct){
+  if(!ui.battle || !livingEnemies().length) return null;
+  const team = playerField().concat(battleParty(), companionsAllowed() ? bondedCompanions() : []);
+  const seen = new Set(), hs = [];
+  team.forEach(m=>{
+    if(!m || !m.uid || seen.has(m.uid) || !(m.currentHp > 0)) return;
+    seen.add(m.uid);
+    const carries = [m.equippedStone, m.power1Stone].some(st=> st && st.tier === 'veryhigh' && stonePlus(st) === 2 && (st.type === 'Fire' || st.type === 'Fairy'));
+    if(carries) hs.push(m);
+  });
+  if(!hs.length) return null;
+  return hs.map(h=> Object.assign({ h }, burnScorch(h, pct))).sort((x, y)=> y.total - x.total)[0];
 }
 function wildfireHolder(){
   const oh = ui.battle ? getPStatus(0, 'overheat') : null;
@@ -1920,29 +1944,60 @@ function runViolentDance(done){
   const n = tier + 1, jobs = [];
   holders.forEach(me=>{ for(let k = 1; k <= n; k++) jobs.push([me, k]); });
   let j = 0;
+  /* (4.09) the one striking in focus for its strike (its Leech Seed's drink and Spike Armour ✦'s rider are its own),
+     and the focus as it was after */
+  const was = b.focusUid;
+  const fin = ()=>{ if(ui.battle === b) b.focusUid = was; done(); };
   const step = ()=>{
-    if(!ui.battle || j >= jobs.length) return done();
+    if(!ui.battle || j >= jobs.length) return fin();
     const [me, k] = jobs[j++];
     const foes = livingEnemies();
     if(!foes.length || me.currentHp <= 0 || !yourDragonDance()) return step();
+    setFocus(me);
     /* (3.70) the designer: "violent dance should not strike every enemy,
        just one" — each strike its own at random */
     const t = foes[Math.floor(Math.random() * foes.length)];
+    const idx = b.enemies.indexOf(t), who = escapeHtml(displayName(me)), them = escapeHtml(SPECIES[t.species].name);
+    const tag = `🐲 Violent Dance${n > 1 ? ` (${k}/${n})` : ''}!`;   // (3.71) the Dragon Dance's own drawn dragon
+    /* (4.09) The designer: "since violent dance breaks shields, i think it should be treated like quick hands in terms
+       of damage calculation. it can miss and be subjected to shield block (after removing shields appropriate to the
+       very high tier of dragon dance), and is also subject to super effective and type resistance in the damage
+       calculations. in exchange it can crit and gain super effective which is a core part of dragon's identity (ultra
+       passive)." Each strike is an attack of its own now, as a quick attack is (quickStrikeTheirs): a Lurk it holds
+       ends; their evasion has its say (a strike that finds nothing breaks nothing); then your Dragon Dance's own break
+       (1 / 2 / 3 shields, each strike: 3.77), and the damage through the whole formula (computeDamage) — its types
+       against theirs (Destruction, the Dragon Ultra, making it super effective on all but Fairy; a Fortress resisting
+       it), their armour, a critical (the one strike before the turns that may roll one) — and whatever shield is left
+       soaks it (landStrike). Until 4.09: 0.25× ATK with your buffs, never dodged, never typed, never critical.
+       (4.09) And, the designer, "being 3 unique type pre-turn hits … should be able to proc leech seed and spike armour
+       star's damage riders and procs unlike other pre-turn hits": unlike a burn or a quick attack (`noLeech`), each
+       strike that lands feeds your Leech Seed (its ✦ bite too), carries your ✦ Spike Armour's strike, stores a
+       Capacitor's share and meets their reflexes (a Lullaby, an Ink Cloud, Warning Colours), as any blow of yours. Only
+       a holder on the field strikes (the designer: "violent dragon counts only for the onfielder"). */
+    if(me.lurk || me.cunning){ breakCover(me); me._ambush = 0; renderStatusBadges(); }
+    if(rollDodge(t, idx, 0, false, true, me)){
+      logBattle(`Violent Dance (${displayName(me)}) ${k}/${n}: ${SPECIES[t.species].name} slipped it`);
+      battleMsg(`${tag} ${who}'s strike at ${them} finds nothing.`);
+      return setTimeout(step, 700);
+    }
+    const ref = Object.assign(monRef(me), { _ambush:0, _omen:0, _blow:newBlowId('vd') });   // an ambush or omen waits for a real blow
     /* (3.77) the designer: "violent dance hits should destroy extra shields
        before each hit" — your Dragon Dance's own break (1 / 2 / 3), each strike */
-    const idx = b.enemies.indexOf(t), sh0 = shieldsOn(t);
-    b._vdSeq = (b._vdSeq || 0) + 1;                 // a break of its own, every strike
-    breakShields('player', null, t, 'vd:' + b._vdSeq, 'enemyBlk-' + idx, 'enemy-' + idx);
+    const sh0 = shieldsOn(t);
+    breakShields('player', null, t, ref._blow, 'enemyBlk-' + idx, 'enemy-' + idx);
     const broke = sh0 - shieldsOn(t);
-    let dmg = Math.ceil(VIOLENT_DANCE.pct * monAtk(me) * ownBuffMultiplier(me) * elemAttackAmp(monRef(me), t) * hexAmp(t));
-    const cur = getEStatus(t, 'curse');
-    dmg = Math.ceil(dmg * curseBucket(cur, 'enemy'));
+    const eff = typeMultFor(ref, t);
+    const dmg = computeDamage(VIOLENT_DANCE.pct, monAtk(me), ref, t, true, false, { violent:true });
     const hits = [{ t, idx, dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }];
-    applyHits(hits, { noLeech:true, by:me });       // an upkeep strike: no Leech Seed — its own (3.70)
+    b._seedSaid = '';
+    applyHits(hits, { blow:ref._blow, by:me, sayLater:true });   // (4.09) its riders and procs, as any blow of its (no `noLeech`)
     reportHits(hits);
-    logBattle(`Violent Dance (${displayName(me)}) ${k}/${n}: ${dmg} to ${SPECIES[t.species].name}` + (broke ? `, ${broke} shield${broke > 1 ? 's' : ''} broken first` : ''));
-    battleMsg(`🐲 Violent Dance${n > 1 ? ` (${k}/${n})` : ''}! ${escapeHtml(displayName(me))} strikes ${escapeHtml(SPECIES[t.species].name)}` +
-      (broke ? ` — ${broke} shield${broke > 1 ? 's' : ''} shattered first.` : '.'));   // (3.71) the Dragon Dance's own drawn dragon
+    const h = hits[0], soaked = h.blocked > 0 ? h.blocked : 0, said = effectivenessLabel(eff), seed = b._seedSaid || '';
+    b._seedSaid = '';
+    logBattle(`Violent Dance (${displayName(me)}) ${k}/${n}: ${dmg} planned (type ×${eff}) → ${h.dmg} to ${SPECIES[t.species].name}` +
+      (h.rider ? ` +${h.rider} rider` : '') + (broke ? `, ${broke} shield${broke > 1 ? 's' : ''} broken first` : '') + (soaked ? `, ${soaked} soaked` : ''));
+    battleMsg(`${tag} ${who} strikes ${them}` + (broke ? ` — ${broke} shield${broke > 1 ? 's' : ''} shattered first` : '') +
+      (soaked && !h.dmg ? ', but a shield takes the blow' : '') + '.' + (said ? ` ${said}` : '') + (seed ? ` ${seed}` : ''));
     setTimeout(step, 700);
   };
   step();
@@ -2304,7 +2359,7 @@ const VERY_HIGH = {
   ], text:[
     'Your team deals <b>1.5×</b> damage, but takes <b>1.5×</b> too.',
     'Your team deals <b>1.5×</b> damage and takes only <b>1.3×</b>.',
-    'Your team deals <b>1.5×</b> damage and takes only <b>1.1×</b>. Every enemy burns for <b>0.25× ATK</b> each turn.',
+    'Your team deals <b>1.5×</b> damage and takes only <b>1.1×</b>. Every enemy burns for <b>0.25× ATK</b> each turn — the ATK of whichever of your team carrying an Overheat ✦ or a Diamond Dust ✦ burns hardest, on the field or off it, as Wildfire burns.',
   ]},
   /* (3.16) The designer: "change ice tomb base/plus/star to 1/2/2 turns
      frozen, along with -1/2/3 initiative value and 10/20/30% attack decrease
@@ -2426,8 +2481,8 @@ const VERY_HIGH = {
     { deal:1.35, strip:3, mach:2, passive:true, passiveOnly:'mach' },
   ], text:[
     'Your team deals <b>25% more</b> damage, and each attack breaks <b>1</b> extra shield.',
-    'Triggers <b>Mach Dragon</b> upon taking the field, giving your monsters extreme speed. Active skill grants <b>30%</b> increased damage and the ability to break <b>2</b> additional shields per attack.',
-    'Triggers <b>Mach Dragon ✦</b> upon taking the field, giving your monsters extreme speed. Active skill grants <b>35%</b> increased damage and the ability to break <b>3</b> additional shields per attack.',
+    'Triggers <b>Mach Dragon</b> upon taking the field, and again each time the recharge meter fills, giving your monsters extreme speed. Active skill grants <b>30%</b> increased damage and the ability to break <b>2</b> additional shields per attack.',
+    'Triggers <b>Mach Dragon ✦</b> upon taking the field, and again each time the recharge meter fills, giving your monsters extreme speed. Active skill grants <b>35%</b> increased damage and the ability to break <b>3</b> additional shields per attack.',
   ]},
   Steel: { name:'Steel Aegis', turns:5, tiers:[
     { reduce:0.30 },
@@ -2436,8 +2491,8 @@ const VERY_HIGH = {
   ], text:[
     'Take <b>30% less</b> damage.',
     /* (3.64) its shields are the team's: whichever of yours is struck */
-    'Gives your team <b>1 shield</b> upon taking the field. Active skill: take <b>35% less</b> damage and your team gains <b>2 shields</b>, with a <b>50%</b> chance of another each turn. Its shields guard whichever of your team is struck.',
-    'Gives your team <b>3 shields</b> upon taking the field. Active skill: take <b>40% less</b> damage and your team gains <b>4 shields</b>, with two <b>50%</b> chances of another each turn. Its shields guard whichever of your team is struck.',
+    'Gives your team <b>1 shield</b> upon taking the field, and again each time the recharge meter fills. Active skill: take <b>35% less</b> damage and your team gains <b>2 shields</b>, with a <b>50%</b> chance of another each turn. Its shields guard whichever of your team is struck.',
+    'Gives your team <b>3 shields</b> upon taking the field, and again each time the recharge meter fills. Active skill: take <b>40% less</b> damage and your team gains <b>4 shields</b>, with two <b>50%</b> chances of another each turn. Its shields guard whichever of your team is struck.',
   ]},
   Fairy: { name:'Diamond Dust', turns:5, tiers:[
     { cleanse:true },
@@ -2632,10 +2687,16 @@ function applyEntryPassives(holder, species, level, atk){
    check reads the tier table rather than naming it. (Every way one of yours
    takes the field comes through here — the first time, from
    applyEntryPassives; after that, straight here.) */
-function applyStonePassives(mon){
+/* (4.09) `opts.refill`: not an arrival — the meter has filled with the carrier already out (rechargeFieldPassives,
+   05-battle-flow.js): only the stones' passives, and `opts.quiet` hands back what each did rather than saying it (the
+   second wind's line says it). Returns those lines either way. */
+function applyStonePassives(mon, opts){
   const b = ui.battle;
-  if(!b) return;
-  deflectOnEntry(mon);                       // (3.80) Focused Fury, arriving
+  opts = opts || {};
+  const said = [];
+  if(!b) return said;
+  if(!opts.refill) deflectOnEntry(mon);      // (3.80) Focused Fury, arriving
+  const say = line=>{ said.push(line); if(!opts.quiet) setTimeout(()=> battleMsg(line), 400); };
   [mon.equippedStone, mon.power1Stone].forEach(st=>{
     if(!st || st.tier !== 'veryhigh') return;
     const plus = stonePlus(st);
@@ -2657,12 +2718,13 @@ function applyStonePassives(mon){
       const T = d.turns || veryHighDef(st.type, plus).turns || 5;
       setPStatus(0, { type:'machDragon', turnsLeft:T + 1, tier:d.mach, mine:true });
       renderStatusBadges();
-      return setTimeout(()=> battleMsg(`🐉 ${escapeHtml(d.name)}: Mach Dragon — the air moves out of the way.`), 400);
+      return say(`🐉 ${escapeHtml(d.name)}: Mach Dragon — the air moves out of the way.`);
     }
     if(d.passiveBlock){
       grantTeamBlock('player', d.passiveBlock, monAtk(mon));   // (3.64) the team's
       renderStatusBadges();
-      return setTimeout(()=> battleMsg(`🔩 ${escapeHtml(d.name)} — ${d.passiveBlock} shield${d.passiveBlock>1?'s':''} already standing, for your whole team.`), 400);
+      return say(opts.refill ? `🔩 ${escapeHtml(d.name)} — ${d.passiveBlock} more shield${d.passiveBlock>1?'s':''} up, for your whole team.`
+                             : `🔩 ${escapeHtml(d.name)} — ${d.passiveBlock} shield${d.passiveBlock>1?'s':''} already standing, for your whole team.`);
     }
 
     /* (3.59) Already in the air: it is RENEWED — swept again, its turns
@@ -2677,10 +2739,11 @@ function applyStonePassives(mon){
     renderStatusBadges();
     const swept = res.cleared ? ` ${res.cleared} of their effect${res.cleared === 1 ? '' : 's'} swept away.` : '';
     const T = d.turns || 5;
-    setTimeout(()=> battleMsg(running
+    say(running
       ? `✨ ${escapeHtml(d.name)} swirls up again — ${T} fresh turns!${swept}`
-      : `✨ ${escapeHtml(d.name)} is already in the air.${swept}`), 400);
+      : `✨ ${escapeHtml(d.name)} is ${opts.refill ? 'in the air again' : 'already in the air'}.${swept}`);
   });
+  return said;
 }
 /* The party-status key a Very High type writes to. */
 function veryHighStatusKey(type){
@@ -2959,7 +3022,13 @@ function overheatMerged(prev, next){
 /* What an Overheat does, as it now stands — for the line a cast says. */
 function overheatSays(st, foes){
   return `deals <b>${st.deal || 1.5}×</b> damage and takes ${(st.take || 1.5) < 1.5 ? 'only ' : ''}<b>${st.take || 1.5}×</b>` +
-    (st.burn > 0 ? `, and ${foes} burn${foes === 'you' ? '' : 's'} for <b>${Math.ceil(st.burn * (st.atk || 0))}</b> each turn` : '');
+    (st.burn > 0 ? `, and ${foes} burn${foes === 'you' ? '' : 's'} for <b>${overheatBurnShown(st, foes !== 'you')}</b> each turn` : '');
+}
+/* (4.09) The burn's figure as it will land before their own marks: yours by the carrier that burns hardest
+   (overheatBurnBest), else (theirs, or nobody carrying one) its own. */
+function overheatBurnShown(st, yours){
+  const best = (yours && st && st.burn > 0) ? overheatBurnBest(st.burn) : null;
+  return best ? Math.ceil(best.base) : Math.ceil(((st && st.burn) || 0) * ((st && st.atk) || 0));
 }
 function removeESide(type){ if(ui.battle) delete enemySideStatuses()[type]; }
 
@@ -4131,27 +4200,32 @@ function enemyFreshMove(move){
 }
 /* A carrier's passive on taking the field, the mirror of applyStonePassives:
    refined Diamond Dust sweeps, refined Dragon Dance lays Mach Dragon, refined
-   Steel Aegis stands its block. Once per carrier per battle. */
-function enemyStonePassive(e){
+   Steel Aegis stands its block. Once per carrier per battle — and (4.10) again at each of their recharges
+   (foeRecharge): `opts.again`, its line handed back for the recharge's own (`opts.quiet`) rather than said. */
+function enemyStonePassive(e, opts){
+  opts = opts || {};
   const st = e && e.stone;
-  if(!st || st.passiveDone) return;
+  if(!st || st.passiveDone) return '';
   st.passiveDone = true;
   const d = veryHighDef(st.type, st.plus || 0);
-  if(!d || !d.passive) return;
+  if(!d || !d.passive) return '';
   const who = SPECIES[e.species].name;
+  const say = line=>{ if(!opts.quiet) setTimeout(()=> battleMsg(line), 700); return line; };
   if(d.passiveOnly === 'mach'){
     setESide({ type:'machDragon', turnsLeft:(d.turns || 5) + 1, tier:d.mach });
-    return setTimeout(()=> battleMsg(`🐉 ${who}'s ${escapeHtml(d.name)}: Mach Dragon — their side moves first.`), 700);
+    return say(`🐉 ${who}'s ${escapeHtml(d.name)}: Mach Dragon — their side moves first.`);
   }
   if(d.passiveBlock){
     grantTeamBlock('enemy', d.passiveBlock, e.atk);          // (3.13) your dust cannot stop a shield; (3.64) their wave's
-    return setTimeout(()=> battleMsg(`🔩 ${who} arrives with ${d.passiveBlock} shield${d.passiveBlock > 1 ? 's' : ''} standing for its whole side.`), 700);
+    return say(opts.again ? `🔩 ${who}'s ${escapeHtml(d.name)} — ${d.passiveBlock} more shield${d.passiveBlock > 1 ? 's' : ''} for its whole side.`
+                          : `🔩 ${who} arrives with ${d.passiveBlock} shield${d.passiveBlock > 1 ? 's' : ''} standing for its whole side.`);
   }
   if(st.type === 'Fairy'){
     const n = diamondDustCleanse('enemy');
     setESide({ type:'diamondDust', turnsLeft:(d.turns || 5) + 1, owner:e });
-    return setTimeout(()=> battleMsg(`✨ ${who}'s Diamond Dust is already in the air${n ? `: ${n} of your effects swept away` : ''}.`), 700);
+    return say(`✨ ${who}'s Diamond Dust is ${opts.again ? 'in the air again' : 'already in the air'}${n ? `: ${n} of your effects swept away` : ''}.`);
   }
+  return '';
 }
 /* Their Discombobulate on YOU: a damaging move turns on your own side.
    `fresh` keeps a muddle cast mid-round alive until your own turn comes (a
@@ -5123,12 +5197,15 @@ function runPreHits(done){
       return setTimeout(step, 850);
     }
     const buff = ownBuffMultiplier(p.owner ? { uid:p.owner } : null);   // Overheat / Dragon Dance / Legacy — (3.93) and the Feeble of the one that laid it (an Aftershock, a Sacred Flame; a side's burn has no one)
-    const hits = foes.map(t=>{
+    /* (4.09) your Overheat ✦'s burn: as Wildfire's scorch, by the carrier that burns hardest (overheatBurnBest) */
+    const best = (p.src === 'overheat' && p.by !== 'enemy') ? overheatBurnBest(p.pct) : null;
+    const hits = best ? best.hits : foes.map(t=>{
       let dmg = Math.ceil(p.pct * p.atk * buff * hexAmp(t));   // (3.68) and Vicious Hex's marks
       const cur = getEStatus(t,'curse');
       dmg = Math.ceil(dmg * curseBucket(cur, 'enemy'));
       return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
     });
+    if(best) logBattle(`Overheat ✦'s burn (by ${displayName(best.h)}'s ATK${playerField().includes(best.h) ? '' : ', off the field'}): ${hits.map(h=> h.dmg).join('/')}`);
     applyHits(hits, { noLeech:true });   // upkeep damage never feeds Leech Seed
     reportHits(hits);
     battleMsg(p.label);
@@ -6760,21 +6837,32 @@ function noteCertainDodge(m){
    place of your meter giving them theirs (until 3.85). Not in a fight with
    rules of its own for that: the jungle's bands keep theirs. */
 const FOE_RECHARGE_TURNS = 7;
+/* (4.10) The designer: "enemy stones should also recharge at the 7 turn mark and autofire unless otherwise stated!"
+   — a refined stone of theirs that works by itself (Steel Aegis + / ✦: shields for their side; Diamond Dust + / ✦:
+   swept up again; Dragon Dance + / ✦: Mach Dragon) works again at their recharge, as yours do when your meter fills
+   (rechargeFieldPassives, 05-battle-flow.js): all of theirs standing are on the field. Said with the recharge. */
 function foeRecharge(){
   const b = ui.battle;
   if(!b || b.jungle || b.noFoeRecharge) return '';
   const r = roundNo();
   if(r <= 1 || (r - 1) % FOE_RECHARGE_TURNS !== 0) return '';
   let any = false;
+  const fired = [];
   livingEnemies().forEach(e=>{
     if(e.stone && e.stone.cast && e.stone.used){ e.stone.used = false; any = true; }
     if(e.futureUltra && e.futureUltra.used){ e.futureUltra.used = false; e._fuActs = 0; any = true; }
     if(e._soulUsed){ e._soulUsed = false; any = true; }
     if(e._lastStand){ e._lastStand = false; any = true; }
     if(e._temperUsed){ e._temperUsed = false; any = true; }
+    if(e.stone && e.stone.passiveDone){
+      e.stone.passiveDone = false;
+      const said = enemyStonePassive(e, { again:true, quiet:true });
+      if(said){ fired.push(said); any = true; }
+    }
   });
-  if(any) logBattle(`Their recharge (turn ${r})`);
-  return any ? '⚡ <b>Their side recharges</b> — what they spent is ready again.' : '';
+  if(fired.length) renderStatusBadges();
+  if(any) logBattle(`Their recharge (turn ${r})` + (fired.length ? ': ' + fired.map(x=> x.replace(/<[^>]+>/g, '')).join(' ') : ''));
+  return any ? '⚡ <b>Their side recharges</b> — what they spent is ready again.' + (fired.length ? ' ' + fired.join(' ') : '') : '';
 }
 function beginRound(msg){
   const b = ui.battle;
@@ -10243,7 +10331,8 @@ function statusTipText(key, st, c, pill){
   const cap = t=> t ? t[0].toUpperCase() + t.slice(1) : t;
   switch(key){
     case 'overheat': return `${c.W} deals <b>${s.deal || 1.5}×</b> damage but takes <b>${s.take || 1.5}×</b>.` +
-      (s.burn ? ` ${cap(c.foes)} burns for <b>${s.atk ? Math.ceil(s.burn * s.atk) : s.burn + '× ATK'}</b> each turn.` : '');
+      (s.burn ? ` ${cap(c.foes)} burns for <b>${s.atk || c.yours ? overheatBurnShown(s, !!c.yours) : s.burn + '× ATK'}</b> each turn` +
+        (c.yours && overheatBurnBest(s.burn) ? ` (by ${escapeHtml(displayName(overheatBurnBest(s.burn).h))}'s ATK, as Wildfire burns).` : '.') : '');
     case 'overcharge': { const q = (s.fresh && Array.isArray(s.firsts) && s.firsts.length) ? s.firsts : (s.fresh && s.firstChance != null ? [s.firstChance] : []);
       return (q.length && (q.length > 1 || q[0] > (s.chance || 0))
         ? `${c.Its} next move that lands has a <b>${pc(q[0])}%</b> chance to go again` + (q[1] != null ? `, the one after it <b>${pc(q[1])}%</b> (Catalyse)` : '') + `; after that, <b>${pc(s.chance)}%</b>.`   // (3.76) Catalyse's too
@@ -10443,7 +10532,7 @@ function statusTipText(key, st, c, pill){
       return `${c.W} deals <b>+${Math.round(r * 100)}%</b> damage: +10% for every step of initiative it has (its own passives' too), up to +${Math.round(MOMENTUM.cap * 100)}%.`; }
 
     case 'violentDance': { const tr = Math.max(0, danceTier());
-      return `While your Dragon Dance is up and ${c.w} is on the field, it strikes <b>${tr + 1}×</b> at the start of each turn, each at one enemy at random, for <b>${VIOLENT_DANCE.pct}×</b> its ATK — breaking <b>${tr + 1}</b> of that enemy's shields before each strike — every damage buff counted, and deals <b>+${Math.round(VIOLENT_DANCE.faster * 100)}%</b> to anything slower than it (Mach Dragon first, then initiative).`; }
+      return `While your Dragon Dance is up and ${c.w} is on the field, it strikes <b>${tr + 1}×</b> at the start of each turn, each at one enemy at random, for <b>${VIOLENT_DANCE.pct}×</b> its ATK — breaking <b>${tr + 1}</b> of that enemy's shields before each strike. Each strike is an attack of its own: it can be dodged, any shield left blocks it, its type counts (super effective or resisted) and it can land a critical hit. And ${c.w} deals <b>+${Math.round(VIOLENT_DANCE.faster * 100)}%</b> to anything slower than it (Mach Dragon first, then initiative).`; }
     case 'destruction': return `${c.W}'s attacks are super effective (<b>${DESTRUCTION_MULT}×</b>) against every element except Fairy.`;
     case 'tempering': { const ready = m ? temperReady(m) : false, left = temperSweepLeft('player');
       return `While your Steel Aegis is up, once, a blow that would take ${c.w} below half its health leaves it at half, with <b>${TEMPER.shields}</b> shields — ` +

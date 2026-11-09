@@ -979,6 +979,13 @@ function escapeHtml(s){
 
 /* ---------- BOOT ---------- */
 (async function boot(){
+  /* (4.09) the loading screen (27-assets.js): up at once, the sounds and pictures fetched while the save comes down;
+     it fades off the first page once that is drawn, whatever happens on the way */
+  const loading = typeof assetLoadStart === 'function' ? assetLoadStart() : null;
+  try { await bootSteps(loading); }
+  finally { if(loading) assetLoadEnd(); }
+})();
+async function bootSteps(loading){
   // Anonymous cloud identity + pull FIRST — cloud is the source of truth, so
   // any local cache gets overwritten before the player sees anything.
   await initCloud();
@@ -1003,6 +1010,8 @@ function escapeHtml(s){
   }
 
   if(state) await runProfileMigrations();
+  /* (4.09) the save is in: this region's backdrops and the team's portraits first; then the meter is waited for */
+  if(loading){ assetLoadProfile(); await assetLoadWait(); }
   if(state && state._needsMasteryReconcile){
     delete state._needsMasteryReconcile;
     const g = reconcileMastery();
@@ -1059,4 +1068,4 @@ function escapeHtml(s){
   if(state) go('home');
   else if(idx.length) go('profileSelect');
   else go('profileSelect');
-})();
+}

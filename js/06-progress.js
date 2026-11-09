@@ -820,6 +820,7 @@ function go(screen){
   /* Training with the Monkey King ends when you walk away from it (2.87). */
   if(ui.coreSession && !['coreSpar','battle','quiz','spelling'].includes(screen) && typeof endCoreSession === 'function') endCoreSession();
   ui.screen = screen;
+  if(typeof assetRegionCheck === 'function') assetRegionCheck();   // (4.09) a region come to since the loading screen: its backdrops, quietly
   render();
 }
 

@@ -377,6 +377,8 @@ function riftSoftCovers(sp, f, th, rc){
 function riftSkyDraw(sky, now){
   const v = riftSkyView(sky);
   if(!v) return;
+  if(!sky.ctx) sky.ctx = sky.cv.getContext('2d');                    // (4.09) none to be had a moment ago: ask again
+  if(!sky.ctx) throw new Error('no 2d context');
   const cv = sky.cv, ctx = sky.ctx, f = sky.f, map = sky.mode === 'map';
   const cw = Math.round(v.W * v.dpr), ch = Math.round(v.H * v.dpr);
   if(cv.width !== cw || cv.height !== ch){ cv.width = cw; cv.height = ch; sky.base = null; }
@@ -557,8 +559,19 @@ function riftSkyTick(now){
     }
     if(now - s.last >= 1000 / fps - 4){
       s.last = now;
-      try { riftSkyDraw(s, now); }
-      catch(e){ console.error('rift sky:', e); s.off = true; }
+      /* (4.09) A slip in the drawing no longer puts the sky out for good (its canvas emptied, the page black until
+         the page is drawn again — "there are times the starry background disappears while fighting"): a tablet short
+         of canvas memory can hand back no drawing context for a moment. The sky rests a second, takes its context
+         up again and starts afresh; only a sky that fails twenty times running is put away. */
+      try { riftSkyDraw(s, now); s.errs = 0; }
+      catch(e){
+        s.errs = (s.errs || 0) + 1;
+        if(s.errs === 1) console.error('rift sky:', e);
+        s.soft = null; s.base = null;
+        try { s.ctx = s.cv.getContext('2d') || s.ctx; } catch(e2){}
+        s.last = now + 1000;
+        if(s.errs >= 20) s.off = true;
+      }
     }
   });
   if(_riftSkies.size) _riftRaf = requestAnimationFrame(riftSkyTick);
@@ -572,10 +585,21 @@ function riftSkyTick(now){
    page's own answer can keep it without a flicker. */
 const RIFT_LIVE_KEYS = ['region6', 'explore', 'challenge', 'tear', 'shop', 'recover', 'rift'];
 let _riftPage = null, _riftHideT = null;
-function riftSkyLive(key, src){
+/* (4.09) What the page under the spelling asked of the sky. The designer: "there are times the starry background
+   disappears while fighting in the future fight and i think challenge the past". After each spelling the fight was
+   drawn again, sky and all — and then the spelling screen, tidying up behind itself a moment later (quizSkyOff,
+   03-quiz.js), put the sky away: it had thought the sky was its own, not the fight's, because the spelling page had
+   asked for no backdrop on its way in. The fight's sky stayed off until the fight was next drawn. Now each page's own
+   answer is kept here — { screen, on }, `on` null while its backdrop is still being looked for — and the spelling
+   screen leaves the sky to a page that asked for it. The spelling page's own "nothing" does not count. */
+let _riftWish = null;
+function riftWishFor(screen){ if(screen !== 'quiz') _riftWish = { screen, on:null }; }
+function riftWishOn(screen){ return !!(_riftWish && _riftWish.on === true && (screen === undefined || _riftWish.screen === screen)); }
+function riftSkyLive(key, src, screen){
   /* (3.82) …and a fight's, when its backdrop is the drawn sky (the designer: "the sky background is so
      beautiful, please don't cover over it with a translucent white layer in the battle UI") */
   const on = !!key && typeof r6SkyUri === 'function' && src === r6SkyUri() && (RIFT_LIVE_KEYS.includes(key) || /^battle_/.test(key));
+  if(_riftWish && screen !== undefined && _riftWish.screen === screen) _riftWish.on = on;
   if(on) riftPageShow(); else riftPageHide(!key);
   /* (3.83) the designer: "in region 6, the buttons for the main region page, challenge, recover and shop
      are not translucent. please make them translucent so your art is beautiful and the contrast is not so
@@ -624,6 +648,18 @@ function riftMapSky(stage, world, d){
    THE ROUND ROOM
    ============================================================ */
 const RIFT_ROOM = { n:17, r:7.6 };
+/* (4.09) The designer: "i realise there's no healing zone in region 6. can we have a starlight pool which has silvery
+   starlight aura floating up designated as the healing spot?" A pool of starlight in the middle of the round room, three
+   squares by two (not to be walked on), its water bright at the heart and deep blue at the rim, ripples running out
+   over it and glints on it, and silver motes rising off it in a soft column of light. Beside it, Recover: the motes
+   surge, and the Recover page opens (heal by spelling, as everywhere); its Back returns here. The jungle's Back comes
+   to this room too, so the pool is a step away from anywhere in the jungle.
+   (4.10) The designer: "remove the white dots on the edge of the pool and increase the intensity, density and height
+   of the rising particles. Allow the player to step inside the border, and move it to the bottom right of the screen
+   instead of the centre". In the room's south-east, between the tear and the future, three squares by two; you can
+   walk into it (its Recover offered there or beside it). No crystal stones round its rim now; 52 motes, brighter and
+   larger, rising about twice as high in a taller, brighter column. */
+const RIFT_POOL = { x:11, y:11, w:3, h:2, motes:52, surgeMs:560, rise:[3.2, 5.6], col:5.8 };
 /* Vesper's station: the desk's squares, along the top of the circle */
 const RIFT_DESK = [[6,1],[7,1],[8,1],[9,1],[10,1],[4,2],[5,2],[11,2],[12,2],[4,3],[12,3]];
 /* Selene's walk: from beside the tear (its west side) to beside the ancient portal */
@@ -665,6 +701,8 @@ const RIFT_DECK = {
     { x:2,  y:11, h:2, icon:'', verb:'Portal', sub:'To the past', act:()=> riftPortal('small') },
     { x:4,  y:1,  w:9, h:3, walk:true, icon:'', verb:'The Council', sub:'Vesper’s station', mark:()=> typeof jgCallDue === 'function' && jgCallDue(), act:()=> riftCouncil() },
     { x:4,  y:6,  html:(t, px)=> riftLucescoImg(px), cls:'rift-lion', faceR:true, icon:'🦁', verb:'Talk', sub:'Lucesco', act:()=> riftLucesco() },
+    /* (4.09) the starlight pool, in the middle of the room: Region 6's place to heal (riftPool) */
+    { x:RIFT_POOL.x, y:RIFT_POOL.y, w:RIFT_POOL.w, h:RIFT_POOL.h, walk:true, icon:'', verb:'Recover', sub:'The starlight pool', act:()=> riftPool() },   // (4.10) to be walked into
   ],
   occupied:(x, y)=> riftSelOn(x, y),
   nearActs:(d, p)=> riftNearActs(p),
@@ -709,6 +747,7 @@ function riftRoomRender(world, d){
   const jgP = art('rift-portal', 2.5 - 0.8, 5.0 - 1.4, 1.6, 2.5, riftPortalSvg(false), 'riftPortalJg');
   if(typeof jgPortalAwake === 'function' && jgPortalAwake()){ if(typeof jgCss === 'function') jgCss(); jgP.classList.add('jg-awake'); }   // (3.84) awake, green
   art('rift-portal', 2.5 - 0.8, 12.0 - 1.4, 1.6, 2.5, riftPortalSvg(false));
+  riftPoolRender(world, art);                                          // (4.09) the starlight pool
   const me = $('#walkYou');
   if(me) me.classList.add('rift-person');
   riftSelRender(world);
@@ -717,6 +756,54 @@ function riftRoomRender(world, d){
   if(!r6().roomSeen && !ui.sceneRunning) setTimeout(()=>{ if(ui.screen === 'r6_rift') riftTour(); }, 450);
   /* (3.84) …and once she has, the Council has a call waiting (20-jungle.js) */
   else if(typeof jgCallDue === 'function' && jgCallDue()) setTimeout(()=>{ if(ui.screen === 'r6_rift' && !ui.sceneRunning) toast('📡 The Council is calling! Go to Vesper\'s station.'); }, 700);
+}
+
+/* ---------- (4.09) the starlight pool ---------- */
+function riftPoolSvg(){
+  /* 100 units a square: the picture is 3.4 × 2.3 squares, the pool's oval 3.1 × 1.84 about its middle */
+  const glints = [[112, 92, 1], [208, 78, .8], [150, 136, .9], [236, 122, 1.1], [92, 128, .7], [186, 106, 1.2], [128, 70, .6], [254, 96, .7], [170, 150, .8], [70, 104, .6]]
+    .map(([x, y, k], i)=> `<path class="rp-gl" style="animation-delay:${(-i * 0.37).toFixed(2)}s" transform="translate(${x} ${y}) scale(${k})" d="M0,-7 L1.6,-1.6 7,0 1.6,1.6 0,7 -1.6,1.6 -7,0 -1.6,-1.6Z"/>`).join('');
+  return `<svg viewBox="0 0 340 230" aria-hidden="true"><defs>` +
+    `<radialGradient id="rpHalo" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#d4ddff" stop-opacity=".5"/><stop offset=".68" stop-color="#9fb2ff" stop-opacity=".18"/><stop offset="1" stop-color="#9fb2ff" stop-opacity="0"/></radialGradient>` +
+    `<radialGradient id="rpWater" cx="50%" cy="44%" r="60%"><stop offset="0" stop-color="#ffffff"/><stop offset=".2" stop-color="#eef2ff"/><stop offset=".52" stop-color="#a9b9f4"/><stop offset=".82" stop-color="#5262be"/><stop offset="1" stop-color="#2b3584"/></radialGradient>` +
+    `<linearGradient id="rpRim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6f8ff"/><stop offset="1" stop-color="#8e99cc"/></linearGradient>` +
+    `</defs>` +
+    `<ellipse class="rp-halo" cx="170" cy="115" rx="170" ry="114" fill="url(#rpHalo)"/>` +
+    `<ellipse cx="170" cy="118" rx="157" ry="94" fill="#141a4c" opacity=".6"/>` +
+    `<ellipse cx="170" cy="115" rx="155" ry="92" fill="none" stroke="url(#rpRim)" stroke-width="7"/>` +
+    `<ellipse class="rp-water" cx="170" cy="115" rx="149" ry="87" fill="url(#rpWater)"/>` +
+    `<ellipse class="rp-ripple" cx="170" cy="115" rx="149" ry="87"/><ellipse class="rp-ripple r2" cx="170" cy="115" rx="149" ry="87"/>` +
+    `<g fill="#fff">${glints}</g></svg>`;
+}
+function riftPoolRender(world, art){
+  const P = RIFT_POOL, T = WALK_T, cx = P.x + P.w / 2, cy = P.y + P.h / 2;
+  art('rift-pool', cx - 1.7, cy - 1.15, 3.4, 2.3, riftPoolSvg(), 'riftPool');
+  /* the light rising off it: over anyone behind the pool, under anyone in front (a walker's own z, 10 + its row) */
+  const up = document.createElement('div');
+  up.className = 'rift-pool-up';
+  up.id = 'riftPoolUp';
+  const H = P.col;                                                     // (4.10) taller: 5.8 squares (3.4 until 4.10)
+  up.style.cssText = `left:${(P.x + 0.1) * T}px;top:${(cy - H) * T}px;width:${(P.w - 0.2) * T}px;height:${H * T}px;z-index:${10 + P.y + P.h - 1};`;
+  let motes = '<b class="rp-col"></b>';
+  const [r0, r1] = P.rise;
+  for(let i = 0; i < P.motes; i++){
+    const near = Math.random();
+    motes += `<i style="--x:${(4 + Math.random() * 92).toFixed(1)}%;--b:${(Math.random() * 12).toFixed(1)}%;--s:${(3 + near * 4.6).toFixed(1)}px;` +
+      `--o:${(0.72 + near * 0.28).toFixed(2)};--rise:${Math.round(T * (r0 + near * (r1 - r0)))}px;--dr:${(Math.random() * 22 - 11).toFixed(1)}px;` +
+      `--t:${(4.6 - near * 1.6).toFixed(2)}s;--d:${(-Math.random() * 4.6).toFixed(2)}s;"></i>`;
+  }
+  up.innerHTML = motes;
+  world.appendChild(up);
+}
+/* Recover, at the pool: the motes surge, then the Recover page (its Back: this room). */
+function riftPool(){
+  if(ui.sceneRunning || ui.riftPoolGo) return;
+  ui.riftPoolGo = true;
+  ['riftPool', 'riftPoolUp'].forEach(id=>{ const e = document.getElementById(id); if(e) e.classList.add('surge'); });
+  setTimeout(()=>{
+    ui.riftPoolGo = false;
+    if(ui.screen === 'r6_rift') leaveDeck('recover');
+  }, RIFT_POOL.surgeMs);
 }
 
 /* ---------- Selene and Vesper, walking ---------- */
@@ -1191,6 +1278,30 @@ function riftCss(){
   .rift-edge{ position:absolute; left:0; top:0; pointer-events:none; z-index:0; }
   .rift-art{ position:absolute; pointer-events:none; z-index:5; }
   .rift-art > svg{ width:100%; height:100%; display:block; overflow:visible; }
+  /* (4.09) the starlight pool: ripples out over it, glints on it, silver motes rising off it in a soft column of light */
+  .rift-pool .rp-halo{ transform-box:fill-box; transform-origin:50% 50%; animation:rpHalo 4.2s ease-in-out infinite; }
+  .rift-pool .rp-water{ transition:filter .4s ease; }
+  .rift-pool .rp-ripple{ fill:none; stroke:#fff; stroke-width:2.2; opacity:0; transform-box:fill-box; transform-origin:50% 50%; animation:rpRipple 3.8s ease-out infinite; }
+  .rift-pool .rp-ripple.r2{ animation-delay:-1.9s; }
+  .rift-pool .rp-gl{ opacity:.2; animation:rpGlint 2.6s ease-in-out infinite; }
+  .rift-pool.surge .rp-water{ filter:brightness(1.3) saturate(.8); }
+  .rift-pool.surge .rp-halo{ animation:none; transform:scale(1.12); opacity:1; transition:transform .4s ease; }
+  .rift-pool-up{ position:absolute; pointer-events:none; overflow:visible; }
+  .rift-pool-up .rp-col{ position:absolute; left:4%; right:4%; bottom:0; height:100%; border-radius:50% 50% 40% 40% / 60% 60% 30% 30%;
+    background:radial-gradient(ellipse 50% 100% at 50% 100%, rgba(236,241,255,.62), rgba(214,223,255,.26) 46%, rgba(205,215,255,0) 78%);
+    animation:rpCol 4.6s ease-in-out infinite; transition:opacity .35s ease, transform .35s ease; transform-origin:50% 100%; }
+  .rift-pool-up i{ position:absolute; left:var(--x); bottom:var(--b); width:var(--s); height:var(--s); margin-left:calc(var(--s) / -2); border-radius:50%;
+    background:#ffffff; box-shadow:0 0 5px 2px rgba(232,238,255,.95), 0 0 14px 4px rgba(196,210,255,.6); opacity:0;
+    animation:rpMote var(--t) linear var(--d) infinite; }
+  .rift-pool-up.surge .rp-col{ opacity:1; transform:scaleY(1.3); animation:none; }
+  .rift-pool-up.surge i{ animation-duration:calc(var(--t) * .42); }
+  @keyframes rpRipple{ 0%{ transform:scale(.12); opacity:.75; } 70%{ opacity:.18; } 100%{ transform:scale(1); opacity:0; } }
+  @keyframes rpGlint{ 0%,100%{ opacity:.18; } 50%{ opacity:1; } }
+  @keyframes rpHalo{ 0%,100%{ transform:scale(.97); opacity:.85; } 50%{ transform:scale(1.04); opacity:1; } }
+  @keyframes rpCol{ 0%,100%{ opacity:.62; } 50%{ opacity:1; } }
+  @keyframes rpMote{ 0%{ transform:translate(0, 0); opacity:0; } 12%{ opacity:var(--o); } 72%{ opacity:calc(var(--o) * .75); }
+    100%{ transform:translate(var(--dr), calc(-1 * var(--rise))); opacity:0; } }
+  @media (prefers-reduced-motion: reduce){ .rift-pool .rp-ripple{ animation:none; } .rift-pool-up i{ animation-duration:calc(var(--t) * 2); } }
   .rift-stage .walk-steps i{ background:rgba(215,225,255,.42); box-shadow:0 0 0 1.5px rgba(255,255,255,.55); }
   .rift-stage .walk-shade i{ background:#000; }
   .rift-stage.pathing .walk-shade{ opacity:.45; }

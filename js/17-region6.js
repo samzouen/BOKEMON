@@ -1411,6 +1411,56 @@ function foeOneStrike(e, pct, label, opts){
   const r = foeStrikeYours(e, pct, false, opts)[0];
   return r ? `${label} — ${escapeHtml(displayName(r.me))}${r.broke ? ` (${r.broke} shield${r.broke > 1 ? 's' : ''} shattered first)` : ''}!` : '';
 }
+/* (4.09) Their Violent Dance: a strike of its own, as yours is now (runViolentDance, 04-battle.js) — the designer, of
+   Violent Dance: "it can miss and be subjected to shield block … subject to super effective and type resistance … in
+   exchange it can crit". The mirror of their quick attack (quickStrikeYours): one of yours at random; the Aria, a blind
+   and your evasion have their say; their Dragon Dance breaks its shields first; then the whole formula — its types
+   against yours (their Destruction; your Fortress), your cuts, a critical — and what shields are left soak it; and what
+   gets through carries their riders and procs, as any blow of theirs does. */
+function foeViolentStrike(e, label){
+  const b = ui.battle, mine = livingField();
+  if(!b || !e || e.hp <= 0 || !mine.length) return '';
+  const me = mine[Math.floor(Math.random() * mine.length)];
+  return withFocus(me, ()=>{
+    const nm = escapeHtml(displayName(me)), bob = pid('playerBob', me);
+    if(e.lurk || e.cunning){ breakCover(e); e._ambush = 0; }
+    noteAriaAttack();                                           // an attack on your side, all the same
+    if(ariaPassesThrough(me, seesThrough(e))){ dodgePlayer(); floatMiss(bob, 'MISS'); return `${label} — it passes harmlessly through ${nm}.`; }
+    if(!seesThrough(e) && rollBlind(e)){ floatMiss(bob, 'MISS'); return `${label} — 🔆 blinded, it misses!`; }
+    if(!seesThrough(e) && rollPlayerDodge(e)){ dodgePlayer(); floatMiss(bob, dodgeWord(me)); return `${label} — ${nm} slips it.`; }
+    const omen = e._omen, amb = e._ambush;
+    e._omen = 0; e._ambush = 0;                               // kept for its real blow
+    e._blow = newBlowId('fvd');                               // an attack of its own
+    const dmg = computeDamage(VIOLENT_DANCE.pct, enemyAtk(e), e, monRef(me), false, false, { violent:true });
+    e._omen = omen; e._ambush = amb;
+    const sh0 = shieldsOn(me);
+    breakShields('enemy', e, me, e._blow, pid('playerBlk', me), bob);   // (3.77) their Dance's break, each strike
+    const broke = sh0 - shieldsOn(me);
+    const before = me.currentHp;
+    const through = capHit(me, applyBlock(me, dmg, pid('playerBlk', me)));
+    if(through > 0) noteHurt(me, e._blow);
+    me.lastDamageTaken = dmg;                                 // a reflection returns the full figure
+    dropHp(me, through);
+    /* (4.09) its riders and procs, as any blow of theirs that gets through: their Deadly Combo, Capacitor and Vicious
+       Hex (foeHitLanded), their ✦ Spike Armour's strike, their Leech Seed's drink (and its ✦ bite) */
+    let fed = 0;
+    if(through > 0){
+      foeHitLanded(e, me, before - me.currentHp);
+      spikeRiderTheirs(e, me);
+      fed = theirSeedsDrink(e);
+    }
+    if(b.arenaImmortal && me.currentHp <= 0) me.currentHp = monMaxHp(me);
+    flashHit(document.getElementById(bob));
+    drainHp(pid('playerHp', me), before, me.currentHp, monMaxHp(me));
+    showDamageNumber(bob, before - me.currentHp);
+    if(dmg > through) floatBlocked(bob, dmg - through);
+    playSfx('hit_taken');
+    const said = effectivenessLabel(typeMultFor(e, monRef(me)));
+    logBattle(`Their Violent Dance (${SPECIES[e.species].name}): ${dmg} → ${before - me.currentHp} to ${displayName(me)}` + (broke ? `, ${broke} shield${broke > 1 ? 's' : ''} broken first` : '') + (fed ? `, their seeds +${fed}` : ''));
+    return `${label} — ${nm}${broke ? ` (${broke} shield${broke > 1 ? 's' : ''} shattered first)` : ''}!${said ? ' ' + said : ''}` +
+      (fed > 0 ? ` 🌱 Their seeds drink deep — ${fed} HP to each of them.` : '');
+  });
+}
 function foeCapacitorStrike(s){
   const mine = livingField();
   if(!mine.length || !s || !(s.dmg > 0)) return '';
@@ -1439,8 +1489,8 @@ function foeUpkeepPassives(done){
   const dd = getESide('dragonDance');
   if(dd){
     const n = Math.max(0, vhTier(dd)) + 1;
-    foeHolders('Dragon', 'vh').forEach(e=>{ for(let k = 1; k <= n; k++) jobs.push(()=> getESide('dragonDance') ? foeOneStrike(e, VIOLENT_DANCE.pct, `🐲 Their ${foeNm(e)}'s Violent Dance${n > 1 ? ` (${k}/${n})` : ''} strikes`,
-      { breakKey:'fvd:' + (b._vdSeq = (b._vdSeq || 0) + 1) }) : ''); });   // (3.77) shields broken before each strike, a break of its own each
+    /* (3.77) shields broken before each strike, a break of its own each; (4.09) each a strike of its own (foeViolentStrike) */
+    foeHolders('Dragon', 'vh').forEach(e=>{ for(let k = 1; k <= n; k++) jobs.push(()=> (getESide('dragonDance') && e.hp > 0) ? foeViolentStrike(e, `🐲 Their ${foeNm(e)}'s Violent Dance${n > 1 ? ` (${k}/${n})` : ''} strikes`) : ''); });
   }
   if(getESide('spikeArmour')) foeHolders('Ground', 'vh').forEach(e=> jobs.push(()=>{
     const sa = getESide('spikeArmour');                                         // (3.77) 0.2 / 0.3 / 0.4× by its tier
