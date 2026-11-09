@@ -1,0 +1,8 @@
+# Spelling fixes for the word lists. One per line: the wrong phrase, then >, then the right one.
+# The game swaps the wrong phrase for the right one everywhere: in every list, in each child's
+# progress (the right phrase takes over its mastery, ticks and medals) and in words added on a device.
+# Correct the line in the list file as well. Lines starting with # are notes.
+肮胀 > 肮脏
+车俩 > 车辆
+炒香肠 > 烤香肠
+购物产 > 购物中心
