@@ -184,6 +184,11 @@ function ancCss(){
    Only then does he unseal them, the north-west first and on round
    clockwise — Grass (no invaders), Water (2 captains, 1 commander), Fire
    (4, 1), Earth (5, 2) — and after his gift the castle itself is invaded.
+   (4.13) The unsealing is 28-unseal.js's now: you lead the King to each village yourself, without his knights; he
+   unseals the ancestor there, it fights you, and the light of it brings the aliens down on the village — one
+   unsealing a day. A village is done (warStage) once its siege is won, not when its ancestor is calmed; the King, his
+   knights and the bands of 3.92–3.99 no longer stand at the villages (their things stay, unseen, so that nothing else
+   the jungle places moves).
    ============================================================ */
 /* (3.99) The designer: "The King agrees to unseal each ancestor, but in its village … starting top-left, then
    clockwise. The alien invasion happens on the 2nd, 3rd and 4th unsealing." So the north-west first, and the forces
@@ -206,7 +211,7 @@ function warStage(){
   if(!state || !state.progress || !state.progress.region6) return null;
   const w = warState();
   if(!w.council) return null;
-  return WAR_ORDER.find(k=> !w.calmed[k]) || 'done';
+  return WAR_ORDER.find(k=> !(typeof unDone === 'function' ? unDone(k) : w.calmed[k])) || 'done';   // (4.13) done: its siege won
 }
 const warAncId = k=> 'tribal_ancestor_' + k;
 const WAR_VILLAGE = { water:'the Water tribe\'s village, in the north-east', fire:'the Fire tribe\'s village, in the south-east',
@@ -267,30 +272,32 @@ function warSpots(k){
   return { king:{ x:L.x + 5, y:L.y + L.h + 1 }, guards:[{ x:L.x + 7, y:L.y + L.h + 1 }, { x:L.x - 2, y:L.y + L.h + 1 }], anc:{ x:L.x + L.w + 1, y:L.y + 1 } };
 }
 
-/* ---------- the things the war puts in the jungle (jgThings asks) ---------- */
+/* ---------- the things the war puts in the jungle (jgThings asks) ----------
+   (4.13) warOld(): the King with his knights at the village, and its bands — 3.92–3.99's war, not shown since 28-unseal.js */
+function warOld(){ return typeof unPhase !== 'function'; }   // (asked as it is drawn: 28-unseal.js comes after this file)
 function warJungleThings(list, P){
   WAR_ORDER.forEach(k=>{
     const S = warSpots(k), A = ANC_FOLK[warAncId(k)];
     /* the King, mounted, with two knights, while the war is at this village */
     list.push({ x:S.king.x, y:S.king.y, cls:'jg-npc war-king', faceR:true, html:()=> jgMonImg('fairy_king_mounted_c_front', WALK_T * 2.3, false, 'fairy_king_c_front'),   // (3.96) faces right with face-r, so he can turn to you
-      verb:'Talk', sub:'The Fairy King', when:()=> warStage() === k, mark:()=> warStage() === k && !warBandsLeft(k).length, act:()=> warKingVillage(k) });
+      verb:'Talk', sub:'The Fairy King', when:()=> warOld() && warStage() === k, mark:()=> warStage() === k && !warBandsLeft(k).length, act:()=> warKingVillage(k) });
     S.guards.forEach((g, i)=> list.push({ x:g.x, y:g.y, cls:'jg-npc war-guard', still:true, faceR:i === 1, html:()=> jgMonImg('chestnut_knight2_front', WALK_T * 1.5),
-      verb:'Talk', sub:'Chestnut Knight', when:()=> warStage() === k, act:()=> warKnightTalk(k) }));
+      verb:'Talk', sub:'Chestnut Knight', when:()=> warOld() && warStage() === k, act:()=> warKnightTalk(k) }));
     /* the invaders, each band fought by one of the King's knights */
     warBands(k).forEach(b=>{
       const dx = b.knight.x - b.x, dy = b.knight.y - b.y;
       list.push({ x:b.x, y:b.y, get cls(){ return 'jg-npc war-alien war-' + b.rank; },
         html:()=> `<div class="war-fig">${jgMonImg(b.lead, WALK_T * (b.rank === 'commander' ? 1.9 : 1.6), dx > 0)}</div>` + warSlashHtml(dx, dy),
         verb:'Fight', sub:b.rank === 'commander' ? "Commander Octopus's army" : "Captain Humanoid's band",
-        when:()=> warStage() === k && !warState().beaten[b.id], act:()=> warFight(b) });
+        when:()=> warOld() && warStage() === k && !warState().beaten[b.id], act:()=> warFight(b) });
       list.push({ x:b.knight.x, y:b.knight.y, still:true, get cls(){ return 'jg-npc war-knight' + (warState().beaten[b.id] ? ' war-won' : ''); },
         html:()=> `<div class="war-fig">${jgMonImg(b.knight.sprite + '_front', WALK_T * 1.45, dx < 0)}</div>`,
         verb:'Talk', get sub(){ return b.knight.sprite === 'duck_knight2' ? 'Duck Knight' : b.knight.sprite === 'bug_knight1' ? 'Bug Knight' : 'Chestnut Knight'; },
-        when:()=> warStage() === k, act:()=> warKnightTalk(k, b) });
+        when:()=> warOld() && warStage() === k, act:()=> warKnightTalk(k, b) });
     });
     /* calmed: the ancestor stays at its village, gruff but no longer hostile */
     list.push({ x:S.anc.x, y:S.anc.y, cls:'jg-npc war-anc anc-' + k, html:()=> jgMonImg(warAncId(k) + '_front', WALK_T * 2.5),
-      verb:'Talk', sub:A ? A.name : 'The ancestor', when:()=> !!warState().calmed[k], act:()=> warAncestorTalk(k) });
+      verb:'Talk', sub:A ? A.name : 'The ancestor', when:()=> typeof unAncHome === 'function' ? unAncHome(k) : !!warState().calmed[k], act:()=> warAncestorTalk(k) });
   });
   warCss();
 }
@@ -327,7 +334,7 @@ async function warLines(seq){
 async function warKingCastle(){
   const w = warState(), st = warStage();
   if(!w.council) return caLines([['king', `<b>"Welcome, my friends."</b>`]]);
-  if(st && st !== 'done') return warOfferRide(st);
+  if(st && st !== 'done') return typeof unKingCastle === 'function' ? unKingCastle(st) : warOfferRide(st);   // (4.13) a ride a day, from the south gate
   if(st === 'done' && !w.stone) return warGift();
   if(typeof questAlarmDue === 'function' && questAlarmDue()) return questAlarm();   // (3.99) after the gift: the alarm
   return caLines([['king', caTurn('kingAfter', [

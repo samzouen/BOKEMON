@@ -130,8 +130,13 @@ const TALENT_COST = { minor:1, major:2 };
 const TALENT_CRIT_MULT = 1.5;          // a critical from a talent, unless a node raises it
 /* (4.04) no caps (the designer: "there should not be a cap on talent passive numbers. We can control talent trees to
    naturally prevent overachieving a stat"): until 4.04 a talent's critical chance stopped at 50%, its dodge at 30% and
-   its damage cuts at 60% off — now only a chance's own 100% (and all of a blow) bound them */
-const TALENT_CRIT_CAP = 1, TALENT_DODGE_CAP = 1, TALENT_CUT_MAX = 1;
+   its damage cuts at 60% off — and until 4.14 each still stopped at 100%.
+   (4.14) The designer: "Please do not cap any stats. Crit chance needs uncapping." Nothing stops any of them now, and
+   what is past 100% counts: a critical chance of 115% is certain, and still certain under an Unlucky hex (15 off, each
+   source of criticals); a dodge of 115% likewise under a Clumsy one (dodgeStack, 04-battle.js); a damage cut of 115%
+   lets nothing through, and still nothing under a Brittle one (15 points of its cuts), its multiplier below 0 and the
+   blow held at 0 at the end (computeDamage). (TALENT_CRIT_CAP, TALENT_DODGE_CAP and TALENT_CUT_MAX are gone, and an
+   alien's own dodge limit with them.) */
 const TALENT_STATS = {
   atk:  { short:'ATK',   name:'Attack',    v:0.04 },
   hp:   { short:'HP',    name:'Vitality',  v:0.05 },
@@ -382,8 +387,8 @@ function talentSummary(fx){
   if(fx.hp) out.push(`Max HP ${pct(fx.hp)}`);
   if(fx.dmg) out.push(`Damage ${pct(fx.dmg)}`);
   if(fx.def) out.push(`Damage taken −${talentPct(fx.def)}`);
-  if(fx.dodge) out.push(`Dodge +${talentPct(Math.min(TALENT_DODGE_CAP, fx.dodge))}`);
-  if(fx.crit) out.push(`Critical +${talentPct(Math.min(TALENT_CRIT_CAP, fx.crit))} (×${fx.critX})`);
+  if(fx.dodge) out.push(`Dodge +${talentPct(fx.dodge)}`);                       // (4.14) uncapped, as shown
+  if(fx.crit) out.push(`Critical +${talentPct(fx.crit)} (×${fx.critX})`);
   Object.values(fx.nm).filter((v, i, a)=> a.indexOf(v) === i).forEach(nm=> out.push(nm));
   return out.join(' · ');
 }
@@ -441,7 +446,8 @@ function talentDealMult(att, def, isPlayer, peek, opts){
   add -= hexCut(a || att, 'hxDmg');               // (3.86) a Vicious Hex Dulled: off its damage bonuses
   return add ? Math.max(0.1, 1 + add) : 1;
 }
-/* …and the defender's: its damage cuts, all added up (60% at most until 4.04). */
+/* …and the defender's: its damage cuts, all added up (60% at most until 4.04, 100% until 4.14: past it now, the
+   multiplier goes below 0, and computeDamage holds the blow at 0 — what is past 100% stands against Brittle). */
 function talentTakeMult(def, att){
   if(!ui.battle) return 1;
   const d = talentHolder(def);
@@ -453,20 +459,20 @@ function talentTakeMult(def, att){
     if(fx.resilient && att && att.types && def && def.types && typeMultFor(att, def) > 1) cut += fx.resilient;
   }
   cut += talentAura(d || def, 'warden');
-  return cut ? Math.max(1 - TALENT_CUT_MAX, 1 - cut) : 1;
+  return cut ? 1 - cut : 1;
 }
 /* A talent's critical: rolled for a blow that no other critical has made
    one already. Returns the multiplier, or 1. */
 function talentCrit(att, def){
   const a = talentHolder(att), fx = a ? talentFxOf(a) : null;
-  if(!fx || !(fx.crit > 0) || !(Math.random() < Math.min(TALENT_CRIT_CAP, fx.crit) - critCut(a))) return 1;   // (3.86) less, Unlucky
+  if(!fx || !(fx.crit > 0) || !(Math.random() < fx.crit - critCut(a))) return 1;   // (3.86) less, Unlucky; (4.14) no cap
   const d = def ? (talentHolder(def) || def) : null;
   if(d && d.species) floatOver(d, 'CRITICAL');
   const b = ui.battle;
   if(b && a.uid){ if(b._critAt !== b.actionSeq){ b._critAt = b.actionSeq; b._crits = 0; } b._crits++; }
   return fx.critX || TALENT_CRIT_MULT;
 }
-function talentDodge(x){ const fx = tfx(x); return fx ? Math.min(fx.dodgeCap || TALENT_DODGE_CAP, fx.dodge || 0) : 0; }   // (3.86) an alien's own limit
+function talentDodge(x){ const fx = tfx(x); return fx ? (fx.dodge || 0) : 0; }   // (4.14) no cap (an alien's own limit gone too)
 function talentInit(x){ const fx = tfx(x); return (fx ? (fx.swift || 0) : 0) + ((x && !x.uid && x.distInit) || 0); }   // and the distortion's Haste
 function talentLinger(x){ const fx = tfx(x); return fx ? (fx.linger || 0) : 0; }
 function talentThorns(x){ const fx = tfx(x); return fx ? (fx.thorns || 0) : 0; }
@@ -483,20 +489,39 @@ function talentMarkOpened(x){
 function talentUndyingReady(x){ const h = talentHolder(x), fx = h ? talentFxOf(h) : null; return !!(fx && fx.undying && !bState(h).tUndying); }
 function talentUndyingUse(x){ const h = talentHolder(x); if(h) bState(h).tUndying = true; return talentName(h, 'undying') || 'Undying'; }
 /* Shields as it comes onto the field (applyEntryPassives): once a battle —
-   a Bastion constellation's, and the distortion's Haste. */
-function talentEntry(holder, atk){
+   a Bastion constellation's, and the distortion's Haste. (4.14) Every arrival
+   of yours asks (applyStonePassives), so one the meter's refill has given its
+   shields back (talentRecharge) raises them as it comes in again; `opts.quiet`
+   hands the line back rather than saying it. Returns the line, or ''. */
+function talentEntry(holder, atk, opts){
   const b = ui.battle;
-  if(!b || !holder) return;
+  if(!b || !holder) return '';
   const h = talentHolder(holder) || holder, fx = talentFxOf(h);
   const n = (fx ? (fx.bastion || 0) : 0) + ((!h.uid && h.distShields) || 0);
-  if(!(n > 0)) return;
+  if(!(n > 0)) return '';
   const s = bState(h);
-  if(s.tBastion) return;
+  if(s.tBastion) return '';
   s.tBastion = true;
   grantBlock(h, n, atk || (typeof atkOfMon === 'function' ? atkOfMon(h) : 0));
   const who = h.uid ? displayName(h) : SPECIES[h.species].name;
   const why = (fx && fx.nm.bastion) ? fx.nm.bastion : 'Haste';
-  setTimeout(()=>{ if(ui.battle === b) battleMsg(`🧱 ${escapeHtml(who)} — ${escapeHtml(why)}: ${n} shields.`); }, 650);
+  const line = `🧱 ${escapeHtml(who)} — ${escapeHtml(why)}: ${n} shields.`;
+  if(opts && opts.quiet) return line;
+  setTimeout(()=>{ if(ui.battle === b) battleMsg(line); }, 650);
+  return line;
+}
+/* (4.14) The designer: "Reinvigorate should read all moves and talents restored" — and so the meter's refill
+   (feedRecharge) gives every one of yours its once-a-battle talents back: Undying ready again, and a Bastion's shields.
+   One standing on the field raises them at once, as a refined stone's passive works again at once
+   (rechargeFieldPassives); one on the bench, as it comes in. Theirs are not touched: their recharge every 7 turns is
+   their own (foeRecharge). Returns what was raised, for the second wind's line. */
+function talentRecharge(){
+  const b = ui.battle;
+  if(!b) return [];
+  Object.values(b.mscratch || {}).forEach(s=>{ s.tUndying = false; s.tBastion = false; });
+  const said = [];
+  if(typeof livingField === 'function') livingField().forEach(m=>{ const line = talentEntry(m, 0, { quiet:true }); if(line) said.push(line); });
+  return said;
 }
 /* The end of every turn: what heals itself (endRound). Returns its line. */
 function talentRoundEnd(){

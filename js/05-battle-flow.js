@@ -172,8 +172,13 @@ function fxBox(at){
   };
 }
 
+/* (4.15) How much longer a move's drawn art holds the screen: nothing when 29-fx.js isn't loaded, so this file still runs
+   under an index.html that doesn't load it yet (an upload done in two steps). */
+function fxHoldMs(name){ return typeof fxHoldFor === 'function' ? fxHoldFor(name) : 0; }
+
 function playEffect(moveName, opts, done){
   opts = opts || {};
+  if(typeof fxPlay === 'function' && fxPlay(moveName, opts, done)) return;   // (4.15) the drawn art (29-fx.js), where a move has it
   const layer = $('#fxLayer');
   if(!layer){ if(done) done(); return; }
   const fx = resolveFx(moveName, opts.type, opts.tier);
@@ -290,6 +295,7 @@ function reportHits(hits){
 function flashHit(el){
   if(!el) return;
   el.classList.remove('hit-flash'); void el.offsetWidth; el.classList.add('hit-flash');
+  if(typeof fxStruck === 'function') fxStruck(el);    // (4.15) the move's burst where it lands (29-fx.js)
 }
 function drainHp(id, oldCur, newCur, max){
   const bar = document.getElementById(id);
@@ -893,7 +899,8 @@ const RECHARGE_TARGET = 100;
 /* Every word written during a fight feeds a shared meter. At 100 it restores
    every spent Very High and Ultra move, Steel Soul's cast on both sides
    (2.93) and the phoenix's Rebirth (3.00) — a second wind for long battles —
-   and rolls the surplus into the next charge. */
+   (4.14) and the talents' once-a-battle uses (talentRecharge), and rolls the
+   surplus into the next charge. */
 function feedRecharge(words){
   const b = ui.battle;
   if(!b || !words) return false;
@@ -909,6 +916,7 @@ function feedRecharge(words){
      cast — so it fires again the next time its carrier takes the field. */
   b.passiveFired = {};
   b.refillSaid = rechargeFieldPassives();   // (4.09) …and at once, for a carrier already out
+  if(typeof talentRecharge === 'function') b.refillSaid.push(...talentRecharge());   // (4.14) …and the talents' once-a-battle ones: Undying, a Bastion's shields
   allyRecharge();                      // (3.19) the Monkey King's stones, every one again
   return true;
 }
@@ -941,12 +949,9 @@ function secondWindSoon(){
   setTimeout(show, 1500);
 }
 /* What the second wind says it gave back (2.93: Steel Soul too, if a
-   monster of yours knows it; 3.00: Rebirth, if a phoenix of yours has it). */
+   monster of yours knows it; 3.00: Rebirth, if a phoenix of yours has it —
+   named one by one until 4.14). */
 function secondWindMsg(){
-  const soul = battleParty().some(m=> m && (MOVES[m.species] || []).some(r=> r[6] && r[6].soul && (m.level || 1) >= r[5]));
-  const tachy = battleParty().some(m=> m && (MOVES[m.species] || []).some(r=> r[6] && r[6].tachy && (m.level || 1) >= r[5]));   // (3.63)
-  const reborn = battleParty().some(m=> m && hasRebirth(m));
-  const extra = [soul ? 'Steel Soul' : '', tachy ? 'Tachypsychia' : '', reborn ? 'Rebirth' : ''].filter(Boolean);
   /* (3.59) …and a refined stone's free cast on taking the field (Diamond
      Dust + / ✦ above all: bring its carrier in to renew the dust) */
   /* (4.09) those whose carriers stand on the field have worked already (rechargeFieldPassives): what they did; the rest,
@@ -958,7 +963,11 @@ function secondWindMsg(){
     .filter(st=> st && st.tier === 'veryhigh' && (veryHighDef(st.type, stonePlus(st)) || {}).passive).map(st=> stoneDisplayName(st)))];
   const freeLine = free.length ? ` ${free.join(' and ')} work${free.length === 1 ? 's' : ''} again as ${free.length === 1 ? 'its carrier comes' : 'their carriers come'} in.` : '';
   const didLine = did.length ? '<br>' + did.join('<br>') : '';
-  return `⚡ Second wind! Very High and Ultra moves${extra.length ? ', and ' + extra.join(' and ') + ',' : ''} restored.${freeLine}${didLine}`;
+  /* (4.12) The designer: "keep the name Second Wind [a talent to come], but let the recharge meter's one be renamed
+     'Reinvigorate'." (4.14) "Reinvigorate should read all moves and talents restored": until 4.14 it named the Very
+     High and Ultra moves, and Steel Soul, Tachypsychia and Rebirth where yours had them. The talents' once-a-battle
+     ones come back with it now (talentRecharge, 17-region6.js). */
+  return `⚡ Reinvigorate! All moves and talents restored.${freeLine}${didLine}`;
 }
 
 function bankWordSpill(mv){
@@ -2076,7 +2085,8 @@ function resolveBattleMove(mv, target, results, opts){
             takePsyNote());
   bob($('#' + pid('playerBob')), +1);
   playEffect(mv.name, { type: mv.stoneType || SPECIES[mon.species].types[0], tier: mv.stoneTier,
-                        at: hits[0] ? 'enemy-'+hits[0].idx : null });
+                        at: hits[0] ? 'enemy-'+hits[0].idx : null, targets:[...new Set(hits.map(h=> 'enemy-' + h.idx))],   // (4.15) all of them, for the art
+                        charge: mv.scale ? Math.max(0, Math.min(1, (scaledFactor(mv, correct) - mv.mult) / Math.max(0.01, mv.scale.max - mv.mult))) : null });   // and how far past its base a scaling move was written
   setTimeout(()=>{
     applyHits(hits);
     reportHits(hits);
@@ -2115,7 +2125,7 @@ function resolveBattleMove(mv, target, results, opts){
       setTimeout(()=>onMonFainted(), 900); return;
     }
     afterPlayerAttack(mon, hits);
-  }, 330);
+  }, 330 + fxHoldMs(mv.name));
 }
 
 /* (4.07) What a blow of yours sets off on the ones it reached — a stun, a sleep, a blinding, a taunt, a muddle, a
@@ -3005,7 +3015,7 @@ function enemyIceBarrier(e, move, then){
   const idx = ui.battle.enemies.indexOf(e);
   bob(document.getElementById('enemyBob-' + idx), -1);
   const gaze = !!(move[6] && move[6].stargaze);   // (3.87) a Firefox's quick Stargazer comes this way too
-  playEffect(move[1], { type:gaze ? 'Psychic' : 'Water', at:'enemy-' + idx });
+  playEffect(move[1], { type:gaze ? 'Psychic' : 'Water', at:'enemy-' + idx, from:'enemy-' + idx });
   battleMsg(gaze ? castStargazer('enemy', e, move[6].stargaze, move[1]) : castIceBarrier('enemy', e, move[6].iceBarrier, move[1]));
   renderStatusBadges();
   setTimeout(then, 1300);
@@ -3026,7 +3036,7 @@ function enemyQuickStargazer(e){
 function enemyBarrier(e, move, next){
   const idx = ui.battle.enemies.indexOf(e);
   bob(document.getElementById('enemyBob-' + idx), -1);
-  playEffect(move[1], { type:'Water', at:'enemy-' + idx });
+  playEffect(move[1], { type:'Water', at:'enemy-' + idx, from:'enemy-' + idx });
   battleMsg(castBarrier('enemy', e, move[6].barrier, move[1]));
   renderStatusBadges();
   setTimeout(next, 1100);
@@ -3066,7 +3076,7 @@ function foeSupportPick(e){
 function enemyPsySupport(e, move, next){
   const idx = ui.battle.enemies.indexOf(e), x = move[6], name = SPECIES[e.species].name;
   bob(document.getElementById('enemyBob-' + idx), -1);
-  playEffect(move[1], { type:e.types[0], at:'enemy-' + idx });
+  playEffect(move[1], { type:e.types[0], at:'enemy-' + idx, from:'enemy-' + idx });
   let line = '';
   if(x.mend) line = castMend('enemy', e, x.mend, move[1]);
   else if(x.transfuse) line = castTransfuse('enemy', e, x.transfuse, move[1]).line;
@@ -3093,7 +3103,7 @@ function enemyGlitch(e, move, next){
   const idx = ui.battle.enemies.indexOf(e);
   const t = enemyPickTarget(e, null) || activeMon();
   bob(document.getElementById('enemyBob-' + idx), -1);
-  playEffect(move[1], { type:'Psychic', at:'enemy-' + idx });
+  playEffect(move[1], { type:'Psychic', at:'enemy-' + idx, from:'enemy-' + idx });
   battleMsg(applyGlitch('enemy', e, t, kind) || `🔷 ${SPECIES[e.species].name}'s Glitch — nothing happens.`);
   renderStatusBadges();
   setTimeout(next, 1100);
@@ -3278,7 +3288,7 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
   logBattle(`${displayName(mon)} used ${mv.name} — ${totalHits} strikes on ${targets.length} target(s)`);
   battleMsg(`${mv.name}!` + takePsyNote());
   bob($('#' + pid('playerBob')), +1);
-  playEffect(mv.name, { type: SPECIES[mon.species].types[0] });
+  playEffect(mv.name, { type: SPECIES[mon.species].types[0], targets:targets.map(t=> 'enemy-' + ui.battle.enemies.indexOf(t)) });   // (4.15)
   setTimeout(()=> playVolleys(volleys, 0, ()=>{
     reportHits(all);
     saveProfile();
@@ -3292,7 +3302,7 @@ function resolveAoeHits(mv, mon, factor, atk, targets){
       setTimeout(()=>onMonFainted(), 900); return;
     }
     afterPlayerAttack(mon, all);
-  }), 330);
+  }), 330 + fxHoldMs(mv.name));
 }
 
 /* Every damage path must roll evasion, not just the single-hit one. Airborne
@@ -3609,7 +3619,7 @@ function resolveSplitHits(mv, mon, factor, atk, target){
       ? `${mv.name} struck ${hits.length} time${hits.length===1?'':'s'}!` + (dodged ? ` (${dodged} dodged)` : '') + (zap ? ' ' + zap : '')
       : `${mv.name} — every strike dodged!`);
     afterPlayerAttack(mon, hits);
-  }, true), 330);
+  }, true), 330 + fxHoldMs(mv.name));
 }
 
 /* (4.07) A High move's blows: the one you aimed at (or, fallen, the first standing) and one other at random — split out
@@ -3643,13 +3653,13 @@ function resolveMulti2(mv, mon, correct, target){
   battleMsg(`${mv.name}!` + takePsyNote());
   bob($('#' + pid('playerBob')), +1);
   playEffect(mv.name, { type: mv.stoneType || SPECIES[mon.species].types[0], tier: mv.stoneTier,
-                        at: hits[0] ? 'enemy-'+hits[0].idx : null });
+                        at: hits[0] ? 'enemy-'+hits[0].idx : null, targets:[...new Set(hits.map(h=> 'enemy-' + h.idx))] });   // (4.15)
   setTimeout(()=> playSuccessiveHits(hits, 0, ()=>{
     reportHits(hits);                   // the red numbers, one on each target
     saveProfile();
     battleMsg(`${mv.name} hit ${hits.length} time${hits.length===1?'':'s'}!`);
     afterPlayerAttack(mon, hits);
-  }, true), 330);
+  }, true), 330 + fxHoldMs(mv.name));
 }
 
 /* (4.07) An Ultra's (or a drive move's) strikes: its count rolled (5–7, 6–8, 7–9 as the stone is refined, 45/35/20;
@@ -3727,7 +3737,7 @@ function resolveMultiHit(mv, mon, correct, driveTarget){
       setTimeout(()=>onMonFainted(), 900); return;
     }
     afterPlayerAttack(mon, hits);
-  }, true), 330);
+  }, true), 330 + fxHoldMs(mv.name));
 }
 /* Held until explicitly released, so the screen stays inverted for the entire
    Ultra sequence rather than snapping back mid-barrage. */
@@ -4336,7 +4346,7 @@ function enemyActs(i, e){
     const msg = castEnemyVeryHigh(e, e.stone.type, e.stone.plus || 0);
     renderStatusBadges();
     if(msg) battleMsg(msg);
-    playEffect((VERY_HIGH[e.stone.type] || {}).name || e.stone.type, { type:e.stone.type, tier:'veryhigh' });
+    playEffect((VERY_HIGH[e.stone.type] || {}).name || e.stone.type, { type:e.stone.type, tier:'veryhigh', from:'enemy-' + idx, foe:true });
     return setTimeout(()=> enemyActs(i, e), 1500);
   }
   /* (3.16) Caladrius's Ice Barrier is a quick cast now, as yours is: up
@@ -4567,7 +4577,7 @@ function enemyActs(i, e){
   /* ---- moves that deal no damage: not an attempt ---- */
   // a charging turn does no damage at all
   if(move[0] === 'Charge' && !ex.stoop){
-    playEffect(move[1], { type:'Water', duration:700 });
+    playEffect(move[1], { type:'Water', duration:700, from:'enemy-' + idx });
     bob(document.getElementById('enemyBob-'+idx), -1);
     setTimeout(()=>{
       battleMsg(`⚡ ${name} gathers power… (${e.chargeTurns}/3)`);
@@ -4595,7 +4605,7 @@ function enemyActs(i, e){
     if(oc) spendOverchargeFirst(oc);
     renderStatusBadges();
     bob(document.getElementById('enemyBob-'+idx), -1);
-    playEffect(ex.windup.name || move[1], { type:e.types[0], duration:700 });
+    playEffect(ex.windup.name || move[1], { type:e.types[0], duration:700, from:'enemy-' + idx });
     battleMsg((ex.windup.say || `{name} gathers itself…`).replace('{name}', name) +
               (surge ? ' ⚡ Their Overcharge surges — it comes down at once!' : ''));
     if(surge){ e._ocWindup = true; return setTimeout(()=> enemyActs(i, e), 1100); }
@@ -4606,7 +4616,7 @@ function enemyActs(i, e){
      to go through as a blow of 0, spending a block stack on nothing). */
   if(ex.charm || ex.disrupt){
     bob(document.getElementById('enemyBob-'+idx), -1);
-    playEffect(move[1], { type:e.types[0], at:pid('playerBob') });
+    playEffect(move[1], { type:e.types[0], at:pid('playerBob'), from:'enemy-' + idx });
     if(ex.charm){
       if(enemyStatusBlocked('charmed')) battleMsg(`${name} uses ${move[1]} — the diamond dust scatters the charm.`);
       else { setPStatus(0, { type:'charmed', turnsLeft:(ex.charm.turns || 5) + 1, chance:ex.charm.chance || 0.20 });
@@ -4628,7 +4638,7 @@ function enemyActs(i, e){
   if(ex.soul){
     e._soulUsed = true;
     bob(document.getElementById('enemyBob-'+idx), -1);
-    playEffect(move[1], { type:'Steel', at:'enemy-' + idx });
+    playEffect(move[1], { type:'Steel', at:'enemy-' + idx, from:'enemy-' + idx });
     const turns = ex.soul.turns || 1;
     const st = setESide({ type:'steelSoul', turnsLeft:turns, max:turns, noDust:true,
                           reduce:ex.soul.reduce, bonus:ex.soul.bonus, owner:e });
@@ -4797,7 +4807,7 @@ function enemyStrikeOn(ctx, step, done){
     return;
   }
 
-  playEffect(move[1], { type: e.types[0], at:pid('playerBob') });
+  playEffect(move[1], { type: e.types[0], at:pid('playerBob', mon), from:'enemy-' + idx });   // (4.15) from it, at the one of yours it strikes
 
   setTimeout(()=>{
     if(!ui.battle) return;
@@ -5110,7 +5120,7 @@ function enemyStrikeOn(ctx, step, done){
     logBattle(`${name} → ${msg}`);
     battleMsg(msg);
     setTimeout(done, 750);
-  }, 330);
+  }, 330 + fxHoldMs(move[1]));
 }
 /* The attack is over: what it sets off as a whole, once — and then their
    follow-ups, or the next of them. */

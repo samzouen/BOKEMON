@@ -629,7 +629,8 @@ function jgThings(){
     const v = P.villages[k], t = JG_TRIBES[k];
     /* (3.96) the designer: "way too big" — 2.1 squares, now 1.6: half as tall again as you */
     list.push({ x:v.guardian.x, y:v.guardian.y, w:2, h:1, cls:'jg-npc jg-guardian', html:(tt, px)=> jgMonImg(t.guardian, WALK_T * 1.6),
-      verb:'Talk', sub:`${t.short} Guardian`, mark:()=> !jgState().met[k], act:()=> jgGuardian(k) });
+      verb:'Talk', sub:`${t.short} Guardian`, mark:()=> !jgState().met[k], act:()=> jgGuardian(k),
+      when:()=> typeof unGuardHome !== 'function' || unGuardHome(k) });   // (4.13) out at the unsealing, or walking you home (28-unseal.js)
   });
   P.castle.knights.forEach((kn, i)=>{
     list.push({ x:kn.x, y:kn.y, cls:'jg-npc jg-knight', html:()=> jgMonImg(JG_GATE_KNIGHT + '_front', WALK_T * 1.5, false, 'fairy_knight_front'),
@@ -1791,7 +1792,8 @@ function jgFolkAll(){
   _jgFolk = list;
   return list;
 }
-function jgFolkAway(f){ return typeof warStage === 'function' && warStage() === f.tribe; }   // the war is at their village: indoors
+/* (4.13) the King at their village: its people gather to watch him, then fight at its walls (28-unseal.js draws them) */
+function jgFolkAway(f){ return typeof unFolkAway === 'function' ? unFolkAway(f.tribe) : (typeof warStage === 'function' && warStage() === f.tribe); }
 function jgFolkHere(f){ return !f.inside && !jgFolkAway(f); }
 /* somebody of a village standing on (x, y) — `but` not counted */
 function jgFolkAt(x, y, but){
@@ -2878,11 +2880,11 @@ function jgFight(b, seen, opts){
    crit chance (1.5x), dmg boost, dmg reduction, dodge%. 25% for captains,
    35% for commanders." ATK in its ATK bonuses (e.atkPct: enemyAtk), the rest
    as a talent set of its own (e.talentFx: talentFxOf) — its criticals ×1.5,
-   its dodge allowed past the talents' 30%. Not the captive fairies. */
+   its dodge allowed past the talents' 30% (a limit of its own until 4.14,
+   when no talent had one any more). Not the captive fairies. */
 const JG_BOOST = { alien:0.15, captain:0.25, commander:0.35 };
 function jgBoostFx(p){
   const fx = talentFxSum([{ fx:[{ k:'crit', v:p }, { k:'dmg', v:p }, { k:'def', v:p }, { k:'dodge', v:p }] }]);
-  fx.dodgeCap = Math.max(TALENT_DODGE_CAP, p);
   fx.jgBoost = p;
   return fx;
 }
@@ -3213,6 +3215,7 @@ function jgChooser(withRift){
   opts.push({ k:'entry', pic:`<span class="jg-go-pic jg-go-portal">${typeof riftPortalSvg === 'function' ? riftPortalSvg(false) : '🌀'}</span>`, name:'The portal', sub:'The glade where the jungle begins' });
   JG_TRIBE_KEYS.forEach(k=>{ if(j.found[k]) opts.push({ k, pic:pic(JG_TRIBES[k].guardian, JG_TRIBES[k].icon), name:JG_TRIBES[k].name.replace(/^the /, 'The '), sub:'Their village, by their guardian' }); });
   if(j.found.castle) opts.push({ k:'castle', pic:pic('fairy_king_c_front', '🏰'), name:'The Fairy King\'s castle', sub:(typeof caOpen === 'function' && caOpen()) ? 'Inside its gates' : 'The south gate' });   // (3.89) in, once it is open
+  if(typeof unChooserOpt === 'function'){ const o = unChooserOpt(pic); if(o) opts.push(o); }                // (4.13) back to the King, out with you
   if(!withRift && opts.length === 1) return jgEnter(opts[0].k);
   const ov = document.createElement('div');
   ov.className = 'refine-scrim jg-choose';
@@ -3227,6 +3230,7 @@ function jgChooser(withRift){
     close();
     const k = btn.dataset.k;
     if(k === 'rift') return riftGo();
+    if(k === 'king' && typeof unToKing === 'function') return unToKing();
     if(k === 'castle' && typeof caOpen === 'function' && caOpen() && typeof caEnter === 'function') return caEnter();
     jgEnter(k);
   }));

@@ -362,17 +362,28 @@ async function questLionTalk(){
   return questSniff();
 }
 function caTurnJ(key, lines){ const t = jgState().talk; const n = t[key] = (t[key] || 0) + 1; return lines[(n - 1) % lines.length]; }
+/* (4.12) The designer: "when talking to lucesco, please make his nose smell icons sprites instead of emoticons! for
+   aliens, please put the humanoid gif, and for the rest please use the respective sprites of fairy king, tribe
+   leaders … and for just talking please put Lucesco's sprite." As the jungle's Where to? (3.97): the castle by the
+   Fairy King, each tribe by its guardian, the aliens by their captain, the Humanoid, and Just talk by Lucesco. A
+   picture that will not load falls back to the old icon. */
+const QUEST_SNIFF_PIC = { castle:['fairy_king_c_front', '🏰'], alien:['alien_captain_humanoid', '👽'], talk:['lucesco_front', '💬'] };
+function questSniffPic(k){
+  const p = QUEST_SNIFF_PIC[k] || (JG_TRIBES[k] ? [JG_TRIBES[k].guardian, JG_TRIBES[k].icon] : null);
+  if(!p) return '';
+  return `<img class="jg-go-pic q-sniff-pic" src="assets/mon/${p[0]}.png" alt="" onerror="this.replaceWith(document.createTextNode('${p[1]}'))">`;
+}
 function questSniff(){
   if(document.querySelector('.q-sniff')) return;
   releaseKeys();
   const q = questState(), cur = questTrack();
-  const opts = [{ k:'castle', icon:'🏰', sub:'Its south gate' }, { k:'alien', icon:'👽', sub:'Whichever is closest' }];
-  questTribesSmelt().forEach(k=> opts.push({ k, icon:JG_TRIBES[k].icon, sub:q.found[k] ? 'Their village' : 'The blade’s scent' }));
+  const opts = [{ k:'castle', sub:'Its south gate' }, { k:'alien', sub:'Whichever is closest' }];
+  questTribesSmelt().forEach(k=> opts.push({ k, sub:q.found[k] ? 'Their village' : 'The blade’s scent' }));
   const ov = document.createElement('div');
   ov.className = 'refine-scrim jg-choose q-sniff';
   ov.innerHTML = `<div class="refine-card"><div class="q-sniff-face">${questFace.lion()}</div><div class="refine-name">What shall I sniff out?</div>
-      <div class="jg-choose-list">${opts.map(o=> `<button class="btn btn-ghost jg-go${o.k === cur ? ' q-on' : ''}" data-k="${o.k}"><span class="jg-go-pic jg-go-emoji">${o.icon}</span><span class="jg-go-words">${escapeHtml(questTrackLabel(o.k))}<small>${escapeHtml(o.sub)}${o.k === cur ? ' · now' : ''}</small></span></button>`).join('')}
-      <button class="btn btn-ghost jg-go" data-k="talk"><span class="jg-go-pic jg-go-emoji">💬</span><span class="jg-go-words">Just talk<small>What is on his mind</small></span></button></div>
+      <div class="jg-choose-list">${opts.map(o=> `<button class="btn btn-ghost jg-go${o.k === cur ? ' q-on' : ''}" data-k="${o.k}">${questSniffPic(o.k)}<span class="jg-go-words">${escapeHtml(questTrackLabel(o.k))}<small>${escapeHtml(o.sub)}${o.k === cur ? ' · now' : ''}</small></span></button>`).join('')}
+      <button class="btn btn-ghost jg-go" data-k="talk">${questSniffPic('talk')}<span class="jg-go-words">Just talk<small>What is on his mind</small></span></button></div>
       <button class="btn btn-ghost" id="qSniffNo" style="margin-top:10px;">Cancel</button></div>`;
   document.body.appendChild(ov);
   const close = ()=> ov.remove();
@@ -381,7 +392,7 @@ function questSniff(){
   ov.querySelectorAll('.jg-go').forEach(b=> b.addEventListener('click', ()=>{
     close();
     const k = b.dataset.k;
-    if(k === 'talk') return jgLionChat();
+    if(k === 'talk') return questStage() === 'unseal' && typeof unLionTalk === 'function' ? unLionTalk() : jgLionChat();   // (4.13) by where the King's ride stands
     q.track = k; saveProfile();
     toast(`🦁 Lucesco sniffs out: ${questTrackLabel(k).replace(/^The /, 'the ')}.`);
     jgHud(); questPulseSoon();
@@ -429,7 +440,7 @@ function questKingDue(){
   const q = questState(), st = q.stage;
   if(st === 'arrive' || st === 'intro' || st === 'castle') return true;
   if(st === 'fifty') return q.fifty >= QUEST.fifty;
-  if(st === 'unseal'){ const w = warState(); return (warStage() === 'done' && !w.stone) || questAlarmDue(); }
+  if(st === 'unseal'){ const w = warState(); return (warStage() === 'done' && !w.stone) || questAlarmDue() || (typeof unKingDue === 'function' && unKingDue()); }
   return false;
 }
 /* fifty: his thanks, his challenge, and the council */
@@ -799,6 +810,7 @@ function questGuardEl(k, at){
   el.innerHTML = `<div class="q-guard-arc">${jgMonImg(JG_TRIBES[k].guardian, WALK_T * 1.6)}</div>`;
   el.style.transform = `translate3d(${at.x * WALK_T}px,${at.y * WALK_T}px,0)`;
   el.style.zIndex = 10 + at.y;
+  el._at = { x:at.x, y:at.y };                                         // (4.13) where it stands: its walk home starts there
   world.appendChild(el);
   ui.qGuardEl = el;
   return el;
@@ -834,6 +846,9 @@ async function questGuardAfter(k, how){
   finally { w.busy = false; if(ui.screen === JG_KEY) refreshWalk(); }
 }
 async function questGuardAfterSay(k, how){
+  /* (4.13) The designer: "let the guardian conversations differ for flavour … Let the player be invited inside the
+     guardian's main home" — its words, its wall down, the walk to its home and its people inside (28-unseal.js) */
+  if(typeof unGuardAfter === 'function') return unGuardAfter(k, how);
   const q = questState(), T = JG_TRIBES[k];
   const left = QUEST.seek.filter(t=> t !== k && !q.found[t]);
   const seq = [];
@@ -873,21 +888,26 @@ async function questGuardAfterSay(k, how){
    THE THRONE ROOM: after the first tribe, and after all four
    ============================================================ */
 async function questThrone(which){
+  /* (4.13) The designer: "The fairy king should not meet the four guardians in the city" — after all four, you bring the
+     castle their answer, and their terms (28-unseal.js, unCourtAll) */
+  const court = which === 'all' && typeof unCourtAll === 'function';
   await sceneCurtain(true, 700);
-  await sceneCurtainText(which === 'all' ? 'You lead the four guardians to the castle…' : 'You tell the guardian everything, then hurry back to the castle…', 1500);
-  ui.qCourt4 = which === 'all';
+  await sceneCurtainText(court ? 'You hurry back to the castle with the four tribes\u2019 answer…' : which === 'all' ? 'You lead the four guardians to the castle…' : 'You tell the guardian everything, then hurry back to the castle…', 1500);
+  ui.qCourt4 = which === 'all' && !court;
   caGo('r6_palace', [19, 7]);
-  await new Promise(r=> setTimeout(r, 450));
+  /* (4.13) until it is drawn (a fixed 450 ms: the first visit after loading could take longer, and the court was skipped) */
+  for(let i = 0; i < 60 && !(ui.screen === 'r6_palace' && document.getElementById('walkYou')); i++) await new Promise(r=> setTimeout(r, 75));
+  await new Promise(r=> setTimeout(r, 300));
   await sceneCurtainText('', 300);
   await sceneCurtain(false, 700);
   if(ui.screen !== 'r6_palace') return;
-  return which === 'all' ? questCourt4() : questCourtWater();
+  return which === 'all' ? (court ? unCourtAll() : questCourt4()) : questCourtWater();
 }
 async function questCourtWater(){
   const q = questState();
   await caLines([
     ['king', `<b>"The Water Tribe… after all these years. My friends, you have done what my scouts could not do in two hundred years."</b>`],
-    ['you', `<b>"The guardian will help — but only if you unseal their ancestor yourself, and only if all four tribes agree together."</b>`],
+    ['you', `<b>"The guardian will help — but only if you unseal their ancestor yourself, in their own village, and come alone. And no tribe decides alone: all four must agree."</b>`],
     ['king', `<b>"Then all four must be found."</b> He turns to the wall behind his throne, and lifts down the three blades that are left.`],
   ]);
   if(ui.screen !== 'r6_palace') return;

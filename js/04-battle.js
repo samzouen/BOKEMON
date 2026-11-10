@@ -2743,6 +2743,10 @@ function applyStonePassives(mon, opts){
       ? `✨ ${escapeHtml(d.name)} swirls up again — ${T} fresh turns!${swept}`
       : `✨ ${escapeHtml(d.name)} is ${opts.refill ? 'in the air again' : 'already in the air'}.${swept}`);
   });
+  /* (4.14) …and its talents' arrival (a Bastion constellation's shields), on every arrival: still once a battle, but the
+     meter's refill gives it back (talentRecharge), so one coming in again after a refill raises them again. (The first
+     arrival's applyEntryPassives asks again after this: nothing more, as they are up.) */
+  if(!opts.refill && typeof talentEntry === 'function') talentEntry(mon);
   return said;
 }
 /* The party-status key a Very High type writes to. */
@@ -2883,9 +2887,16 @@ function enemyEvasion(t, noTachy){
   if(siphonUp(1)) src.push(SIPHON.dodge);           // (3.43) the tower's first siphon: no dust takes it
   if(typeof talentDodge === 'function') src.push(talentDodge(t));   // (3.75) a future monster's sky
   if(typeof foeForesightDodge === 'function') src.push(foeForesightDodge(t));   // (3.76) its Foresight
-  let hit = 1;
-  src.forEach(x=>{ if(x > 0) hit *= (1 - x); });
-  return Math.max(0, (1 - hit) - hexCut(t, 'hxDodge')) * sightFactor('player');      // (3.15) Arcane Sight; (3.86) a Vicious Hex Clumsy
+  return Math.max(0, dodgeStack(src) - hexCut(t, 'hxDodge')) * sightFactor('player');      // (3.15) Arcane Sight; (3.86) a Vicious Hex Clumsy
+}
+/* (4.14) Independent dodge sources, together: each lets through what the others leave. No source has a cap any more (a
+   talent's Evasion can pass 100%, 17-region6.js): one past 100% lets nothing through, and what it has past 100% is
+   kept on top — so a Clumsy hex (15 off) leaves a dodge of 115% certain still. Until 4.14 two sources past 100% would
+   have multiplied back into a chance (1 − 1.2 and 1 − 1.1 make 0.02 to hit: no longer a sure dodge). */
+function dodgeStack(src){
+  let hit = 1, over = 0;
+  src.forEach(x=>{ if(x > 0){ hit *= Math.max(0, 1 - x); if(x > 1) over += x - 1; } });
+  return (1 - hit) + over;
 }
 /* A stance-spending Ultimate: consumes the stance for a far bigger multiplier. */
 function spendStance(mv, holder, baseFactor){
@@ -4342,9 +4353,7 @@ function playerEvasionFrom(e, peek, noTachy){
     foresightDodge(mon),                          // (3.68) Foresight, while your Discombobulate is up
     (typeof talentDodge === 'function') ? talentDodge(mon) : 0,   // (3.75) its talents' Evasion
   ];
-  let hit = 1;
-  src.forEach(x=>{ if(x > 0) hit *= (1 - x); });
-  return Math.max(0, (1 - hit) - hexCut(mon, 'hxDodge')) * sightFactor('enemy');       // (3.15) Arcane Sight; (3.86) a Vicious Hex Clumsy
+  return Math.max(0, dodgeStack(src) - hexCut(mon, 'hxDodge')) * sightFactor('enemy');       // (3.15) Arcane Sight; (3.86) a Vicious Hex Clumsy; (4.14) dodgeStack
 }
 /* ============================================================
    TACHYPSYCHIA (3.63) — the designer: "please change tachypsychia's
@@ -8660,7 +8669,7 @@ function allyStrike(t, done){
   const factor = ALLY_STRIKE.mult * ALLY_STRIKE.bonus * (clone ? 2 : 1);
   battleMsg(`🐒 ${escapeHtml(displayName(mk))} — Heavensplitter!` + (clone ? ' His clones strike with him!' : ''));
   bob(document.getElementById('allyBob'), +1);
-  playEffect('Heavensplitter', { type:'Physical', at:'enemy-' + idx });
+  playEffect('Heavensplitter', { type:'Physical', at:'enemy-' + idx, from:'allyBob' });
   setTimeout(()=>{
     if(ui.battle !== b) return;
     if(clone) A.clones--;

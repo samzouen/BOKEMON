@@ -1573,6 +1573,11 @@ function sceneCss(){
     .scene-say .ss-body{flex:1;text-align:left;font-size:14px;line-height:1.5;}
     .scene-say .ss-name{font-weight:800;margin-bottom:4px;}
     .scene-say .ss-go{display:flex;justify-content:flex-end;margin-top:10px;}
+    /* (4.13) an autoplaying line: a thin bar runs down along its bottom */
+    .scene-say.ss-auto{overflow:hidden;}
+    .scene-say.ss-auto::after{content:'';position:absolute;left:0;bottom:0;height:3px;width:100%;background:rgba(201,154,63,.85);
+      transform-origin:left center;animation:ssAuto var(--ssAuto,4s) linear forwards;}
+    @keyframes ssAuto{from{transform:scaleX(1);}to{transform:scaleX(0);}}
     #sceneCurtain{position:fixed;inset:0;background:#000;opacity:0;z-index:95;pointer-events:none;
       display:flex;align-items:center;justify-content:center;}
     #sceneCurtain .sc-text{color:#fff;font-size:20px;line-height:1.5;text-align:center;padding:0 28px;opacity:0;}
@@ -1780,8 +1785,25 @@ function sceneSay(faces, name, html, button){
       `<div class="ss-body"><div class="ss-name">${escapeHtml(name || '')}</div><div>${html}</div>` +
       `<div class="ss-go"><button class="btn btn-primary">${button || 'Continue'}</button></div></div>`;
     document.body.appendChild(box);
-    box.querySelector('button').addEventListener('click', ()=>{ box.remove(); done(); });
+    let t = null;
+    const fin = ()=>{ clearTimeout(t); if(box.isConnected) box.remove(); done(); };
+    box.querySelector('button').addEventListener('click', fin);
+    /* (4.13) The designer: "The dialogue should autoplay." While ui.sayAuto is on, a line moves on by itself after
+       its reading time (longer lines wait longer); a tap still moves on at once. A bar along the bottom runs down. */
+    if(ui.sayAuto){
+      const words = String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().length;
+      const ms = Math.max(2400, Math.min(9500, 1500 + words * 42)) * (typeof ui.sayAuto === 'number' ? ui.sayAuto : 1) * SCENE_SPEED;
+      box.classList.add('ss-auto');
+      box.style.setProperty('--ssAuto', Math.round(ms) + 'ms');
+      t = setTimeout(fin, ms);
+    }
   });
+}
+/* (4.13) lines that play by themselves: sayAutoRun(async ()=> { await caLines(…); }) — off again however it ends */
+async function sayAutoRun(fn, pace){
+  const was = ui.sayAuto;
+  ui.sayAuto = pace || true;
+  try { return await fn(); } finally { ui.sayAuto = was; }
 }
 function faceNpc(id, emoji){
   return `<img src="assets/npc/${id}.png" alt="" onerror="walkArtMissing(this,'${emoji || '🧑'}',48,0)">`;
