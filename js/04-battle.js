@@ -1439,7 +1439,14 @@ function runWildfire(done){
   if(!b || !getPStatus(0, 'overheat')) return done();
   const me = wildfireHolder();
   if(!me) return done();
-  {
+  /* (4.16) Nova's ring of fire from the one burning (the designer: "the nova animation could possibly be used for
+     overheat star and wildfire's aoe damage procs") — from your front when it burns from the bench — the scorch
+     landing as the ring reaches them */
+  const hold = typeof fxHoldMs === 'function' ? fxHoldMs('Wildfire') : 0;
+  if(hold) playEffect('Wildfire', { type:'Fire', from:playerField().includes(me) ? pid('playerBob', me) : pid('playerBob'), targets:livingEnemies().map(t=> 'enemy-' + b.enemies.indexOf(t)) });
+  const scorch = ()=>{
+    if(ui.battle !== b) return;
+    if(!getPStatus(0, 'overheat') || !livingEnemies().length) return done();
     const oh = getPStatus(0, 'overheat');
     const out = playerField().includes(me);
     const { base, hits } = wildfireScorch(me, oh);
@@ -1465,7 +1472,9 @@ function runWildfire(done){
     battleMsg(`🔥 Wildfire! ${escapeHtml(displayName(me))}'s flames${out ? '' : ', from the bench,'} scorch them` + (took > 0 ? ' — and itself.' : '.'));
     renderStatusBadges();
     setTimeout(done, 850);
-  }
+  };
+  if(hold) setTimeout(scorch, hold);
+  else scorch();
 }
 /* ---- (3.67) Electric, Flying, Ground ----
    - Catalyse (Electric, VH): (3.76) an Overcharge cast while a holder stands
@@ -1975,6 +1984,7 @@ function runViolentDance(done){
        Capacitor's share and meets their reflexes (a Lullaby, an Ink Cloud, Warning Colours), as any blow of yours. Only
        a holder on the field strikes (the designer: "violent dragon counts only for the onfielder"). */
     if(me.lurk || me.cunning){ breakCover(me); me._ambush = 0; renderStatusBadges(); }
+    playEffect('Violent Dance', { type:'Dragon', from:pid('playerBob', me), at:'enemy-' + idx });   // (4.16) the Dragon Dance's swords round it, its claws on the one struck
     if(rollDodge(t, idx, 0, false, true, me)){
       logBattle(`Violent Dance (${displayName(me)}) ${k}/${n}: ${SPECIES[t.species].name} slipped it`);
       battleMsg(`${tag} ${who}'s strike at ${them} finds nothing.`);
@@ -2222,16 +2232,22 @@ function chargeMoves(m){
   /* No charging at the usual cap. From one below it, an Overcharge double is
      what carries it one past (startCharge caps a double at caps.lucky). */
   const atCap = c.charges >= chargeCaps(def).normal;
-  const why = legacyClosedWhy();                   // (3.66) Dragon Legacy, in the slot that stood empty
+  /* (4.18) Dragon Legacy is on the Switch button now (legacyOnSwitch, 05-battle-flow.js), not in the slot that stood
+     empty (3.66) — the designer: "Dragon legacy now obscures the very high move … I don't want it to obscure very high
+     or ultra moves": a Very High stone keeps its place in the Basic slot while he is charged, and an Ultra its button. */
+  const plain = unlockedMovesPlain(m);
+  const vh = plain.find(mv=> mv.slot === 'Basic' && mv.isStone && mv.stoneTier === 'veryhigh');
+  const ultra = plain.find(mv=> mv.slot === 'UltraStone');
   return [
-    { slot:'Basic', name:'Dragon Legacy', mult:null, target:'Legacy', words:0, unlock:0, available:!why, legacyWhy:why, isStone:false, legacyGive:true },
+    vh,
     { slot:'Power1', name:'Charge', mult:null, target:'Charge', words:10, unlock:0,
       available:!atCap, isStone:false, chargeMore:true },
     { slot:'Power2', name:'Unleash', mult:chargeMult(def, 'unleash', c.charges), target:'AOE', words:0, unlock:0,
       available:true, isStone:false, chargeSpend:'unleash' },
     { slot:'Ultimate', name:'Hyperbeam', mult:chargeMult(def, 'hyper', c.charges), target:'Single', words:0, unlock:0,
       available:true, isStone:false, chargeSpend:'hyper' },
-  ];
+    ultra,
+  ].filter(Boolean);
 }
 
 /* ============================================================
@@ -3579,16 +3595,24 @@ function openBorrowPicker(mon, plus, count, done){
   paint();
 }
 
-/* Fire the borrowed skills in the order they were chosen. */
+/* Fire the borrowed skills in the order they were chosen. (4.17) Each plays its own art as it is cast (the designer:
+   "Diamond dust + and star bonus cast is not playing the animation of the second move"), from the one who cast the
+   dust, and the next waits for it to finish. */
 function castBorrowed(mon, atk, types, plus, done){
   if(!types || !types.length) return done();
+  const b = ui.battle;
   const next = (i)=>{
+    if(ui.battle !== b) return;
     if(i >= types.length) return done();
+    const fd = veryHighDef(types[i], plus), name = fd ? fd.name : types[i];
+    if(typeof playEffect === 'function'){
+      const from = (typeof playerField === 'function' && playerField().includes(mon)) ? pid('playerBob', mon) : pid('playerBob');
+      playEffect(name, { type:types[i], tier:'veryhigh', from });
+    }
     const r = applyVeryHighEffect(types[i], mon, atk, livingEnemies(), plus);
     renderStatusBadges();
-    const fd = veryHighDef(types[i], plus);
-    battleMsg(`✨ A facet catches the light — ${fd ? fd.name : types[i]}! ${r.msg}`);
-    setTimeout(()=> next(i+1), 1100);
+    battleMsg(`✨ A facet catches the light — ${name}! ${r.msg}`);
+    setTimeout(()=> next(i+1), Math.max(1100, typeof fxDurMs === 'function' ? fxDurMs(name) : 0));
   };
   next(0);
 }
@@ -4658,6 +4682,8 @@ function ariaActive(){ const a = ariaState(); return !!(a && a.turnsLeft > 0); }
 function castAria(mon, def, byReflex, pierced, forMon){
   const b = ui.battle;
   if(!b || ariaActive()) return false;
+  /* (4.18) its art (notes rising, rings of song, his ghostly look) — never played in a fight until now */
+  if(typeof playEffect === 'function'){ try { playEffect('Haunting Aria', { type:'Ghost', from:playerField().includes(mon) ? pid('playerBob', mon) : pid('playerBob') }); } catch(e){} }
   /* (3.64) woken by a blow at the one beside him: said with its name */
   const forOther = !!(byReflex && forMon && forMon !== mon);
   /* Five turns of it, each with its pre-action phase — the same phase as
@@ -5192,18 +5218,29 @@ function runPreHits(done){
       let dmg = Math.ceil(p.pct * p.atk * enemyBuffMultiplier());
       const curP = getPStatus(0,'curse');
       dmg = Math.ceil(dmg * curseBucket((curP && isEnemyOwned('curse', curP)) ? curP : null, 'player'));   // (4.07) a Portent too
-      mine.forEach(me=>{
-        const before = me.currentHp;
-        const through = capHit(me, applyBlock(me, dmg, pid('playerBlk', me)));   // (3.15) a Carapace
-        dropHp(me, through);           // (3.68) Bedrock's endurance
-        if(through > 0) noteHurt(me);                       // an upkeep strike breaks a Focus (2.97)
-        flashHit(document.getElementById(pid('playerBob', me)));
-        drainHp(pid('playerHp', me), before, me.currentHp, monMaxHp(me));
-        showDamageNumber(pid('playerBob', me), before - me.currentHp);
-        floatBlocked(pid('playerBob', me), dmg - through);
-      });
-      battleMsg(p.label);
-      return setTimeout(step, 850);
+      const land = ()=>{
+        if(ui.battle !== b) return;
+        mine.forEach(me=>{
+          const before = me.currentHp;
+          const through = capHit(me, applyBlock(me, dmg, pid('playerBlk', me)));   // (3.15) a Carapace
+          dropHp(me, through);           // (3.68) Bedrock's endurance
+          if(through > 0) noteHurt(me);                       // an upkeep strike breaks a Focus (2.97)
+          flashHit(document.getElementById(pid('playerBob', me)));
+          drainHp(pid('playerHp', me), before, me.currentHp, monMaxHp(me));
+          showDamageNumber(pid('playerBob', me), before - me.currentHp);
+          floatBlocked(pid('playerBob', me), dmg - through);
+        });
+        battleMsg(p.label);
+        setTimeout(step, 850);
+      };
+      /* (4.16) an Overheat ✦'s burn: Nova's ring of fire from their side (the designer: "the nova animation could
+         possibly be used for overheat star and wildfire's aoe damage procs"), the burn landing as it arrives */
+      const hold = (p.src === 'overheat' && typeof fxHoldMs === 'function') ? fxHoldMs('Overheat Burn') : 0;
+      if(hold){
+        playEffect('Overheat Burn', { type:'Fire', from:'enemy-' + b.enemies.indexOf(foes[0]), targets:mine.map(m=> pid('playerBob', m)) });
+        return setTimeout(land, hold);
+      }
+      return land();
     }
     const buff = ownBuffMultiplier(p.owner ? { uid:p.owner } : null);   // Overheat / Dragon Dance / Legacy — (3.93) and the Feeble of the one that laid it (an Aftershock, a Sacred Flame; a side's burn has no one)
     /* (4.09) your Overheat ✦'s burn: as Wildfire's scorch, by the carrier that burns hardest (overheatBurnBest) */
@@ -5215,10 +5252,20 @@ function runPreHits(done){
       return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0,t.hp-dmg) };
     });
     if(best) logBattle(`Overheat ✦'s burn (by ${displayName(best.h)}'s ATK${playerField().includes(best.h) ? '' : ', off the field'}): ${hits.map(h=> h.dmg).join('/')}`);
-    applyHits(hits, { noLeech:true });   // upkeep damage never feeds Leech Seed
-    reportHits(hits);
-    battleMsg(p.label);
-    setTimeout(step, 850);
+    const land = ()=>{
+      if(ui.battle !== b) return;
+      applyHits(hits, { noLeech:true });   // upkeep damage never feeds Leech Seed
+      reportHits(hits);
+      battleMsg(p.label);
+      setTimeout(step, 850);
+    };
+    /* (4.16) your Overheat ✦'s burn: Nova's ring, from the one burning (from your front when it burns from the bench) */
+    const hold = (p.src === 'overheat' && typeof fxHoldMs === 'function') ? fxHoldMs('Overheat Burn') : 0;
+    if(hold){
+      playEffect('Overheat Burn', { type:'Fire', from:(best && playerField().includes(best.h)) ? pid('playerBob', best.h) : pid('playerBob'), targets:hits.map(h=> 'enemy-' + h.idx) });
+      return setTimeout(land, hold);
+    }
+    land();
   };
   step();
 }
@@ -8652,6 +8699,7 @@ function allyTurn(){
     bob(document.getElementById('allyBob'), +1);
     playSfx('power_up');                                 // (3.51) not the fanfare
     renderBattle();
+    playEffect('72 Transformations', { type:'Physical', from:'allyBob' });   // (4.16) his two clones, drawn
     battleMsg(`🐒 ${name} — 72 Transformations! Two clones of him spring up at his side: his next <b>${ALLY_STRIKE.clones}</b> blows land with theirs — <b>twice as hard</b>.`);
     return setTimeout(advanceTurn, 1500);
   }
@@ -8669,7 +8717,7 @@ function allyStrike(t, done){
   const factor = ALLY_STRIKE.mult * ALLY_STRIKE.bonus * (clone ? 2 : 1);
   battleMsg(`🐒 ${escapeHtml(displayName(mk))} — Heavensplitter!` + (clone ? ' His clones strike with him!' : ''));
   bob(document.getElementById('allyBob'), +1);
-  playEffect('Heavensplitter', { type:'Physical', at:'enemy-' + idx, from:'allyBob' });
+  playEffect('Heavensplitter', { type:'Physical', at:'enemy-' + idx, from:'allyBob', bonus:true });   // (4.16) his bonus always won: its critical art
   setTimeout(()=>{
     if(ui.battle !== b) return;
     if(clone) A.clones--;
@@ -8687,7 +8735,7 @@ function allyStrike(t, done){
       if(livingEnemies().length === 0) return onWaveCleared();
       done();
     }, 900);
-  }, 420);
+  }, typeof fxHoldMs === 'function' && fxHoldMs('Heavensplitter') ? 330 + fxHoldMs('Heavensplitter') : 420);   // (4.16) as his own Heavensplitter waits for its art
 }
 /* His figure beside yours, and his line on your plate. */
 /* (3.52) His card beside yours, as your monsters' are: the same size, his
@@ -8941,6 +8989,10 @@ function unlockedMoves(m){
   // While a Cataclysm charge is held, the whole kit is replaced.
   const c = chargeState();
   if(c && c.uid === m.uid) return chargeMoves(m);
+  return unlockedMovesPlain(m);
+}
+/* (4.18) The kit as it is when no charge is held (the charged kit keeps a Very High stone and an Ultra from it). */
+function unlockedMovesPlain(m){
 
   // A borrowed story monster gets exactly one button, and no writing.
   const sm = ui.battle && ui.battle.allyMove && SCRIPTED_MOVES[ui.battle.allyMove];
@@ -9642,7 +9694,7 @@ function moveEffectText(mv, mon, atk){
     out.push(`<b>Charge</b> costs the turn and stores 1 charge (up to <b>${d.max}</b>). With charges, <b>Unleash</b> (all enemies, ` +
       `${row('unleash')}) or <b>Hyperbeam</b> (one enemy, ${row('hyper')}) costs no words.`);
     /* (3.66) Dragon Legacy, reworked */
-    out.push(`Overcharge can double a charge. Switched out, he keeps his charges. <b>Dragon Legacy</b> (quick) gives one to a monster you switch in: ` +
+    out.push(`Overcharge can double a charge. Switched out, he keeps his charges. <b>Dragon Legacy</b> (quick, on the Switch button) gives one to a monster you switch in: ` +
       `its next attack deals <b>×${LEGACY_AMP}</b>. If he falls, all his charges go to the monster you choose, one ×${LEGACY_AMP} attack each.`);
   }
   /* Passives describe their payload, not just their existence. */
@@ -9846,7 +9898,8 @@ function renderBattle(){
           </button>`; })}
       </div>
       <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
-        <button class="side-btn" id="switchBtn" ${(switchShut() || !canAct)?'disabled':''}${b.movedThisRound && !b.switchedThisTurn ? ' title="No switching after a move this turn"' : ''}>🔄 Switch</button>
+        ${(()=>{ const lg = typeof legacyOnSwitch === 'function' && legacyOnSwitch();   /* (4.18) Dragon Legacy rides on the Switch button */
+          return `<button class="side-btn" id="switchBtn" ${((switchShut() && !lg) || !canAct)?'disabled':''}${b.movedThisRound && !b.switchedThisTurn && !lg ? ' title="No switching after a move this turn"' : ''}>${lg ? '🐉 Dragon Legacy' : '🔄 Switch'}</button>`; })()}
         <button class="side-btn" id="fleeBtn" ${((b.noFlee && !b.arenaChallenge) || !canAct || (typeof fleeShut === 'function' && fleeShut(b)))?'disabled':''}>${(b.arena || b.arenaChallenge)?'🚪 Exit':(b.coreSpar || b.caSpar)?'🏳️ Give up':b.tear?'🚪 Save & leave':b.future?'🚪 Leave':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
         <button class="side-btn" id="skipBtn" ${canAct?'':'disabled'}>⏭️ Skip turn</button>
         ${(b.arena || b.arenaChallenge)?'<button class="side-btn" id="arenaMoveBtn" style="background:var(--gold);color:#fff;" '+(canAct?'':'disabled')+'>🧪 Test move</button>':''}
@@ -10517,7 +10570,7 @@ function statusTipText(key, st, c, pill){
       if(!cs || !m || cs.uid !== m.uid) return '';
       const n = cs.charges, t = Math.max(0, cs.turnsLeft || 0);
       return `<b>${n}</b> charge${n === 1 ? '' : 's'} held: Unleash hits every enemy for <b>${chargeMult(cs.def, 'unleash', n)}×</b>, Hyperbeam one for <b>${chargeMult(cs.def, 'hyper', n)}×</b>` +
-        ` — for <b>${t}</b> more turn${t === 1 ? '' : 's'} on the field. Switched out, he keeps them. Dragon Legacy (quick) gives one to a monster you switch in; if he falls, they all go to the one you choose.`; }
+        ` — for <b>${t}</b> more turn${t === 1 ? '' : 's'} on the field. Switched out, he keeps them. Dragon Legacy (quick, on the Switch button) gives one to a monster you switch in; if he falls, they all go to the one you choose.`; }
     /* (3.67) element passives at work */
     case 'wildfire': { const oh = getPStatus(0, 'overheat'), p = wildfirePct(oh);
       return m ? `While your Overheat is up, each turn ${c.w} scorches every enemy for <b>${p}×</b> its ATK (<b>${Math.ceil(p * monAtk(m) * ownBuffMultiplier(m) * elemSelfAmp(m))}</b> now — the Overheat's tier: ${WILDFIRE.pct.join(' / ')}×), and itself too, never below half its health — on the field or off it. With several holders, only the one whose scorch would hit hardest burns.` : ''; }

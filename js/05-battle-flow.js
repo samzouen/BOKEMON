@@ -175,9 +175,14 @@ function fxBox(at){
 /* (4.15) How much longer a move's drawn art holds the screen: nothing when 29-fx.js isn't loaded, so this file still runs
    under an index.html that doesn't load it yet (an upload done in two steps). */
 function fxHoldMs(name){ return typeof fxHoldFor === 'function' ? fxHoldFor(name) : 0; }
+/* (4.17) …and how long it plays (a Diamond Dust's borrowed skills wait for each other's) */
+function fxDurMs(name){ return typeof fxDurFor === 'function' ? fxDurFor(name) : 0; }
 
 function playEffect(moveName, opts, done){
   opts = opts || {};
+  /* (4.17) what each one's move was played with, for an Overcharge repeat to play it again (replayMoveFx) */
+  const b = ui.battle;
+  if(b && !opts.replay){ b._fxLast = b._fxLast || {}; b._fxLast[(opts.from || 'you') + '|' + moveName] = Object.assign({}, opts); }
   if(typeof fxPlay === 'function' && fxPlay(moveName, opts, done)) return;   // (4.15) the drawn art (29-fx.js), where a move has it
   const layer = $('#fxLayer');
   if(!layer){ if(done) done(); return; }
@@ -314,7 +319,50 @@ function drainHp(id, oldCur, newCur, max){
   });});
 }
 
+/* (4.18) The designer: "Dragon legacy now obscures the very high move as a result of my decision. … Can we move it to
+   the switch button? The switch button should say "Dragon Legacy" but offer a choice whether to bequeath charges to
+   another monster that is switched in or to perform a regular switch whereupon the charges remain with water dragon."
+   While the Water Dragon is the one acting, holds charges and has someone to hand one to, the Switch button says Dragon
+   Legacy, and asks which: a charge handed on (useDragonLegacy: to one switched in, or the one beside him) or a plain
+   switch (he keeps them all). */
+function legacyOnSwitch(){
+  const b = ui.battle, c = chargeState && chargeState(), mon = (typeof controlMon === 'function' && controlMon()) || activeMon();
+  return !!(b && c && mon && c.uid === mon.uid && c.charges > 0 && !legacyClosedWhy());
+}
+function legacySwitchChoice(){
+  const b = ui.battle, c = chargeState(), mon = (typeof controlMon === 'function' && controlMon()) || activeMon();
+  const n = c ? c.charges : 0, canSwitch = !switchShut() && sendOutOptions(b.activeIndex).length > 0;
+  const scrim = document.createElement('div');
+  scrim.className = 'legacy-switch';
+  scrim.style.cssText = 'position:fixed;inset:0;background:rgba(35,32,25,0.55);z-index:70;display:flex;align-items:flex-end;justify-content:center;';
+  const opt = (k, head, sub, ok)=> `<button class="btn btn-ghost sw-opt" data-legacy-pick="${k}" ${ok ? '' : 'disabled'} style="margin-bottom:8px;display:block;text-align:left;${ok ? '' : 'opacity:.5;'}">
+      <span style="font-weight:800;">${head}</span><br><span style="font-size:12px;color:var(--ink-soft);font-weight:700;">${sub}</span></button>`;
+  scrim.innerHTML = `<div style="background:var(--paper);border-radius:18px 18px 0 0;padding:20px;max-width:480px;width:100%;">
+    <div style="font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;">${escapeHtml(displayName(mon))} holds ${n} charge${n === 1 ? '' : 's'}</div>
+    <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin:2px 0 12px;">Hand one on, or switch and keep them?</div>
+    ${opt('give', '🐉 Dragon Legacy', `One charge to the monster you choose: its next attack deals ×${LEGACY_AMP}. It costs no turn.`, true)}
+    ${opt('switch', '🔄 Switch', canSwitch ? `A plain switch: ${escapeHtml(displayName(mon))} keeps all ${n} charge${n === 1 ? '' : 's'}.` : (b.switchedThisTurn ? 'Switched this turn.' : b.movedThisRound ? 'No switching after a move this turn.' : 'Nobody else can fight.'), canSwitch)}
+    <button class="btn btn-ghost" id="lgsCancel" style="margin-top:4px;">Cancel</button>
+  </div>`;
+  document.body.appendChild(scrim);
+  const close = ()=>{ if(scrim.parentNode) scrim.parentNode.removeChild(scrim); };
+  scrim.querySelector('#lgsCancel').addEventListener('click', close);
+  scrim.addEventListener('click', e=>{ if(e.target === scrim) close(); });
+  scrim.querySelector('[data-legacy-pick="give"]').addEventListener('click', ()=>{
+    close();
+    if((b.phase || 'player') !== 'player') return;
+    b.phase = 'resolving'; setFocus(mon);                  // a quick action of his, as the button was (onMoveChosen)
+    b.actionSeq = (b.actionSeq || 0) + 1; b.actionMon = mon; b.actionDodges = [];
+    useDragonLegacy(mon);
+  });
+  const sw = scrim.querySelector('[data-legacy-pick="switch"]');
+  if(canSwitch) sw.addEventListener('click', ()=>{ close(); plainSwitch(); });
+}
 function onSwitchPressed(){
+  if(legacyOnSwitch()) return legacySwitchChoice();
+  plainSwitch();
+}
+function plainSwitch(){
   const b=ui.battle;
   if(switchShut()) return;                               // (3.76) or after a move of yours this turn
   const options = sendOutOptions(b.activeIndex);        // (3.52) a pair whose companion can still fight, too
@@ -1714,8 +1762,10 @@ function resolveBattleMove(mv, target, results, opts){
       return { t, idx:ui.battle.enemies.indexOf(t), dmg:g, oldHp:t.hp, newHp:Math.max(0, t.hp - g), sure:true }; });   // (3.61) nor its Overcharge repeat
     battleMsg(`${mv.name}! Everything he has lost, given back at once.`);
     bob($('#' + pid('playerBob')), +1);
+    /* (4.18) its art — never played in a fight of yours until now — the blows landing as it does */
+    playEffect(mv.name, { type:SPECIES[mon.species].types[0], at:hits[0] ? 'enemy-' + hits[0].idx : null, targets:hits.map(h=> 'enemy-' + h.idx) });
     return setTimeout(()=>{ applyHits(hits); reportHits(hits);
-      setTimeout(()=> afterPlayerAttack(mon, hits), 700); }, 380);
+      setTimeout(()=> afterPlayerAttack(mon, hits), 700); }, Math.max(380, 330 + fxHoldMs(mv.name)));
   }
   /* Vengeance — one hit, then the grudge begins gathering. */
   if(mv.wrath){
@@ -1733,6 +1783,7 @@ function resolveBattleMove(mv, target, results, opts){
     const foes = livingEnemies();
     if(!foes.length) return setTimeout(()=> afterPlayerAttack(mon, []), 700);
     const start = Math.max(0, foes.indexOf(target && target.hp > 0 ? target : foes[0]));
+    const land = Math.max(380, 330 + fxHoldMs(mv.name));   // (4.18) the blows held for its art
     const left = new Map();                       // running health, so a repeat blow counts
     const soak = blockPlanner();                  // and what their block will take of each
     const hits = [];
@@ -1745,7 +1796,7 @@ function resolveBattleMove(mv, target, results, opts){
       /* Each blow can be slipped, like any other attack of yours: a lurking
          enemy is simply not there. (It never rolled evasion, so Vengeance
          found lurkers in the dark — Grudge still does, by design.) */
-      if(rollDodge(t, idx, 380 + i * 200, ignoresEvasion(mv, mon))){
+      if(rollDodge(t, idx, land + i * 200, ignoresEvasion(mv, mon))){
         hits.push({ t, idx, dmg:0, oldHp:cur, newHp:cur, dodged:true });
         continue;
       }
@@ -1757,8 +1808,11 @@ function resolveBattleMove(mv, target, results, opts){
     battleMsg(`${mv.name}! ${hits.length} blows${fallen ? `, heavier for every one you have lost` : ''} — ` +
               `and every blow from here will be remembered.`);
     bob($('#' + pid('playerBob')), +1);
+    /* (4.18) its art (the designer: "fade him out and create a black-purplish fog around the enemies, then create a
+       black impact ring on each one") — never played in a fight of yours until now */
+    playEffect(mv.name, { type:SPECIES[mon.species].types[0], at:hits[0] ? 'enemy-' + hits[0].idx : null, targets:[...new Set(hits.map(h=> 'enemy-' + h.idx))] });
     return setTimeout(()=>{ applyHits(hits); reportHits(hits);
-      setTimeout(()=> offerVengeanceSwap(mon, hits), 800); }, 380);
+      setTimeout(()=> offerVengeanceSwap(mon, hits), 800); }, land);
   }
   if(mv.dot){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
@@ -1894,9 +1948,11 @@ function resolveBattleMove(mv, target, results, opts){
       battleMsg(`${mv.name} — the stance is spent!`);
     }
   }
+  let bonusWon = false;                     // (4.16) for the art: Heavensplitter's critical
   if(ui.battle && ui.battle.bonusMult && ui.battle.bonusMult > 1){
     factor *= ui.battle.bonusMult;          // multiplies with everything else
     ui.battle.bonusMult = 0;
+    bonusWon = true;
   }
   /* (3.15) Pent-up Fury pays back a hit taken this round; Random Access rolls
      its power; an Arcane Meteor that took a hit while it gathered comes down
@@ -2086,7 +2142,8 @@ function resolveBattleMove(mv, target, results, opts){
   bob($('#' + pid('playerBob')), +1);
   playEffect(mv.name, { type: mv.stoneType || SPECIES[mon.species].types[0], tier: mv.stoneTier,
                         at: hits[0] ? 'enemy-'+hits[0].idx : null, targets:[...new Set(hits.map(h=> 'enemy-' + h.idx))],   // (4.15) all of them, for the art
-                        charge: mv.scale ? Math.max(0, Math.min(1, (scaledFactor(mv, correct) - mv.mult) / Math.max(0.01, mv.scale.max - mv.mult))) : null });   // and how far past its base a scaling move was written
+                        charge: mv.scale ? Math.max(0, Math.min(1, (scaledFactor(mv, correct) - mv.mult) / Math.max(0.01, mv.scale.max - mv.mult))) : null,   // and how far past its base a scaling move was written
+                        bonus: bonusWon });   // (4.16) a bonus round won: Heavensplitter's critical
   setTimeout(()=>{
     applyHits(hits);
     reportHits(hits);
@@ -2094,28 +2151,42 @@ function resolveBattleMove(mv, target, results, opts){
     if(mv.shell) applyShell(mv, mon);       // Slag Eruption leaves molten armour
     // resolves AFTER Leech Seed, so the field heal lands first
     const drain = applyPartyDrain(mv, mon, hits);
+    /* (4.17) Giga Drain's drink: its art draws the life across to her as each blow lands (fxLifeDrain, its impact: a
+       faint red on each it reached, bright green motes floating to her, her glow); the drink is shown as they reach her
+       (fxDrinkMs), and a share that goes to another of yours on the field is handed on from her (fxPassDrink). */
+    const sip = typeof fxDrinkMs === 'function' ? fxDrinkMs() : 0, herId = pid('playerBob', mon), b0 = ui.battle;
+    const passOn = ids=>{ const on = [...new Set(ids)].filter(id=> id !== herId); if(on.length && typeof fxPassDrink === 'function') fxPassDrink(herId, on); };
     if(Array.isArray(drain)){
       /* (3.19) the gift's Giga Drain: one drink for each one it reached */
       const got = drain.filter(d=> d.healed > 0);
       got.forEach((d, k)=>{
-        const onField = playerField().includes(d.target);
         setTimeout(()=>{
-          if(onField) drainHp(pid('playerHp', d.target), d.from, d.from + d.healed, monMaxHp(d.target));
+          if(ui.battle !== b0) return;
+          /* (4.17) shown a moment after it was drunk: up to what it has now, less the drinks still to be shown */
+          const onField = playerField().includes(d.target);
+          const later = got.slice(k + 1).filter(x=> x.target === d.target).reduce((s, x)=> s + x.healed, 0), end = d.target.currentHp - later;
+          if(onField) drainHp(pid('playerHp', d.target), Math.max(0, end - d.healed), Math.max(0, end), monMaxHp(d.target));
           showDamageNumber(onField ? pid('playerBob', d.target) : pid('playerBob'), d.healed, { heal:true });
-        }, 250 * k);
+        }, sip + 250 * k);
       });
       if(got.length){
+        passOn(got.filter(d=> playerField().includes(d.target)).map(d=> pid('playerBob', d.target)));
         const by = {}, reached = hits.filter(h=> h && h.t && !h.dodged).length;
         got.forEach(d=>{ const nm = displayName(d.target); by[nm] = (by[nm] || 0) + d.healed; });
         setTimeout(()=> battleMsg(`🌿 Giga Drain drinks from ${reached === 1 ? 'one of them' : `${reached} of them`} — ` +
-          Object.entries(by).map(([nm, n])=> `<b>${n} HP</b> to ${escapeHtml(nm)}`).join(', ') + '.'), 600);
+          Object.entries(by).map(([nm, n])=> `<b>${n} HP</b> to ${escapeHtml(nm)}`).join(', ') + '.'), Math.max(600, sip));
       }
     }
     else if(drain && drain.healed>0){
       const onField = playerField().includes(drain.target);
-      if(onField) drainHp(pid('playerHp', drain.target), drain.target.currentHp-drain.healed, drain.target.currentHp, monMaxHp(drain.target));
-      showDamageNumber(onField ? pid('playerBob', drain.target) : pid('playerBob'), drain.healed, { heal:true });
-      setTimeout(()=> battleMsg(`🌿 ${displayName(drain.target)} drinks in ${drain.healed} HP.`), 600);
+      if(onField) passOn([pid('playerBob', drain.target)]);
+      const show = ()=>{
+        if(ui.battle !== b0) return;
+        if(onField) drainHp(pid('playerHp', drain.target), drain.target.currentHp-drain.healed, drain.target.currentHp, monMaxHp(drain.target));
+        showDamageNumber(onField ? pid('playerBob', drain.target) : pid('playerBob'), drain.healed, { heal:true });
+      };
+      if(sip) setTimeout(show, sip); else show();
+      setTimeout(()=> battleMsg(`🌿 ${displayName(drain.target)} drinks in ${drain.healed} HP.`), Math.max(600, sip));
     }
     applySelfDamage(mv, mon);
     if(mon.currentHp<=0){
@@ -2374,7 +2445,9 @@ function landStrike(h, opts){
   if(through > 0 && !(opts && opts.noLeech)){
     const sp = spikeRiderYours(t, activeMon());
     if(sp > 0){ h.rider = (h.rider || 0) + sp; h.newHp = t.hp; }
-    return resolveLeech(t, activeMon());
+    const got = resolveLeech(t, activeMon());
+    if(got > 0 && typeof fxDrainOrbs === 'function') fxDrainOrbs('enemy-' + h.idx);   // (4.16) the drink drawn back to yours, as bright green orbs
+    return got;
   }
   return 0;
 }
@@ -2740,6 +2813,21 @@ function setReplan(mon, plan, riders){
   const b = ui.battle;
   if(b) b._replan = { seq:b.actionSeq, mon, plan, riders };
 }
+/* (4.17) The designer: "Overcharge should play the repeated moves again". A repeat plays its move's art again, as the
+   move first played it (playEffect keeps what it was given), aimed at the ones the repeat goes for; its blows land as
+   the art's do, 330 ms and its hold on. `from`: an id of theirs (theirs repeating) or none (yours); `ids` the ones it
+   goes for. A move that played no art (a Seoi Nage) plays none again. Returns how long to wait before they land (0: no
+   art played, the repeat keeps its old pace). */
+function replayMoveFx(name, from, ids){
+  const b = ui.battle;
+  const was = b && name && b._fxLast ? b._fxLast[(from || 'you') + '|' + name] : null;
+  if(!was) return 0;
+  const o = Object.assign({}, was, { replay:true });
+  const to = [...new Set((ids || []).filter(Boolean))];
+  if(to.length && (was.at || (was.targets && was.targets.length))){ o.at = to[0]; o.targets = to; }   // aimed again (an Ultra's, aimed at none, is not)
+  playEffect(name, o);
+  return 330 + fxHoldMs(name);
+}
 /* The one a single blow's repeat goes for: the same one, if it is standing — else the one their Steel Soul makes
    every blow come to, or any of them at random. */
 function replanTarget(t){
@@ -2783,9 +2871,10 @@ function afterPlayerAttackReal(mon, hits){
       if(shock) setTimeout(()=> layAftershock(mon, shock.pct, true), 450);
       bob($('#' + pid('playerBob')), +1);
       if(fresh.ultra) invertScreen();
+      const wait = replayMoveFx(b0.lastMove && b0.lastMove.name, null, list.map(h=> h.t ? 'enemy-' + h.idx : null)) || 300;   // (4.17) its art again
       const finish = ()=>{
         if(!ui.battle) return;
-        if(fresh.ultra) releaseInvert();
+        if(fresh.ultra) releaseInvert(ULTRA_TAIL);
         reportHits(list);
         const said = rp.riders ? (rp.riders(list) || '') : '';
         /* Amnesia (2.97): a repeat that lands makes them forget one more */
@@ -2799,7 +2888,7 @@ function afterPlayerAttackReal(mon, hits){
         if(fresh.volleys) return playVolleys(fresh.volleys, 0, finish);
         if(fresh.successive) return playSuccessiveHits(list, 0, finish, true);
         applyHits(list); finish();
-      }, 300);
+      }, wait);
       return;
     }
     if(canRepeat && rolled){
@@ -2849,6 +2938,7 @@ function afterPlayerAttackReal(mon, hits){
       if(flame) setTimeout(()=> laySacredFlame(mon, true), 450);
       if(shock) setTimeout(()=> layAftershock(mon, shock.pct, true), 450);   // a Rampage's Aftershock, the same (2.81)
       bob($('#' + pid('playerBob')), +1);
+      const wait = replayMoveFx(b0 && b0.lastMove && b0.lastMove.name, null, list.map(h=> 'enemy-' + h.idx)) || 300;   // (4.17) its art again
       setTimeout(()=>{
         if(!ui.battle) return;
         applyHits(list);
@@ -2857,7 +2947,7 @@ function afterPlayerAttackReal(mon, hits){
         const forgot = mindPassivesLanded(mon, [...new Set(list.filter(h=> h.dmg > 0 && !h.dodged).map(h=> h.t))], true);
         if(forgot.length) setTimeout(()=> battleMsg(forgot.join(' ')), 450);
         setTimeout(()=> endPlayerAction(mon), forgot.length ? 1500 : 850);
-      }, 300);
+      }, wait);
       return;
     }
     endPlayerAction(mon);
@@ -3170,6 +3260,8 @@ function enemyConversio(e, def, next){
 }
 
 function runConversio(mon, def){
+  /* (4.18) its art (a pillar of light on each of its side) — never played in a fight until now */
+  if(typeof playEffect === 'function') playEffect('Conversio', { type:'Water', from:playerField().includes(mon) ? pid('playerBob', mon) : pid('playerBob') });
   /* (3.52) a fainted companion of your party's can be raised too: it is a
      full monster now */
   const fallen = ()=> state.party.filter(m=> m.currentHp <= 0 && !isPassenger(m) && m !== mon)
@@ -3724,7 +3816,7 @@ function resolveMultiHit(mv, mon, correct, driveTarget){
   bob($('#' + pid('playerBob')), +1);
   playEffect(mv.name, { duration:700, type: mv.stoneType || SPECIES[mon.species].types[0], tier: mv.stoneTier });
   setTimeout(()=> playSuccessiveHits(hits, 0, ()=>{
-    releaseInvert();                      // only once every strike has landed
+    releaseInvert(ULTRA_TAIL);            // only once every strike has landed — (4.18) and its art's last bursts
     saveProfile();
     reportHits(hits);
     const zap = stunRiders(mv, hits);     // (3.62) each strike that got through rolls
@@ -3740,12 +3832,32 @@ function resolveMultiHit(mv, mon, correct, driveTarget){
   }, true), 330 + fxHoldMs(mv.name));
 }
 /* Held until explicitly released, so the screen stays inverted for the entire
-   Ultra sequence rather than snapping back mid-barrage. */
+   Ultra sequence rather than snapping back mid-barrage. (4.18) The designer: "For all ultra moves, the screen invert
+   should remain … apart from causing an invert, we might have to dim the background of the battlefield to create more
+   contrast. the ultra moves' fx and impact splashes/explosions/waves and should be in ordinary colour, not inverted".
+   Now the whole screen from the page's root (its backdrop too, as Heavensplitter's critical), the battlefield dimmed
+   under the sprites (fxDimOn), the art in its own colours (29-fx.js); let go `after` ms after the last strike, so the
+   art's last bursts finish over it. One still up when another comes holds to the later one's end; a fail-safe lets it
+   go 20 s on whatever happens. Theirs too (an arena Ultra). */
+let _invertN = 0;
+const ULTRA_TAIL = 450;                                  // the art's last bursts, after the last strike
 function invertScreen(ms){
-  document.body.classList.add('ultra-invert');
-  if(ms) setTimeout(()=> releaseInvert(), ms);
+  const n = ++_invertN;
+  document.documentElement.classList.add('ultra-invert');
+  if(typeof fxDimOn === 'function') fxDimOn(0.5);
+  setTimeout(()=>{ if(n === _invertN) releaseInvert(); }, 20000);
+  if(ms) setTimeout(()=>{ if(n === _invertN) releaseInvert(); }, ms);   // (4.18) unless a later one has taken it on (theirs: each of its strikes holds it)
 }
-function releaseInvert(){ document.body.classList.remove('ultra-invert'); }
+function releaseInvert(after){
+  const n = _invertN;
+  const off = ()=>{
+    if(n !== _invertN) return;                           // a later one is up: it lets go
+    document.documentElement.classList.remove('ultra-invert'); document.body.classList.remove('ultra-invert');
+    if(typeof fxDimOff === 'function') fxDimOff(true);
+    if(typeof fxHostsEnd === 'function') fxHostsEnd();   // its orb, and a monster that left the field for it (Devastate, Sonic Skydive), back
+  };
+  if(after) setTimeout(off, after); else off();
+}
 /* play pre-computed hits one at a time, applying HP as each lands.
    fast=true halves the gap (the multi-hit "2x speed" rule). */
 /* Thunderhound punishes each health threshold it is driven below, once each. */
@@ -4808,6 +4920,7 @@ function enemyStrikeOn(ctx, step, done){
   }
 
   playEffect(move[1], { type: e.types[0], at:pid('playerBob', mon), from:'enemy-' + idx });   // (4.15) from it, at the one of yours it strikes
+  if(ex && ex.ultraTier != null){ ctx.inverted = true; invertScreen(330 + fxHoldMs(move[1]) + 1300); }   // (4.18) their Ultra turns the screen over too — held from its first strike to the end of its last (each one of yours it reaches takes it on)
 
   setTimeout(()=>{
     if(!ui.battle) return;
@@ -5258,6 +5371,7 @@ function theirSeedsDrink(e){
     x.hp = Math.min(x.maxHp, x.hp + heal);
     if(x.hp > before){ fed++; drainHp('enemyHp-' + ui.battle.enemies.indexOf(x), before, x.hp, x.maxHp); }
   });
+  if(fed && typeof fxDrainOrbs === 'function') fxDrainOrbs(pid('playerBob'));   // (4.16) their drink drawn off yours, to them
   return fed ? heal : 0;
 }
 /* An enemy blow has landed on you for `taken` (on `victims`, the ones of
@@ -5401,7 +5515,11 @@ function enemyFollowUps(i, e, move, ctx, next){
     const timesFor = st=> st.hits || Math.max(1, (moveHitsFor(e, ex2) && !ex2.reflect && !ex2.grudge) ? moveHitsFor(e, ex2) : 1);
     const each = k=> k >= plan.length ? then()
       : strike({ mon:plan[k].mon }, amountFor(plan[k].mon), `⚡ Their Overcharge — ${name} strikes again`, ()=> each(k + 1), timesFor(plan[k]), true);
-    each(0);
+    /* (4.17) its art again (replayMoveFx), at the ones of yours it goes for, the first strike landing as it does */
+    const wait = plan.length && move ? replayMoveFx(move[1], 'enemy-' + b.enemies.indexOf(e), plan.map(st=> pid('playerBob', st.mon))) : 0;
+    if(!wait) return each(0);
+    battleMsg(`⚡ Their Overcharge — ${escapeHtml(name)} strikes again…`);
+    setTimeout(()=>{ if(ui.battle === b) each(0); }, wait);
   };
   const cl = getESide('clones');
   const echo = (then)=>{
