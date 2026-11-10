@@ -873,23 +873,47 @@ FX_MOVES['Vortex Blast'] = {
 };
 
 /* VERDANT NOVA (Grass). (4.20, the designer: "could you have green solar beams firing from a bright green orb and
-   exploding into bright green balls a la the giga drain particles instead of leaf particles instead?"): a green sun
-   swells over your monster, motes of green light drifting off it; each strike a solar beam from it to the one struck,
-   the sun flaring as it fires, and there a burst of bright green balls. (Until 4.20 a flower of blades throwing razor
-   leaves.) */
+   exploding into bright green balls a la the giga drain particles instead of leaf particles instead?"; 4.21: "Verdant
+   nova's ball should not be a sun, could it involve swirling leaves round the ball much like water's vortex? Maybe
+   slightly smaller too so it doesn't look too much like fusion flare."): a glossy green ball over your monster — a
+   fifth smaller than the other orbs, a Giga Drain mote grown large — leaves whirling round it as Vortex Blast's water
+   does (the far half of the whirl behind it, the near half before it), motes of green light drifting off; each strike
+   a solar beam from it to the one struck, the ball flaring as it fires, and there a burst of bright green balls.
+   (Until 4.20 a flower of blades throwing razor leaves; in 4.20 a green sun.) */
+function fxLeafOrb(L, x, y, r, flare){
+  if(r < 1) return;
+  const fl = flare || 0, R = r * (1 + fl * 0.08);
+  fxDisc(L, x, y, R + 3.5, FX_SAP[2], 0.22 + fl * 0.2);                // a little light round it
+  fxDisc(L, x, y, R + 1, FX_SAP[4]);
+  fxDisc(L, x, y, R, FX_SAP[3]);
+  fxDisc(L, x - R * 0.07, y - R * 0.07, R * 0.86, FX_SAP[2]);
+  fxDisc(L, x - R * 0.17, y - R * 0.17, R * 0.6, FX_SAP[1]);
+  fxDisc(L, x - R * 0.33, y - R * 0.33, Math.max(1, R * 0.27), FX_SAP[0]);   // its gloss
+  if(fl > 0.3) fxDisc(L, x, y, R * 0.4, FX_SAP[0], fl);
+}
 FX_MOVES['Verdant Nova'] = {
   dur:900, window:6500,
   cast(ctx){
     fxStoneTell(ctx, FX_GRASS);
-    const R = FX_ULTRA_ORB_R, rnd = fxRand(ctx.seed), motes = [];
+    const R = FX_ULTRA_ORB_R * 0.8, S = FX_ULTRA_ORB, rnd = fxRand(ctx.seed), motes = [];
     let last = 0, acc = 0;
-    fxHost(ctx, { r:Math.round(R + 2) }, (L, h, t, g, fade)=>{
+    fxHost(ctx, { r:Math.round(R + 5) }, (L, h, t, g, fade)=>{
       const dt = Math.min(0.05, Math.max(0, t - last) / 1000); last = t;
       const fl = h.fired ? Math.max(0, 1 - (performance.now() - h.fired) / 140) : 0;
-      const r = R * fxEaseOut(Math.min(1, t / 360)) * fade * (1 + 0.04 * Math.sin(t * 0.026));
+      const r = R * fxEaseOut(Math.min(1, t / 360)) * fade * (1 + 0.03 * Math.sin(t * 0.026));
+      const whirl = front=>{                                           // leaves whirling round it, three arms of them
+        for(let arm = 0; arm < 3; arm++) for(let j = 0; j < 7; j++){
+          const f = (j + 0.5) / 7, ang = arm * 2.094 + f * 3.4 - t * 0.0105, rr = (R / S + 1.5 + f * 9) * S * g;
+          const c = Math.cos(ang), sn = Math.sin(ang);
+          if((sn >= 0) !== front) continue;
+          const lx = h.x + c * rr, ly = h.y + sn * rr * 0.5;
+          fxLeaf(L, lx, ly, (5 + f * 6) * g * fade, Math.atan2(-c * 0.5, sn), FX_LEAFC, front ? 1 : 0.85);   // along the way it turns
+        }
+      };
+      whirl(false);
       if(t > 160 && fade > 0.3){                                       // motes of green light drifting off it, more as it fires
-        acc += dt * 26 * (1 + fl * 4);
-        while(acc >= 1){ acc--; const a = rnd() * 6.28, v = 14 + rnd() * 26; motes.push({ x:h.x + Math.cos(a) * r, y:h.y + Math.sin(a) * r, vx:Math.cos(a) * v, vy:Math.sin(a) * v - 6, age:0, life:520 + rnd() * 420, r:1 + rnd() * 1.1 }); }
+        acc += dt * 14 * (1 + fl * 4);
+        while(acc >= 1){ acc--; const a = rnd() * 6.28, v = 14 + rnd() * 24; motes.push({ x:h.x + Math.cos(a) * r, y:h.y + Math.sin(a) * r, vx:Math.cos(a) * v, vy:Math.sin(a) * v - 6, age:0, life:480 + rnd() * 380, r:0.9 + rnd() * 0.9 }); }
       }
       for(let i = motes.length - 1; i >= 0; i--){
         const m = motes[i];
@@ -899,13 +923,14 @@ FX_MOVES['Verdant Nova'] = {
         const u = m.age / m.life;
         fxSapOrb(L, m.x, m.y, m.r * (1 - u * 0.5), u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3);
       }
-      fxGreenSun(L, h.x, h.y, r, t, fl);
+      fxLeafOrb(L, h.x, h.y, r, fl);
+      whirl(true);
     });
   },
   impact(ctx, at, k, side){
     const h = fxHostHit(ctx), H = FX_ULTRA_HIT;
     h.fired = performance.now();
-    fxSolarBeam('back', h, at, 6 * H);                                  // under the sun, as every Ultra's beam
+    fxSolarBeam('back', h, at, 6 * H);                                  // under the ball, as every Ultra's beam
     fxLater(40, ()=> fxSapBurst(at, fxLayerFor(side), { seed:ctx.seed + k * 13, big:1.3 * H }));
   },
 };
