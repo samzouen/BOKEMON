@@ -440,6 +440,7 @@ function questKingDue(){
   const q = questState(), st = q.stage;
   if(st === 'arrive' || st === 'intro' || st === 'castle') return true;
   if(st === 'fifty') return q.fifty >= QUEST.fifty;
+  if(st === 'seek') return questAllFound() && !warState().council;   // (4.21) the court to hold
   if(st === 'unseal'){ const w = warState(); return (warStage() === 'done' && !w.stone) || questAlarmDue() || (typeof unKingDue === 'function' && unKingDue()); }
   return false;
 }
@@ -493,12 +494,16 @@ async function questCouncil(){
 }
 function questKingSeek(){
   const q = questState(), next = questNextTribe();
+  /* (4.21) all four found, and the court not yet held — its words cut short by leaving the throne room, or a save set
+     back to it (the designer: "put this save back to the war council before the first riding out"): it is held now */
+  if(questAllFound() && !warState().council) return typeof unCourtAll === 'function' ? unCourtAll() : questCourt4();
   if(!q.found.water) return caLines([['king', caTurn('qKingWater', [
     `<b>"The Water Tribe, in the north-east. Lucesco will follow the blade's scent — trust his nose."</b>`,
     `<b>"Speak to them kindly. They have every reason not to trust anyone from this castle."</b>`])]]);
   return caLines([['king', next ? `<b>"${questTribeCap(next)} next${JG_TRIBES[next] ? ', in the ' + { ne:'north-east', se:'south-east', sw:'south-west', nw:'north-west' }[JG_TRIBES[next].corner] : ''}. Lucesco has its blade's scent."</b>` : `<b>"All four… I can hardly believe it."</b>`]]);
 }
 /* the tribe the pulse leads to next: the first, in the designer's order, whose blade you carry and who is not found */
+function questAllFound(){ const q = questState(); return QUEST.seek.every(k=> !!q.found[k]); }
 function questNextTribe(){
   const q = questState();
   return QUEST.seek.find(k=> q.blades[k] && !q.found[k]) || null;
