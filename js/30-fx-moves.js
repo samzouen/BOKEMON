@@ -221,6 +221,52 @@ function fxSapOrb(L, x, y, r, cover){
   fxDisc(L, x, y, r, FX_SAP[1], cover);
   fxDisc(L, x - r * 0.3, y - r * 0.3, Math.max(1, r * 0.45), FX_SAP[0], cover);
 }
+/* (4.20) A GREEN SUN, ITS SOLAR BEAM, ITS BURST (the designer: "could you have green solar beams firing from a bright green
+   orb and exploding into bright green balls a la the giga drain particles instead of leaf particles instead?" — Verdant
+   Nova's; and Verdant Wrath's, smaller). The sun: an orb of bright green light, shaded from its top left, light churning
+   in it, a glow round it (as Fusion Flare's sphere, in green); `flare` 0–1 as it fires. */
+function fxGreenSun(L, x, y, r, t, flare){
+  if(r < 1) return;
+  const fl = flare || 0, R = r * (1 + fl * 0.1);
+  fxDisc(L, x, y, R * 1.5, FX_SAP[3], 0.16 + fl * 0.16); fxDisc(L, x, y, R * 1.28, FX_SAP[2], 0.26 + fl * 0.2); fxDisc(L, x, y, R * 1.12, FX_SAP[1], 0.38 + fl * 0.2);   // its light
+  fxDisc(L, x, y, R + 0.8, FX_SAP[4]);
+  const Ri = Math.ceil(R), R2 = R * R;
+  for(let dy = -Ri; dy <= Ri; dy++) for(let dx = -Ri; dx <= Ri; dx++){
+    const d2 = dx * dx + dy * dy;
+    if(d2 > R2) continue;
+    const d = Math.sqrt(d2) / R, n = Math.sin(dx * 0.6 + t * 0.012) * Math.sin(dy * 0.55 - t * 0.015) * 0.5 + Math.sin((dx + dy) * 0.33 - t * 0.02) * 0.5;
+    const v = d * 0.9 - (-dx - dy) / (R * 3.2) - n * 0.1 - fl * 0.3;
+    fxSet(L, Math.round(x + dx), Math.round(y + dy), v < 0.18 ? FX_SAP[0] : v < 0.42 ? FX_SAP[1] : v < 0.7 ? FX_SAP[2] : v < 0.9 ? FX_SAP[3] : FX_SAP[4]);
+  }
+}
+/* A solar beam from `a` to `b`, `w` wide: a dark green edge, green, light green, white at its heart; it shoots out in
+   55 ms, burns, thins and goes. */
+function fxSolarBeam(layer, a, b, w, o){
+  o = o || {};
+  const dur = o.dur || 300, x0 = a.x, y0 = a.y;
+  fxAdd({ layer, z:o.z || 0, dur, step(L, t){
+    const u = Math.min(1, t / 55), ex = x0 + (b.x - x0) * u, ey = y0 + (b.y - y0) * u;
+    const late = t < 160 ? 0 : (t - 160) / (dur - 160), cv = 1 - late, ww = w * (1 - late * 0.6) * (1 + 0.08 * Math.sin(t * 0.09));
+    fxLine(L, x0, y0, ex, ey, FX_SAP[3], Math.round(ww + 5), 0.35 * cv);
+    fxLine(L, x0, y0, ex, ey, FX_SAP[4], Math.round(ww + 2), cv);
+    fxLine(L, x0, y0, ex, ey, FX_SAP[2], Math.round(ww), cv);
+    fxLine(L, x0, y0, ex, ey, FX_SAP[1], Math.max(1, Math.round(ww * 0.55)), cv);
+    fxLine(L, x0, y0, ex, ey, FX_SAP[0], Math.max(1, Math.round(ww * 0.22)), cv);
+  } });
+}
+/* Where it strikes: a flash, a ring of green light spreading, and bright green balls bursting out — as Giga Drain's
+   motes (fxSapOrb), each its own light round it, shrinking as it goes. */
+function fxSapBurst(at, layer, o){
+  const big = o.big || 1, rnd = fxRand(o.seed || 1), parts = [], n = Math.round(13 * big), rs = Math.sqrt(big);
+  fxFlash(layer, at, 9 * big, FX_SAP[0], 70);
+  fxAdd({ layer, dur:460, step(L, t){ const u = fxEaseOut(t / 460), rr = (7 + u * 22) * big; fxRing(L, at.x, at.y, rr + 1.5, 2, FX_SAP[4], 1 - u, 0.85); fxRing(L, at.x, at.y, rr, 2, FX_SAP[1], 1 - u, 0.85); } });
+  for(let i = 0; i < n; i++){
+    const ang = rnd() * 6.28, v = (55 + rnd() * 120) * rs, r = (1.4 + rnd() * 1.8) * rs;
+    parts.push({ x:at.x + Math.cos(ang) * 3, y:at.y + Math.sin(ang) * 3, vx:Math.cos(ang) * v, vy:Math.sin(ang) * v * 0.8 - 15, grav:30, drag:2.4, life:420 + rnd() * 380, delay:rnd() * 40, ramp:[0],
+      draw(L, x, y, u){ fxSapOrb(L, x, y, r * (1 - u * 0.45), u < 0.65 ? 1 : 1 - (u - 0.65) / 0.35); } });
+  }
+  fxSpray(layer, parts, 900);
+}
 function fxDrainOrbs(fromId, toIds, o){
   if(!FX.on || !ui.battle || !fxReady()) return false;
   const a = fxAnchor(fromId);
@@ -535,7 +581,11 @@ function fxSpike(L, x, y, h, w, lean, pal, cover){
   fxPoly(L, [[x - w * 0.2, y], [x + lean * 0.9, y - h * 0.85], [x + w * 0.6, y]], pal[2], cover);
   fxLine(L, x - w * 0.6, y - 1, x + lean * 0.8, y - h * 0.8, pal[0], 1, cover);
 }
-/* A guard before one monster, rising: `pal` [light, mid, dark, line], `face` its own colour inside. */
+/* A guard before one monster, rising: `pal` [light, mid, dark, line], `face` its own colour inside. (4.20, the
+   designer: "the three moves with a shield: spike armour, counter and steel aegis should all have the shields placed
+   under the monster sprite in Z position (so it looks like the shield is in between the player monster and the enemy
+   monsters)": it stands on the canvas between the two sides (fxGuardLayer) — behind one of yours, before one of theirs.) */
+const fxGuardLayer = id=> 'back';                                     // under yours (fxUnderOf), over theirs (fxOverOf): both the back canvas
 function fxGuard(L, id, a, g, cv, pal, face){
   const dir = /^enemy-/.test(id) ? -1 : 1, cx = a.x + dir * a.w * 0.36, cy = a.y - a.h * 0.04, hh = a.h * 0.42 * g, ww = a.w * 0.2 * g;
   const pts = fxShieldPts(cx, cy, ww, hh);
@@ -558,7 +608,7 @@ FX_MOVES['Spike Armour'] = {
           fxSpike(L, s.x, s.y, s.h * g, s.w, Math.cos(s.ang) * 3, FX_ROCKC);
         });
       } });
-      fxAdd({ layer:fxOverOf(id), dur:1150, step(L, t){             // a shield of stone before it, as Counter's
+      fxAdd({ layer:fxGuardLayer(id), dur:1150, step(L, t){         // a shield of stone before it, as Counter's — (4.20) between it and them
         if(t < 180) return;
         const g = fxEaseOut(Math.min(1, (t - 180) / 180)), cv = t < 850 ? 1 : 1 - (t - 850) / 300;
         const s = fxGuard(L, id, a, g, cv, FX_ROCKC, FX_GROUND[0]);
@@ -609,7 +659,7 @@ FX_MOVES['Counter'] = {
     fxStoneTell(ctx, FX_PHYS);
     fxMine(ctx).forEach(id=>{
       const a = fxAnchor(id); if(!a) return;
-      fxAdd({ layer:fxOverOf(id), dur:1000, step(L, t){
+      fxAdd({ layer:fxGuardLayer(id), dur:1000, step(L, t){          // (4.20) between it and them
         const g = fxEaseOut(Math.min(1, t / 160)), cv = t < 700 ? 1 : 1 - (t - 700) / 300;
         const s = fxGuard(L, id, a, g, cv, [FX_PHYS[0], FX_PHYS[1], FX_PHYS[2], FX_PHYS[4]], FX_PHYS[0]);
         if(t > 120 && t < 260) fxLine(L, s.cx - s.ww, s.cy - s.hh * 0.5, s.cx + s.ww, s.cy + s.hh * 0.3, FX_PHYS[0], 2);
@@ -744,7 +794,7 @@ FX_MOVES['Steel Aegis'] = {
       const a = fxAnchor(id); if(!a) return;
       const D = 1150, d0 = 60;
       fxMetal(id, D, d0);
-      fxAdd({ layer:fxOverOf(id), dur:d0 + D, step(L, t){
+      fxAdd({ layer:fxGuardLayer(id), dur:d0 + D, step(L, t){         // (4.20) between it and them
         if(t < d0) return;
         const u = t - d0, g = fxEaseOut(Math.min(1, u / 200)), cv = u > D - 220 ? Math.max(0, (D - u) / 220) : 1;
         const s = fxGuard(L, id, a, g, cv, FX_STEELC, FX_STEEL[1]);
@@ -822,26 +872,41 @@ FX_MOVES['Vortex Blast'] = {
   },
 };
 
-/* VERDANT NOVA (Grass): a great flower of blades opens over your monster, turning; each strike throws a fan of razor
-   leaves from it and a green nova bursts where they land. */
+/* VERDANT NOVA (Grass). (4.20, the designer: "could you have green solar beams firing from a bright green orb and
+   exploding into bright green balls a la the giga drain particles instead of leaf particles instead?"): a green sun
+   swells over your monster, motes of green light drifting off it; each strike a solar beam from it to the one struck,
+   the sun flaring as it fires, and there a burst of bright green balls. (Until 4.20 a flower of blades throwing razor
+   leaves.) */
 FX_MOVES['Verdant Nova'] = {
   dur:900, window:6500,
   cast(ctx){
     fxStoneTell(ctx, FX_GRASS);
-    const S = FX_ULTRA_ORB;
-    const k = 0.8;                                                     // (4.19) its flower brought to every Ultra's orb (it was a fifth over); its heart as it was
-    fxHost(ctx, { r:Math.round(24 * k) }, (L, h, t, g)=>{
-      for(let i = 0; i < 8; i++){ const ang = i * Math.PI / 4 + t * 0.003; fxLeaf(L, h.x + Math.cos(ang) * 8 * S * k * g, h.y + Math.sin(ang) * 8 * S * k * g, (11 * g + 1) * S * k, ang, FX_LEAFC); }
-      fxDisc(L, h.x, h.y, (3.5 * g + 0.5) * S, FX_GOLD[5]); fxDisc(L, h.x, h.y, (2.5 * g + 0.5) * S, FX_GOLD[2]); fxDisc(L, h.x - 2, h.y - 2, 1.5 * S * g, FX_GOLD[0]);
+    const R = FX_ULTRA_ORB_R, rnd = fxRand(ctx.seed), motes = [];
+    let last = 0, acc = 0;
+    fxHost(ctx, { r:Math.round(R + 2) }, (L, h, t, g, fade)=>{
+      const dt = Math.min(0.05, Math.max(0, t - last) / 1000); last = t;
+      const fl = h.fired ? Math.max(0, 1 - (performance.now() - h.fired) / 140) : 0;
+      const r = R * fxEaseOut(Math.min(1, t / 360)) * fade * (1 + 0.04 * Math.sin(t * 0.026));
+      if(t > 160 && fade > 0.3){                                       // motes of green light drifting off it, more as it fires
+        acc += dt * 26 * (1 + fl * 4);
+        while(acc >= 1){ acc--; const a = rnd() * 6.28, v = 14 + rnd() * 26; motes.push({ x:h.x + Math.cos(a) * r, y:h.y + Math.sin(a) * r, vx:Math.cos(a) * v, vy:Math.sin(a) * v - 6, age:0, life:520 + rnd() * 420, r:1 + rnd() * 1.1 }); }
+      }
+      for(let i = motes.length - 1; i >= 0; i--){
+        const m = motes[i];
+        m.age += dt * 1000;
+        if(m.age > m.life){ motes.splice(i, 1); continue; }
+        m.x += m.vx * dt; m.y += m.vy * dt;
+        const u = m.age / m.life;
+        fxSapOrb(L, m.x, m.y, m.r * (1 - u * 0.5), u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3);
+      }
+      fxGreenSun(L, h.x, h.y, r, t, fl);
     });
   },
   impact(ctx, at, k, side){
-    const h = fxHostHit(ctx), layer = fxLayerFor(side), H = FX_ULTRA_HIT;
-    [-1, 0, 1].forEach(i=> fxTravel('back', h, at, { delay:0, time:110, lift:i * 20, linear:true }, (L, p, u, t)=> fxLeaf(L, p.x, p.y, 9 * H, t * 0.05 + i, FX_LEAFC)));
-    fxLater(90, ()=>{
-      FX_KIT.Grass.burst(at, layer, { seed:ctx.seed + k * 13, big:1.3 * H });
-      fxRingBurst(at, layer, FX_GRASS, 1.2 * H);
-    });
+    const h = fxHostHit(ctx), H = FX_ULTRA_HIT;
+    h.fired = performance.now();
+    fxSolarBeam('back', h, at, 6 * H);                                  // under the sun, as every Ultra's beam
+    fxLater(40, ()=> fxSapBurst(at, fxLayerFor(side), { seed:ctx.seed + k * 13, big:1.3 * H }));
   },
 };
 
@@ -1034,22 +1099,90 @@ FX_MOVES['Mindstorm'] = {
   },
 };
 
-/* DRACO METEOR (Dragon): an orb shoots up from your monster into the sky; each strike is a meteor coming down on one
-   of them, a blast of dragon fire. */
+/* (4.20) A western dragon, head up and wings spread (Draco Meteor's — the designer: "could you do a western dragon shape
+   with head facing up and wings spread in dragon fire purple rising into the air instead of the cloud? it should trail
+   afterimage shadows instead of a line"). In units of its half-span, from its chest, y down: its right wing (bat-winged,
+   the fingers fanning from the wrist, the membrane scalloped between them), its body from snout to tail, a horn, a hind
+   leg; the left side its mirror. */
+const FX_WYRM = {
+  S:[0.12, -0.2], W:[0.5, -0.6],                                       // the wing's root (its pivot as it beats), its wrist
+  wing:[[0.12, -0.2], [0.5, -0.6], [0.98, -0.8], [0.8, -0.5], [1.0, -0.3], [0.76, -0.12], [0.86, 0.06], [0.6, 0.04], [0.58, 0.24], [0.34, 0.12], [0.12, 0.1]],
+  tips:[[0.98, -0.8], [1.0, -0.3], [0.86, 0.06], [0.58, 0.24]],
+  side:[[0, -0.96], [0.05, -0.88], [0.08, -0.78], [0.11, -0.69], [0.08, -0.62], [0.06, -0.52], [0.1, -0.38], [0.17, -0.24], [0.18, -0.06], [0.15, 0.1], [0.13, 0.2], [0.07, 0.3]],
+  belly:[[0, -0.5], [0.05, -0.36], [0.075, -0.1], [0.05, 0.12], [0, 0.24]],
+  horn:[[0.07, -0.67], [0.25, -0.57], [0.085, -0.6]],
+  leg:[[0.12, 0.12], [0.23, 0.26], [0.2, 0.32], [0.15, 0.3], [0.08, 0.2]],
+};
+function fxWyrm(L, x, y, U, flap, cover, shadow){
+  const P = FX_DRAGON, cv = cover == null ? 1 : cover, W = FX_WYRM;
+  const at = (p, m)=> [x + p[0] * m * U, y + p[1] * U];
+  const wingAt = (p, m)=>{                                             // a point of a wing, beaten about its root
+    const dx = p[0] - W.S[0], dy = p[1] - W.S[1], c = Math.cos(flap), s = Math.sin(flap);
+    return at([W.S[0] + dx * c + dy * s, W.S[1] - dx * s + dy * c], m);
+  };
+  const tail = [];                                                     // its tail, swaying a little, a spade at its end
+  for(let i = 0; i <= 6; i++){ const v = i / 6; tail.push([0.05 * Math.sin(v * 3.8 + flap * 2), 0.28 + v * 0.5, 0.065 * (1 - v) + 0.014]); }
+  const tailPoly = tail.map(([cx, cy, w])=> [cx + w, cy]).concat(tail.slice().reverse().map(([cx, cy, w])=> [cx - w, cy]));
+  const e = tail[tail.length - 1], spade = [[e[0], e[1] - 0.03], [e[0] + 0.1, e[1] + 0.06], [e[0], e[1] + 0.17], [e[0] - 0.1, e[1] + 0.06]];
+  const body = W.side.concat(W.side.slice(1).reverse().map(([px, py])=> [-px, py]));
+  const toW = pts=> pts.map(p=> at(p, 1));
+  if(shadow){                                                          // an afterimage: one dark shape
+    for(const m of [1, -1]) fxPoly(L, W.wing.map(p=> wingAt(p, m)), P[4], cv);
+    fxPoly(L, toW(body), P[4], cv); fxPoly(L, toW(tailPoly), P[4], cv); fxPoly(L, toW(spade), P[4], cv);
+    return;
+  }
+  for(const m of [1, -1]){
+    fxPolyLined(L, W.wing.map(p=> wingAt(p, m)), P[3], P[5], cv);   // the membrane
+    const wr = wingAt(W.W, m), sh = wingAt(W.S, m);
+    fxLine(L, sh[0], sh[1], wr[0], wr[1], P[2], 2, cv);               // its arm
+    W.tips.forEach(tp=>{ const q = wingAt(tp, m); fxLine(L, wr[0], wr[1], q[0], q[1], P[1], 1, cv); });   // its fingers
+    fxPolyLined(L, W.leg.map(p=> at(p, m)), P[3], P[5], cv);
+  }
+  fxPolyLined(L, toW(tailPoly), P[2], P[5], cv); fxPolyLined(L, toW(spade), P[3], P[5], cv);
+  fxPolyLined(L, toW(body), P[2], P[5], cv);
+  fxPoly(L, W.belly.concat(W.belly.slice(1, -1).reverse().map(([px, py])=> [-px, py])).map(p=> at(p, 1)), P[1], 0.85 * cv);   // its belly, lighter
+  for(let j = 0; j < 9; j++){ const py = -0.44 + j * 0.075, hw = 0.05 + 0.025 * Math.sin((j + 1) / 10 * Math.PI); fxLine(L, x - hw * U, y + py * U, x + hw * U, y + py * U, P[2], 1, 0.7 * cv); }   // its scales
+  for(const m of [1, -1]){ fxPolyLined(L, W.horn.map(p=> at(p, m)), P[1], P[4], cv); const ey = at([0.045, -0.79], m); fxSet(L, Math.round(ey[0]), Math.round(ey[1]), P[0]); }   // horns; eyes alight
+}
+
+/* DRACO METEOR (Dragon). (4.20, the designer: "for draco meteor, could you do a western dragon shape with head facing up
+   and wings spread in dragon fire purple rising into the air instead of the cloud? it should trail afterimage shadows
+   instead of a line. let the falling beam/projectiles and explosions be bigger as well."): a dragon of dragon fire rises
+   out of your monster, wings beating, its shadows trailing below it, embers of its fire falling, up and out of the sky;
+   the blows held till it is gone (`hold`); each strike a meteor coming down on one of them — a wider streak, a bigger
+   stone, a bigger blast of dragon fire and a ring of it. (Until 4.20 an orb, a line under it.) */
 FX_MOVES['Draco Meteor'] = {
-  dur:900, window:6500,
+  dur:900, window:6500, hold:480,
   cast(ctx){
     fxStoneTell(ctx, FX_DRAGON);
-    const a = ctx.from;
-    const R = FX_ULTRA_ORB_R;                                          // (4.19) its orb as big as every Ultra's (it was 9)
-    fxAdd({ layer:'back', dur:420, step(L, t){ const u = fxEaseIn(t / 420), y = a.y - u * (a.y + R + 8); fxFlameBall(L, a.x, y, R, FX_DRAGON, t, ctx.seed, { wob:0.3, cols:[FX_DRAGON[3], FX_DRAGON[2], FX_DRAGON[1], FX_DRAGON[0]], outline:FX_DRAGON[5] }); fxLine(L, a.x, y + R + 1, a.x, y + R * 2.8, FX_DRAGON[2], 4, 0.7); } });
+    const a = ctx.from, U = 38 * FX_ULTRA_ORB_R / 16.5, y0 = a.y - a.h * 0.1, y1 = -U * 1.3, T = 780, rnd = fxRand(ctx.seed), embers = [];   // its half-span, about a monster's breadth
+    const pos = t=>{ const u = t < 120 ? 0 : fxEaseIn(Math.min(1, (t - 120) / (T - 120))); return { x:a.x + Math.sin(u * 2.4) * U * 0.12, y:y0 + (y1 - y0) * u }; };
+    let last = 0;
+    fxAdd({ layer:'back', dur:T + 520, step(L, t){
+      const dt = Math.min(0.05, Math.max(0, t - last) / 1000); last = t;
+      const g = Math.min(1, t / 160), s = U * (0.55 + 0.45 * fxEaseOut(g)), flap = tt=> 0.26 * Math.sin(tt * 0.032);
+      if(t < T){
+        for(let i = 0; i < 2; i++){ const p = pos(t), ang = rnd() * 6.28; embers.push({ x:p.x + Math.cos(ang) * s * 0.5, y:p.y + s * (0.1 + rnd() * 0.3), vx:(rnd() - 0.5) * 30, vy:40 + rnd() * 50, age:0, life:300 + rnd() * 300 }); }
+        for(let j = 4; j >= 1; j--){ const tj = t - j * 70; if(tj < 40) continue; const p = pos(tj); fxWyrm(L, p.x, p.y, s, flap(tj), (0.52 - j * 0.1) * g, true); }   // its shadows, trailing — each apart
+      }
+      for(let i = embers.length - 1; i >= 0; i--){                     // embers of its fire, falling
+        const m = embers[i];
+        m.age += dt * 1000;
+        if(m.age > m.life){ embers.splice(i, 1); continue; }
+        m.x += m.vx * dt; m.y += m.vy * dt;
+        const u = m.age / m.life;
+        fxDisc(L, m.x, m.y, 1.6 * (1 - u) + 0.5, FX_DRAGON[u < 0.4 ? 1 : 2], 1 - u * 0.6);
+      }
+      if(t < T){ const p = pos(t); fxWyrm(L, p.x, p.y, s, flap(t), g, false); }
+    } });
   },
   impact(ctx, at, k, side){
     const layer = fxLayerFor(side), H = FX_ULTRA_HIT;
-    fxSkyStreak(layer, at, { side, cols:[FX_FIRE[1], FX_DRAGON[2], FX_DRAGON[4]], w:6, slant:k % 2 ? 0.32 : 0.5 });
-    fxAdd({ layer, dur:120, step(L, t){ fxRock(L, at.x, at.y, 7 * H, k, ctx.seed + k, [FX_DRAGON[1], FX_DRAGON[3], FX_DRAGON[4], FX_DRAGON[5]], 1 - t / 120); } });
-    fxDragonBurst(at, layer, { seed:ctx.seed + k * 13, big:1.5 * H });
-    fxFireBurst(at, layer, { seed:ctx.seed + k * 17, big:0.8 * H });
+    fxSkyStreak(layer, at, { side, cols:[FX_FIRE[1], FX_DRAGON[2], FX_DRAGON[4]], w:10, slant:k % 2 ? 0.32 : 0.5, dur:220 });
+    fxAdd({ layer, dur:160, step(L, t){ fxRock(L, at.x, at.y, 11 * H, k, ctx.seed + k, [FX_DRAGON[1], FX_DRAGON[3], FX_DRAGON[4], FX_DRAGON[5]], 1 - t / 160); } });
+    fxDragonBurst(at, layer, { seed:ctx.seed + k * 13, big:2.1 * H });
+    fxFireBurst(at, layer, { seed:ctx.seed + k * 17, big:1.15 * H });
+    fxAdd({ layer, dur:480, step(L, t){ const u = fxEaseOut(t / 480), rr = (10 + u * 26) * H; fxRing(L, at.x, at.y, rr + 2, 2, FX_DRAGON[5], 1 - u, 0.85); fxRing(L, at.x, at.y, rr, 3, FX_DRAGON[u < 0.5 ? 1 : 2], 1 - u, 0.85); } });
   },
 };
 
@@ -1705,20 +1838,40 @@ FX_MOVES['Overgrowth'] = {
     });
   },
 };
+/* VERDANT WRATH (the Forest Fairy's Ultimate) and its Max. (4.20, the designer: "forest fairy's verdant wrath should
+   also do a similar attack where three small orbs fire three solar beams at the target, hitting it three times"): small
+   green suns gather round her, one for each strike (the Max's three; the Ultimate's two, as it strikes twice); each
+   strike one of them fires a solar beam at the one struck — flaring, then spent — and there a burst of bright green
+   balls, as Verdant Nova's. (Until 4.20 thorned vines lashing up.) */
 function fxVerdantWrath(max){
+  const N = max ? 3 : 2;
   return {
     dur:1100, hold:max ? 600 : 450,
-    cast(ctx){ fxMine(ctx).slice(0, 1).forEach(id=>{ const a = fxAnchor(id); if(a) fxPuffs(fxUnderOf(id), { x:a.x, y:a.foot }, 6, { seed:ctx.seed, pal:[FX_GRASS[1], FX_GRASS[2], FX_GRASS[3]], r:4, spread:a.w, rise:12, life:600 }); }); },
-    impact(ctx, at, k, side){
-      const layer = fxLayerFor(side), from = { x:at.x + (k % 2 ? 40 : -40), y:at.foot + 4 };
-      fxAdd({ layer, dur:620, step(L, t){                       // a great thorned vine lashes up and over it
-        const u = Math.min(1, t / 160), cv = t < 420 ? 1 : 1 - (t - 420) / 200, ctl = { x:(from.x + at.x) / 2, y:at.y - at.h * 0.9 };
-        const pt = v=> ({ x:(1 - v) * (1 - v) * from.x + 2 * (1 - v) * v * ctl.x + v * v * at.x, y:(1 - v) * (1 - v) * from.y + 2 * (1 - v) * v * ctl.y + v * v * at.y });
-        for(let pass = 0; pass < 2; pass++) for(let v = 0; v <= u; v += 0.012){ const p = pt(v), w = (max ? 4 : 3) * (1 - v * 0.5);
-          if(pass === 0) fxDisc(L, p.x, p.y, w + 1, FX_GRASS[5], cv); else { fxDisc(L, p.x, p.y, w, FX_GRASS[3], cv); fxSet(L, Math.round(p.x), Math.round(p.y - w * 0.5), FX_GRASS[1]); }
-          if(pass === 1 && Math.round(v * 80) % 9 === 0){ fxLine(L, p.x, p.y - w, p.x + 2, p.y - w - 3, FX_GROUND[4], 1, cv); } }
+    cast(ctx){
+      const id = ctx.fromId, f = ctx.from;
+      if(!f) return;
+      if(id) fxPuffs(fxUnderOf(id), { x:f.x, y:f.foot }, 6, { seed:ctx.seed, pal:[FX_GRASS[1], FX_GRASS[2], FX_GRASS[3]], r:4, spread:f.w, rise:12, life:600 });
+      const a = id ? fxSpriteMid(id) : f, top = id ? fxSpriteTop(id) : f.y - f.h * 0.5, w = a.w || f.w, hh = a.h || f.h;
+      const spots = N === 3 ? [[-0.5, 0.2], [0, -1], [0.5, 0.2]] : [[-0.46, 0.12], [0.46, 0.12]];
+      const orbs = ctx.orbs = spots.map(([sx, sy], i)=> ({ x:a.x + sx * w, y:sy < 0 ? top - 9 : top + sy * hh, born:i * 90, fired:0, ph:i * 2.1 }));
+      const end = 330 + (max ? 600 : 450) + N * 380 + 900;
+      fxAdd({ layer:id ? fxOverOf(id) : (ctx.foe ? 'back' : 'front'), z:1, dur:end, step(L, t){
+        const now = performance.now();
+        orbs.forEach(o=>{
+          if(t < o.born) return;
+          const g = fxEaseOut(Math.min(1, (t - o.born) / 220)), since = o.fired ? now - o.fired : -1;
+          let r = 5.5 * g * (1 + 0.06 * Math.sin(t * 0.03 + o.ph)), fl = 0;
+          if(since >= 0){ fl = Math.max(0, 1 - since / 90); r *= since < 80 ? 1.25 : Math.max(0, 1 - (since - 80) / 180); }   // flares as it fires, then is spent
+          else if(t > end - 300) r *= Math.max(0, (end - t) / 300);    // never fired (a miss): it fades
+          if(r < 0.6) return;
+          fxGreenSun(L, o.x, o.y + Math.sin(t * 0.008 + o.ph) * 1.5, r, t, fl);
+        });
       } });
-      fxLater(130, ()=>{ FX_KIT.Grass.burst(at, layer, { seed:ctx.seed + k, big:max ? 1.75 : 1.4 }); fxRingBurst(at, layer, FX_GRASS, max ? 1.6 : 1.2); if(max) fxSpray(layer, fxLeafParts(at, 10, { seed:ctx.seed + k + 3, vmin:60, vmax:160, len:7 }), 900); });
+    },
+    impact(ctx, at, k, side){
+      const o = ctx.orbs && ctx.orbs[k % ctx.orbs.length];
+      if(o){ o.fired = performance.now(); fxSolarBeam('back', o, at, max ? 5 : 4); }
+      fxLater(40, ()=> fxSapBurst(at, fxLayerFor(side), { seed:ctx.seed + k * 13, big:max ? 1.2 : 1.05 }));
     },
   };
 }
