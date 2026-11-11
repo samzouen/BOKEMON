@@ -304,17 +304,6 @@
     display:inline-flex;align-items:center;gap:6px;background:none;border:none;color:var(--ink-soft);
     font-family:'Nunito';font-weight:800;font-size:14px;cursor:pointer;padding:8px 0;margin-bottom:4px;
   }
-  .party-strip{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap;}
-  .party-chip{
-    display:flex;align-items:center;gap:8px;background:var(--paper-2);border:1px solid var(--line);
-    border-radius:11px;padding:7px 11px 7px 7px;
-  }
-  .party-chip .mon-mini{
-    width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;
-    font-family:'Noto Sans SC';font-weight:900;font-size:16px;color:#fff;
-  }
-  .party-chip .pc-name{font-family:'Baloo 2',cursive;font-weight:700;font-size:13px;line-height:1;}
-  .party-chip .pc-lvl{font-size:11px;color:var(--ink-soft);font-weight:700;}
 
   .toast{
     position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
@@ -746,9 +735,91 @@
   .daily-sub{font-size:11px;font-weight:700;color:var(--ink-soft);margin-top:4px;}
   .version-tag{position:absolute;top:6px;right:10px;font-size:10px;font-weight:800;
     color:var(--ink-soft);opacity:.7;letter-spacing:.04em;z-index:5;}
-  .home-hero{display:flex;align-items:center;gap:13px;margin:4px 0 16px;}
-  .home-hero-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:22px;line-height:1.1;}
-  .home-hero-sub{font-size:13px;color:var(--ink-soft);font-weight:600;}
+  /* (4.29) THE HOME PAGE (renderHome, 07-screens.js): your team going by, Continue, Regions, the two indexes, the daily.
+     Continue is the one bold thing on it — the seal's cinnabar, big, under your thumb; the rest paper, quiet. */
+  /* (4.30) The designer: "Please allow the monster sprites to pass visibly behind the player sprite by making his square
+     transparent except for the sprite, and give just the player sprite (not the square he is in) a faint white outline
+     to help keep him visible. I don't want the border around them but could each of them drop a small shadow (not the
+     tile, the sprite). Remember not to give the tiles any shadows. Make it look like only the sprites are there." No box:
+     the sprites alone, each casting its own small shadow; your team going by underneath you, round and round. */
+  .home-team{position:relative;height:calc(var(--ht-s, 78px) + 26px);margin:2px 0 14px;cursor:pointer;}
+  .home-team:focus-visible{outline:3px solid var(--jade);outline-offset:2px;border-radius:14px;}
+  .ht-me{position:absolute;left:2px;bottom:3px;z-index:2;line-height:0;pointer-events:none;}
+  .ht-me img{box-shadow:none !important;
+    filter:drop-shadow(1px 0 0 rgba(255,255,255,.72)) drop-shadow(-1px 0 0 rgba(255,255,255,.72))
+           drop-shadow(0 1px 0 rgba(255,255,255,.72)) drop-shadow(0 -1px 0 rgba(255,255,255,.72))
+           drop-shadow(0 3px 2px rgba(35,32,25,.3));}
+  .ht-view{position:absolute;inset:0;display:flex;align-items:flex-end;overflow-x:auto;overflow-y:hidden;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;
+    -webkit-mask-image:linear-gradient(to right, transparent 0, #000 5%, #000 95%, transparent 100%);
+            mask-image:linear-gradient(to right, transparent 0, #000 5%, #000 95%, transparent 100%);}
+  .ht-view::-webkit-scrollbar{display:none;}
+  .ht-track{display:flex;align-items:flex-end;gap:4px;padding:0 10px 7px calc(var(--ht-s, 78px) * 0.8);width:max-content;}
+  .home-team.ht-alone .ht-track{padding-left:10px;}
+  .ht-mon{flex:0 0 auto;position:relative;line-height:0;}
+  .ht-mon img{display:block;filter:drop-shadow(0 3px 2px rgba(35,32,25,.3));}
+  .home-team .ht-mon .crowned-aura{filter:drop-shadow(0 3px 2px rgba(35,32,25,.3)) drop-shadow(0 0 10px rgba(255,209,102,.95))
+    drop-shadow(0 0 24px rgba(255,180,60,.6)) !important;}
+  .home-go{display:flex;align-items:center;gap:15px;width:100%;min-height:86px;padding:14px 20px;margin:0;border:0;border-radius:22px;cursor:pointer;
+    text-align:left;color:#fbf3e2;font-family:'Baloo 2',cursive;
+    background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,0) 55%), var(--cinnabar);
+    box-shadow:0 5px 0 var(--cinnabar-dark), 0 12px 24px rgba(158,47,39,.24);transition:transform .07s, box-shadow .07s;}
+  .home-go:active{transform:translateY(3px);box-shadow:0 2px 0 var(--cinnabar-dark), 0 6px 14px rgba(158,47,39,.2);}
+  .home-go:focus-visible{outline:3px solid var(--gold);outline-offset:3px;}
+  .hg-play{flex:0 0 auto;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:rgba(251,243,226,.16);box-shadow:inset 0 0 0 2px rgba(251,243,226,.55);}
+  .hg-play svg{width:24px;height:24px;margin-left:3px;}
+  .hg-words{display:flex;flex-direction:column;min-width:0;}
+  .hg-title{font-weight:800;font-size:29px;line-height:1.05;letter-spacing:.01em;}
+  .hg-where{font-family:'Nunito',system-ui,sans-serif;font-weight:700;font-size:14px;line-height:1.3;opacity:.86;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .home-menu{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0 14px;}
+  .home-card{display:flex;align-items:center;gap:12px;min-height:64px;padding:12px 16px;margin:0;cursor:pointer;text-align:left;
+    background:var(--paper-2);border:1px solid var(--line);border-radius:16px;box-shadow:0 3px 0 var(--paper-3);
+    color:var(--ink);font-family:'Baloo 2',cursive;font-weight:700;font-size:17px;line-height:1.15;transition:transform .07s;}
+  .home-card.wide{grid-column:1/-1;}
+  .home-card:active{transform:translateY(2px);box-shadow:0 1px 0 var(--paper-3);}
+  .home-card:focus-visible{outline:3px solid var(--jade);outline-offset:2px;}
+  .hc-icon{flex:0 0 auto;font-size:26px;line-height:1;}
+  body.has-bg .home-card{background:rgba(244,236,216,0.34);border-color:rgba(35,32,25,0.22);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);}
+  /* the daily, folded: the day it is, all it pays, and the day's count; opened, the cycle's six days and all each pays.
+     (4.29, "the daily rewards can be a little more prominent") a card of the medals' gold, as big as the others */
+  .daily-card.dz{margin:0;padding:13px 16px 14px;border-radius:16px;border:1.5px solid rgba(201,154,63,.72);
+    background:linear-gradient(180deg, rgba(255,244,214,.95), rgba(245,224,168,.9));
+    box-shadow:0 3px 0 rgba(176,128,40,.42), 0 10px 22px rgba(201,154,63,.16);}
+  body.has-bg .daily-card.dz{background:linear-gradient(180deg, rgba(255,244,214,.72), rgba(245,224,168,.6));
+    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);}
+  .dz-head{display:flex;align-items:center;gap:13px;width:100%;margin:0;padding:0;border:0;background:none;cursor:pointer;color:var(--ink);text-align:left;}
+  .dz-head:focus-visible{outline:2px solid var(--jade);outline-offset:4px;border-radius:10px;}
+  .dz-icon{flex:0 0 auto;font-size:28px;line-height:1;}
+  .dz-main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:8px;}
+  .dz-top{display:flex;align-items:center;gap:9px;min-width:0;}
+  .dz-title{font-family:'Baloo 2',cursive;font-weight:800;font-size:19px;line-height:1;white-space:nowrap;}
+  .dz-day{flex:0 1 auto;min-width:0;font-size:12.5px;font-weight:800;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .dz-today{flex:0 0 auto;display:flex;align-items:center;gap:10px;margin-left:auto;}
+  .dz-today .dz-pay{font-size:17px;gap:3px;}
+  .dz-today .dz-pay i{font-size:19px;}
+  .dz-line{display:flex;align-items:center;gap:10px;}
+  .dz-bar{flex:1 1 auto;height:11px;border-radius:7px;background:rgba(35,32,25,.13);overflow:hidden;box-shadow:inset 0 1px 1px rgba(35,32,25,.12);}
+  .dz-bar span{display:block;height:100%;border-radius:7px;background:linear-gradient(90deg, var(--jade), var(--gold));}
+  .dz-count{font-size:14px;font-weight:800;color:var(--ink);white-space:nowrap;}
+  .dz-done .dz-count{color:var(--jade);}
+  .dz-chev{flex:0 0 auto;width:20px;height:20px;color:var(--ink-soft);transition:transform .2s ease;}
+  .dz.open .dz-chev{transform:rotate(180deg);}
+  .dz-body{margin-top:12px;}
+  .dz-body .daily-grid{margin-top:0;}
+  .dz-body .dq-day{font-size:10px;}
+  .dz-pays{display:flex;flex-direction:column;align-items:center;gap:3px;margin-top:3px;}
+  .dz-pay{display:flex;align-items:center;gap:2px;font-size:12.5px;line-height:1;}
+  .dz-pay b{font-weight:900;}
+  .dz-pay i{font-style:normal;font-size:15px;line-height:1;}
+  .dz-pay .ui-icon{display:block;}
+  @media (max-width: 374px){                                   /* a narrow phone: all of it still on one line */
+    .daily-card.dz{padding:12px 13px 13px;}
+    .dz-head{gap:10px;} .dz-icon{font-size:24px;} .dz-title{font-size:17px;} .dz-top{gap:7px;}
+    .dz-today{gap:7px;} .dz-today .dz-pay{font-size:15.5px;} .dz-today .dz-pay i{font-size:17px;}
+  }
+  @media (prefers-reduced-motion: reduce){ .dz-chev{transition:none;} }
   .avatar-nudge{display:flex;align-items:center;justify-content:space-between;gap:12px;
     background:#fbf3e2;border:1px dashed var(--cinnabar);border-radius:13px;padding:11px 13px;
     margin-bottom:14px;font-size:13px;font-weight:700;}
@@ -1693,6 +1764,25 @@
   body.in-battle .screen{ display:flex; flex-direction:column; }
   body.in-battle .battle-stage{ flex:1 0 auto; display:flex; flex-direction:column; }
   body.in-battle .battlefield{ flex:1 0 auto; }
+  /* (4.29) The designer: "because the ultra button disappears for monsters who don't have it, the buttons still shift.
+     Can we have a dedicated empty space and no movement of all buttons please?" — and "buttons still move because of the
+     text length changing the height. Can we fix all move buttons to the same height? I want muscle memory to reliably
+     press the same buttons". The same five places for every kit (btGridHtml, 04-battle.js), the Ultra's last and the
+     width of the row, an empty place kept where a kit has nothing; and every move button one height whatever it says —
+     its name in two lines at most, what it says under the name in one. */
+  .bt-grid{ --mv-h:62px; grid-auto-rows:var(--mv-h); }
+  .bt-grid .move-btn{ height:var(--mv-h); min-height:0; display:flex; flex-direction:column; justify-content:center; overflow:hidden; padding-top:6px; padding-bottom:6px; }
+  .bt-grid .move-btn .mv-name{ display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2; overflow:hidden; }
+  .bt-grid .move-btn .mv-meta{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.2; }
+  .bt-grid .move-btn.ultra-btn, .bt-grid .bt-slot-ultra{ order:9; }
+  .bt-grid .bt-slot-ultra{ grid-column:1/-1; }
+  .bt-grid .bt-slot-empty{ visibility:hidden; pointer-events:none; }
+  @media (max-height: 900px){
+    body.in-battle .bt-grid{ --mv-h:54px; }
+    body.in-battle .bt-grid .move-btn{ padding-top:5px; padding-bottom:5px; }
+    body.in-battle .bt-grid .move-btn .mv-name{ font-size:14px; line-height:1.05; }
+    body.in-battle .bt-grid .move-btn .mv-meta{ margin-top:2px; }
+  }
   .enemy-row.many{ gap:6px; }
   .enemy-row.many .mon-title{ font-size:11px; }
   .enemy-row.many .mon-title span{ font-size:11px; }
