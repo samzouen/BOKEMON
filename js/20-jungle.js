@@ -462,7 +462,18 @@ function jgGround(){
     if(y < H - 1){ const u = v + W; if(!reach[u] && !JG_SOLID[g[u]]){ reach[u] = 1; q[qt++] = u; } }
   }
   for(let i = 0; i < W * H; i++) if(!JG_SOLID[g[i]] && !reach[i]) g[i] = JG_T.HEDGE;
-  _jgGround = { g, W, H, places, R, inCorner };
+  /* (4.24) each village's centrepiece — the designer: "Each tribe also needs an element specific centrepiece in the
+     village such as a pond in water tribe etc." On the green before the lodge, below where the unsealing is held (its
+     blade two squares before the door, you three below it): 4 × 2 squares nobody walks on, drawn whole by
+     jgPieceEls. Laid after all the rest, with none of the jungle's dice, so nothing else moved; what was on its squares
+     is kept (pieceOld), for the finds to be laid as they were (jgFinds). */
+  const pieceOld = new Map();
+  JG_TRIBE_KEYS.forEach(k=>{
+    const V = places.villages[k], P = { x:V.cx - 2, y:V.cy + 7, w:JG_PIECE.w, h:JG_PIECE.h };
+    for(let y = P.y; y < P.y + P.h; y++) for(let x = P.x; x < P.x + P.w; x++){ const i = y * W + x; pieceOld.set(i, g[i]); g[i] = JG_T.HUT; }
+    V.piece = P;
+  });
+  _jgGround = { g, W, H, places, R, inCorner, pieceOld };
   return _jgGround;
 }
 function jgTile(x, y){ const G = jgGround(); return (x < 0 || y < 0 || x >= G.W || y >= G.H) ? JG_T.HEDGE : G.g[y * G.W + x]; }
@@ -645,6 +656,7 @@ function jgThings(){
     arrow:'up' });
   if(typeof warJungleThings === 'function') warJungleThings(list, P);   // (3.92) the war: the King, his knights, the invaders at the villages, the ancestors woken
   if(typeof questJungleThings === 'function') questJungleThings(list, P);   // (3.99) the tribes' barricades
+  if(typeof hutJungleThings === 'function') hutJungleThings(list, P);       // (4.25) a door into every house in the villages (31-huts.js)
   _jgThings = list;
   return list;
 }
@@ -816,6 +828,7 @@ function jgRender(world, d){
   por.style.cssText = `left:${(pt.x - 0.3) * WALK_T}px;top:${(pt.y + pt.h - 2.7) * WALK_T}px;width:${2.2 * WALK_T}px;height:${3 * WALK_T}px;z-index:${10 + pt.y + pt.h - 1};`;
   por.innerHTML = riftPortalSvg(false);
   world.appendChild(por);
+  jgPieceEls(world);                                 // (4.24) each village's centrepiece
   ui.jgBandEls = {};
   ui.jgFolkEls = {}; ui.jgFindEls = {};             // (3.96) a new world: theirs drawn afresh
   /* those right by you as you arrive give you a moment */
@@ -1014,6 +1027,7 @@ function jgSeeThrough(now){
 }
 /* the patch round the windows `was` (put back) and `now` (cut): the crowns there drawn again, then the windows cut */
 function jgOverPatch(was, now){
+  if(!JG_P.ov || !JG_P.win || !JG_P.k || !JG_P.ov.isConnected) return;   // (4.22) the map gone mid-way (a fight begun as the windows moved): nothing to patch
   const ov = JG_P.ov, w = JG_P.win, k = JG_P.k, g = ov.getContext('2d');
   const all = (was || []).concat(now || []).filter(q=> q && q.length >= 4);
   if(!all.length) return;
@@ -1031,6 +1045,7 @@ function jgOverPatch(was, now){
   }
   const bh = JG_P.bh && JG_P.bh.isConnected ? JG_P.bh : null;
   if(!bh) jgVillageTreesOver(g, X0, Y0, X1, Y1, w.x0, w.y0, k);       // (3.97) the villages' trees too — (4.10) on their own layer
+  if(typeof CA_WALL !== 'undefined') CA_WALL.jungleOver(g, w.x0, w.y0, w.x1, w.y1, k, performance.now());   // (4.26) the castle's towers (the patch clips them)
   g.globalCompositeOperation = 'destination-out';                       // only over the paths, as the layer is
   g.fillStyle = '#000';
   for(let y = Y0; y < Y1; y++) for(let x = X0; x < X1; x++) if(JG_SOLID[jgTile(x, y)]) g.fillRect(px(x), py(y), px(x + 1) - px(x), py(y + 1) - py(y));
@@ -1132,6 +1147,7 @@ function jgPaintLayer(ctx, x0, y0, x1, y1, k, frame, lw, lh, ov, bh){
     }
   }
   if(water) jgDrawLakes(ctx, x0, y0, x1, y1, k, frame);                 // (4.02) the lakes, round, over their squares
+  if(typeof CA_WALL !== 'undefined') CA_WALL.jungle(ctx, x0, y0, x1, y1, k, performance.now());   // (4.26) the castle, as it is inside its walls
   /* (3.96) the designer: "Can we allow the trees to rise up to half a tile and include dark shadowy trunks at the bottom
      of each row? Make it look like real trees please. The round tops of the trees can protrude up to 1/3 or even 1/2 a
      tile on top tile into the empty path" — and of the mockups, "Round olive trees are amazing!". A round olive tree
@@ -1158,6 +1174,7 @@ function jgPaintLayer(ctx, x0, y0, x1, y1, k, frame, lw, lh, ov, bh){
     og.clearRect(0, 0, ov.width, ov.height);
     drawTrees(og);
     if(!bh) jgVillageTreesOver(og, x0, y0, x1, y1, x0, y0, k);       // (3.97) and the villages' tall trees — (4.10) on their own layer
+    if(typeof CA_WALL !== 'undefined') CA_WALL.jungleOver(og, x0, y0, x1, y1, k, performance.now());   // (4.26) the castle's corner towers, over the road behind them
     og.globalCompositeOperation = 'destination-out';
     og.fillStyle = '#000';
     solid.forEach(r=> og.fillRect(r[0], r[1], r[2], r[3]));
@@ -1286,8 +1303,8 @@ function jgPaintTile(ctx, x, y, px, py, pw, ph, frame, pass){
       if(r) ctx.drawImage(jgSprite(`mound-${vk}-${r.w}x${r.h}`, r.n), (x - r.x) * S, (y - r.y) * S, S, S, px, py, pw, ph);
       return;
     }
-    case JG_T.CASTLE: spr = jgSprite('castle-' + jgCastlePart(x, y), (x + y) & 1); break;
-    case JG_T.GATE: spr = jgSprite('gate', 0); break;
+    case JG_T.CASTLE: spr = typeof CA_WALL !== 'undefined' ? jgSprite('road', Math.floor(v * 3)) : jgSprite('castle-' + jgCastlePart(x, y), (x + y) & 1); break;   // (4.26) under the castle as it is (CA_WALL.jungle)
+    case JG_T.GATE: spr = typeof CA_WALL !== 'undefined' ? jgSprite('road', Math.floor(v * 3)) : jgSprite('gate', 0); break;
     case JG_T.ROAD: spr = jgSprite('road', Math.floor(v * 3)); break;
     case JG_T.ENTRY: floor = true; spr = jgSprite('entry', Math.floor(v * 3)); break;
   }
@@ -1640,6 +1657,299 @@ function jgDrawMound(g, tk, tw, th, n, S){
   }
 }
 
+/* ============================================================
+   (4.24) THE VILLAGES' CENTREPIECES
+   The designer: "Each tribe also needs an element specific centrepiece in the village such as a pond in water tribe
+   etc." On the green before each lodge (jgGround lays its 4 × 2 squares): the Water tribe's Moon Pond, ringed with
+   river stones, lilies on it, reeds at its ends and a stone fish at its back pouring a thread of water into it; the
+   Fire tribe's Undying Hearth, a pit of stones with its logs ablaze, embers going up, a carved post either side; the
+   Earth tribe's Standing Stones, five carved and mossy round a stone table with an amber crystal glowing on it; the
+   Grass tribe's Great Bloom, a flower as tall as you on a mossy mound in a ring of little ones. Each is drawn once, a
+   picture (jgPieceCanvas), and what moves on it is the page's own (jgPieceEls: CSS, in jgCss) — the ripples and the
+   thread of water, the flames, the embers and the glow, the crystal's light, the bloom swaying and its petals.
+   ============================================================ */
+const JG_PIECE = { w:4, h:2, up:1.0 };                                 // its squares; how far its picture reaches up above them
+/* one of a centrepiece's squares */
+function jgPieceSq(x, y){ const G = jgGround(); return !!(G.pieceOld && x >= 0 && y >= 0 && x < G.W && y < G.H && G.pieceOld.has(y * G.W + x)); }
+const JG_PIECE_NAME = { water:'The Moon Pond', fire:'The Undying Hearth', earth:'The Standing Stones', grass:'The Great Bloom' };
+const _jgPieceArt = new Map();
+/* its picture, `S` pixels to a square (cached as a picture's address) */
+function jgPieceSrc(k, S){
+  const key = k + ':' + S;
+  if(_jgPieceArt.has(key)) return _jgPieceArt.get(key);
+  let src = '';
+  try { src = jgPieceCanvas(k, S).toDataURL(); } catch(e){}
+  _jgPieceArt.set(key, src);
+  return src;
+}
+function jgPieceCanvas(k, S, part){
+  const W = JG_PIECE.w * S, U = JG_PIECE.up * S, H = JG_PIECE.h * S + U;
+  const c = document.createElement('canvas');
+  c.width = Math.round(W); c.height = Math.round(H);
+  const g = c.getContext('2d');
+  const R = jgRng((0x9e37 + k.charCodeAt(0) * 131 + k.length * 7) >>> 0);
+  const draw = { water:jgPieceWater, fire:jgPieceFire, earth:jgPieceEarth, grass:jgPieceGrass }[k];
+  if(draw) draw(g, W, H, U, S, ()=> R());
+  return c;
+}
+/* a rounded stone, lit from the top left: (x, y) its middle */
+function jgStone(g, x, y, rx, ry, base, lite, dark, rot){
+  g.save(); g.translate(x, y); if(rot) g.rotate(rot);
+  g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(rx * 0.12, ry * 0.35, rx, ry * 0.8, 0, 0, Math.PI * 2); g.fill();
+  const gr = g.createRadialGradient(-rx * 0.35, -ry * 0.45, Math.max(1, rx * 0.1), 0, 0, Math.max(rx, ry) * 1.1);
+  gr.addColorStop(0, lite); gr.addColorStop(0.55, base); gr.addColorStop(1, dark);
+  g.fillStyle = gr; g.beginPath(); g.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+function jgEll(g, x, y, rx, ry, fill){ g.fillStyle = fill; g.beginPath(); g.ellipse(x, y, Math.max(0.5, rx), Math.max(0.5, ry), 0, 0, Math.PI * 2); g.fill(); }
+/* a flower: n petals round (x, y) */
+function jgFlower(g, x, y, r, col, mid, n){
+  n = n || 5;
+  g.fillStyle = col;
+  for(let i = 0; i < n; i++){ const a = i / n * Math.PI * 2; g.beginPath(); g.ellipse(x + Math.cos(a) * r * 0.55, y + Math.sin(a) * r * 0.55, r * 0.5, r * 0.36, a, 0, Math.PI * 2); g.fill(); }
+  jgEll(g, x, y, r * 0.32, r * 0.32, mid || '#f6d76a');
+}
+/* grass blades in a clump at (x, y): `n` blades up to `h` tall */
+function jgBlades(g, x, y, n, h, cols, r){
+  g.lineCap = 'round';
+  for(let i = 0; i < n; i++){
+    const dx = (r() - 0.5) * h * 0.5, lean = (r() - 0.5) * h * 0.6, hh = h * (0.55 + r() * 0.45);
+    g.strokeStyle = cols[i % cols.length]; g.lineWidth = Math.max(1, h * 0.06);
+    g.beginPath(); g.moveTo(x + dx, y); g.quadraticCurveTo(x + dx + lean * 0.3, y - hh * 0.6, x + dx + lean, y - hh); g.stroke();
+  }
+}
+
+/* THE MOON POND (Water) */
+function jgPieceWater(g, W, H, U, S, r){
+  const cx = W / 2, cy = U + S * 1.02, rx = S * 1.86, ry = S * 0.8;
+  jgEll(g, cx, cy + S * 0.12, rx + S * 0.12, ry + S * 0.14, 'rgba(12,40,30,.3)');            // its shade on the green
+  jgEll(g, cx, cy, rx * 0.98, ry * 0.97, '#7d8f6a');                                        // wet earth under the stones
+  /* the water: deep in the middle, the shallows light, the sky in it */
+  const wg = g.createRadialGradient(cx, cy - ry * 0.15, S * 0.08, cx, cy, rx * 0.9);
+  wg.addColorStop(0, '#225f8c'); wg.addColorStop(0.45, '#2f7cad'); wg.addColorStop(0.8, '#4a9cc6'); wg.addColorStop(1, '#79c1da');
+  jgEll(g, cx, cy, rx * 0.9, ry * 0.86, wg);
+  g.save(); g.beginPath(); g.ellipse(cx, cy, rx * 0.9, ry * 0.86, 0, 0, Math.PI * 2); g.clip();
+  jgEll(g, cx - rx * 0.28, cy - ry * 0.42, rx * 0.55, ry * 0.16, 'rgba(255,255,255,.16)');
+  jgEll(g, cx + rx * 0.35, cy + ry * 0.38, rx * 0.4, ry * 0.1, 'rgba(255,255,255,.08)');
+  g.strokeStyle = 'rgba(200,236,250,.35)'; g.lineWidth = Math.max(1, S * 0.03);
+  [[-0.5, 0.1, 0.18], [0.2, 0.42, 0.14], [0.45, -0.3, 0.12]].forEach(([u, v, l])=>{ g.beginPath(); g.ellipse(cx + u * rx, cy + v * ry, l * rx, l * ry * 0.4, 0, Math.PI * 1.1, Math.PI * 1.9); g.stroke(); });
+  g.restore();
+  /* the stone fish at its back, a thread of water from its mouth (the thread itself moves: .jgp-stream) */
+  const fx = cx, fy = cy - ry * 0.98;
+  jgEll(g, fx, fy + S * 0.06, S * 0.36, S * 0.12, 'rgba(10,30,20,.3)');
+  const sg = g.createLinearGradient(fx - S * 0.3, 0, fx + S * 0.3, 0);
+  sg.addColorStop(0, '#c9cfc6'); sg.addColorStop(0.5, '#a3ab9f'); sg.addColorStop(1, '#6f7a70');
+  g.fillStyle = sg; g.beginPath();
+  g.moveTo(fx - S * 0.3, fy + S * 0.05); g.lineTo(fx - S * 0.3, fy - S * 0.42);
+  g.quadraticCurveTo(fx - S * 0.3, fy - S * 0.72, fx, fy - S * 0.74); g.quadraticCurveTo(fx + S * 0.3, fy - S * 0.72, fx + S * 0.3, fy - S * 0.42);
+  g.lineTo(fx + S * 0.3, fy + S * 0.05); g.closePath(); g.fill();
+  g.strokeStyle = 'rgba(60,70,62,.6)'; g.lineWidth = Math.max(1, S * 0.025);
+  g.beginPath(); g.ellipse(fx, fy - S * 0.36, S * 0.17, S * 0.12, 0, 0, Math.PI * 2); g.stroke();            // the fish's head, carved
+  jgEll(g, fx - S * 0.06, fy - S * 0.4, S * 0.03, S * 0.03, '#2f3a33');
+  for(let i = 0; i < 3; i++){ g.beginPath(); g.arc(fx + S * (0.05 + i * 0.07), fy - S * 0.35, S * 0.05, -1.2, 1.2); g.stroke(); }   // its scales
+  jgEll(g, fx, fy - S * 0.22, S * 0.05, S * 0.035, '#2f3a33');                                 // its mouth
+  g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(fx - S * 0.27, fy - S * 0.55, S * 0.06, S * 0.45);
+  /* the river stones round it: the back ones, then the front ones over the water's edge */
+  const stones = [];
+  for(let i = 0; i < 26; i++){ const a = i / 26 * Math.PI * 2 + r() * 0.08; stones.push({ a, x:cx + Math.cos(a) * rx * 0.94, y:cy + Math.sin(a) * ry * 0.92, s:S * (0.12 + 0.07 * r()), c:r() }); }
+  const pal = c=> c < 0.33 ? ['#9aa39a', '#d4dad2', '#5d665f'] : c < 0.66 ? ['#8e9a8e', '#c8d2c4', '#56625a'] : ['#a59d8e', '#ddd4c2', '#665f52'];
+  stones.filter(t=> Math.sin(t.a) < 0 && Math.abs(Math.cos(t.a)) > 0.12).forEach(t=>{ const [b, l, d] = pal(t.c); jgStone(g, t.x, t.y, t.s * 1.3, t.s, b, l, d, t.a * 0.2); });
+  stones.filter(t=> Math.sin(t.a) >= 0 || Math.abs(Math.cos(t.a)) <= 0.12).forEach(t=>{ const [b, l, d] = pal(t.c); jgStone(g, t.x, t.y, t.s * 1.3, t.s, b, l, d, t.a * 0.2); });
+  /* lily pads, two in flower */
+  [[-0.46, 0.18, 0.2, 1], [0.3, -0.2, 0.15, 0], [0.56, 0.3, 0.17, 1], [-0.12, -0.38, 0.12, 0], [0.05, 0.44, 0.11, 0]].forEach(([u, v, s, fl], i)=>{
+    const px = cx + u * rx, py = cy + v * ry, pr = S * s * 1.35;
+    jgEll(g, px + pr * 0.1, py + pr * 0.18, pr, pr * 0.55, 'rgba(10,40,40,.3)');
+    g.fillStyle = i % 2 ? '#4f9a4a' : '#5aa653'; g.beginPath(); g.ellipse(px, py, pr, pr * 0.55, 0, 0.35, Math.PI * 2 - 0.1); g.lineTo(px, py); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(30,80,30,.55)'; g.lineWidth = Math.max(1, S * 0.015);
+    for(let j = 0; j < 4; j++){ const a = 0.9 + j * 1.3; g.beginPath(); g.moveTo(px, py); g.lineTo(px + Math.cos(a) * pr * 0.85, py + Math.sin(a) * pr * 0.47); g.stroke(); }
+    if(fl){ for(let j = 0; j < 7; j++){ const a = j / 7 * Math.PI * 2; g.fillStyle = j % 2 ? '#f6c3d6' : '#fbe3ec'; g.beginPath(); g.ellipse(px + Math.cos(a) * pr * 0.25, py - pr * 0.2 + Math.sin(a) * pr * 0.12, pr * 0.24, pr * 0.12, a, 0, Math.PI * 2); g.fill(); }
+      jgEll(g, px, py - pr * 0.22, pr * 0.12, pr * 0.08, '#f4d35e'); }
+  });
+  /* reeds at its two ends, bulrushes in them */
+  [[-1, cx - rx * 0.96], [1, cx + rx * 0.96]].forEach(([sd, x])=>{
+    jgBlades(g, x, cy + ry * 0.3, 11, S * 1.05, ['#4c8a3c', '#6aa64e', '#3b6e30', '#86b85e'], r);
+    for(let i = 0; i < 3; i++){ const bx = x + sd * (i - 1) * S * 0.09, top = cy - S * (0.55 + i * 0.13 + r() * 0.1);
+      g.strokeStyle = '#5c7a3a'; g.lineWidth = Math.max(1, S * 0.025); g.beginPath(); g.moveTo(bx, cy + ry * 0.25); g.lineTo(bx + sd * S * 0.03, top); g.stroke();
+      g.fillStyle = '#6b4526'; g.beginPath(); g.ellipse(bx + sd * S * 0.03, top + S * 0.08, S * 0.045, S * 0.13, 0, 0, Math.PI * 2); g.fill(); }
+  });
+}
+
+/* THE UNDYING HEARTH (Fire) */
+function jgPieceFire(g, W, H, U, S, r){
+  const cx = W / 2, cy = U + S * 1.05;
+  const sc = g.createRadialGradient(cx, cy, S * 0.1, cx, cy, S * 1.8);                       // scorched, the ash ring
+  sc.addColorStop(0, 'rgba(40,22,12,.85)'); sc.addColorStop(0.5, 'rgba(70,46,30,.55)'); sc.addColorStop(0.85, 'rgba(120,98,70,.25)'); sc.addColorStop(1, 'rgba(120,98,70,0)');
+  jgEll(g, cx, cy, S * 1.9, S * 0.86, sc);
+  for(let i = 0; i < 26; i++){ const a = r() * Math.PI * 2, d = 1.25 + r() * 0.45; jgEll(g, cx + Math.cos(a) * S * d, cy + Math.sin(a) * S * d * 0.45, S * 0.03, S * 0.02, 'rgba(200,190,170,.5)'); }
+  const rx = S * 1.22, ry = S * 0.52;
+  jgEll(g, cx, cy, rx * 0.92, ry * 0.88, '#2a1610');                                         // the pit
+  for(let i = 0; i < 40; i++){ const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.82; jgEll(g, cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, S * (0.04 + r() * 0.05), S * (0.03 + r() * 0.03), ['#7a1d0e', '#b8350f', '#e3631a', '#4a1a0f'][(r() * 4) | 0]); }   // coals
+  const stones = [];
+  for(let i = 0; i < 16; i++){ const a = i / 16 * Math.PI * 2; stones.push({ a, x:cx + Math.cos(a) * rx, y:cy + Math.sin(a) * ry, s:S * (0.15 + 0.05 * r()) }); }
+  const ring = t=>{ const lit = Math.max(0, -Math.sin(t.a)) * 0.5 + 0.3; jgStone(g, t.x, t.y, t.s * 1.25, t.s, '#5b5049', `rgba(${Math.round(200 + 55 * lit)},${Math.round(140 + 40 * lit)},90,1)`, '#2b2420'); };
+  stones.filter(t=> Math.sin(t.a) < 0).forEach(ring);
+  /* the logs, crossed, burning at their middles */
+  [[-0.42, 0.06, 0.28, 1.05], [0.38, 0.1, -0.32, 1.0], [0, -0.06, 1.47, 0.7], [-0.1, 0.2, -0.12, 0.8]].forEach(([u, v, a, len])=>{
+    g.save(); g.translate(cx + u * S, cy + v * S); g.rotate(a);
+    const L = S * len, T = S * 0.16, lg = g.createLinearGradient(0, -T, 0, T);
+    lg.addColorStop(0, '#8a5a34'); lg.addColorStop(0.5, '#5c3a20'); lg.addColorStop(1, '#2d1a0e');
+    g.fillStyle = lg; g.beginPath(); g.roundRect ? g.roundRect(-L / 2, -T / 2, L, T, T * 0.45) : g.rect(-L / 2, -T / 2, L, T); g.fill();
+    g.fillStyle = '#1a0f09'; g.fillRect(-L * 0.18, -T / 2, L * 0.36, T);                                    // charred
+    g.strokeStyle = '#ff7a2a'; g.lineWidth = Math.max(1, S * 0.018);
+    for(let j = 0; j < 3; j++){ g.beginPath(); g.moveTo(-L * 0.15 + j * L * 0.11, -T * 0.4); g.lineTo(-L * 0.1 + j * L * 0.11, T * 0.35); g.stroke(); }   // glowing cracks
+    jgEll(g, L / 2, 0, T * 0.32, T * 0.5, '#c9a173'); jgEll(g, L / 2, 0, T * 0.18, T * 0.3, '#a47a4c');   // a cut end, its rings
+    g.restore();
+  });
+  stones.filter(t=> Math.sin(t.a) >= 0).forEach(ring);
+  /* a carved post either side, its mask painted in the fire's colours */
+  [cx - S * 1.78, cx + S * 1.78].forEach((x, i)=>{
+    const top = cy - S * 1.75, bot = cy + S * 0.42, w = S * 0.3;
+    jgEll(g, x + S * 0.05, bot, w * 0.9, S * 0.08, 'rgba(0,0,0,.3)');
+    const pg = g.createLinearGradient(x - w / 2, 0, x + w / 2, 0); pg.addColorStop(0, '#9a6a3e'); pg.addColorStop(0.6, '#6e4524'); pg.addColorStop(1, '#3f2612');
+    g.fillStyle = pg; g.fillRect(x - w / 2, top + S * 0.2, w, bot - top - S * 0.2);
+    g.beginPath(); g.moveTo(x - w * 0.65, top + S * 0.26); g.lineTo(x, top - S * 0.05); g.lineTo(x + w * 0.65, top + S * 0.26); g.closePath(); g.fill();   // its point, a flame of wood
+    const my = top + S * 0.5;                                                                                   // the mask
+    g.fillStyle = '#d2452a'; g.beginPath(); g.ellipse(x, my, w * 0.62, S * 0.26, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#f7b23c'; g.beginPath(); g.moveTo(x - w * 0.55, my - S * 0.06); g.lineTo(x - w * 0.12, my - S * 0.02); g.lineTo(x - w * 0.5, my + S * 0.06); g.fill();
+    g.beginPath(); g.moveTo(x + w * 0.55, my - S * 0.06); g.lineTo(x + w * 0.12, my - S * 0.02); g.lineTo(x + w * 0.5, my + S * 0.06); g.fill();
+    jgEll(g, x - w * 0.22, my - S * 0.02, S * 0.035, S * 0.025, '#1c0d06'); jgEll(g, x + w * 0.22, my - S * 0.02, S * 0.035, S * 0.025, '#1c0d06');
+    g.fillStyle = '#1c0d06'; g.fillRect(x - w * 0.22, my + S * 0.1, w * 0.44, S * 0.035);
+    g.strokeStyle = 'rgba(30,15,6,.5)'; g.lineWidth = Math.max(1, S * 0.02);
+    for(let j = 0; j < 3; j++){ const yy = my + S * (0.36 + j * 0.28); g.beginPath(); g.moveTo(x - w / 2, yy); g.lineTo(x + w / 2, yy); g.stroke(); }   // its bands, carved
+    g.fillStyle = i ? '#f0573c' : '#f7a03c'; g.fillRect(x - w / 2, my + S * 0.42, w, S * 0.06);
+  });
+}
+
+/* THE STANDING STONES (Earth) */
+function jgPieceEarth(g, W, H, U, S, r){
+  const cx = W / 2, cy = U + S * 1.05;
+  const pv = g.createRadialGradient(cx, cy, S * 0.2, cx, cy, S * 1.9);                       // the old paving, its flags
+  pv.addColorStop(0, '#b3a27e'); pv.addColorStop(0.75, '#9a8a66'); pv.addColorStop(1, 'rgba(154,138,102,0)');
+  jgEll(g, cx, cy, S * 1.92, S * 0.84, pv);
+  g.strokeStyle = 'rgba(70,58,40,.45)'; g.lineWidth = Math.max(1, S * 0.02);
+  for(let i = 0; i < 9; i++){ const a = i / 9 * Math.PI * 2 + 0.2; g.beginPath(); g.moveTo(cx + Math.cos(a) * S * 0.45, cy + Math.sin(a) * S * 0.2); g.lineTo(cx + Math.cos(a) * S * 1.7, cy + Math.sin(a) * S * 0.74); g.stroke(); }
+  g.beginPath(); g.ellipse(cx, cy, S * 1.05, S * 0.46, 0, 0, Math.PI * 2); g.stroke();
+  for(let i = 0; i < 14; i++) jgEll(g, cx + (r() - 0.5) * S * 3.4, cy + (r() - 0.5) * S * 1.3, S * (0.03 + r() * 0.03), S * 0.025, 'rgba(90,120,60,.6)');   // moss between them
+  /* a standing stone: base (x, y), h tall, w wide; carved, mossy at its foot */
+  const menhir = (x, y, h, w, n)=>{
+    jgEll(g, x + w * 0.2, y, w * 0.75, w * 0.22, 'rgba(30,22,10,.35)');
+    const gr = g.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+    gr.addColorStop(0, '#c8bca2'); gr.addColorStop(0.45, '#9d907a'); gr.addColorStop(1, '#5f5546');
+    g.fillStyle = gr; g.beginPath();
+    g.moveTo(x - w * 0.5, y); g.lineTo(x - w * 0.42, y - h * 0.7); g.quadraticCurveTo(x - w * 0.36, y - h, x + w * 0.02, y - h);
+    g.quadraticCurveTo(x + w * 0.42, y - h * 0.98, x + w * 0.44, y - h * 0.66); g.lineTo(x + w * 0.5, y); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(60,48,32,.65)'; g.lineWidth = Math.max(1, S * 0.03);                 // its glyphs
+    const gy = y - h * 0.58;
+    if(n % 3 === 0){ g.beginPath(); for(let t = 0; t < 14; t++){ const a = t * 0.55, rr = w * 0.02 + t * w * 0.016; const px = x + Math.cos(a) * rr, py = gy + Math.sin(a) * rr; t ? g.lineTo(px, py) : g.moveTo(px, py); } g.stroke(); }
+    else if(n % 3 === 1){ for(let t = 0; t < 3; t++){ g.beginPath(); g.moveTo(x - w * 0.2, gy - h * 0.12 + t * h * 0.11); g.lineTo(x + w * 0.2, gy - h * 0.12 + t * h * 0.11); g.stroke(); } g.beginPath(); g.moveTo(x, gy - h * 0.18); g.lineTo(x, gy + h * 0.16); g.stroke(); }
+    else { g.beginPath(); g.moveTo(x - w * 0.2, gy + h * 0.1); g.lineTo(x, gy - h * 0.14); g.lineTo(x + w * 0.2, gy + h * 0.1); g.closePath(); g.stroke(); jgEll(g, x, gy, w * 0.04, w * 0.04, 'rgba(60,48,32,.65)'); }
+    g.strokeStyle = 'rgba(255,248,225,.25)'; g.lineWidth = Math.max(1, S * 0.02);
+    g.beginPath(); g.moveTo(x - w * 0.36, y - h * 0.15); g.lineTo(x - w * 0.32, y - h * 0.85); g.stroke();     // the light down its edge
+    for(let t = 0; t < 7; t++) jgEll(g, x + (r() - 0.5) * w * 0.8, y - r() * h * 0.22, w * (0.07 + r() * 0.06), w * 0.05, ['#5f8a3a', '#7aa04a', '#4c7232'][t % 3]);   // moss at its foot
+    for(let t = 0; t < 4; t++) jgEll(g, x + (r() - 0.5) * w * 0.6, y - h * (0.3 + r() * 0.6), w * 0.04, w * 0.03, 'rgba(210,200,120,.55)');   // lichen
+  };
+  menhir(cx - S * 1.08, cy - S * 0.26, S * 1.5, S * 0.46, 0);
+  menhir(cx, cy - S * 0.42, S * 1.85, S * 0.54, 1);
+  menhir(cx + S * 1.08, cy - S * 0.26, S * 1.5, S * 0.46, 2);
+  /* the stone table, a crystal of amber on it (its light: .jgp-crystal) */
+  const ty = cy + S * 0.12;
+  jgEll(g, cx + S * 0.06, ty + S * 0.2, S * 0.62, S * 0.14, 'rgba(30,22,10,.35)');
+  g.fillStyle = '#6f6452'; g.fillRect(cx - S * 0.52, ty - S * 0.06, S * 1.04, S * 0.24);
+  jgEll(g, cx, ty - S * 0.06, S * 0.52, S * 0.17, '#b7aa8e');
+  jgEll(g, cx - S * 0.1, ty - S * 0.1, S * 0.3, S * 0.07, 'rgba(255,248,225,.3)');
+  const kx = cx, ky = ty - S * 0.1, kw = S * 0.16, kh = S * 0.42;
+  g.fillStyle = '#e39a2c'; g.beginPath(); g.moveTo(kx - kw, ky); g.lineTo(kx - kw * 0.9, ky - kh * 0.7); g.lineTo(kx, ky - kh); g.lineTo(kx + kw * 0.9, ky - kh * 0.7); g.lineTo(kx + kw, ky); g.closePath(); g.fill();
+  g.fillStyle = '#ffd36b'; g.beginPath(); g.moveTo(kx - kw * 0.9, ky - kh * 0.7); g.lineTo(kx, ky - kh); g.lineTo(kx, ky); g.lineTo(kx - kw, ky); g.closePath(); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(kx - kw * 0.55, ky - kh * 0.62, Math.max(1, kw * 0.18), kh * 0.42);
+  menhir(cx - S * 1.62, cy + S * 0.55, S * 1.05, S * 0.4, 1);                                // the two in front, at its ends
+  menhir(cx + S * 1.62, cy + S * 0.55, S * 1.05, S * 0.4, 0);
+  [[-0.55, 0.62], [0.62, 0.66], [-1.2, -0.05], [0.35, -0.55]].forEach(([u, v])=> jgStone(g, cx + u * S, cy + v * S, S * 0.1, S * 0.07, '#8f836c', '#cbbf9f', '#5b5142'));   // fallen bits
+}
+
+/* THE GREAT BLOOM (Grass): the mound and its ring of flowers (the bloom itself, which sways: jgBloomCanvas) */
+function jgPieceGrass(g, W, H, U, S, r){
+  const cx = W / 2, cy = U + S * 1.05;
+  jgEll(g, cx + S * 0.08, cy + S * 0.16, S * 1.85, S * 0.72, 'rgba(14,30,6,.32)');
+  const mg = g.createRadialGradient(cx - S * 0.3, cy - S * 0.35, S * 0.1, cx, cy, S * 1.8);
+  mg.addColorStop(0, '#9ccf62'); mg.addColorStop(0.5, '#6fa845'); mg.addColorStop(1, '#3f6d2a');
+  jgEll(g, cx, cy, S * 1.78, S * 0.7, mg);
+  for(let i = 0; i < 70; i++){ const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.92; jgEll(g, cx + Math.cos(a) * S * 1.7 * d, cy + Math.sin(a) * S * 0.64 * d, S * 0.035, S * 0.025, ['#b6e07e', '#4f8a33', '#8cc35a'][i % 3]); }   // moss
+  g.strokeStyle = '#3e7a2c'; g.lineWidth = Math.max(1, S * 0.035); g.lineCap = 'round';      // vines, curling
+  for(let i = 0; i < 5; i++){ const a = i / 5 * Math.PI * 2 + 0.4, x0 = cx + Math.cos(a) * S * 0.5, y0 = cy + Math.sin(a) * S * 0.2, x1 = cx + Math.cos(a) * S * 1.4, y1 = cy + Math.sin(a) * S * 0.56;
+    g.beginPath(); g.moveTo(x0, y0); g.bezierCurveTo(x0 + S * 0.3, y0 - S * 0.25, x1 - S * 0.3, y1 + S * 0.2, x1, y1); g.stroke();
+    jgEll(g, x1, y1, S * 0.08, S * 0.05, '#5c9a3c'); }
+  const cols = ['#f4a9c8', '#fff4dc', '#f6d76a', '#e98bb5', '#a9c8f4', '#ffffff'];
+  for(let i = 0; i < 22; i++){ const a = i / 22 * Math.PI * 2 + r() * 0.1, x = cx + Math.cos(a) * S * 1.62, y = cy + Math.sin(a) * S * 0.62;
+    jgBlades(g, x, y + S * 0.05, 3, S * 0.28, ['#4b8231', '#6aa64e'], r);
+    jgFlower(g, x + (r() - 0.5) * S * 0.08, y - S * 0.14, S * (0.08 + r() * 0.04), cols[i % cols.length], i % 4 ? '#f6d76a' : '#c0742e'); }
+  for(let i = 0; i < 8; i++){ const a = r() * Math.PI * 2, d = 0.5 + r() * 0.35; jgFlower(g, cx + Math.cos(a) * S * 1.6 * d, cy + Math.sin(a) * S * 0.6 * d, S * 0.06, cols[(i + 2) % cols.length]); }
+}
+/* the bloom: its stem from the bottom middle, two leaves, its flower, w × h (it is turned about its foot, by the page) */
+function jgBloomCanvas(S){
+  const w = Math.round(S * 1.7), h = Math.round(S * 1.95), c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d'), x0 = w / 2, y0 = h - S * 0.04, fx = w / 2 + S * 0.05, fy = S * 0.62;
+  g.strokeStyle = '#3f7a2c'; g.lineWidth = S * 0.11; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(x0, y0); g.bezierCurveTo(x0 - S * 0.12, y0 - S * 0.5, fx + S * 0.12, fy + S * 0.55, fx, fy + S * 0.15); g.stroke();
+  g.strokeStyle = 'rgba(160,220,110,.6)'; g.lineWidth = S * 0.03;
+  g.beginPath(); g.moveTo(x0 - S * 0.03, y0 - S * 0.1); g.bezierCurveTo(x0 - S * 0.14, y0 - S * 0.5, fx + S * 0.08, fy + S * 0.55, fx - S * 0.03, fy + S * 0.2); g.stroke();
+  const leaf = (sx, sy, ex, ey, bend)=>{ g.fillStyle = '#4f9a3a'; g.beginPath(); g.moveTo(sx, sy); g.quadraticCurveTo((sx + ex) / 2 + bend, (sy + ey) / 2 - S * 0.2, ex, ey); g.quadraticCurveTo((sx + ex) / 2 - bend * 0.3, (sy + ey) / 2 + S * 0.12, sx, sy); g.fill();
+    g.strokeStyle = 'rgba(30,70,20,.6)'; g.lineWidth = Math.max(1, S * 0.02); g.beginPath(); g.moveTo(sx, sy); g.quadraticCurveTo((sx + ex) / 2 + bend * 0.4, (sy + ey) / 2 - S * 0.05, ex, ey); g.stroke(); };
+  leaf(x0 - S * 0.02, y0 - S * 0.38, x0 - S * 0.7, y0 - S * 0.62, -S * 0.1);
+  leaf(x0 + S * 0.02, y0 - S * 0.62, x0 + S * 0.68, y0 - S * 0.86, S * 0.1);
+  /* its petals, two rings, pink at their roots and white at their tips; a golden heart */
+  const petals = (n, len, wd, off, a0)=>{ for(let i = 0; i < n; i++){ const a = a0 + i / n * Math.PI * 2;
+    g.save(); g.translate(fx, fy); g.rotate(a); g.scale(1, 0.62);
+    const pg = g.createLinearGradient(0, 0, len, 0); pg.addColorStop(0, '#e2508e'); pg.addColorStop(0.45, '#f59ac0'); pg.addColorStop(1, '#fff1f6');
+    g.fillStyle = pg; g.beginPath(); g.moveTo(off, 0); g.quadraticCurveTo(len * 0.55, -wd, len, 0); g.quadraticCurveTo(len * 0.55, wd, off, 0); g.fill();
+    g.strokeStyle = 'rgba(190,60,110,.35)'; g.lineWidth = Math.max(1, S * 0.012); g.beginPath(); g.moveTo(off, 0); g.lineTo(len * 0.8, 0); g.stroke();
+    g.restore(); } };
+  petals(8, S * 0.72, S * 0.2, S * 0.05, 0.2);
+  petals(8, S * 0.5, S * 0.16, S * 0.04, 0.2 + Math.PI / 8);
+  const hg = g.createRadialGradient(fx - S * 0.04, fy - S * 0.04, S * 0.02, fx, fy, S * 0.2);
+  hg.addColorStop(0, '#fff3b0'); hg.addColorStop(0.6, '#f2c043'); hg.addColorStop(1, '#c98a1e');
+  jgEll(g, fx, fy, S * 0.19, S * 0.13, hg);
+  for(let i = 0; i < 9; i++){ const a = i / 9 * Math.PI * 2; jgEll(g, fx + Math.cos(a) * S * 0.11, fy + Math.sin(a) * S * 0.07, S * 0.022, S * 0.022, '#8a5a12'); }
+  return c;
+}
+const _jgBloom = new Map();
+function jgBloomSrc(S){ if(!_jgBloom.has(S)){ let s = ''; try { s = jgBloomCanvas(S).toDataURL(); } catch(e){} _jgBloom.set(S, s); } return _jgBloom.get(S); }
+/* drawn into the world (jgRender): each village's centrepiece, a picture and what moves on it */
+function jgPieceEls(world){
+  if(!world) return;
+  const T = WALK_T, S = Math.round(T * Math.min(2, Math.max(1, window.devicePixelRatio || 1))), V = jgGround().places.villages;
+  JG_TRIBE_KEYS.forEach(k=>{
+    const P = V[k] && V[k].piece;
+    if(!P) return;
+    const el = document.createElement('div');
+    el.className = 'jg-piece jg-piece-' + k;
+    el.dataset.tribe = k;
+    el.style.cssText = `left:${P.x * T}px;top:${(P.y - JG_PIECE.up) * T}px;width:${P.w * T}px;height:${(P.h + JG_PIECE.up) * T}px;z-index:${10 + P.y + P.h - 1};`;
+    const at = (x, y, w, h, extra)=> `left:${(x / P.w * 100).toFixed(2)}%;top:${(y / (P.h + JG_PIECE.up) * 100).toFixed(2)}%;width:${(w / P.w * 100).toFixed(2)}%;height:${(h / (P.h + JG_PIECE.up) * 100).toFixed(2)}%;${extra || ''}`;
+    const U = JG_PIECE.up, cy = U + 1.03;                                                     // its middle, in squares from its picture's top
+    let html = `<img class="jgp-base" alt="" src="${jgPieceSrc(k, S)}">`;
+    if(k === 'water'){
+      html += [[-0.5, 0.15, 0], [0.42, -0.1, 1.3], [0.08, 0.35, 2.4]].map(([u, v, d])=> `<i class="jgp-ring" style="${at(2 + u * 1.86 - 0.32, cy + v * 0.8 - 0.12, 0.64, 0.24, `animation-delay:-${d}s`)}"></i>`).join('');
+      html += `<i class="jgp-stream" style="${at(1.975, cy - 0.8 * 0.98 - 0.24, 0.05, 0.42)}"></i>`;
+      html += [[-0.3, -0.25, 0], [0.5, 0.1, 1.1]].map(([u, v, d])=> `<i class="jgp-glint" style="${at(2 + u * 1.86 - 0.05, cy + v * 0.8 - 0.05, 0.1, 0.1, `animation-delay:-${d}s`)}"></i>`).join('');
+    } else if(k === 'fire'){
+      html += `<i class="jgp-glow" style="${at(0.2, cy - 1.3, 3.6, 2.2)}"></i>`;
+      html += [[-0.42, 0.55, 0.9, 0], [0.4, 0.55, 0.85, 0.3], [-0.05, 0.75, 1.25, 0.15], [0.18, 0.5, 0.75, 0.45], [-0.25, 0.45, 0.7, 0.6]].map(([u, w, h, d])=>
+        `<i class="jgp-flame" style="${at(2 + u - w / 2, cy - h + 0.08, w, h, `animation-delay:-${d}s`)}"><b></b></i>`).join('');
+      html += [0, 1, 2, 3, 4, 5, 6].map(i=> `<i class="jgp-ember" style="${at(1.6 + (i * 0.37) % 0.9, cy - 0.4, 0.06, 0.06, `animation-delay:-${(i * 0.53).toFixed(2)}s;--dx:${((i % 3) - 1) * 6}px`)}"></i>`).join('');
+    } else if(k === 'earth'){
+      html += `<i class="jgp-crystal" style="${at(2 - 0.55, cy + 0.12 - 0.1 - 0.42 - 0.3, 1.1, 1.0)}"></i>`;
+      html += [0, 1, 2, 3].map(i=> `<i class="jgp-mote" style="${at(1.55 + i * 0.3, cy - 0.5, 0.05, 0.05, `animation-delay:-${(i * 1.1).toFixed(1)}s`)}"></i>`).join('');
+    } else if(k === 'grass'){
+      html += `<img class="jgp-bloom" alt="" src="${jgBloomSrc(S)}" style="${at(2 - 0.85, cy - 1.95 + 0.12, 1.7, 1.95)}">`;
+      html += [0, 1, 2, 3, 4].map(i=> `<i class="jgp-petal" style="${at(1.3 + i * 0.35, cy - 1.5 + (i % 2) * 0.2, 0.09, 0.06, `animation-delay:-${(i * 0.9).toFixed(1)}s;--dx:${(i % 2 ? 1 : -1) * (10 + i * 3)}px`)}"></i>`).join('');
+    }
+    el.innerHTML = html;
+    el.setAttribute('aria-label', JG_PIECE_NAME[k] || '');
+    world.appendChild(el);
+  });
+}
+
 /* ---------- the bands on the map: only those near you are drawn, and only those nearer still move ---------- */
 function jgShowBands(){
   const world = $('#walkWorld'), w = walkState(), p = w.at && w.at[JG_KEY];
@@ -1924,12 +2234,14 @@ function jgFinds(){
   if(_jgFinds) return _jgFinds;
   const G = jgGround(), { W, H, places, g } = G, R = jgRng((JG.seed ^ 0x71c4e7) >>> 0);
   const rd = places.castle.road, E = places.entry, avoid = new Set();
-  jgThings().forEach(t=>{ for(let y = t.y - 1; y <= t.y + (t.h || 1); y++) for(let x = t.x - 1; x <= t.x + (t.w || 1); x++) avoid.add(y * W + x); });   // where somebody stands, or something is
+  jgThings().forEach(t=>{ if(t.hut) return;                          // (4.25) the houses' doors came after: every find stays where it was
+    for(let y = t.y - 1; y <= t.y + (t.h || 1); y++) for(let x = t.x - 1; x <= t.x + (t.w || 1); x++) avoid.add(y * W + x); });   // where somebody stands, or something is
   Object.values(places.villages).forEach(v=>{ for(let y = v.stand.y - 1; y <= v.stand.y + 1; y++) for(let x = v.stand.x - 1; x <= v.stand.x + 1; x++) avoid.add(y * W + x); });
   const ok = v=>{
     const x = v % W, y = (v - x) / W;
     /* (4.02) as the jungle was before its lakes were made round, so every find stays where it was (jgLakeWaterOld) */
-    const t = g[v] === JG_T.WATER || g[v] === JG_T.SHORE ? (jgLakeWaterOld(x, y) ? JG_T.WATER : JG_T.SHORE) : g[v];
+    const g0 = G.pieceOld && G.pieceOld.has(v) ? G.pieceOld.get(v) : g[v];   // (4.24) a centrepiece's squares as they were
+    const t = g0 === JG_T.WATER || g0 === JG_T.SHORE ? (jgLakeWaterOld(x, y) ? JG_T.WATER : JG_T.SHORE) : g0;
     if(JG_SOLID[t] || t === JG_T.ROAD || t === JG_T.ENTRY || avoid.has(v)) return false;
     if(x >= rd.x - 1 && x <= rd.x + rd.w && y >= rd.y - 1 && y <= rd.y + rd.h) return false;   // the castle and the road round it
     if(x >= E.x - 3 && y >= E.y - 3 && y <= E.y + E.h + 3) return false;                       // the way in
@@ -3312,6 +3624,33 @@ function jgCss(){
   s.id = 'jgCss';
   s.textContent = `
   .walk-stage.jg-stage{ background:#2a3417; }
+  /* (4.24) the villages' centrepieces (jgPieceEls): a picture, and what moves on it */
+  .jg-piece{ position:absolute; pointer-events:none; }
+  .jg-piece > *{ position:absolute; display:block; pointer-events:none; }
+  .jg-piece > .jgp-base{ left:0; top:0; width:100%; height:100%; }
+  .jgp-ring{ border:1.5px solid rgba(225,246,255,.7); border-radius:50%; opacity:0; animation:jgpRing 3.6s ease-out infinite; }
+  @keyframes jgpRing{ 0%{ transform:scale(.25); opacity:.85; } 100%{ transform:scale(1.25); opacity:0; } }
+  .jgp-stream{ border-radius:2px; opacity:.85; background:repeating-linear-gradient(180deg, rgba(220,245,255,.95) 0 5px, rgba(140,205,235,.75) 5px 9px); background-size:100% 18px; animation:jgpFlow .5s linear infinite; }
+  @keyframes jgpFlow{ from{ background-position:0 0; } to{ background-position:0 18px; } }
+  .jgp-glint{ border-radius:50%; background:radial-gradient(circle, #fff 0 30%, rgba(255,255,255,0) 70%); animation:jgpGlint 2.2s ease-in-out infinite; }
+  @keyframes jgpGlint{ 0%, 60%, 100%{ opacity:0; transform:scale(.4); } 75%{ opacity:1; transform:scale(1); } }
+  .jgp-glow{ border-radius:50%; background:radial-gradient(ellipse at 50% 62%, rgba(255,170,60,.55), rgba(255,120,40,.22) 45%, rgba(255,100,30,0) 70%); mix-blend-mode:screen; animation:jgpGlow 1.6s ease-in-out infinite alternate; }
+  @keyframes jgpGlow{ from{ opacity:.65; transform:scale(.96); } to{ opacity:1; transform:scale(1.04); } }
+  .jgp-flame{ transform-origin:50% 100%; animation:jgpFlick .55s ease-in-out infinite alternate; }
+  .jgp-flame::before, .jgp-flame b{ content:''; position:absolute; left:8%; right:8%; bottom:0; top:0; border-radius:50% 50% 45% 45% / 62% 62% 38% 38%;
+    background:radial-gradient(ellipse at 50% 78%, #fff6c4 0%, #ffd34d 22%, #ff9a2a 48%, rgba(232,70,22,.9) 70%, rgba(200,40,16,0) 100%); }
+  .jgp-flame b{ left:28%; right:28%; top:30%; background:radial-gradient(ellipse at 50% 80%, #ffffff 0%, #fff3b0 35%, rgba(255,220,110,0) 80%); }
+  @keyframes jgpFlick{ 0%{ transform:scale(.92, .86) skewX(-3deg); opacity:.9; } 50%{ transform:scale(1.04, 1.08) skewX(2deg); opacity:1; } 100%{ transform:scale(.96, 1.16) skewX(-1deg); opacity:.88; } }
+  .jgp-ember{ border-radius:50%; background:#ffcf5a; box-shadow:0 0 4px 1px rgba(255,140,40,.9); opacity:0; animation:jgpEmber 2.6s ease-out infinite; }
+  @keyframes jgpEmber{ 0%{ transform:translate(0, 0); opacity:0; } 10%{ opacity:1; } 100%{ transform:translate(var(--dx, 0), -70px); opacity:0; } }
+  .jgp-crystal{ border-radius:50%; background:radial-gradient(circle at 50% 62%, rgba(255,214,110,.75), rgba(255,170,60,.3) 38%, rgba(255,160,40,0) 68%); mix-blend-mode:screen; animation:jgpGlow 2.4s ease-in-out infinite alternate; }
+  .jgp-mote{ border-radius:50%; background:#ffe08a; box-shadow:0 0 3px 1px rgba(255,200,90,.8); opacity:0; animation:jgpMote 4.4s ease-in-out infinite; }
+  @keyframes jgpMote{ 0%{ transform:translate(0, 0); opacity:0; } 20%{ opacity:.9; } 100%{ transform:translate(6px, -46px); opacity:0; } }
+  .jg-piece > .jgp-bloom{ transform-origin:50% 100%; animation:jgpSway 3.8s ease-in-out infinite alternate; }
+  @keyframes jgpSway{ from{ transform:rotate(-3deg); } to{ transform:rotate(3deg); } }
+  .jgp-petal{ border-radius:60% 40% 60% 40%; background:#f7b3cf; opacity:0; animation:jgpPetal 5s ease-in infinite; }
+  @keyframes jgpPetal{ 0%{ transform:translate(0, 0) rotate(0); opacity:0; } 12%{ opacity:.95; } 100%{ transform:translate(var(--dx, 12px), 52px) rotate(260deg); opacity:0; } }
+  @media (prefers-reduced-motion: reduce){ .jg-piece > *{ animation:none !important; } .jgp-ring, .jgp-ember, .jgp-mote, .jgp-petal, .jgp-glint{ display:none; } }
   .jg-rays{ position:absolute; inset:0; z-index:3; pointer-events:none; overflow:hidden; mix-blend-mode:screen; }
   .jg-rays i{ position:absolute; top:-45%; left:var(--x); width:var(--w); height:190%; opacity:var(--o); transform-origin:50% 0; will-change:transform;
     -webkit-mask-image:linear-gradient(180deg, transparent 0%, #000 22%, #000 58%, transparent 95%); mask-image:linear-gradient(180deg, transparent 0%, #000 22%, #000 58%, transparent 95%);

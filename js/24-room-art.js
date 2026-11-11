@@ -866,6 +866,7 @@ function fairyLights(g, x0, x1, y, s){
    ============================================================ */
 const FLOORLESS = new Set([T.STAIRS]);
 function paint(g, m, s, R0){
+  if(m.painter) return m.painter(g, m, s, R0);                         // (4.25) a room that paints itself (31-huts.js: the tribes' houses)
   if(m.walk) return walkPaint(g, m, s, R0);                            // (3.98) a wall's walk, a rampart (below)
   const I = info(m), room = m.room;
   const inR = (r)=> r.x + r.w >= R0.x0 && r.x <= R0.x1 && r.y + r.h >= R0.y0 && r.y <= R0.y1;

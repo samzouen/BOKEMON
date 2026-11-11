@@ -309,13 +309,9 @@ function readyEvent(m){
            ready:Math.min(LEVEL_MAX, monCeiling(m) + CEILING_STEP), stone:st ? st.name : '' };
 }
 
-function catchPhraseCount(species){
-  const t = SPECIES[species].tier;
-  if(t==='legendary') return 10;
-  if(t==='elite') return 9;                    // between starter and legendary
-  if(t==='starter' || t==='special') return 7;
-  return 5;
-}
+/* (4.27) A catch is no longer so many phrases spelt in one go (10 a legendary, 9 an elite, 7 a starter, 5 a wild one,
+   one slip risky and two letting it escape): it is throws of four words each, until it is caught or flees
+   (CATCH, 33-catch.js). */
 
 /* Move token drop chance, WILD encounters only (never NPC/boss fights).
    Base = the highest-level party monster's level, read directly as a percentage
@@ -670,13 +666,15 @@ function showVictory(enemyNames, levelUps, tokens){
       (ui.currentZone||{}).id==='catacombs' ? '🕯️ Back into the dark' : '🌿 Explore further'}</button>
   `;
   const area = $('#catchArea');
+  /* (4.27) each Catch with the monster's own little picture (the designer: "for catching buttons, please now also show a
+     small version of the monster's sprite to make it clear which is being caught"), and no more words than that */
   if(catchable.length){
+    if(typeof czCss === 'function') czCss();
     if(catchable.length===1){
-      area.innerHTML = `<button class="btn btn-primary" id="catchBtn">🎯 Try to catch the ${SPECIES[catchable[0].species].name}!</button>`;
+      area.innerHTML = catchButtonHtml(catchable[0], 0, true);
       $('#catchBtn').addEventListener('click', ()=> startCatch(catchable[0]));
     } else {
-      area.innerHTML = `<div style="font-weight:800;font-size:13px;margin-bottom:8px;">Catch which one?</div>` +
-        catchable.map((e,i)=>`<button class="btn btn-primary catch-opt" data-i="${i}" style="margin-bottom:8px;">🎯 ${SPECIES[e.species].name} (Lv ${e.level})</button>`).join('');
+      area.innerHTML = catchable.map((e,i)=> catchButtonHtml(e, i, false)).join('');
       area.querySelectorAll('.catch-opt').forEach(btn=> btn.addEventListener('click', ()=> startCatch(catchable[+btn.dataset.i])));
     }
   }
@@ -688,54 +686,9 @@ function showVictory(enemyNames, levelUps, tokens){
 }
 
 /* ---------- CATCHING ---------- */
+/* (4.27) its own page now: the monster above, a ball of light below, throws of four words (catchBegin, 33-catch.js) */
 function startCatch(enemy){
-  const need = catchPhraseCount(enemy.species);
-  // build challenge words: fight mistakes first, then fill from pool
-  const mistakes = (ui.battle.fightMistakes||[]).slice();
-  const poolWords = shuffle(activePool().map(w=>w.text).filter(t=>!mistakes.includes(t)));
-  const words = [];
-  for(const t of mistakes){ if(words.length<need) words.push(t); }
-  while(words.length<need){ if(poolWords.length===0){ // refill if pool smaller than need
-      const all = activePool().map(w=>w.text); if(all.length===0) break; poolWords.push(...shuffle(all)); }
-    words.push(poolWords.pop());
-  }
-  ui.catchTarget = enemy;
-  /* (3.49) the designer: "some of the music such as capturing monsters is not
-     playing once the monster is caught at the naming page … please check to
-     see if the music can be preloaded while doing the spelling to catch a
-     monster". Its jingle (and the miss's) to the front of the queue now, in
-     memory well before the last phrase is written (preloadSfx). */
-  preloadSfx(['catch_success', 'catch_miss'], true);
-  startQuiz({
-    title:`Catching ${SPECIES[enemy.species].name}`,
-    subtitle:`Spell ${words.length} to seal it. One slip is risky — two lets it escape!`,
-    words,
-    endAfterMistakes:2, lockExit:true,
-    onComplete:(results)=> resolveCatch(enemy, results),
-    onExit:()=>{ showVictory(ui.battle.enemies.map(e=>SPECIES[e.species].name).join(' & '), []); },
-  });
-}
-function resolveCatch(enemy, results){
-  const mistakes = results.filter(r=>!r.passed).length;
-  let caught;
-  if(mistakes===0) caught = true;
-  else if(mistakes===1) caught = Math.random() >= 0.80; // first mistake fails 80% of the time
-  else caught = false;                                   // second mistake always fails
-  if(caught) gotcha(enemy);
-  else {
-    playSfxSoon('catch_miss', 2500);                     // (3.49) as the jingle: waits for it if still on its way
-    go('battle'); // reuse container
-    $('#brandSub').textContent='Catch';
-    screenEl.innerHTML = `
-      <div style="text-align:center;padding:30px 0;">
-        <div style="font-size:42px;">💨</div>
-        <div class="screen-title" style="text-align:center;">So close!</div>
-        <div class="screen-sub" style="text-align:center;">The ${SPECIES[enemy.species].name} broke free and fled.</div>
-      </div>
-      <button class="btn btn-primary" id="okBtn">Continue</button>
-    `;
-    $('#okBtn').addEventListener('click', ()=> afterCatch());
-  }
+  if(typeof catchBegin === 'function') return catchBegin(enemy);
 }
 /* Where a catch (or a miss) leaves you: the region, or — in the catacombs —
    the very spot the fight found you. */
@@ -754,54 +707,13 @@ const CATCH_MESSAGES = {
     `<i>Grow it well, and it will help you as you adventure onward.</i>`,
 };
 
-function gotcha(enemy){
-  /* Remember the form it was actually caught in, so a Lv55 base-form catch
-     becomes stage 1 at Lv56 and stage 2 at Lv57 rather than jumping instantly. */
-  /* (3.49) from memory, waiting up to 2½ s if it is still on its way — it
-     comes long after the last tap, and an iPad will not start the fallback
-     then (playSfxSoon) */
-  playSfxSoon('catch_success', 2500);
-  const sp = SPECIES[enemy.species];
-  const ov = document.createElement('div');
-  ov.style.cssText='position:fixed;inset:0;z-index:80;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at center,#fff7e0,#e8dcc0);gap:16px;';
-  ov.innerHTML = `
-    <div class="evo-mon cutout">${monPortrait(enemy.species, 140, { view:'front', bare:true, stage:enemy.stage||0 })}</div>
-    <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:24px;">Gotcha!</div>
-    <div style="font-weight:700;color:var(--ink-soft);">${sp.name} was caught!</div>
-    <div style="font-size:13px;color:var(--ink-soft);font-weight:600;">Give it a nickname? (optional)</div>
-    <input type="text" id="nickInput" placeholder="${sp.name}" maxlength="16" style="max-width:220px;text-align:center;">
-    <button class="btn btn-primary" id="nickSave" style="width:auto;padding:12px 28px;">Add to team</button>
-  `;
-  document.body.appendChild(ov);
-  ov.querySelector('#nickSave').addEventListener('click', async ()=>{
-    const nick = ov.querySelector('#nickInput').value.trim();
-    const mon = newMonster(enemy.species, enemy.level);
-  const caughtStage = enemy.stage || 0;
-  if(caughtStage < evolutionStage(enemy.species, enemy.level)){
-    mon.evoFloor = caughtStage;
-    mon.evoFloorLevel = enemy.level;
-  }
-    if(nick){ mon.nickname = nick; mon.namedRegion = state.progress.currentRegion; }
-    if(slottedCount() < 6) state.party.push(mon);
-    else state.storage.push(mon);
-    if(!state.caughtSpecies.includes(enemy.species)) state.caughtSpecies.push(enemy.species);
-    if(!state.encounteredSpecies.includes(enemy.species)) state.encounteredSpecies.push(enemy.species);
-    await saveProfile();
-    document.body.removeChild(ov);
-    const where = state.party.some(m=>m.uid===mon.uid) ? 'your party' : 'storage';
-    toast(`${displayName(mon)} joined ${where}!`);
-    // Some catches carry a scene of their own.
-    if(enemy.species === 'ankylosaurus') return ankyloConversation(mon);
-    const msg = CATCH_MESSAGES[enemy.species];
-    if(msg) return storyModal(monPortrait(enemy.species, 150, { view:'front', bare:true, stage:enemy.stage||0 }),
-      SPECIES[enemy.species].name, msg, ()=>go('region'), { subtitle:'A bond formed' });
-    afterCatch();
-  });
-}
+/* gotcha (the caught page): 33-catch.js since 4.27 */
 
 function go(screen){
   if(typeof closeStatusTip === 'function') closeStatusTip();   // (3.42) a pill's card goes with the screen it was on
+  document.body.classList.toggle('in-battle', screen === 'battle');   // (4.22) a fight: no top bar, the page fitted to a phone
   if(screen !== 'quiz') document.body.classList.remove('writing');
+  if(ui.catching && screen !== 'quiz' && screen !== 'catch' && typeof catchTeardown === 'function') catchTeardown();   // (4.27) a catch left behind
   document.body.classList.remove('in-scene');
   /* A daily reward held back during a fight gets its moment once the player is
      somewhere it can safely take over the screen. */
@@ -858,6 +770,7 @@ function goBack(fallback){
 }
 
 function render(){
+  document.body.classList.toggle('in-battle', ui.screen === 'battle');   // (4.22)
   try{ renderInner(); }
   catch(err){
     console.error('render error:', err);
@@ -876,7 +789,7 @@ function renderInner(){
   if(!['home','region','battle','recover','challenge','explore','shop','storage','party','companions','coreSpar','stats','monsterIndex','indexDetail','spellingIndex','profileSelect','talents','future'].includes(ui.screen)) setScreenBg(null);
   const hb = $('#hamburgerBtn');
   // hamburger available everywhere except profile setup + (future) fights
-  const noMenu = ['boot','profileSelect','starterSelect','battle','quiz'].includes(ui.screen);
+  const noMenu = ['boot','profileSelect','starterSelect','battle','quiz','catch'].includes(ui.screen);
   hb.disabled = noMenu;
 
   switch(ui.screen){
@@ -921,6 +834,7 @@ function renderInner(){
     case 'spellingIndex': return renderSpellingIndex();
     case 'spelling':      return renderSpelling();
     case 'quiz':          return renderQuiz();
+    case 'catch':         return typeof catchRender === 'function' ? catchRender() : undefined;   // (4.27) a throw, or the caught page
     case 'arena':         return renderArenaGate();
     case 'sound':         return renderSound();
     /* Every walkable place is a screen of its own: the ship's decks above,

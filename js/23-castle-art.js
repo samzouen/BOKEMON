@@ -653,6 +653,7 @@ function towerGeo(d, x, y, w, h, k){
   return { corner, keep, cx, bw, top, bot, rw, apexY };
 }
 function towerBody(g, d, x, y, w, h, k){
+  if(d.kind === 'cornerTower' && typeof CA_WALL !== 'undefined') return CA_WALL.cornerBody(g, d, x, y, w, h, k);   // (4.26) round, ringed with battlements
   const { corner, keep, cx, bw, top, bot, rw, apexY } = towerGeo(d, x, y, w, h, k);
   const stone = corner ? '#a8a3bc' : '#f4efe4', dark = corner ? '#6f6a86' : '#cbc1ae';
   const rnd = rng(Math.round(d.x * 100 + d.y * 7));
@@ -757,6 +758,7 @@ function towerBody(g, d, x, y, w, h, k){
 }
 /* its pennant, in the wind */
 function towerFlag(g, d, x, y, w, h, k, t){
+  if(d.kind === 'cornerTower' && typeof CA_WALL !== 'undefined') return CA_WALL.cornerFlag(g, d, x, y, w, h, k, t);
   const { corner, keep, cx, top, apexY } = towerGeo(d, x, y, w, h, k);
   if(corner){
     const cy = top, sway = Math.sin(t * 2 + d.x) * k * 0.15;

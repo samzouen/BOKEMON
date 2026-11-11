@@ -538,10 +538,10 @@ function quizOfferNow(q){
   $('#quizNext').addEventListener('click', e=>{ const bt = e.currentTarget; if(bt.disabled || q._ended) return; bt.disabled = true; q._ended = true; quizMarkBonus(q); if(q.config.onComplete) q.config.onComplete(q.results); });
   $('#quizBonus').addEventListener('click', e=>{ const bt = e.currentTarget; if(bt.disabled) return; bt.disabled = true; quizStartBonus(q); });
 }
-function quizReadyHtml(){
+function quizReadyHtml(q){
   return `<button class="btn qz-next qz-ready" id="quizNext"><span class="qz-bloom"></span>` +
     [[9, .1], [24, 1.3], [41, .7], [58, 1.8], [76, .4], [90, 1.5]].map(([l, d])=> `<i class="qz-lift" style="left:${l}%;animation-delay:${d}s"></i>`).join('') +
-    `<span class="qz-word">Ready!</span></button>`;
+    `<span class="qz-word">${q && q.config && q.config.catchUi ? 'Catch!' : 'Ready!'}</span></button>`;   // (4.27) four words in the ball: Catch!
 }
 function quizTipHtml(){
   return `<i class="qz-tip"><i class="qz-halo"></i>${QUIZ_SPARKS.map(([a, d])=> `<b style="--a:${a}deg;--d:${d}s"></b>`).join('')}${QUIZ_SPARKS_HOT.map(([a, d])=> `<b class="hot" style="--a:${a}deg;--d:${d}s"></b>`).join('')}</i>`;
@@ -690,7 +690,9 @@ function renderQuiz(){
   quizSkyOn();                                                         // (3.98) over Region 6's sky
   /* (3.98) "committed does not need to be written on the top left with a lock, it's assumed" */
   const top = (q.config.lockExit ? '' : `<button class="back-link" id="quizExit">← Exit</button>`) + (q.config.wordTarget ? '' : `<div class="qz-count">Word ${q.index+1} / ${total}</div>`);
-  screenEl.innerHTML = `
+  /* (4.27) a catch: its own page, over the monster and the ball (catchQuizHtml, 33-catch.js) */
+  if(q.config.catchUi && typeof catchQuizHtml === 'function') screenEl.innerHTML = catchQuizHtml(q);
+  else screenEl.innerHTML = `
     ${top ? `<div class="qz-top">${top}</div>` : ''}
 
     <div class="quiz-layout">
@@ -762,6 +764,7 @@ function renderQuiz(){
     if(!q.config.relaxed) startTimer();
     setTimeout(()=> speakWord(word), 200);
   });
+  if(q.config.onRender) q.config.onRender(q);                         // (4.27) a catch's page, drawn
 }
 
 /* Re-fit the writing box when the device rotates or the window resizes. */
@@ -1000,6 +1003,8 @@ function buildWriter(i, box){
     /* (3.98) white writing on a dark square (the designer: "a black square and white writing") */
     strokeColor:'#ffffff', drawingColor:'#ffffff', drawingWidth:Math.max(24, Math.round(size*0.075)),
     highlightColor:'#ffd66a',
+    /* (4.27) on a catch's white ball, dark ink */
+    ...(q.config.catchUi ? { strokeColor:'#271b57', drawingColor:'#33256e', highlightColor:'#ff8a1f' } : {}),
     /* Stroke data comes off a CDN. A character the browser has never seen needs
        a live fetch, and with no handling a slow or failed request left the pad
        blank and unresponsive — which is why it stalled on NEW words and why
@@ -1104,6 +1109,8 @@ function resolveWord(passed, timedOut){
   else if(q.bonusPhase){ const bm = $('#qzBMeter'); if(bm) bm.classList.add('dying'); }   // (4.07) the bonus is lost; the move is not
   else if(q.config.wordTarget) quizMeterDown(q);                       // (3.98) the charge dies away
   q.results.push({ text:word, passed, mistakes:q.wordMistakes||0, timedOut, words:countWords(word) });
+  /* (4.27) a catch: the phrase's words go into the ball — or, missed, the ball's are lost and the monster may flee */
+  if(q.config.onWord){ try { q.config.onWord(passed, q, word); } catch(e){ console.error('onWord:', e); } }
 
   const st = $('#quizStatus');
   const rb = $('#quizResult');
@@ -1127,8 +1134,8 @@ function resolveWord(passed, timedOut){
     const powered = ends && !!c.wordTarget && (q.wordsDone || 0) >= need;
     const ready = passed && powered;
     const btn0 = ready
-      ? quizReadyHtml()
-      : `<button class="btn qz-next${ends && !passed ? ' qz-quiet' : ''}" id="quizNext">${ends ? 'Continue' : 'Next word'}</button>`;
+      ? quizReadyHtml(q)
+      : `<button class="btn qz-next${ends && !passed ? ' qz-quiet' : ''}" id="quizNext">${ends ? 'Continue' : (c.catchUi ? 'Next' : 'Next word')}</button>`;
     /* (4.07) a bonus to offer: it stands beside Ready! (or beside Continue, a scaling move's slip once powered) */
     const btn = quizBonusOpen(q, powered) ? `<div class="qz-split">${btn0}${quizBonusBtnHtml(q)}</div>` : btn0;
     rb.innerHTML = `
@@ -1156,6 +1163,7 @@ function resolveWord(passed, timedOut){
 
 function quizWillEnd(passed){
   const q = ui.quiz;
+  if(q.config.fled) return true;                                      // (4.27) the monster you were catching is gone
   if(q.index+1 >= q.config.words.length) return true;
   if(q.config.stopAtFirstMiss && !passed) return true;
   /* (4.03) as advanceQuiz ends it: a move's words all written (it said "Next word" over a move already powered), or
@@ -1182,6 +1190,7 @@ function advanceQuiz(){
   const end = how=>{ q._ended = true; stopTimer(); if(how === 'exit'){ if(q.config.onExit) q.config.onExit(); } else { quizMarkBonus(q); if(q.config.onComplete) q.config.onComplete(q.results); } };   // (4.07) and how its bonus went
   if(q.masteryReward){ announceMastery(q.masteryReward); q.masteryReward = null; }
   if(q.dailyReward){ const r = q.dailyReward; q.dailyReward = null; setTimeout(()=>announceDaily(r), 1200); }
+  if(q.config.fled) return end();                                     // (4.27) fled: the catch is over
   const last = q.results[q.results.length-1];
   if(q.config.stopAtFirstMiss && last && !last.passed) return end();
   if(q.config.endAfterMistakes){

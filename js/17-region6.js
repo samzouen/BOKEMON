@@ -1374,6 +1374,8 @@ function foeDetonateNow(){
   const hs = foeHolders('Fairy', 'ultra');
   if(!(n > 0) || !hs.length || !livingField().length) return '';
   const e = hs.slice().sort((x, y)=> enemyAtk(y) * foeSelfAmp(y) - enemyAtk(x) * foeSelfAmp(x))[0];   // the strongest
+  /* (4.22) its art: its holder flaring, if it stands on the field; the magic bursting on each of yours as it lands */
+  if(typeof fxPlay === 'function'){ const i = b.enemies.indexOf(e); fxPlay('Unstable Magic', { type:'Fairy', from:i >= 0 && e.hp > 0 ? 'enemy-' + i : 'enemy-row', targets:livingField().map(m=> pid('playerBob', m)) }); }
   foeStrikeYours(e, DETONATE_PCT * n, true, { noHex:true });
   return `💥 Their ${foeNm(e)}'s Unstable Magic${n > 1 ? ` ×${n}` : ''} — its magic bursts over your side!`;
 }

@@ -455,6 +455,7 @@ function tickStatuses(){
   Object.keys(ps).forEach(k=>{
     const st = ps[k];
     if(st.permanent) return;                               // a bog lasts the whole battle
+    if(k === 'wrath') wrathTurnStack(st);                  // (4.24) a grudge a turn, before the turn ages it
     if(held(statusOwner(k, st, 'player'), k, st, 'player')){
       st.turnsLeft = st.max ? st.max : STATUS_TURNS + 1;   // refreshed, never ages
       return;
@@ -725,9 +726,23 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     const en = getPStatus(0,'enchant');
     if(en) dmg *= (en.deal || 1.3);                // (3.36) the Firefox's Enchant, Grand Enchantment
     dmg *= 1 + sideAura('player', 'empower');      // (3.36) its Stargazer's Cheer: +10% while it stands
+    /* (4.24) Gathering Wrath's grudges: +3% each (Max +5%) to everything your side deals while they are held —
+       the designer, "Gathering wrath should be fixed if you mean there should be a ramping bonus". Until 4.24 it
+       reached the buttons' estimates and the side's burns and images (ownBuffMultiplier), never a blow. */
+    dmg *= wrathDamageBonus();
     /* (3.66) Dragon Legacy: an attack made with one of its charges, ×1.5 —
        multiplying with the above */
     dmg *= legacyAmp(attacker, peek);
+    /* (4.23) Counter's Combo — the designer: "combo stacks from counter seem to be getting consumed by non damaging
+       skills, they should only be consumed after amplifying the damage of a damaging skill." Until 4.23 it reached
+       only the buttons' estimates and the side's burns and images, never the blows of your attack, and any action
+       spent it — a buff, a heal, a skip. Now every blow of the action you take while it stands (its repeats, its
+       clones' echoes) is heavier by it; and only an action it made heavier spends it (spendComboAfterAttack). Not a
+       quick attack, a riposte, what rides on a hit, nor the turn's opening strikes: those are not your attack. */
+    if(!peek && ui.battle && ui.battle._comboWin && !(opts && (opts.rider || opts.preTurn || opts.violent || opts.reflex))){
+      const cm = comboMultiplier(realMon(attacker) || attacker);
+      if(cm > 1){ dmg *= cm; ui.battle._comboUsed = true; }
+    }
     dmg *= elemAttackAmp(attacker, defender);      // (3.67) Consume, Burgeon, Shatter
     if(!peek && !noCrit) fc = foresightCrit(attacker, defender);   // (3.68) Foresight's critical, its own roll
     dmg *= fc;
@@ -2156,6 +2171,9 @@ function detonateNow(){
   if(!holders.length) return '';
   const me = holders.map(h=> ({ h, total:foes.reduce((x, t)=> x + burstOf(h, t), 0) })).sort((x, y)=> y.total - x.total)[0].h;
   const hits = foes.map(t=>{ const dmg = burstOf(me, t); return { t, idx:b.enemies.indexOf(t), dmg, oldHp:t.hp, newHp:Math.max(0, t.hp - dmg) }; });
+  /* (4.22) its art (the designer: "fiery enchantment and unstable magic lack animations when damaging enemies"): its holder
+     flaring, if it stands on the field; the magic bursting on each as the blows land (fxStruck) */
+  if(typeof fxPlay === 'function') fxPlay('Unstable Magic', { type:'Fairy', from:playerField().includes(me) ? pid('playerBob', me) : 'nobody', targets:hits.map(h=> 'enemy-' + h.idx) });
   applyHits(hits, { noLeech:true, by:me, noHex:true });
   reportHits(hits);
   logBattle(`Unstable Magic (${displayName(me)}) ×${n}: ` + hits.map(h=> h.dmg).join(', '));
@@ -2288,7 +2306,7 @@ function clonesServe(mon){
 function applyClones(mv, mon){
   if(dustBlocks('player')) return;                  // their dust: no copies form
   ui.battle.clones = { turnsLeft:mv.clones.turns, mult:mv.clones.mult,
-                       evade:mv.clones.evade, full:!!mv.clones.full, uid:mon.uid };
+                       evade:mv.clones.evade, full:!!mv.clones.full, uid:mon.uid, fresh:true };   // (4.23) `fresh`: their pictures come in late, the first time
   setPStatus(0, { type:'clones', turnsLeft:mv.clones.turns, evade:mv.clones.evade });
 }
 /* Clone echoes: successive hits that spread across untouched enemies first. */
@@ -2734,11 +2752,13 @@ function applyStonePassives(mon, opts){
       const T = d.turns || veryHighDef(st.type, plus).turns || 5;
       setPStatus(0, { type:'machDragon', turnsLeft:T + 1, tier:d.mach, mine:true });
       renderStatusBadges();
+      playPassiveArt('Mach Dragon', mon, 'Dragon');               // (4.22) its art as it fires
       return say(`🐉 ${escapeHtml(d.name)}: Mach Dragon — the air moves out of the way.`);
     }
     if(d.passiveBlock){
       grantTeamBlock('player', d.passiveBlock, monAtk(mon));   // (3.64) the team's
       renderStatusBadges();
+      playPassiveArt('Steel Aegis', mon, 'Steel');                // (4.22) its art, its shields standing in it
       return say(opts.refill ? `🔩 ${escapeHtml(d.name)} — ${d.passiveBlock} more shield${d.passiveBlock>1?'s':''} up, for your whole team.`
                              : `🔩 ${escapeHtml(d.name)} — ${d.passiveBlock} shield${d.passiveBlock>1?'s':''} already standing, for your whole team.`);
     }
@@ -2753,6 +2773,7 @@ function applyStonePassives(mon, opts){
     const running = !!getPStatus(0, veryHighStatusKey(st.type));
     const res = applyVeryHighEffect(st.type, mon, monAtk(mon), livingEnemies(), plus);
     renderStatusBadges();
+    playPassiveArt(st.type === 'Fairy' ? 'Diamond Dust' : ((VERY_HIGH[st.type] || {}).name || st.type), mon, st.type);   // (4.22) the dust falls as it fires
     const swept = res.cleared ? ` ${res.cleared} of their effect${res.cleared === 1 ? '' : 's'} swept away.` : '';
     const T = d.turns || 5;
     say(running
@@ -4065,12 +4086,13 @@ function applyEnemyVeryHigh(e, type, plus){
          monster, as its damage is (`ddBreak`; your dust sweeps both). */
       e.ddBreak = Math.max(e.ddBreak || 0, d.strip || 0);
       /* Mach Dragon is a TEAM status on their side too, running its turns. */
-      if(d.mach) setESide({ type:'machDragon', turnsLeft:T + 1, tier:d.mach });
+      if(d.mach){ setESide({ type:'machDragon', turnsLeft:T + 1, tier:d.mach }); playPassiveArt('Mach Dragon', e, 'Dragon'); }   // (4.22) its art as it comes in
       break;
     case 'Steel':
       e.takeMult = (e.takeMult || 1) * (1 - (d.reduce || 0.30));
       if(d.block) grantTeamBlock('enemy', d.block, e.atk);               // (3.64) their wave's, as yours are your team's
       if(d.passiveBlock) grantTeamBlock('enemy', d.passiveBlock, e.atk);
+      if(d.block || d.passiveBlock) playPassiveArt('Steel Aegis', e, 'Steel');   // (4.22) its art, its shields standing in it
       break;
     case 'Flying':
       e.evadeAlways = Math.max(e.evadeAlways || 0, d.after || 0.15);
@@ -4081,6 +4103,7 @@ function applyEnemyVeryHigh(e, type, plus){
          nothing new of yours takes hold while it lasts. */
       const n = diamondDustCleanse('enemy');
       setESide({ type:'diamondDust', turnsLeft:T + 1 });
+      playPassiveArt('Diamond Dust', e, 'Fairy');                         // (4.22) the dust falls as it comes in
       if(n) setTimeout(()=> battleMsg(`✨ Their diamond dust sweeps ${n} of your effects away.`), 900);
       break; }
     case 'Water': {
@@ -4248,16 +4271,19 @@ function enemyStonePassive(e, opts){
   const say = line=>{ if(!opts.quiet) setTimeout(()=> battleMsg(line), 700); return line; };
   if(d.passiveOnly === 'mach'){
     setESide({ type:'machDragon', turnsLeft:(d.turns || 5) + 1, tier:d.mach });
+    playPassiveArt('Mach Dragon', e, 'Dragon');               // (4.22) its art as it fires
     return say(`🐉 ${who}'s ${escapeHtml(d.name)}: Mach Dragon — their side moves first.`);
   }
   if(d.passiveBlock){
     grantTeamBlock('enemy', d.passiveBlock, e.atk);          // (3.13) your dust cannot stop a shield; (3.64) their wave's
+    playPassiveArt('Steel Aegis', e, 'Steel');                // (4.22) its art, its shields standing in it
     return say(opts.again ? `🔩 ${who}'s ${escapeHtml(d.name)} — ${d.passiveBlock} more shield${d.passiveBlock > 1 ? 's' : ''} for its whole side.`
                           : `🔩 ${who} arrives with ${d.passiveBlock} shield${d.passiveBlock > 1 ? 's' : ''} standing for its whole side.`);
   }
   if(st.type === 'Fairy'){
     const n = diamondDustCleanse('enemy');
     setESide({ type:'diamondDust', turnsLeft:(d.turns || 5) + 1, owner:e });
+    playPassiveArt('Diamond Dust', e, 'Fairy');               // (4.22) the dust falls as it fires
     return say(`✨ ${who}'s Diamond Dust is ${opts.again ? 'in the air again' : 'already in the air'}${n ? `: ${n} of your effects swept away` : ''}.`);
   }
   return '';
@@ -4661,7 +4687,7 @@ function barrierLapse(side, who){
    Three moves that all pay more the worse things are going.
      Grudge          scales with HIS missing health
      Haunting Aria   punishes the enemy for landing hits at all
-     Gathering Wrath scales with how much the TEAM has been hurt
+     Gathering Wrath grows with every attack on the team, and every turn (4.24), to come due when he returns
    ============================================================ */
 
 /* ---- Haunting Aria: a 5-turn field the whole party stands in ----
@@ -4935,12 +4961,21 @@ function wrathDamageBonus(){
   if(!w || !w.stacks) return 1;
   return 1 + Math.min(w.stacks * w.bonus, w.bonusCap);
 }
-/* One stack per enemy MOVE — not per hit, and whether or not it lands. */
+/* One stack per enemy MOVE — not per hit, and whether or not it lands (a dodge, a miss, a blow that passes through). */
 function noteWrath(){
   const w = wrathState();
   if(!w || w.turnsLeft <= 0) return;
   w.stacks = (w.stacks || 0) + 1;
   renderStatusBadges();
+}
+/* (4.24) …and one a TURN besides, at its end, whatever was attempted — the designer: "Please let gathering wrath gain
+   one stack per turn regardless of whether an attempted/attack is suffered", and "one stack a turn is the base gain,
+   but getting attacked must add more per attack (not per hit), whether or not it is dodged." (Until 4.24 only the
+   attacks: an enemy that buffed, healed or slept, or a lone one, left him little to gather.) Every turn of the five
+   but the last — more while a Diamond Dust of yours holds it open. Called from tickStatuses before the turn ages it. */
+function wrathTurnStack(w){
+  if(!w || w.turnsLeft <= 1) return;
+  w.stacks = (w.stacks || 0) + 1;
 }
 /* Cashing in: free, no words, on swapping Cuain back into the fight. */
 function vengefulWrath(mon, done){
@@ -4950,8 +4985,9 @@ function vengefulWrath(mon, done){
   const counted = Math.min(n, w.dmgCap || 15);
   const per = Math.ceil(w.per * monAtk(mon));
   /* The bonus applies BEFORE the stacks are cleared, so the blow rides the
-     anger that produced it. */
-  const dmg = Math.ceil(counted * per * wrathDamageBonus() * ownBuffMultiplier(mon));
+     anger that produced it — once: ownBuffMultiplier carries it (4.24: it was
+     multiplied in twice, squared). */
+  const dmg = Math.ceil(counted * per * ownBuffMultiplier(mon));
   const foes = livingEnemies();
   if(!foes.length){ w.stacks = 0; return done(); }
   const hits = foes.map(t=>{ const d = Math.ceil(dmg * hexAmp(t));   // (3.68) Vicious Hex: all damage it takes
@@ -5234,10 +5270,11 @@ function runPreHits(done){
         setTimeout(step, 850);
       };
       /* (4.16) an Overheat ✦'s burn: Nova's ring of fire from their side (the designer: "the nova animation could
-         possibly be used for overheat star and wildfire's aoe damage procs"), the burn landing as it arrives */
-      const hold = (p.src === 'overheat' && typeof fxHoldMs === 'function') ? fxHoldMs('Overheat Burn') : 0;
+         possibly be used for overheat star and wildfire's aoe damage procs"), the burn landing as it arrives —
+         (4.22) and a Fiery Enchantment's: its circle of runes kindling beneath each of yours */
+      const art = burnArtOf(p), hold = (art && typeof fxHoldMs === 'function') ? fxHoldMs(art) : 0;
       if(hold){
-        playEffect('Overheat Burn', { type:'Fire', from:'enemy-' + b.enemies.indexOf(foes[0]), targets:mine.map(m=> pid('playerBob', m)) });
+        playEffect(art, { type:'Fire', from:'enemy-' + b.enemies.indexOf(foes[0]), targets:mine.map(m=> pid('playerBob', m)) });
         return setTimeout(land, hold);
       }
       return land();
@@ -5259,16 +5296,20 @@ function runPreHits(done){
       battleMsg(p.label);
       setTimeout(step, 850);
     };
-    /* (4.16) your Overheat ✦'s burn: Nova's ring, from the one burning (from your front when it burns from the bench) */
-    const hold = (p.src === 'overheat' && typeof fxHoldMs === 'function') ? fxHoldMs('Overheat Burn') : 0;
+    /* (4.16) your Overheat ✦'s burn: Nova's ring, from the one burning (from your front when it burns from the bench) —
+       (4.22) your Fiery Enchantment's: its circle of runes beneath each of them, flames bursting up through them */
+    const art = burnArtOf(p), hold = (art && typeof fxHoldMs === 'function') ? fxHoldMs(art) : 0;
     if(hold){
-      playEffect('Overheat Burn', { type:'Fire', from:(best && playerField().includes(best.h)) ? pid('playerBob', best.h) : pid('playerBob'), targets:hits.map(h=> 'enemy-' + h.idx) });
+      playEffect(art, { type:'Fire', from:(best && playerField().includes(best.h)) ? pid('playerBob', best.h) : pid('playerBob'), targets:hits.map(h=> 'enemy-' + h.idx) });
       return setTimeout(land, hold);
     }
     land();
   };
   step();
 }
+/* (4.22) An upkeep burn's drawn art (30-fx-moves.js): an Overheat ✦'s, a Fiery Enchantment's (the designer: "fiery
+   enchantment and unstable magic lack animations when damaging enemies"). The rest have none. */
+function burnArtOf(p){ return !p ? null : p.src === 'overheat' ? 'Overheat Burn' : p.src === 'enchant' ? 'Enchant Burn' : null; }
 
 /* ============================================================
    QUICK ATTACKS (2.73)
@@ -5415,6 +5456,7 @@ function grantBlock(holder, n, atkAt){
   // each stack remembers the ATK it was minted at
   holder.blockValue = atkAt || holder.blockValue || 0;
   setTimeout(refreshAllBlockBars, 0);      // show it at once, not next render
+  if(typeof fxShieldGain === 'function') fxShieldGain(holder, n, false);   // (4.22) a blue shield rising before it (30-fx-moves.js)
 }
 /* Consume one stack against `dmg`; returns what actually gets through. Its
    own shields first — they can only ever help it — then (3.64) its team's. */
@@ -5425,6 +5467,7 @@ function applyBlock(holder, dmg, barId){
     const before = holder.blockStacks;
     holder.blockStacks--;
     if(barId) drainBlock(barId, before, holder.blockStacks);
+    if(typeof fxShieldBlock === 'function') fxShieldBlock(holder, false);   // (4.22) its shield takes the blow and shatters (30-fx-moves.js)
     const absorbed = Math.round((holder.blockValue || 0) * amp);
     return Math.max(0, dmg - absorbed);
   }
@@ -5435,6 +5478,7 @@ function applyBlock(holder, dmg, barId){
   const before = tb.stacks;
   tb.stacks--;
   drainBlock('teamBlk-' + side, before, tb.stacks);
+  if(typeof fxShieldBlock === 'function') fxShieldBlock(holder, true);    // (4.22) …one of the team's, silver
   return Math.max(0, dmg - Math.round(v * amp));
 }
 /* (4.07) How much more a side's shields soak: yours 1.2× while a princess of yours has Lithification (her Power 2's
@@ -5495,6 +5539,7 @@ function grantTeamBlock(side, n, atkAt){
   tb.value = atkAt || tb.value || 0;             // minted at its caster's ATK, as a monster's are
   for(let k = 0; k < n; k++) tb.vals.push(tb.value);   // (4.07) each keeps it
   setTimeout(()=>{ if(ui.battle) renderStatusBadges(); }, 0);   // its bar, on the side's row
+  if(typeof fxShieldGain === 'function') fxShieldGain(side, n, true);   // (4.22) a silver shield rising before each of that side (30-fx-moves.js)
 }
 /* The team's bar: the block bar's shape, in silver (.team-blk, companionCss). */
 function teamBlockBarHtml(side){
@@ -5581,6 +5626,7 @@ function breakShields(side, attacker, holder, key, barId, anchorId){
     logBattle(`  🐲 Dragon Dance breaks ${kt} of the team's shield${kt > 1 ? 's' : ''} (${before} → ${tb.stacks})`);
   }
   if(!k && !kt) return 0;
+  if(typeof fxShieldBlock === 'function'){ if(k) fxShieldBlock(holder, false, k); if(kt) fxShieldBlock(holder, true, kt); }   // (4.22) shattered, as a blow's
   if(anchorId) floatMiss(anchorId, `🐲 −${k + kt} 🛡`, 'blk-pop', 0.16);
   setTimeout(refreshAllBlockBars, 0);
   return k + kt;
@@ -6923,6 +6969,7 @@ function foeRecharge(){
 function beginRound(msg){
   const b = ui.battle;
   if(!b) return;
+  b._comboWin = false;                           // (4.23) no action of yours under way: no blow made heavier by a Combo
   /* (3.19) A wave that arrives with a show of its own — Cyborg splitting in
      three, in the vault — plays it before the wave's first turn. */
   if(b.introDue){
@@ -7932,7 +7979,7 @@ function beginBattle(config){
      BATTLES — you could walk into a wild fight already holding four guards.
      Every fight starts clean. */
   /* the side's own stacks, not any one monster's — theirs too (3.01) */
-  if(ui.battle){ ui.battle.pCounter = []; ui.battle.pCombo = 0; ui.battle.eCounter = []; ui.battle.eCombo = 0; }
+  if(ui.battle){ ui.battle.pCounter = []; ui.battle.pCombo = 0; ui.battle.eCounter = []; ui.battle.eCombo = 0; ui.battle._comboWin = false; ui.battle._comboUsed = false; }
   state.party.concat(state.storage || []).forEach(m=>{
     m.counterStack = []; m.comboStacks = 0; m.enrageStacks = 0;
     m.blockStacks = 0;   m.blockValue = 0;
@@ -8622,8 +8669,9 @@ function allyPassives(){
   if(types.includes('Dragon')){
     const d = veryHighDef('Dragon', 2);
     setPStatus(0, { type:'machDragon', turnsLeft:(d.turns || 5) + 1, tier:d.mach || 2, mine:true });
+    playPassiveArt('Mach Dragon', A.mon, 'Dragon');           // (4.22) its art, from him
   }
-  if(types.includes('Fairy') && !playerDust()) applyVeryHighEffect('Fairy', A.mon, monAtk(A.mon), livingEnemies(), 2);
+  if(types.includes('Fairy') && !playerDust()){ applyVeryHighEffect('Fairy', A.mon, monAtk(A.mon), livingEnemies(), 2); playPassiveArt('Diamond Dust', A.mon, 'Fairy'); }
   renderStatusBadges();
 }
 /* The pre-turn: what he casts before anyone moves this round. */
@@ -9113,11 +9161,13 @@ function battleWidth(){
    side — and all at one size, alone or in a pair (the designer: "Standardise
    the height of the sprites"): the size for two across, a touch larger than
    theirs, since yours are nearer. */
-function playerSpriteSize(){
+function playerSpriteSize(){ return playerSpriteBase() - fitCuts().p; }
+function playerSpriteBase(){
   const per = (battleWidth() - 10) / 2;            // two cards across
   const byH = window.innerHeight * 0.19;
   return Math.round(Math.max(96, Math.min(per * 0.8, byH, 190)));
 }
+const PLAYER_SPRITE_LEAST = 96;
 /* (3.52) Who stands on your side of the field, left to right: the leader
    and its companion (shown even when it has fainted — greyed, so the row
    keeps its shape — while the leader fights on). */
@@ -9135,9 +9185,17 @@ function shownPlayers(){
 function playerCardHtml(m, base, acting){
   const px = playerSpriteSize();
   const hp = m.currentHp, max = monMaxHp(m), down = hp <= 0;
+  /* (4.23) its clones standing with it while they last — the designer, of the Monkey King's: "should we have clones on
+     the field like afterimages or actual images as long as the buff is up, or should we only have their images appear
+     when an attack is repeating?" Both: two of it, smaller and half see-through, behind it to either side (as the
+     Monkey King beside you has his), and when they echo a blow each dashes out to strike (Clone Echo, 30-fx-moves.js).
+     The first drawing after they are called up brings them in as the cast's art hands them over (`fresh`). */
+  const cl = !down && ui.battle && ui.battle.clones;
+  const clones = (cl && cl.turnsLeft > 0 && clonesServe(m))
+    ? `<span class="ally-clones my-clones${cl.fresh ? ' arriving' : ''}" aria-hidden="true">${[0, 1].map(()=> monPortrait(m.species, Math.round(px * 0.62), { view:'back', bare:true, stage:monStage(m) })).join('')}</span>` : '';
   return `<div class="my-card${down ? ' down' : ''}${acting ? ' acting' : ''}" id="${base}Card" style="width:${px + 16}px;">
       <div class="card-status" id="${base}Status"></div>
-      <div class="bob player-avatar${down ? ' down' : ''}" id="${base}Bob">${monPortrait(m.species, px, { view:'back', bare:true, crowned:isCrowned(m), stage:monStage(m), breathe: hp > 0 ? ((hp / max) < 0.3 ? 'weak' : 'normal') : null })}</div>
+      <div class="bob player-avatar${down ? ' down' : ''}" id="${base}Bob">${monPortrait(m.species, px, { view:'back', bare:true, crowned:isCrowned(m), stage:monStage(m), breathe: hp > 0 ? ((hp / max) < 0.3 ? 'weak' : 'normal') : null })}${clones}</div>
       <div class="info-layer name-plate">
         <div class="mon-title">${escapeHtml(displayName(m))}${crownMark(m)} <span>Lv ${m.level}</span></div>
         ${blockBar(base + 'Blk', m)}
@@ -9205,6 +9263,15 @@ function companionCss(){
   .ally-clones{ position:absolute; inset:auto 0 0 0; display:flex; justify-content:space-between; pointer-events:none; opacity:.5; z-index:-1; }
   .ally-clones > *:first-child{ transform:translate(-30%, -34%); }
   .ally-clones > *:last-child{ transform:translate(30%, -34%); }
+  /* (4.23) yours too, while they last — one over its far shoulder, one at its near side, both to be seen (yours stand at
+     the left of the row: one to the left of it went off the screen, or behind it); brought in as the cast's art hands
+     them over */
+  .my-clones{ display:block; }
+  .my-clones > *{ position:absolute; bottom:0; }
+  .my-clones > *:first-child{ left:-18%; transform:translate(0, -58%); }
+  .my-clones > *:last-child{ left:58%; transform:translate(0, -30%); }
+  .ally-clones.arriving{ animation:clonesIn .4s ease 1.05s both; }
+  @keyframes clonesIn{ from{ opacity:0; } to{ opacity:.5; } }
   /* (3.19) a lone Cyborg stands where the middle of a wave of three would (3.00) */
   .enemy-row.centred{ justify-content:center; }
   .ally-plate{ margin-top:2px; padding:4px 7px; border-radius:10px; background:linear-gradient(180deg, #fff6d8, #f6e3a8);
@@ -9237,12 +9304,82 @@ function enemyFieldSlots(b){
   const list = (b && b.enemies) || [];
   return (list.length === 1 && list[0].species === 'cyborg') ? 3 : list.length;
 }
-function enemySpriteSize(count){
+function enemySpriteSize(count){ return enemySpriteBase(count) - fitCuts(count).e; }
+function enemySpriteBase(count){
   const n = Math.max(1, count||1);
   const per = (battleWidth() - (n-1)*10) / n;      // share of the row per enemy
   const byH = window.innerHeight * 0.17;
-  return Math.round(Math.max(76, Math.min(per*0.78, byH, 170)));
+  /* (4.22) four or five in one row on a phone (they wrapped onto two, and the page ran off the screen): smaller, and
+     each card (its sprite and 16) within its share */
+  return Math.floor(Math.max(enemySpriteLeast(n), Math.min(per*0.78, per - 16, byH, 170)));
 }
+function enemySpriteLeast(n){ return n >= 5 ? 50 : n >= 4 ? 62 : 76; }
+
+/* ============================================================
+   THE DOCK, AND THE FIELD FITTED OVER IT (4.23)
+   The designer: "Could you make the buttons for players consistent in
+   position so they can press them without having to adjust each time? This
+   means an enemy trainer's portrait should not affect the position of the
+   player's buttons. Please align the player's buttons to the bottom of the
+   screen for consistency." The message and the buttons are one dock
+   (.bt-dock), held to the bottom of the screen (index.html): whatever stands
+   above it, the buttons are where they were. The field above takes what is
+   left — its gap across the middle first; and where even that is not enough
+   (a trainer's banner, two of yours, a message run to a second line, on a
+   short screen) its sprites are drawn smaller, yours first down to their
+   least, then theirs (`fitCut`, pixels off their height): measured after
+   each drawing (battleFit), and drawn again at once when it has to change.
+   On a phone, room is kept for what can grow between drawings — the message
+   running to a second line, their side's pills arriving — so the field does
+   not change size in the middle of a turn. Past the least sizes (a very
+   small phone) the field scrolls under the dock, which stays put
+   (body.battle-over: a veil under it).
+   ============================================================ */
+function fitCuts(count){
+  const b = ui.battle, cut = (b && b.fitCut) || 0;
+  if(!cut) return { p:0, e:0 };
+  const n = count || (b ? enemyFieldSlots(b) : 1);
+  const p = Math.min(cut, Math.max(0, playerSpriteBase() - PLAYER_SPRITE_LEAST));
+  const e = Math.min(cut - p, Math.max(0, enemySpriteBase(n) - enemySpriteLeast(Math.max(1, n))));
+  return { p, e };
+}
+function fitRoom(){
+  const b = ui.battle, n = b ? enemyFieldSlots(b) : 1;
+  return Math.max(0, playerSpriteBase() - PLAYER_SPRITE_LEAST) + Math.max(0, enemySpriteBase(n) - enemySpriteLeast(Math.max(1, n)));
+}
+const FIT_LINE = 18, FIT_PILLS = 24;            // a line of the message; their side's line of pills
+function battleFit(){
+  const b = ui.battle;
+  if(!b || b._fitting || ui.screen !== 'battle') return;
+  const bf = screenEl && screenEl.querySelector('.battlefield'), msg = document.getElementById('battleMsg'), fs = screenEl.querySelector('.foe-side');
+  if(!bf || !document.getElementById('btDock')) return;
+  const phone = typeof matchMedia === 'function' && matchMedia('(max-height: 900px)').matches;
+  const gapMin = phone ? 8 : 26;                 // the field's gap at its least (index.html)
+  const over = document.documentElement.scrollHeight - window.innerHeight;
+  const slack = over > 1 ? -over : bf.getBoundingClientRect().height - gapMin;
+  /* on a phone, room kept for what can grow between drawings without one: the message's second line, and their side's
+     line of pills if it is not standing yet (a trainer's banner stands on it already) — so the field does not change
+     size as they come */
+  const msgH = msg ? msg.getBoundingClientRect().height : FIT_LINE;
+  const keep = phone ? Math.max(0, FIT_LINE * 2 - msgH) + (fs && fs.getBoundingClientRect().height < 10 ? FIT_PILLS : 0) : 0;
+  const cur = b.fitCut || 0, next = Math.max(0, Math.min(fitRoom(), Math.round(cur + keep - slack)));
+  if(next > cur || cur - next >= 6){           // smaller at once; larger again only for a clear gain
+    b.fitCut = next;
+    b._fitting = true;
+    try { renderBattle(); } finally { b._fitting = false; }
+  }
+  battleOverMark();
+}
+/* the veil under the dock while the field runs under it — after a drawing, and after what changes the field's height
+   between drawings (its pills, renderStatusBadges), once a frame. Never a drawing between drawings: that would wipe
+   what a move is doing on the screen (its message, its numbers, a monster its art has hidden). */
+function battleOverMark(){ document.body.classList.toggle('battle-over', !!ui.battle && ui.screen === 'battle' && document.documentElement.scrollHeight > window.innerHeight + 1); }
+let _fitRaf = 0;
+function battleFitSoon(){
+  if(_fitRaf || typeof requestAnimationFrame !== 'function') return;
+  _fitRaf = requestAnimationFrame(()=>{ _fitRaf = 0; battleOverMark(); });
+}
+
 
 /* Depth is faked with size + speed: big fast motes read as near, small slow
    ones as far. A few sparkles punctuate it. */
@@ -9578,7 +9715,7 @@ function moveEffectText(mv, mon, atk){
       ` Then you may swap him out for free.`);
   }
   if(mv.wrath) out.push(
-    `For <b>${mv.wrath.turns} turns</b> every enemy move adds a <b>grudge</b>: <b>+${pc(mv.wrath.bonus)}%</b> damage each (up to <b>+${pc(mv.wrath.bonusCap)}%</b>). ` +
+    `For <b>${mv.wrath.turns} turns</b> he gathers a <b>grudge</b> at the end of every turn, and one more for every attack on your side, landed or not: your side deals <b>+${pc(mv.wrath.bonus)}%</b> damage for each (up to <b>+${pc(mv.wrath.bonusCap)}%</b>). ` +
     `Swap him back in and every grudge hits every enemy for <b>${val(mv.wrath.per)}</b>.`);
   if(mv.grudge){
     const flat = (mv.grudge.flat || 0.25) * atk, part = mv.grudge.missing || 0.75;
@@ -9852,9 +9989,8 @@ function renderBattle(){
     <div class="battle-stage" id="battleStage">
       <div class="fx-layer" id="fxLayer" aria-hidden="true"></div>
 
-      ${b.npcId ? `<div class="npc-banner">${npcPortrait(b.npcId, '🧑', 44, 'var(--paper-3)')}<span>${escapeHtml(b.name)}</span></div>` : ''}
-      <div class="foe-side"><div class="team-slot" id="teamSlot-enemy"></div><div class="foe-side-row" id="foeSideRow"></div></div>
-      <div class="enemy-row${enemyFieldSlots(b) > (b.enemies || []).length ? ' centred' : ''}">
+      <div class="foe-side"><div class="team-slot" id="teamSlot-enemy"></div><div class="foe-side-row" id="foeSideRow"></div>${b.npcId ? `<div class="npc-banner">${npcPortrait(b.npcId, '🧑', 44, 'var(--paper-3)')}<span>${escapeHtml(b.name)}</span></div>` : ''}</div>
+      <div class="enemy-row${enemyFieldSlots(b) > (b.enemies || []).length ? ' centred' : ''}${enemyFieldSlots(b) >= 4 ? ' many' : ''}">
         ${b.enemies.map((e,i)=>`
           <div class="enemy-card ${e.hp<=0?'fainted':''}${e.shattered?' shattered':''}${e.cls ? ' ' + e.cls : ''}" data-enemy="${i}" id="enemy-${i}" style="width:${enemySpriteSize(enemyFieldSlots(b))+16}px;">
             <div class="enemy-status" id="enemyStatus-${i}"></div>
@@ -9882,10 +10018,11 @@ function renderBattle(){
         </div>
       </div>
     </div>
-    <div id="battleMsg" style="text-align:center;font-weight:700;font-size:14px;min-height:20px;margin-bottom:10px;color:var(--ink-soft);">${canAct ? 'Choose a move.' : ''}</div>
+    <div class="bt-dock" id="btDock">
+    <div id="battleMsg" class="bt-msg">${canAct ? 'Choose a move.' : ''}</div>
     ${pairLineHtml(mon, comp, ctlMon, canAct)}
-    <div style="display:flex;gap:12px;">
-      <div style="flex:2;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+    <div class="bt-moves">
+      <div class="bt-grid">
         ${moveGridHtml(ctlMon, moves, (mv,i)=>{
           /* A Haunting Aria already singing shuts its own button, so ten words
              can never be spent on nothing. */
@@ -9897,13 +10034,14 @@ function renderBattle(){
             <div class="mv-meta">${mv.available ? moveMeta(mv, ctlMon) : (mv.chargeMore ? 'Full' : mv.silenced ? '🔇 Sealed by the distortion' : mv.spent ? `Used · back at ${RECHARGE_TARGET}字` : mv.cometWait ? `Falling · lands in ${mv.cometWait}` : mv.forgotten ? '💭 Forgotten this turn' : mv.taunted ? '🥱 Taunted — strongest move only' : mv.ogFull ? `Full · ATK +${Math.round(FOREST_GIFT.maxStacks * FOREST_GIFT.step * 100)}%` : mv.ogDone ? 'Grown this turn' : mv.tried ? 'Missed · next turn' : mv.legacyGive ? (mv.legacyWhy || 'Nobody to give to') : 'Locked')}</div>
           </button>`; })}
       </div>
-      <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+      <div class="bt-side">
         ${(()=>{ const lg = typeof legacyOnSwitch === 'function' && legacyOnSwitch();   /* (4.18) Dragon Legacy rides on the Switch button */
           return `<button class="side-btn" id="switchBtn" ${((switchShut() && !lg) || !canAct)?'disabled':''}${b.movedThisRound && !b.switchedThisTurn && !lg ? ' title="No switching after a move this turn"' : ''}>${lg ? '🐉 Dragon Legacy' : '🔄 Switch'}</button>`; })()}
         <button class="side-btn" id="fleeBtn" ${((b.noFlee && !b.arenaChallenge) || !canAct || (typeof fleeShut === 'function' && fleeShut(b)))?'disabled':''}>${(b.arena || b.arenaChallenge)?'🚪 Exit':(b.coreSpar || b.caSpar)?'🏳️ Give up':b.tear?'🚪 Save & leave':b.future?'🚪 Leave':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
         <button class="side-btn" id="skipBtn" ${canAct?'':'disabled'}>⏭️ Skip turn</button>
         ${(b.arena || b.arenaChallenge)?'<button class="side-btn" id="arenaMoveBtn" style="background:var(--gold);color:#fff;" '+(canAct?'':'disabled')+'>🧪 Test move</button>':''}
       </div>
+    </div>
     </div>
     ${(b.arena || b.arenaChallenge) ? `
       <label class="arena-toggle">
@@ -9943,6 +10081,8 @@ function renderBattle(){
   const lc = $('#logClear');
   if(lc) lc.addEventListener('click', e=>{ e.preventDefault(); ui.battle.log=[]; renderBattle(); });
   renderStatusBadges();
+  battleFit();                                   // (4.23) the field fitted over the dock
+  if(b.clones && b.clones.fresh && !b._fitting) b.clones.fresh = false;   // (4.23) the clones' pictures brought in once
 }
 
 /* (3.52) Every status has a symbol of its own on its side's rows — the pill
@@ -10326,6 +10466,7 @@ function renderStatusBadges(){
     symbolizePills(slot);
   });
   paintConcealment();
+  battleFitSoon();                               // (4.23) a row of pills come or gone: the veil under the dock, if the field runs under it
 }
 
 /* ============================================================
@@ -10482,9 +10623,10 @@ function statusTipText(key, st, c, pill){
       const w = getPStatus(0,'wrath') || s, n = (w && w.stacks) || 0;
       const wl = (state.party || []).find(x=> x.species === 'whalelord');
       const hit = (wl && w.per) ? Math.ceil(w.per * monAtk(wl)) : 0;
+      const more = Math.max(0, ((w && w.turnsLeft) || 0) - 1);
       return (key === 'wrathStacks' ? `<b>${n}</b> grudge${n === 1 ? '' : 's'} stored. ` : '') +
-        `Every enemy move adds a grudge: <b>+${pc(w.bonus || 0.05)}%</b> damage each, up to <b>+${pc(w.bonusCap || 0.5)}%</b>. ` +
-        `Swap ${wl ? escapeHtml(displayName(wl)) : 'the Whalelord'} back in and every grudge hits every enemy${hit ? ` for <b>${hit}</b>` : ''}.`; }
+        `A grudge gathers at the end of every turn${more ? ` (<b>${more}</b> more turn${more === 1 ? '' : 's'})` : ''}, and one more for every attack on your side, landed or not: your side deals <b>+${pc(w.bonus || 0.03)}%</b> damage each, up to <b>+${pc(w.bonusCap || 0.3)}%</b>. ` +
+        `Swap ${wl ? escapeHtml(displayName(wl)) : 'the Whalelord'} back in and every grudge hits every enemy${hit ? ` for <b>${hit}</b>` : ''}` + (more ? '' : ` — this turn, or they are gone`) + `.`; }
     case 'airborne': return `${c.W} is in the air: it dodges <b>${pc(STANCE_EVASION.airborne)}%</b> of attacks.`;
     case 'invisible': return `${c.W} can't be seen: it dodges <b>${pc(STANCE_EVASION.invisible)}%</b> of attacks.`;
     case 'guard': return `${c.W} is on guard: it gains a shield each turn.`;

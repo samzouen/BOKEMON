@@ -269,6 +269,7 @@ function questPulseOn(){
   return st === 'castle' || st === 'fifty' || st === 'seek' || st === 'unseal' || st === 'end';
 }
 function questTrackLabel(t){
+  if(t === 'find') return 'The nearest ticket';
   if(t === 'castle') return 'The castle';
   if(t === 'alien') return 'The nearest alien';
   if(JG_TRIBES[t]) return questTribeCap(t);
@@ -281,7 +282,9 @@ function questTribesSmelt(){
 }
 function questTrack(){
   const q = questState();
+  if(q.track === 'find' && !questFindsOn()) q.track = 'alien';           // (4.25) every ticket found: back to the aliens
   let t = q.track;
+  if(t === 'find') return 'find';
   if(t === 'alien' && (q.stage === 'castle')) t = 'castle';
   if(JG_TRIBES[t] && !questTribesSmelt().includes(t)) t = 'castle';
   return t || 'castle';
@@ -289,6 +292,7 @@ function questTrack(){
 function questTarget(p){
   if(!questPulseOn()) return null;
   const P = jgGround().places, t = questTrack(), q = questState();
+  if(t === 'find') return questFindTarget(JG_KEY, p);
   if(t === 'castle'){ const s = P.castle.stand; return { x:s.x + 0.5, y:s.y + 0.5 }; }
   if(t === 'alien'){
     let best = null, bd = Infinity;
@@ -305,6 +309,54 @@ function questTarget(p){
   }
   return null;
 }
+/* (4.25) THE FINDS — the designer: "Could Lucesco's nose guide the player to nearest tickets after all quests in region 6
+   are done?" Once the castle is saved (invAfter: Region 6's story over) and while any find is still hidden — the
+   jungle's hundred, one in every house of the four villages, one in each of the castle's rooms and homes — he says
+   so the first time you are back in the jungle (questFindSay), and from then on his pulse points to the nearest: in the jungle, the find itself or the door of the house that hides one (the castle's gate,
+   for the castle's); in the castle's grounds, the door of a house or room with one (the gate, when the castle has none
+   left); in a room, its own, else the way out (the palace: the stair to the tower, if the tower still hides one). */
+function questFindsOn(){ return questOn() && typeof invAfter === 'function' && invAfter() && questFindsLeft() > 0; }
+function questFindDecks(){
+  if(typeof DECKS === 'undefined') return [];
+  return Object.keys(DECKS).filter(k=> k !== JG_KEY && DECKS[k].region === 6 && DECKS[k].prizes && DECKS[k].prizes.length && !(typeof DECKS[k].opens === 'function' && !DECKS[k].opens()));
+}
+function questDeckLeft(key){ const d = DECKS[key]; return d && d.prizes ? d.prizes.map((q, i)=> i).filter(i=> !prizeTaken(key, i)) : []; }
+function questFindsLeft(){
+  let n = 0;
+  if(typeof jgFinds === 'function') jgFinds().forEach((f, i)=>{ if(!prizeTaken(JG_KEY, i)) n++; });
+  questFindDecks().forEach(k=> n += questDeckLeft(k).length);
+  return n;
+}
+/* where in the castle's grounds each of its places is gone into */
+function questCastleDoors(){
+  const out = {}, tg = caGrounds().tags;
+  out.r6_palace = { x:tg.palaceDoor.x, y:tg.palaceDoor.y }; out.r6_tower = out.r6_palace;
+  out.r6_tavern = { x:tg.tavern.door[0], y:31 }; out.r6_records = { x:tg.records.door[0], y:31 };
+  if(typeof homeList === 'function') homeList().forEach(({ b, bi })=>{ out[homeKey(bi)] = { x:b.door[0], y:b.y + b.h - 1 }; });
+  return out;
+}
+function questFindTarget(key, p){
+  const near = list=>{ let best = null, bd = Infinity; list.forEach(c=>{ if(!c) return; const d = (c.x - p.x) * (c.x - p.x) + (c.y - p.y) * (c.y - p.y); if(d < bd){ bd = d; best = c; } }); return best ? { x:best.x + 0.5, y:best.y + 0.5 } : null; };
+  const decks = questFindDecks(), castleLeft = decks.filter(k=> !(typeof hutParse === 'function' && hutParse(k)) && questDeckLeft(k).length);
+  if(key === JG_KEY){
+    const c = [];
+    jgFinds().forEach(([x, y], i)=>{ if(!prizeTaken(JG_KEY, i)) c.push({ x, y }); });
+    decks.forEach(k=>{ const H = typeof hutParse === 'function' && hutParse(k); if(!H || !questDeckLeft(k).length) return;
+      const V = jgGround().places.villages[H.k], h = H.n === 'lodge' ? V.lodge : V.huts[H.n]; c.push(H.n === 'lodge' ? { x:h.x + 2, y:h.y + h.h + 1 } : { x:h.x + 1, y:h.y + h.h }); });
+    if(castleLeft.length){ const s2 = jgGround().places.castle.stand; c.push({ x:s2.x, y:s2.y }); }
+    return near(c);
+  }
+  if(key === CA_KEY){
+    const doors = questCastleDoors(), c = castleLeft.map(k=> doors[k]).filter(Boolean);
+    if(!c.length){ const g = caGrounds().tags.gate; c.push({ x:g.x + 1, y:g.y }); }
+    return near(c);
+  }
+  const own = questDeckLeft(key);
+  if(own.length) return near(own.map(i=>{ const q = DECKS[key].prizes[i]; return { x:q[0], y:q[1] }; }));
+  if(key === 'r6_palace' && questDeckLeft('r6_tower').length){ const st = CA_MAPS.r6_palace().tags.stair; return near([{ x:st.x, y:st.y }]); }
+  const out = (typeof caThings === 'function' ? caThings(key) : []).find(t=> /^(Out|Down)$/.test(t.verb || ''));
+  return out ? near([{ x:out.x, y:out.y }]) : null;
+}
 function questPulseEl(){
   const stage = $('#walkStage');
   if(!stage) return null;
@@ -320,11 +372,12 @@ function questPulseEl(){
 }
 let _qPulseSoon = null;
 function questPulseUpdate(){
-  if(ui.screen !== JG_KEY) return;
+  const key = ui.screen, inside = key !== JG_KEY;
+  if(inside && !(typeof CA_PLACES !== 'undefined' && CA_PLACES[key] && questOn() && questTrack() === 'find')){ const o = document.querySelector('#walkStage > .q-pulse'); if(o) o.classList.add('off'); return; }
   const el = questPulseEl(), stage = $('#walkStage'), you = $('#walkYou');
-  const w = walkState(), p = w && w.at && w.at[JG_KEY];
+  const w = walkState(), p = w && w.at && w.at[key];
   if(!el || !stage || !you || !p) return;
-  const tgt = questTarget(p);
+  const tgt = inside ? questFindTarget(key, p) : questTarget(p);
   if(!tgt){ el.classList.add('off'); return; }
   const sr = stage.getBoundingClientRect(), yr = you.getBoundingClientRect();
   const tile = yr.width || 40;
@@ -359,7 +412,16 @@ async function questLionTalk(){
     `<b>"The castle is that way. See the ripples at the edge of your eyes? That is its smell, reaching my nose. Walk towards them."</b>`,
     `<b>"Follow the pulse. The paths twist, but the smell does not lie."</b>`,
     `<b>"Where the trees are only one deep, tap Jump, and I will carry you over."</b>`])]);
+  if(questFindsOn() && !questState().said.findSay) return questFindSay();   // (4.25)
   return questSniff();
+}
+/* (4.25) the story over, his nose turns to the tickets still hidden: he says so, once (and from then on you may choose
+   again what he sniffs out) */
+function questFindSay(){
+  const q = questState();
+  q.said.findSay = true; q.track = 'find'; saveProfile();
+  return jgLines([questFace.lion()], 'Lucesco', [`<b>"It is quiet at last. …Do you smell that? Not aliens — something shiny. There are tickets tucked away all over the kingdom: in the jungle, in every house in the villages, in the castle's rooms and homes. ${questFindsLeft()} of them, still hidden."</b>`,
+    `<b>"Follow the ripples: my nose will take you to the nearest. Talk to me if you would rather hunt aliens."</b>`]).then(()=> questPulseSoon());
 }
 function caTurnJ(key, lines){ const t = jgState().talk; const n = t[key] = (t[key] || 0) + 1; return lines[(n - 1) % lines.length]; }
 /* (4.12) The designer: "when talking to lucesco, please make his nose smell icons sprites instead of emoticons! for
@@ -369,6 +431,7 @@ function caTurnJ(key, lines){ const t = jgState().talk; const n = t[key] = (t[ke
    picture that will not load falls back to the old icon. */
 const QUEST_SNIFF_PIC = { castle:['fairy_king_c_front', '🏰'], alien:['alien_captain_humanoid', '👽'], talk:['lucesco_front', '💬'] };
 function questSniffPic(k){
+  if(k === 'find') return `<span class="jg-go-pic q-sniff-pic q-sniff-find">${typeof tokenIcon === 'function' ? tokenIcon(30) : '🎟️'}</span>`;   // (4.25) a find: what it holds
   const p = QUEST_SNIFF_PIC[k] || (JG_TRIBES[k] ? [JG_TRIBES[k].guardian, JG_TRIBES[k].icon] : null);
   if(!p) return '';
   return `<img class="jg-go-pic q-sniff-pic" src="assets/mon/${p[0]}.png" alt="" onerror="this.replaceWith(document.createTextNode('${p[1]}'))">`;
@@ -378,6 +441,7 @@ function questSniff(){
   releaseKeys();
   const q = questState(), cur = questTrack();
   const opts = [{ k:'castle', sub:'Its south gate' }, { k:'alien', sub:'Whichever is closest' }];
+  if(questFindsOn()) opts.unshift({ k:'find', sub:`${questFindsLeft()} still hidden` });   // (4.25)
   questTribesSmelt().forEach(k=> opts.push({ k, sub:q.found[k] ? 'Their village' : 'The blade’s scent' }));
   const ov = document.createElement('div');
   ov.className = 'refine-scrim jg-choose q-sniff';
@@ -795,6 +859,7 @@ async function questGuardLeap(k, bar){
   } catch(e){}
   el.style.transform = at(to.x, to.y);
   el.style.zIndex = 10 + to.y;
+  el._at = { x:to.x, y:to.y };   // (4.24) where it landed: its walk home starts there (from behind its wall, until now — you were pulled over the wall after it)
 }
 function questBackStep(to, bar){
   const [dx, dy] = bar.d, inBar = (x, y)=> bar.sq.some(s=> s[0] === x && s[1] === y);
@@ -845,10 +910,11 @@ function questGuardFight(k){
 /* persuaded, or beaten: it lifts its wall, its conditions, and (the first) back to the King, (the last) all four to him */
 async function questGuardAfter(k, how){
   const q = questState(), T = JG_TRIBES[k], w = walkState();
-  if(q.found[k]) return;
+  if(q.found[k] || ui.qAfter === k) return;                              // (4.24) once: the jungle drawn afresh meanwhile does not begin it again
+  ui.qAfter = k;
   w.busy = true;
   try { return await questGuardAfterSay(k, how); }
-  finally { w.busy = false; if(ui.screen === JG_KEY) refreshWalk(); }
+  finally { if(ui.qAfter === k) ui.qAfter = null; w.busy = false; if(ui.screen === JG_KEY) refreshWalk(); }
 }
 async function questGuardAfterSay(k, how){
   /* (4.13) The designer: "let the guardian conversations differ for flavour … Let the player be invited inside the
@@ -1025,7 +1091,7 @@ function questJungleAfter(stage){
   }
   if(ui.sceneRunning) return;
   /* back from a guardian's fight, won: its words, and its wall comes down */
-  if(q.guardWon && JG_TRIBES[q.guardWon] && !q.found[q.guardWon]){
+  if(q.guardWon && JG_TRIBES[q.guardWon] && !q.found[q.guardWon] && ui.qAfter !== q.guardWon){
     const k = q.guardWon, b = (questBars()[k] || [])[0], p = walkState().at[JG_KEY];
     const bar = (questBars()[k] || []).slice().sort((a, c)=> Math.hypot(a.front[0] - p.x, a.front[1] - p.y) - Math.hypot(c.front[0] - p.x, c.front[1] - p.y))[0] || b;
     if(bar){ questGuardEl(k, { x:bar.front[0], y:bar.front[1] }); }
@@ -1051,6 +1117,11 @@ function questJungleAfter(stage){
     }, 700);
     return;
   }
+  /* (4.25) the story over: his nose turns to the tickets, and he says so as you come back to the jungle */
+  if(questFindsOn() && !q.said.findSay && !(q.note && q.note.n)){
+    setTimeout(()=>{ if(ui.screen === JG_KEY && !ui.jgTalk && !ui.jgAlert && !ui.sceneRunning && !questState().said.findSay) questFindSay(); }, 900);
+    return;
+  }
   /* a week's pay to tell of */
   if(q.note && q.note.n){
     const n = q.note.n; q.note = null; saveProfile();
@@ -1062,6 +1133,12 @@ if(typeof jgStep === 'function'){
   const _qJgStep = jgStep;
   jgStep = function(p, d){ const r = _qJgStep.apply(this, arguments); if(questOn()) questPulseSoon(); return r; };
   if(typeof JG_DECK !== 'undefined') JG_DECK.onStep = (p, d)=> jgStep(p, d);
+}
+/* (4.25) and, hunting the finds, through the castle and the houses too (their decks call caStep and caRender by name) */
+if(typeof caStep === 'function'){
+  const _qCaStep = caStep, _qCaRender = caRender;
+  caStep = function(key, p){ const r = _qCaStep.apply(this, arguments); if(questOn() && questTrack() === 'find') questPulseSoon(); return r; };
+  caRender = function(key, world){ const r = _qCaRender.apply(this, arguments); if(questOn() && questTrack() === 'find'){ questCss(); questPulseSoon(); } return r; };
 }
 
 /* ---------- the party: the blades you carry, as passengers ---------- */

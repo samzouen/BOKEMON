@@ -467,16 +467,19 @@ function caGrounds(){
     const i = y * W + x;
     if(m.spr[i]) continue;
     const t = m.g[i];
-    if(t === T.WALL){
-      const inner = Math.min(x, y, W - 1 - x, H - 1 - y);
-      m.spr[i] = inner === 2 && y >= 2 && y <= H - 3 && x >= 2 && x <= W - 3 ? (y === 2 ? 'wallN' : y === H - 3 ? 'wallS' : x === 2 ? 'wallW' : 'wallE') : 'wallTop';
-    } else if(t === T.TOWER) m.spr[i] = 'towerTop';
-    else if(t === T.GATE) m.spr[i] = 'gate:' + (x - 30) + (y === 61 ? 'i' : 'o');
+    if(t === T.WALL || t === T.TOWER || t === T.GATE){
+      /* (4.26) the walls drawn standing (32-castle-walls.js, CA_WALL.slice): each square its piece of its side's wall;
+         a tower's squares off the walls the court's cobbles, under the tower */
+      const side = y <= 2 ? 'n' : y >= H - 3 ? 's' : x <= 2 ? 'w' : x >= W - 3 ? 'e' : '';
+      m.spr[i] = side ? `cw:${side}:${x}:${y}` : 'cobble:' + (i % 6);
+    }
     else if(t === T.TREE || t === T.LAMP) m.spr[i] = 'grass:' + (i % 4);
     else m.spr[i] = caDefaultSpr(m, x, y);
   }
-  Object.entries(m.tags.towerDoors).forEach(([k, d])=>{ m.spr[d.y * W + d.x] = 'towerDoor:' + (d.y < 30 ? 's' : 'n'); });
-  ['nw', 'ne', 'sw', 'se'].forEach(k=>{ const t = m.tags.towers[k]; caDeco(m, 'cornerTower', t.x + 0.4, t.y - 1.6, 9.2, 11.4, { corner:k, z:t.y + 9.6 }); });
+  /* (4.26) the towers' doors are drawn on the towers themselves (CA_WALL.cornerBody); until 4.26 a square each ('towerDoor') */
+  ['nw', 'ne', 'sw', 'se'].forEach(k=>{ const t = m.tags.towers[k]; caDeco(m, 'cornerTower', t.x + 0.4, t.y - 1.6, 9.2, 11.4, { corner:k, z:t.y + 9.6, door:k[0] === 'n' ? m.tags.towerDoors[k].x + 0.5 : null }); });   // (4.26) the north ones' doors on their faces
+  caDeco(m, 'gatehouse', 26.6, 59.2, 10.8, 4.8, { z:63.95, clear:{ x:m.tags.gate.x, y:m.tags.gate.y, w:m.tags.gate.w, h:1 } });   // (4.26) the gate in the south wall: drum towers, its arch (CA_WALL.gatehouse); `clear`: the way out before it, not drawn over (its arrow in sight)
+  for(let c = 0; c < W / 8; c++) caDeco(m, 'cwCrest', c * 8, -0.95, 8, 0.95, { part:c, z:0.02 });   // (4.26) the north wall's battlements, against the sky
   m.deco.sort((a, b)=> a.z - b.z);
   _caGrounds = m;
   return m;
@@ -499,7 +502,7 @@ const CA_P = { cv:null, ov:null, stage:null, world:null, raf:0, key:'', last:0, 
    (JG_SEE). Only these kinds: a sign or a banner never hides anyone. A market stall is one of them: its counter
    stands in front of its keepers' legs, its canopy over whoever passes behind it ("put the fairies properly behind
    their stalls instead of above"). */
-const CA_OVER_KINDS = new Set(['tree', 'lamp', 'palaceTower', 'keep', 'cornerTower', 'fountSmall', 'fountGrand', 'chimney', 'column', 'bookcase', 'stall', 'planter', 'well',
+const CA_OVER_KINDS = new Set(['tree', 'lamp', 'palaceTower', 'keep', 'cornerTower', 'gatehouse', 'fountSmall', 'fountGrand', 'chimney', 'column', 'bookcase', 'stall', 'planter', 'well',
   /* (3.97) and indoors: whatever stands up high enough to hide someone behind it, and the counters with their keepers behind */
   'candelabra', 'palm', 'armour', 'vase', 'clock', 'globe', 'readingTable', 'harp', 'plantPot', 'desk', 'rockingHorse', 'teaTable', 'armchair',
   'bar', 'table', 'barrels', 'recCounter', 'recBin', 'gramophone', 'jukebox', 'boxes',
@@ -596,6 +599,7 @@ function caPaintDraw(cam, now){
       let key = m.spr[i];
       if(key === 'water') key = 'water:' + ((frame + (x * 3 + y) % 4) % 4);
       if(key && (key[0] === 'b' || key[0] === 'p') && /^(bld|pal):/.test(key)) CA_ART.bldSlice(ctx, key, CA_P.S, px, py, pw, ph);
+      else if(key && key[0] === 'c' && key[1] === 'w' && typeof CA_WALL !== 'undefined') CA_WALL.slice(ctx, key, CA_P.S, px, py, pw, ph);   // (4.26) the walls
       else if(key) ctx.drawImage(caSpr(key), px, py, pw, ph);
       caEdges(ctx, m, x, y, t, px, py, pw, ph);
     }
@@ -631,8 +635,10 @@ function caPaintOver(m, k, ox, oy, x0, y0, x1, y1, dpr, now){
     const sy0 = Math.max(y0, Math.floor(d.y)), sy1 = Math.min(y1, base - 1);
     let squares = 0;
     c.save(); c.beginPath();
+    const cl = d.clear;                                                // (4.26) squares it leaves alone: the gatehouse's way out, its arrow
     for(let y = sy0; y <= sy1; y++) for(let x = sx0; x <= sx1; x++){
       if(caSolidCode(caAt(m, x, y))) continue;
+      if(cl && x >= cl.x && x < cl.x + cl.w && y >= cl.y && y < cl.y + cl.h) continue;
       const px = Math.round(ox + x * k), py = Math.round(oy + y * k);
       c.rect(px, py, Math.round(ox + (x + 1) * k) - px, Math.round(oy + (y + 1) * k) - py);
       squares++;
@@ -751,6 +757,14 @@ function caEdges(ctx, m, x, y, t, px, py, pw, ph){
       gr.addColorStop(0, 'rgba(20,14,30,.34)'); gr.addColorStop(1, 'rgba(20,14,30,0)');
       ctx.fillStyle = gr; ctx.fillRect(px, py, pw, ph * 0.45);
     }
+    /* (4.26) the castle's walls standing beside you: the west one's shade (the light is from the upper left), the east
+       one's foot, the south one's */
+    if(m === (typeof _caGrounds !== 'undefined' ? _caGrounds : null)){
+      const isW = u=> u === T.WALL || u === T.TOWER || u === T.GATE;
+      if(isW(caAt(m, x - 1, y))){ const gr = ctx.createLinearGradient(px, 0, px + pw * 0.75, 0); gr.addColorStop(0, 'rgba(20,14,30,.5)'); gr.addColorStop(0.4, 'rgba(20,14,30,.22)'); gr.addColorStop(1, 'rgba(20,14,30,0)'); ctx.fillStyle = gr; ctx.fillRect(px, py, pw * 0.75, ph); }
+      if(isW(caAt(m, x + 1, y))){ const gr = ctx.createLinearGradient(px + pw, 0, px + pw * 0.85, 0); gr.addColorStop(0, 'rgba(20,14,30,.22)'); gr.addColorStop(1, 'rgba(20,14,30,0)'); ctx.fillStyle = gr; ctx.fillRect(px + pw * 0.85, py, pw * 0.15, ph); }
+      if(isW(caAt(m, x, y + 1))){ const gr = ctx.createLinearGradient(0, py + ph, 0, py + ph * 0.86); gr.addColorStop(0, 'rgba(20,14,30,.24)'); gr.addColorStop(1, 'rgba(20,14,30,0)'); ctx.fillStyle = gr; ctx.fillRect(px, py + ph * 0.86, pw, ph * 0.14); }
+    }
   }
 }
 /* ---------- the far views (walls, ramparts) ----------
@@ -789,7 +803,12 @@ function caDrawView(ctx, v, k, ox, oy, x0, y0, x1, y1, frame, now){
         if(sx < 0 || sy < 0 || sx >= gm.W || sy >= gm.H) continue;
         let key = gm.spr[sy * gm.W + sx];
         if(key === 'water' || gm.g[sy * gm.W + sx] === CA_T.WATER) key = 'water:' + frame;   // (4.02) a round pool's squares too
+        else if(gm.g[sy * gm.W + sx] === CA_T.TOWER){                    // (4.26) the corner towers' squares as they were (their round towers are part of the walls, not drawn down there)
+          const td = Object.values(gm.tags.towerDoors).find(d=> d.x === sx && d.y === sy);
+          key = td ? 'towerDoor:' + (td.y < 30 ? 's' : 'n') : 'towerTop';
+        }
         if(key && /^(bld|pal):/.test(key)) CA_ART.bldSlice(ctx, key, kk, px, py, pw, ph);   // (3.97) its picture, small
+        else if(key && key.startsWith('cw:') && typeof CA_WALL !== 'undefined') CA_WALL.slice(ctx, key, kk, px, py, pw, ph);   // (4.26) the walls
         else if(key) ctx.drawImage(caSpr(key), px, py, pw, ph);
       }
     }
@@ -797,7 +816,7 @@ function caDrawView(ctx, v, k, ox, oy, x0, y0, x1, y1, frame, now){
   /* trees and towers down there stand up too (the castle's), and the jungle's trees */
   if(!jg){
     gm.deco.forEach(dd=>{
-      if(dd.kind === 'cornerTower') return;                          // the tower under your feet, and its kin: part of the walls
+      if(dd.kind === 'cornerTower' || dd.kind === 'gatehouse' || dd.kind === 'cwCrest') return;   // the tower under your feet, and its kin: part of the walls — (4.26) as are the gatehouse and the battlements
       const a = v.along === 'x' ? dd.x : dd.y, dpt = v.along === 'x' ? dd.y : dd.x, len = v.along === 'x' ? dd.w : dd.h;
       if(a + len < sA0 || a > sA1) return;
       const dd0 = (dpt - v.srcEdge) * v.srcOut;
@@ -936,7 +955,7 @@ function caDrawSprite(g, key, S){
       g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.arc(S * (0.3 + 0.4 * ((n + 1) % 4) / 4), S * 0.55, S * 0.025, 0, 7); g.fill();
       return;
     }
-    case 'wallTop': case 'wallS': case 'wallW': case 'wallE': {
+    case 'wallTop': case 'wallS': case 'wallW': case 'wallE': case 'cw': {   // ('cw': a wall's square, should its picture be missing)
       R(0, 0, 1, 1, '#a39fb5');
       g.strokeStyle = 'rgba(60,55,80,.35)'; g.lineWidth = lw;
       g.strokeRect(0, 0, S / 2, S / 2); g.strokeRect(S / 2, S / 2, S / 2, S / 2); g.strokeRect(0, S / 2, S / 2, S / 2); g.strokeRect(S / 2, 0, S / 2, S / 2);
@@ -1544,6 +1563,8 @@ function caDrawDeco(g, d, x, y, w, h, now){
     }
     case 'pool': return caDrawPool(g, d, x, y, w, h, k, t);           // (4.02) a pool, round (caPool)
     case 'palaceTower': case 'cornerTower': case 'keep': return CA_ART.tower(g, d, x, y, w, h, k, t);   // (3.97) was caDrawTower
+    case 'gatehouse': if(typeof CA_WALL !== 'undefined') return CA_WALL.gatehouse(g, d, x, y, w, h, k, t); return;   // (4.26)
+    case 'cwCrest': if(typeof CA_WALL !== 'undefined') return CA_WALL.crest(g, d, x, y, w, h, k); return;
     case 'stall': return CA_ART.stall(g, d, x, y, w, h, k);            // (3.97) the market's stalls, their keepers behind
     case 'planter': return CA_ART.planter(g, d, x, y, w, h, k);
     case 'bench': return CA_ART.bench(g, d, x, y, w, h, k);
@@ -1919,6 +1940,7 @@ function caRecordsMap(){
 }
 /* indoors, and the spyglass on a rampart */
 function caDrawFurniture(g, d, x, y, w, h, k, t){
+  if(typeof HUT_ART !== 'undefined' && HUT_ART.furn(g, d, x, y, w, h, k, t)) return;   // (4.25) what stands in the tribes' houses (31-huts.js)
   if(typeof CA_ROOM !== 'undefined' && CA_ROOM.furn(g, d, x, y, w, h, k, t)) return;   // (3.97) drawn in full (24-room-art.js); what follows is the old, plainer set
   const gold = '#d9b247', wood = '#7a4a28', woodL = '#a56f40';
   const shadow = (cx, cy, rx, ry)=>{ g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 7); g.fill(); };
@@ -2212,6 +2234,7 @@ function caThings(key){
     if(tg.listen) T({ x:tg.listen.x, y:tg.listen.y, w:2, icon:'', verb:'Listen', sub:'The listening corner', act:()=> caShopTalk('records') });
   }
   if(typeof invThings === 'function') invThings(key, list, T);   // (4.00) the battle for the castle, and the rift's perimeter after it (26-invasion.js)
+  if(typeof hutThings === 'function') hutThings(key, list, T);   // (4.25) inside the tribes' houses (31-huts.js)
   _caThings[key] = list;
   return list;
 }
@@ -2783,6 +2806,7 @@ function caPrincessTalk(){
   return caLines([['princess', caTurn('princess', CA_LINES.princess)]]);
 }
 function caLionTalk(key){
+  if(typeof hutLionTalk === 'function' && hutLionTalk(key)) return;   // (4.25) in one of the tribes' houses (31-huts.js)
   const lines = [
     `<b>"I came here often, long ago, when the King was young. It has hardly changed."</b>`,
     `<b>"There are four ramparts, one on each corner tower. From each one you can see a corner of the jungle."</b>`,
@@ -2913,6 +2937,8 @@ function caOverview(c){
       const px = Math.round(ox + x * k), py = Math.round(oy + y * k);
       jgPaintTile(ctx, x, y, px, py, Math.round(ox + (x + 1) * k) - px, Math.round(oy + (y + 1) * k) - py, 0);
     }
+    /* (4.26) the castle as it is, its grounds square for square, as the jungle draws it (32-castle-walls.js) */
+    if(typeof CA_WALL !== 'undefined'){ ctx.save(); ctx.translate(Math.round(ox + x0 * k), Math.round(oy + y0 * k)); CA_WALL.jungle(ctx, x0, y0, x1, y1, k, performance.now()); ctx.restore(); }
     for(let y = y0; y <= y1 + 1; y++) for(let x = x0; x <= x1; x++){
       if(jgTile(x, y) !== JG_T.TREE) continue;
       ctx.drawImage(jgSprite('tree', jgHash(x, y, 3) < 0.5 ? 0 : 1), Math.round(ox + (x - 0.5) * k), Math.round(oy + (y - 1.2) * k), Math.round(2 * k), Math.round(2 * k));

@@ -177,6 +177,18 @@ function fxBox(at){
 function fxHoldMs(name){ return typeof fxHoldFor === 'function' ? fxHoldFor(name) : 0; }
 /* (4.17) …and how long it plays (a Diamond Dust's borrowed skills wait for each other's) */
 function fxDurMs(name){ return typeof fxDurFor === 'function' ? fxDurFor(name) : 0; }
+/* (4.22) A stone's passive firing (the designer: "Can we have an animation for when Mach dragon, diamond dust and free
+   shields from steel aegis + or star trigger?"): its art, from the one carrying it (`mon`: one of yours, one of theirs,
+   the Monkey King), as its line is said — once the fight is drawn, if it fires before that (as its carrier first takes
+   the field). It plays beside any move playing (`aside`): that move's blows keep their own art. Steel Aegis's shields
+   stand in its art, so the shields its gain would raise for that side are not drawn over them (fxGuardingSide). */
+function playPassiveArt(name, mon, type){
+  if(typeof fxCue !== 'function' || typeof fxPlay !== 'function' || !mon) return;
+  const theirs = !!(ui.battle && (ui.battle.enemies || []).includes(mon));
+  if(name === 'Steel Aegis' && typeof fxGuardingSide === 'function') fxGuardingSide(theirs ? 'enemy' : 'player', 3200);
+  const at = ()=> fxIdOfMon(mon);
+  fxCue(()=>{ const id = at(); if(id) fxPlay(name, { type, from:id, aside:true }); }, { delay:theirs ? 650 : 380, need:()=> [at()].filter(Boolean) });
+}
 
 function playEffect(moveName, opts, done){
   opts = opts || {};
@@ -1552,6 +1564,7 @@ function quickMissed(mv, mon, correct, verb){
 }
 function resolveBattleMove(mv, target, results, opts){
   const mon=activeMon();
+  openComboWindow();                                 // (4.23) its blows made heavier by a Combo standing (computeDamage)
   /* (3.38) Taunted (their Hermit Sloth's Mocking Yawn): a blow aimed at one
      of them goes to the one that yawned (promptTarget has said so) — unless
      their Steel Soul draws it, below. */
@@ -1918,7 +1931,7 @@ function resolveBattleMove(mv, target, results, opts){
   if(mv.clones){
     if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn,900); }
     applyClones(mv, mon);
-    renderStatusBadges();
+    renderBattle();                                   // (4.23) their pictures beside it (coming up as the art hands them over)
     battleMsg(`${mv.name}! Two clones spring up beside ${escapeHtml(displayName(mon))} — they join ${mv.clones.full ? 'his' : 'its'} next <b>${mv.clones.turns}</b> attacks.`);   // (3.96) his, not the side's
     playEffect(mv.name, { type:SPECIES[mon.species].types[0] });
     return setTimeout(()=> afterPlayerAttack(mon, []), 900);
@@ -2782,9 +2795,15 @@ function runCloneEchoes(mon, mv, done){
   const targets = cloneEchoTargets(2);
   const atk = monAtk(mon);
   const base = (b.clones.full && b.lastFactor) ? b.lastFactor : (mv.mult||0.2);
+  /* (4.24) the designer: "Could the clones repeat his attack animations in quick succession?" — each clone plays his
+     move's own art again, from where it stands, one after the other (fxCloneEchoes, 30-fx-moves.js); `own`: when the
+     first of their blows lands. Else (no art of its own for it, or no pictures of them drawn) the 4.23 dash. */
+  const me = pid('playerBob', mon);
+  const own = typeof fxCloneEchoLand === 'function' ? fxCloneEchoLand(me, mv.name) : 0;
+  const hold = own || (typeof fxHoldMs === 'function' ? fxHoldMs('Clone Echo') : 0);   // (4.23) held for the clones' dash (below)
   const echoes = targets.filter(t=>t && t.hp>0).map((t, k)=>{
     const idx = b.enemies.indexOf(t);
-    if(rollDodge(t, idx, 300 + k*350)) return { t, idx, dmg:0, oldHp:t.hp, newHp:t.hp, dodged:true };
+    if(rollDodge(t, idx, (own ? own : hold + 300) + k*350)) return { t, idx, dmg:0, oldHp:t.hp, newHp:t.hp, dodged:true };
     /* part of the same action: an enemy that took it on the guard takes the
        echoes on it too, as your guard takes their echoes */
     const dmg = enemyGuard(t, Math.max(1, Math.ceil(computeDamage(base, atk, monRef(mon), t, true) * b.clones.mult)));
@@ -2792,13 +2811,23 @@ function runCloneEchoes(mon, mv, done){
   });
   if(echoes.length===0){ b._cloneEchoing=false; return done(); }
   battleMsg('Two clones strike!');
-  playSuccessiveHits(echoes, 0, ()=>{
-    reportHits(echoes);
-    b._cloneEchoing = false;
-    b.clones.turnsLeft--;
-    if(b.clones.turnsLeft<=0){ b.clones=null; clearPStatus(0,'clones'); }
-    done();
-  }, true);
+  /* (4.23) the designer: "could you resummon the clones afterimages as the attacks repeat please?" — each clone dashes
+     out from beside it to the one its echo strikes (Clone Echo, beside the move's own art: the echoes land with its
+     bursts), the blows held for the first to arrive */
+  if(own) fxCloneEchoes(me, mv.name, (b._fxLast || {})['you|' + mv.name], echoes.map(h=> 'enemy-' + h.idx));
+  else if(hold) fxPlay('Clone Echo', { type:'Physical', from:me, targets:echoes.map(h=> 'enemy-' + h.idx), aside:true });
+  setTimeout(()=>{
+    if(ui.battle !== b){ b._cloneEchoing = false; return; }
+    playSuccessiveHits(echoes, 0, ()=>{
+      reportHits(echoes);
+      b._cloneEchoing = false;
+      if(b.clones){
+        b.clones.turnsLeft--;
+        if(b.clones.turnsLeft<=0){ b.clones=null; clearPStatus(0,'clones'); }
+      }
+      done();
+    }, true);
+  }, hold);
 }
 
 /* (4.07) THE OVERCHARGE REPEAT, PLANNED AGAIN. The designer: "overcharge has a bug with multihit moves like ultra.
@@ -2961,6 +2990,7 @@ function afterPlayerAttackReal(mon, hits){
    repeat); if not, the turn moves on. */
 function endPlayerAction(mon){
   if(!ui.battle) return;
+  spendComboAfterAttack(mon);                      // (4.23) spent by the action it made heavier — before any extra one
   if(tachyExtraAction(mon)) return;
   finishPlayerTurn();
 }
@@ -3054,8 +3084,20 @@ function offerVengeanceSwap(mon, hits){
   });
 }
 
-/* A Combo is spent by the attack that benefited from it. */
-function spendComboAfterAttack(mon){ clearCombo(mon); renderStatusBadges(); }
+/* A Combo is spent by the attack that benefited from it — (4.23) only that: an action of yours that no blow of it was
+   made heavier by (a buff, a heal, a status, a skip, a switch; an attack that met nothing) leaves it standing for the
+   next. It closes the action's window either way (computeDamage reads it). */
+function spendComboAfterAttack(mon){
+  const b = ui.battle;
+  if(!b) return;
+  const used = !!b._comboUsed;
+  b._comboWin = false; b._comboUsed = false;
+  if(!used) return;
+  clearCombo(mon);
+  renderStatusBadges();
+}
+/* (4.23) …and an action of yours opens the window in which its blows are made heavier by it */
+function openComboWindow(){ if(ui.battle) ui.battle._comboWin = true; }
 
 /* Conversio. Choose the fallen one at a time; each costs a Mors mark, and the
    third mark takes the bird with it. With nobody to raise, the power turns
@@ -3331,9 +3373,9 @@ function runConversio(mon, def){
 }
 
 function finishPlayerTurn(){
+  spendComboAfterAttack(activeMon());              // (4.23) before the wave's end too: the blow that cleared it used it
   if(livingEnemies().length===0){ setTimeout(onWaveCleared,700); return; }
   // hand back to the round's order rather than assuming the enemy is next
-  spendComboAfterAttack(activeMon());
   setTimeout(advanceTurn, 850);
 }
 
@@ -4770,10 +4812,11 @@ function enemyActs(i, e){
 
   /* ---- an ATTEMPT: from here on this is an attack ---- */
   /* Every damaging move an enemy ATTEMPTS is remembered — once per move,
-     landed or not. The Haunting Aria remembers too: (3.08) any attack on your
-     side, even one that passes straight through, adds 1 to his vengeance —
-     once for the whole move, however many hits or targets it has. And
-     whatever hid this monster is gone. */
+     landed or not (and (4.24) a grudge a turn besides: wrathTurnStack). The
+     Haunting Aria remembers too: (3.08) any attack on your side, even one that
+     passes straight through, adds 1 to his vengeance — once for the whole
+     move, however many hits or targets it has. And whatever hid this monster
+     is gone. */
   noteWrath();
   noteAriaAttack();
   e._blow = newBlowId('e');                       // one attack: its strikes share this (Precognition, 2.97)
@@ -5555,7 +5598,7 @@ function playerRiposte(e){
     /* A reflex, not an attack: it reads no guard of theirs, as their riposte
        reads none of yours. */
     const ref = Object.assign(monRef(me), { _blow:newBlowId('r') });
-    const dmg = computeDamage(p.riposte, monAtk(me), ref, e, true);
+    const dmg = computeDamage(p.riposte, monAtk(me), ref, e, true, false, { reflex:true });   // (4.23) a reflex: no Combo
     const hits = [{ t:e, idx, dmg, oldHp:e.hp, newHp:Math.max(0, e.hp - dmg) }];
     applyHits(hits, { noLeech:true, blow:ref._blow });   // an attack of its own: your Dragon Dance breaks shields first (3.13)
     reportHits(hits);

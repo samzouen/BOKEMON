@@ -178,6 +178,34 @@ function fxMonOf(id){
   return typeof activeMon === 'function' ? activeMon() : null;
 }
 function fxSpeciesOf(id){ const m = fxMonOf(id); return m ? m.species : null; }
+/* (4.22) …and the other way: where a monster stands on the stage (one of theirs, the Monkey King, one of yours on the
+   field), or null (one of yours on the bench). */
+function fxIdOfMon(m){
+  const b = ui.battle;
+  if(!b || !m) return null;
+  const i = (b.enemies || []).indexOf(m);
+  if(i >= 0) return 'enemy-' + i;
+  try { const A = typeof battleAlly === 'function' ? battleAlly() : null; if(A && A.mon === m) return 'allyBob'; } catch(e){}
+  try { if(typeof playerField === 'function' && typeof pid === 'function' && playerField().includes(m)) return pid('playerBob', m); } catch(e){}
+  return null;
+}
+/* (4.22) Art for what happens beside a move's own (a stone's passive firing, shields gained or lost): `fn` run once the
+   fight is drawn — its canvases ready and one of `need`'s sprites on the stage — after `delay` ms; tried again every
+   120 ms, `tries` times (a passive can fire before its fight is first drawn), then let go (`fail`). Nothing if the
+   effects are off, or the fight it was for is over. */
+function fxCue(fn, o){
+  o = o || {};
+  const b0 = ui.battle, fail = ()=>{ if(o.fail) try { o.fail(); } catch(e){} };
+  let left = o.tries == null ? 20 : o.tries;
+  const go = ()=>{
+    if(!FX.on || !ui.battle || (b0 && ui.battle !== b0)) return fail();
+    const need = typeof o.need === 'function' ? o.need() : o.need;
+    if(fxReady() && (!need || !need.length || need.some(id=> !!fxAnchor(id)))){ try { fn(); } catch(e){ fxErr(e); } return; }
+    if(left-- > 0) setTimeout(go, 120);
+    else fail();
+  };
+  setTimeout(go, o.delay || 0);
+}
 
 /* ---------- the frame ---------- */
 function fxAdd(e){
@@ -723,13 +751,17 @@ function fxPlay(moveName, opts, done){
   const now = performance.now();
   const self = !tids.length || (!!opts.from && tids.length === 1 && tids[0] === opts.from);
   const side = self ? 'self' : (fxSideOf(tids[0]) || 'enemy');
-  const from = fxAnchor(fromId) || (side === 'player' ? fxEnemyRowMiddle() : { x:FX.W * 0.25, y:FX.H * 0.75, w:40, h:40, foot:FX.H * 0.85 });
+  /* (4.24) `fromAt`: where it comes from, if not its maker's own picture — one of the Monkey King's clones, his move
+     again (fxCloneEchoes). What only he has (his aura round his picture, his picture kept) is not drawn: no `fromId`. */
+  const from = opts.fromAt || fxAnchor(fromId) || (side === 'player' ? fxEnemyRowMiddle() : { x:FX.W * 0.25, y:FX.H * 0.75, w:40, h:40, foot:FX.H * 0.85 });
   const to = self ? [] : tids.map(id=> fxAnchor(id)).filter(Boolean);
   if(!self && !to.length) to.push(side === 'player' ? (fxAnchor(pid('playerBob')) || from) : fxEnemyRowMiddle());
-  const ctx = FX.ctx = { name:moveName, type:opts.type, tier:opts.tier, recipe, side, self, from, fromId, foe:!!(fromId && /^enemy-/.test(fromId)),
-                         to, tids, t0:now, strikes:0, until:now + (recipe.window || 3500) + (recipe.hold || 0), seed:(Math.random() * 1e9) | 0, opts,
-                         big:fxBig(moveName, opts), charge:opts.charge == null ? null : +opts.charge,
-                         species, slot:fxSlotFor(species, moveName), crit:!!opts.bonus };   // (4.16) who made it, its slot; a bonus round won
+  const ctx = { name:moveName, type:opts.type, tier:opts.tier, recipe, side, self, from, fromId:opts.fromAt ? null : fromId, foe:!!(fromId && /^enemy-/.test(fromId)),
+                to, tids, t0:now, strikes:0, until:now + (recipe.window || 3500) + (recipe.hold || 0), seed:(Math.random() * 1e9) | 0, opts,
+                big:fxBig(moveName, opts), charge:opts.charge == null ? null : +opts.charge,
+                species, slot:fxSlotFor(species, moveName), crit:!!opts.bonus, aside:!!opts.aside };   // (4.16) who made it, its slot; a bonus round won
+  /* (4.22) `aside`: art beside a move's (a stone's passive firing): the move playing keeps the blows that land (fxStruck) */
+  if(!opts.aside) FX.ctx = ctx;
   ctx.shake = fxShakeOf(ctx);
   try {
     if(self && recipe.aura) recipe.aura(ctx);

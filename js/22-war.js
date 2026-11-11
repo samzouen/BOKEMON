@@ -233,7 +233,9 @@ function warBands(k){
   hold(L.x - 1, L.y - 1, L.x + L.w, L.y + L.h);                           // the lodge
   hold(L.x + 1, L.y + L.h, L.x + 4, L.y + L.h + 3);                       // the guardian, and where you arrive
   [S.king].concat(S.guards, [S.anc]).forEach(p=> hold(p.x - 1, p.y - 1, p.x + 1, p.y + 1));   // the King, his knights, the ancestor's place
-  const free = (x, y)=> !reserved.has(key(x, y)) && !jgSolidAt(x, y) && jgVillageAt(x, y) === k;   // (3.95) on the village's own ground: the maze runs round its oval
+  /* (4.24) as the ground was before its centrepiece (jgPieceSq): these bands are not shown since 4.13, but where they
+     stood is kept clear of the finds (jgFinds), which must not move */
+  const free = (x, y)=> !reserved.has(key(x, y)) && (!jgSolidAt(x, y) || (typeof jgPieceSq === 'function' && jgPieceSq(x, y))) && jgVillageAt(x, y) === k;   // (3.95) on the village's own ground: the maze runs round its oval
   const KNIGHTS = ['chestnut_knight2', 'duck_knight2', 'bug_knight1'];
   for(let i = 0; i < n; i++){
     const rank = i < F.commanders ? 'commander' : 'captain';

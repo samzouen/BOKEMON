@@ -132,20 +132,29 @@ async function unLines(seq, k, opts){
    THE WORDS
    ============================================================ */
 /* the guardian, persuaded or beaten, before it lifts its wall (25-quest.js, questGuardAfterSay) */
+/* (4.23) `why`: Lucesco, straight after a fight — the designer: "Immediately after a battle with the tribal guardians,
+   Lucesco needs to come in with a word about why they're there, as there's a gap between what has been told them by
+   the player and what they understand of the situation. Lucesco should explain that the king is offering them the
+   opportunity to unseal their long lost ancestors so that through united strength the alien threat might be
+   overcome." (A fight only comes of a wrong answer: the right one told it already.) */
 const UN_GUARD_AFTER = {
   water:{ fight:`The guardian lowers its staff, breathing hard.<br><br><b>"Enough. The tide has turned, and not my way. You are strong."</b>`,
+    why:`<b>"Peace, guardian. The fight should never have come — those were the wrong words. The Fairy King sent us with your ancestor's blade for a reason: he is offering to unseal your ancestor, lost to your tribe for so long. Alone, each of us is losing to the aliens, one tide at a time. Together — every tribe, its ancestor and the castle — we might turn that tide."</b>`,
     help:`<b>"I will not pretend with you. The aliens take our people from the river every day, and our walls grow thinner with every tide. We need help."</b>`,
     wall:`It raises its staff. The thorns shiver, wither, and sink into the mud.`,
     come:`<b>"Come, then. Walk with me to the long house, and meet my people."</b>` },
   fire:{ fight:`The guardian drops to one knee, smoke curling from its mask.<br><br><b>"…Fine! FINE! You can fight. I'll give you that, and nothing else."</b>`,
+    why:`<b>"Hold your fire, and hear why we really came. We did not come to take anything. The King sends your ancestor's blade as a promise: he will unseal your ancestor, lost to your tribe for so long. The aliens are beating every one of us, one by one. Stand together — the tribes, your ancestors and the castle — and we can beat them."</b>`,
     help:`<b>"You want the truth? We're starving. The aliens burn our woods and snatch our people, and we can't even keep the forges lit. …There. I said it."</b>`,
     wall:`It slams its torch into the ground. The thorns blacken, crumble to ash, and blow away.`,
     come:`<b>"Follow me to my hall. And keep your hands where I can see them."</b>` },
   earth:{ fight:`The guardian sways, then sits down with a thud that shakes the ground.<br><br><b>"…Strong. …Very… strong."</b>`,
+    why:`<b>"Rest, guardian, and hear me. Take all the time you need. The King is offering to unseal your ancestor — lost to your tribe for so long — and that is why we carry its blade. Alone, the aliens wear each of us down. Together — every tribe, every ancestor and the castle — we might wear them down instead."</b>`,
     help:`<b>"…We… are tired. …The aliens… take… and take. …We… cannot… hold… for ever."</b>`,
     wall:`It lays a hand on the ground. With a long groan, the thorns sink back into the earth, one by one.`,
     come:`<b>"…Come. …My house. …We… talk… there."</b>` },
   grass:{ fight:`The guardian flops onto its back in the grass, giggling and panting.<br><br><b>"Ow! Ow! Okay, you win! Best game in AGES."</b>`,
+    why:`<b>"Now the game is over — the truth, with no tricks. The King is offering to unseal your ancestor, lost to your tribe for so long. That's why we carry its blade. The aliens are winning because we're all hiding apart. Together — every tribe, every ancestor and the castle — we can send them packing."</b>`,
     help:`<b>"…Can I be serious for a second? Just one? The jungle's dying. The aliens are everywhere. We're hiding in our own houses. We need help."</b>`,
     wall:`It snaps its fingers. The thorns wriggle, giggle (you're sure of it), and burrow back into the ground.`,
     come:`<b>"Come on, come on! My house! You'll love it. It's mostly roots."</b>` },
@@ -1463,7 +1472,7 @@ async function unGuardAfter(k, how){
   const q = questState(), T = JG_TRIBES[k], L = UN_GUARD_AFTER[k];
   const left = QUEST.seek.filter(t=> t !== k && !q.found[t]);
   const auto = { auto:1.05, keep:true };
-  await unLines((how === 'fight' ? [['g', L.fight]] : []).concat([['g', L.help]]), k, auto);
+  await unLines((how === 'fight' ? [['g', L.fight], ['lion', L.why]] : []).concat([['g', L.help]]), k, auto);   // (4.23) Lucesco's word, after a fight
   if(unGone()) return;
   /* the wall comes down */
   q.found[k] = how; delete q.guardWon;
@@ -1489,13 +1498,33 @@ async function unGuardAfter(k, how){
   saveProfile(); jgHud(); questPulseSoon();
   if(q.track !== 'alien') jgLines([questFace.lion()], 'Lucesco', [`<b>"I have the next scent: ${questTribe(q.track)}, in the ${{ ne:'north-east', se:'south-east', sw:'south-west', nw:'north-west' }[JG_TRIBES[q.track].corner]}. Follow the pulse when you are ready."</b>`]);
 }
-/* it walks to its door, slowly; you follow a step behind; the words play by themselves as you go */
+/* it walks to its door, slowly; you follow a step behind; the words play by themselves as you go.
+   (4.24) The designer: "The tribal guardians are not leading the way into their huts, only the water tribe when I
+   fought it and defeated it did so." The walk was given up, without a word, whenever the guardian's figure was not
+   on the ground as it began (the jungle drawn afresh after it was put before its wall: it was neither there nor
+   walking), or no way round the bands could be found — and then the curtain fell straight on the inside of its
+   house. Now its figure is put back where it stood if it has gone (at every step), a way is found without the
+   bands if need be, and at the end it steps into its doorway and is gone inside, and you after it to the door. */
+function unGuardFig(k, at){
+  const el = ui.qGuardEl;
+  if(el && el.isConnected) return el;
+  const was = (el && el._at) || at;
+  if(!was || !document.getElementById('walkWorld')) return null;
+  const fig = questGuardEl(k, was);
+  if(fig && el && el.style.transform) fig.style.transform = el.style.transform;   // (where it stood, to the pixel)
+  return fig;
+}
 async function unHomeWalk(k){
-  const w = walkState(), p = w.at && w.at[JG_KEY], V = unV(k), home = { x:V.guardian.x, y:V.guardian.y }, el = ui.qGuardEl;
-  if(!p || !el || !el.isConnected) return;
-  const start = el._at || { x:p.x, y:p.y };
-  const path = unPath(start, home, (x, y)=> !!jgBandAt(x, y));
-  if(!path) return;
+  const w = walkState(), p = w.at && w.at[JG_KEY], V = unV(k), home = { x:V.guardian.x, y:V.guardian.y };
+  if(!p) return;
+  /* where it stands: its figure, or (gone from the ground) the front of its wall nearest you */
+  const bars = (typeof questBars === 'function' ? questBars()[k] || [] : []).slice()
+    .sort((a, b)=> Math.hypot(a.front[0] - p.x, a.front[1] - p.y) - Math.hypot(b.front[0] - p.x, b.front[1] - p.y));
+  const near = bars[0] ? { x:bars[0].front[0], y:bars[0].front[1] } : { x:p.x, y:p.y };
+  let el = unGuardFig(k, near);
+  if(!el) return;
+  const start = el._at || near;
+  const path = unPath(start, home, (x, y)=> !!jgBandAt(x, y)) || unPath(start, home) || [];
   ui.unGuardOut = k; questRefreshThings(); unGuardMarkOff(k);            // (it is out here, walking you home)
   const lines = UN_HOME_WALK[k], pace = 1.1;
   const total = lines.reduce((t, l)=> t + unAutoMs(l[1], pace), 0);
@@ -1511,6 +1540,8 @@ async function unHomeWalk(k){
       let prev = start;
       for(const s of path){
         if(unGone()) return;
+        el = unGuardFig(k, prev);                                           // (4.24) put back, if the ground was drawn afresh
+        if(!el) return;
         el.style.transition = `transform ${t}ms linear`;
         el.style.transform = `translate3d(${s.x * T}px,${s.y * T}px,0)`;
         el.style.zIndex = 10 + s.y;
@@ -1525,14 +1556,34 @@ async function unHomeWalk(k){
         prev = s;
         await unWaitMs(ms);
       }
+      el = unGuardFig(k, home);
+      if(!el) return;
       el.style.transform = `translate3d(${(home.x + 0.5) * T}px,${home.y * T}px,0)`;   // (in the middle of its door, as it stands there)
       faceRight(el, false);
     })();
     await Promise.all([talk, walk]);
+    /* (4.24) and in: it steps up into its doorway and is gone inside; you step up to the door after it */
+    if(!unGone()){
+      const fig = unGuardFig(k, home), t = Math.max(1, Math.round(700 * SCENE_SPEED)), me = $('#walkYou'), world = $('#walkWorld');
+      if(fig){
+        fig.style.transition = `transform ${t}ms ease-in, opacity ${t}ms ease-in`;
+        fig.style.transform = `translate3d(${(home.x + 0.5) * T}px,${(home.y - 0.85) * T}px,0) scale(0.9)`;
+        fig.style.opacity = '0';
+        fig._in = true;
+      }
+      if(p.x !== home.x || p.y !== home.y){
+        const dx = home.x - p.x;
+        w.face = 'u'; if(dx) w.faceX = dx > 0 ? 'r' : 'l';
+        if(me) me.style.transition = `transform ${t}ms linear`;
+        if(world) world.style.transition = `transform ${t}ms linear`;
+        p.x = home.x; p.y = home.y;
+        refreshWalk();
+      }
+      await unWaitMs(760);
+    }
   } finally {
     jgHold(false);
-    if(me && me.isConnected) me.style.transition = '';
-    if(world && world.isConnected) world.style.transition = '';
+    [me, world, $('#walkYou'), $('#walkWorld')].forEach(e=>{ if(e && e.isConnected) e.style.transition = ''; });
     jgSave(false);
   }
 }

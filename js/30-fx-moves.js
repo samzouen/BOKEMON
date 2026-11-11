@@ -793,6 +793,7 @@ FX_MOVES['Steel Aegis'] = {
     fxMine(ctx).forEach(id=>{
       const a = fxAnchor(id); if(!a) return;
       const D = 1150, d0 = 60;
+      fxGuarding(id, d0 + D);                                          // (4.22) its shields are drawn here: none of the gain's over them
       fxMetal(id, D, d0);
       fxAdd({ layer:fxGuardLayer(id), dur:d0 + D, step(L, t){         // (4.20) between it and them
         if(t < d0) return;
@@ -1421,15 +1422,125 @@ FX_MOVES['72 Transformations'] = {
       fxAdd({ layer:fxOverOf(id), dur:520, step(L, t){ const u = t / 520; for(let j = 0; j < 5; j++){ const ang = j * 1.256 + i; fxCloudPuff(L, x + Math.cos(ang) * (4 + u * 12), y + Math.sin(ang) * (3 + u * 7), 5 * (1 - u * 0.5), 1 - u); } } });
       fxSpray(fxOverOf(id), fxBurstParts(x, y, 10, { seed:ctx.seed + i, vmin:40, vmax:100, ramp:[FX_GOLD[0], FX_GOLD[1], FX_GOLD[2]], drag:3, lmin:200, lmax:380, shape:'streak' }), 500);
     }));
+    /* (4.23) …and then each goes to where it stands while they last (its picture, behind him and to one side, smaller:
+       .my-clones, 04-battle.js), as that picture comes up under it */
+    const m = fxSpriteMid(id), rest = fxCloneSpots(id), GO = 820, END = 1250;
     fxAdd({ layer:fxUnderOf(id), dur:1450, step(L, t){       // the two clones, behind him, wavering
       if(t < 120) return;
-      const u = t - 120, out = fxEaseOut(Math.min(1, u / 260)), cv = u < 1000 ? 0.55 : Math.max(0, 0.55 * (1 - (u - 1000) / 330));
-      fxClone(L, id, { dx:-a.w * 0.42 * out, cover:cv, t:u, wob:1.4 });
-      fxClone(L, id, { dx:a.w * 0.42 * out, cover:cv, t:u + 400, wob:1.4 });
+      const u = t - 120, out = fxEaseOut(Math.min(1, u / 260));
+      if(u < GO || !m || rest.length < 2){
+        const cv = u < 1000 ? 0.55 : Math.max(0, 0.55 * (1 - (u - 1000) / 330));
+        fxClone(L, id, { dx:-a.w * 0.42 * out, cover:cv, t:u, wob:1.4 });
+        fxClone(L, id, { dx:a.w * 0.42 * out, cover:cv, t:u + 400, wob:1.4 });
+        return;
+      }
+      if(u > END) return;
+      const g = fxEaseOut((u - GO) / (END - GO)), cv = 0.55 * (1 - g * 0.6);
+      [-1, 1].forEach((s, i)=>{ const x0 = m.x + s * a.w * 0.42, sp = rest[i];
+        fxSpriteAt(L, id, x0 + (sp.x - x0) * g, m.y + (sp.y - m.y) * g, { scale:1 + (sp.s - 1) * g, cover:cv }); });
     } });
     fxBuffLook(id, fxBuffOf('Physical'), 1100, 200);
   },
 };
+/* (4.23) Where one's clones stand while they last (.my-clones, .ally-clones: two of it at 0.62 its size, behind it, up
+   and out to either side) — from their pictures, drawn already (perhaps not yet showing); else worked out as they would
+   be. [{ x, y (the middle of the picture), s (its size against the one it copies), el (its picture, if drawn) }] */
+function fxCloneSpots(id){
+  const host = id ? document.getElementById(id) : null, img = fxSpriteOf(id);
+  if(!host || !img || !img.getBoundingClientRect) return [];
+  const B = fxSpriteBox(id), mk = B && B.mk;
+  const mid = (x0, y0, w, h)=> mk ? { x:x0 + (mk.left + mk.right + 1) / 2 / mk.w * w, y:y0 + (mk.top + mk.bot + 1) / 2 / mk.h * h } : { x:x0 + w / 2, y:y0 + h * 0.58 };
+  const box = r=> [(r.left - FX.ox) / FX.P, (r.top - FX.oy) / FX.P, r.width / FX.P, r.height / FX.P];
+  const els = [...host.querySelectorAll('.ally-clones > *')];
+  if(els.length === 2) return els.map(el=>{ const pic = el.tagName === 'IMG' ? el : (el.querySelector('img') || el), [x0, y0, w, h] = box(pic.getBoundingClientRect()); return Object.assign(mid(x0, y0, w, h), { s:0.62, el }); });
+  const [x0, y0, W, H] = box(img.getBoundingClientRect()), sz = 0.62 * W, bot = y0 + H - sz;
+  const at = id === 'allyBob' ? [[x0 - 0.3 * sz, bot - 0.34 * sz], [x0 + W - 0.7 * sz, bot - 0.34 * sz]]   // the Monkey King beside you: .ally-clones
+                              : [[x0 - 0.18 * W, bot - 0.58 * sz], [x0 + 0.58 * W, bot - 0.30 * sz]];      // yours: .my-clones
+  return at.map(([cx0, cy0])=> Object.assign(mid(cx0, cy0, sz, sz), { s:0.62, el:null }));
+}
+/* (4.23) CLONE ECHO — the designer: "when monkey king's attacks are repeating with clones, could you resummon the clones
+   afterimages as the attacks repeat please?" As his clones' echoes come (runCloneEchoes, 05-battle-flow.js: their blows
+   held `hold` for it), each clone leaves where it stands beside him (its picture there gone while it is out) and dashes
+   at the one its echo strikes, afterimages of it trailing — arriving as its blow lands (the move's own burst there, as
+   the move it echoes: this art plays `aside`), a flash; then it is gone in a puff of cloud, and back at his side. */
+FX_MOVES['Clone Echo'] = {
+  dur:1350, hold:300, window:2200,
+  cast(ctx){
+    const id = ctx.fromId, rest = fxCloneSpots(id);
+    if(!id || rest.length < 2) return;
+    const DASH = 200, H = 300, BIG = 0.8;           // out at 0.8 his size, a golden edge round it, to be seen against the field
+    ctx.to.forEach((b, k)=>{
+      const sp = rest[k % 2], hitAt = H + k * 350, t0 = hitAt - DASH, gone = hitAt + 380;
+      if(sp.el){ const el = sp.el; setTimeout(()=>{ el.style.visibility = 'hidden'; }, t0); setTimeout(()=>{ el.style.visibility = ''; }, gone + 60); }
+      const at = { x:b.x, y:b.y - b.h * 0.05 };
+      fxAdd({ layer:'back', dur:gone + 40, step(L, t){
+        if(t < t0) return;
+        if(t <= hitAt){
+          const u = (t - t0) / DASH, pos = v=>{ const e = fxEaseIn(Math.max(0, Math.min(1, v))); return [sp.x + (at.x - sp.x) * e, sp.y + (at.y - sp.y) * e]; };
+          const sc = v=> sp.s + (BIG - sp.s) * Math.min(1, Math.max(0, v) * 2.5);
+          for(let j = 3; j >= 1; j--){ const [x, y] = pos(u - j * 0.13); fxSpriteAt(L, id, x, y, { scale:sc(u - j * 0.13), cover:0.5 - j * 0.11, edge:FX_GOLD[2] }); }   // its afterimages
+          const [x, y] = pos(u);
+          fxSpriteAt(L, id, x, y, { scale:sc(u), cover:0.92, edge:FX_GOLD[1] });
+          return;
+        }
+        const v = (t - hitAt) / (gone - hitAt);
+        fxSpriteAt(L, id, at.x - (at.x - sp.x) * 0.06, at.y, { scale:BIG, cover:0.8 * (1 - v), edge:FX_GOLD[1] });
+        for(let j = 0; j < 5; j++){ const ang = j * 1.256 + k; fxCloudPuff(L, at.x + Math.cos(ang) * (4 + v * 12), at.y + Math.sin(ang) * (3 + v * 7), 4.5 * (1 - v * 0.5), (1 - v) * 0.9); }
+      } });
+      fxLater(hitAt, ()=>{
+        fxAdd({ layer:'back', dur:200, step(L, t){ const u = t / 200; fxStar4(L, at.x, at.y, 10 * (1 - u) + 2, FX_GOLD[0], FX_ICE[0]); fxRing(L, at.x, at.y, 5 + u * 14, 2, FX_GOLD[1], 1 - u); } });
+      });
+      fxAdd({ layer:fxUnderOf(id), dur:t0 + 380, step(L, t){   // a puff where it leaves from
+        if(t < t0) return;
+        const v = (t - t0) / 380;
+        for(let j = 0; j < 4; j++){ const ang = j * 1.57 + k; fxCloudPuff(L, sp.x + Math.cos(ang) * (3 + v * 9), sp.y + Math.sin(ang) * (2 + v * 6), 4 * (1 - v * 0.5), 1 - v); }
+      } });
+    });
+  },
+};
+/* (4.24) HIS CLONES, HIS OWN ATTACK — the designer: "Could the clones repeat his attack animations in quick succession?"
+   Each clone in turn, FX_ECHO_GAP apart (the pace its blows land at: playVolleys), steps out from where it stands beside
+   him — drawn whole, a golden edge round it, its picture there hidden meanwhile — and the move he made plays again from
+   it (fxPlay's `fromAt`), at the one its echo strikes; its blow lands as that art's does, and it steps back. A move with
+   no art of its own (none of his) is echoed by the 4.23 dash (Clone Echo). `id`: his; `base`: what his move was played
+   with (playEffect's record); `ids`: the ones the echoes strike, in order. fxCloneEchoLand says, before, when the first
+   lands (0: not this way). */
+const FX_ECHO_GAP = 350, FX_ECHO_LEAD = 90;           // (its art begins as it has stepped out: FX_ECHO_LEAD in)
+function fxCloneEchoLand(id, name){
+  if(!FX.on || !id || !FX_MOVES[fxBaseName(name)] || !fxReady() || !fxAnchor(id)) return 0;
+  if(fxCloneSpots(id).length < 2) return 0;
+  return FX_ECHO_LEAD + Math.max(380, 330 + fxHoldFor(name));
+}
+function fxCloneEchoes(id, name, base, ids){
+  const land = fxCloneEchoLand(id, name);
+  if(!land) return 0;
+  const spots = fxCloneSpots(id), A = fxAnchor(id), STEP = 140, BACK = 260;
+  (ids || []).forEach((tid, k)=>{
+    const sp = spots[k % 2], s = sp.s || 0.62;
+    fxLater(k * FX_ECHO_GAP, ()=>{
+      if(!ui.battle) return;
+      const at = { x:sp.x, y:sp.y, w:A.w * s, h:A.h * s, foot:sp.y + A.h * s * 0.34 };
+      /* out from behind him (away from his middle), and a little at the one it strikes: in front of him while it does */
+      const b = fxAnchor(tid), ox = sp.x - A.x, oy = sp.y - A.y, on = Math.hypot(ox, oy) || 1;
+      const tx = b ? b.x - sp.x : 1, ty = b ? b.y - sp.y : -1, tn = Math.hypot(tx, ty) || 1;
+      let ux = ox / on * 0.75 + tx / tn * 0.25, uy = oy / on * 0.75 + ty / tn * 0.25 - 0.2;
+      const un = Math.hypot(ux, uy) || 1, reach = Math.min(26, A.w * 0.24);
+      ux /= un; uy /= un;
+      const out = { x:at.x + ux * reach, y:at.y + uy * reach, w:at.w, h:at.h, foot:at.foot + uy * reach };
+      const D = land + BACK, el = sp.el;
+      if(el){ el.style.visibility = 'hidden'; setTimeout(()=>{ if(el.isConnected) el.style.visibility = ''; }, D + 30); }
+      fxAdd({ layer:'front', dur:D, step(L, t){                                   // it, stepping out, held, and back
+        const f = t < STEP ? fxEaseOut(t / STEP) : t < land ? 1 : Math.max(0, 1 - (t - land) / BACK);
+        const glow = t < land ? 1 : Math.max(0, 1 - (t - land) / BACK);
+        if(t < STEP) fxSpriteAt(L, id, at.x, at.y, { scale:s, cover:0.35 * (1 - t / STEP), edge:FX_GOLD[2] });   // where it stood, left behind
+        fxSpriteAt(L, id, at.x + ux * reach * f, at.y + uy * reach * f, { scale:s, cover:0.6 + 0.35 * glow, edge:FX_GOLD[glow > 0.5 ? 1 : 2] });
+      } });
+      fxAdd({ layer:'front', dur:260, step(L, t){ const u = t / 260; fxRing(L, at.x, at.y, 4 + u * 12, 2, FX_GOLD[1], 1 - u); } });   // a flash of gold as it moves
+      fxLater(FX_ECHO_LEAD, ()=>{ if(ui.battle) fxPlay(name, Object.assign({}, base || {}, { from:id, fromAt:out, at:tid, targets:[tid], replay:true, bonus:false })); });
+    });
+  });
+  return land;
+}
 /* HEAVENSPLITTER and its Max (4.16, the designer: "a golden beam of light emerging from above monkey king … directly
    upwards offscreen, then rotating clockwise (against enemies) or anticlockwise (against players) … it should sweep
    until it hits the base of the screen and then the target sprite explodes with golden light (turning dark and backlit
@@ -2471,3 +2582,338 @@ FX_MOVES['Hood of Dread'] = { side:'self', dur:1200, hold:300,
     } });
  } };
 fxSig('Black Beam', max=> Object.assign(fxSigBeam('Ghost', [FX_PSY[1], FX_NIGHT[1], FX_NIGHT[3], FX_NIGHT[4], FX_NIGHT[5], FX_NIGHT[5]], 260)(max), { hold:max ? 600 : 450 }));
+
+/* ============================================================
+   4.22 — SHIELDS ON THE FIELD; THE STONES' PASSIVES FIRING; FIERY ENCHANTMENT'S BURN; UNSTABLE MAGIC
+   The designer: "Can we have an animation played when damage block takes effect? Can we have an animation for when
+   Mach dragon, diamond dust and free shields from steel aegis + or star trigger? A shield should appear every time a
+   damage block stack is gained to notify the player too. fiery enchantment and unstable magic lack animations when
+   damaging enemies."
+   ============================================================ */
+
+/* ---- THE SHIELDS ----
+   Each stands where a guard does (fxGuard): before its monster, towards the other side, on the canvas between the two
+   (behind one of yours, in front of one of theirs). A monster's own shields are blue, as their bar is; its side's
+   (Steel Aegis's, a princess's) silver, as the team's bar is.
+   - Gained (grantBlock, grantTeamBlock): a shield rises before each that has it — one for each stack, up to three,
+     fanned out — turning from white, a gleam crossing it, a ring of light as it stands; then it fades. A side's rise
+     before every one of that side on the field. Not where a cast's own art is drawing its shields already (Steel
+     Aegis, cast or as its passive fires: fxGuarding).
+   - Spent (applyBlock: one stack, one blow), or broken by a Dragon Dance (breakShields): the shield stands where the
+     blow lands, flashes white, cracks from where it was struck and shatters, its pieces flying back and falling, sparks
+     off it. Several spent at once go one after another. */
+const FX_BLOCKC = [fxRGB('#f2fbff'), fxRGB('#8fd0f5'), fxRGB('#3b7ea1'), fxRGB('#173552')];   // the block bar's blue: light, mid, dark, line
+/* One shield, point down: (cx, cy) its middle, ww and hh half its breadth and height. Its rim, its face, its boss, the
+   light along its top and its left; `white` turns it white (as a blow lands on it). */
+function fxShieldDraw(L, cx, cy, ww, hh, pal, cover, white){
+  if(ww < 1 || hh < 1) return null;
+  const cv = cover == null ? 1 : cover, pts = fxShieldPts(cx, cy, ww, hh), wh = !!white;
+  fxPolyLined(L, pts, wh ? FX_ICE[0] : pal[1], pal[3], cv);
+  fxPoly(L, pts.map(([x, y])=> [cx + (x - cx) * 0.7, cy + (y - cy) * 0.7]), wh ? pal[0] : pal[2], cv);
+  if(!wh){
+    fxLine(L, pts[0][0] + 1.5, pts[0][1] + 1.2, pts[1][0], pts[1][1] + 1.5, pal[0], 1, cv);    // the light on its top edge
+    fxLine(L, pts[0][0] + 1.2, pts[0][1] + 1.5, pts[5][0] + 1.5, pts[5][1], pal[0], 1, cv);    // …and down its left
+  }
+  const by = cy - hh * 0.12, br = Math.max(1.2, ww * 0.24);
+  fxDisc(L, cx, by, br + 1, pal[3], cv); fxDisc(L, cx, by, br, wh ? FX_ICE[0] : pal[1], cv);
+  fxSet(L, Math.round(cx - br * 0.4), Math.round(by - br * 0.4), pal[0]);
+  return pts;
+}
+function fxInPoly(pts, x, y){
+  let inside = false;
+  for(let i = 0, j = pts.length - 1; i < pts.length; j = i++){
+    const a = pts[i], b = pts[j];
+    if((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+  }
+  return inside;
+}
+/* A gleam crossing a shield corner to corner, `pos` 0–1 of the way */
+function fxShieldGleam(L, pts, cx, cy, ww, hh, pos, cover){
+  const x0 = cx - ww, y0 = cy - hh, span = ww * 2 + hh * 2 * 0.6, at = -span * 0.1 + pos * span * 1.2;
+  for(let y = Math.floor(y0); y <= cy + hh; y++) for(let x = Math.floor(x0); x <= cx + ww; x++){
+    const d = Math.abs((x - x0) + (y - y0) * 0.6 - at);
+    if(d > 4 || !fxInPoly(pts, x + 0.5, y + 0.5)) continue;
+    if(d < 1.6 ? fxCover(x, y, cover) : fxCover(x, y, 0.5 * cover)) fxSet(L, x, y, FX_ICE[0]);
+  }
+}
+/* Where a guard stands before `a` (an anchor), as fxGuard has it — but one of yours, the shield behind it, far enough out
+   from its picture's own edge (fxSpriteMid) to be seen: a broad monster (the Phoenix's wings) hid most of it. */
+function fxShieldSpot(id, a){
+  const dir = /^enemy-/.test(id) ? -1 : 1, ww = a.w * 0.2;
+  let cx = a.x + dir * a.w * 0.36;
+  if(dir > 0){ const m = fxSpriteMid(id); if(m) cx = Math.max(cx, m.x + m.w * 0.5 + ww * 0.45); }
+  return { dir, cx, cy:a.y - a.h * 0.04, hh:a.h * 0.42, ww };
+}
+/* A cast's own art drawing its side's shields before these (Steel Aegis): no silver shield of the gain over them
+   (fxShieldGain). `fxGuarding(id, ms)` for one; `fxGuardingSide(side, ms)` for a side's art still to come (a passive's,
+   cued). */
+function fxGuarding(id, ms){ (FX.guarding = FX.guarding || {})[id] = performance.now() + (ms || 1200); }
+function fxGuardingSide(side, ms){ (FX.guardSide = FX.guardSide || {})[side] = performance.now() + (ms || 2600); }
+function fxGuarded(id){ const now = performance.now(); return ((FX.guarding || {})[id] || 0) > now || ((FX.guardSide || {})[fxSideOf(id)] || 0) > now; }
+/* Shields rising before `id`: `n` of them (up to three, fanned out, one after another) */
+function fxShieldRise(id, n, pal, delay){
+  const a = fxReady() ? fxAnchor(id) : null;
+  if(!a) return;
+  const s = fxShieldSpot(id, a), k = Math.max(1, Math.min(3, n || 1)), D = 1000;
+  for(let i = 0; i < k; i++){
+    const d0 = (delay || 0) + i * 130;
+    fxAdd({ layer:fxGuardLayer(id), dur:d0 + D, step(L, t){
+      if(t < d0) return;
+      const u = t - d0, g = fxEaseOut(Math.min(1, u / 220)), cv = u < D - 300 ? Math.min(1, 0.35 + u / 120) : Math.max(0, (D - u) / 300);
+      const f = 0.5 + 0.5 * g, cx = s.cx + s.dir * i * s.ww * 0.8, cy = s.cy - i * s.hh * 0.08 + (1 - g) * 9, ww = s.ww * f, hh = s.hh * f;   // fanned out, each its own
+      const pts = fxShieldDraw(L, cx, cy, ww, hh, pal, cv, u < 80);
+      if(!pts) return;
+      if(u > 150 && u < 600) fxShieldGleam(L, pts, cx, cy, ww, hh, (u - 150) / 450, cv);
+      if(u > 170 && u < 560){ const v = (u - 170) / 390; fxRing(L, cx, cy, ww * (1.15 + v * 0.9), 1, pal[0], (1 - v) * cv, hh / ww); }
+      if(u > 240 && u < 760){ const v = (u - 240) / 520, r = 3.2 * Math.sin(v * Math.PI) + 0.5;
+        fxStar4(L, pts[0][0] + 1, pts[0][1] + 1, r, FX_ICE[0], FX_ICE[0]); if(v > 0.25) fxStar4(L, pts[3][0], pts[3][1] - 1, r * 0.7, pal[0], FX_ICE[0]); }
+    } });
+  }
+}
+/* A shield before `id` taking a blow and shattering, `delay` ms from now */
+function fxShieldShatter(id, pal, delay, seed){
+  const a = fxReady() ? fxAnchor(id) : null;
+  if(!a) return;
+  const s = fxShieldSpot(id, a), d0 = delay || 0, D = 780, BRK = 220, rnd = fxRand(seed || 7);
+  const pts = fxShieldPts(s.cx, s.cy, s.ww, s.hh), hit = { x:s.cx + s.dir * s.ww * 0.18, y:s.cy - s.hh * 0.18 };
+  const rim = [];                                                       // round its edge: each corner and a point between
+  for(let i = 0; i < pts.length; i++){ const p = pts[i], q = pts[(i + 1) % pts.length]; rim.push(p, [(p[0] + q[0]) / 2 + (rnd() - 0.5) * 2, (p[1] + q[1]) / 2 + (rnd() - 0.5) * 2]); }
+  const cracks = rim.filter((p, i)=> i % 2 === 1 || i === 4).map(p=>{   // from where it was struck to its edge, crooked
+    const m = [(hit.x + p[0]) / 2 + (rnd() - 0.5) * 3, (hit.y + p[1]) / 2 + (rnd() - 0.5) * 3];
+    return [[hit.x, hit.y], m, [hit.x + (p[0] - hit.x) * 0.94, hit.y + (p[1] - hit.y) * 0.94]];
+  });
+  const shards = rim.map((p, i)=>{                                      // the pieces it breaks into: a fan from the blow
+    const q = rim[(i + 1) % rim.length], mx = (hit.x + p[0] + q[0]) / 3, my = (hit.y + p[1] + q[1]) / 3;
+    const dx = mx - hit.x, dy = my - hit.y, d = Math.hypot(dx, dy) || 1, sp = 45 + rnd() * 60;
+    return { tri:[[hit.x - mx, hit.y - my], [p[0] - mx, p[1] - my], [q[0] - mx, q[1] - my]], x:mx, y:my,
+             vx:dx / d * sp - s.dir * (15 + rnd() * 30), vy:dy / d * sp - 25 - rnd() * 35, spin:(rnd() - 0.5) * 14, ang:0, lit:i % 3 === 0 };
+  });
+  let last = null;
+  fxAdd({ layer:fxGuardLayer(id), dur:d0 + D, step(L, t){
+    const dt = last == null ? 0 : Math.min(0.05, Math.max(0, t - last) / 1000); last = t;
+    if(t < d0) return;
+    const u = t - d0;
+    if(u < BRK){
+      fxShieldDraw(L, s.cx, s.cy, s.ww, s.hh, pal, 1, u < 85);
+      if(u >= 45){ const g = Math.min(1, (u - 45) / 110);
+        cracks.forEach(c=>{ const e = c[0][0] + (c[2][0] - c[0][0]) * g, f = c[0][1] + (c[2][1] - c[0][1]) * g, mid = g > 0.5 ? c[1] : [c[0][0] + (c[1][0] - c[0][0]) * g * 2, c[0][1] + (c[1][1] - c[0][1]) * g * 2];
+          fxLine(L, c[0][0], c[0][1], mid[0], mid[1], pal[3], 1); if(g > 0.5) fxLine(L, mid[0], mid[1], e, f, pal[3], 1); }); }
+      if(u < 130) fxStar4(L, hit.x, hit.y, 7 * (1 - u / 130) + 2, FX_ICE[0], FX_ICE[0]);
+      return;
+    }
+    const v = (u - BRK) / (D - BRK), cv = 1 - v * v;
+    shards.forEach(p=>{
+      p.vy += 320 * dt; p.vx *= 1 - 0.8 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.ang += p.spin * dt;
+      fxPolyLined(L, fxRot(p.tri, p.x, p.y, p.ang), p.lit ? pal[0] : pal[1], pal[3], cv);
+    });
+  } });
+  fxLater(d0 + BRK - 10, ()=> fxSpray(fxGuardLayer(id), fxBurstParts(hit.x, hit.y, 12, { seed:(seed || 7) + 3, vmin:70, vmax:170, ramp:[FX_ICE[0], pal[0], pal[1]], shape:'streak', drag:3, lmin:150, lmax:320 }), 420));
+}
+/* What the fight calls. A shield gained: `who` the monster (its own) or the side (`team`), `n` stacks — gathered for
+   a moment (a cast and its passive's top-up come together), then risen. */
+function fxShieldGain(who, n, team){
+  if(!FX.on || !ui.battle || !(n > 0) || !who) return;
+  const key = team ? 'team:' + who : who, ids = ()=> team ? (who === 'player' ? fxYoursIds() : fxFoesIds()) : [fxIdOfMon(who)].filter(Boolean);
+  FX.gainQ = FX.gainQ || new Map();
+  const q = FX.gainQ.get(key);
+  if(q){ q.n += n; return; }
+  const job = { n };
+  FX.gainQ.set(key, job);
+  const drop = ()=>{ if(FX.gainQ.get(key) === job) FX.gainQ.delete(key); };
+  fxCue(()=>{
+    drop();
+    ids().forEach(id=>{ if(!team || !fxGuarded(id)) fxShieldRise(id, job.n, team ? FX_STEELC : FX_BLOCKC); });   // (its own blue ones still rise)
+  }, { delay:160, need:ids, fail:drop });
+}
+/* A shield spent (a blow on `holder`): its own (blue) or its side's (silver). `n` of them at once, one after another. */
+function fxShieldBlock(holder, team, n){
+  if(!FX.on || !ui.battle || !holder) return;
+  const id = fxIdOfMon(holder);
+  if(!id || !fxReady() || !fxAnchor(id)) return;
+  FX.breakAt = FX.breakAt || {};
+  const now = performance.now();
+  for(let i = 0; i < Math.min(4, n || 1); i++){
+    const at = Math.max(now, FX.breakAt[id] || 0);
+    FX.breakAt[id] = at + 130;
+    fxShieldShatter(id, team ? FX_STEELC : FX_BLOCKC, at - now, (Math.random() * 1e9) | 0);
+  }
+}
+
+/* ---- MACH DRAGON ----
+   Dragon Dance + / ✦'s passive (the Monkey King's Dragon Stone, and theirs) as it fires: speed. A long eastern dragon of
+   dragon fire (its 🐉) races along its side's row and away, coiling round them as it goes — the near half of each coil
+   before them, the far half behind — the air streaming after it; each one it passes left a trail of after-images in
+   its colours, as one gone too fast to see. Yours from the left, theirs from the right. */
+function fxLoongHead(L, x, y, R, ang, dir, cover){
+  const P = FX_DRAGON, cv = cover == null ? 1 : cover, at = pts=> fxRot(pts.map(([px, py])=> [px * R, py * R * dir]), x, y, ang);
+  const line = (pts, c, w)=>{ const q = at(pts); for(let i = 0; i + 1 < q.length; i++) fxLine(L, q[i][0], q[i][1], q[i + 1][0], q[i + 1][1], c, w || 1, cv); };
+  [[[-1.0, -0.55], [-2.0, -1.05], [-2.9, -1.0]], [[-1.15, 0.0], [-2.2, 0.05], [-3.1, 0.3]], [[-0.9, 0.5], [-1.8, 0.95], [-2.6, 1.2]]].forEach(m=>{   // its mane, flame-like
+    line(m, P[1], 3); line(m.slice(1), P[0], 1); });
+  [[[-0.2, -1.05], [-1.3, -1.9], [-2.5, -2.3]], [[-0.6, -0.95], [-1.8, -1.35], [-2.9, -1.4]]].forEach(h=>{                                        // antlers, swept back, a tine on each
+    line(h, FX_GOLD[3], 2); line([h[1], [h[1][0] + 0.1, h[1][1] - 0.8]], FX_GOLD[2], 1); line(h, FX_GOLD[1], 1); });
+  fxPolyLined(L, at([[2.2, 0.42], [1.2, 0.5], [0.1, 0.62], [-0.6, 0.5], [-0.4, 0.98], [0.7, 1.02], [1.7, 0.8]]), P[3], P[5], cv);              // its lower jaw, open
+  fxPolyLined(L, at([[2.7, -0.05], [2.3, -0.5], [1.3, -0.82], [0.25, -1.18], [-0.95, -1.0], [-1.35, -0.25], [-1.0, 0.42], [0.3, 0.36], [1.4, 0.18], [2.5, 0.2]]), P[2], P[5], cv);   // its head
+  fxPoly(L, at([[2.4, 0.08], [1.3, -0.3], [0.3, -0.45], [0.3, 0.3], [1.4, 0.16]]), P[1], cv);                                                       // its muzzle, lighter
+  line([[1.2, -0.84], [0.2, -1.16]], P[0], 1);                                                                                                       // its brow catching the light
+  const t = at([[2.0, 0.24], [1.3, 0.3], [0.7, 0.34], [1.8, 0.48], [1.0, 0.54]]);
+  t.forEach(([tx, ty])=> fxSet(L, Math.round(tx), Math.round(ty), FX_ICE[0]));                                                                        // its teeth
+  const n = at([[2.2, -0.32]])[0]; fxSet(L, Math.round(n[0]), Math.round(n[1]), P[5]);                                                              // a nostril
+  const e = at([[0.6, -0.62]])[0];                                                                                                                   // its eye, alight
+  fxDisc(L, e[0], e[1], Math.max(1, R * 0.2), FX_GOLD[1], cv); fxSet(L, Math.round(e[0] + dir * 0.4), Math.round(e[1]), P[5]);
+  line([[2.3, 0.1], [1.3, 0.75], [0.0, 1.4], [-1.6, 1.75], [-3.0, 1.55], [-4.2, 1.85]], P[0], 1);                                                    // its whiskers, streaming back
+  line([[2.2, -0.35], [1.6, -1.2], [0.6, -1.7], [-0.8, -1.9]], P[0], 1);
+}
+function fxMachDragon(ctx){
+  const ids = fxMine(ctx), anc = ids.map(id=> fxAnchor(id)), pts = anc.filter(Boolean), dir = ctx.foe ? -1 : 1;
+  const hgt = pts.length ? pts.reduce((s, p)=> s + p.h, 0) / pts.length : 44;
+  const rowY = (pts.length ? pts.reduce((s, p)=> s + p.y, 0) / pts.length : (ctx.foe ? FX.H * 0.25 : FX.H * 0.7)) - hgt * 0.06;
+  const r0 = Math.max(2.6, Math.min(5.2, hgt * 0.065)), N = 44, gap = r0 * 0.58, A = hgt * 0.24, k = 6.283 / Math.max(54, hgt * 1.25);
+  const x0 = dir > 0 ? -14 : FX.W + 14, travel = FX.W + 28 + N * gap + r0 * 4, T = 900, D = T + 480;
+  const over = ctx.foe ? 'back' : 'front', under = ctx.foe ? 'under' : 'back';
+  const track = sv=>{ const ph = sv * k; return { x:x0 + dir * sv, y:rowY + Math.sin(ph) * A, z:Math.cos(ph), dy:A * k * Math.cos(ph) }; };
+  const headAt = t=>{ const u = Math.min(1, t / T); return travel * (u * 0.4 + u * u * 0.6); };
+  const radius = j=> r0 * (1 - 0.72 * Math.pow(j / N, 1.2));
+  const legs = [Math.round(N * 0.16), Math.round(N * 0.22), Math.round(N * 0.56), Math.round(N * 0.62)];
+  const rnd = fxRand(ctx.seed), streaks = [];
+  for(let i = 0; i < 18; i++) streaks.push({ y:rowY + (rnd() - 0.5) * hgt * 1.5, d:rnd() * 260, len:10 + rnd() * 20, off:rnd() * 40, near:rnd() < 0.5, c:rnd() < 0.5 ? FX_DRAGON[0] : FX_ICE[0] });
+  const passed = ids.map(()=> null);
+  const body = (L, t, near)=>{
+    if(t >= T + 200) return;
+    const sh = headAt(t), segs = [];
+    for(let j = N; j >= 1; j--){ const sv = sh - j * gap; if(sv < -8) continue; const p = track(sv); if((p.z > 0) === near) segs.push({ j, p, r:radius(j) }); }
+    segs.forEach(s=>{ if(!legs.includes(s.j)) return;                                                            // its legs, small, clawed
+      const b = s.p, r = s.r, fx = b.x - dir * r * 1.1, fy = b.y + r * 1.7;
+      fxLine(L, b.x, b.y + r * 0.4, fx, fy, FX_DRAGON[5], 3); fxLine(L, b.x, b.y + r * 0.4, fx, fy, FX_DRAGON[3], 1);
+      for(let c = -1; c <= 1; c++) fxLine(L, fx, fy, fx + dir * (1.6 + c * 0.2), fy + 1.2 + c * 1.2, FX_GOLD[2], 1); });
+    segs.forEach(s=> fxDisc(L, s.p.x, s.p.y, s.r + 1, FX_DRAGON[5]));                                           // its outline
+    segs.forEach(s=>{ fxDisc(L, s.p.x, s.p.y, s.r, FX_DRAGON[s.j % 3 === 0 ? 3 : 2]);                            // its scales, banded
+      fxDisc(L, s.p.x, s.p.y + s.r * 0.42, s.r * 0.52, FX_DRAGON[1]); });                                        // its belly, lighter
+    segs.forEach(s=>{ if(s.j % 3 !== 1 || s.j > N - 4) return;                                                    // the spines down its back
+      const b = s.p, r = s.r; fxPolyLined(L, [[b.x + dir * r * 0.5, b.y - r * 0.75], [b.x - dir * r * 1.5, b.y - r * 2.0], [b.x - dir * r * 0.9, b.y - r * 0.55]], FX_DRAGON[1], FX_DRAGON[5]); });
+    const tl = track(sh - N * gap);
+    if((tl.z > 0) === near && sh - N * gap > -8) fxFlameBall(L, tl.x - dir * 2, tl.y, Math.max(2, r0 * 0.55), FX_DRAGON, t, ctx.seed, { wob:0.4, cols:[FX_DRAGON[3], FX_DRAGON[2], FX_DRAGON[1], FX_DRAGON[0]], outline:FX_DRAGON[5] });   // its tail, a tuft of fire
+    const hd = track(sh);
+    if((hd.z > 0) === near){ const nk = track(sh - gap * 0.5); fxDisc(L, nk.x, nk.y, r0 + 1, FX_DRAGON[5]); fxDisc(L, nk.x, nk.y, r0, FX_DRAGON[2]); fxLoongHead(L, hd.x + dir * r0 * 0.4, hd.y, r0 * 1.45, Math.atan2(hd.dy, dir), dir, 1); }
+  };
+  const air = (L, t, near)=>{                                           // the air streaming after it
+    streaks.forEach(s=>{
+      if(s.near !== near || t < s.d) return;
+      const hx = track(headAt(t)).x, u = (t - s.d) / 420;
+      if(u > 1) return;
+      const x = hx - dir * (s.off + u * 90), cv = (1 - u) * 0.8;
+      fxLine(L, x, s.y, x - dir * s.len, s.y, s.c, 1, cv);
+    });
+  };
+  fxAdd({ layer:under, dur:D, step(L, t){
+    air(L, t, false);
+    ids.forEach((id, n)=>{                                               // after-images of each it has passed
+      const p = anc[n];
+      if(!p) return;
+      if(passed[n] == null && dir * (track(headAt(t)).x - p.x) > 0) passed[n] = t;
+      if(passed[n] == null) return;
+      const v = (t - passed[n]) / 440;
+      if(v > 1) return;
+      const m = fxSpriteMid(id);
+      if(!m) return;
+      for(let i = 2; i >= 0; i--) fxSpriteAt(L, id, m.x - dir * (i + 1) * (5 + 5 * v), m.y, { ramp:[FX_DRAGON[4], FX_DRAGON[3], FX_DRAGON[2]], cover:(0.6 - i * 0.16) * (1 - v) });
+    });
+    body(L, t, false);
+  } });
+  fxAdd({ layer:over, dur:D, step(L, t){
+    ids.forEach((id, n)=>{ if(passed[n] == null) return; const v = (t - passed[n]) / 240; if(v < 1) fxGlow(L, id, FX_DRAGON[1], 0.4 * (1 - v), FX_DRAGON[2]); });   // a flash of its colour as it passes
+    body(L, t, true);
+    air(L, t, true);
+  } });
+}
+FX_MOVES['Mach Dragon'] = { side:'self', dur:1340, cast:fxMachDragon };
+
+/* ---- FIERY ENCHANTMENT'S BURN ----
+   (The spell up, at the start of each turn, every one of the other side on the field.) The circle of runes the Firefox
+   casts it in kindles beneath each of them, fox fire rising round its rim; as the burn lands (`hold`), the circle flares
+   and flames burst up through them, embers drifting up after. */
+function fxEnchantRing(L, b, g, cv, t){
+  const rx = b.w * 0.46 * g;
+  fxRing(L, b.x, b.foot, rx + 1, 1, FX_PSY[5], cv, 0.3); fxRing(L, b.x, b.foot, rx, 2, FX_PSY[2], cv, 0.3); fxRing(L, b.x, b.foot, rx * 0.66, 1, FX_FIRE[2], cv, 0.3);
+  for(let i = 0; i < 6; i++){ const an = i * 1.047 + t * 0.005; fxStar4(L, b.x + Math.cos(an) * rx * 0.83, b.foot + Math.sin(an) * rx * 0.83 * 0.3, 1.6, FX_GOLD[1], FX_GOLD[0]); }
+}
+FX_MOVES['Enchant Burn'] = {
+  dur:1100, hold:330, window:1500,
+  cast(ctx){
+    ctx.to.forEach((b, n)=>{
+      const id = ctx.tids[n] || b.id, D = 950;
+      fxAdd({ layer:fxUnderOf(id), dur:D, step(L, t){
+        const g = fxEaseOut(Math.min(1, t / 260)), cv = t < D - 250 ? 1 : (D - t) / 250, flare = t > 330 && t < 520 ? 1 - (t - 330) / 190 : 0;
+        fxEnchantRing(L, b, g * (1 + flare * 0.25), cv, t);
+        if(flare > 0) fxRing(L, b.x, b.foot, b.w * 0.46 * (1 + (1 - flare) * 0.6), 2, FX_FIRE[1], flare, 0.3);
+      } });
+      for(const near of [false, true]) fxAdd({ layer:near ? fxOverOf(id) : fxUnderOf(id), dur:520, step(L, t){   // fox fire round its rim, rising
+        const g = fxEaseOut(Math.min(1, t / 260)), cv = t < 380 ? 1 : (520 - t) / 140;
+        for(let i = 0; i < 4; i++){ const an = i * 1.571 + t * 0.006, s = Math.sin(an); if((s > 0) !== near) continue;
+          fxFlameBall(L, b.x + Math.cos(an) * b.w * 0.42 * g, b.foot + s * b.w * 0.12 - Math.min(1, t / 330) * 6, 2.6, FX_FIRE, t, ctx.seed + i, { wob:0.4, up:0.7, cover:cv }); }
+      } });
+    });
+  },
+  impact(ctx, at, k, side){
+    const layer = fxLayerFor(side), rnd = fxRand(ctx.seed + k * 17), flames = [];
+    fxFireBurst(at, layer, { seed:ctx.seed + k, big:1.05 });
+    for(let i = 0; i < 7; i++) flames.push({ x:at.x + (rnd() - 0.5) * at.w * 0.6, y:at.foot - rnd() * 4, vx:(rnd() - 0.5) * 12, vy:-(80 + rnd() * 70), life:380 + rnd() * 220, size:3 + rnd() * 2,
+      ramp:[FX_FIRE[0], FX_FIRE[1], FX_FIRE[2], FX_FIRE[3]], shape:'flame', outline:FX_FIRE[5], grav:-30, drag:1.5, delay:rnd() * 80 });
+    fxSpray(layer, flames, 760);
+    fxSpray(layer, fxBurstParts(at.x, at.foot - 4, 8, { seed:ctx.seed + k + 5, vmin:15, vmax:45, ramp:[FX_GOLD[0], FX_FIRE[1], FX_FIRE[2]], grav:-40, lmin:450, lmax:750, delay:180 }), 1000);
+  },
+};
+
+/* ---- UNSTABLE MAGIC ----
+   (The Fairy Ultra passive; theirs too.) Every count goes off at once, on every one of the other side: the magic of its
+   strongest holder bursting over each. Its holder, if it stands on the field, flares, a ring of runes turning beneath
+   it; on each one struck the magic bursts — a flash, rings that will not keep still, flickering pink and violet,
+   crackling arcs, pink shards and stars flung out — and a smaller pop or two after it, as magic that will not settle. */
+const FX_ARCANE = [fxRGB('#ffffff'), fxRGB('#ffd6f4'), fxRGB('#f48ce0'), fxRGB('#c44fd0'), fxRGB('#7a2a9e'), fxRGB('#3a1450')];
+function fxArcanePop(at, layer, big, seed, delay){
+  const rnd = fxRand(seed), R = 20 * big, arcs = [];
+  for(let i = 0; i < 5; i++){ const an = i * 1.257 + rnd() * 0.6; arcs.push([Math.cos(an), Math.sin(an), 0.6 + rnd() * 0.5]); }
+  fxAdd({ layer, dur:(delay || 0) + 460, step(L, t){
+    const u = t - (delay || 0);
+    if(u < 0) return;
+    if(u < 120){ const g = u / 120, c = 1 - g * 0.5; fxDisc(L, at.x, at.y, R * (0.3 + g * 0.35), FX_ARCANE[2], c); fxDisc(L, at.x, at.y, R * (0.22 + g * 0.22), FX_ARCANE[1], c); fxDisc(L, at.x, at.y, R * (0.14 + g * 0.1), FX_ARCANE[0]); }
+    const st = (u / 40) | 0, jr = fxRand(seed + st * 7);
+    for(let i = 0; i < 3; i++){                                       // rings that will not keep still
+      const v = (u - i * 60) / 380;
+      if(v < 0 || v > 1) continue;
+      const rr = R * (0.3 + fxEaseOut(v) * 0.9) + (jr() - 0.5) * 3;
+      fxRing(L, at.x, at.y, rr, i ? 2 : 3, FX_ARCANE[(st + i) % 2 ? 2 : 3], 1 - v * v, 0.85);
+    }
+    if(u < 260){                                                       // crackling arcs out of it
+      const cv = 1 - u / 260;
+      arcs.forEach(([cx, cy, l], i)=>{ const len = R * l * (0.6 + 0.4 * Math.min(1, u / 80)); fxBolt(L, at.x, at.y, at.x + cx * len, at.y + cy * len * 0.85, seed + st * 13 + i, cv > 0.5 ? FX_ARCANE[1] : FX_ARCANE[3], 1, 2.5, 4); });
+    }
+  } });
+}
+FX_MOVES['Unstable Magic'] = {
+  dur:900, window:1600,
+  cast(ctx){
+    const id = ctx.fromId, a = ctx.from;
+    if(!id || !document.getElementById(id)) return;                    // off the field: only the bursts
+    fxAdd({ layer:fxUnderOf(id), dur:700, step(L, t){                    // a ring of runes beneath it, turning
+      const g = fxEaseOut(Math.min(1, t / 200)), cv = t < 480 ? 1 : (700 - t) / 220, rx = a.w * 0.5 * g;
+      fxRing(L, a.x, a.foot, rx + 1, 1, FX_ARCANE[5], cv, 0.32); fxRing(L, a.x, a.foot, rx, 2, FX_ARCANE[3], cv, 0.32); fxRing(L, a.x, a.foot, rx * 0.62, 1, FX_ARCANE[2], cv, 0.32);
+      for(let i = 0; i < 5; i++){ const an = i * 1.257 - t * 0.006; fxStar4(L, a.x + Math.cos(an) * rx * 0.8, a.foot + Math.sin(an) * rx * 0.8 * 0.32, 1.5 + (i % 2), FX_ARCANE[1], FX_ARCANE[0]); }
+    } });
+    fxAdd({ layer:fxOverOf(id), z:-1, dur:420, step(L, t){ fxGlow(L, id, FX_ARCANE[2], t < 200 ? 0.45 : 0.45 * (420 - t) / 220, FX_ARCANE[3]); } });
+    const src = { x:a.x, y:a.y - a.h * 0.2 };
+    ctx.to.forEach((b, n)=> fxAdd({ layer:'back', dur:200, step(L, t){ // its magic leaping to each, crackling
+      const st = (t / 40) | 0, cv = t < 110 ? 1 : (200 - t) / 90;
+      if(cv <= 0) return;
+      const pts = fxBolt(L, src.x, src.y, b.x, b.y, ctx.seed + n * 17 + st * 5, FX_ARCANE[3], 3, 7);
+      for(let i = 0; i + 1 < pts.length; i++) fxLine(L, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], cv > 0.5 ? FX_ARCANE[0] : FX_ARCANE[1], 1);
+    } }));
+  },
+  impact(ctx, at, k, side){
+    const layer = fxLayerFor(side), rnd = fxRand(ctx.seed + k * 31);
+    fxArcanePop(at, layer, 1.25, ctx.seed + k * 7, 0);
+    fxSpray(layer, fxGlitterParts(at.x, at.y, 9, { seed:ctx.seed + k * 11, vmin:60, vmax:150, life:650 }), 900);
+    fxSpray(layer, fxBurstParts(at.x, at.y, 10, { seed:ctx.seed + k * 13, vmin:90, vmax:200, ramp:[FX_ARCANE[0], FX_ARCANE[1], FX_ARCANE[2], FX_ARCANE[3]], shape:'streak', drag:3, lmin:160, lmax:320 }), 420);
+    for(let i = 0; i < 2; i++){ const an = rnd() * 6.28, d = at.w * (0.18 + rnd() * 0.16);   // and a smaller pop or two after
+      fxArcanePop({ x:at.x + Math.cos(an) * d, y:at.y + Math.sin(an) * d * 0.8 }, layer, 0.5, ctx.seed + k * 7 + i + 1, 150 + i * 120 + rnd() * 60); }
+  },
+};
