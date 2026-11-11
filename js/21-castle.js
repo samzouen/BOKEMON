@@ -2767,6 +2767,9 @@ const CA_LINES = {
 };
 function caTalk(who, line){
   if(ui.caTalk) return;
+  /* (4.29) a royal spoken to is met: in the index's Encountered (they are never fought, nor caught) */
+  const royal = { king:'fairy_king', kingOut:'fairy_king', dauphin:'fairy_dauphin', princess:'fairy_princess' }[who];
+  if(royal && typeof noteMet === 'function') noteMet(royal);
   if(typeof invTalk === 'function'){ const r = invTalk(who, line); if(r) return r; }   // (4.00) during the invasion, and after it (26-invasion.js)
   if(who === 'king' || who === 'commander' || who === 'advisor' || who === 'dauphin'){ if(!caState().met.court) return caCourtScene(); }
   if(who === 'princess') return caPrincessTalk();

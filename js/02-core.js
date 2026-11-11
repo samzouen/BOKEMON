@@ -91,7 +91,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.27';
+const GAME_VERSION = '4.30';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -239,6 +239,30 @@ function rampGain(node, to, ms, onDone){
 
 function sfxVolume(){ return (state?.settings?.sfxVolume ?? 0.55); }
 function musicVolume(){ return (state?.settings?.musicVolume ?? 0.10); }
+
+/* (4.28) VIBRATION — the designer: "do you think it would help to add vibration for exceptional moves such as ultra
+   moves, fairy king final unsealing, and when cyborg/nemesis rewinds time?" and "the catching buzz should happen on near
+   misses, near catches, and successful catches only". So a buzz for those moments alone, each still meaning something.
+   The browser's navigator.vibrate: Android phones and tablets; iPhones, iPads and computers have none, and nothing
+   happens there. Never when the device asks for less motion. `p`: one of BUZZ's, or a pattern (ms on, off, on…). */
+const BUZZ = {
+  ultra:     [70, 40, 70, 40, 280],                              // an Ultra unleashed, yours or theirs: two kicks, the surge
+  rewind:    [16, 44, 16, 44, 16, 44, 16, 44, 16, 44, 340],      // time turned back: the clock's ticks, then the pull
+  timestop:  [40, 30, 320],                                      // Nemesis stops time
+  unseal:    [110, 90, 150, 90, 560],                            // the King's last pulse: the seal gives way
+  catchNear: [30, 60, 45, 50, 70],                               // a catch's fakeout: the light swells round it
+  catchOff:  [140],                                              // …and a near miss throws the orbs off
+  caught:    [50, 60, 50, 60, 240],                              // caught
+};
+function buzz(p){
+  const pat = typeof p === 'string' ? BUZZ[p] : p;
+  if(!pat) return false;
+  try {
+    if(typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return false;
+    if(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    return !!navigator.vibrate(pat);
+  } catch(e){ return false; }
+}
 
 function unlockAudio(){
   ensureAudioCtx();

@@ -252,108 +252,191 @@ function renderStarterSelect(){
   });
 }
 
-/* ---------- SCREEN: home ---------- */
-/* Six squares, one per day of the cycle. Completed days grey out with a tick;
-   the day you're working on glows. */
+/* ---------- SCREEN: home ----------
+   (4.29) The designer: "I want to beautify and simplify the home screen at the start. There should be a continue button
+   to go straight back to the latest region's storyline progress. The dailies should be expandable to see the full
+   rewards per day, and the monster display is rather cluttered. Please remove the party UI and instead have a cycling
+   banner for team sprites that can be scrolled (without monster names and details) or pressed to go to the party page.
+   The continue button should be prominent. Region next, then index and monster list."
+   From the top: your team going by (you at its head; swipe along it, or tap it for the party page), Continue, Regions,
+   the Spelling Index and the Monster Index, and the day's phrases (open it for what each day of the cycle pays). */
+
+/* The daily: the day's phrases so far; opened, the six days of the cycle with everything each pays — the days done
+   ticked, the one being written glowing, the last golden. The cycle never resets for a missed day: it waits. */
 function dailyPanel(){
   const d = dailyState();
   const step = d.step % DAILY_CYCLE.length;          // the day being worked on
   const pct = Math.min(100, d.count/DAILY_TARGET*100);
   const allDone = d.done && step === 0;              // a full cycle just closed
-
+  const open = !!ui.dailyOpen;
+  const pays = (r, s)=> (r.tokens ? `<span class="dz-pay">${tokenIcon(s || 16)}<b>${r.tokens}</b></span>` : '') +
+                   (r.silver ? `<span class="dz-pay"><i>🥈</i><b>${r.silver}</b></span>` : '') +
+                   (r.gold ? `<span class="dz-pay"><i>🥇</i><b>${r.gold}</b></span>` : '');
   const square = (i)=>{
-    const r = DAILY_CYCLE[i];
-    /* `step` ALREADY points at tomorrow once today is claimed, so `i < step`
-       covers every completed day on its own. The extra `i === step` clause was
-       also ticking the day that hasn't been earned yet. */
+    /* `step` ALREADY points at tomorrow once today is claimed, so `i < step` covers every completed day on its own. */
     const done = allDone || i < step;
     const current = !done && i === step && !d.done;
-    const icon = r.gold   ? `<span class="dq-icon">🥇</span>`
-               : r.silver ? `<span class="dq-icon">🥈</span>`
-               : `<span class="dq-icon">${tokenIcon(26)}</span>`;
-    const amt = r.gold || r.silver || r.tokens;
     return `<div class="daily-sq ${done?'done':''} ${current?'current':''} ${i===5?'finale':''}">
       <div class="dq-day">Day ${i+1}</div>
-      ${icon}
-      <div class="dq-amt">${amt}</div>
+      <div class="dz-pays">${pays(DAILY_CYCLE[i])}</div>
       ${done ? `<svg class="dq-tick" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M4 12.5 L9.5 18 L20 6" fill="none" stroke="currentColor"
               stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}
     </div>`;
   };
-
-  return `<div class="daily-card">
-    <div class="daily-head">🗓️ Daily — ${DAILY_TARGET} phrases a day
-      <span>${d.done ? 'done today' : `${d.count} / ${DAILY_TARGET}`}</span></div>
-    <div class="trial-bar"><span style="width:${pct}%"></span></div>
-    <div class="daily-grid">${DAILY_CYCLE.map((_,i)=>square(i)).join('')}</div>
-    <div class="daily-sub">${d.done
-      ? 'Today is done. Tomorrow carries on from here — a missed day costs nothing.'
-      : `Write ${DAILY_TARGET - d.count} more phrase${DAILY_TARGET-d.count===1?'':'s'} to claim day ${step+1}.`}</div>
+  /* (4.29) folded, still the day's own: which day it is and all it pays, big (the designer: "the daily rewards can be a
+     little more prominent since you've compacted the UI") — once today is claimed (`step` is tomorrow then), tomorrow's */
+  const day = d.done ? 'Tomorrow' : `Day ${step + 1} of ${DAILY_CYCLE.length}`;
+  return `<div class="daily-card dz${open ? ' open' : ''}${d.done ? ' dz-done' : ''}" id="dailyCard">
+    <button class="dz-head" id="dailyToggle" aria-expanded="${open}" aria-controls="dailyBody">
+      <span class="dz-icon" aria-hidden="true">🗓️</span>
+      <span class="dz-main">
+        <span class="dz-top"><span class="dz-title">Daily</span><span class="dz-day">${day}</span><span class="dz-today">${pays(DAILY_CYCLE[step], 20)}</span></span>
+        <span class="dz-line"><span class="dz-bar" aria-hidden="true"><span style="width:${pct}%"></span></span><span class="dz-count">${d.done ? 'Done today' : `${d.count} / ${DAILY_TARGET}`}</span></span>
+      </span>
+      <svg class="dz-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5 L12 15.5 L18 9.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="dz-body" id="dailyBody"${open ? '' : ' hidden'}>
+      <div class="daily-grid">${DAILY_CYCLE.map((_,i)=>square(i)).join('')}</div>
+      <div class="daily-sub">${d.done
+        ? 'Today is done. Tomorrow carries on from here — a missed day costs nothing.'
+        : `${DAILY_TARGET} phrases a day. Write ${DAILY_TARGET - d.count} more to claim day ${step+1}.`}</div>
+    </div>
   </div>`;
+}
+
+/* CONTINUE — the furthest region you have reached, and in it the place you last walked (state.progress.lastPlace, kept
+   as you walk: walkNotePlace, 13-walkmap.js), stepped back into the way its own Explore would; else that region's page. */
+function latestRegion(){
+  const open = REGIONS.filter(r=>{ try { return r.unlocked(); } catch(e){ return false; } });
+  return (open[open.length - 1] || REGIONS[0]).id;
+}
+function deckTitle(k){
+  const d = typeof DECKS !== 'undefined' && DECKS[k];
+  return (d && d.title) || { weather_deck:'The Weather Deck', cabin_deck:'The Cabin Deck', laboratory_deck:'The Laboratory' }[k] || '';
+}
+/* how to step back into a place: as its region's Explore takes you there (a catacomb floor from where you left it, a
+   street through its zone, the jungle where Lucesco remembers, a castle place where you stood) — or null */
+function continueRoute(r, lp){
+  const k = lp.deck, d = DECKS[k], w = walkState();
+  const put = ()=>{ w.at = w.at || {}; w.at[k] = { x:lp.x, y:lp.y }; ui.walkFresh = false; };
+  if(r === 6){
+    if(typeof JG_KEY !== 'undefined' && k === JG_KEY) return (typeof jgPortalAwake === 'function' && jgPortalAwake()) ? ()=>{ if(!jgEnter('last')) go('region'); } : null;
+    if(typeof CA_PLACES !== 'undefined' && CA_PLACES[k] && typeof caGo === 'function') return ()=> caGo(k, [lp.x, lp.y]);
+    if(k === 'r6_rift' && typeof riftGo === 'function') return ()=> riftGo();
+    if(typeof PAST_KEY !== 'undefined' && k === PAST_KEY) return (typeof pastOpen === 'function' && pastOpen()) ? ()=>{ put(); ui.pastLion = null; goDeck(k); } : null;
+    return null;
+  }
+  if(r === 5 && typeof r5Zone === 'function'){
+    if(typeof r5IsCata === 'function' && r5IsCata(d)) return ()=> r5Resume();
+    /* a street, or a room off one: its street's own way in */
+    let street = k;
+    for(let n = 0; n < 4 && street && !['harbour', 'old_town', 'church', 'hilltop'].includes(street); n++) street = DECKS[street] && DECKS[street].backTo;
+    const zone = street === 'church' ? 'old_town' : street;
+    if(!zone || !r5Zone(zone)) return null;
+    return ()=>{ if(street === k) put(); ui.currentZone = r5Zone(zone); go('zone'); };
+  }
+  if(r === 4 && ['weather_deck', 'cabin_deck', 'laboratory_deck'].includes(k)) return ()=>{ put(); go(k); };
+  return null;
+}
+function continueInfo(){
+  const r = latestRegion(), meta = REGIONS.find(x=> x.id === r) || REGIONS[0];
+  const lp = state.progress.lastPlace && state.progress.lastPlace[r];
+  const route = lp && typeof DECKS !== 'undefined' && DECKS[lp.deck] ? continueRoute(r, lp) : null;
+  return { r, where:(route && deckTitle(lp.deck)) || meta.name, go:route || (()=> go('region')) };
+}
+function continueGame(){
+  const c = continueInfo();
+  if(state.progress.currentRegion !== c.r){ state.progress.currentRegion = c.r; saveProfile(); }
+  c.go();
+}
+
+/* Your team going by: you at its head, then each of them (a companion beside its leader), round and round when they are
+   more than the banner holds. Swipe (or drag) along it; tap it for the party page. No names: only who they are.
+   (4.30) Only the sprites, no box round them: you stand over the left of it, and they go by behind you (index.html). */
+function teamBannerHtml(){
+  const team = [];
+  state.party.forEach(m=>{
+    const c = (companionsUnlocked() && !isPassenger(m)) ? companionOf(m) : null;
+    pairOrder(m, c).forEach(x=> team.push([x, x === c]));
+  });
+  if(!team.length && !playerAvatar()) return '';
+  const S = Math.round(Math.max(78, Math.min(150, window.innerHeight * 0.17)));   // the room the page has: big where there is room
+  const mon = ([m, comp])=> `<span class="ht-mon${comp ? ' ht-comp' : ''}">${monPortrait(m.species, Math.round(S * (comp ? 0.8 : 1)), { view:'front', bare:true, stage:monStage(m), crowned:isCrowned(m) })}</span>`;
+  return `<div class="home-team${playerAvatar() ? '' : ' ht-alone'}" id="homeTeam" role="button" tabindex="0" aria-label="Your team: open the party page" style="--ht-s:${S}px">
+    ${playerAvatar() ? `<span class="ht-me">${avatarImg(playerAvatar(), Math.round(S * 1.08), { bare:true })}</span>` : ''}
+    <div class="ht-view" id="htView"><div class="ht-track" id="htTrack">${team.map(mon).join('')}</div></div>
+  </div>`;
+}
+function teamBannerWire(){
+  const box = $('#homeTeam'), view = $('#htView'), track = $('#htTrack');
+  if(!box || !view || !track) return;
+  let dragged = false;
+  const openParty = ()=>{ ui.walkBack = 'home'; go('party'); };
+  box.addEventListener('click', ()=>{ if(dragged){ dragged = false; return; } openParty(); });
+  box.addEventListener('keydown', e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openParty(); } });
+  let hold = 0;
+  const touched = ()=>{ hold = performance.now() + 2500; };
+  ['pointerdown', 'wheel', 'touchstart'].forEach(ev=> view.addEventListener(ev, touched, { passive:true }));
+  /* a mouse drags it along (a finger scrolls it as it is) */
+  let down = null;
+  view.addEventListener('pointerdown', e=>{ if(e.pointerType !== 'mouse') return; down = { x:e.clientX, s:view.scrollLeft, moved:false }; try { view.setPointerCapture(e.pointerId); } catch(err){} });
+  view.addEventListener('pointermove', e=>{ if(!down) return; const dx = e.clientX - down.x; if(Math.abs(dx) > 5) down.moved = true; view.scrollLeft = down.s - dx; touched(); });
+  view.addEventListener('pointerup', ()=>{ if(down && down.moved) dragged = true; down = null; });
+  requestAnimationFrame(()=>{
+    if(!track.isConnected) return;
+    const kids = track.children.length;
+    if(!kids || track.scrollWidth <= view.clientWidth + 4){ track.classList.add('ht-still'); return; }   // all of them in view: they stand
+    track.insertAdjacentHTML('beforeend', track.innerHTML);                                          // round and round
+    [...track.children].slice(kids).forEach(el=> el.setAttribute('aria-hidden', 'true'));
+    const period = track.children[kids].offsetLeft - track.children[0].offsetLeft;
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let pos = 0, last = 0;
+    const step = now=>{
+      if(!view.isConnected) return;
+      const dt = last ? Math.min(0.05, (now - last) / 1000) : 0; last = now;
+      if(!still && now >= hold){ pos += 20 * dt; if(pos >= period) pos -= period; view.scrollLeft = pos; }
+      else { pos = view.scrollLeft; if(pos >= period){ pos -= period; view.scrollLeft = pos; } }
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
 }
 
 function renderHome(){
   setScreenBg('home');
   playMusic('main_menu');
   $('#brandSub').textContent = state.name;
+  const cont = continueInfo();
   screenEl.innerHTML = `
     <div class="version-tag">v${GAME_VERSION}</div>
-    ${dailyPanel()}
-    ${playerAvatar() ? `<div class="home-hero">${avatarImg(playerAvatar(), 58)}<div>
-        <div class="home-hero-name">${escapeHtml(state.name)}</div>
-        <div class="home-hero-sub">Where to today?</div></div></div>`
-      : `<div class="screen-title">Home</div><div class="screen-sub">Where to, ${escapeHtml(state.name)}?</div>`}
     ${playerAvatar() ? '' : `<div class="avatar-nudge" id="avatarNudge">
         <span>👤 Choose a look for ${escapeHtml(state.name)}</span>
         <button class="btn btn-primary" id="pickAvatarBtn" style="width:auto;padding:9px 16px;font-size:13px;">Pick</button>
       </div>`}
-    ${renderPartyStrip()}
-    <div class="menu-grid" style="margin-top:16px;">
-      <div class="menu-card full" data-nav="regionList">
-        <span class="mc-emoji">🗺️</span>
-        <div class="mc-title">Regions</div>
-        <div class="mc-desc">Explore, battle, and catch monsters</div>
-      </div>
-      <div class="menu-card" data-nav="monsterIndex">
-        <span class="mc-emoji">📖</span>
-        <div class="mc-title">Monster Index</div>
-        <div class="mc-desc">Monsters you've met</div>
-      </div>
-      <div class="menu-card" data-nav="spellingIndex">
-        <span class="mc-emoji">🀄</span>
-        <div class="mc-title">Spelling Index</div>
-        <div class="mc-desc">Words in your pool</div>
-      </div>
+    ${teamBannerHtml()}
+    <button class="home-go" id="homeGo">
+      <span class="hg-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6.2v11.6L18.4 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
+      <span class="hg-words"><span class="hg-title">Continue</span><span class="hg-where">${escapeHtml(cont.where)}</span></span>
+    </button>
+    <div class="home-menu">
+      <button class="home-card wide" data-nav="regionSelect"><span class="hc-icon">🗺️</span><span class="hc-title">Regions</span></button>
+      <button class="home-card" data-nav="spellingIndex"><span class="hc-icon">🀄</span><span class="hc-title">Spelling Index</span></button>
+      <button class="home-card" data-nav="monsterIndex"><span class="hc-icon">📖</span><span class="hc-title">Monster Index</span></button>
     </div>
-
+    ${dailyPanel()}
   `;
   const pab = $('#pickAvatarBtn');
   if(pab) pab.addEventListener('click', ()=>go('avatarPick'));
-  screenEl.querySelector('[data-nav="regionList"]').addEventListener('click', ()=>go('regionSelect'));
-  screenEl.querySelector('[data-nav="monsterIndex"]').addEventListener('click', ()=>go('monsterIndex'));
-  screenEl.querySelector('[data-nav="spellingIndex"]').addEventListener('click', ()=>go('spellingIndex'));
-}
-
-function renderPartyStrip(){
-  if(!state.party.length) return '';
-  /* (3.52) each companion beside its leader, as it fights */
-  const team = [];
-  state.party.forEach(m=>{
-    const c = (companionsUnlocked() && !isPassenger(m)) ? companionOf(m) : null;
-    pairOrder(m, c).forEach(x=> team.push([x, x === c]));
+  $('#homeGo').addEventListener('click', ()=> continueGame());
+  screenEl.querySelectorAll('.home-card[data-nav]').forEach(c=> c.addEventListener('click', ()=> go(c.dataset.nav)));
+  const dt = $('#dailyToggle');
+  if(dt) dt.addEventListener('click', ()=>{
+    ui.dailyOpen = !ui.dailyOpen;
+    const card = $('#dailyCard'), body = $('#dailyBody');
+    card.classList.toggle('open', ui.dailyOpen); body.hidden = !ui.dailyOpen; dt.setAttribute('aria-expanded', String(ui.dailyOpen));
   });
-  return `<div class="party-strip">
-    ${team.map(([m, comp])=>`
-      <div class="party-chip">
-        ${monPortrait(m.species,34,{stage:monStage(m),crowned:isCrowned(m)})}
-        <div>
-          <div class="pc-name">${comp ? '🤝 ' : ''}${escapeHtml(displayName(m))}</div>
-          <div class="pc-lvl">Lv ${m.level}</div>
-        </div>
-      </div>
-    `).join('')}
-  </div>`;
+  teamBannerWire();
 }
 
 /* ---------- SCREEN: region list + region hub ---------- */
@@ -3366,32 +3449,81 @@ function moveToParty(uid, letGo){
 }
 
 /* ---------- SCREEN: monster index ---------- */
+/* (4.29) The designer: "Could we remove uncatchable monsters from the index please? Eggs, seeds, cyborg, ghost guardian,
+   mindcat and the tribal guardians and ancestors as well as royalty as well as the aliens should not be on the list,
+   though maybe they can be put as a separate tab, 'encountered'." The index is what can be caught — and so collected;
+   the rest, once met, are on a tab of their own. Not caught by anyone: an egg, a seed; the jungle's aliens, the royals,
+   the ancestors and the guardians (noCatch), the future's bosses, Cyborg, the Padrino's Ghost Guardian and Mindcat, and
+   the Water Dragon you only ever fight beside (its twin, the one you raise, is caught). */
+const INDEX_UNCATCHABLE = ['cyborg', 'ghost_guardian', 'mindcat', 'water_dragon'];
+function indexCatchable(sp){
+  const s = SPECIES[sp];
+  return !!s && !(s.noCatch || s.isEgg || s.isSeed || s.future || s.royal || s.alien || s.ancestor || s.guardianOf || INDEX_UNCATCHABLE.includes(sp));
+}
+/* (4.29) "when the guardians are peacefully talked to, they don't appear on the encountered list because they're not
+   battled": everyone met, fought or not — the encountered, what you have, and (from the save, for meetings before
+   4.29 too) the guardians whose villages you found and the court once you have met it */
+function indexMet(){
+  const met = new Set([...(state.encounteredSpecies || []), ...(state.caughtSpecies || [])]);
+  const r6s = state.progress && state.progress.region6;
+  if(r6s && typeof JG_TRIBES !== 'undefined'){
+    const q = r6s.quest || {}, j = r6s.jungle || {};
+    Object.keys(JG_TRIBES).forEach(k=>{ if((q.found && q.found[k]) || (j.met && j.met[k])) met.add(JG_TRIBES[k].guardian); });
+    if(r6s.castle && r6s.castle.met && r6s.castle.met.court){ met.add('fairy_king'); met.add('fairy_dauphin'); }
+  }
+  return met;
+}
+/* met, as it happens (a guardian over its wall, a royal spoken to) */
+function noteMet(sp){
+  if(!state || !SPECIES[sp]) return;
+  state.encounteredSpecies = state.encounteredSpecies || [];
+  if(!state.encounteredSpecies.includes(sp)){ state.encounteredSpecies.push(sp); saveProfile(); }
+}
 function renderMonsterIndex(){
   setScreenBg('home');
   $('#brandSub').textContent = 'Monster Index';
-  const seen = state.encounteredSpecies || [];
-  const all = Object.keys(SPECIES);
-  screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Home</button>
-    ${(state.progress.currentRegion === 4 && typeof expeditionBar === 'function') ? expeditionBar() : ''}
-    <div class="screen-title">Monster Index</div>
-    <div class="screen-sub">${seen.length} / ${all.length} monsters discovered</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      ${all.map(sp=>{
-        const known = seen.includes(sp);
-        const caught = state.caughtSpecies.includes(sp);
-        return `
+  indexCss();
+  const met = indexMet(), tab = ui.indexTab === 'met' ? 'met' : 'all';
+  const all = Object.keys(SPECIES).filter(indexCatchable);
+  const others = Object.keys(SPECIES).filter(sp=> !indexCatchable(sp) && met.has(sp));
+  const card = sp=>{
+    const known = met.has(sp), caught = state.caughtSpecies.includes(sp);
+    return `
         <div class="mon-index-card ${known?'':'unknown'}" ${known?`data-sp="${sp}"`:''}>
           ${known ? monPortrait(sp,48) : `<div class="mon-portrait" style="width:48px;height:48px;border-radius:11px;background:var(--paper-3);color:var(--ink-soft);font-size:22px;display:flex;align-items:center;justify-content:center;">?</div>`}
           <div style="margin-top:6px;font-family:'Baloo 2',cursive;font-weight:700;font-size:13px;">${known?SPECIES[sp].name:'???'}</div>
           ${known?`<div style="font-size:10px;">${typeBadges(sp)}</div>`:''}
-          ${caught?'<div class="caught-dot">✓ Caught</div>':''}
+          ${caught && tab === 'all'?'<div class="caught-dot">✓ Caught</div>':''}
         </div>`;
-      }).join('')}
+  };
+  const list = tab === 'met' ? others : all;
+  screenEl.innerHTML = `
+    <button class="back-link" id="backBtn">← Home</button>
+    ${(state.progress.currentRegion === 4 && typeof expeditionBar === 'function') ? expeditionBar() : ''}
+    <div class="screen-title">Monster Index</div>
+    <div class="idx-tabs" role="tablist">
+      <button class="idx-tab${tab === 'all' ? ' on' : ''}" data-tab="all" role="tab" aria-selected="${tab === 'all'}">Monsters</button>
+      <button class="idx-tab${tab === 'met' ? ' on' : ''}" data-tab="met" role="tab" aria-selected="${tab === 'met'}">Encountered</button>
     </div>
+    <div class="screen-sub">${tab === 'met' ? `${others.length} met who cannot be caught` : `${all.filter(sp=> met.has(sp)).length} / ${all.length} monsters discovered`}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">${list.map(card).join('')}</div>
   `;
   $('#backBtn').addEventListener('click', ()=>go('home'));
+  screenEl.querySelectorAll('.idx-tab').forEach(b=> b.addEventListener('click', ()=>{ ui.indexTab = b.dataset.tab; renderMonsterIndex(); }));
   screenEl.querySelectorAll('[data-sp]').forEach(c=> c.addEventListener('click', ()=>{ ui.indexSpecies=c.dataset.sp; go('indexDetail'); }));
+}
+function indexCss(){
+  if(document.getElementById('indexCss')) return;
+  const st = document.createElement('style');
+  st.id = 'indexCss';
+  st.textContent = `
+  .idx-tabs{ display:flex; gap:6px; padding:4px; margin:10px 0 12px; background:var(--paper-3); border-radius:14px; }
+  .idx-tab{ flex:1; border:0; border-radius:11px; padding:9px 8px; background:transparent; color:var(--ink-soft); cursor:pointer;
+    font-family:'Baloo 2', cursive; font-weight:700; font-size:15px; }
+  .idx-tab.on{ background:var(--paper); color:var(--ink); box-shadow:0 2px 0 var(--paper-2), 0 1px 4px rgba(35,32,25,.12); }
+  .idx-tab:focus-visible{ outline:2px solid var(--jade); outline-offset:2px; }
+  `;
+  document.head.appendChild(st);
 }
 function renderIndexDetail(){
   const sp = ui.indexSpecies;

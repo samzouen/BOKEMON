@@ -5300,7 +5300,9 @@ function runPreHits(done){
        (4.22) your Fiery Enchantment's: its circle of runes beneath each of them, flames bursting up through them */
     const art = burnArtOf(p), hold = (art && typeof fxHoldMs === 'function') ? fxHoldMs(art) : 0;
     if(hold){
-      playEffect(art, { type:'Fire', from:(best && playerField().includes(best.h)) ? pid('playerBob', best.h) : pid('playerBob'), targets:hits.map(h=> 'enemy-' + h.idx) });
+      /* (4.29) an Aftershock, a Sacred Flame: from the one that laid it, while it is on the field */
+      const owner = p.owner ? playerField().find(m=> m.uid === p.owner) : null;
+      playEffect(art, { type:p.aftershock ? 'Ground' : 'Fire', from:(best && playerField().includes(best.h)) ? pid('playerBob', best.h) : owner ? pid('playerBob', owner) : pid('playerBob'), targets:hits.map(h=> 'enemy-' + h.idx) });
       return setTimeout(land, hold);
     }
     land();
@@ -5308,8 +5310,10 @@ function runPreHits(done){
   step();
 }
 /* (4.22) An upkeep burn's drawn art (30-fx-moves.js): an Overheat ✦'s, a Fiery Enchantment's (the designer: "fiery
-   enchantment and unstable magic lack animations when damaging enemies"). The rest have none. */
-function burnArtOf(p){ return !p ? null : p.src === 'overheat' ? 'Overheat Burn' : p.src === 'enchant' ? 'Enchant Burn' : null; }
+   enchantment and unstable magic lack animations when damaging enemies") — (4.29) and an Aftershock's ("Aftershock needs
+   an animation too please"), and a Sacred Flame's. */
+function burnArtOf(p){ return !p ? null : p.src === 'overheat' ? 'Overheat Burn' : p.src === 'enchant' ? 'Enchant Burn'
+  : p.aftershock ? 'Aftershock Quake' : p.sacredFlame ? 'Sacred Flame Burn' : null; }
 
 /* ============================================================
    QUICK ATTACKS (2.73)
@@ -8997,6 +9001,18 @@ function moveGridHtml(m, moves, btnOf){
   const before = i=> ps.filter(p=> i < 0 ? p.at >= moves.length : p.at === i).map(p=> passiveButtonHtml(m, p.j)).join('');
   return moves.map((mv, i)=> before(i) + btnOf(mv, i)).join('') + before(-1);
 }
+/* (4.29) The designer: "because the ultra button disappears for monsters who don't have it, the buttons still shift. Can
+   we have a dedicated empty space and no movement of all buttons please?" In a fight every kit fills the same five
+   places — four (its moves, and its passives in their slots) and the Ultra's, the width of the row below them — and a
+   place it has nothing for is kept, empty (.bt-slot-empty, index.html), so no button ever moves. (Every monster's kit
+   is four; a borrowed story monster's one button, or a Cataclysm charge's, is made up to four the same way.) */
+const BT_PLACES = 4;
+function btGridHtml(m, moves, btnOf){
+  const html = moveGridHtml(m, moves, btnOf), ultra = moves.some(mv=> mv.slot === 'UltraStone');
+  const n = (html.match(/class="move-btn/g) || []).length - (ultra ? 1 : 0);
+  const empty = cls=> `<div class="move-btn locked bt-slot-empty ${cls}" aria-hidden="true"><div class="mv-name">&nbsp;</div><div class="mv-meta">&nbsp;</div></div>`;
+  return html + empty('bt-slot-half').repeat(Math.max(0, BT_PLACES - n)) + (ultra ? '' : empty('bt-slot-ultra'));
+}
 /* Its card: the passive's name, what it does, and — under their ✦ Curse —
    that it is quiet for now. */
 function openPassiveTip(btn, m, j){
@@ -10023,7 +10039,7 @@ function renderBattle(){
     ${pairLineHtml(mon, comp, ctlMon, canAct)}
     <div class="bt-moves">
       <div class="bt-grid">
-        ${moveGridHtml(ctlMon, moves, (mv,i)=>{
+        ${btGridHtml(ctlMon, moves, (mv,i)=>{
           /* A Haunting Aria already singing shuts its own button, so ten words
              can never be spent on nothing. */
           const ok = mv.available && canAct && !(mv.aria && ariaActive()) && !(mv.iceBarrier && getPStatus(0,'iceBarrier')) && !(mv.stargaze && getPStatus(0, 'stargaze'));   // (3.16) nor an Ice Barrier that stands; (3.87) nor a Stargazer

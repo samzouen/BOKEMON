@@ -792,6 +792,7 @@ async function questGuardian(k, bar){
   try {
     await questGuardLeap(k, bar);
     if(ui.screen !== JG_KEY) return;
+    if(typeof noteMet === 'function') noteMet(JG_TRIBES[k].guardian);   // (4.29) met, fought or not: in the index's Encountered
     const G = QUEST_GUARD[k];
     await warLines([[['guardian', k], `${questSaid('guard-' + k) ? '' : `A tall figure in a great ${JG_TRIBES[k].short.toLowerCase()} mask leaps over the wall of thorns, and lands right in front of you. You stumble back a step.<br><br>`}${G.ask}`]]);
     questState().said['guard-' + k] = true;

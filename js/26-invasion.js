@@ -445,12 +445,18 @@ if(typeof caToJungle === 'function'){
     return _invToJungle.apply(this, arguments);
   };
 }
-/* the battle music while the castle is invaded (the designer is finding the castle's and the palace's own) */
-['r6_castle', 'r6_palace', 'r6_tower'].forEach(key=>{
+/* the battle music while the castle is invaded (the designer is finding the castle's and the palace's own) — (4.29) "have
+   the battle music play during the invasion of villages and the castle even when in the overworld to give a sense of
+   tension": on its walls and their stairs too (not in the tavern by the fire, nor the record store), and as you walk
+   (musicLive: walkMusicSync, 13-walkmap.js), so it comes the moment the castle is attacked and goes when it is saved */
+['r6_castle', 'r6_palace', 'r6_tower']
+  .concat(typeof CA_WALLS !== 'undefined' ? CA_WALLS.map(k=> 'r6_wall_' + k) : [])
+  .concat(typeof CA_CORNERS !== 'undefined' ? CA_CORNERS.map(c=> 'r6_ramp_' + c) : []).forEach(key=>{
   const d = typeof DECKS !== 'undefined' && DECKS[key];
   if(!d) return;
   const base = d.music;
   Object.defineProperty(d, 'music', { configurable:true, enumerable:true, get(){ return invActive() ? 'battle_region6' : base; } });
+  d.musicLive = true;
 });
 
 /* ---------- a step: the princess at your heels, a band that sees you, her door, the hall ---------- */

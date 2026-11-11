@@ -674,10 +674,12 @@ function renderWalkDeck(id){
     if(cuainAboard()){ w.ghostAt = w.ghostAt || {}; w.ghostAt[id] = { x:d.spawn[0], y:d.spawn[1] }; }
   }
   ui.walkFresh = false;
+  walkNotePlace(id);                     // (4.29) for Continue
   const W = d.rows[0].length, H = d.rows.length;
 
   setScreenBg(d.bg || 'sea');
   playMusicChain([d.music, 'region' + (d.region || 4), 'region']);
+  ui.walkMusic = d.music;                // (4.29) what it asked for, for walkMusicSync
   $('#brandSub').textContent = d.title || { weather_deck:'Weather Deck', cabin_deck:'Cabin Deck',
                                  laboratory_deck:'Laboratory' }[id];
 
@@ -1248,6 +1250,28 @@ function walkFaceEachOther(){
   walkFaceToward(q.x + 0.5);
   walkGhostFaceToward(p.x + 0.5);
 }
+/* (4.29) Where you last walked in each region (state.progress.lastPlace: { region: { deck, x, y } }), kept with the
+   save — what the home page's Continue takes you back to (continueInfo, 07-screens.js). A new place is saved a moment
+   after you arrive; a step only notes it, for the next save to keep. */
+let _placeSave = null;
+function walkNotePlace(id){
+  const d = DECKS[id], w = walkState(), p = w.at && w.at[id];
+  if(!d || !p || typeof state === 'undefined' || !state || !state.progress) return;
+  const r = d.region || 4, lp = state.progress.lastPlace || (state.progress.lastPlace = {}), was = lp[r];
+  lp[r] = { deck:id, x:p.x, y:p.y };
+  if(!was || was.deck !== id){ clearTimeout(_placeSave); _placeSave = setTimeout(()=>{ _placeSave = null; if(typeof saveProfile === 'function') saveProfile(); }, 2500); }
+}
+/* (4.29) A place whose music can change as you walk in it (`musicLive`): the battle music while a village or the castle
+   is under attack (the designer: "have the battle music play during the invasion of villages and the castle even when in
+   the overworld to give a sense of tension"). Its `music` asked again after each step, and played when it is not what it
+   asked for last (never fighting your records over the same place's tune). */
+function walkMusicSync(d){
+  if(!d || !d.musicLive) return;
+  const want = d.music;
+  if(!want || want === ui.walkMusic) return;
+  ui.walkMusic = want;
+  playMusicChain([want, 'region' + (d.region || 4), 'region']);
+}
 const WALK_MIN = 150, WALK_HOLD = 110, WALK_REP = 200;   // (3.96) a step every 0.2 s while held: as long as a step takes to draw (.walk-world, .walk-ent)
 function walkMove(dir){
   const w = walkState(); if(w.busy) return;
@@ -1272,6 +1296,7 @@ function walkMove(dir){
       w.ghostAt[w.deck] = { x:p.x, y:p.y };
     }
     p.x=nx; p.y=ny;
+    walkNotePlace(w.deck);            // (4.29) where you are, for Continue
     if(checkPrize()){                 // stepping onto one ends the move
       releaseKeys();
       refreshWalk();                  // draw the step BEFORE the window opens
@@ -1279,6 +1304,7 @@ function walkMove(dir){
     }
     refreshWalk();
     if(d.onStep && d.onStep(p, d)) releaseKeys();   // a guard saw you, a ghost found you
+    walkMusicSync(d);                               // (4.29) into a village under attack, or the castle attacked
     return;
   }
   else {

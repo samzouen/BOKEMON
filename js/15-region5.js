@@ -7120,6 +7120,7 @@ function r5BeamGone(id){ const el = document.getElementById('rb-' + id); if(el){
 async function r5RewindRoom(ids){
   const cyb = document.getElementById('sa-cyborg'), r = cyb ? cyb.getBoundingClientRect() : null;
   playSfx('rewind');
+  if(typeof buzz === 'function') buzz('rewind');                        // (4.28) time turned back: felt too
   const sphere = rwSphere(r ? r.left + r.width / 2 : window.innerWidth / 2, r ? r.top + r.height * 0.45 : window.innerHeight / 2);
   const grown = sphere.grow();
   await sceneWait(RW.grow * 0.7);
@@ -7210,6 +7211,7 @@ async function r5VaultScene(){
   r5Beam('wish', P.cyborg.x + P.cyborg.s / 2, P.cyborg.y + 0.7, P.box.x + 0.4, P.box.y + 0.4);
   sceneGlow('wish', P.box.x + 0.4, P.box.y + 0.4, 1.5, 16);
   playSfx('rewind');
+  if(typeof buzz === 'function') buzz('rewind');                        // (4.28)
   sceneShake(2600, t=> 0.15 * Math.sin(Math.PI * Math.min(1, t / 2600)));
   await say(`Cyborg's clock spins faster and faster. The whole room shakes. Light pours out of the little box on the table — brighter, and brighter—`);
   await sceneFlash(450, 450, ()=>{ r5VaultBody(); r5BeamGone('wish'); const g = document.getElementById('sg-wish'); if(g) g.remove(); }, 900);
@@ -7593,6 +7595,7 @@ async function r5ClimaxBreak(done){
      holds him there, glowing purple, while you cry out */
   r5BattleBeam('enemyBob-0', 'playerBob', 'rewind-beam');
   playSfx('rewind');
+  if(typeof buzz === 'function') buzz('rewind');                        // (4.28)
   await sceneWait(450);
   let ab = document.getElementById('allyBob');
   if(ab) ab.classList.add('r5-leap');
@@ -8862,6 +8865,7 @@ async function r5TimeStop(on, cx, cy){
   const T = WALK_T;
   if(on){
     playSfx('timestop');
+    if(typeof buzz === 'function') buzz('timestop');                    // (4.28) Nemesis stops time: felt too
     const W = world.offsetWidth || 11 * T, H = world.offsetHeight || 11 * T;
     const X = cx * T, Y = cy * T, R = Math.hypot(Math.max(X, W - X), Math.max(Y, H - Y)) + T;
     const s = document.createElement('div');
@@ -8900,6 +8904,7 @@ async function r5NemesisGo(){
     el.style.transform = `scale(.12) rotate(${k === 1 ? -200 : 220}deg)`; el.style.opacity = '0';
   });
   playSfx('rewind');
+  if(typeof buzz === 'function') buzz('rewind');                        // (4.28) into the tear, time pulled after it
   await sceneWait(1950);
   ['nemesis', 'nemA', 'nemW'].forEach(sceneActorGone);
   r5TearSpirit(false);
@@ -12042,8 +12047,9 @@ function renderChallengeR5(){
   const allFloors = upper ? [...R5_FLOORS, ...R5_FLOORS_T2] : R5_FLOORS;
   const floorsReached = allFloors.filter(f=> r.reached.includes(f)).length;
   const roomsFound = R5_ALL_ROOMS.filter(f=> r.reached.includes(f)).length;
-  const card = (sprite, icon, title, done, desc)=> `
-    <div class="challenge-card" style="cursor:default;">
+  /* (4.30) `id`: a card you can tap, to go to them (Figlio's) */
+  const card = (sprite, icon, title, done, desc, id)=> `
+    <div class="challenge-card"${id ? ` id="${id}" role="button" tabindex="0"` : ' style="cursor:default;"'}>
       ${sprite.startsWith('<') ? `<span style="width:54px;height:54px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;">${sprite}</span>`
                                : npcPortrait(sprite, icon, 54, 'transparent')}
       <div style="flex:1;">
@@ -12076,8 +12082,8 @@ function renderChallengeR5(){
       : r.sottoBeaten ? (r.reached.includes('cata_watch') ? 'On the Watch, under the villa, in his long hall — with a key to the gate down.' : 'Gone down under the villa, to keep watch.')
       : r.capoGrey ? 'Nobody saw a thing.' : (r.reached.includes('cata_pit') ? 'Waiting in the middle of his ring.' : 'Somewhere under the Old Town.')) : ''}
     ${r.figlioMet ? card('figlio', '🎙️', 'Figlio', concertState().figlioDay === today(),
-      (concertState().figlioDay === today() ? 'Beaten today. Back at the opera house tomorrow. ' : 'At the opera house in the Old Town. ') +
-      `Once a day: his team is level <b>${r5FiglioSpan()}</b> · win for <b>+3 Silver Medals</b>.`) : ''}
+      (concertState().figlioDay === today() ? 'Beaten today. Back at the opera house tomorrow. ' : 'Outside the opera house in the Old Town: <b>tap to go to him</b>. ') +
+      `Once a day: his team is level <b>${r5FiglioSpan()}</b> · win for <b>+3 Silver Medals</b>.`, concertState().figlioDay === today() ? null : 'cFiglio') : ''}
     ${r.hill ? card('psychic_master', '🔮', 'Psychic Master', r5TowerBeaten(12),
       r5TowerBeaten(12) ? 'The leader of the exorcists. Without her, her order cannot hold the dead for long.' : 'The leader of the exorcists, on floor 12 of the tower in the estate\'s east garden.') : ''}
     ${r.hill ? card('ghost_master', '👻', 'Ghost Master', r5TowerBeaten(13),
@@ -12101,6 +12107,25 @@ function renderChallengeR5(){
   $('#returnBtn').addEventListener('click', ()=> go('region'));
   const tc = $('#cTear');
   if(tc) tc.addEventListener('click', ()=>{ ui.tearBack = null; go('tear'); });          // straight there (2.94)
+  const fc = $('#cFiglio');                                                               // (4.30) straight to him
+  if(fc){
+    fc.addEventListener('click', ()=> r5ToFiglio());
+    fc.addEventListener('keydown', e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); r5ToFiglio(); } });
+  }
+}
+/* (4.30) The designer: "Please also make figlio challengeable from the region 5 challenge page which should port the
+   player straight to his location outside the opera house": in front of him, by the opera house's right-hand door, facing
+   him — in uniform (put on for you, as the way up the hill does), unless the dead are loose and nobody is looking. */
+function r5FiglioSpot(){
+  const f = ((DECKS.old_town || {}).things || []).find(t=> t.sprite === 'figlio');
+  return f ? [f.x, f.y + 1] : [21, 8];
+}
+function r5ToFiglio(){
+  const r = r5();
+  if(!r.figlioMet || !r.disguise || !DECKS.old_town) return;
+  if(!r.disguised && !r.holdBroken){ r.disguised = true; saveProfile(); toast('🎭 You put your uniform on.'); }
+  goFloor('old_town', null, r5FiglioSpot());
+  walkState().face = 'u';
 }
 
 /* After a fight in the dark: back to the spot, not the region screen. */

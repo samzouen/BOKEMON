@@ -18,8 +18,13 @@
    Every throw costs four words (one hanzi, one word: countWords); a phrase that runs past four carries the rest into
    the next throw. Out of 1000 a throw catches it `win` times (CATCH.odds); the `pity`-th throw always does. A word
    missed loses the ball's gathered words, and the monster may flee (`flee` of 1000). Near the line, the throw fakes:
-   a win in the first 35% of its band above the line builds, falls back, builds again; a miss within 20% of the band
-   below the line builds, falls back, and is thrown off.
+   a win in the first 35% of its band above the line builds, falls back, builds again; a miss within 35% of the band
+   below the line builds, falls back, and is thrown off (4.28, from 20%: "let's make near misses 35% to increase the
+   suspense too").
+   (4.28) Felt as well as seen (buzz, 02-core.js): "the catching buzz should happen on near misses, near catches, and
+   successful catches only" — the fakeout's swell, the catch itself, a near miss thrown off; a plain miss is quiet. And
+   "the X is ok but please include a confirmation message so it doesn't get accidentally dismissed": ✕ asks first
+   (czAskLetGo), the word's clock held meanwhile.
    ============================================================ */
 const CATCH = {
   words:4,
@@ -29,7 +34,7 @@ const CATCH = {
     starter:  { win:365, pity:10, flee:500 },   // 5 (a special one too: the Mouse)
     wild:     { win:530, pity:6,  flee:250 },   // 3
   },
-  near:{ win:0.35, miss:0.20 },
+  near:{ win:0.35, miss:0.35 },
   orbs:12,
 };
 function catchTier(species){
@@ -117,7 +122,7 @@ function catchQuizHtml(q){
 }
 function catchOnRender(){
   const b = document.getElementById('czLetGo');
-  if(b) b.addEventListener('click', ()=> catchLetGo());
+  if(b) b.addEventListener('click', ()=> czAskLetGo());
   /* back from a throw: the spelling fades in over the new ball */
   if(document.body.classList.contains('cz-throwing')) requestAnimationFrame(()=> requestAnimationFrame(()=> document.body.classList.remove('cz-throwing')));
 }
@@ -147,6 +152,7 @@ function catchOnDone(){
 async function catchThrow(){
   const C = ui.catching;
   if(!C) return;
+  czPrime();                                                          // (4.29) in the tap: its jingle made ready
   C.phase = 'throw';
   ui.screen = 'catch';                                               // nothing redraws the spelling under it
   C.throws++;
@@ -160,13 +166,45 @@ async function catchThrow(){
   catchSpell();
 }
 function catchGone(){ catchTeardown(); afterCatch(); }
+/* (4.28) ✕ — the designer: "the X is ok but please include a confirmation message so it doesn't get accidentally
+   dismissed". Asked first, over everything, the word's clock held (q.paused) while it asks; off the panel, or Escape,
+   is Keep trying. Fled already, or mid-throw: nothing to ask. */
+function czAskLetGo(){
+  const C = ui.catching;
+  if(!C || C.leaving || document.getElementById('czAsk')) return;
+  if(C.phase !== 'spell') return C.phase === 'gone' ? catchLetGo() : undefined;
+  const q = ui.quiz, held = q && q.config && q.config.catchUi && !q._ended ? q : null;
+  if(held) held.paused = true;
+  const ask = document.createElement('div');
+  ask.id = 'czAsk'; ask.className = 'cz-ask';
+  ask.innerHTML = `
+    <div class="cz-ask-box" role="dialog" aria-modal="true" aria-labelledby="czAskMsg">
+      <div class="cz-msg cz-ask-msg" id="czAskMsg">Let ${escapeHtml(SPECIES[C.enemy.species].name)} go?</div>
+      <div class="cz-acts">
+        <button class="btn cz-btn" id="czAskGo">Let go</button>
+        <button class="btn cz-btn cz-keep" id="czAskStay">Keep trying</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ask);
+  const key = e=>{ if(e.key === 'Escape'){ e.preventDefault(); close(); } };
+  const close = ()=>{ ask.remove(); document.removeEventListener('keydown', key, true); if(held) held.paused = false; };
+  ask._close = close;
+  document.addEventListener('keydown', key, true);
+  ask.addEventListener('click', e=>{ if(e.target === ask) close(); });
+  ask.querySelector('#czAskStay').addEventListener('click', close);
+  ask.querySelector('#czAskGo').addEventListener('click', ()=>{ close(); catchLetGo(); });
+  try { ask.querySelector('#czAskStay').focus({ preventScroll:true }); } catch(e){}
+}
+function czAskClose(){ const a = document.getElementById('czAsk'); if(a){ if(a._close) a._close(); else a.remove(); } }
 async function catchLetGo(){
   const C = ui.catching;
   if(!C || C.leaving) return;
   C.leaving = true;
+  czAskClose();
   czEndQuiz();
   document.body.classList.add('cz-throwing');
-  await czFlee(0.7);
+  if(C.phase === 'gone') await czWait(300);                          // (4.28) fled already: nothing left to fly off
+  else await czFlee(0.7);
   if(ui.catching === C) catchGone();
 }
 /* a catch's spelling still going (its clock running) when the catch is over: it ends here, never to come back over
@@ -176,6 +214,7 @@ function czEndQuiz(){
   if(q && q.config && q.config.catchUi && !q._ended){ q._ended = true; q.locked = true; q.resolved = true; stopTimer(); }
 }
 function catchTeardown(){
+  czAskClose();
   czEndQuiz();
   if(CZ){ cancelAnimationFrame(CZ.raf); CZ = null; }
   ['czStage', 'czFx'].forEach(id=>{ const el = document.getElementById(id); if(el) el.remove(); });
@@ -256,10 +295,13 @@ async function catchKeep(enemy, nick){
   return mon;
 }
 /* the victory page's buttons: the monster's own little picture, and Catch (the designer: "for catching buttons, please
-   now also show a small version of the monster's sprite to make it clear which is being caught") */
+   now also show a small version of the monster's sprite to make it clear which is being caught") — (4.29) "Please also
+   add back the names of monsters to the catch button in addition to the sprite! Can the sprite be a little bigger? Maybe
+   33% bigger?": Catch and its name, its picture 69px (52 until 4.29) */
 function catchButtonHtml(e, i, single){
-  return `<button class="btn btn-primary cz-catch-btn${single ? '' : ' catch-opt'}"${single ? ' id="catchBtn"' : ` data-i="${i}"`} aria-label="Catch the ${escapeHtml(SPECIES[e.species].name)}">` +
-    `<span class="cz-catch-pic">${monPortrait(e.species, 52, { view:'front', bare:true, stage:e.stage || 0 })}</span><span>Catch</span></button>`;
+  const nm = escapeHtml(SPECIES[e.species].name);
+  return `<button class="btn btn-primary cz-catch-btn${single ? '' : ' catch-opt'}"${single ? ' id="catchBtn"' : ` data-i="${i}"`} aria-label="Catch the ${nm}">` +
+    `<span class="cz-catch-pic">${monPortrait(e.species, 69, { view:'front', bare:true, stage:e.stage || 0 })}</span><span>Catch ${nm}</span></button>`;
 }
 
 /* ============================================================
@@ -274,7 +316,7 @@ const czEase = { io:t=> t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2, o
 const czLerp = (a, b, t)=> a + (b - a) * t;
 const czClamp = t=> Math.max(0, Math.min(1, t));
 function czReduced(){ return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; }
-function czBuzz(p){ try { if(!czReduced() && navigator.vibrate) navigator.vibrate(p); } catch(e){} }
+function czBuzz(p){ return typeof buzz === 'function' ? buzz(p) : false; }   // (4.28) the game's own (02-core.js)
 
 function czTop(H){ return Math.round(Math.max(128, Math.min(236, (H || window.innerHeight) * 0.25))); }
 function czStage(enemy){
@@ -404,13 +446,18 @@ function czParts(g, dt, t){
     const p = Z.parts[i];
     p.life += dt;
     if(p.k === 'en'){
-      /* along a curve into the ball, quicker as it goes */
-      const u = czClamp(p.life / p.max), e = czEase.in(u) * 0.75 + u * 0.25, tx = B.cx, ty = B.cy;
-      const x = (1 - e) * (1 - e) * p.sx + 2 * (1 - e) * e * p.qx + e * e * tx, y = (1 - e) * (1 - e) * p.sy + 2 * (1 - e) * e * p.qy + e * e * ty;
-      p.tr.push([x, y]); if(p.tr.length > 7) p.tr.shift();
-      p.tr.forEach(([qx, qy], j)=> czOrb(g, qx, qy, p.s * (0.35 + 0.65 * j / p.tr.length), p.hue + t * 60, 0.5, 0.18 + 0.5 * j / p.tr.length));
-      czOrb(g, x, y, p.s * 1.25, p.hue + t * 60, 0.35, 1);
-      if(u >= 1){ Z.parts.splice(i, 1); B.level += 1; B.pulse = 1; if(p.done) p.done(); }
+      /* (4.29) faded in all round the ball, spiralling into it, quicker and smaller as it goes */
+      if(p.life < 0) continue;                                          // (its moment's wait)
+      const u = czClamp(p.life / p.max), e = czEase.in(u) * 0.7 + u * 0.3;
+      const r = p.r0 * (1 - e), an = p.a + p.turn * e, x = B.cx + Math.cos(an) * r, y = B.cy + Math.sin(an) * r;
+      const vis = czClamp(u / 0.3) * (u > 0.85 ? 1 - (u - 0.85) / 0.15 * 0.6 : 1);
+      p.tr.push([x, y]); if(p.tr.length > 8) p.tr.shift();
+      p.tr.forEach(([qx, qy], j)=> czOrb(g, qx, qy, p.s * (0.3 + 0.6 * j / p.tr.length) * (1 - 0.45 * u), p.hue + t * 60, 0.5, vis * (0.14 + 0.46 * j / p.tr.length)));
+      czOrb(g, x, y, p.s * (1.3 - 0.6 * u), p.hue + t * 60, 0.35, vis);
+      if(u >= 1){
+        Z.parts.splice(i, 1); B.level += p.share; B.pulse = 1;
+        if(p.g && --p.g.left === 0) B.level = Math.round(B.level);    // (its words, whole, once they are all in)
+      }
       continue;
     }
     if(p.life >= p.max){ Z.parts.splice(i, 1); continue; }
@@ -444,21 +491,22 @@ function czTween(ms, f){
 const czWait = ms=> czTween(ms, ()=>{});
 
 /* ---------- while spelling ---------- */
-/* a phrase spelt: a ball of light for each of its words, in from the dark to the ball */
+/* a phrase spelt: its words' light gathered into the ball. (4.29) The designer: "Can we have the orbs fade in from all
+   directions into the central circle rather than 2 random orbs coming in? Either have them come straight in or spiral
+   in." A ring of orbs (CZ_GATHER a word, the spectrum round it) fades in all round the ball and spirals into it, each
+   phrase the other way round; the ball grows by its words as they come in. */
+const CZ_GATHER = { perWord:6, most:24, turn:0.62 };                  // orbs a word, at most; how far round they wind (×π)
 function czAbsorb(n){
   const Z = CZ;
-  if(!Z) return;
-  const B = Z.ball;
-  for(let i = 0; i < n; i++){
-    setTimeout(()=>{
-      if(CZ !== Z) return;
-      Z.launched = (Z.launched || 0) + 1;
-      const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.25, far = Math.hypot(Z.W, Z.H) * 0.55;
-      const sx = B.cx + Math.cos(a) * far, sy = B.cy + Math.sin(a) * far;
-      const side = Math.random() < 0.5 ? -1 : 1, mx = (sx + B.cx) / 2, my = (sy + B.cy) / 2;
-      const nx = -(B.cy - sy) / far, ny = (B.cx - sx) / far;
-      Z.parts.push({ k:'en', sx, sy, qx:mx + nx * far * 0.28 * side, qy:my + ny * far * 0.28 * side, life:0, max:(0.72 + Math.random() * 0.2) * CZ_SPEED.k, s:13, hue:Math.random() * 360, tr:[] });
-    }, i * 150 * CZ_SPEED.k);
+  if(!Z || !(n > 0)) return;
+  const B = Z.ball, K = Math.max(CZ_GATHER.perWord, Math.min(CZ_GATHER.most, CZ_GATHER.perWord * n)), share = n / K;
+  const ballR = B.base * 0.49 * (1 + 0.04 * Math.min(6, B.shown)), R0 = ballR * 1.1 + Math.min(Z.W, Z.H) * 0.32;
+  const a0 = Math.random() * Math.PI * 2, dir = Z.spin = -(Z.spin || -1), g = { left:K };
+  for(let i = 0; i < K; i++){
+    Z.launched = (Z.launched || 0) + 1;
+    Z.parts.push({ k:'en', a:a0 + i * (Math.PI * 2 / K) + (Math.random() - 0.5) * 0.16, r0:R0 * (0.9 + Math.random() * 0.2),
+      turn:dir * (CZ_GATHER.turn + Math.random() * 0.18) * Math.PI, life:-(i % 3) * 0.05 * CZ_SPEED.k, max:(1.0 + Math.random() * 0.16) * CZ_SPEED.k,
+      s:12, hue:i / K * 360, tr:[], share, g });
   }
 }
 /* a word missed: the ball breaks up into dust and is gone */
@@ -498,6 +546,44 @@ async function czFlee(soft){
   await czTween(800 * k, t=>{ const e = czEase.in(t); M.lift = -(M.y + M.px * 1.2) * e; M.scale = 1 - 0.3 * e; M.alpha = t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35; });
   if(CZ === Z) M.alpha = 0;
 }
+/* (4.29) The designer: "Can we have the fanfare for a successful catch back please?" Its jingle (catch_success, as the
+   caught page always had) plays as the light fills the screen — seconds after the last tap (Catch!). A tablet that has
+   let its sound go quiet since then (an iPad does, after a spoken word, a lock, another app) will not start a sound
+   without a tap, and from memory it stayed silent. So the tap itself readies it: the sound woken, and the jingle's own
+   player (and the miss's) started silently and stopped, which an iPad then lets play without another tap. czJingle
+   plays it from memory while the sound is up, else from that player. */
+function czPrime(){
+  try { if(typeof wakeAudio === 'function') wakeAudio(); } catch(e){}
+  const Z = CZ;
+  if(!Z || typeof Audio === 'undefined' || typeof SFX_MAP === 'undefined') return;
+  Z.primed = Z.primed || {};
+  ['catch_success', 'catch_miss'].forEach(ev=>{
+    const f = SFX_MAP[ev];
+    if(!f || Z.primed[ev]) return;
+    try {
+      const el = new Audio(SFX_DIR + f);
+      el.preload = 'auto'; el.muted = true;
+      const p = el.play();
+      if(p && p.then) p.then(()=>{ el.pause(); el.currentTime = 0; el.muted = false; }).catch(()=>{});
+      Z.primed[ev] = el;
+    } catch(e){}
+  });
+}
+function czJingle(ev){
+  const Z = CZ, f = typeof SFX_MAP !== 'undefined' ? SFX_MAP[ev] : null;
+  const up = typeof actx !== 'undefined' && actx && actx.state === 'running';
+  if(f && up && typeof sfxBufferOf === 'function' && sfxBufferOf(f)) return playSfx(ev);
+  const el = Z && Z.primed && Z.primed[ev];
+  if(el && typeof audio !== 'undefined' && audio.unlocked && !audio.missing[f]){
+    try {
+      el.muted = false; el.volume = Math.max(0, Math.min(1, typeof sfxVolume === 'function' ? sfxVolume() : 0.55)); el.currentTime = 0;
+      const p = el.play();
+      if(p && p.catch) p.catch(()=> playSfxSoon(ev, 2500));
+      return el;
+    } catch(e){}
+  }
+  return playSfxSoon(ev, 2500);
+}
 /* the next word waits while it flees */
 function czHoldNext(on){
   const set = ()=>{ const b = document.getElementById('quizNext'); if(b){ b.classList.toggle('cz-hold', on); b.disabled = on; } };
@@ -525,8 +611,8 @@ async function czThrow(kind){
   await czTween(1300, t=>{ const e = czEase.io(t), o = czEase.out(t);
     ring.cx = czLerp(c0.x, M.x, e); ring.cy = czLerp(c0.y, M.y, e); ring.R = czLerp(c0.R, R1, o);
     ring.size = czLerp(22, 58, o); ring.diff = czLerp(0.25, 0.9, o); ring.alpha = czLerp(1, 0.78, t); ring.spin = czLerp(0.8, 1.1, t); });
-  /* closing in, small, bright and concentrated; the monster turns white and glows, and shakes */
-  czBuzz([25, 60, 25, 60, 25]);
+  /* closing in, small, bright and concentrated; the monster turns white and glows, and shakes (4.28: unfelt — the
+     buzz is kept for a near thing and a catch) */
   await czTween(1500, t=>{ const e = czEase.io(t);
     ring.cx = M.x; ring.cy = M.y; ring.R = czLerp(R1, R2, e); ring.size = czLerp(58, 17, e); ring.diff = czLerp(0.9, 0.08, e); ring.alpha = czLerp(0.78, 1, e); ring.spin = czLerp(1.1, 2.6, e);
     const w = czClamp((t - 0.38) / 0.62);
@@ -538,12 +624,12 @@ async function czThrow(kind){
   await czFallBack();
   if(kind === 'nearWin') return czWin(true);
   await czTween(420, t=>{ Z.aura.a = czLerp(0.6, 0.3, t); ring.wob = 0.06 * (1 - t); });
-  return czMiss();
+  return czMiss(true);
 }
 /* the fakeout: the light swells round it, the orbs drawn tight */
 function czBuild(){
   const Z = CZ, M = Z.mon, ring = Z.ring, R2 = M.px * 0.62, big = Math.hypot(Z.W, Z.H) * 0.42;
-  czBuzz([40, 40, 40]);
+  czBuzz('catchNear');
   return czTween(950, t=>{ const e = czEase.out(t);
     Z.aura.a = czLerp(0.75, 1, e); Z.aura.r = czLerp(M.px * 1.5, big, e); ring.R = czLerp(R2, R2 * 0.72, e); ring.size = czLerp(17, 15, e); ring.spin = czLerp(2.6, 3.4, e); M.shake = czLerp(4.5, 6.5, e); });
 }
@@ -562,7 +648,8 @@ async function czWin(after){
     ring.R = R0 * (1 - e); ring.size = czLerp(s0, 8, t); ring.spin = czLerp(ring.spin, 5, t * 0.2); ring.alpha = 1 - czClamp((t - 0.72) / 0.28);
     Z.aura.a = czLerp(a0, 1, t); Z.aura.r = czLerp(r0, M.px * 2.2, t); M.white = 1; });
   Z.ring = null;
-  playSfxSoon('catch_success', 2500);
+  czJingle('catch_success');
+  czBuzz('caught');
   await czTween(850, t=>{ const e = czEase.io(t); Z.aura.r = czLerp(M.px * 2.2, diag * 1.15, e); Z.aura.a = 1; Z.flood = czEase.in(t) * 0.92; });
   Z.flood = 1;
   await czWait(380);
@@ -572,14 +659,14 @@ async function czWin(after){
   await czTween(1100, t=>{ const e = czEase.out(t); Z.flood = 1 - e; Z.aura.a = 1 - e; Z.aura.r = czLerp(diag * 1.15, M.px * 1.2, e); });
   Z.flood = 0; Z.aura.a = 0;
 }
-/* thrown off: it shudders, flares, and throws the orbs back off the screen; then itself again */
-async function czMiss(){
+/* thrown off: it shudders, flares, and throws the orbs back off the screen; then itself again (felt, `near`: a near miss) */
+async function czMiss(near){
   const Z = CZ;
   if(!Z) return;
   const M = Z.mon, ring = Z.ring, R0 = ring.R, far = Math.hypot(Z.W, Z.H) * 1.1, s0 = ring.size, a0 = Z.aura.a;
   await czTween(320, t=>{ M.shake = czLerp(M.shake, 7, t); ring.wob = 0.05 * t; });
-  playSfx('catch_miss');
-  czBuzz(220);
+  czJingle('catch_miss');
+  if(near) czBuzz('catchOff');
   await czTween(850, t=>{ const e = czEase.out(t);
     ring.R = czLerp(R0, far, e); ring.size = czLerp(s0, 40, e); ring.diff = czLerp(0.1, 0.8, e); ring.alpha = 1 - czClamp((t - 0.45) / 0.55); ring.spin = czLerp(2.6, 0.6, e); ring.wob = 0.05 * (1 - t);
     Z.aura.a = t < 0.18 ? czLerp(a0, 1, t / 0.18) : 1 - czEase.out((t - 0.18) / 0.82); Z.aura.r = czLerp(M.px * 1.5, M.px * 3.2, e); M.shake = 8 * (1 - t * 0.6); });
@@ -611,6 +698,14 @@ function czCss(){
   .cz-x{ position:absolute; left:max(10px, env(safe-area-inset-left)); top:max(8px, env(safe-area-inset-top)); z-index:3; width:40px; height:40px; border:0; border-radius:50%;
     background:rgba(5,7,20,.18); color:rgba(230,226,246,.55); font-size:17px; line-height:40px; text-align:center; cursor:pointer; padding:0; }
   .cz-x:active{ background:rgba(255,255,255,.12); }
+  /* (4.28) ✕ asks first */
+  .cz-ask{ position:fixed; inset:0; z-index:90; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(3,4,14,.55); animation:czFade .2s ease-out both; }
+  @keyframes czFade{ from{ opacity:0; } to{ opacity:1; } }
+  .cz-ask-box{ width:min(100%, 380px); display:flex; flex-direction:column; align-items:center; gap:18px; padding:22px 18px 18px; border-radius:20px;
+    background:rgba(10,12,34,.74); border:1px solid rgba(220,232,255,.22); box-shadow:0 0 30px rgba(160,190,255,.16), 0 18px 50px rgba(0,0,0,.5);
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+  .cz-ask .cz-msg{ font-size:22px; }
+  .cz-ask .cz-acts{ width:100%; }
   .cz-tools{ display:flex; align-items:center; gap:10px; }
   body.writing .cz-tools .cz-ic{ flex:0 0 auto; width:50px; height:44px; padding:0; margin:0; border-radius:14px; font-size:20px; background:rgba(5,7,20,.2); }
   .cz-tools .qz-def{ flex:1 1 auto; margin:0; min-height:0; }
@@ -656,7 +751,7 @@ function czCss(){
   .cz-nick .cz-btn{ flex:0 0 96px; }
   /* the victory page's Catch, with the monster's picture */
   .cz-catch-btn{ display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:8px; }
-  .cz-catch-pic{ flex:0 0 auto; width:52px; height:52px; margin:-12px 0; display:inline-flex; align-items:center; justify-content:center; }
+  .cz-catch-pic{ flex:0 0 auto; width:69px; height:69px; margin:-17px 0; display:inline-flex; align-items:center; justify-content:center; }
   .cz-catch-pic img{ filter:drop-shadow(0 1px 3px rgba(0,0,0,.35)); }
   @media (prefers-reduced-motion: reduce){ body.writing.catching .qz-next.qz-ready{ animation:none !important; } }
   `;

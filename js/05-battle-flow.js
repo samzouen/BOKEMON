@@ -3885,6 +3885,9 @@ let _invertN = 0;
 const ULTRA_TAIL = 450;                                  // the art's last bursts, after the last strike
 function invertScreen(ms){
   const n = ++_invertN;
+  /* (4.28) an Ultra unleashed, yours or theirs, is felt too (buzz) — once, as the screen turns over (their Ultra holds
+     it over again for each of yours it reaches) */
+  if(!document.documentElement.classList.contains('ultra-invert') && typeof buzz === 'function') buzz('ultra');
   document.documentElement.classList.add('ultra-invert');
   if(typeof fxDimOn === 'function') fxDimOn(0.5);
   setTimeout(()=>{ if(n === _invertN) releaseInvert(); }, 20000);

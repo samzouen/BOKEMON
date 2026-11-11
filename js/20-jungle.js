@@ -596,6 +596,14 @@ function jgBands(){
   _jgBands = bands; _jgBandsDay = key;
   return bands;
 }
+/* (4.29) A village under attack, where you stand: the King's unsealing, from the commander's vanguard on you until its
+   captain and commander are beaten (28-unseal.js); or (a save from before 4.13) the old war's bands still at it */
+function jgUnderAttack(x, y){
+  const v = typeof jgVillageAt === 'function' ? jgVillageAt(x, y) : null;
+  if(!v) return false;
+  if(typeof unPhase === 'function' && ['alarm', 'siege'].includes(unPhase(v))) return true;
+  return typeof warOld === 'function' && warOld() && typeof warStage === 'function' && warStage() === v && typeof warBandsLeft === 'function' && warBandsLeft(v).length > 0;
+}
 function jgBandBeaten(b){ return b.intro ? !!(typeof questIntroWon === 'function' && questIntroWon(b.id)) : jgState().beaten[b.id] === today(); }   // (3.99) the first three: for good
 function jgBandAt(x, y){ return jgBands().find(b=> b.x === x && b.y === y && !jgBandBeaten(b)) || null; }
 
@@ -604,7 +612,10 @@ function jgBandAt(x, y){ return jgBands().find(b=> b.x === x && b.y === y && !jg
    ============================================================ */
 const JG_ROW = '.'.repeat(JG.W);
 const JG_DECK = {
-  key:JG_KEY, region:6, title:'The Time-Lost Jungle', bg:'jungle', music:'zone_jungle', noGhost:true,
+  key:JG_KEY, region:6, title:'The Time-Lost Jungle', bg:'jungle', noGhost:true,
+  /* (4.29) in a village under attack, the battle music (jgUnderAttack) — as you walk in, and out (walkMusicSync) */
+  get music(){ const p = walkState().at && walkState().at[JG_KEY]; return p && jgUnderAttack(p.x, p.y) ? 'battle_region6' : 'zone_jungle'; },
+  musicLive:true,
   /* a little further back than the past: about 13 squares across on a tablet, 9 on a phone */
   get view(){
     const W = window.innerWidth, H = window.innerHeight;
@@ -675,6 +686,9 @@ const JG_GATE_KNIGHT = 'chestnut_knight2', JG_GATE_KNIGHT_NAME = 'Chestnut Knigh
 /* ---------- in and out ---------- */
 function jgEnter(where){
   if(!jgPortalAwake()) return false;
+  /* (4.29) a save from before the quest brought up to date first: Continue (07-screens.js) comes straight here from the
+     home page, and that may move you out of a village that has walled itself off (questMigrate) */
+  if(typeof questState === 'function') questState();
   const j = jgState();
   const P = jgGround().places;
   let at = null;
@@ -2556,8 +2570,9 @@ function jgRideFigure(){
    again" — every fight builds its waves afresh at full health (jgWaves), so each fight takes its 15% (or 30%) once.
    The effects on the fight: jgEdgeApply, at its first wave (jgWaveStart).
    ============================================================ */
-/* (4.08) the designer: "please reduce the cooldown of pulsar glare to 15 steps" (50 until 4.08) */
-const JG_GLARE = { reach:2, steps:15, ms:5000, beam:1000, hp:0.15, weak:0.25, turns:3 };
+/* (4.08) the designer: "please reduce the cooldown of pulsar glare to 15 steps" (50 until 4.08); (4.29) "Please reduce
+   pulsar glare cooldown to 5 steps" */
+const JG_GLARE = { reach:2, steps:5, ms:5000, beam:1000, hp:0.15, weak:0.25, turns:3 };
 const JG_AMBUSH = { reach:2, hp:0.15, stun:1, dark:420, fly:260, fadeIn:330, after:620 };   // (4.05) its timings, ms
 function jgGlareIn(){
   const j = jgState();

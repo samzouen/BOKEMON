@@ -795,6 +795,7 @@ async function cyborgRewind(b, acts, landed, opts){
      it is gone already, and stays gone */
   document.querySelectorAll('.enemy-card.fainted .avatar-layer').forEach(el=>{ el.style.animation = 'none'; el.style.opacity = '0'; });
   playSfx('rewind');
+  if(typeof buzz === 'function') buzz('rewind');                        // (4.28) Cyborg turns back time: felt too
   const sphere = rwSphere(cx, cy);
   const grown = sphere.grow();
   await sceneWait(RW.grow * 0.7);

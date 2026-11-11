@@ -807,6 +807,7 @@ function renderMistakeDots(){
    interval ran on invisibly. An interval must only ever clear its own handle. */
 function tick(myToken){
   if(!ui.quiz || ui.quiz.token !== myToken || ui.quiz.resolved) return false;
+  if(ui.quiz.paused) return true;                     // (4.28) held: a catch asking whether to let it go — the clock waits
   ui.quiz.timeLeft -= 0.1;
   if(ui.quiz.timeLeft <= 0){
     ui.quiz.timeLeft = 0;

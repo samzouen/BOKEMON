@@ -2863,6 +2863,74 @@ FX_MOVES['Enchant Burn'] = {
   },
 };
 
+/* ---- AFTERSHOCK (4.29) ----
+   (Rampage Max's, the ground still shaking: at the start of each of your next turns it strikes every one of them.) The
+   designer: "Aftershock needs an animation too please" — and on the first draft: "aftershock should be a ripple pulse like
+   overheat but less flashy on the player's monster's side. the impact animation looks wonderful - ground fissure and
+   all". From the feet of the one that laid it a pulse of ripples runs out over the ground, as Overheat's ring runs out of
+   the one burning, but in the earth's own dun, soft, with no flare — a little dust lifting where they start; the first of
+   them reaches the furthest of theirs as the blow lands (`hold`), and there the ground breaks under each — a thud of
+   dust, cracks, rocks thrown up, rings running out over the ground — and the field shakes. */
+FX_MOVES['Aftershock Quake'] = {
+  dur:1150, hold:440, window:1500,
+  cast(ctx){
+    ctx.shake = 2;
+    const a = ctx.from;
+    if(!a) return;
+    const cx = a.x, cy = a.foot - 3, sy = 0.6, r0 = a.w * 0.3, HIT = 440;
+    const D = Math.max(r0 + 24, ...fxTargets(ctx).map(b=> Math.hypot(b.x - cx, (b.foot - cy) / sy)));   // to the furthest
+    const v = (D - r0) / HIT, life = HIT + 60;                      // the first there as the blow lands, gone just after
+    if(ctx.fromId) fxPuffs(fxUnderOf(ctx.fromId), { x:a.x, y:a.foot }, 4, { seed:ctx.seed, pal:[FX_GROUND[1], FX_GROUND[2]], r:3.5, spread:a.w * 0.8, rise:6, life:460, stagger:100 });
+    [0, 170].forEach((t0, i)=> fxAdd({ layer:'under', dur:t0 + life, step(L, t){   // a ripple, and its echo
+      if(t < t0) return;
+      const s = t - t0, rr = r0 + v * s, u = s / life, k = i ? 0.55 : 1;
+      const cv = k * Math.min(1, u / 0.08) * (u > 0.72 ? Math.max(0, 1 - (u - 0.72) / 0.28) : 1);
+      fxRingWide(L, cx, cy, rr + 2, 2, FX_GROUND[5], cv * 0.7, sy);     // its dark edge
+      fxRingWide(L, cx, cy, rr, 3, FX_GROUND[2], cv * 0.85, sy);        // the ripple: the earth's ochre (Overheat's is flame)
+      fxRingWide(L, cx, cy, rr - 3, 2, FX_GROUND[1], cv * 0.6, sy);     // light caught behind it
+    } }));
+  },
+  impact(ctx, at, k, side){
+    const layer = fxLayerFor(side), under = at.id ? fxUnderOf(at.id) : fxUnderFor(side), g = { x:at.x, y:at.foot - 3, w:at.w, h:at.h, foot:at.foot };
+    FX_KIT.Ground.burst(g, layer, { seed:ctx.seed + k, big:1.35 });
+    fxGroundRing(under, at, { cols:[FX_GROUND[1], FX_GROUND[2], FX_GROUND[3]], line:FX_GROUND[5], r0:6, r1:at.w * 0.75, dur:520 });
+    fxGroundRing(under, at, { cols:[FX_GROUND[2], FX_GROUND[3]], line:FX_GROUND[5], r0:4, r1:at.w * 0.5, dur:640, delay:120 });
+    fxSpray(layer, fxRockParts({ x:at.x, y:at.foot }, 7, { seed:ctx.seed + k * 3, r:2.8, vmin:110, vmax:210, life:680 }), 950);
+  },
+};
+
+/* ---- THE SACRED FLAME (4.29) ----
+   (The ghost phoenix's gift: a Nova or an Incinerate may leave it, burning every one of them at the start of each of your
+   next three turns.) Gold-white fire: a ring of it kindles at each one's feet, flames running round its rim; as it burns
+   (`hold`) sacred fire bursts up through each, gold sparks drifting up after. */
+FX_MOVES['Sacred Flame Burn'] = {                                   // (FX_SACRED: the sacred fire's own colours, 29-fx.js)
+  dur:1150, hold:360, window:1500,
+  cast(ctx){
+    ctx.to.forEach((b, n)=>{
+      const id = ctx.tids[n] || b.id, D = 900;
+      fxAdd({ layer:fxUnderOf(id), dur:D, step(L, t){
+        const g = fxEaseOut(Math.min(1, t / 240)), cv = t < D - 260 ? 1 : (D - t) / 260, rx = b.w * 0.44 * g;
+        fxRing(L, b.x, b.foot, rx + 1, 1, FX_SACRED[5], cv, 0.3); fxRing(L, b.x, b.foot, rx, 2, FX_SACRED[2], cv, 0.3); fxRing(L, b.x, b.foot, rx * 0.62, 1, FX_SACRED[1], cv, 0.3);
+      } });
+      for(const near of [false, true]) fxAdd({ layer:near ? fxOverOf(id) : fxUnderOf(id), dur:560, step(L, t){   // flames round its rim, rising
+        const g = fxEaseOut(Math.min(1, t / 240)), cv = t < 420 ? 1 : (560 - t) / 140;
+        for(let i = 0; i < 6; i++){ const an = i * 1.047 + t * 0.005, sn = Math.sin(an); if((sn > 0) !== near) continue;
+          fxFlameBall(L, b.x + Math.cos(an) * b.w * 0.4 * g, b.foot + sn * b.w * 0.12 - Math.min(1, t / 360) * 7, 2.4, FX_SACRED, t, ctx.seed + i, { wob:0.35, up:0.8, cover:cv }); }
+      } });
+    });
+  },
+  impact(ctx, at, k, side){
+    const layer = fxLayerFor(side), rnd = fxRand(ctx.seed + k * 13), flames = [], sparks = [];
+    fxFireBurst({ x:at.x, y:at.y, w:at.w, h:at.h, foot:at.foot }, layer, { seed:ctx.seed + k, big:1.15, pal:FX_SACRED });
+    for(let i = 0; i < 9; i++) flames.push({ x:at.x + (rnd() - 0.5) * at.w * 0.5, y:at.foot - rnd() * 6, vx:(rnd() - 0.5) * 10, vy:-(110 + rnd() * 90), life:420 + rnd() * 240, size:3 + rnd() * 2.2,
+      ramp:[FX_SACRED[0], FX_SACRED[1], FX_SACRED[2], FX_SACRED[3]], shape:'flame', outline:FX_SACRED[5], grav:-40, drag:1.4, delay:rnd() * 90 });
+    fxSpray(layer, flames, 820);
+    for(let i = 0; i < 6; i++) sparks.push({ x:at.x + (rnd() - 0.5) * at.w * 0.7, y:at.y - rnd() * at.h * 0.3, vx:(rnd() - 0.5) * 18, vy:-(30 + rnd() * 40), life:520 + rnd() * 260, ramp:[0], delay:120 + rnd() * 160,
+      draw(L, x, y, u){ fxStar4(L, x, y, 3.2 * Math.sin(u * Math.PI) + 0.8, FX_SACRED[1], FX_SACRED[0]); } });
+    fxSpray(layer, sparks, 1100);
+  },
+};
+
 /* ---- UNSTABLE MAGIC ----
    (The Fairy Ultra passive; theirs too.) Every count goes off at once, on every one of the other side: the magic of its
    strongest holder bursting over each. Its holder, if it stands on the field, flares, a ring of runes turning beneath

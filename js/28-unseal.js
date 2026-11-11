@@ -10,7 +10,7 @@
        must come alone with you.
      · The King does not meet the guardians in the castle. You bring him to each village: from the south gate, his
        mounted figure following you as the whalelord did, without his army (over the Commander's and the Advisor's
-       protests). He leaps where Lucesco leaps, one square behind; within 3 squares of an alien, his own beam follows
+       protests). He leaps where Lucesco leaps, one square behind; within 4 squares (3 until 4.29) of an alien, his own beam follows
        Lucesco's Pulsar Glare (15% more of its health, and confusion), or his Rift Ambush, once a band. A jump away
        leaves him behind (go back for him, or jump back to him).
      · At the village the tribe does not trust him easily. The unsealing: the blade on the ground, the guardian to its
@@ -23,10 +23,13 @@
        — then the captain and the commander, back to back. (Fire: 2 captains, 1 commander; Earth: 2 and 2.)
      · One unsealing a day: the King rests at the castle, to his attendants' worry, and is ready again the next day
        (to their protests).
+     · (4.28) "commanders must have 6 waves. the ones invading the villages had 3": the vanguard is a commander's army of
+       six waves (its four aliens, its captain, the commander — all six of them on the map), and in the finals each
+       commander brings its six (a captain beyond theirs, its three): Grass and Water 6 waves, Fire 9, Earth 12 (unArmy).
    The chant: the designer asked for Tolkien's "A Elbereth Gilthoniel"; that song is not ours to put in the game, so
    the King chants in an old fae tongue of our own, four parts, the sense of each in the words around it.
    ============================================================ */
-const UN = { walkMs:520, near:2, beamNear:3, beamCut:0.15, siegeLv:175 };
+const UN = { walkMs:520, near:2, beamNear:4, beamCut:0.15, siegeLv:175 };   // (4.29) his beam's reach: 4 squares (3 until 4.29)
 
 /* ---------- the save: r6().war (22-war.js), what this adds ----------
    v (2: this flow), rite{ k:{ arrived, chant, opened, done } }, siege{ k:{ id:true } }, escort (null, or { k, x, y,
@@ -409,7 +412,7 @@ const UN_WATCH = {
   fire:[`<b>"One wrong move, King. Just one."</b>`, `<b>"My torch is lit. Just in case."</b>`],
   earth:[`<b>"…Hm."</b>`, `<b>"…We… watch. …We… remember."</b>`],
 };
-const UN_VANGUARD = `Commander Octopus's vanguard bars the way, tentacles lashing, its aliens howling for the light.`;
+const UN_VANGUARD = `Commander Octopus's vanguard bars the way, tentacles lashing, its captain and its aliens howling for the light.`;
 const UN_SIEGE_START = [
   ['n', `The commander falls back to the ancestor, and its army pours into the village: twelve aliens, one of every kind. The tribe's fairies throw themselves in the way, two to each.`],
   ['lion', `<b>"The fairies are holding them, but not for long. Twelve aliens — we take them one by one. Then the guardian and the ancestor."</b>`],
@@ -487,8 +490,9 @@ function unPlace(k){
     /* the unsealing: the guardian to the blade's left, the King to its right, you before it; four of the tribe watching */
     g:at(-2, 0, true), king:at(2, 0, false), you:at(0, 3, false),
     watch:[at(-4, 1, true), at(-3, 3, true), at(4, 1, false), at(3, 3, false)],
-    /* the commander's vanguard, come running at the light */
-    van:[at(4, 2, false), at(5, 1, false), at(5, 3, false)],
+    /* the commander's vanguard, come running at the light — (4.28) six, as its six waves: the commander at their head,
+       two of its aliens behind it, its captain behind them between two more */
+    van:[at(4, 2, false), at(5, 1, false), at(5, 3, false), at(6, 2, false), at(6, 0, false), at(6, 4, false)],
     /* the siege: back to back — the guardian facing the captains (left), the ancestor the commanders (right); the King,
        spent, below them */
     sg:at(-1, 0, false), sanc:at(0, 0, true), sking:at(1, 2, false),
@@ -540,10 +544,17 @@ function unSiegeBandsOf(k){
   }));
 }
 function unSiegeLeft(k){ const won = unWar().siege[k] || {}; return unSiegeSpots(k).filter(s=> !won[s.id]); }
-/* the commander's vanguard: two of its aliens (the village's own two, every time) and the commander */
+/* the commander's vanguard: four of its aliens (the village's own four, every time: until 4.28 the first two only), its
+   captain and the commander */
 function unVanAliens(k){
   const i = WAR_ORDER.indexOf(k) * 5 + 3, n = JG_ALIEN_IDS.length;
-  return [JG_ALIEN_IDS[i % n], JG_ALIEN_IDS[(i + 7) % n]];
+  return [JG_ALIEN_IDS[i % n], JG_ALIEN_IDS[(i + 7) % n], JG_ALIEN_IDS[(i + 3) % n], JG_ALIEN_IDS[(i + 10) % n]];
+}
+/* one of the vanguard's figures (P.van[i]): the commander (0), its captain (3), its aliens (the rest) */
+function unVanFig(k, i){
+  const al = unVanAliens(k), who = i === 0 ? JG_COMMANDER : i === 3 ? JG_CAPTAIN : al[i < 3 ? i - 1 : i - 2];
+  return { cls:'jg-npc war-alien un-van' + (i === 0 ? ' war-commander' : i === 3 ? ' un-van-cap' : ''),
+           html:`<div class="war-fig">${jgMonImg(who, WALK_T * (i === 0 ? 1.9 : i === 3 ? 1.6 : 1.35))}</div>` };
 }
 
 /* ---------- the story at a village ----------
@@ -837,11 +848,7 @@ function unVillageDraw(k){
     P.watch.forEach((s, i)=> unAct('w' + i, { x:s.x, y:s.y, faceR:s.faceR, solid:true, cls:'jg-folk un-watch', html:jgFolkImg(folk[i % folk.length]) }));
   }
   /* the commander's vanguard, waiting for you */
-  if(ph === 'alarm'){
-    const al = unVanAliens(k);
-    P.van.forEach((s, i)=> unAct('v' + i, { x:s.x, y:s.y, faceR:s.faceR, solid:true, cls:'jg-npc war-alien un-van' + (i ? '' : ' war-commander'),
-      html:`<div class="war-fig">${jgMonImg(i ? al[i - 1] : JG_COMMANDER, WALK_T * (i ? 1.35 : 1.9))}</div>` }));
-  }
+  if(ph === 'alarm') P.van.forEach((s, i)=> unAct('v' + i, Object.assign({ x:s.x, y:s.y, faceR:s.faceR, solid:true }, unVanFig(k, i))));
   /* the siege: the captains and the commanders on the guardian and the ancestor; the twelve, each between two fairies */
   if(ph === 'siege'){
     P.caps.forEach((c, i)=> unAct('cap' + i, { x:c.x, y:c.y, faceR:true, solid:true, cls:'jg-npc war-alien un-boss',
@@ -920,25 +927,37 @@ function unAncestorWon(k){
   saveProfile();
   jgBack();                                                              // where you stood: everyone where they were
 }
+/* (4.28) An army's waves — the designer: "commanders must have 6 waves. the ones invading the villages had 3 (at least
+   the first commander did)". A commander's, six, as every commander's band in the jungle and the castle: four of its
+   aliens, each between two of the tribe's people in its grip; its captain; the commander. A captain's own, three: two
+   aliens, the captain. The captain and the commander come with two aliens beside them, as they always have here. */
+function unArmy(k, lead, aliens){
+  const lv = UN.siegeLv, boss = sp=> [unAlienSpec(unPick(), lv), unAlienSpec(sp, lv), unAlienSpec(unPick(), lv)];
+  const waves = aliens.map(sp=> [unCaptive(k), unAlienSpec(sp, lv), unCaptive(k)]);
+  if(lead === JG_COMMANDER) waves.push(boss(JG_CAPTAIN));
+  waves.push(boss(lead));
+  return waves;
+}
+const unLeads = waves=> waves.map(w=> w[1].species);                    // for jgWon: one share of XP a wave
 function unFightVanguard(k){
-  const al = unVanAliens(k), lv = UN.siegeLv;
-  const waves = [[unCaptive(k), unAlienSpec(al[0], lv), unCaptive(k)], [unCaptive(k), unAlienSpec(al[1], lv), unCaptive(k)],
-                 [unAlienSpec(unPick(), lv), unAlienSpec(JG_COMMANDER, lv), unAlienSpec(unPick(), lv)]];
+  const waves = unArmy(k, JG_COMMANDER, unVanAliens(k));               // the four on the map, the captain, the commander
   return unBattle(k, 'un-van-' + k, waves, `Commander ${SPECIES[JG_COMMANDER].name}'s vanguard`, (levelUps)=>{
     unRite(k).siege = true;
     saveProfile();
-    jgWon(unPseudo(k, 'van', al.concat([JG_COMMANDER])), levelUps);
+    jgWon(unPseudo(k, 'van', unLeads(waves)), levelUps);
   }, ['battle_boss', 'battle_region6']);
 }
+/* the finals: a captain beyond the commanders' own, its band first (Fire's second); then each commander's army, its
+   captain in it — Grass and Water 6 waves, Fire 9, Earth 12 */
 function unFightFinals(k){
-  const F = UN_FORCES[k], lv = UN.siegeLv, waves = [], leaders = [];
-  for(let i = 0; i < F.captains; i++){ waves.push([unAlienSpec(unPick(), lv), unAlienSpec(JG_CAPTAIN, lv), unAlienSpec(unPick(), lv)]); leaders.push(JG_CAPTAIN); }
-  for(let i = 0; i < F.commanders; i++){ waves.push([unAlienSpec(unPick(), lv), unAlienSpec(JG_COMMANDER, lv), unAlienSpec(unPick(), lv)]); leaders.push(JG_COMMANDER); }
+  const F = UN_FORCES[k], waves = [], picks = n=> Array.from({ length:n }, ()=> unPick());
+  for(let i = F.commanders; i < F.captains; i++) waves.push(...unArmy(k, JG_CAPTAIN, picks(2)));
+  for(let i = 0; i < F.commanders; i++) waves.push(...unArmy(k, JG_COMMANDER, picks(4)));
   const nm = `${F.captains > 1 ? 'The captains' : 'The captain'} and ${F.commanders > 1 ? 'the commanders' : 'the commander'}`;
   return unBattle(k, 'un-fin-' + k, waves, nm, (levelUps)=>{
     unRite(k).won = true;
     saveProfile();
-    jgWon(unPseudo(k, 'fin', leaders), levelUps);
+    jgWon(unPseudo(k, 'fin', unLeads(waves)), levelUps);
   }, ['battle_boss', 'battle_region6']);
 }
 /* lost, at the village: the tribe's fairies carry you to the castle, by the tavern fire; the King waits */
@@ -1191,6 +1210,7 @@ async function unRitual(k){
 async function unAncestorRise(k){
   const B = unB(k), pil = document.getElementById('unPillar');
   playSfx('timestop');
+  if(typeof buzz === 'function') buzz('unseal');                         // (4.28) the seal gives way: felt too
   if(pil){ pil.classList.remove('up-pulse'); pil.classList.add('up-end'); }
   const pool = document.getElementById('unPool'); if(pool) pool.classList.add('up-end');
   unRing(true);
@@ -1234,12 +1254,11 @@ async function unAftermath(k){
   if(go) unFightVanguard(k);
 }
 async function unVanCharge(k){
-  const P = unPlace(k), al = unVanAliens(k);
+  const P = unPlace(k);
   [0, 1, 2, 3].forEach(i=> unActGone('w' + i, 500));                   // the tribe, to arms
   playSfx('alert');
   await Promise.all(P.van.map((s, i)=>{
-    unAct('v' + i, { x:s.x + 7, y:s.y, faceR:false, solid:true, cls:'jg-npc war-alien un-van' + (i ? '' : ' war-commander'),
-      html:`<div class="war-fig">${jgMonImg(i ? al[i - 1] : JG_COMMANDER, WALK_T * (i ? 1.35 : 1.9))}</div>` });
+    unAct('v' + i, Object.assign({ x:s.x + 7, y:s.y, faceR:false, solid:true }, unVanFig(k, i)));
     return unWaitMs(60 + i * 140).then(()=> unActMove('v' + i, s.x, s.y, 900));
   }));
 }
@@ -1317,7 +1336,7 @@ function unNearActs(p){
   if(by(A.king)) add('K', A.king, 'The Fairy King', ()=> unKingTalk(k));
   if(by(A.g)) add('G', A.g, unName('g', k), ()=> unGuardTalk(k));
   if(by(A.anc)) add('A', A.anc, unName('anc', k), ()=> unAncTalk(k), ph === 'opened' ? '⚔️ Fight' : null);
-  if(ph === 'alarm'){ const v = ['v0', 'v1', 'v2'].map(id=> A[id]).find(by); if(v) add('V', v, `Commander ${SPECIES[JG_COMMANDER].name}`, ()=> unVanTalk(k), '⚔️ Fight'); }
+  if(ph === 'alarm'){ const v = unPlace(k).van.map((s, i)=> A['v' + i]).find(by); if(v) add('V', v, `Commander ${SPECIES[JG_COMMANDER].name}`, ()=> unVanTalk(k), '⚔️ Fight'); }
   const folk = (typeof JG_VILLAGE_FOLK !== 'undefined' && JG_VILLAGE_FOLK[k]) || JG_TRIBES[k].members;
   const w = [0, 1, 2, 3].find(i=> by(A['w' + i]));
   if(w != null) add('W', A['w' + w], jgFolkName(folk[w % folk.length]), ()=> unSayAs(jgFace(folk[w % folk.length] + '_front'), jgFolkName(folk[w % folk.length]), UN_WATCH[k][w % 2]));

@@ -276,6 +276,25 @@ function fxRing(L, cx, cy, r, th, c, cover, sy){
     return (d <= r && d > r - th && (cover == null || fxCover(X, Y, cover))) ? c : 0;
   });
 }
+/* (4.29) A ring wider than the stage (Aftershock's ripples, run out to theirs): painted a row at a time, across only what
+   of it is on the stage — fxRing goes over the whole square round it, a cost that grows with its size. The same band:
+   r - th < d <= r, d measured with the height squeezed by `sy`. */
+function fxRingWide(L, cx, cy, r, th, c, cover, sy){
+  sy = sy || 1;
+  if(!(r > 0) || !(cover > 0)) return;
+  cx = Math.round(cx); cy = Math.round(cy);
+  const ri = Math.max(0, r - th), y0 = Math.max(0, Math.ceil(cy - r * sy)), y1 = Math.min(FX.H - 1, Math.floor(cy + r * sy));
+  for(let Y = y0; Y <= y1; Y++){
+    const v = (Y - cy) / sy, vv = v * v;
+    if(vv > r * r) continue;
+    const xo = Math.sqrt(r * r - vv), xi = vv < ri * ri ? Math.sqrt(ri * ri - vv) : -1;
+    const spans = xi < 0 ? [cx - xo, cx + xo] : [cx - xo, cx - xi, cx + xi, cx + xo];
+    for(let s = 0; s < spans.length; s += 2){
+      const A = Math.max(0, Math.ceil(spans[s])), B = Math.min(FX.W - 1, Math.floor(spans[s + 1]));
+      for(let X = A; X <= B; X++) if(fxCover(X, Y, cover)) L.buf[Y * FX.W + X] = c;
+    }
+  }
+}
 function fxLine(L, x0, y0, x1, y1, c, w, cover){
   w = w || 1;
   if(w >= 4) return fxBand(L, x0, y0, x1, y1, w, c, cover);   // (4.16) a wide one as a filled band: the brush cost w² a step
