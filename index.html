@@ -1662,6 +1662,51 @@
     font-family:'Baloo 2',cursive;font-weight:700;font-size:13px;color:var(--ink);flex:1;
   }
   .side-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  /* the fight's message and buttons (4.22: classes for what were inline styles) */
+  .bt-msg{text-align:center;font-weight:700;font-size:14px;min-height:20px;margin-bottom:10px;color:var(--ink-soft);}
+  .bt-moves{display:flex;gap:12px;}
+  .bt-grid{flex:2;display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .bt-side{flex:1;display:flex;flex-direction:column;gap:8px;}
+  /* (4.22) The designer: "Could we remove the top banner with Bokemon and the hamburger menu in the battle UI please? I'm
+     on iPhone 16 plus and I hope my whole screen can fit without scrolling in battles for skipping turns or using ultra
+     moves at the bottom." In a fight: no top bar (the menu is shut there anyway); the page from the top edge (below a
+     notch, in a home-screen app) to the bottom edge; and on a phone's height (an iPhone 16 Plus in Safari is 740 tall
+     with its bars showing) the gap across the field, the buttons and the trainer's banner tighter — Skip turn and the
+     Ultra's button on the screen without scrolling. Four or five of theirs stay in one row (enemySpriteSize). */
+  body.in-battle .topbar{ display:none !important; }
+  body.in-battle .screen{ padding-top:max(8px, env(safe-area-inset-top)); padding-bottom:0; }
+  /* (4.23) The designer: "Could you make the buttons for players consistent in position so they can press them without
+     having to adjust each time? This means an enemy trainer's portrait should not affect the position of the player's
+     buttons. Please align the player's buttons to the bottom of the screen for consistency." The message and the buttons
+     are one dock, held to the bottom of the screen whatever stands above it (sticky: on a page too tall even at the
+     sprites' least sizes, the field scrolls under it and it stays — with a veil under it then). The field above is
+     fitted to what is left (battleFit, 04-battle.js). A trainer's portrait and name stand on their side's own line, with
+     their pills and shields (.foe-side), not on a line of their own. */
+  body.in-battle .bt-dock{ position:sticky; bottom:0; z-index:12; padding-bottom:max(8px, env(safe-area-inset-bottom)); }
+  body.in-battle.battle-over .bt-dock{ padding-top:14px; margin-top:-14px; background:linear-gradient(to bottom, rgba(244,236,216,0), rgba(244,236,216,.94) 14px); }
+  .foe-side .npc-banner{ margin:0 0 0 auto; flex:0 0 auto; white-space:nowrap; }
+  .foe-side .foe-side-row:not(:empty) + .npc-banner{ margin-left:6px; }
+  /* the page exactly the screen's height (dvh: Safari's height with its bars showing — 100vh there is the height with
+     them hidden, and ran the buttons under the bar): the buttons kept at the bottom, the field taking what is left, its
+     gap across the middle stretching to fill it */
+  body.in-battle #app{ min-height:100vh; min-height:100dvh; }
+  body.in-battle .screen{ display:flex; flex-direction:column; }
+  body.in-battle .battle-stage{ flex:1 0 auto; display:flex; flex-direction:column; }
+  body.in-battle .battlefield{ flex:1 0 auto; }
+  .enemy-row.many{ gap:6px; }
+  .enemy-row.many .mon-title{ font-size:11px; }
+  .enemy-row.many .mon-title span{ font-size:11px; }
+  .enemy-row.many .hp-num{ font-size:9px !important; letter-spacing:-0.2px; }
+  @media (max-height: 900px){
+    body.in-battle .battlefield{ height:8px; }
+    body.in-battle .battle-stage{ margin-bottom:6px; }
+    body.in-battle .bt-msg{ margin-bottom:6px; }
+    body.in-battle .bt-grid, body.in-battle .bt-side{ gap:6px; }
+    body.in-battle .move-btn{ min-height:48px; padding:7px 8px; }
+    body.in-battle .side-btn{ padding:7px 6px; }
+    body.in-battle .npc-banner{ margin-bottom:0; font-size:12px; }
+    body.in-battle .npc-banner .npc-portrait, body.in-battle .npc-banner .cc-emoji{ width:28px !important; height:28px !important; border-radius:9px !important; }
+  }
 
   /* party / storage */
   .seed-card{opacity:0.62;filter:saturate(0.55);cursor:default;}
@@ -1890,6 +1935,9 @@
   <script src="js/28-unseal.js"></script>
   <script src="js/29-fx.js"></script>
   <script src="js/30-fx-moves.js"></script>
+  <script src="js/31-huts.js"></script>
+  <script src="js/32-castle-walls.js"></script>
+  <script src="js/33-catch.js"></script>
   <script src="js/11-app.js"></script>
 
 </body>
