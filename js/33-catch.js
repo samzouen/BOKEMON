@@ -216,6 +216,7 @@ function czEndQuiz(){
 function catchTeardown(){
   czAskClose();
   czEndQuiz();
+  czSound.stopAttempt(0.12);                                          // (4.35)
   if(CZ){ cancelAnimationFrame(CZ.raf); CZ = null; }
   ['czStage', 'czFx'].forEach(id=>{ const el = document.getElementById(id); if(el) el.remove(); });
   document.body.classList.remove('catching', 'cz-throwing');
@@ -244,7 +245,7 @@ function gotcha(enemy, opts){
   ui.screen = 'catch';
   document.body.classList.add('writing');
   if(typeof quizSkyOn === 'function') quizSkyOn();
-  if(CZ){ CZ.mon.white = 0; CZ.mon.alpha = 1; CZ.mon.lift = 0; CZ.ball.alpha = 0; CZ.sparkle = true; CZ.ring = null; }
+  if(CZ){ CZ.mon.white = 0; CZ.mon.alpha = 1; CZ.mon.lift = 0; CZ.mon.sink = 0; CZ.ball.alpha = 0; CZ.sparkle = true; CZ.ring = null; }
   const sp = SPECIES[enemy.species];
   screenEl.innerHTML = `
     <div class="cz-caught">
@@ -341,8 +342,9 @@ function czStage(enemy){
   CZ = {
     id:++_czId, fx, g:fx.getContext('2d'), W:0, H:0, dpr:1, raf:0, last:0,
     ball:{ el:st.querySelector('#czBall'), cx:0, cy:0, base:0, level:0, shown:0, alpha:0, scale:1, pulse:0, seen:false },
-    mon:{ el:st.querySelector('#czMon'), white:0, alpha:1, lift:0, scale:1, shake:0, x:0, y:0, px:0 },
+    mon:{ el:st.querySelector('#czMon'), white:0, alpha:1, lift:0, sink:0, scale:1, shake:0, x:0, y:0, px:0 },
     ring:null, aura:{ r:0, a:0 }, flood:0, parts:[], sparkle:false, sparkAcc:0,
+    pulse:{ rate:0, ph:0, amt:0 }, snd:null,                          // (4.35) the attempt's to and fro (czSound.attempt)
   };
   CZ.mon.white_el = st.querySelector('.cz-white');
   CZ.mon.sprite_el = st.querySelector('.cz-sprite');
@@ -374,12 +376,19 @@ function czFrame(now, dt){
   M.x = M.x ? M.x + (tx - M.x) * Math.min(1, dt * 3.2) : tx;
   M.px = px; M.y = 10 + top * 0.52 + drop;
   const t = now / 1000, red = czReduced();
-  /* its float, its shaking */
-  const bob = Math.sin(t * 2.1) * 6, amp = red ? 0 : M.shake;
-  const sx = amp ? amp * (Math.sin(t * 171) * 0.6 + (Math.random() - 0.5) * 0.8) : 0, sy = amp ? amp * 0.6 * (Math.sin(t * 143 + 1) * 0.6 + (Math.random() - 0.5) * 0.8) : 0;
+  /* its float, its shaking. (4.35) The designer: "when catching caladrius there was a double white silhouette every time
+     the orbs surrounded him, please make sure there's only one each time". The shake was 27 swings a second with a jolt
+     of chance on every frame: drawn 60 times a second, it stood one side, then the other, frame by frame — two
+     silhouettes side by side. Now a tremble the eye can follow (CZ_TREMBLE): slower, smaller, smooth. */
+  const bob = Math.sin(t * 2.1) * 6, amp = red ? 0 : Math.min(CZ_TREMBLE.most, M.shake * CZ_TREMBLE.k);
+  const w = t * CZ_TREMBLE.hz * 2 * Math.PI;
+  const sx = amp ? amp * Math.sin(w) : 0, sy = amp ? amp * 0.45 * Math.sin(w * 1.37 + 1.1) : 0;
+  /* (4.35) the attempt's to and fro (the voice's own beat): the ring drawn in a little on each pulse */
+  const P = Z.pulse;
+  if(P.rate > 0) P.ph += dt * P.rate * 2 * Math.PI;
   if(M.el){
     M.el.style.width = M.el.style.height = px + 'px';
-    M.el.style.transform = `translate(${(M.x - px / 2 + sx).toFixed(1)}px, ${(M.y - px / 2 + bob + sy + M.lift).toFixed(1)}px) scale(${M.scale.toFixed(3)})`;
+    M.el.style.transform = `translate(${(M.x - px / 2 + sx).toFixed(1)}px, ${(M.y - px / 2 + bob + sy + M.lift + M.sink).toFixed(1)}px) scale(${M.scale.toFixed(3)})`;
     M.el.style.opacity = M.alpha.toFixed(3);
     if(M.white_el) M.white_el.style.opacity = M.white.toFixed(3);
     if(M.sprite_el) M.sprite_el.style.filter = M.white > 0.01 ? `brightness(${(1 + M.white * 1.4).toFixed(2)})` : '';
@@ -399,12 +408,12 @@ function czFrame(now, dt){
   const g = Z.g;
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, W, H);
-  if(Z.aura.a > 0.003) czAura(g, M.x, M.y + bob, Z.aura.r, Z.aura.a);
+  if(Z.aura.a > 0.003) czAura(g, M.x, M.y + M.sink + bob, Z.aura.r, Z.aura.a);
   if(Z.ring) czRing(g, Z.ring, t, dt);
   if(Z.sparkle){
     Z.sparkAcc += dt * 16;
     while(Z.sparkAcc >= 1){ Z.sparkAcc -= 1;
-      Z.parts.push({ k:'spark', x:M.x + (Math.random() - 0.5) * px * 0.9, y:M.y + bob + (Math.random() * 0.7 - 0.15) * px, vx:(Math.random() - 0.5) * 8, vy:-(28 + Math.random() * 46), life:0, max:1 + Math.random() * 0.8, s:1.4 + Math.random() * 2.4 }); }
+      Z.parts.push({ k:'spark', x:M.x + (Math.random() - 0.5) * px * 0.9, y:M.y + M.sink + bob + (Math.random() * 0.7 - 0.15) * px, vx:(Math.random() - 0.5) * 8, vy:-(28 + Math.random() * 46), life:0, max:1 + Math.random() * 0.8, s:1.4 + Math.random() * 2.4 }); }
   }
   czParts(g, dt, t);
   if(Z.flood > 0.003){ g.globalCompositeOperation = 'source-over'; g.fillStyle = `rgba(255,255,255,${Math.min(1, Z.flood).toFixed(3)})`; g.fillRect(0, 0, W, H); }
@@ -435,13 +444,16 @@ function czRing(g, R, t, dt){
   R.rot += dt * Math.PI * 2 * 0.22 * R.spin;
   g.globalCompositeOperation = 'lighter';
   const n = CATCH.orbs;
-  /* (4.34) round the monster, its top never above the screen's: as it loosens on a near miss it sinks a little instead */
+  /* (4.34) round the monster, its top never above the screen's: as it loosens on a near miss it sinks a little instead
+     — (4.35) the monster has gone down into its middle by then (czSinkFor): only while it is still wide, rising */
   const cy = R.keepIn ? Math.max(R.cy, R.R * (1 + (R.wob || 0)) + R.size + 6) : R.cy;
+  /* (4.35) drawn in on each pulse of the attempt, in time with its voice */
+  const P = CZ && CZ.pulse, pz = P && P.amt ? 1 - P.amt * (0.5 + 0.5 * Math.sin(P.ph)) : 1;
   for(let i = 0; i < n; i++){
     const hue = (i * 360 / n + t * 90) % 360;
     for(let k = 3; k >= 0; k--){
       const a = R.rot - k * 0.07 * Math.max(0.6, R.spin) + i * Math.PI * 2 / n;
-      const rr = R.R * (1 + (R.wob || 0) * Math.sin(t * 9 + i));
+      const rr = R.R * pz * (1 + (R.wob || 0) * Math.sin(t * 9 + i));
       const x = R.cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
       czOrb(g, x, y, R.size * (k ? 0.75 - k * 0.12 : 1), hue, R.diff, R.alpha * (k ? 0.32 - k * 0.07 : 1));
     }
@@ -551,7 +563,9 @@ async function czFlee(soft){
   const Z = CZ;
   if(!Z) return;
   const M = Z.mon;
-  if(!soft){ await czTween(260, t=>{ M.shake = 4 * (1 - t * 0.5); }); M.shake = 0; playSfx('move_miss'); }
+  /* (4.35) catch_miss is this — "that's the sound for the monster fleeing only" (until 4.35 it was every miss's, and
+     a fight's move_miss was this) */
+  if(!soft){ await czTween(260, t=>{ M.shake = 4 * (1 - t * 0.5); }); M.shake = 0; czJingle('catch_miss'); }
   const k = soft ? 0.75 : 1;
   await czTween(800 * k, t=>{ const e = czEase.in(t); M.lift = -(M.y + M.px * 1.2) * e; M.scale = 1 - 0.3 * e; M.alpha = t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35; });
   if(CZ === Z) M.alpha = 0;
@@ -601,6 +615,15 @@ function czHoldNext(on){
 }
 
 /* ---------- the throw ---------- */
+/* (4.35) How far the monster goes down into the ring while it is thrown at — the designer, of 4.34's picture: "the sprite
+   decentered from the middle of the ring, be sure to lower it enough to occupy the centre of the new ring position".
+   Enough that the ring round it at its widest (czFallBack's: R2 × 1.28, wobbling 6% more), its biggest orb and a margin
+   are on the screen with the monster in their middle. It goes down as the orbs rise to it (the spelling is away), and
+   back up as they are thrown off, or when the light has filled the screen on a catch. */
+const CZ_SINK = { swell:1.28 * 1.06, orb:21, margin:8 };
+function czSinkFor(M){ return Math.max(0, Math.round(M.px * 0.62 * CZ_SINK.swell + CZ_SINK.orb + CZ_SINK.margin - M.y)); }
+/* (4.35) its tremble (czFrame): `hz` swings a second, `k` px of it for each of M.shake, never more than `most` px */
+const CZ_TREMBLE = { hz:8.5, k:0.45, most:3.2 };
 async function czThrow(kind){
   const Z = CZ;
   if(!Z) return;
@@ -610,7 +633,9 @@ async function czThrow(kind){
   /* the spelling fades, leaving the ball */
   document.body.classList.add('cz-throwing');
   await czWait(380);
-  playSfx('power_up');
+  /* (4.35) its own sound: twelve bells as twelve orbs open out of the ball (until 4.35 'power_up', whose stand-in is
+     level_up.mp3 — a fanfare at every throw) */
+  czSound.launch();
   /* the ball opens into twelve orbs */
   /* (4.34) `keepIn`: its top never above the screen's, from the first (czRing) — rising, it stops short of the monster
      while it is wide, and closes up round it */
@@ -618,17 +643,24 @@ async function czThrow(kind){
   Z.parts.push({ k:'flash', x:B.cx, y:B.cy, vx:0, vy:0, life:0, max:0.6, s:ballR });
   await czTween(650, t=>{ const e = czEase.out(t); B.scale = 1 - 0.6 * e; B.alpha = 1 - czClamp(t * 1.4); ring.R = ballR * (0.15 + 0.7 * e); ring.alpha = czClamp(t * 2.2); ring.size = 10 + 12 * e; });
   B.level = B.shown = 0;
-  /* widening, rising: up to the monster, out to the edges of the screen, big and soft */
-  const c0 = { x:ring.cx, y:ring.cy, R:ring.R };
+  /* widening, rising: up to the monster, out to the edges of the screen, big and soft — (4.35) and the monster down into
+     the middle of where it will close (czSinkFor), the orbs tinkling, pulsing, climbing as they fly (czSound.fly) */
+  const c0 = { x:ring.cx, y:ring.cy, R:ring.R }, sink = czSinkFor(M);
+  czSound.fly(1300 * CZ_SPEED.k);
   await czTween(1300, t=>{ const e = czEase.io(t), o = czEase.out(t);
-    ring.cx = czLerp(c0.x, M.x, e); ring.cy = czLerp(c0.y, M.y, e); ring.R = czLerp(c0.R, R1, o);
+    M.sink = sink * e;
+    ring.cx = czLerp(c0.x, M.x, e); ring.cy = czLerp(c0.y, M.y + M.sink, e); ring.R = czLerp(c0.R, R1, o);
     ring.size = czLerp(22, 58, o); ring.diff = czLerp(0.25, 0.9, o); ring.alpha = czLerp(1, 0.78, t); ring.spin = czLerp(0.8, 1.1, t); });
   /* closing in, small, bright and concentrated; the monster turns white and glows, and shakes (4.28: unfelt — the
-     buzz is kept for a near thing and a catch) */
+     buzz is kept for a near thing and a catch). (4.35) Its try: a voice that throbs low and rings high by turns
+     (czSound.attempt), the ring drawn in on each throb (Z.pulse) */
+  czSound.attempt();
+  const P = Z.pulse; P.ph = 0; P.rate = CZS_TRY.rate; P.amt = 0;
   await czTween(1500, t=>{ const e = czEase.io(t);
-    ring.cx = M.x; ring.cy = M.y; ring.R = czLerp(R1, R2, e); ring.size = czLerp(58, 17, e); ring.diff = czLerp(0.9, 0.08, e); ring.alpha = czLerp(0.78, 1, e); ring.spin = czLerp(1.1, 2.6, e);
+    ring.cx = M.x; ring.cy = M.y + M.sink; ring.R = czLerp(R1, R2, e); ring.size = czLerp(58, 17, e); ring.diff = czLerp(0.9, 0.08, e); ring.alpha = czLerp(0.78, 1, e); ring.spin = czLerp(1.1, 2.6, e);
     const w = czClamp((t - 0.38) / 0.62);
-    M.white = czEase.io(w); Z.aura.a = 0.75 * w; Z.aura.r = M.px * (0.8 + 0.7 * w); M.shake = 4.5 * czClamp((t - 0.55) / 0.45); });
+    M.white = czEase.io(w); Z.aura.a = 0.75 * w; Z.aura.r = M.px * (0.8 + 0.7 * w); M.shake = 4.5 * czClamp((t - 0.55) / 0.45);
+    P.amt = CZS_TRY.amt * czClamp((t - 0.4) / 0.6); });
   if(kind === 'win') return czWin();
   if(kind === 'miss') return czMiss();
   /* a near thing: it all builds… and falls back */
@@ -638,32 +670,42 @@ async function czThrow(kind){
   await czTween(420, t=>{ Z.aura.a = czLerp(0.6, 0.3, t); ring.wob = 0.06 * (1 - t); });
   return czMiss(true);
 }
-/* the fakeout: the light swells round it, the orbs drawn tight */
+/* the fakeout: the light swells round it, the orbs drawn tight — (4.35) its try quicker and higher, condensing */
 function czBuild(){
-  const Z = CZ, M = Z.mon, ring = Z.ring, R2 = M.px * 0.62, big = Math.hypot(Z.W, Z.H) * 0.42;
+  const Z = CZ, M = Z.mon, ring = Z.ring, R2 = M.px * 0.62, big = Math.hypot(Z.W, Z.H) * 0.42, P = Z.pulse;
   czBuzz('catchNear');
+  czSound.intent(CZS_TRY.build, 0.85 * CZ_SPEED.k);
   return czTween(950, t=>{ const e = czEase.out(t);
-    Z.aura.a = czLerp(0.75, 1, e); Z.aura.r = czLerp(M.px * 1.5, big, e); ring.R = czLerp(R2, R2 * 0.72, e); ring.size = czLerp(17, 15, e); ring.spin = czLerp(2.6, 3.4, e); M.shake = czLerp(4.5, 6.5, e); });
+    Z.aura.a = czLerp(0.75, 1, e); Z.aura.r = czLerp(M.px * 1.5, big, e); ring.R = czLerp(R2, R2 * 0.72, e); ring.size = czLerp(17, 15, e); ring.spin = czLerp(2.6, 3.4, e); M.shake = czLerp(4.5, 6.5, e);
+    P.rate = czLerp(CZS_TRY.rate, CZS_TRY.build.rate, e); P.amt = CZS_TRY.amt * czLerp(1, 1.3, e); });
 }
+/* …and falls back — (4.35) slower and lower, faltering */
 function czFallBack(){
-  const Z = CZ, M = Z.mon, ring = Z.ring, R2 = M.px * 0.62, big = Math.hypot(Z.W, Z.H) * 0.42;
+  const Z = CZ, M = Z.mon, ring = Z.ring, R2 = M.px * 0.62, big = Math.hypot(Z.W, Z.H) * 0.42, P = Z.pulse;
+  czSound.intent(CZS_TRY.fall, 0.55 * CZ_SPEED.k);
   return czTween(720, t=>{ const e = czEase.io(t);
-    Z.aura.a = czLerp(1, 0.6, e); Z.aura.r = czLerp(big, M.px * 1.6, e); ring.R = czLerp(R2 * 0.72, R2 * 1.28, e); ring.size = czLerp(15, 21, e); ring.spin = czLerp(3.4, 2.2, e); ring.wob = 0.06 * e; M.shake = czLerp(6.5, 3, e); });
+    Z.aura.a = czLerp(1, 0.6, e); Z.aura.r = czLerp(big, M.px * 1.6, e); ring.R = czLerp(R2 * 0.72, R2 * 1.28, e); ring.size = czLerp(15, 21, e); ring.spin = czLerp(3.4, 2.2, e); ring.wob = 0.06 * e; M.shake = czLerp(6.5, 3, e);
+    P.rate = czLerp(CZS_TRY.build.rate, CZS_TRY.fall.rate, e); P.amt = CZS_TRY.amt * czLerp(1.3, 0.7, e); });
 }
-/* caught: no shaking now; the orbs wind into it, the light fills the screen; then it is itself again, sparkling */
+/* caught: no shaking now; the orbs wind into it, the light fills the screen; then it is itself again, sparkling —
+   (4.35) the try gives way to the bells winding in (czSound.condense), and only then the fanfare */
 async function czWin(after){
   const Z = CZ;
   if(!Z) return;
-  const M = Z.mon, ring = Z.ring, R0 = ring.R, s0 = ring.size, diag = Math.hypot(Z.W, Z.H), a0 = Z.aura.a, r0 = Z.aura.r;
+  const M = Z.mon, ring = Z.ring, R0 = ring.R, s0 = ring.size, diag = Math.hypot(Z.W, Z.H), a0 = Z.aura.a, r0 = Z.aura.r, P = Z.pulse, p0 = P.amt;
   M.shake = 0; ring.wob = 0;
-  await czTween(after ? 1000 : 900, t=>{ const e = czEase.in(t);
+  const ms = after ? 1000 : 900;
+  czSound.stopAttempt(0.45 * CZ_SPEED.k);
+  czSound.condense(ms * CZ_SPEED.k);
+  await czTween(ms, t=>{ const e = czEase.in(t);
     ring.R = R0 * (1 - e); ring.size = czLerp(s0, 8, t); ring.spin = czLerp(ring.spin, 5, t * 0.2); ring.alpha = 1 - czClamp((t - 0.72) / 0.28);
-    Z.aura.a = czLerp(a0, 1, t); Z.aura.r = czLerp(r0, M.px * 2.2, t); M.white = 1; });
-  Z.ring = null;
+    Z.aura.a = czLerp(a0, 1, t); Z.aura.r = czLerp(r0, M.px * 2.2, t); M.white = 1; P.amt = p0 * (1 - t); });
+  Z.ring = null; P.rate = 0; P.amt = 0;
   czJingle('catch_success');
   czBuzz('caught');
   await czTween(850, t=>{ const e = czEase.io(t); Z.aura.r = czLerp(M.px * 2.2, diag * 1.15, e); Z.aura.a = 1; Z.flood = czEase.in(t) * 0.92; });
   Z.flood = 1;
+  M.sink = 0;                                                         // (4.35) back in its place, unseen under the light
   await czWait(380);
   Z.sparkle = true;
   M.white = 0;
@@ -671,23 +713,352 @@ async function czWin(after){
   await czTween(1100, t=>{ const e = czEase.out(t); Z.flood = 1 - e; Z.aura.a = 1 - e; Z.aura.r = czLerp(diag * 1.15, M.px * 1.2, e); });
   Z.flood = 0; Z.aura.a = 0;
 }
-/* thrown off: it shudders, flares, and throws the orbs back off the screen; then itself again (felt, `near`: a near miss) */
+/* thrown off: it shudders, flares, and throws the orbs back off the screen; then itself again (felt, `near`: a near miss)
+   — (4.35) heard as the orbs scattering (czSound.disperse); catch_miss is the sound of its fleeing (czFlee) */
 async function czMiss(near){
   const Z = CZ;
   if(!Z) return;
-  const M = Z.mon, ring = Z.ring, R0 = ring.R, far = Math.hypot(Z.W, Z.H) * 1.1, s0 = ring.size, a0 = Z.aura.a;
+  const M = Z.mon, ring = Z.ring, R0 = ring.R, far = Math.hypot(Z.W, Z.H) * 1.1, s0 = ring.size, a0 = Z.aura.a, P = Z.pulse;
   await czTween(320, t=>{ M.shake = czLerp(M.shake, 7, t); ring.wob = 0.05 * t; });
   if(ring.keepIn) ring.cy = Math.max(ring.cy, ring.R * (1 + (ring.wob || 0)) + ring.size + 6);   // (4.34) from where it is drawn —
   ring.keepIn = false;                                                // …thrown off the screen, as it always was
-  czJingle('catch_miss');
+  czSound.stopAttempt(0.06);
+  czSound.disperse();
+  P.rate = 0; P.amt = 0;
   if(near) czBuzz('catchOff');
   await czTween(850, t=>{ const e = czEase.out(t);
     ring.R = czLerp(R0, far, e); ring.size = czLerp(s0, 40, e); ring.diff = czLerp(0.1, 0.8, e); ring.alpha = 1 - czClamp((t - 0.45) / 0.55); ring.spin = czLerp(2.6, 0.6, e); ring.wob = 0.05 * (1 - t);
     Z.aura.a = t < 0.18 ? czLerp(a0, 1, t / 0.18) : 1 - czEase.out((t - 0.18) / 0.82); Z.aura.r = czLerp(M.px * 1.5, M.px * 3.2, e); M.shake = 8 * (1 - t * 0.6); });
   Z.ring = null;
-  await czTween(700, t=>{ M.white = 1 - czEase.io(t); M.shake = 3.2 * (1 - t); Z.aura.a = 0; });
-  M.white = 0; M.shake = 0;
+  const k0 = M.sink;
+  await czTween(700, t=>{ M.white = 1 - czEase.io(t); M.shake = 3.2 * (1 - t); Z.aura.a = 0; M.sink = k0 * (1 - czEase.io(t)); });
+  M.white = 0; M.shake = 0; M.sink = 0;
 }
+
+/* ============================================================
+   (4.35) THE CATCH'S OWN SOUNDS, made as they play (Web Audio, through the sound effects' volume: sfxGain)
+   The designer (2026-11-12): "the fanfare must only be played when the catch is successful, but currently it's played
+   everytime the orbs are launched. and the sound for failed catch is played everytime but actually that's the sound for
+   the monster fleeing only. could you help me code sounds exciting and appropriate for the launching of the orbs (like
+   tinkling pulsating sounds as the orbs are launched, fly towards the sprite, then try to catch it? while the orbs
+   attempt to catch the monster, there should be a secondary sound of a back and forth pulsing attempt to condense and
+   catch. then if it fails, there should be a sound for the orbs dispersing."
+   (The throw's 'power_up' has no file of its own: level_up.mp3 stood in for it — that was the fanfare at every throw.)
+   (4.36) Then, of 4.35's: "it's too tinkly and with no reverb or real feeling". So they are made again: fewer and
+   softer high notes, and those mostly heard in the room's own ring; under them warm chords (two voices a note, a little
+   apart, through a filter that opens and closes), a choir's "ah", a low boom for weight, air; and all of it in a space
+   — a hall made as it plays (CZS_VERB: a ring of 2.6 seconds, its far end darker), a gentle compressor holding it
+   together. One key throughout (E major, its ninth and seventh: a bright, open, magical colour; the failing chord minor).
+     launch   — the ball opening: a soft boom and a breath out; a harp swept up the chord, one string an orb, left and right;
+                the chord swelling warm under it.
+     fly      — up to the monster: the chord climbing a whole tone as they rise, pulsing seven times a second, opening and
+                brightening; the wind of it rising; a few motes catching the light, far off in the hall.
+     attempt  — closing in and trying: one beat, two voices by turns — low, a growl that opens, swells and squeezes up in
+                pitch (condensing); high, the choir's "ah" (letting go) — and a thin high tension slowly gathering.
+                Building, it quickens and climbs (CZS_TRY.build); falling back, it slows and sinks (CZS_TRY.fall). The ring is
+                drawn in on each throb (Z.pulse).
+     condense — caught: the light drawn in (a rush swelling and cut off), the chord rising a fifth, a harp swept quickly up
+                into the middle; then the fanfare (catch_success).
+     disperse — thrown off: a boom, a rush outward both ways, the chord sinking an octave and darkening (minor), the motes
+                falling away into the hall.
+   Fled: catch_miss (czFlee), its own sound. Each scheduler takes (context, where to, when): the same sounds can be made
+   ahead of time (an OfflineAudioContext) to be listened to.
+   ============================================================ */
+const CZS_LEVEL = 2.2;                                               // all of them, before the effects' slider (about the files' own loudness)
+const CZS_VERB = { secs:2.6, wet:0.5, pre:0.014 };                   // the hall: its ring, how much of every sound goes into it, the gap before it
+const CZS_TRY = { rate:3.2, amt:0.035,                               // the try's beats a second; the ring drawn in by this much
+  build:{ rate:5.2, pitch:3, bright:1.6, level:1.25 },               // building: quicker, higher (semitones), brighter, louder
+  fall:{ rate:2.2, pitch:-2, bright:0.6, level:0.8 } };              // falling back
+const czsMidi = m=> 440 * Math.pow(2, (m - 69) / 12);
+const CZS_CHORD = { warm:[52, 59, 64, 68], up:[52, 56, 59, 63, 64, 66, 68, 71, 75, 76, 80, 83], sad:[52, 55, 59, 64] };   // E, Emaj9 swept up, E minor
+const _czsCache = typeof WeakMap === 'function' ? { noise:new WeakMap(), hall:new WeakMap(), bus:new WeakMap() } : null;
+function czsNoiseBuf(ctx){
+  let b = _czsCache && _czsCache.noise.get(ctx);
+  if(b) return b;
+  const n = Math.floor(ctx.sampleRate * 1.6);
+  b = ctx.createBuffer(1, n, ctx.sampleRate);
+  const d = b.getChannelData(0);
+  for(let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  if(_czsCache) _czsCache.noise.set(ctx, b);
+  return b;
+}
+/* the hall's ring, made once a context: noise dying away over CZS_VERB.secs, its high end dying sooner (each channel
+   its own, for width), a few early echoes off near walls, a moment's gap before it */
+function czsHall(ctx){
+  let ir = _czsCache && _czsCache.hall.get(ctx);
+  if(ir) return ir;
+  const sr = ctx.sampleRate, len = Math.floor(sr * CZS_VERB.secs), pre = Math.floor(sr * CZS_VERB.pre);
+  ir = ctx.createBuffer(2, len, sr);
+  for(let c = 0; c < 2; c++){
+    const d = ir.getChannelData(c);
+    let lp = 0;
+    for(let i = pre; i < len; i++){
+      const t = (i - pre) / sr, k = 0.12 + 0.8 * Math.exp(-t / 0.55);   // brighter at first, darker as it dies
+      lp += k * ((Math.random() * 2 - 1) - lp);
+      d[i] = lp * Math.exp(-t * 6.9 / CZS_VERB.secs) * (1.2 - 0.6 * k);
+    }
+    [0.009, 0.017, 0.026, 0.038, 0.049].forEach((s, j)=>{ const i = pre + Math.floor((s + c * 0.0035) * sr); if(i < len) d[i] += (j % 2 ? -0.55 : 0.6) * Math.exp(-j * 0.35); });
+  }
+  if(_czsCache) _czsCache.hall.set(ctx, ir);
+  return ir;
+}
+/* where a catch's sounds go: `in` (heard as it is, and in the hall), `verb` (in the hall only); a gentle compressor over
+   both, their level (CZS_LEVEL), into `dest` (the effects' volume). One a destination, kept. */
+function czsBusOf(ctx, dest){
+  if(dest && dest.in && dest.verb) return dest;
+  let B = _czsCache && _czsCache.bus.get(dest);
+  if(B && B.ctx === ctx) return B;
+  const input = ctx.createGain(), verb = ctx.createGain(), send = ctx.createGain(), comp = ctx.createDynamicsCompressor(), lvl = ctx.createGain();
+  send.gain.value = CZS_VERB.wet;
+  comp.threshold.value = -20; comp.knee.value = 16; comp.ratio.value = 3; comp.attack.value = 0.006; comp.release.value = 0.3;
+  lvl.gain.value = CZS_LEVEL;
+  input.connect(comp); input.connect(send); send.connect(verb);
+  try {
+    const conv = ctx.createConvolver(); conv.normalize = true; conv.buffer = czsHall(ctx);
+    verb.connect(conv); conv.connect(comp);
+  } catch(e){ verb.connect(comp); }                                  // (no hall where none can be made: heard dry)
+  comp.connect(lvl); lvl.connect(dest);
+  B = { ctx, in:input, verb };
+  if(_czsCache) _czsCache.bus.set(dest, B);
+  return B;
+}
+/* into `to`, to one side (`pan`, −1 to 1) where the device can */
+function czsTo(ctx, node, to, pan){
+  if(pan && typeof ctx.createStereoPanner === 'function'){ const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); node.connect(p); p.connect(to); }
+  else node.connect(to);
+}
+/* air: noise through a band (or a low-pass) swept from f0 to f1, swelling to `vol` at `peak` of the way */
+function czsAir(ctx, to, t, dur, f0, f1, vol, o){
+  o = o || {};
+  const src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+  src.buffer = czsNoiseBuf(ctx); src.loop = true;
+  bp.type = o.type || 'bandpass'; bp.Q.value = o.q || 1.3;
+  bp.frequency.setValueAtTime(f0, t); bp.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  const pk = t + Math.max(0.008, dur * (o.peak == null ? 0.4 : o.peak));
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, pk);
+  if(o.cut){ g.gain.setValueAtTime(vol, Math.max(pk, t + dur - 0.03)); g.gain.linearRampToValueAtTime(0, t + dur); }   // cut off, not faded
+  else g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(bp); bp.connect(g); czsTo(ctx, g, to, o.pan);
+  src.start(t, Math.random()); src.stop(t + dur + 0.05);
+}
+/* warm chords: two sawtooth voices a note, a little out of tune with each other and set apart left and right, through
+   a low-pass that opens from cut0 to cut1; swelling in over `att`, away over `rel`; `glide`: all of it bent by that much
+   (over glideAt of its length); `trem`: pulsing { rate, depth } */
+function czsPad(ctx, B, t, dur, notes, o){
+  o = o || {};
+  const att = o.att || 0.3, rel = Math.min(o.rel || 0.6, dur), vol = o.vol || 0.05, end = t + dur;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = o.q || 0.9;
+  lp.frequency.setValueAtTime(o.cut0 || 900, t); lp.frequency.exponentialRampToValueAtTime(o.cut1 || o.cut0 || 900, t + Math.max(0.05, (o.cutAt || 1) * dur));
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(vol, t + att);
+  env.gain.setValueAtTime(vol, Math.max(t + att, end - rel)); env.gain.linearRampToValueAtTime(0, end);
+  lp.connect(env);
+  const all = [];
+  if(o.trem){
+    const tg = ctx.createGain(), lfo = ctx.createOscillator(), d = ctx.createGain();
+    tg.gain.value = 1 - o.trem.depth / 2; d.gain.value = o.trem.depth / 2; lfo.frequency.value = o.trem.rate;
+    lfo.connect(d); d.connect(tg.gain); env.connect(tg); tg.connect(B.in); all.push(lfo);
+  } else env.connect(B.in);
+  notes.forEach(m=>{
+    const f = czsMidi(m);
+    [-1, 1].forEach(side=>{
+      const osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = o.type || 'sawtooth';
+      osc.frequency.setValueAtTime(f, t);
+      if(o.glide) osc.frequency.exponentialRampToValueAtTime(f * o.glide, t + dur * (o.glideAt || 1));
+      osc.detune.value = side * (o.detune || 9) + (Math.random() - 0.5) * 3;
+      g.gain.value = 1 / Math.sqrt(notes.length * 2);
+      osc.connect(g); czsTo(ctx, g, lp, side * (o.width == null ? 0.5 : o.width));
+      all.push(osc);
+    });
+  });
+  all.forEach(x=>{ x.start(t); x.stop(end + 0.05); });
+}
+/* a harp string: a triangle and its octave, plucked, its brightness dying faster than it does */
+function czsPluck(ctx, B, t, f, o){
+  o = o || {};
+  const dur = o.dur || 1.4, vol = o.vol || 0.05;
+  const a = ctx.createOscillator(), b = ctx.createOscillator(), bg = ctx.createGain(), lp = ctx.createBiquadFilter(), env = ctx.createGain();
+  a.type = 'triangle'; a.frequency.setValueAtTime(f, t);
+  b.frequency.setValueAtTime(f * 2.003, t); bg.gain.value = 0.3;
+  lp.type = 'lowpass'; lp.Q.value = 0.5;
+  lp.frequency.setValueAtTime(Math.min(9000, f * 7), t); lp.frequency.exponentialRampToValueAtTime(Math.max(220, f * 1.3), t + dur * 0.55);
+  env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(vol, t + (o.att || 0.012)); env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  a.connect(lp); b.connect(bg); bg.connect(lp); lp.connect(env);
+  czsTo(ctx, env, B.in, o.pan);
+  [a, b].forEach(x=>{ x.start(t); x.stop(t + dur + 0.05); });
+}
+/* a mote of light: a soft sine with a slow start and a little vibrato, heard mostly in the hall (a glow, not a ping) */
+function czsMote(ctx, B, t, f, o){
+  o = o || {};
+  const dur = o.dur || 1.4, vol = o.vol || 0.03;
+  const osc = ctx.createOscillator(), vib = ctx.createOscillator(), vd = ctx.createGain(), env = ctx.createGain(), dry = ctx.createGain();
+  osc.frequency.setValueAtTime(f, t);
+  if(o.bend) osc.frequency.exponentialRampToValueAtTime(f * o.bend, t + dur);
+  vib.frequency.value = 4.5 + Math.random() * 2; vd.gain.value = f * 0.005; vib.connect(vd); vd.connect(osc.frequency);
+  env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(vol, t + (o.att || 0.05)); env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  dry.gain.value = o.dry == null ? 0.3 : o.dry;
+  osc.connect(env); czsTo(ctx, env, B.verb, o.pan); env.connect(dry); czsTo(ctx, dry, B.in, o.pan);
+  [osc, vib].forEach(x=>{ x.start(t); x.stop(t + dur + 0.05); });
+}
+/* weight: a low sine falling (and its octave and a puff of low noise, for small speakers that cannot play the sine) */
+function czsBoom(ctx, B, t, o){
+  o = o || {};
+  const vol = o.vol || 0.3, f0 = o.f0 || 110, f1 = o.f1 || 40, dur = o.dur || 0.9;
+  [[1, 'sine', vol, dur], [2, 'triangle', vol * 0.35, dur * 0.7]].forEach(([k, type, v, d])=>{
+    const osc = ctx.createOscillator(), env = ctx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(f0 * k, t); osc.frequency.exponentialRampToValueAtTime(f1 * k, t + d * 0.6);
+    env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(v, t + 0.012); env.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    osc.connect(env); env.connect(B.in); osc.start(t); osc.stop(t + d + 0.05);
+  });
+  czsAir(ctx, B.in, t, dur * 0.55, o.n0 || 900, o.n1 || 150, vol * 0.45, { type:'lowpass', q:0.7, peak:0.03 });
+}
+/* a choir's "ah" on `f`: two sawtooth voices a little apart, a slow vibrato, through the vowel's three bands. Returns its
+   oscillators (to bend or stop) and where it comes out */
+function czsAh(ctx, t, f, o){
+  o = o || {};
+  const v = [ctx.createOscillator(), ctx.createOscillator()], vib = ctx.createOscillator(), vd = ctx.createGain(), sum = ctx.createGain(), out = ctx.createGain();
+  vib.frequency.value = 5.2 + Math.random() * 0.6; vd.gain.value = f * 0.006; vib.connect(vd);
+  v.forEach((x, i)=>{ x.type = 'sawtooth'; x.frequency.setValueAtTime(f, t); x.detune.value = (i ? 6 : -6) + (Math.random() - 0.5) * 3; vd.connect(x.frequency); x.connect(sum); });
+  sum.gain.value = 0.5; out.gain.value = o.vol || 1;
+  [[730, 1, 9], [1090, 0.55, 11], [2440, 0.22, 13]].forEach(([ff, g, q])=>{
+    const bp = ctx.createBiquadFilter(), bg = ctx.createGain(); bp.type = 'bandpass'; bp.frequency.value = ff; bp.Q.value = q; bg.gain.value = g * 5;
+    sum.connect(bp); bp.connect(bg); bg.connect(out); });
+  return { oscs:v, all:v.concat([vib]), out };
+}
+/* hold an AudioParam where it is at `at` and let it go to `v` (time constant `tc`) */
+function czsGlide(p, v, at, tc){
+  try { if(typeof p.cancelAndHoldAtTime === 'function') p.cancelAndHoldAtTime(at); else { const now = p.value; p.cancelScheduledValues(at); p.setValueAtTime(now, at); } } catch(e){}
+  p.setTargetAtTime(v, at, Math.max(0.01, tc));
+}
+const CZS = {
+  launch(ctx, out, t){
+    const B = czsBusOf(ctx, out);
+    czsBoom(ctx, B, t, { vol:0.16, f0:95, f1:48, dur:0.75 });                                   // the ball opening: a soft whoomp
+    czsAir(ctx, B.in, t, 0.75, 300, 2600, 0.05, { peak:0.3 });                                 // …a breath out
+    CZS_CHORD.up.forEach((m, i)=> czsPluck(ctx, B, t + 0.03 + i * 0.048 + Math.random() * 0.01, czsMidi(m),   // a harp swept up the chord: one string an orb
+      { vol:0.032 + 0.008 * Math.random(), dur:1.7, pan:Math.cos(i / 12 * Math.PI * 2 - Math.PI / 2) * 0.7 }));
+    czsPad(ctx, B, t + 0.04, 1.9, CZS_CHORD.warm, { vol:0.055, att:0.4, rel:1.0, cut0:450, cut1:1900, detune:10, width:0.6 });   // warm under it
+    return 1.9 + CZS_VERB.secs;
+  },
+  fly(ctx, out, t, dur){
+    const B = czsBusOf(ctx, out), span = dur + 0.5;
+    /* the chord climbing a whole tone as they rise to it, pulsing seven times a second, opening */
+    czsPad(ctx, B, t, span, [59, 64, 68, 71, 76], { vol:0.08, att:0.3, rel:0.45, cut0:650, cut1:3400, glide:Math.pow(2, 2 / 12), glideAt:0.9, detune:11, width:0.7, trem:{ rate:7, depth:0.6 } });
+    czsAir(ctx, B.in, t, span, 420, 3800, 0.065, { peak:0.85, q:1.1 });                        // the wind of it, rising
+    [80, 83, 87, 88, 92, 95].forEach((m, i)=> czsMote(ctx, B, t + (i + 0.2 + Math.random() * 0.6) * span / 6, czsMidi(m),   // a few motes, far off
+      { vol:0.026, dur:1.3, pan:(Math.random() - 0.5) * 1.3, dry:0.25 }));
+    return span + CZS_VERB.secs;
+  },
+  attempt(ctx, out, t){
+    const B = czsBusOf(ctx, out), T = CZS_TRY, base = { level:0.055, cut:480 };
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0, t); master.gain.linearRampToValueAtTime(base.level, t + 0.6);
+    master.connect(B.in);
+    czsAir(ctx, B.in, t, 1.1, 500, 2400, 0.03, { peak:0.8 });                                  // the orbs gathering in round it
+    const lfo = ctx.createOscillator(); lfo.frequency.setValueAtTime(T.rate, t);
+    const reach = (v, param)=>{ const g = ctx.createGain(); g.gain.value = v; lfo.connect(g); g.connect(param); };
+    /* low: a growl (E2, B2, E3) through a low-pass that opens on each beat, swelling on it, squeezed up in pitch on it */
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 5; lp.frequency.setValueAtTime(base.cut, t);
+    const loG = ctx.createGain(); loG.gain.setValueAtTime(0.55, t);
+    reach(380, lp.frequency); reach(0.45, loG.gain);
+    const low = [40, 47, 52].map((m, i)=>{ const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(czsMidi(m), t); o.detune.value = (i - 1) * 7; reach(35, o.detune); o.connect(lp); return o; });
+    const sub = ctx.createOscillator(); sub.frequency.setValueAtTime(czsMidi(40), t);
+    const subG = ctx.createGain(); subG.gain.value = 0.5; sub.connect(subG); subG.connect(loG);
+    lp.connect(loG); loG.connect(master);
+    /* high: the choir's "ah" (E4, G#4, B4), in the gaps between the beats */
+    const hiG = ctx.createGain(); hiG.gain.setValueAtTime(0.32, t); reach(-0.28, hiG.gain);
+    const choir = [64, 68, 71].map(m=> czsAh(ctx, t, czsMidi(m), { vol:0.5 }));
+    choir.forEach((c, i)=> czsTo(ctx, c.out, hiG, (i - 1) * 0.5));
+    hiG.connect(master);
+    /* tension: a thin high fifth (E6, B6), slowly gathering, a little into the hall */
+    const tenG = ctx.createGain(); tenG.gain.setValueAtTime(0, t); tenG.gain.linearRampToValueAtTime(0.07, t + 3);
+    const ten = [88, 95].map((m, i)=>{ const o = ctx.createOscillator(); o.frequency.setValueAtTime(czsMidi(m), t); o.detune.value = i ? 4 : -4; o.connect(tenG); return o; });
+    tenG.connect(master);
+    const oscs = [lfo, sub].concat(low, ten), all = oscs.concat(...choir.map(c=> c.all));
+    all.forEach(o=> o.start(t));
+    let stopped = false;
+    return {
+      /* quicker or slower, higher or lower (`secs` to get there; `at`, for a sound made ahead of time) */
+      set(o, secs, at){
+        if(stopped) return;
+        const now = at != null ? at : ctx.currentTime, tc = Math.max(0.05, (secs || 0.6) / 3), k = Math.pow(2, (o.pitch || 0) / 12);
+        czsGlide(lfo.frequency, o.rate, now, tc);
+        [40, 47, 52].forEach((m, i)=> czsGlide(low[i].frequency, czsMidi(m) * k, now, tc));
+        czsGlide(sub.frequency, czsMidi(40) * k, now, tc);
+        [64, 68, 71].forEach((m, i)=> choir[i].oscs.forEach(x=> czsGlide(x.frequency, czsMidi(m) * k, now, tc)));
+        czsGlide(lp.frequency, base.cut * (o.bright || 1), now, tc);
+        czsGlide(master.gain, base.level * (o.level || 1), now, tc);
+      },
+      /* faded out over `secs` (from `at`, for a sound made ahead of time) */
+      stop(secs, at){
+        if(stopped) return;
+        stopped = true;
+        const now = at != null ? at : ctx.currentTime, d = Math.max(0.03, secs || 0.3);
+        czsGlide(master.gain, 0.0001, now, d / 4);
+        all.forEach(o=>{ try { o.stop(now + d + 0.1); } catch(e){} });
+      },
+    };
+  },
+  condense(ctx, out, t, dur){
+    const B = czsBusOf(ctx, out);
+    czsAir(ctx, B.in, t, dur, 600, 7000, 0.09, { peak:0.97, q:0.9, cut:true });               // the light drawn in, cut off
+    czsPad(ctx, B, t, dur + 0.12, [64, 68, 71, 75], { vol:0.07, att:dur * 0.85, rel:0.1, cut0:600, cut1:5200, glide:Math.pow(2, 7 / 12), glideAt:0.95, detune:12, width:0.6 });   // rising a fifth
+    [64, 66, 68, 71, 75, 76, 78, 80, 83].forEach((m, i, a)=>{ const u = i / (a.length - 1);   // a harp swept quickly up into the middle
+      czsPluck(ctx, B, t + dur * 0.92 * (1 - Math.pow(1 - u, 2)), czsMidi(m), { vol:0.028 + 0.03 * u, dur:1.1, pan:(i % 2 ? -1 : 1) * 0.55 * (1 - u) }); });
+    return dur + CZS_VERB.secs;
+  },
+  disperse(ctx, out, t){
+    const B = czsBusOf(ctx, out);
+    czsBoom(ctx, B, t, { vol:0.24, f0:120, f1:36, dur:1.0 });                                  // thrown off
+    czsAir(ctx, B.in, t, 1.3, 3200, 240, 0.085, { pan:-0.8, peak:0.04 });                      // a rush outward, both ways
+    czsAir(ctx, B.in, t + 0.02, 1.3, 2900, 220, 0.085, { pan:0.8, peak:0.04 });
+    czsPad(ctx, B, t, 1.5, CZS_CHORD.sad, { vol:0.07, att:0.02, rel:1.3, cut0:2600, cut1:200, glide:0.5, detune:14, width:0.7 });   // the light failing: down an octave, darkening
+    [88, 85, 83, 80, 78, 76, 73].forEach((m, i)=> czsMote(ctx, B, t + 0.05 + i * 0.07, czsMidi(m),   // the motes falling away into the hall
+      { vol:0.032, dur:1.3, bend:0.8, pan:(i % 2 ? -1 : 1) * (0.4 + 0.08 * i), dry:0.25 }));
+    return 1.5 + CZS_VERB.secs;
+  },
+};
+/* played now, while the sound is on (audio.unlocked) and running: through the catch's hall, into the effects' volume */
+const czSound = {
+  live(){
+    try {
+      if(typeof audio === 'undefined' || !audio.unlocked || typeof ensureAudioCtx !== 'function') return null;
+      const ctx = ensureAudioCtx();
+      if(!ctx || typeof sfxGain === 'undefined' || !sfxGain) return null;
+      wakeAudio();
+      if(ctx.state !== 'running') return null;
+      return { ctx, out:czsBusOf(ctx, sfxGain), t:ctx.currentTime + 0.015 };
+    } catch(e){ return null; }
+  },
+  play(fn, arg){
+    const L = czSound.live();
+    if(!L) return null;
+    try { fn(L.ctx, L.out, L.t, arg); } catch(e){}
+    return L;
+  },
+  launch(){ return czSound.play(CZS.launch); },
+  fly(ms){ return czSound.play(CZS.fly, Math.max(0.3, ms / 1000)); },
+  condense(ms){ return czSound.play(CZS.condense, Math.max(0.3, ms / 1000)); },
+  disperse(){ return czSound.play(CZS.disperse); },
+  attempt(){
+    if(CZ && CZ.snd) czSound.stopAttempt(0.05);                      // (one at a time)
+    const L = CZ && czSound.live();
+    if(!L) return null;
+    try { CZ.snd = CZS.attempt(L.ctx, L.out, L.t); } catch(e){ CZ.snd = null; }
+    return CZ.snd;
+  },
+  intent(o, secs){ try { if(CZ && CZ.snd) CZ.snd.set(o, secs); } catch(e){} },
+  stopAttempt(secs){
+    try {
+      const v = CZ && CZ.snd;
+      if(!v) return;
+      CZ.snd = null;
+      v.stop(secs);
+    } catch(e){}
+  },
+};
 
 /* ---------- its looks ---------- */
 function czCss(){
