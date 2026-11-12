@@ -1747,6 +1747,7 @@ function renderChallengeR6(){
       </div>
     </div>
     ${tearChallengeCard()}
+    ${typeof caDauphinCard === 'function' ? caDauphinCard() : ''}
     <div class="challenge-card" style="cursor:default;">
       ${nemesisTrioHtml(30).replace('emblem-pair', 'fu-mini')}
       <div style="flex:1;">
@@ -1760,6 +1761,7 @@ function renderChallengeR6(){
   $('#cFuture').addEventListener('click', ()=>{ ui.futureBack = null; go('future'); });
   const tc = $('#cTear');
   if(tc) tc.addEventListener('click', ()=>{ ui.tearBack = null; go('tear'); });
+  if(typeof caDauphinCardWire === 'function') caDauphinCardWire();      // (4.33) straight to the Dauphin, and her spar (21-castle.js)
 }
 
 /* ============================================================

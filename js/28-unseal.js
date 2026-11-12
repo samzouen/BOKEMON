@@ -26,6 +26,8 @@
      · (4.28) "commanders must have 6 waves. the ones invading the villages had 3": the vanguard is a commander's army of
        six waves (its four aliens, its captain, the commander — all six of them on the map), and in the finals each
        commander brings its six (a captain beyond theirs, its three): Grass and Water 6 waves, Fire 9, Earth 12 (unArmy).
+     · (4.32) every village the same: the captain's band and the commander's army, nine waves in one fight; one captain on
+       the guardian, one commander on the ancestor.
    The chant: the designer asked for Tolkien's "A Elbereth Gilthoniel"; that song is not ours to put in the game, so
    the King chants in an old fae tongue of our own, four parts, the sense of each in the words around it.
    ============================================================ */
@@ -73,6 +75,7 @@ function unFace(who, k){
     case 'king': return jgFace('fairy_king_mounted_c_front', 'fairy_king_c_front');
     case 'kingFoot': return jgFace('fairy_king_c_front');
     case 'commander': case 'advisor': return typeof caFace === 'function' ? caFace(who) : '';
+    case 'knight': return jgFace('chestnut_knight2_front');            // (4.33) the castle's messenger
     case 'lion': return riftLucescoFace();
     case 'you': return facePlayer();
     case 'g': return jgFace(JG_TRIBES[k].guardian);
@@ -86,6 +89,7 @@ function unName(who, k){
   switch(who){
     case 'king': case 'kingFoot': return 'The Fairy King';
     case 'commander': return 'Royal Commander';
+    case 'knight': return 'Chestnut Knight';
     case 'advisor': return 'Royal Advisor';
     case 'lion': return 'Lucesco';
     case 'you': return 'You';
@@ -476,7 +480,9 @@ if(typeof PAST_DECK !== 'undefined') PAST_DECK.ghostChat = id=> r6GhostChat(id);
 /* ============================================================
    WHERE EVERYONE STANDS — B, the blade's square: just before the guardian's door (between it and where you arrive)
    ============================================================ */
-const UN_FORCES = { grass:{ captains:1, commanders:1 }, water:{ captains:1, commanders:1 }, fire:{ captains:2, commanders:1 }, earth:{ captains:2, commanders:2 } };
+/* (4.32) the same at every village now: one captain on the guardian, one commander on the ancestor (Fire had two
+   captains, Earth two of each) — and the finals one fight of nine waves (unFightFinals) */
+const UN_FORCES = { grass:{ captains:1, commanders:1 }, water:{ captains:1, commanders:1 }, fire:{ captains:1, commanders:1 }, earth:{ captains:1, commanders:1 } };
 function unV(k){ return jgGround().places.villages[k]; }
 function unB(k){ const s = unV(k).stand; return { x:s.x, y:s.y - 1 }; }
 const _unPlaces = {};
@@ -947,13 +953,15 @@ function unFightVanguard(k){
     jgWon(unPseudo(k, 'van', unLeads(waves)), levelUps);
   }, ['battle_boss', 'battle_region6']);
 }
-/* the finals: a captain beyond the commanders' own, its band first (Fire's second); then each commander's army, its
-   captain in it — Grass and Water 6 waves, Fire 9, Earth 12 */
+/* the finals — (4.32) the designer: "the tribe final fight after ancestor unsealing should be 9 waves long: 1 Captain (3
+   waves ending with him) and 1 commander (6 waves ending with Captain penultimate and commander final wave), back to
+   back like one continuous fight 9 waves in one go." The captain's band, then the commander's army, every tribe
+   (until 4.32: Grass and Water 6 waves, Fire 9, Earth 12) */
 function unFightFinals(k){
-  const F = UN_FORCES[k], waves = [], picks = n=> Array.from({ length:n }, ()=> unPick());
-  for(let i = F.commanders; i < F.captains; i++) waves.push(...unArmy(k, JG_CAPTAIN, picks(2)));
-  for(let i = 0; i < F.commanders; i++) waves.push(...unArmy(k, JG_COMMANDER, picks(4)));
-  const nm = `${F.captains > 1 ? 'The captains' : 'The captain'} and ${F.commanders > 1 ? 'the commanders' : 'the commander'}`;
+  const waves = [], picks = n=> Array.from({ length:n }, ()=> unPick());
+  waves.push(...unArmy(k, JG_CAPTAIN, picks(2)));
+  waves.push(...unArmy(k, JG_COMMANDER, picks(4)));
+  const nm = 'The captain and the commander';
   return unBattle(k, 'un-fin-' + k, waves, nm, (levelUps)=>{
     unRite(k).won = true;
     saveProfile();
@@ -1293,10 +1301,15 @@ async function unSiegeTalk(k, who){
 /* ---------- won: everyone's thanks; the King home; the village its own again ---------- */
 async function unEnding(k){
   const P = unPlace(k), V = unV(k), S = warSpots(k);
+  /* (4.33) the last of the four: no ride home — word comes from the castle (36-the-return.js: invReturnStart). The
+     designer: "The player will be asked to return swiftly after the last tribe's unsealing." */
+  const last = JG_TRIBE_KEYS.every(t=> t === k || unDone(t)) && typeof invReturnStart === 'function';
+  let back = false;
   await unScene(async ()=>{
     await unLook(k, 700);
     await unLines(UN_SIEGE_WON[k], k);
     if(unGone()) return;
+    if(last){ back = await invReturnStart(k); return; }
     await unLines(UN_SIEGE_HOME.slice(0, 2), k);
     if(unGone()) return;
     unActGone('king', 1500);                                              // the tribe's fairies lead his mount away
@@ -1319,6 +1332,7 @@ async function unEnding(k){
     await unLines([['lion', next === 'done' ? UN_LION.done
       : `<b>"He will sleep for a day at least. Tomorrow, if he is ready: ${questTribe(next)}, in the ${where(next)}."</b>`]], k);
   });
+  if(back) return invReturnGo();                                       // (4.33) the hidden paths, to the castle
   if(!unGone()) await sceneCamFree(500);
 }
 
@@ -1471,6 +1485,7 @@ async function unLionAsk(html, yes, then){
 function unLionTalk(){
   const st = warStage(), e = unEscort(), say = html=> jgLines([riftLucescoFace()], 'Lucesco', [html]);
   if(!st) return jgLionChat();
+  if(st === 'done' && typeof invLionJungle === 'function'){ const r = invLionJungle(); if(r) return r; }   // (4.33) the castle invaded, Wadjet's trail
   if(st === 'done') return warState().stone ? jgLionChat() : say(UN_LION.done);
   const p = walkState().at && walkState().at[JG_KEY];
   if(e){

@@ -361,7 +361,9 @@ function teamBannerHtml(){
     pairOrder(m, c).forEach(x=> team.push([x, x === c]));
   });
   if(!team.length && !playerAvatar()) return '';
-  const S = Math.round(Math.max(78, Math.min(150, window.innerHeight * 0.17)));   // the room the page has: big where there is room
+  /* the room the page has: big where there is room — (4.32) "reduce the size of the sprite and monsters by about 33%. This
+     will allow for more monsters to scroll at once" (78–150 until 4.32) */
+  const S = Math.round(Math.max(52, Math.min(100, window.innerHeight * 0.114)));
   const mon = ([m, comp])=> `<span class="ht-mon${comp ? ' ht-comp' : ''}">${monPortrait(m.species, Math.round(S * (comp ? 0.8 : 1)), { view:'front', bare:true, stage:monStage(m), crowned:isCrowned(m) })}</span>`;
   return `<div class="home-team${playerAvatar() ? '' : ' ht-alone'}" id="homeTeam" role="button" tabindex="0" aria-label="Your team: open the party page" style="--ht-s:${S}px">
     ${playerAvatar() ? `<span class="ht-me">${avatarImg(playerAvatar(), Math.round(S * 1.08), { bare:true })}</span>` : ''}
@@ -386,7 +388,11 @@ function teamBannerWire(){
   requestAnimationFrame(()=>{
     if(!track.isConnected) return;
     const kids = track.children.length;
-    if(!kids || track.scrollWidth <= view.clientWidth + 4){ track.classList.add('ht-still'); return; }   // all of them in view: they stand
+    /* (4.32) "If a party does not have enough to fill up the scrolling bar, keep it static with the monsters next to the
+       sprite": all of them in view stood beside you — they stand there, none going by behind */
+    box.classList.add('ht-static');
+    if(!kids || track.scrollWidth <= view.clientWidth + 4){ track.classList.add('ht-still'); return; }
+    box.classList.remove('ht-static');
     track.insertAdjacentHTML('beforeend', track.innerHTML);                                          // round and round
     [...track.children].slice(kids).forEach(el=> el.setAttribute('aria-hidden', 'true'));
     const period = track.children[kids].offsetLeft - track.children[0].offsetLeft;
@@ -404,10 +410,12 @@ function teamBannerWire(){
 }
 
 function renderHome(){
-  setScreenBg('home');
+  const cont = continueInfo();
+  /* (4.32) "Can you have transparent buttons and the continue region's art at the back? I want the art to come through":
+     the art of the region Continue goes to, behind see-through buttons (index.html; Region 6's sky, violet glass) */
+  setScreenBg('region' + cont.r);
   playMusic('main_menu');
   $('#brandSub').textContent = state.name;
-  const cont = continueInfo();
   screenEl.innerHTML = `
     <div class="version-tag">v${GAME_VERSION}</div>
     ${playerAvatar() ? '' : `<div class="avatar-nudge" id="avatarNudge">
@@ -419,12 +427,12 @@ function renderHome(){
       <span class="hg-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6.2v11.6L18.4 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span>
       <span class="hg-words"><span class="hg-title">Continue</span><span class="hg-where">${escapeHtml(cont.where)}</span></span>
     </button>
+    ${dailyPanel()}
     <div class="home-menu">
       <button class="home-card wide" data-nav="regionSelect"><span class="hc-icon">🗺️</span><span class="hc-title">Regions</span></button>
       <button class="home-card" data-nav="spellingIndex"><span class="hc-icon">🀄</span><span class="hc-title">Spelling Index</span></button>
       <button class="home-card" data-nav="monsterIndex"><span class="hc-icon">📖</span><span class="hc-title">Monster Index</span></button>
     </div>
-    ${dailyPanel()}
   `;
   const pab = $('#pickAvatarBtn');
   if(pab) pab.addEventListener('click', ()=>go('avatarPick'));
@@ -2393,6 +2401,7 @@ function storageItemsPageHtml(){
       ${others ? `<div class="wal-row">${others}</div>` : ''}
       ${elemPassivesHeld().length ? `<div class="wal-head">Passive upgrades <span>put one on from a monster's Stats page</span></div>
         <div class="wal-row">${elemPassivesHeld().map(x=> chip(elemIcon(x.el, 20), x.n, `${elemPassiveDef(x.el, x.slot).name} · ${ELEM_PASSIVE_SLOTS[x.slot]}`, true)).join('')}</div>` : ''}
+      ${typeof boostWalletHtml === 'function' ? boostWalletHtml() : ''}
     </div>
     ${heldStones().length ? `<button class="btn btn-ghost stone-page-btn" id="openStones">💠 Element Stones <span>${totalStones()} held</span></button>` : ''}
     ${typeof recStorageHtml === 'function' ? (caCss(), recStorageHtml()) : ''}

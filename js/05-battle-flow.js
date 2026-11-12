@@ -64,7 +64,7 @@ function bgCandidates(key){
   if(!key) return [];
   const rid0 = (state && state.progress && state.progress.currentRegion) || 1;
   /* (3.75) the Time Rift: its own art when there is some, its drawn sky until then */
-  if((rid0 === 6 || key === 'rift') && typeof r6BgCandidates === 'function'){ const r6c = r6BgCandidates(key); if(r6c) return r6c; }
+  if((rid0 === 6 || key === 'rift' || key === 'region6') && typeof r6BgCandidates === 'function'){ const r6c = r6BgCandidates(key); if(r6c) return r6c; }   // (4.32) Region 6's own, asked for by name (the home page's, from any region)
   const out = [];
   /* A region's own art takes precedence over the shared screen art, so
      Region 3's Explore shows region3.png rather than Region 1's explore.png. */
@@ -3546,6 +3546,7 @@ function confusedStrikeOwn(e, done, mayControl){
   bob(document.getElementById('enemyBob-'+from), -1);
   setTimeout(()=>{
     const before = victim.hp;
+    if(victim.nemShadow){ floatMiss('enemy-'+idx, 'PASSES THROUGH'); return setTimeout(()=> done(), 800); }   // (4.31) a shadow of Wadjet's
     victim.hp = Math.max(0, victim.hp - dmg);
     flashHit(document.getElementById('enemy-'+idx));
     drainHp('enemyHp-'+idx, before, victim.hp, victim.maxHp);
@@ -3609,8 +3610,10 @@ function mindControl(e, done){
         const said = victims.filter(v=> v !== e).map(v=> escapeHtml(SPECIES[v.species].name)).concat(victims.includes(e) ? ['itself'] : []);
         battleMsg(`🧠 Mind Control! ${escapeHtml(name)} uses <b>${escapeHtml(pick.r[1])}</b> on ${said.length > 1 ? said.slice(0, -1).join(', ') + ' and ' + said[said.length - 1] : said[0]}!`);
         setTimeout(()=>{
+          let marks = '';
           victims.forEach(v=>{
             const idx = b.enemies.indexOf(v);
+            if(v.nemShadow){ floatMiss('enemy-' + idx, 'PASSES THROUGH'); return; }   // (4.31) a shadow of Wadjet's: it passes through
             let dmg = total(pick.r) * enemyAtk(e) * typeMultiplier(e.types, v.types) * hexAmp(v);
             const cur = getEStatus(v, 'curse');
             dmg *= curseBucket(cur, 'enemy');   // (4.07) a Portent too
@@ -3621,7 +3624,10 @@ function mindControl(e, done){
             drainHp('enemyHp-' + idx, before, v.hp, v.maxHp);
             showDamageNumber('enemy-' + idx, before - v.hp);
             if(v.hp <= 0){ const el = document.getElementById('enemy-' + idx); if(el) el.classList.add('fainted'); }
+            /* (4.31) a shadow's Night Venom: a Curse and Venom on the one it struck (34-nemesis.js) */
+            if(pick.r[6] && pick.r[6].afflict && typeof nemAfflictFoe === 'function') marks += nemAfflictFoe(v, pick.r[6].afflict);
           });
+          if(marks){ const el = $('#battleMsg'); if(el) el.innerHTML += (typeof emoHtml === 'function') ? emoHtml(marks) : marks; }
           logBattle(`Mind Control: ${name} used ${pick.r[1]} on its own side`);
           hexSweep();
           renderStatusBadges();
@@ -5255,6 +5261,12 @@ function enemyStrikeOn(ctx, step, done){
         if(getMStatus(mon,'discombobulate')) msg += ` 🌀 ${displayName(mon)} is confused — its next swing turns on its own side!`;
       }
       renderStatusBadges();
+    }
+    /* (4.31) Wadjet's Hood of Dread that got through: Curse and Venom on your side, once an attack (34-nemesis.js) */
+    if(ex.afflict && totalTaken > 0 && !ctx._afflicted && typeof nemAfflict === 'function'){
+      ctx._afflicted = true;
+      const z = nemAfflict(ex.afflict);
+      if(z){ msg += ' ' + z; renderStatusBadges(); }
     }
     /* Yours punish a threshold as theirs do (2.87): a Thunderhound driven
        below 75/50/25% stuns whoever drove it there; a Moon Swan sings it to

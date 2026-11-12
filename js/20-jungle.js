@@ -473,7 +473,20 @@ function jgGround(){
     for(let y = P.y; y < P.y + P.h; y++) for(let x = P.x; x < P.x + P.w; x++){ const i = y * W + x; pieceOld.set(i, g[i]); g[i] = JG_T.HUT; }
     V.piece = P;
   });
-  _jgGround = { g, W, H, places, R, inCorner, pieceOld };
+  /* (4.33) The jungle's northern edge, half way across: where Wadjet runs to and tears open his rift (36-the-return.js) —
+     the designer: "Wadjet escapes into the northern edge of the map, not the castle wall … That's where the army's
+     perimeter will be". A half-round glade against the edge, opened as the centrepieces were: after all the rest, with
+     none of the jungle's dice, what was on its squares kept (northOld) so the finds lie where they always have. */
+  const northOld = new Map();
+  const N = { x:W >> 1, y:0, rx:9.5, ry:7.5 };
+  for(let y = 1; y <= Math.ceil(N.ry); y++) for(let x = Math.floor(N.x - N.rx); x <= Math.ceil(N.x + N.rx); x++){
+    if(x < 1 || x >= W - 1 || !oval(x, y, N.x, N.y, N.rx, N.ry)) continue;
+    const i = y * W + x;
+    if(g[i] !== JG_T.GLADE){ northOld.set(i, g[i]); g[i] = JG_T.GLADE; }
+  }
+  /* the rift at the very edge, a palisade round it later (10 across, 4 deep, its gate the middle two of its front) */
+  places.north = { x:N.x, y:N.y, rx:N.rx, ry:N.ry, rift:{ x:N.x + 0.5, y:1.3 }, pen:{ x:N.x - 5, y:1, w:10, h:4 }, gate:{ x:N.x - 1, y:4, w:2 }, stand:{ x:N.x, y:5 } };
+  _jgGround = { g, W, H, places, R, inCorner, pieceOld, northOld };
   return _jgGround;
 }
 function jgTile(x, y){ const G = jgGround(); return (x < 0 || y < 0 || x >= G.W || y >= G.H) ? JG_T.HEDGE : G.g[y * G.W + x]; }
@@ -522,11 +535,15 @@ function jgZoneOf(x, y){ return jgTribeOf(x, y); }
 let _jgBands = null, _jgBandsDay = null;
 function jgDaySeed(day){ let h = 2166136261; const s = String(day); for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 /* (4.00) After the battle for the castle the designer: "there will still be aliens in the forest for the player to
-   hunt albeit a third the number before" — 120 of the 360, in the same shares (26-invasion.js: invAfter). */
+   hunt albeit a third the number before" — 120 of the 360, in the same shares (26-invasion.js: invAfter).
+   (4.33) "…the post region state where alien counts on the map are halved but aliens are continually battling at the
+   north edge's rift": 180 of the 360, in the same shares (18 commanders' bands, 27 captains'). */
+const JG_AFTER_SHARE = 1 / 2;
 function jgAlienCounts(){
   const A = JG.aliens;
   if(!(typeof invAfter === 'function' && invAfter())) return A;
-  return Object.assign({}, A, { total:Math.round(A.total / 3), commander:Math.round(A.commander / 3), captain:Math.round(A.captain / 3) });
+  const k = JG_AFTER_SHARE;
+  return Object.assign({}, A, { total:Math.round(A.total * k), commander:Math.round(A.commander * k), captain:Math.round(A.captain * k) });
 }
 function jgBands(){
   const day = today(), A = jgAlienCounts(), key = day + ':' + A.total;
@@ -535,7 +552,8 @@ function jgBands(){
   const R = jgRng((JG.seed ^ 0x51ed ^ jgDaySeed(day)) >>> 0), ri = n=> Math.floor(R() * n);
   const mix = list=>{ for(let i = list.length - 1; i > 0; i--){ const j = ri(i + 1); const t = list[i]; list[i] = list[j]; list[j] = t; } return list; };
   const C = places.castle, ccx = C.x + C.w / 2, ccy = C.y + C.h / 2, far = Math.hypot(ccx, ccy);
-  const safe = [places.entry, ...Object.values(places.villages), { x:C.x - 8, y:C.y + C.h - 2, w:C.w + 16, h:14 }];
+  const N = places.north;                                              // (4.33) and the rift's glade at the north edge
+  const safe = [places.entry, ...Object.values(places.villages), { x:C.x - 8, y:C.y + C.h - 2, w:C.w + 16, h:14 }].concat(N ? [{ x:N.x - N.rx, y:0, w:N.rx * 2, h:N.ry + 1 }] : []);
   const tooNear = (x, y)=> safe.some(s=> x > s.x - A.safe && x < s.x + s.w + A.safe && y > s.y - A.safe && y < s.y + s.h + A.safe);
   const spots = [];
   for(let y = 1; y < H - 1; y++) for(let x = 1; x < W - 1; x++){
@@ -668,6 +686,7 @@ function jgThings(){
   if(typeof warJungleThings === 'function') warJungleThings(list, P);   // (3.92) the war: the King, his knights, the invaders at the villages, the ancestors woken
   if(typeof questJungleThings === 'function') questJungleThings(list, P);   // (3.99) the tribes' barricades
   if(typeof hutJungleThings === 'function') hutJungleThings(list, P);       // (4.25) a door into every house in the villages (31-huts.js)
+  if(typeof riftJungleThings === 'function') riftJungleThings(list, P);     // (4.33) the rift at the north edge, its perimeter (36-the-return.js)
   _jgThings = list;
   return list;
 }
@@ -2248,13 +2267,13 @@ function jgFinds(){
   if(_jgFinds) return _jgFinds;
   const G = jgGround(), { W, H, places, g } = G, R = jgRng((JG.seed ^ 0x71c4e7) >>> 0);
   const rd = places.castle.road, E = places.entry, avoid = new Set();
-  jgThings().forEach(t=>{ if(t.hut) return;                          // (4.25) the houses' doors came after: every find stays where it was
+  jgThings().forEach(t=>{ if(t.hut || t.late) return;                // (4.25) the houses' doors came after: every find stays where it was ((4.33) and the rift's people)
     for(let y = t.y - 1; y <= t.y + (t.h || 1); y++) for(let x = t.x - 1; x <= t.x + (t.w || 1); x++) avoid.add(y * W + x); });   // where somebody stands, or something is
   Object.values(places.villages).forEach(v=>{ for(let y = v.stand.y - 1; y <= v.stand.y + 1; y++) for(let x = v.stand.x - 1; x <= v.stand.x + 1; x++) avoid.add(y * W + x); });
   const ok = v=>{
     const x = v % W, y = (v - x) / W;
     /* (4.02) as the jungle was before its lakes were made round, so every find stays where it was (jgLakeWaterOld) */
-    const g0 = G.pieceOld && G.pieceOld.has(v) ? G.pieceOld.get(v) : g[v];   // (4.24) a centrepiece's squares as they were
+    const g0 = G.pieceOld && G.pieceOld.has(v) ? G.pieceOld.get(v) : G.northOld && G.northOld.has(v) ? G.northOld.get(v) : g[v];   // (4.24) a centrepiece's squares as they were; (4.33) the north edge's glade's
     const t = g0 === JG_T.WATER || g0 === JG_T.SHORE ? (jgLakeWaterOld(x, y) ? JG_T.WATER : JG_T.SHORE) : g0;
     if(JG_SOLID[t] || t === JG_T.ROAD || t === JG_T.ENTRY || avoid.has(v)) return false;
     if(x >= rd.x - 1 && x <= rd.x + rd.w && y >= rd.y - 1 && y <= rd.y + rd.h) return false;   // the castle and the road round it
@@ -3094,6 +3113,14 @@ function jgHud(){
 }
 
 /* ---------- the map of where you have been ---------- */
+/* (4.32) a tribe's village found (its guardian met at home: the quest's jgState().found) — till then the maps show only
+   forest there (jgMapOpen; the ramparts' spyglasses, 21-castle.js) */
+function jgVillageKnown(k){ const j = jgState(); return !!(j && j.found && j.found[k]); }
+/* the squares that hide it: the village and a margin round it, out past its own trees */
+function jgVillageCover(k){
+  const v = jgGround().places.villages[k], m = 4;
+  return { x0:v.x - m, y0:v.y - m, x1:v.x + v.w - 1 + m, y1:v.y + v.h - 1 + m };
+}
 function jgMapOpen(){
   if(ui.jgAlert || ui.jgTalk) return;
   releaseKeys();
@@ -3103,7 +3130,7 @@ function jgMapOpen(){
   const side = Math.min(window.innerWidth - 32, window.innerHeight - 180, 600);
   ov.innerHTML = `<div class="jg-map-card"><div class="jg-map-title">The Time-Lost Jungle</div>
       <canvas id="jgMapCv" width="${JG.W}" height="${JG.H}" style="width:${side}px;height:${side}px;"></canvas>
-      <div class="jg-map-key">🧍 you · ${JG_TRIBE_KEYS.map(k=> JG_TRIBES[k].icon + ' ' + JG_TRIBES[k].short).join(' · ')} · 🏰 castle · 🌀 the portal</div>
+      <div class="jg-map-key">🧍 you · ${JG_TRIBE_KEYS.filter(k=> jgVillageKnown(k)).map(k=> JG_TRIBES[k].icon + ' ' + JG_TRIBES[k].short).concat(['']).join(' · ')}🏰 castle · 🌀 the portal${typeof riftMapKey === 'function' ? riftMapKey() : ''}</div>
       <button class="btn btn-ghost" id="jgMapClose">Close</button></div>`;
   document.body.appendChild(ov);
   const cv = ov.querySelector('#jgMapCv'), ctx = cv.getContext('2d');
@@ -3115,11 +3142,23 @@ function jgMapOpen(){
     if(seen){ D[i] = c[0]; D[i + 1] = c[1]; D[i + 2] = c[2]; } else { D[i] = 14; D[i + 1] = 22; D[i + 2] = 18; }
     D[i + 3] = 255;
   }
+  /* (4.32) "on the map, a tribe looks like a thick section filled with trees or shadowed over before it is found": what
+     you have seen of a village not yet found is deep forest on the map, the rest of it dark */
+  JG_TRIBE_KEYS.forEach(k=>{
+    if(jgVillageKnown(k)) return;
+    const f = jgVillageCover(k);
+    for(let y = Math.max(0, f.y0); y <= Math.min(JG.H - 1, f.y1); y++) for(let x = Math.max(0, f.x0); x <= Math.min(JG.W - 1, f.x1); x++){
+      if(!jgExplored(x, y)) continue;
+      const i = (y * JG.W + x) * 4, h = jgHash(x, y, 7), d = h < 0.3 ? -10 : h > 0.8 ? 8 : 0;
+      D[i] = 30 + d; D[i + 1] = 44 + d; D[i + 2] = 20 + d;
+    }
+  });
   ctx.putImageData(img, 0, 0);
   ctx.font = '22px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   JG_TRIBE_KEYS.forEach(k=>{ if(j.found[k]){ const v = P.villages[k]; ctx.fillText(JG_TRIBES[k].icon, v.x + v.w / 2, v.y + v.h / 2); } });
   if(j.found.castle) ctx.fillText('🏰', P.castle.x + P.castle.w / 2, P.castle.y + P.castle.h / 2);
   ctx.fillText('🌀', P.entry.x + P.entry.w / 2, P.entry.y + P.entry.h / 2);
+  if(typeof riftMapDraw === 'function') riftMapDraw(ctx);           // (4.33) the rift at the north edge, once you know of it (36-the-return.js)
   if(p){ ctx.fillStyle = '#ff4d4d'; ctx.beginPath(); ctx.arc(p.x + 0.5, p.y + 0.5, 4, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); }
   const close = ()=> ov.remove();
   ov.querySelector('#jgMapClose').addEventListener('click', close);

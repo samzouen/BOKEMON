@@ -3308,8 +3308,8 @@ function sweepableBuffs(side){
     });
   }
   /* (3.64) the team's shields — fire burns them off, as it burns a monster's */
-  const tbS = teamBlock(side);
-  if(tbS && tbS.stacks > 0) out.push({ key:'teamBlock', shield:true, label:`🔩 Team shields ×${tbS.stacks}`, take:()=>{ tbS.stacks = 0; } });
+  const tbS = teamBlock(side), fixS = tbS ? Math.min(tbS.fixed || 0, tbS.stacks) : 0;   // (4.34) a Slate Shield's are never swept (37-peace.js)
+  if(tbS && tbS.stacks > fixS) out.push({ key:'teamBlock', shield:true, label:`🔩 Team shields ×${tbS.stacks - fixS}`, take:()=>{ tbS.stacks = fixS; teamVals(tbS); } });
   /* an Overheat's burn goes with its Overheat; the rest are buffs of their own */
   (b.preHits || []).forEach(p=>{
     if((p.by || 'player') !== side || p.src === 'overheat' || p.src === 'enchant') return;   // (3.87) a Fiery Enchantment's goes with its spell
@@ -3511,9 +3511,9 @@ function stealableBuffs(victimSide, victims){
   });
   /* (3.64) the team's shields (Steel Aegis's) — the side's, as its Counter
      stacks are: taken whole, to the thief's team, standing even under dust */
-  const tbV = teamBlock(victimSide);
-  if(tbV && tbV.stacks > 0) out.push({ key:'teamBlock', label:`🔩 Team shields ×${tbV.stacks}`, shield:true, take:()=>{
-    const n = tbV.stacks, v = tbV.value; tbV.stacks = 0;
+  const tbV = teamBlock(victimSide), fixV = tbV ? Math.min(tbV.fixed || 0, tbV.stacks) : 0;   // (4.34) nor stolen
+  if(tbV && tbV.stacks > fixV) out.push({ key:'teamBlock', label:`🔩 Team shields ×${tbV.stacks - fixV}`, shield:true, take:()=>{
+    const n = tbV.stacks - fixV, v = tbV.value; tbV.stacks = fixV; teamVals(tbV);
     return (toSide)=>{ grantTeamBlock(toSide, n, v); return true; };
   }});
   if(victimSide === 'player'){
@@ -5493,6 +5493,7 @@ function shieldAmp(side){ return (side === 'player' && typeof lithifyAmp === 'fu
    that takes shields off the pool by its count (a Dragon Dance, a Nova, Greed) takes the oldest. */
 function teamVals(tb){
   if(!tb) return [];
+  if((tb.fixed || 0) > tb.stacks) tb.fixed = tb.stacks;   // (4.34) a Slate Shield's, used up as blows come (37-peace.js)
   tb.vals = Array.isArray(tb.vals) ? tb.vals : [];
   while(tb.vals.length > tb.stacks) tb.vals.shift();
   while(tb.vals.length < tb.stacks) tb.vals.unshift(tb.value || 0);
@@ -7000,7 +7001,7 @@ function beginRound(msg){
      then each side's Ice Barrier melts one of the other side's marks off it.
      (Who is confused was settled in the end phase — discombobulateEndPhase.
      Frost Armour is gone.) Said with a pause, so it is seen. */
-  const iced = [foeRecharge(), chillRefreeze(), iceBarrierPulse(), siphonRoundStart()].filter(Boolean).join(' ');   // (3.43) and the tower's siphons; (3.76) Frost Armour is gone; (3.86) their recharge
+  const iced = [foeRecharge(), chillRefreeze(), iceBarrierPulse(), siphonRoundStart(), (typeof boostPulse === 'function' ? boostPulse() : '')].filter(Boolean).join(' ');   // (3.43) and the tower's siphons; (3.76) Frost Armour is gone; (3.86) their recharge; (4.34) a Spring Water's wash, a Fruit Punch's pour (37-peace.js)
   if(iced) battleMsg(iced);
   /* The pre-action phase: Overheat's burn and the other pre-hits, then the
      Haunting Aria's roll — here, not at the end of the round, so it still
@@ -8928,7 +8929,7 @@ function monAtk(m){
   const base = rawMonAtk(m);
   /* (3.19) your Forest Fairy's Overgrowth: 7% of its own a stack, for the
      whole team, for the rest of the battle — added as Enrage is */
-  const og = (ui.battle ? overgrowthBonus(m, base) + nourishBonus(m, base) : 0);   // (3.76) and Nourish ((3.77) Metamorph is damage now: elemSelfAmp); (3.93) a Vicious Hex Feeble cuts its hits now (attackCut), not its ATK
+  const og = (ui.battle ? overgrowthBonus(m, base) + nourishBonus(m, base) + (typeof boostAtkBonus === 'function' ? boostAtkBonus(m, base) : 0) : 0);   // (3.76) and Nourish ((3.77) Metamorph is damage now: elemSelfAmp); (3.93) a Vicious Hex Feeble cuts its hits now (attackCut), not its ATK; (4.34) a Fire Mote's (37-peace.js)
   const n = (m && m.enrageStacks) || 0;
   if(!n) return Math.max(1, base + og);
   const c = ui.battle ? getPStatus(0,'counter') : null;
@@ -10053,7 +10054,8 @@ function renderBattle(){
       <div class="bt-side">
         ${(()=>{ const lg = typeof legacyOnSwitch === 'function' && legacyOnSwitch();   /* (4.18) Dragon Legacy rides on the Switch button */
           return `<button class="side-btn" id="switchBtn" ${((switchShut() && !lg) || !canAct)?'disabled':''}${b.movedThisRound && !b.switchedThisTurn && !lg ? ' title="No switching after a move this turn"' : ''}>${lg ? '🐉 Dragon Legacy' : '🔄 Switch'}</button>`; })()}
-        <button class="side-btn" id="fleeBtn" ${((b.noFlee && !b.arenaChallenge) || !canAct || (typeof fleeShut === 'function' && fleeShut(b)))?'disabled':''}>${(b.arena || b.arenaChallenge)?'🚪 Exit':(b.coreSpar || b.caSpar)?'🏳️ Give up':b.tear?'🚪 Save & leave':b.future?'🚪 Leave':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>
+        ${(typeof boostItemOn === 'function' && boostItemOn(b)) ? boostItemBtnHtml(b, canAct) :   /* (4.34) a fight that cannot be fled: the Item button, where Flee was (37-peace.js) */
+        `<button class="side-btn" id="fleeBtn" ${((b.noFlee && !b.arenaChallenge) || !canAct || (typeof fleeShut === 'function' && fleeShut(b)))?'disabled':''}>${(b.arena || b.arenaChallenge)?'🚪 Exit':(b.coreSpar || b.caSpar)?'🏳️ Give up':b.tear?'🚪 Save & leave':b.future?'🚪 Leave':(b.noFlee?'🚫 No fleeing':'🏃 Flee')}</button>`}
         <button class="side-btn" id="skipBtn" ${canAct?'':'disabled'}>⏭️ Skip turn</button>
         ${(b.arena || b.arenaChallenge)?'<button class="side-btn" id="arenaMoveBtn" style="background:var(--gold);color:#fff;" '+(canAct?'':'disabled')+'>🧪 Test move</button>':''}
       </div>
@@ -10087,7 +10089,8 @@ function renderBattle(){
     battleMsg('⏭️ Turn skipped.');
     setTimeout(advanceTurn, 500);
   });
-  $('#fleeBtn').addEventListener('click', onFlee);
+  { const fb = $('#fleeBtn'); if(fb) fb.addEventListener('click', onFlee); }
+  { const ib = $('#itemBtn'); if(ib) ib.addEventListener('click', ()=> boostSheetOpen()); }   // (4.34)
   const amb = $('#arenaMoveBtn');
   if(amb) amb.addEventListener('click', renderArenaMoveSheet);
   const ah = $('#autoHeal');

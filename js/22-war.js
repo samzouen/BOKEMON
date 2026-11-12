@@ -337,6 +337,7 @@ async function warKingCastle(){
   const w = warState(), st = warStage();
   if(!w.council) return caLines([['king', `<b>"Welcome, my friends."</b>`]]);
   if(st && st !== 'done') return typeof unKingCastle === 'function' ? unKingCastle(st) : warOfferRide(st);   // (4.13) a ride a day, from the south gate
+  if(st === 'done' && typeof invReturnDue === 'function' && invReturnDue()) return invReturnGo('throne');   // (4.33) word from the castle's gate (36-the-return.js)
   if(st === 'done' && !w.stone) return warGift();
   if(typeof questAlarmDue === 'function' && questAlarmDue()) return questAlarm();   // (3.99) after the gift: the alarm
   return caLines([['king', caTurn('kingAfter', [

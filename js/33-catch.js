@@ -319,10 +319,18 @@ function czReduced(){ return typeof matchMedia === 'function' && matchMedia('(pr
 function czBuzz(p){ return typeof buzz === 'function' ? buzz(p) : false; }   // (4.28) the game's own (02-core.js)
 
 function czTop(H){ return Math.round(Math.max(128, Math.min(236, (H || window.innerHeight) * 0.25))); }
+/* (4.34) The designer: "slightly lower monster sprite on the catching page so the rotating orbs don't spill over the
+   edges on iPhone 16 plus": the monster (and the page under it) that much lower that the ring of orbs closing round it
+   (CZ_RING_TOP: its radius, its biggest orb, a margin) stays on the screen — about 19px on a phone. */
+const CZ_RING_TOP = { r:0.62, orb:21, margin:8 };
+function czDrop(top){
+  const px = Math.min(240, top * 0.84), need = px * CZ_RING_TOP.r + CZ_RING_TOP.orb + CZ_RING_TOP.margin;
+  return Math.max(0, Math.round(need - (10 + top * 0.52)));
+}
 function czStage(enemy){
   czCss();
   document.body.classList.add('catching');
-  document.body.style.setProperty('--cz-top', czTop() + 'px');
+  document.body.style.setProperty('--cz-top', (czTop() + czDrop(czTop())) + 'px');   // (4.34) lowered
   let st = document.getElementById('czStage');
   if(!st){ st = document.createElement('div'); st.id = 'czStage'; st.setAttribute('aria-hidden', 'true'); document.body.appendChild(st); }
   const pic = monPortrait(enemy.species, 200, { view:'front', bare:true, stage:enemy.stage || 0 });
@@ -351,8 +359,8 @@ function czFrame(now, dt){
   const Z = CZ, W = window.innerWidth, H = window.innerHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
   if(Z.W !== W || Z.H !== H || Z.dpr !== dpr){ Z.W = W; Z.H = H; Z.dpr = dpr; Z.fx.width = Math.round(W * dpr); Z.fx.height = Math.round(H * dpr); }
   /* the monster's place: the top of the page (--cz-top, as the page leaves room for it), over the ball */
-  const top = czTop(H);
-  if(Z.top !== top){ Z.top = top; document.body.style.setProperty('--cz-top', top + 'px'); }
+  const top = czTop(H), drop = czDrop(top);
+  if(Z.top !== top){ Z.top = top; document.body.style.setProperty('--cz-top', (top + drop) + 'px'); }
   const px = Math.round(Math.min(240, top * 0.84));
   /* the ball: where the square you write in is (while there is one to see) */
   const box = ui.screen === 'quiz' ? document.getElementById('qbox-0') : null;
@@ -364,7 +372,7 @@ function czFrame(now, dt){
   let tx = Z.ball.cx || W / 2;
   if(caught){ const r = panel && panel.getBoundingClientRect(); tx = r && r.width ? r.left + r.width / 2 : W / 2; }
   M.x = M.x ? M.x + (tx - M.x) * Math.min(1, dt * 3.2) : tx;
-  M.px = px; M.y = 10 + top * 0.52;
+  M.px = px; M.y = 10 + top * 0.52 + drop;
   const t = now / 1000, red = czReduced();
   /* its float, its shaking */
   const bob = Math.sin(t * 2.1) * 6, amp = red ? 0 : M.shake;
@@ -427,12 +435,14 @@ function czRing(g, R, t, dt){
   R.rot += dt * Math.PI * 2 * 0.22 * R.spin;
   g.globalCompositeOperation = 'lighter';
   const n = CATCH.orbs;
+  /* (4.34) round the monster, its top never above the screen's: as it loosens on a near miss it sinks a little instead */
+  const cy = R.keepIn ? Math.max(R.cy, R.R * (1 + (R.wob || 0)) + R.size + 6) : R.cy;
   for(let i = 0; i < n; i++){
     const hue = (i * 360 / n + t * 90) % 360;
     for(let k = 3; k >= 0; k--){
       const a = R.rot - k * 0.07 * Math.max(0.6, R.spin) + i * Math.PI * 2 / n;
       const rr = R.R * (1 + (R.wob || 0) * Math.sin(t * 9 + i));
-      const x = R.cx + Math.cos(a) * rr, y = R.cy + Math.sin(a) * rr;
+      const x = R.cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
       czOrb(g, x, y, R.size * (k ? 0.75 - k * 0.12 : 1), hue, R.diff, R.alpha * (k ? 0.32 - k * 0.07 : 1));
     }
   }
@@ -602,7 +612,9 @@ async function czThrow(kind){
   await czWait(380);
   playSfx('power_up');
   /* the ball opens into twelve orbs */
-  const ring = Z.ring = { cx:B.cx, cy:B.cy, R:ballR * 0.15, rot:-Math.PI / 2, spin:0.8, size:10, diff:0.25, alpha:0, wob:0 };
+  /* (4.34) `keepIn`: its top never above the screen's, from the first (czRing) — rising, it stops short of the monster
+     while it is wide, and closes up round it */
+  const ring = Z.ring = { cx:B.cx, cy:B.cy, R:ballR * 0.15, rot:-Math.PI / 2, spin:0.8, size:10, diff:0.25, alpha:0, wob:0, keepIn:true };
   Z.parts.push({ k:'flash', x:B.cx, y:B.cy, vx:0, vy:0, life:0, max:0.6, s:ballR });
   await czTween(650, t=>{ const e = czEase.out(t); B.scale = 1 - 0.6 * e; B.alpha = 1 - czClamp(t * 1.4); ring.R = ballR * (0.15 + 0.7 * e); ring.alpha = czClamp(t * 2.2); ring.size = 10 + 12 * e; });
   B.level = B.shown = 0;
@@ -665,6 +677,8 @@ async function czMiss(near){
   if(!Z) return;
   const M = Z.mon, ring = Z.ring, R0 = ring.R, far = Math.hypot(Z.W, Z.H) * 1.1, s0 = ring.size, a0 = Z.aura.a;
   await czTween(320, t=>{ M.shake = czLerp(M.shake, 7, t); ring.wob = 0.05 * t; });
+  if(ring.keepIn) ring.cy = Math.max(ring.cy, ring.R * (1 + (ring.wob || 0)) + ring.size + 6);   // (4.34) from where it is drawn —
+  ring.keepIn = false;                                                // …thrown off the screen, as it always was
   czJingle('catch_miss');
   if(near) czBuzz('catchOff');
   await czTween(850, t=>{ const e = czEase.out(t);

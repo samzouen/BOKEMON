@@ -515,7 +515,10 @@ const CA_OVER_KINDS = new Set(['tree', 'lamp', 'palaceTower', 'keep', 'cornerTow
 /* (4.10) The designer: "In the castle palace and in the tribal villages please turn the player and Lucesco sprites
    translucent behind two tile pillars, knight armours, and trees" — the palace hall's columns and the suits of armour
    join them (the villages' trees: JG_BEHIND, 20-jungle.js). */
-const CA_BEHIND_KINDS = new Set(['fountGrand', 'fountSmall', 'stall', 'well', 'planter', 'column', 'armour']);
+/* (4.32) The designer: "The castle walls at north and south need to turn the player translucent on the south edge to
+   show he is behind the walls and the flames" — the battlements and the parapet before you on a wall's (or a rampart's)
+   south edge, and the braziers burning on them, join them: you are drawn faded behind them, no longer clear through. */
+const CA_BEHIND_KINDS = new Set(['fountGrand', 'fountSmall', 'stall', 'well', 'planter', 'column', 'armour', 'battlement', 'parapetW', 'brazier']);
 const CA_BEHIND = { cut:0.42 };
 function caPaintStart(stage, world, m, views, bg){
   if(!stage || !world) return;
@@ -1461,7 +1464,8 @@ function caDrawDeco(g, d, x, y, w, h, now){
         return;
       }
       g.fillStyle = '#6a4626'; g.fillRect(x + w * 0.45, y + h * 0.55, w * 0.1, h * 0.36);
-      const cols = d.variant === 'blossom' ? ['#f2a7c3', '#f7c6d8', '#e889ad'] : ['#3f7d3a', '#4f9447', '#5ea852'];
+      /* (4.33) 'jungle': the jungle's own olive (the rift's compound at its north edge, 36-the-return.js) */
+      const cols = d.variant === 'blossom' ? ['#f2a7c3', '#f7c6d8', '#e889ad'] : d.variant === 'jungle' ? ['#3e5a24', '#4f6f2c', '#62863a'] : ['#3f7d3a', '#4f9447', '#5ea852'];
       for(let n = 0; n < 6; n++){ g.fillStyle = cols[n % 3]; g.beginPath(); g.arc(x + w * (0.3 + 0.4 * jgHash(n, d.x * 7 + d.y, 2)), y + h * (0.2 + 0.3 * jgHash(n, d.x + d.y * 5, 3)), w * (0.17 + 0.06 * jgHash(n, d.x, 4)), 0, 7); g.fill(); }
       if(d.variant === 'apple' || d.variant === 'pear'){ g.fillStyle = d.variant === 'apple' ? '#e0393e' : '#e8d04a'; for(let n = 0; n < 5; n++){ g.beginPath(); g.arc(x + w * (0.3 + 0.4 * jgHash(n, d.y, 9)), y + h * (0.22 + 0.3 * jgHash(n, d.x, 8)), w * 0.035, 0, 7); g.fill(); } }
       return;
@@ -1735,7 +1739,10 @@ function caRampMap(c){
   if(m.tags.stair.stand.x < 3 || m.tags.stair.stand.x > 10) m.tags.stair.stand.x = Math.max(3, Math.min(10, m.tags.stair.stand.x));
   /* the lookouts, one of each kind, in notches of the outer battlements */
   const outerNotches = [];
-  R.out.forEach(s=>{ [4, 9].forEach(a=> outerNotches.push(s === 'n' ? [a, 2] : s === 's' ? [a, 11] : s === 'w' ? [2, a] : [11, a])); });
+  /* (4.32) "The northwest and northeast spyglasses are not accessible because chestnut knight blocks them": the third
+     lookout's notch, on a north corner's west or east side, is the far one now — the spyglass in that corner had him on
+     one side and the duck on the other, with no square left to stand on by it */
+  R.out.forEach(s=>{ ((s === 'w' || s === 'e') && c[0] === 'n' ? [9, 4] : [4, 9]).forEach(a=> outerNotches.push(s === 'n' ? [a, 2] : s === 's' ? [a, 11] : s === 'w' ? [2, a] : [11, a])); });
   ['duck', 'bug', 'knight'].forEach((who, i)=>{
     const [x, y] = outerNotches[i];
     caPut(m, x, y, T.NOTCH, (y === 2 || y === 11) ? 'notchH' : 'notchV');
@@ -2901,6 +2908,31 @@ function caFirstLooks(key, p){
    on that side, every hedge and path of it (not only where you have been),
    its village and the alien bands still out today; drag to look about.
    ============================================================ */
+/* (4.32) the spyglass map's marks, drawn: the red pin where you stand (the jungle bar's, 25-quest.js), an alien band's
+   red dot */
+const CA_PIN_PATH = 'M12 1.6c-4.5 0-8 3.5-8 7.9 0 5.8 7 12.4 7.4 12.8a.9.9 0 0 0 1.2 0C13 21.9 20 15.3 20 9.5c0-4.4-3.5-7.9-8-7.9z';
+function caOvPinSvg(px){
+  if(typeof questPinSvg === 'function') return questPinSvg(px).replace('class="q-pin"', 'class="q-pin ca-ov-mark"');
+  return '';
+}
+function caOvDotSvg(px){
+  return `<svg class="ca-ov-mark" viewBox="0 0 12 12" width="${px}" height="${px}" aria-hidden="true"><circle cx="6" cy="6" r="4.6" fill="#e0393e" stroke="#fff" stroke-width="1.4"/></svg>`;
+}
+function caOvPin(ctx, x, y, size){
+  const s = size / 24;
+  ctx.save();
+  ctx.translate(x - 12 * s, y - 22.6 * s);                              // its point on the spot
+  ctx.scale(s, s);
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1;
+  const P = typeof Path2D === 'function' ? new Path2D(CA_PIN_PATH) : null;
+  if(P){
+    ctx.fillStyle = '#e3262b'; ctx.fill(P);
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6; ctx.lineJoin = 'round'; ctx.stroke(P);
+  }
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(12, 9.5, 3.3, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
 function caOverview(c){
   if(ui.caTalk) return;
   releaseKeys();
@@ -2916,7 +2948,7 @@ function caOverview(c){
   const hid = typeof questLookoutHidden === 'function' && questLookoutHidden();
   ov.innerHTML = `<div class="ca-ov-card"><div class="ca-ov-title">🔭 The ${escapeHtml(CA_CORNER_NAME[c])}: the jungle's ${{ nw:'north-west', ne:'north-east', sw:'south-west', se:'south-east' }[c]}</div>
       <canvas id="caOvCv" style="width:${side}px;height:${side}px;"></canvas>
-      <div class="ca-ov-key">Drag to look about · 🏰 you are here · 🔴 an alien band${hid ? ' · the far corner is lost in a strange, dark magic' : ''}</div>
+      <div class="ca-ov-key">Drag to look about · ${caOvPinSvg(15)} you are here · ${caOvDotSvg(12)} an alien band${hid ? ' · the far corner is lost in a strange, dark magic' : ''}</div>
       <div class="ca-ov-btns"><button class="btn btn-ghost" id="caOvZoom">🔍 Closer</button><button class="btn btn-primary" id="caOvClose">Close</button></div></div>`;
   document.body.appendChild(ov);
   const cv = ov.querySelector('#caOvCv'), dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -2946,6 +2978,21 @@ function caOverview(c){
       if(jgTile(x, y) !== JG_T.TREE) continue;
       ctx.drawImage(jgSprite('tree', jgHash(x, y, 3) < 0.5 ? 0 : 1), Math.round(ox + (x - 0.5) * k), Math.round(oy + (y - 1.2) * k), Math.round(2 * k), Math.round(2 * k));
     }
+    /* (4.32) "on the map, a tribe looks like a thick section filled with trees or shadowed over before it is found":
+       a village not yet found is deep forest from up here, and the shade under it */
+    JG_TRIBE_KEYS.forEach(t=>{
+      if(typeof jgVillageKnown !== 'function' || jgVillageKnown(t)) return;
+      const f = jgVillageCover(t);
+      if(f.x1 < x0 || f.x0 > x1 || f.y1 < y0 || f.y0 > y1) return;
+      ctx.fillStyle = '#1f2a12';
+      ctx.fillRect(Math.round(ox + f.x0 * k), Math.round(oy + f.y0 * k), Math.round((f.x1 - f.x0 + 1) * k), Math.round((f.y1 - f.y0 + 1) * k));
+      for(let y = Math.max(y0, f.y0); y <= Math.min(y1 + 1, f.y1 + 1); y++) for(let x = Math.max(x0, f.x0); x <= Math.min(x1, f.x1); x++){
+        if(jgHash(x, y, 9) < 0.16) continue;                              // close, but not in rows
+        ctx.drawImage(jgSprite('tree', jgHash(x, y, 3) < 0.5 ? 0 : 1), Math.round(ox + (x - 0.5) * k), Math.round(oy + (y - 1.2) * k), Math.round(2 * k), Math.round(2 * k));
+      }
+      ctx.fillStyle = 'rgba(8,14,6,.32)';
+      ctx.fillRect(Math.round(ox + f.x0 * k), Math.round(oy + (f.y0 - 1) * k), Math.round((f.x1 - f.x0 + 1) * k), Math.round((f.y1 - f.y0 + 2) * k));
+    });
     jgBands().forEach(b=>{
       if(jgBandBeaten(b) || b.x < x0 || b.x > x1 || b.y < y0 || b.y > y1) return;
       ctx.fillStyle = b.rank === 'alien' ? '#e0393e' : '#9a1020'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 * dpr;
@@ -2960,6 +3007,7 @@ function caOverview(c){
       ctx.fillStyle = gr; ctx.fillRect(0, 0, cv.width, cv.height);
     }
     if(!hid) JG_TRIBE_KEYS.forEach(t=>{
+      if(typeof jgVillageKnown === 'function' && !jgVillageKnown(t)) return;   // (4.32) not found yet: only the forest
       const v = P.villages[t];
       if(v.x + v.w < q.x0 || v.x > q.x1 || v.y + v.h < q.y0 || v.y > q.y1) return;
       const vx = ox + (v.x + v.w / 2) * k, vy = oy + (v.y + v.h / 2) * k;
@@ -2968,7 +3016,8 @@ function caOverview(c){
       ctx.strokeText(JG_TRIBES[t].name.replace(/^the /, 'The '), vx, vy + 18 * dpr); ctx.fillText(JG_TRIBES[t].name.replace(/^the /, 'The '), vx, vy + 18 * dpr);
       ctx.font = `${Math.round(20 * dpr)}px sans-serif`;
     });
-    ctx.fillText('🏰', ox + corner.x * k, oy + corner.y * k);
+    /* (4.32) "The spyglass map shouldn't use castle emojis at each corner": where you are, a drawn pin on the castle's corner */
+    caOvPin(ctx, ox + corner.x * k, oy + corner.y * k, 30 * dpr);
   };
   const redraw = ()=>{ if(!raf) raf = requestAnimationFrame(draw); };
   draw();
@@ -3028,7 +3077,8 @@ async function caDauphinTalk(){
   const html = !s.asked
     ? `<b>"You! Father's guests! I have waited all day for somebody strong enough."</b><br><br><b>"Spar with me! Sir Chestnut and the Advisor will stand at my side, and we will hold nothing back. Win, and you shall have ${CA_SPAR.bronze} bronze medals from my own purse."</b>` + rules
     : paid ? caTurn('sparAgain', [`<b>"Again? Ha! I like you."</b>`, `<b>"One more! I almost had you last time. …Almost."</b>`]) + `<br><br><i>Today's ${CA_SPAR.bronze} bronze medals are yours already. This one is for the fun of it — the medals come again tomorrow.</i>`
-    : caTurn('sparAsk', [`<b>"Ready for today's spar? My hammer is!"</b>`, `<b>"Sir Chestnut says I must practise every day. So: you, me, now!"</b>`, `<b>"I have been training all morning. Let's see who is stronger today!"</b>`])
+    : (caKingOut() ? `<b>"You're back! Father's still out there in the jungle, isn't he? Then the palace is mine to guard — and you're mine to spar with!"</b>`   // (4.33) he is out riding with you
+       : caTurn('sparAsk', [`<b>"Ready for today's spar? My hammer is!"</b>`, `<b>"Sir Chestnut says I must practise every day. So: you, me, now!"</b>`, `<b>"I have been training all morning. Let's see who is stronger today!"</b>`]))
       + `<br><br><i>Win: 🥉 ${CA_SPAR.bronze} bronze medals, the first win each day.</i>` + rules;
   releaseKeys();
   ui.caTalk = true;
@@ -3120,6 +3170,55 @@ function caSparBack(){
   ui.walkFresh = false;
   walkState().busy = false;
   goDeck('r6_palace');
+}
+/* (4.33) The designer: "Please put Dauphin on the challenge page as a direct teleport to castle and challenge as well.
+   The king may or may not be present depending on the quest state (he might be following the player in the jungle)".
+   Her card on Region 6's Challenge page (17-region6.js), once the court has met you: a tap and you are in the throne
+   room, before her and facing her, and she asks for her spar at once. The King is on his throne or not, as the story
+   has him: out riding with you, he waits in the jungle where you left him (Lucesco knows the way back to him). While the
+   castle is invaded she is fighting for it: her card says so, with nothing to tap. */
+function caDauphinKnown(){ return !!(state && state.progress && state.progress.region6 && caOpen() && caState().met.court); }
+function caDauphinBusy(){ return typeof invActive === 'function' && invActive() && !invAt('muster'); }
+function caKingOut(){ return typeof unEscort === 'function' && !!unEscort(); }
+function caDauphinCard(){
+  if(!caDauphinKnown()) return '';
+  const busy = caDauphinBusy(), paid = caSparPaidToday();
+  const desc = busy ? `Fighting for the castle beside her father's knights. No spars while the castle is invaded.`
+    : (paid ? `Today's 🥉 ${CA_SPAR.bronze} bronze medals are won — she will spar again just for the fun of it. More tomorrow. `
+            : `In the throne room of the Fairy King's castle: <b>tap to go to her</b>, and she asks for her spar at once. `) +
+      `Daily: the Royal Commander, the Dauphin and the Royal Advisor, all Lv ${CA_SPAR.level}${paid ? '' : ` · win for <b>+${CA_SPAR.bronze} bronze medals</b> (the first win each day)`}.` +
+      (caKingOut() ? ` <i>The King is out in the jungle with you: his throne is empty, and he waits where you left him.</i>` : '');
+  return `
+    <div class="challenge-card ca-dau-card"${busy ? ' style="cursor:default;"' : ' id="cDauphin" role="button" tabindex="0"'}>
+      <span class="fu-mini ca-dau-pic">${jgMonImg('fairy_dauphin2_front', 54)}</span>
+      <div style="flex:1;">
+        <div class="cc-title">The Dauphin's spar ${paid ? '<span class="clear-tag">Won today</span>' : ''}</div>
+        <div class="cc-desc">${desc}</div>
+      </div>
+    </div>`;
+}
+function caDauphinCardWire(){
+  const c = document.getElementById('cDauphin');
+  if(!c) return;
+  c.addEventListener('click', ()=> caToDauphin());
+  c.addEventListener('keydown', e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); caToDauphin(); } });
+}
+/* straight to her: before her in the throne room, facing her — and her spar asked as soon as the hall is drawn (unless
+   something of the story has the floor first: then she is there to talk to) */
+function caToDauphin(){
+  if(!caDauphinKnown() || caDauphinBusy() || ui.caTalk) return false;
+  const d = caPalaceMap().tags.court.dauphin;
+  caGo('r6_palace', [d.x, d.y + 1]);
+  walkState().face = 'u';
+  const t0 = Date.now();
+  const ask = ()=>{
+    if(ui.screen !== 'r6_palace') return;
+    const free = !!document.getElementById('walkYou') && !ui.sceneRunning && !ui.caTalk && !walkState().busy && !document.querySelector('.scene-say, #sceneNext');
+    if(!free) return Date.now() - t0 < 2500 ? setTimeout(ask, 120) : undefined;
+    caDauphinTalk();
+  };
+  setTimeout(ask, 400);
+  return true;
 }
 
 /* ============================================================
@@ -3277,6 +3376,7 @@ function caCss(){
   .ca-ov-title{ font-weight:900; margin-bottom:8px; }
   .ca-ov canvas{ display:block; border-radius:10px; touch-action:none; cursor:grab; background:#2a3417; }
   .ca-ov-key{ font-size:12px; opacity:.85; margin:8px 0; }
+  .ca-ov-key .ca-ov-mark{ vertical-align:-2px; }   /* (4.32) its marks drawn */
   .ca-ov-btns{ display:flex; gap:8px; } .ca-ov-btns .btn{ flex:1; }
   .ca-shop{ position:fixed; inset:0; z-index:380; background:rgba(20,14,10,.6); display:flex; align-items:center; justify-content:center; padding:12px; }
   .ca-shop-card{ width:min(560px, 100%); max-height:92vh; overflow:auto; background:#fff8ec; border:3px solid #d9b247; border-radius:18px; padding:14px; box-shadow:0 12px 40px rgba(0,0,0,.45); }

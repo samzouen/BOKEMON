@@ -272,6 +272,7 @@ function questTrackLabel(t){
   if(t === 'find') return 'The nearest ticket';
   if(t === 'castle') return 'The castle';
   if(t === 'alien') return 'The nearest alien';
+  if(t === 'rift') return 'The rift';                                   // (4.33) at the jungle's north edge
   if(JG_TRIBES[t]) return questTribeCap(t);
   return '';
 }
@@ -287,6 +288,7 @@ function questTrack(){
   if(t === 'find') return 'find';
   if(t === 'alien' && (q.stage === 'castle')) t = 'castle';
   if(JG_TRIBES[t] && !questTribesSmelt().includes(t)) t = 'castle';
+  if(t === 'rift' && !(typeof invRiftKnown === 'function' && invRiftKnown())) t = 'castle';   // (4.33)
   return t || 'castle';
 }
 function questTarget(p){
@@ -294,6 +296,7 @@ function questTarget(p){
   const P = jgGround().places, t = questTrack(), q = questState();
   if(t === 'find') return questFindTarget(JG_KEY, p);
   if(t === 'castle'){ const s = P.castle.stand; return { x:s.x + 0.5, y:s.y + 0.5 }; }
+  if(t === 'rift' && P.north){ const s = P.north.stand; return { x:s.x + 0.5, y:s.y + 0.5 }; }   // (4.33) the rift's gate
   if(t === 'alien'){
     let best = null, bd = Infinity;
     jgBands().forEach(b=>{ if(jgBandBeaten(b)) return; const d = (b.x - p.x) * (b.x - p.x) + (b.y - p.y) * (b.y - p.y); if(d < bd){ bd = d; best = b; } });
@@ -431,6 +434,7 @@ function caTurnJ(key, lines){ const t = jgState().talk; const n = t[key] = (t[ke
    picture that will not load falls back to the old icon. */
 const QUEST_SNIFF_PIC = { castle:['fairy_king_c_front', '🏰'], alien:['alien_captain_humanoid', '👽'], talk:['lucesco_front', '💬'] };
 function questSniffPic(k){
+  if(k === 'rift' && typeof riftSniffPic === 'function') return riftSniffPic();   // (4.33) the rift, drawn
   if(k === 'find') return `<span class="jg-go-pic q-sniff-pic q-sniff-find">${typeof tokenIcon === 'function' ? tokenIcon(30) : '🎟️'}</span>`;   // (4.25) a find: what it holds
   const p = QUEST_SNIFF_PIC[k] || (JG_TRIBES[k] ? [JG_TRIBES[k].guardian, JG_TRIBES[k].icon] : null);
   if(!p) return '';
@@ -443,6 +447,7 @@ function questSniff(){
   const opts = [{ k:'castle', sub:'Its south gate' }, { k:'alien', sub:'Whichever is closest' }];
   if(questFindsOn()) opts.unshift({ k:'find', sub:`${questFindsLeft()} still hidden` });   // (4.25)
   questTribesSmelt().forEach(k=> opts.push({ k, sub:q.found[k] ? 'Their village' : 'The blade’s scent' }));
+  if(typeof invRiftSniffOpt === 'function'){ const o = invRiftSniffOpt(); if(o) opts.splice(opts[0] && opts[0].k === 'find' ? 1 : 0, 0, o); }   // (4.33) the rift at the north edge (36-the-return.js)
   const ov = document.createElement('div');
   ov.className = 'refine-scrim jg-choose q-sniff';
   ov.innerHTML = `<div class="refine-card"><div class="q-sniff-face">${questFace.lion()}</div><div class="refine-name">What shall I sniff out?</div>
@@ -456,7 +461,10 @@ function questSniff(){
   ov.querySelectorAll('.jg-go').forEach(b=> b.addEventListener('click', ()=>{
     close();
     const k = b.dataset.k;
-    if(k === 'talk') return questStage() === 'unseal' && typeof unLionTalk === 'function' ? unLionTalk() : jgLionChat();   // (4.13) by where the King's ride stands
+    if(k === 'talk'){
+      if(typeof invLionJungle === 'function'){ const r = invLionJungle(); if(r) return r; }   // (4.33) the castle invaded, Wadjet's trail
+      return questStage() === 'unseal' && typeof unLionTalk === 'function' ? unLionTalk() : jgLionChat();   // (4.13) by where the King's ride stands
+    }
     q.track = k; saveProfile();
     toast(`🦁 Lucesco sniffs out: ${questTrackLabel(k).replace(/^The /, 'the ')}.`);
     jgHud(); questPulseSoon();
@@ -543,7 +551,7 @@ async function questCouncil(){
     ['advisor', `<b>"Hoo. And who would hold them, once they were free? They swore revenge on this castle. No: first we must win over the tribes. Only their own people can calm their ancestors."</b>`],
     ['dauphin', `<b>"And the tribes will never come to us, Father. Someone will have to go to them."</b>`],
     ['king', `<b>"Would that we could. My scouts have searched for them for two hundred years. Not one of them has ever been found."</b>`],
-    ['king', `<b>"They hid themselves with magic, and walled off every path that leads to them — three walls deep and more, thicker than any Lucesco could leap."</b>`],
+    ['king', `<b>"They hid themselves with magic, and walled off every path that leads to them — three walls deep and more."</b>`],   // (4.32) not "thicker than any Lucesco could leap": nobody has seen them yet
     ['lion', `<b>"…If the blades hold their ancestors, then the blades must smell of their tribes. Give me one, and I will follow its scent to its people."</b>`],
     ['king', `<b>"Yes… yes! But I cannot come with you. If a tribe senses me near, it will only hide deeper. You must go as my ambassadors."</b>`],
     ['king', `He rises, and lifts one of the blades down from the wall behind his throne. It is cold, and frost creeps over the stone.<br><br><b>"Take this one: the Water Tribe's, in the north-east. They were always the most peaceable of the four. If any tribe will listen, it is them."</b>`],

@@ -91,7 +91,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.30';
+const GAME_VERSION = '4.34';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -253,6 +253,7 @@ const BUZZ = {
   catchNear: [30, 60, 45, 50, 70],                               // a catch's fakeout: the light swells round it
   catchOff:  [140],                                              // …and a near miss throws the orbs off
   caught:    [50, 60, 50, 60, 240],                              // caught
+  argh:      [90, 50, 160],                                      // (4.31) Wadjet loses the light he was gathering
 };
 function buzz(p){
   const pat = typeof p === 'string' ? BUZZ[p] : p;

@@ -56,23 +56,84 @@
              (invHallScene); a band in the east corridor, another at the
              tower's stair
      tower   a commander's army before her door; she comes with you
-     escort  she follows at your heels; into the hall: the King cornered,
-             the black beam, Wadjet, her courage, her evolution, the pink
-             light (invClimax), and Wadjet's fight
+     escort  she follows at your heels; (4.31) down from the tower, the horns:
+             the four tribes march in at the south gate and drive the aliens
+             out of the market (invTribesEarly); then the King's cry from the
+             great hall, and Lucesco: run! Into the hall (invClimax): the King
+             struck down by Wadjet's Prismatic Laser, Wadjet gathering another,
+             his two shadows fighting the Advisor and the Dauphin; her courage,
+             her evolution, her pink light — the shadows burn away, the King
+             holds on, she stays at his side — and Wadjet turns on you
+             (34-nemesis.js: survive ten turns)
      wadjet  his fight lost or left: he waits in the hall, she heals you
-     chase   he is beaten and flees: the King sends her with you (she joins
-             your party), the race to the north wall, the rift, Lucesco's
-             nose, the smoke, the tribes (invChase, invTribes)
-     done    the great hall that night (invFinale); then the rift's
+     chase   (4.31) he slips away into the past: Lucesco's nose, out of the
+             palace and across the grounds to the north wall; Wadjet opening a
+             rift and gone through it; aliens pouring out of it the other way,
+             a commander's army to beat; more behind them — the Royal Commander
+             and his soldiers come up behind you, drive them back, thank you
+             for finding their way in, and put a perimeter round it; back to
+             the King (invAfterNem, invRiftChaseRun, invRiftHoldRun). A save
+             from before 4.31 that beat the old six waves keeps the old chase:
+             the race to the crack, the smoke, the tribes (invChaseRun,
+             invTribesRun).
+     done    the great hall: the King awake again, Lucesco's whiff of the land
+             Wadjet went to — a land in the past — the King's promise to follow
+             you there, the Advisor's "convalesce!", and the princess goes in
+             his place (invFinaleNem; before 4.31, invFinaleRun); then the rift's
              perimeter (r6_perimeter), a third of the jungle's aliens, a wild one
              now and then on its paths
+
+   (4.31) The designer: "The fight with wadjet comes when he appears suddenly and ambushes the fairy king, a member of
+   the cosmic council, with a laser. The plan is to stop the fairy king's forces from rallying against nemesis. But the
+   princess will be the king's representative and fulfilment of the promise to aid the player after the aliens were
+   dealt with. The fight happens immediately after he fires the prismatic laser at the fairy king. If he flees, the
+   player chases him to the rift using Lucesco's nose. They will find him opening a rift and porting through. Lucesco
+   will attempt to follow him through but alien commanders and captains will come out and attack the player. After the
+   player defeats the commander, Lucesco will remark that there are too many aliens to fight and that the player needs
+   to escape before being surrounded. However, The king's forces led by the royal army commander will appear behind
+   Lucesco and take on the aliens. The army commander will thank the player for finding the rift of the aliens and
+   declare that the forces will set up a perimeter. The player is encouraged to return to the king to aid him. The chase
+   ends there without further fighting. After the king recovers, Lucesco will reveal that the chase wasn't fruitless.
+   He caught a whiff of the land that wadjet had ported to, a land in the past, and the king will remark that he will
+   fulfil his promise and follow the player there. However, the advisor will demand that the king convalesces and the
+   princess will volunteer to be the player's help, much to the surprise and delight of the royal family, who had been
+   trying to get her out of her timidity" — "Tribes march in before the chase because they help the castle to defend
+   against the alien onslaught before the king cries out in the palace and the player is told by Lucesco to rush to
+   him, discovering wadjet's assassination attempt. Wadjet would have fired a laser but will be charging another. His
+   two shadows will be engaged with the advisor and dauphin in a fight. This is where the princess evolves and dispels
+   the shadows and heals her father. Wadjet then turns his attention to the player. The princess doesn't join him in
+   the fight, she rushes to help her father."
+
+   (4.33) The designer: "The princess is with the player when the king is hit with the laser because of an earlier
+   storyline. I messed it up a bit. Can we follow this progression?" — and "Wadjet escapes into the northern edge of the
+   map, not the castle wall". The story from the last unsealing on, told that way (36-the-return.js; `v433` in the
+   save), the stages:
+     arrive  word at the last village: back to the castle, swiftly; at its gate the soldiers already fighting, a
+             Chestnut Knight's report (flying cocoons, down inside the walls); the King runs in, you at his heels; by
+             the fountain the Commander and his soldiers, two on every alien, the Commander against an alien commander
+             and its captain, the townsfolk running; the princess still in the palace with the Dauphin and the Advisor;
+             the King, spent, cannot leave his people — he asks you to bring her out (one scene, nothing else to be
+             done while it plays; left part-way, it begins again from the gate)
+     palace  in the hall the Dauphin against an alien commander, the Advisor against its captain, sending you on;
+             three aliens down the east corridor, the last at the stair
+     tower   upstairs an alien, a captain's band, and a commander's army at her door
+     escort  she follows you down; in the hall the Dauphin and the Advisor come with you; out of the palace — the
+             tribes' horns, and they drive the aliens out of the castle; to the King by the fountain — and Wadjet strikes
+             him down; his shadows at the Dauphin and the Advisor; her courage; Wadjet turns on you
+     wadjet  his fight lost or left: he waits by the fountain
+     chase   he slips away: Lucesco's nose, out of the castle and through the jungle to its north edge; his rift; the
+             army out of it; the Commander's soldiers; the perimeter, there
+     done    the finale in the great hall; the perimeter at the jungle's north edge, half the jungle's aliens
+   A save part-way into the old invasion (the alarm said, up to the princess at your heels) begins it again this way, from
+   the gate (invMigrate). Wadjet's fight, lost to, in the hall, and what comes after it, stay as they were told.
    ============================================================ */
 const INV = { lv:175, wadjetLv:200, princessLv:100, alienLv:170 };
-const INV_ORDER = ['muster', 'market', 'palace', 'tower', 'escort', 'wadjet', 'chase', 'done'];
+const INV_ORDER = ['muster', 'market', 'arrive', 'palace', 'tower', 'escort', 'wadjet', 'chase', 'done'];
 
 /* ---------- the save: r6().inv ----------
    stage, won{} (each band of the invasion, for good), said{} (each scene
-   once), grown (she has evolved), joined (she is one of yours). */
+   once), grown (she has evolved), joined (she is one of yours), (4.31) nem
+   (the story told the 4.31 way: Wadjet's laser, his ten turns, the rift). */
 function invState(){
   const r = r6();
   if(!r.inv || typeof r.inv !== 'object') r.inv = {};
@@ -84,8 +145,22 @@ function invOn(){ return !!(state && state.progress && state.progress.region6) &
 function invStage(){
   if(!invOn()) return null;
   const v = invState();
+  invMigrate(v);
   if(v.stage && INV_ORDER.includes(v.stage)) return v.stage;
   return questState().stage === 'end' ? 'muster' : null;
+}
+/* (4.33) told the designer's new way (36-the-return.js) */
+function invNew(){ return invOn() && !!invState().v433; }
+/* a save part-way into the old invasion — the alarm said, and anywhere up to the princess at your heels — begins it
+   again the new way, from the castle gate (what it had won in the old way is the old way's) */
+const INV_OLD_START = ['muster', 'market', 'palace', 'tower', 'escort'];
+function invMigrate(v){
+  if(v.v433 || typeof invArriveRun !== 'function') return;
+  const st = v.stage && INV_ORDER.includes(v.stage) ? v.stage : (questState().stage === 'end' ? 'muster' : null);
+  if(!st || !INV_OLD_START.includes(st)) return;
+  v.stage = 'arrive'; v.v433 = true; v.won = {}; v.said = {};
+  delete v.nem; delete v.grown;
+  saveProfile();
 }
 function invAt(...st){ return st.includes(invStage()); }
 function invPast(st){ const s = invStage(); return !!s && INV_ORDER.indexOf(s) >= INV_ORDER.indexOf(st); }
@@ -113,31 +188,57 @@ const WADJET = 'nemesis_wadjet';
 /* ============================================================
    WHO STANDS WHERE
    ============================================================ */
-/* the invasion's bands, by the deck they hold; each beaten for good */
+/* the invasion's bands, by the deck they hold; each beaten for good. (4.33) The designer: "Player battles 3 aliens
+   along the right perimeter and 3 on the second floor" — asked which: "3 singles below, 1 single, 1 captain, 1
+   commander above". Down the palace's east corridor three aliens, the last at the stair; upstairs an alien, a captain's
+   band, and a commander's army at her door. (Until 4.33: three captains' bands in the market, two in the palace, the
+   commander's army at her door.) */
 const INV_BANDS = {
-  r6_castle:[ { id:'inv-m1', x:21, y:39, rank:'captain' }, { id:'inv-m2', x:42, y:39, rank:'captain' }, { id:'inv-m3', x:31, y:45, rank:'captain' } ],
-  r6_palace:[ { id:'inv-p1', x:30, y:16, rank:'captain' }, { id:'inv-p2', x:35, y:6, rank:'captain', guards:'stair' } ],
-  r6_tower: [ { id:'inv-t1', x:6, y:13, rank:'commander', guards:'door' } ],
+  r6_palace:[ { id:'inv-q1', x:34, y:23, rank:'alien' }, { id:'inv-q2', x:32, y:13, rank:'alien' }, { id:'inv-q3', x:35, y:7, rank:'alien', guards:'stair' } ],
+  r6_tower: [ { id:'inv-u1', x:11, y:13, rank:'alien' }, { id:'inv-u2', x:8, y:14, rank:'captain' }, { id:'inv-t1', x:6, y:12, rank:'commander', guards:'door' } ],
 };
-const INV_BAND_STAGE = { r6_castle:'market', r6_palace:'palace', r6_tower:'tower' };
+const INV_BAND_STAGE = { r6_palace:'palace', r6_tower:'tower' };
 function invBandsOf(key){
   const list = INV_BANDS[key] || [];
   list.forEach(b=>{
     if(b.aliens) return;
     const R = jgRng((JG.seed ^ jgDaySeed(b.id)) >>> 0), ri = n=> Math.floor(R() * n);
     b.aliens = [];
-    for(let i = 0; i < (b.rank === 'commander' ? 4 : 2); i++) b.aliens.push(JG_ALIEN_IDS[ri(JG_ALIEN_IDS.length)]);
-    b.aliens.push(JG_CAPTAIN);
-    if(b.rank === 'commander') b.aliens.push(JG_COMMANDER);
+    if(b.rank === 'alien') b.aliens.push(JG_ALIEN_IDS[ri(JG_ALIEN_IDS.length)]);   // (4.33) one alien and its captives
+    else {
+      for(let i = 0; i < (b.rank === 'commander' ? 4 : 2); i++) b.aliens.push(JG_ALIEN_IDS[ri(JG_ALIEN_IDS.length)]);
+      b.aliens.push(JG_CAPTAIN);
+      if(b.rank === 'commander') b.aliens.push(JG_COMMANDER);
+    }
     b.lead = b.aliens[b.aliens.length - 1];
     b.lv = INV.lv; b.deck = key; b.inv = true;
   });
   return list;
 }
+/* every band of a deck beaten */
+function invDeckCleared(key){ return invBandsOf(key).every(b=> invState().won[b.id]); }
 function invBandUp(b){
   if(b.perim) return invAfter() && !invPerimBeaten(b);
+  if(b.riftBand) return invAt('chase') && !!invState().nem && invSaid('riftOut') && !invState().won[b.id];
   return invAt(INV_BAND_STAGE[b.deck]) && !invState().won[b.id];
 }
+/* (4.31) the army that comes out of the rift after Wadjet has gone through it: a commander's (as the tower's), at the
+   foot of the crack in the north wall until it is beaten */
+const INV_RIFT_BAND = { id:'inv-r1', x:49, y:3, rank:'commander', riftBand:true };
+function invRiftBand(){
+  const b = INV_RIFT_BAND;
+  if(!b.aliens){
+    const R = jgRng((JG.seed ^ jgDaySeed(b.id)) >>> 0), ri = n=> Math.floor(R() * n);
+    b.aliens = [];
+    for(let i = 0; i < 4; i++) b.aliens.push(JG_ALIEN_IDS[ri(JG_ALIEN_IDS.length)]);
+    b.aliens.push(JG_CAPTAIN, JG_COMMANDER);
+    b.lead = JG_COMMANDER;
+    b.lv = INV.lv; b.deck = CA_KEY; b.inv = true;
+  }
+  return b;
+}
+/* (4.31) the tribes have marched in (invTribesEarly): the market is theirs and the castle's again */
+function invRouted(){ return !!ui.invRouted || invSaid('tribes'); }
 /* the knights and the aliens they hold, clashing (22-war.js's slashes): [knight sprite, kx, ky, alien, ax, ay] */
 const INV_CLASH = {
   r6_castle:[ ['chestnut_knight2', 29, 50, 'alien_insect_physical', 32, 50], ['duck_knight2', 34, 58, 'alien_golem_ground', 37, 58],
@@ -152,6 +253,8 @@ const INV_UFOS = [{ x:24.5, y:33.2 }, { x:39.5, y:33.2 }, { x:31.5, y:57.6 }];
 const INV_SMOKE = [[18.2, 33.6], [45.6, 33.4], [17.6, 41.2], [45.4, 41.4], [25.6, 47.4], [38.4, 47.4], [8.6, 47.6], [55.4, 47.6], [16.6, 54.6], [47.2, 54.6], [17.8, 25.6], [45.6, 25.4]];
 /* the crack in the north wall (the grounds), where Wadjet came in and goes; you stand below it */
 const INV_RIFT = { x:49.5, y:1.6, stand:{ x:49, y:3 } };
+/* (4.31) where each tribe's ancestor stands in the market once they have driven the aliens out */
+const INV_TRIBE_POST = { grass:[27, 44], water:[30, 45], earth:[34, 45], fire:[37, 44] };
 /* after the story: the perimeter round it on the grounds, and where you come out of it */
 const INV_PERIM = { x:45, y:3, w:9, h:3, gate:49, out:[48, 6], soldiers:[[46, 6, 'chestnut_knight2'], [52, 6, 'bug_knight1']], commander:[50, 6] };
 
@@ -199,28 +302,102 @@ function invHidden(key, t){
   if(st === 'done') return false;
   return key === CA_KEY || key === 'r6_palace' || key === 'r6_tower';
 }
-const invFighting = ()=> invAt('market', 'palace', 'tower', 'escort', 'wadjet', 'chase');
+const invFighting = ()=> invAt('market', 'arrive', 'palace', 'tower', 'escort', 'wadjet', 'chase');
+/* (4.33) the grounds as the designer's new way has them: "Commander and soldiers are fighting in the open castle area,
+   near the fountain, citizens are running in terror, and soldiers are engaged, 2 per alien. Commander facing 1 alien
+   commander and 1 alien captain." The King waits on the path before the palace, the fountain at his back, his eyes on
+   its doors; the cocoons they came down in lie split open about the market. */
+const INV_FOUNT = {
+  king:{ x:31, y:30 }, you:{ x:31, y:26 },
+  cmd:{ x:25, y:33 }, foes:[['alien_commander_octopus', 22, 32], ['alien_captain_humanoid', 22, 34]],
+  pins:[['alien_insect_physical', 39, 33, 'chestnut_knight2', 'duck_knight2'], ['alien_golem_ground', 40, 39, 'bug_knight1', 'chestnut_knight2'],
+        ['alien_flower_grass', 23, 39, 'duck_knight2', 'bug_knight1'], ['alien_robot_steel', 44, 46, 'chestnut_knight2', 'chestnut_knight2']],
+  cocoons:[[20.5, 33.8], [43.5, 33.8], [24.5, 45.6], [38.5, 45.6]],
+  /* the strike: Wadjet out of nothing at the fountain's rim, right behind the King; she at his side, the Dauphin and the
+     Advisor either side */
+  wadjet:{ x:31, y:32 }, prin:{ x:32, y:29 }, dau:{ x:34, y:28 }, adv:{ x:28, y:28 },
+};
+const knightName = ks=> ks === 'duck_knight2' ? 'Duck Knight' : ks === 'bug_knight1' ? 'Bug Knight' : 'Chestnut Knight';
 function invGroundsThings(T){
-  invBandsOf(CA_KEY).forEach(b=> T(invBandThing(b, ()=> invBandUp(b))));
-  invClashThings(T, INV_CLASH.r6_castle, ()=> invFighting() && !ui.invRouted, { knightWhen:()=> invFighting() });
-  /* the Commander at the fountain, holding an alien commander */
+  const NEW = ()=> invNew();
+  /* ---- (4.33) ---- */
+  const held = ()=> NEW() && invAt('palace', 'tower', 'escort') && !invRouted();       // the aliens, till the tribes come
+  const posted = ()=> NEW() && invAt('palace', 'tower', 'escort') && !invSaid('walls');  // the knights, till the Commander sends them to the walls
+  const F = INV_FOUNT;
+  F.pins.forEach(([al, ax, ay, k1, k2])=>{
+    T({ x:ax, y:ay, still:true, cls:'ca-npc war-alien inv-clash-alien inv-pinned', invAlien:true,
+        html:()=> `<div class="war-fig">${jgMonImg(al, WALK_T * 1.5, false)}</div>` + warSlashHtml(-2, 0) + warSlashHtml(2, 0),
+        verb:'Look', sub:(SPECIES[al] || {}).name || 'An alien', when:held, act:()=> caLines([`Two knights have it pinned between them, blade and shield. There's no getting in there!`]) });
+    [[k1, ax - 2, true], [k2, ax + 2, false]].forEach(([ks, kx, faceR])=>
+      T({ x:kx, y:ay, still:true, cls:'ca-npc war-knight inv-clash-knight', invKnight:true,
+          html:()=> `<div class="war-fig">${caMonImg(ks, WALK_T * 1.45, faceR)}</div>`,
+          verb:'Talk', sub:knightName(ks), when:posted, act:()=> invKnightTalk() }));
+  });
+  /* the Commander, an alien commander and its captain on him at once */
+  F.foes.forEach(([al, ax, ay])=>{
+    T({ x:ax, y:ay, still:true, cls:'ca-npc war-alien inv-clash-alien', invAlien:true,
+        html:()=> `<div class="war-fig">${jgMonImg(al, WALK_T * (al === JG_COMMANDER ? 1.9 : 1.7), true)}</div>` + warSlashHtml(F.cmd.x - ax, F.cmd.y - ay),
+        verb:'Look', sub:al === JG_COMMANDER ? 'Commander Octopus' : 'Captain Humanoid', when:held, act:()=> invCommanderFightTalk() });
+  });
+  T({ x:F.cmd.x, y:F.cmd.y, still:true, cls:'ca-npc war-knight inv-commander-fight', who:null,
+      html:()=> `<div class="war-fig">${caMonImg('chestnut_knight2_c', WALK_T * 1.6, false)}</div>`,
+      verb:'Talk', sub:'The Royal Commander', when:posted, act:()=> invCommanderFightTalk() });
+  /* the King, waiting for his daughter */
+  T({ x:F.king.x, y:F.king.y, still:true, cls:'ca-npc inv-king-wait', who:null,
+      html:()=> caMonImg('fairy_king_c', WALK_T * 1.75, false, CA_WHO.king.icon, 'back'),
+      verb:'Talk', sub:'The Fairy King', mark:()=> invAt('escort') && invRouted(),
+      when:()=> NEW() && invAt('palace', 'tower', 'escort') && !ui.invClimax, act:()=> invKingFountTalk() });
+  /* his fight lost or left: Wadjet on the fountain's rim; the King on the path, she beside him, the Dauphin and the
+     Advisor standing guard */
+  const waiting = ()=> NEW() && invAt('wadjet') && !ui.invClimax;
+  T({ x:F.wadjet.x, y:F.wadjet.y, still:true, cls:'ca-npc inv-wadjet', html:()=> jgMonImg(WADJET + '_front', WALK_T * 2.3, false),
+      verb:'Fight', sub:'Wadjet', when:waiting, mark:()=> true, act:()=> invWadjetChallenge() });
+  T({ x:F.king.x, y:F.king.y, still:true, cls:'ca-npc inv-king-down', who:null, html:()=> caMonImg('fairy_king_c', WALK_T * 1.75, false, CA_WHO.king.icon),
+      verb:'Look', sub:'The Fairy King', when:waiting, act:()=> caLines([`The King lies on the path before his palace. A soft pink light still glows around him: he is holding on.`]) });
+  T({ x:F.prin.x, y:F.prin.y, still:true, cls:'ca-npc inv-princess-glow', who:null, html:()=> caMonImg('fairy_princess1', WALK_T * 1.5, false),
+      verb:'Talk', sub:'The Little Princess', when:waiting, act:()=> invPrincessHeal() });
+  T({ x:F.adv.x, y:F.adv.y, still:true, cls:'ca-npc', who:null, html:()=> caMonImg('fairybird1_c', WALK_T * 1.35, true),
+      verb:'Talk', sub:'The Royal Advisor', when:waiting, act:()=> caLines([['advisor', caTurn('invAdvisorWatch', INV_LINES.advisorWatch)]]) });
+  T({ x:F.dau.x, y:F.dau.y, still:true, cls:'ca-npc', who:null, html:()=> caMonImg('fairy_dauphin2', WALK_T * 1.55, false),
+      verb:'Talk', sub:'The Dauphin', when:waiting, act:()=> caLines([['dauphin', caTurn('invDauphinWatch', INV_LINES.dauphinWatch)]]) });
+
+  /* ---- the old way (a save from 4.31 at Wadjet's fight in the hall) ---- */
+  const OLD = ()=> !NEW();
+  invClashThings(T, INV_CLASH.r6_castle, ()=> OLD() && invFighting() && !invRouted(), { knightWhen:()=> OLD() && invFighting() });
+  /* the Commander at the fountain, holding an alien commander (till the tribes come; then, (4.31), till he takes his
+     soldiers to the north wall after you) */
   T({ x:32, y:33, still:true, cls:'ca-npc war-alien inv-clash-alien', invAlien:true,
       html:()=> `<div class="war-fig">${jgMonImg(JG_COMMANDER, WALK_T * 1.9, true)}</div>` + warSlashHtml(-3, 0),
-      verb:'Look', sub:'Commander Octopus', when:()=> invFighting() && !ui.invRouted, act:()=> invCommanderFightTalk() });
+      verb:'Look', sub:'Commander Octopus', when:()=> OLD() && invFighting() && !invRouted(), act:()=> invCommanderFightTalk() });
   T({ x:29, y:33, still:true, faceR:true, cls:'ca-npc war-knight inv-commander-fight', who:null,
       html:()=> `<div class="war-fig">${caMonImg('chestnut_knight2_c', WALK_T * 1.6, true)}</div>`,
-      verb:'Talk', sub:'The Royal Commander', when:()=> invFighting(), act:()=> invCommanderFightTalk() });
-  /* after the story: the rift's perimeter, its soldiers, the Commander at its gate */
-  const P = INV_PERIM;
-  T({ x:P.x, y:P.y, w:P.w, h:P.h, icon:'', html:()=> '', verb:'Enter', sub:'The rift perimeter', when:()=> invAfter(), act:()=> invPerimEnter() });
-  P.soldiers.forEach(([x, y, sp])=> T({ x, y, still:true, cls:'ca-npc', html:()=> caMonImg(sp, WALK_T * 1.45, false, '', 'back'),
-    verb:'Talk', sub:sp === 'bug_knight1' ? 'Bug Knight' : 'Chestnut Knight', when:()=> invAfter(), act:()=> caLines([['knight', caTurn('invPerimSoldier', INV_LINES.perimSoldier)]]) }));
-  T({ x:P.commander[0], y:P.commander[1], still:true, cls:'ca-npc', html:()=> caMonImg('chestnut_knight2_c', WALK_T * 1.6, false),
-      verb:'Talk', sub:'The Royal Commander', when:()=> invAfter(), act:()=> invPerimCommanderTalk() });
+      verb:'Talk', sub:'The Royal Commander', when:()=> OLD() && invFighting() && !invSaid('riftOut') && !invSaid('fled'), act:()=> invCommanderFightTalk() });
+  /* (4.31) the tribes, once they have marched in: their ancestors in the market, till the castle is saved ((4.33) they
+     go after the aliens) */
+  JG_TRIBE_KEYS.forEach(k=>{
+    const [x, y] = INV_TRIBE_POST[k];
+    T({ x, y, still:true, cls:'ca-npc inv-tribe-post',
+        html:()=> `<div class="war-fig">${jgMonImg(`tribal_ancestor_${k}_front`, WALK_T * 2, x < 32)}</div>`,
+        verb:'Talk', sub:JG_TRIBES[k].short + ' Ancestor', when:()=> OLD() && invSaid('tribes') && invActive(),
+        act:()=> caLines([['a_' + k, INV_LINES.tribePost[k]]]) });
+  });
+  /* (4.33) the rift's perimeter is at the jungle's north edge now (36-the-return.js): none on the grounds */
 }
 function invPalaceThings(T){
-  const inHall = ()=> invAt('palace', 'tower', 'escort') && !ui.invClimax;
-  /* the King on his dais, holding them off; the Dauphin and the Advisor beside him */
+  const NEW = ()=> invNew();
+  /* ---- (4.33) the Dauphin against an alien commander, the Advisor against its captain, in the hall ---- */
+  const hold = ()=> NEW() && invAt('palace', 'tower') && !ui.invClimax;
+  [['fairy_dauphin2', 17, 9, 1.55, 'dauphin', 'The Dauphin', JG_COMMANDER, 14, 9, 1.9, 'Commander Octopus'],
+   ['fairybird1_c', 22, 9, 1.35, 'advisor', 'The Royal Advisor', JG_CAPTAIN, 25, 9, 1.7, 'Captain Humanoid']].forEach(([sp, x, y, sz, who, nm, al, ax, ay, asz, anm])=>{
+    T({ x:ax, y:ay, still:true, cls:'ca-npc war-alien inv-clash-alien', invAlien:true,
+        html:()=> `<div class="war-fig">${jgMonImg(al, WALK_T * asz, x > ax)}</div>` + warSlashHtml(x - ax, 0),
+        verb:'Look', sub:anm, when:hold, act:()=> caLines([['lion', `<b>"Leave that one to ${who === 'dauphin' ? 'the Dauphin' : 'the Advisor'}! The princess first!"</b>`]]) });
+    T({ x, y, still:true, cls:'ca-npc war-knight', who:null, faceR:x < ax,
+        html:()=> `<div class="war-fig">${caMonImg(sp, WALK_T * sz, x < ax)}</div>`,
+        verb:'Talk', sub:nm, when:hold, act:()=> caLines([[who, caTurn('inv433' + who, INV_LINES[who + 'Hold'])]]) });
+  });
+  /* ---- the old way: the King on his dais, holding them off; the Dauphin and the Advisor beside him ---- */
+  const inHall = ()=> !NEW() && invAt('palace', 'tower', 'escort') && !ui.invClimax && !invSaid('cry');   // (4.31) till his cry: then Wadjet's in there
   T({ x:19, y:3, w:2, still:true, cls:'ca-npc inv-king-fight', html:()=> caMonImg('fairy_king_c', WALK_T * 1.75, false, CA_WHO.king.icon),
       verb:'Talk', sub:'The Fairy King', when:inHall, act:()=> invKingFightTalk() });
   T({ x:22, y:5, still:true, faceR:true, cls:'ca-npc war-knight', html:()=> `<div class="war-fig">${caMonImg('fairy_dauphin2', WALK_T * 1.55, true)}</div>`,
@@ -232,16 +409,23 @@ function invPalaceThings(T){
         html:()=> `<div class="war-fig">${jgMonImg(al, WALK_T * 1.5, kx > ax)}</div>` + warSlashHtml(kx - ax, 0),
         verb:'Look', sub:(SPECIES[al] || {}).name || 'An alien', when:inHall, act:()=> caLines([`There's no getting near — the royal family are fighting for their lives!`]) });
   });
-  invClashThings(T, INV_CLASH.r6_palace, ()=> invAt('palace', 'tower', 'escort'));
+  invClashThings(T, INV_CLASH.r6_palace, ()=> invAt('palace', 'tower') || (invAt('escort') && !NEW()));
   invBandsOf('r6_palace').forEach(b=> T(invBandThing(b, ()=> invBandUp(b))));
-  /* Wadjet, waiting: his fight lost or left. The King lies on his dais, his daughter beside him. */
-  const waiting = ()=> invAt('wadjet') && !ui.invClimax;
+  /* Wadjet, waiting: his fight lost or left. The King lies on his dais, his daughter beside him — (4.31) and after
+     Wadjet has gone, while you chase him, still; the Dauphin and the Advisor standing guard over him. ((4.33) The new
+     way, Wadjet waits by the fountain; while you chase him, the King lies here in the hall.) */
+  const waiting = ()=> !NEW() && invAt('wadjet') && !ui.invClimax;
+  const watch = ()=> ((invAt('wadjet') && !NEW()) || (invAt('chase') && !!invState().nem)) && !ui.invClimax;
   T({ x:19, y:10, still:true, cls:'ca-npc inv-wadjet', html:()=> jgMonImg(WADJET + '_front', WALK_T * 2.3, false),
       verb:'Fight', sub:'Wadjet', when:waiting, mark:()=> true, act:()=> invWadjetChallenge() });
   T({ x:19, y:3, w:2, still:true, cls:'ca-npc inv-king-down', html:()=> caMonImg('fairy_king_c', WALK_T * 1.75, false, CA_WHO.king.icon),
-      verb:'Look', sub:'The Fairy King', when:waiting, act:()=> caLines([`The King lies still on the dais. A soft pink light still glows around him: he is holding on.`]) });
+      verb:'Look', sub:'The Fairy King', when:watch, act:()=> caLines([`The King lies still on the dais. A soft pink light still glows around him: he is holding on.`]) });
   T({ x:22, y:4, still:true, cls:'ca-npc inv-princess-glow', html:()=> caMonImg('fairy_princess1', WALK_T * 1.5, false),
-      verb:'Talk', sub:'The Little Princess', when:waiting, act:()=> invPrincessHeal() });
+      verb:'Talk', sub:'The Little Princess', when:watch, act:()=> invPrincessHeal() });
+  T({ x:17, y:5, still:true, cls:'ca-npc', html:()=> caMonImg('fairybird1_c', WALK_T * 1.35, true),
+      verb:'Talk', sub:'The Royal Advisor', when:()=> watch() && !!invState().nem, act:()=> caLines([['advisor', caTurn('invAdvisorWatch', INV_LINES.advisorWatch)]]) });
+  T({ x:23, y:6, still:true, cls:'ca-npc', html:()=> caMonImg('fairy_dauphin2', WALK_T * 1.55, false),
+      verb:'Talk', sub:'The Dauphin', when:()=> watch() && !!invState().nem, act:()=> caLines([['dauphin', invAt('chase') ? INV_LINES.dauphinChase : caTurn('invDauphinWatch', INV_LINES.dauphinWatch)]]) });
 }
 function invTowerThings(T){
   const up = ()=> invAt('tower');
@@ -308,7 +492,7 @@ function invLost(b){
       `<b>"Easy, easy — we've got you."</b><br><br>` + (perim
         ? `The Commander's soldiers carried you out of the perimeter and all the way to the tavern. You wake by the fire.`
         : `The knights carried you into the tavern and barred the door behind you. You wake by the fire.`) +
-      `<br><br><i>Rest here to heal your team, then go back out. ${perim ? 'The perimeter is behind the palace, by the north wall.' : 'The bands you have beaten stay beaten.'}</i>`,
+      `<br><br><i>Rest here to heal your team, then go back out. ${perim ? 'The perimeter is at the jungle\'s northern edge.' : 'The bands you have beaten stay beaten.'}</i>`,
       ()=>{ res(); caGo('r6_tavern', [7, 10]); }, { subtitle:"The Fairy King's castle", bg:'palace' });
   });
 }
@@ -322,7 +506,7 @@ function invBack(deck){
 }
 function invFled(){
   const f = ui.invFight, id = ui.battle && ui.battle.inv;
-  const b = [].concat(...Object.keys(INV_BANDS).map(k=> invBandsOf(k)), invPerimBands()).find(x=> x.id === id);
+  const b = [].concat(...Object.keys(INV_BANDS).map(k=> invBandsOf(k)), invPerimBands(), [invRiftBand()]).find(x=> x.id === id);
   if(b) b.calm = Date.now() + 8000;                                    // it lets you go, for a moment
   toast('Got away safely!');
   invBack(f && f.deck);
@@ -374,11 +558,42 @@ const INV_LINES = {
   advisor:[`<b>"Hoo! The stair is at the end of the east corridor. Hurry!"</b>`, `<b>"Patience and cleverness— oh, never mind! HOO!"</b>`],
   commander:[`<b>"Their bands are all over the market. Take them one at a time!"</b>`, `<b>"Don't worry about me — this one's mine!"</b>`, `<b>"For the castle!"</b>`],
   kingFight:[`<b>"My little one is alone in the tower! Go to her — bring her to me!"</b>`, `<b>"I can hold them a while yet. Go!"</b>`],
-  perimSoldier:[`<b>"Nothing gets out of that compound on my watch."</b>`, `<b>"They keep crawling out of the crack in the wall. Fewer every day, mind you."</b>`, `<b>"Going in? Watch yourselves. Some of the big ones come through, now and then."</b>`],
+  perimSoldier:[`<b>"Nothing gets out of that compound on my watch."</b>`, `<b>"They keep crawling out of that rift. Fewer every day, mind you."</b>`, `<b>"Going in? Watch yourselves. Some of the big ones come through, now and then."</b>`],
+  /* (4.31) the tribes in the market; the Dauphin and the Advisor watching over the King */
+  tribePost:{
+    grass:`<b>"Ha! Did you see them run? Tag — they're it!"</b>`,
+    water:`<b>"The tribes keep their word. Go to your King, friends. The market is ours to hold."</b>`,
+    earth:`<b>"…Stone… stands… here."</b>`,
+    fire:`<b>"Two hundred years in a blade, and the first thing I do when I'm out is save HIS castle. Don't tell anyone."</b>` },
+  advisorWatch:[`<b>"Hoo… he can turn back time, they say. Then don't try to beat him: outlast him! Even a cobra tires."</b>`,
+                `<b>"Hoo! The princess hasn't let go of His Majesty's hand once. Not once!"</b>`],
+  dauphinWatch:[`<b>"We'll guard Father. That snake is yours — and don't let it fool you, it's only playing for time."</b>`,
+                `<b>"My little sister… did you SEE her? All these years I thought she was afraid of everything."</b>`],
+  dauphinChase:`<b>"Go on — Lucesco's nose knows the way. We'll keep watch over Father."</b>`,
+  /* (4.33) the new way: in the hall, the Dauphin and the Advisor sending you on; by the fountain, the King and the Commander */
+  dauphinHold:[`<b>"She's up in her room! The stair's at the end of the east corridor — go, I've got this one!"</b>`,
+               `<b>"Don't look at me, look at the STAIR! My little sister first!"</b>`],
+  advisorHold:[`<b>"Hoo! Through the east door, then all the way up the corridor to the stair! Mind the ones in the corridor!"</b>`,
+               `<b>"Patience and cleverness, they said. Nobody said anything about tentacles! HOO!"</b>`],
+  kingFount:[`<b>"My little one is in there somewhere. Please — bring her out to me."</b>`,
+             `<b>"I cannot leave them. Not one of my people will I leave. Go — I trust you."</b>`],
+  kingFountTower:[`<b>"Up in the tower? Then she is hiding. She always hides. Good girl… stay hidden till they come for you."</b>`],
+  kingFountEscort:[`<b>"Is that… is that her? My little one!"</b>`],
+  cmdFount:[`<b>"Two on each of them — that's it, hold them, HOLD!"</b>`, `<b>"Don't mind me — this pair is mine. Get the princess!"</b>`, `<b>"For the King!"</b>`],
 };
 function invKnightTalk(){ return caLines([['knight', caTurn('invKnight', INV_LINES.knight)]]); }
 function invKingFightTalk(){ return caLines([['king', caTurn('invKingFight', INV_LINES.kingFight)]]); }
+/* (4.33) the King by the fountain, waiting for his daughter */
+function invKingFountTalk(){
+  if(invAt('escort') && invRouted() && typeof invStrike === 'function') return invStrike();
+  if(invAt('escort')) return caLines([['king', caTurn('invKingFountE', INV_LINES.kingFountEscort)]]);
+  return caLines([['king', caTurn('invKingFount' + (invAt('tower') ? 'T' : ''), invAt('tower') ? INV_LINES.kingFountTower.concat(INV_LINES.kingFount) : INV_LINES.kingFount)]]);
+}
 function invCommanderFightTalk(){
+  if(invNew() && !invRouted()) return caLines([['commander', caTurn('invCmdFount', INV_LINES.cmdFount)]]);
+  if(invRouted()) return caLines([['commander', invAt('escort')
+    ? `<b>"The tribes! I never thought I'd be glad to hear those horns. The market is ours — now get the princess to her father!"</b>`
+    : `<b>"The market is ours, thanks to the tribes. Never mind me — the King needs you. Go!"</b>`]]);
   if(invAt('market')){
     const left = invBandsOf(CA_KEY).filter(b=> invBandUp(b)).length;
     return caLines([['commander', caTurn('invCommander', INV_LINES.commander) + (left ? `<br><br><i>${left} of their bands still hold the market.</i>` : '')]]);
@@ -425,12 +640,20 @@ if(typeof caGo === 'function'){
   const _invCaGo = caGo;
   caGo = function(key, at){
     if(invFighting() && /^r6_(wall|ramp)_/.test(key)){ toast('The knights have barred the way up. The walls are under attack!'); return; }
-    if(key === 'r6_palace' && invAt('market') && !invMarketCleared() && !ui.sceneRunning){ caLines([['lion', `<b>"Not yet! The Commander needs us here — the market is crawling with them."</b>`]]); return; }
-    if(key === CA_KEY && invAt('escort') && ui.screen === 'r6_palace' && !ui.sceneRunning){ caLines([['princess', `<b>"No — Father's in the hall! Please, let's go to him."</b>`]]); return; }
+    if(key === CA_KEY && invAt('escort') && !invNew() && ui.screen === 'r6_palace' && !ui.sceneRunning){ caLines([['princess', `<b>"No — Father's in the hall! Please, let's go to him."</b>`]]); return; }
+    /* (4.33) the princess's door: the hall to the palace's doors with her once the Dauphin and the Advisor are with you */
+    if(key === CA_KEY && invAt('escort') && invNew() && ui.screen === 'r6_palace' && !invSaid('sisters') && !ui.sceneRunning){ caLines([['princess', `<b>"Wait — my sister's in the hall! We can't leave her!"</b>`]]); return; }
     if(key === 'r6_tower' && invAt('palace')){
       const b = invBandsOf('r6_palace').find(x=> x.guards === 'stair');
       if(b && invBandUp(b)){
-        caLines([`Captain ${(SPECIES[b.lead] || {}).name || 'Humanoid'}'s band stands in front of the stair. You'll have to get past them first!`]).then(()=> invFight(b));
+        const nm = (SPECIES[b.lead] || {}).name || 'Humanoid';
+        caLines([b.rank === 'alien' ? `An alien ${nm} stands in front of the stair. You'll have to get past it first!` : `Captain ${nm}'s band stands in front of the stair. You'll have to get past them first!`]).then(()=> invFight(b));
+        return;
+      }
+      /* (4.33) "3 aliens along the right perimeter": not up the stair with any of them at your back */
+      if(invNew() && !invDeckCleared('r6_palace')){
+        const left = invBandsOf('r6_palace').filter(x=> invBandUp(x)).length;
+        caLines([['lion', `<b>"Not with ${left === 1 ? 'that one' : 'those ' + left} still down here — they'd follow us up and trap us at her door. Clear the corridor first!"</b>`]]);
         return;
       }
       invSet('tower');
@@ -438,10 +661,12 @@ if(typeof caGo === 'function'){
     return _invCaGo.apply(this, arguments);
   };
 }
+/* the gate shut while the castle is fought for — (4.33) open again once Wadjet has fled it: after him! */
+function invGateShut(){ return invFighting() && !(invAt('chase') && invState().nem); }
 if(typeof caToJungle === 'function'){
   const _invToJungle = caToJungle;
   caToJungle = function(){
-    if(invFighting()){ toast('The gate is barred. Nobody leaves while the castle is under attack!'); return; }
+    if(invGateShut()){ toast('The gate is barred. Nobody leaves while the castle is under attack!'); return; }
     return _invToJungle.apply(this, arguments);
   };
 }
@@ -459,13 +684,21 @@ if(typeof caToJungle === 'function'){
   d.musicLive = true;
 });
 
-/* ---------- a step: the princess at your heels, a band that sees you, her door, the hall ---------- */
+/* ---------- a step: the princess at your heels ((4.33) her sister and the Advisor after her), a band that sees you,
+   her door, the hall, the King ---------- */
 const _invTrail = [];
+/* who follows you where: she, in the palace and the tower; (4.33) and on the grounds, with her sister and the Advisor */
+function invFollowOn(key){ return invAt('escort') && !ui.invClimax && (key === 'r6_palace' || key === 'r6_tower' || (key === CA_KEY && invNew())); }
+function invFollowers(){
+  const f = [{ id:'invPrin', sprite:'fairy_princess', size:1.25, back:3 }];
+  if(invNew() && invSaid('sisters')) f.push({ id:'invDau', sprite:'fairy_dauphin2', size:1.4, back:5 }, { id:'invAdv', sprite:'fairybird1_c', size:1.25, back:7 });
+  return f;
+}
 function invStep(key, p){
   if(!invOn()) return false;
   _invTrail.push({ x:p.x, y:p.y, key });
-  if(_invTrail.length > 6) _invTrail.shift();
-  if(invAt('escort') && (key === 'r6_palace' || key === 'r6_tower')) invPrincessFollowStep(key);
+  if(_invTrail.length > 10) _invTrail.shift();
+  if(invFollowOn(key)) invFollowStep(key);
   if(ui.sceneRunning || ui.caTalk || ui.invFighting) return false;
   const b = invBandNear(key, p);
   if(b){
@@ -477,7 +710,7 @@ function invStep(key, p){
   }
   /* her door, while the army before it stands */
   if(key === 'r6_tower' && invAt('tower') && p.y <= 11 && p.x <= 11){
-    const t1 = invBandsOf('r6_tower')[0];
+    const t1 = invBandsOf('r6_tower').find(x=> x.guards === 'door');
     if(t1 && invBandUp(t1)){
       walkState().busy = true;
       invAlert(t1);
@@ -485,44 +718,61 @@ function invStep(key, p){
       return true;
     }
   }
-  /* into the hall, with her at your heels */
-  if(key === 'r6_palace' && invAt('escort') && invInHall(p)){ setTimeout(()=> invClimax(), 120); return true; }
+  /* into the hall, with her at your heels — (4.31) after the tribes' horns and the King's cry; (4.33) her sister and the
+     Advisor, their fights won, come with you */
+  if(key === 'r6_palace' && invAt('escort') && invInHall(p)){
+    if(!invNew()){ setTimeout(()=> invSaid('cry') ? invClimax() : invTribesEarly(), 120); return true; }
+    if(!invSaid('sisters') && typeof invSisters === 'function'){ setTimeout(()=> invSisters(), 120); return true; }
+  }
+  /* (4.33) the tribes come, the aliens gone: to the King by the fountain — and Wadjet strikes */
+  if(key === CA_KEY && invNew() && invAt('escort') && invSaid('tribes') && !ui.invClimax && typeof invStrike === 'function'){
+    const K = INV_FOUNT.king;
+    if(Math.abs(p.x - K.x) + Math.abs(p.y - K.y) <= 3){ setTimeout(()=> invStrike(), 120); return true; }
+  }
   return false;
 }
 function invInHall(p){ return !!p && p.x >= 12 && p.x <= 27 && p.y >= 2 && p.y <= 31; }
 
-/* ---------- the princess at your heels (the escort) ---------- */
-function invPrincessFollowStep(key){
-  const el = document.getElementById('invPrin');
-  if(!el) return;
-  const tr = _invTrail.filter(s=> s.key === key);
-  const at = tr[tr.length - 3] || tr[0];
-  if(!at) return;
-  const p = caYou();
-  if(p && at.x === p.x && at.y === p.y) return;
-  const was = el._at || at;
-  el._at = { x:at.x, y:at.y };
-  el.style.transform = `translate3d(${at.x * WALK_T}px,${at.y * WALK_T}px,0)`;
-  el.style.zIndex = 10 + at.y;
-  if(at.x !== was.x) faceRight(el, at.x > was.x);
+/* ---------- at your heels (the escort) ---------- */
+function invFollowStep(key){
+  const tr = _invTrail.filter(s=> s.key === key), p = caYou();
+  invFollowers().forEach(f=>{
+    const el = document.getElementById(f.id);
+    if(!el) return;
+    const at = tr[tr.length - f.back] || tr[0];
+    if(!at || (p && at.x === p.x && at.y === p.y)) return;
+    const was = el._at || at;
+    el._at = { x:at.x, y:at.y };
+    el.style.transform = `translate3d(${at.x * WALK_T}px,${at.y * WALK_T}px,0)`;
+    el.style.zIndex = 10 + at.y;
+    if(at.x !== was.x) faceRight(el, at.x > was.x);
+  });
 }
-function invPrincessFollowDraw(world, key, p){
+function invPrincessFollowStep(key){ return invFollowStep(key); }   // (its name until 4.33)
+function invFollowersDraw(world, key, p){
   if(!p) return;
-  const m = CA_MAPS[key]();
-  const lion = caLion.at;
-  const free = [[0, 1], [1, 0], [-1, 0], [0, -1], [1, 1], [-1, 1]].map(([dx, dy])=> ({ x:p.x + dx, y:p.y + dy }))
-    .find(q=> !caSolidCode(caAt(m, q.x, q.y)) && !wBlockedBy(DECKS[key], q.x, q.y) && !(lion && lion.x === q.x && lion.y === q.y)) || p;
-  const el = document.createElement('div');
-  el.className = 'walk-ent ca-npc inv-follow';
-  el.id = 'invPrin';
-  el.innerHTML = caMonImg('fairy_princess', WALK_T * 1.25, false);
-  el._at = { x:free.x, y:free.y };
-  el.style.transform = `translate3d(${free.x * WALK_T}px,${free.y * WALK_T}px,0)`;
-  el.style.zIndex = 10 + free.y;
-  world.appendChild(el);
+  const m = CA_MAPS[key](), lion = caLion.at, taken = [p].concat(lion ? [lion] : []);
+  const ring = [[0, 1], [1, 0], [-1, 0], [0, -1], [1, 1], [-1, 1], [0, 2], [1, -1], [-1, -1], [2, 0], [-2, 0]];
+  const placed = [];
+  invFollowers().forEach(f=>{
+    const free = ring.map(([dx, dy])=> ({ x:p.x + dx, y:p.y + dy }))
+      .find(q=> !caSolidCode(caAt(m, q.x, q.y)) && !wBlockedBy(DECKS[key], q.x, q.y) && !taken.some(t=> t.x === q.x && t.y === q.y)) || p;
+    taken.push(free); placed.push(free);
+    const el = document.createElement('div');
+    el.className = 'walk-ent ca-npc inv-follow';
+    el.id = f.id;
+    el.innerHTML = caMonImg(f.sprite, WALK_T * f.size, false);
+    el._at = { x:free.x, y:free.y };
+    el.style.transform = `translate3d(${free.x * WALK_T}px,${free.y * WALK_T}px,0)`;
+    el.style.zIndex = 10 + free.y;
+    world.appendChild(el);
+  });
+  /* the trail they walk: each a step further back along it (she 3, her sister 5, the Advisor 7) */
   _invTrail.length = 0;
-  _invTrail.push({ x:free.x, y:free.y, key }, { x:free.x, y:free.y, key }, { x:p.x, y:p.y, key });
+  const at = i=> placed[i] || placed[0];
+  [at(2), at(2), at(1), at(1), at(0), at(0), p].forEach(q=> _invTrail.push({ x:q.x, y:q.y, key }));
 }
+function invPrincessFollowDraw(world, key, p){ return invFollowersDraw(world, key, p); }
 
 /* ============================================================
    ON ARRIVING: the sky, the smoke, the crack in the wall — and whichever scene is due
@@ -533,31 +783,57 @@ function invRender(key, world, p){
   ui.invClimax = false; ui.invRouted = false;
   const st = invStage();
   if(!st) return;
+  /* (4.33) left part-way through the return to the castle: it begins again from the castle's gate (36-the-return.js) */
+  if(st === 'arrive' && typeof invArriveRedirect === 'function'){ setTimeout(()=> invArriveRedirect(key), 250); return; }
   if(key === CA_KEY){
-    if(invFighting() && invPast('market')) INV_UFOS.forEach((u, i)=> invUfoEl('u' + i, u.x, u.y, world));
+    if(invNew()){ if(invAt('palace', 'tower', 'escort', 'wadjet', 'chase') && typeof invCocoonEls === 'function') invCocoonEls(world); }   // (4.33) the cocoons they came down in
+    else if(invFighting() && invPast('market') && !invRouted()) INV_UFOS.forEach((u, i)=> invUfoEl('u' + i, u.x, u.y, world));
     if(invAt('palace', 'tower', 'escort', 'wadjet', 'chase')) INV_SMOKE.forEach(([x, y], i)=> invSmokeEl(world, x, y, i));
-    if(invPast('wadjet')) invRiftEl(world, INV_RIFT.x, INV_RIFT.y, 2.3, 'invRiftGrounds', invAfter() ? 'small' : '');
-    if(invAfter()) invPerimDraw(world);
+    if(invRiftShown()) invRiftEl(world, INV_RIFT.x, INV_RIFT.y, 2.3, 'invRiftGrounds', '');
   }
   if(key === 'r6_perimeter') invRiftDraw(world);
-  if(invAt('escort') && (key === 'r6_palace' || key === 'r6_tower')) invPrincessFollowDraw(world, key, p);
+  if(invFollowOn(key)) invFollowersDraw(world, key, p);
   if(key === 'r6_perimeter'){ const stg = $('#walkStage'); if(stg){ stg.classList.remove('ca-in'); stg.classList.add('ca-out'); } }
   setTimeout(()=> invSceneDue(key), 420);
+}
+/* (4.31) the crack in the north wall on the grounds: once Wadjet has torn it open (before 4.31: from his fight on).
+   (4.33) Only for the old chase of a save from before 4.31: the rift is at the jungle's north edge now. */
+function invRiftShown(){
+  const v = invState();
+  if(v.nem || v.v433 || invAfter()) return false;
+  if(!invAt('chase')) return invAt('wadjet') && !!v.grown && !invSaid('cry');
+  return true;
 }
 function invSceneDue(key){
   if(ui.screen !== key || ui.sceneRunning || ui.caTalk || document.querySelector('.scene-say')) return;
   const st = invStage(), v = invState();
+  /* (4.33) the new way's own (36-the-return.js) */
+  if(v.v433 && typeof invSceneDue433 === 'function'){ const r = invSceneDue433(key, st, v); if(r !== undefined) return r; }
   if(st === 'muster'){ if(key === 'r6_palace') return invMuster(); if(key === CA_KEY) return invLanding(); return; }
   if(st === 'market' && key === CA_KEY && invMarketCleared() && !v.said.toPalace) return invToPalace();
   if(st === 'palace' && key === 'r6_palace' && !v.said.hall) return invHallScene();
   if(st === 'tower' && key === 'r6_tower' && !v.said.towerIn) return invTowerIn();
-  if(st === 'escort' && key === 'r6_palace' && invInHall(caYou())) return invClimax();
+  /* (4.31) down from the tower with her: the tribes' horns, the King's cry — then the hall */
+  if(st === 'escort' && key === 'r6_palace'){
+    if(!v.said.cry) return invTribesEarly();
+    if(invInHall(caYou())) return invClimax();
+  }
+  /* (4.31) a save from before 4.31 that lost to (or left) the old Wadjet: the tribes come now */
+  if(st === 'wadjet' && !v.said.tribes && (key === 'r6_palace' || key === CA_KEY)) return invTribesEarly();
+  if(st === 'chase' && v.nem){
+    /* he has slipped away: Lucesco's nose, in the hall where you beat him — (4.33) then after him, to the jungle's north
+       edge (the rift, its army, the soldiers: there, 36-the-return.js) */
+    if(!v.said.fled){ if(key === 'r6_palace') return invAfterNem(); if(key === CA_KEY){ caGo('r6_palace', [19, 14]); } return; }
+    return;
+  }
   if(st === 'chase'){
     if(!v.said.fled && key === 'r6_palace') return invAfterWadjet();
     if(key === CA_KEY){ invPrincessJoins(); return invScene(()=> v.said.chased ? invTribesRun() : invChaseRun()); }
     if(key === 'r6_palace') return invScene(async ()=>{ await invCut('r6_palace', CA_KEY, [31, 20], v.said.chased ? null : 'After Wadjet!'); await (v.said.chased ? invTribesRun() : invChaseRun()); });
   }
   if(st === 'done' && key === 'r6_palace' && !v.said.finale) return invScene(()=> invFinaleRun());
+  /* (4.34) a save past the finale without its epilogue: the tribes have come to the castle (37-peace.js) */
+  if(st === 'done' && v.said.finale && !v.said.epilogue && typeof peaceEpilogueDue === 'function') return peaceEpilogueDue(key);
 }
 function invMarketCleared(){ return invBandsOf(CA_KEY).every(b=> invState().won[b.id]); }
 
@@ -597,8 +873,8 @@ function invWaitDeck(key){
     const t = setInterval(()=>{ if((ui.screen === key && document.getElementById('walkYou')) || ++n > 60){ clearInterval(t); setTimeout(res, 120); } }, 100);
   });
 }
-/* the black curtain down, another place, the curtain up */
-async function invCut(from, key, at, text){
+/* the black curtain down, another place, the curtain up — (4.31) `mid` run once it is drawn, behind the curtain */
+async function invCut(from, key, at, text, mid){
   await sceneCurtain(true, 600);
   if(text) await sceneCurtainText(text, 1000);
   const w = walkState();
@@ -611,8 +887,16 @@ async function invCut(from, key, at, text){
   await invWaitDeck(key);
   ui.invSceneKey = key;
   walkState().busy = true;
+  if(mid) mid();
   if(text) await sceneCurtainText('', 300);
   await sceneCurtain(false, 600);
+}
+/* (4.31) a monster actor jumping to stand on square (x, y), as invActorTo slides one there */
+function invHopTo(id, x, y, lift, ms){
+  const el = document.getElementById('sa-' + id);
+  if(!el) return Promise.resolve();
+  const s = el._o.w;
+  return sceneHop(id, x + 0.5 - s / 2, y + 1 - s, lift, ms);
 }
 /* a monster on the deck for a scene: its feet on the bottom of square (x, y) */
 function invSrc(name){ return /\//.test(name) ? name : `assets/mon/${name}${/^(alien_|tribal_guardian_)/.test(name) ? '' : '_front'}.png`; }
@@ -742,15 +1026,19 @@ function invTowerIn(){
 /* her room: she comes with you */
 async function invPrincessTalk(){
   if(!invAt('tower')) return caLines([['princess', `<b>"…"</b>`]]);
-  const t1 = invBandsOf('r6_tower')[0];
-  if(t1 && invBandUp(t1)) return caLines([['princess', `A tiny voice comes from behind the wardrobe. <b>"Are they still out there? I can hear them… Please make them go away!"</b>`]]);
+  /* (4.33) every one of them up here beaten, not only the army at her door */
+  const up = invNew() ? invBandsOf('r6_tower').some(b=> invBandUp(b)) : invBandsOf('r6_tower').some(b=> b.guards === 'door' && invBandUp(b));
+  if(up) return caLines([['princess', `A tiny voice comes from behind the wardrobe. <b>"Are they still out there? I can hear them… Please make them go away!"</b>`]]);
+  const NEW = invNew();
   return invScene(async ()=>{
     await L([
       ['princess', `Something behind the wardrobe squeaks. <b>"Go away, go away! I heard them on the stairs!"</b>`],
       ['lion', `<b>"It's only me, little one. Lucesco. The aliens on the stairs are gone — my friends saw to that."</b>`],
       ['princess', `A small face peeks out. <b>"…Lucesco? Is it over?"</b>`],
-      ['you', `<b>"Not yet. Your father wants you down in the hall with him, where he can keep you safe."</b>`],
-      ['princess', `<b>"Down there? But that's where all the fighting is! I'm not brave like my sister. I can't fight. I just… hide."</b>`],
+      NEW ? ['you', `<b>"Not yet. Your father is outside, by the fountain. He sent us to bring you out to him."</b>`]
+          : ['you', `<b>"Not yet. Your father wants you down in the hall with him, where he can keep you safe."</b>`],
+      ['princess', NEW ? `<b>"Father's back?! But… out there? That's where all the fighting is! I'm not brave like my sister. I can't fight. I just… hide."</b>`
+                       : `<b>"Down there? But that's where all the fighting is! I'm not brave like my sister. I can't fight. I just… hide."</b>`],
       ['lion', `<b>"Then hide behind me. Nothing gets past these paws. Stay close, and we will take you to him."</b>`],
       ['princess', `She slips out from behind the wardrobe and takes a fistful of Lucesco's mane.<br><br><b>"…Okay. But stay close. Please stay really close."</b>`]]);
     invSet('escort');
@@ -759,121 +1047,212 @@ async function invPrincessTalk(){
   });
 }
 
-/* ---------- THE CLIMAX: the King cornered, the black beam, Wadjet, her courage ---------- */
-function invClimax(){
+/* ============================================================
+   (4.31) DOWN FROM THE TOWER: the tribes' horns, and the King's cry
+   ============================================================ */
+function invTribesEarly(){
   return invScene(async ()=>{
-    ui.invClimax = true;
-    if(typeof questRefreshThings === 'function') questRefreshThings();
-    const pe = document.getElementById('invPrin'), you = caYou() || { x:19, y:12 };
-    const pat = pe && pe._at ? pe._at : { x:you.x + 1, y:you.y };
-    if(pe) pe.remove();
-    invActor('prin', 'fairy_princess', pat.x, pat.y, 1.25);
-    invActor('king', 'fairy_king_c', 19.5, 3, 2.3);
-    [['c1', 16.6, 3.6], ['c2', 19.5, 5.4], ['c3', 22.4, 3.6]].forEach(([id, x, y], i)=> invActor(id, JG_COMMANDER, x, y, 1.9, { flip:i === 0 }));
-    await sceneLook({ x:13, y:0.5, w:14, h:7 }, { ms:900 });
-    await L([['princess', `<b>"Father!"</b>`],
-                   `Three alien commanders have the King backed against his throne.`,
-                   ['king', `<b>"Stay back, little one! Stay—"</b>`]]);
-    /* he overwhelms them */
-    sceneGlow('kingBurst', 20, 3.2, 4.5);
-    invShockwave(20, 3.2, 'violet');
-    const shake = sceneShake(700, ms=> 0.12 * (1 - ms / 700));
-    await Promise.all([sceneHop('c1', 12.2, 2.4, 1.4, 700), sceneHop('c2', 18.8, 9.6, 1.0, 700), sceneHop('c3', 26.0, 2.4, 1.4, 700), shake]);
-    await Promise.all(['c1', 'c2', 'c3'].map(id=> invActorFade(id, 450)));
-    await sceneGlowOut(['kingBurst'], 500);
-    await L([['king', `The King throws out his arms, and a ring of violet light bursts from him. The commanders are flung clear across the hall.<br><br><b>"Not in my hall. Not while I still stand."</b>`]]);
-    /* the air tears; the cobra; the black beam */
-    const world = $('#walkWorld');
-    invRiftEl(world, 25.2, 8.6, 1.8, 'invRiftHall', '');
-    await sceneWait(600);
-    invActor('wadjet', WADJET, 24.7, 8.4, 2.4);
-    await invActorIn('wadjet', 700);
-    await L([`The air beside the columns tears open like cloth. Something long and dark slides out of it…`]);
-    playSfx('alert');
-    invBeam(24.9, 7.9, 20.0, 3.4, 1100);
-    await sceneWait(250);
-    await sceneFlash(120, 80, null, 400);
-    sceneShake(600, ms=> 0.1 * (1 - ms / 600));
-    sceneActor('king', { faint:1 });
-    const ke = document.getElementById('sa-king'); if(ke) ke.classList.add('inv-hurt');
-    await sceneWait(700);
-    const rh = document.getElementById('invRiftHall'); if(rh) rh.remove();
-    await L([
-      `A beam of pure black lances across the hall and strikes the King. He falls without a sound.`,
-      ['wadjet', `<b>"Hsss… So the great Fairy King CAN be cornered. I only had to wait for the right moment."</b>`],
-      ['lion', `<b>"Wadjet! Nemesis's cobra!"</b>`],
-      ['wadjet', `<b>"Nemesis sends his regards, lion. One of the Divine Council's lights, snuffed out. Without its King, your precious Council is half blind in this world."</b>`]]);
-    /* she runs to him */
-    await invActorTo('prin', 21, 4, 700);
-    await L([['princess', `<b>"Father! Father, please, wake up!"</b>`],
-                   ['king', `The King's eyes flicker open.<br><br><b>"…Run… little one… hide…"</b>`],
-                   ['princess', `<b>"No. I've hidden my whole life. I hid when the aliens came. I hid when my sister went to fight. I'm not hiding any more!"</b>`],
-                   `A light begins to shine from the little princess — brighter, and brighter…`]);
-    /* her courage: she evolves */
-    sceneGlow('prinGlow', 21.5, 4.3, 3);
-    await sceneWait(600);
-    await new Promise(done=> playEvolutions([{ species:'fairy_princess', name:'The Little Princess', stageFrom:0, stageTo:1, newMoves:[], from:99, to:INV.princessLv,
-      headline:`<b>The Little Princess</b> found her courage!`, note:`Lv ${INV.princessLv}` }], done));
     const v = invState();
-    v.grown = true; saveProfile();
-    await sceneGlowOut(['prinGlow'], 300);
-    sceneActor('prin', { src:invSrc('fairy_princess1') });
-    { const pe2 = document.getElementById('sa-prin'); if(pe2){ const s = 1.65, o = pe2._o; sceneActor('prin', { x:o.x + (o.w - s) / 2, y:o.y + (o.h - s), w:s, h:s }); pe2.classList.add('inv-princess-glow'); } }
-    /* the pink light, across everything: the wounded knights stand, the King holds on */
-    await invGlitterBurst('sa-prin');
-    document.querySelectorAll('.inv-clash-knight').forEach(el=> el.classList.add('inv-healed', 'war-won'));
-    if(ke) ke.classList.add('inv-holding');
-    await L([`A wave of pink light rolls out from her, across the whole hall and beyond — and everywhere it touches, the wounded knights stand up again. The King draws a long breath, and holds on.`,
-                   ['king', `<b>"…My daughter…"</b>`],
-                   ['princess', `<b>"Get away from my father!"</b>`],
-                   ['wadjet', `<b>"A late bloomer. How touching. Then I'll put out two lights instead of one. To me, my army!"</b>`],
-                   `Aliens pour in through every broken window!`]);
-    invSet('wadjet');
-    ui.sceneRunning = false;
-    invWadjetBattle();
+    if(!v.said.tribes){
+      if(ui.screen === CA_KEY){
+        await invTribesMarch();
+        ui.sceneRunning = false;
+        go(CA_KEY);                                                     // the market as the tribes hold it
+        return;
+      }
+      await L([['lion', `Lucesco's ears go up. <b>"Listen! …Horns. Out at the south gate — and they're not ours."</b>`]]);
+      await invTribesCutaway();
+    }
+    if(invAt('escort') && !v.said.cry) await invKingCry();
   });
 }
+/* "Meanwhile, at the south gate…": the march on the grounds, and back to where you stood */
+async function invTribesCutaway(){
+  const w = walkState(), from = ui.screen, back = Object.assign({}, caYou() || { x:35, y:5 });
+  w.at = w.at || {};
+  const was = w.at[CA_KEY] ? Object.assign({}, w.at[CA_KEY]) : null;
+  document.body.classList.add('inv-away');                             // you are not there: nobody stands where you would
+  try {
+    await invCut(from, CA_KEY, [31, 58], 'Meanwhile, at the south gate…');
+    await invTribesMarch();
+    if(was) w.at[CA_KEY] = was; else delete w.at[CA_KEY];
+    await invCut(CA_KEY, from, [back.x, back.y], null, ()=> document.body.classList.remove('inv-away'));
+  } finally {
+    document.body.classList.remove('inv-away');
+  }
+}
+/* the four tribes in at the south gate, up into the market; the aliens break, the saucers lift away. `o.smokeOut`:
+   the fires put out after (the old ending, before 4.31) */
+async function invTribesMarch(o){
+  o = o || {};
+  await sceneLook({ x:31.5, y:56.5 }, { zoom:0.6, ms:1100 });
+  await L([`A horn sounds from the south gate. Then another, and another — deep and wild, like nothing from the castle.`]);
+  /* in at the gate, four columns: each tribe's ancestor, its guardian, two of its people */
+  const cols = { grass:28.5, water:30.5, earth:32.5, fire:34.5 };
+  const ids = [];
+  JG_TRIBE_KEYS.forEach(k=>{
+    const T = JG_TRIBES[k], x = cols[k];
+    const sp = k === 'earth' ? 'ground' : k;
+    invActor('anc' + k, `tribal_ancestor_${k}`, x, 62, 2.4); invActor('gd' + k, `tribal_guardian_${sp}`, x, 64, 1.9);
+    invActor('f1' + k, T.members[0], x - 0.6, 66, 1.3); invActor('f2' + k, T.members[1], x + 0.6, 66, 1.3);
+    ids.push('anc' + k, 'gd' + k, 'f1' + k, 'f2' + k);
+  });
+  await sceneGlide(ids, 0, -8, 1600);
+  await L([['g_water', `<b>"The tribes keep their word, Fairy King!"</b>`],
+           ['a_fire', `<b>"Out of our jungle, star-spawn! OUT!"</b>`]]);
+  /* up into the market: the aliens break and run, their saucers lift away */
+  await sceneLook({ x:31.5, y:42 }, { zoom:0.55, ms:900 });
+  const glide = sceneGlide(ids, 0, -10, 1700);
+  await sceneWait(700);
+  document.querySelectorAll('.inv-clash-alien').forEach(el=> el.classList.add('inv-fleeing'));
+  document.querySelectorAll('.inv-ufo').forEach((el, i)=>{ el.style.transitionDelay = (i * 260 * SCENE_SPEED) + 'ms'; el.classList.add('inv-ufo-off'); });
+  await glide;
+  ui.invRouted = true;
+  invSay('tribes');
+  if(typeof questRefreshThings === 'function') questRefreshThings();
+  document.querySelectorAll('.inv-clash-knight').forEach(el=> el.classList.add('war-won'));
+  if(o.smokeOut) document.querySelectorAll('.inv-smoke').forEach(el=> el.classList.add('inv-smoke-out'));
+  await L([['a_earth', `<b>"…Stone… stands… with the castle."</b>`],
+           ['g_grass', `<b>"Tag! You're ALL it!"</b>`],
+           invNew() ? `The aliens break and run — over the walls, out through the gate, anywhere the tribes are not.`   // (4.33) they came in cocoons, not saucers
+                    : `The aliens break and run. Their saucers lift off one by one, and streak away over the walls.`,
+           ['knight', `<b>"They're running! The tribes have come — the tribes have come!"</b>`]]);
+  return ids;
+}
+/* the King's cry from the great hall: Wadjet's laser */
+async function invKingCry(){
+  await sceneWait(400);
+  try { playSfx('core_blast'); } catch(e){}
+  if(typeof buzz === 'function') buzz('ultra');
+  sceneShake(800, ms=> 0.1 * (1 - ms / 800));
+  await invPrismFlash(1100);
+  await L([`Then, from the great hall: a high, thin hum — a flash of light that throws every shadow in the corridor the wrong way — and the King's voice, crying out.`,
+           ['princess', `<b>"That was Father!"</b>`],
+           ['lion', `<b>"The King! To the great hall — RUN!"</b>`]]);
+  invSay('cry');
+  await invCut('r6_palace', 'r6_palace', [21, 13], 'You race for the great hall…');
+  await invClimaxRun();
+}
+/* a flash of every colour at once over the screen (his laser, seen from the corridor) */
+function invPrismFlash(ms){
+  invCss();
+  const f = document.createElement('div');
+  f.className = 'inv-prism-flash';
+  f.style.animationDuration = Math.round(ms * SCENE_SPEED) + 'ms';
+  document.body.appendChild(f);
+  setTimeout(()=> f.remove(), ms * SCENE_SPEED + 60);
+  return sceneWait(ms);
+}
+/* the light gathering in his hood (a scene actor's), or gone out */
+function invPrismOn(id, on){
+  const el = document.getElementById('sa-' + id);
+  if(!el) return;
+  let g = el.querySelector('.inv-prism-glow');
+  if(on){ if(!g){ g = document.createElement('i'); g.className = 'inv-prism-glow'; el.appendChild(g); } return; }
+  if(g){ g.classList.add('out'); setTimeout(()=> g.remove(), 700 * Math.max(SCENE_SPEED, 0.2)); }
+}
 
-/* ---------- WADJET'S FIGHT: six waves of three, he is the middle of the sixth; the princess at your side ---------- */
-function invWadjetWaves(){
-  const R = Math.random, pickA = ()=> JG_ALIEN_IDS[Math.floor(R() * JG_ALIEN_IDS.length)];
-  const alien = (sp, lv)=>{
-    const a = JG_ALIENS[sp], rank = a.rank || 'alien', plus = JG.plus[rank];
-    const vh = a.el || JG_ELEMENTS[Math.floor(R() * JG_ELEMENTS.length)];
-    return { species:sp, level:lv, ai:'best', nerfed:false, anyLevel:true, jg:{ alien:rank, el:a.el, plus, lastVh:vh }, veryHigh:{ type:vh, plus, cast:true } };
-  };
-  const waves = [];
-  for(let i = 0; i < 5; i++) waves.push([alien(pickA(), INV.alienLv), alien(i >= 3 ? JG_CAPTAIN : pickA(), i >= 3 ? INV.lv : INV.alienLv), alien(pickA(), INV.alienLv)]);
-  waves.push([alien(JG_COMMANDER, INV.lv), { species:WADJET, level:INV.wadjetLv, ai:'best', nerfed:false, anyLevel:true, veryHigh:{ type:'Ghost', plus:2, cast:true } }, alien(JG_COMMANDER, INV.lv)]);
-  return waves;
+/* ============================================================
+   (4.31) THE CLIMAX: the King struck down, Wadjet gathering another laser, his shadows at the Advisor and the
+   Dauphin; her courage; her light — the shadows gone, her father holding on, she at his side; Wadjet turns on you
+   ============================================================ */
+function invClimax(){ return invScene(()=> invClimaxRun()); }
+async function invClimaxRun(){
+  const v = invState();
+  v.nem = true; saveProfile();
+  ui.invClimax = true;
+  if(typeof questRefreshThings === 'function') questRefreshThings();
+  const pe = document.getElementById('invPrin'), you = caYou() || { x:21, y:13 };
+  const pat = pe && pe._at ? pe._at : { x:you.x + 1, y:you.y };
+  if(pe) pe.remove();
+  invActor('prin', 'fairy_princess', pat.x, pat.y, 1.25);
+  invActor('king', 'fairy_king_c', 19.5, 3, 2.3, { faint:1 });
+  const ke = document.getElementById('sa-king'); if(ke) ke.classList.add('inv-hurt');
+  /* his shadows, at the Advisor and the Dauphin: blade and claw, and the blades going through */
+  invActor('adv', 'fairybird1_c', 16, 8, 1.35);
+  invActor('sh1', WADJET, 13.6, 8.2, 2.0, { flip:true });
+  invActor('dau', 'fairy_dauphin2', 23, 8, 1.55, { flip:true });
+  invActor('sh2', WADJET, 25.4, 8.2, 2.0);
+  [['sh1', 2.4], ['sh2', -2.4]].forEach(([id, dx])=>{
+    const e = document.getElementById('sa-' + id);
+    if(!e) return;
+    e.classList.add('inv-shade', 'inv-lunge');
+    e.insertAdjacentHTML('beforeend', warSlashHtml(0, 0, { left:50 + dx / e._o.w * 50, top:52 }));
+  });
+  ['adv', 'dau'].forEach(id=>{ const e = document.getElementById('sa-' + id); if(e) e.classList.add('inv-lunge', 'inv-lunge-b'); });
+  /* Wadjet over the King, the light gathering in his hood again */
+  invActor('wadjet', WADJET, 19.5, 6.4, 2.4);
+  invPrismOn('wadjet', true);
+  await sceneLook({ x:12, y:0.5, w:16, h:13 }, { ms:900 });
+  await L([
+    `The great hall has gone quiet — all but a high, thin hum.`,
+    `The King lies crumpled on his dais, smoke curling from his robes. Over him rears a great dark cobra, and in its hood a new light is gathering: every colour at once.`,
+    ['princess', `<b>"FATHER!"</b>`],
+    ['dauphin', `<b>"Get away from him!"</b> The Dauphin's blade sweeps through a shadow of the cobra — and passes clean through it.`],
+    ['advisor', `<b>"Hoo! Shadows! Our blows go straight through them!"</b>`],
+    ['lion', `<b>"Wadjet! Nemesis's cobra!"</b>`],
+    ['wadjet', `<b>"Hsss… Late, lion. Much too late. One beam was all it took."</b>`],
+    ['wadjet', `<b>"The great Fairy King, of the Cosmic Council. One word from him, and every sword in this kingdom would march against Nemesis. Now there will be no word. And this next light makes sure of it."</b>`]]);
+  /* she runs to him */
+  await invActorTo('prin', 21.4, 4.3, 700);
+  await L([['princess', `<b>"Father! Father, please, wake up!"</b>`],
+           ['king', `The King's eyes flicker open.<br><br><b>"…Run… little one… hide…"</b>`],
+           ['wadjet', `<b>"Yes, little one. Run along and hide. You're so very good at it."</b>`],
+           ['princess', `<b>"No. I've hidden my whole life. I hid when the aliens came. I hid while everyone else fought for me. I'm not hiding any more!"</b>`],
+           `A light begins to shine from the little princess — brighter, and brighter…`]);
+  /* her courage: she evolves */
+  sceneGlow('prinGlow', 22.0, 4.6, 3);
+  await sceneWait(600);
+  await new Promise(done=> playEvolutions([{ species:'fairy_princess', name:'The Little Princess', stageFrom:0, stageTo:1, newMoves:[], from:99, to:INV.princessLv,
+    headline:`<b>The Little Princess</b> found her courage!`, note:`Lv ${INV.princessLv}` }], done));
+  v.grown = true; saveProfile();
+  await sceneGlowOut(['prinGlow'], 300);
+  sceneActor('prin', { src:invSrc('fairy_princess1') });
+  { const pe2 = document.getElementById('sa-prin'); if(pe2){ const s = 1.65, o = pe2._o; sceneActor('prin', { x:o.x + (o.w - s) / 2, y:o.y + (o.h - s), w:s, h:s }); pe2.classList.add('inv-princess-glow'); } }
+  /* her pink light: the shadows burn away, the light in his hood gutters out, the King holds on */
+  const burst = invGlitterBurst('sa-prin');
+  await sceneWait(450);
+  ['sh1', 'sh2'].forEach(id=>{ const e = document.getElementById('sa-' + id); if(e){ e.classList.remove('inv-lunge'); e.classList.add('inv-dispel'); const sl = e.querySelector('.war-slash'); if(sl) sl.remove(); } });
+  ['adv', 'dau'].forEach(id=>{ const e = document.getElementById('sa-' + id); if(e) e.classList.remove('inv-lunge', 'inv-lunge-b'); });
+  invPrismOn('wadjet', false);
+  if(ke) ke.classList.add('inv-holding');
+  document.querySelectorAll('.inv-clash-knight').forEach(el=> el.classList.add('inv-healed', 'war-won'));
+  await burst;
+  ['sh1', 'sh2'].forEach(id=> sceneActorGone(id));
+  await L([`A wave of pink light rolls out from her, across the whole hall. Where it touches the shadows, they burn away like mist in the sun — and the light in Wadjet's hood gutters out.`,
+           ['wadjet', `<b>"Hsss! My light—!"</b>`],
+           `The pink light settles over the King like a blanket. He draws a long breath — and holds on.`,
+           ['king', `<b>"…My daughter…"</b>`],
+           ['princess', `She doesn't let go of his hand.<br><br><b>"I've got you, Father. I'm not leaving you."</b>`]]);
+  /* the Dauphin and the Advisor to the King's side */
+  await Promise.all([invActorTo('adv', 17.2, 4.6, 600), invActorTo('dau', 23.2, 5.2, 600)]);
+  { const a = document.getElementById('sa-adv'), d = document.getElementById('sa-dau'); if(a) actorFace(a, true); if(d) actorFace(d, false); }
+  await L([['dauphin', `<b>"Little sister…?! — Guard Father! Nothing gets past us now!"</b>`],
+           ['wadjet', `<b>"A late bloomer. How touching. No matter: the light always comes back… and I have all the time in the world."</b>`]]);
+  /* he turns on you */
+  await invActorTo('wadjet', 20, 10.4, 700);
+  await L([['wadjet', `<b>"But first — you, little trainer. You and your lion have been a thorn in Nemesis's side from the very start. Let's see how long you last against a serpent who can turn back time."</b>`],
+           ['lion', `<b>"Here he comes — stand your ground!"</b>`]]);
+  invSet('wadjet');
+  ui.sceneRunning = false;
+  invWadjetBattle();
 }
+
+/* ---------- WADJET'S FIGHT (4.31: 34-nemesis.js — ten turns to outlast him; she stays with her father) ---------- */
 function invWadjetBattle(){
-  if(!battleParty().some(m=> m.currentHp > 0)){ toast('Your team needs healing first. Talk to the princess.'); go('r6_palace'); return; }
-  releaseKeys();
-  const begin = ()=>{
-    beginBattle({ waves:invWadjetWaves(), isNpc:true, name:'Wadjet', bgKey:'battle_palace', foeRegion:6, encounter:true, encounterMusic:['battle_legendary', 'battle_boss'],
-      ally:{ species:'fairy_princess', level:INV.princessLv, name:'The Little Princess', kind:'princess' },
-      onWaveStart:(i)=> invWadjetWaveStart(i),
-      onWin:()=> invWadjetWon(),
-      onLose:()=> invWadjetLost() });
-    if(ui.battle){ ui.battle.inv = 'wadjet'; ui.battle.noFoeRecharge = true; }
-    setTimeout(()=>{ if(ui.battle && ui.battle.inv === 'wadjet') battleMsg(`The Little Princess fights at your side! When one of your team would fall, her Life Transfusion catches it — once each time the recharge meter fills.`); }, 900);
-  };
-  if(typeof walkEncounter === 'function') walkEncounter(begin, ['battle_legendary', 'battle_boss']); else begin();
-}
-function invWadjetWaveStart(i){
-  jgWaveStart(i);
-  const b = ui.battle;
-  if(b && i === b.waves.length - 1) setTimeout(()=>{ if(ui.battle === b) battleMsg(`Wadjet slithers into the fight himself, two alien commanders at his side!`); }, 700);
+  const NEW = invNew();
+  if(!battleParty().some(m=> m.currentHp > 0)){ toast('Your team needs healing first. Talk to the princess.'); return NEW ? invBackToFountain() : go('r6_palace'); }
+  /* (4.33) fought where he struck: on the grounds, by the fountain */
+  nemBeginBattle({ bg:NEW ? 'battle_castle' : 'battle_palace', onWin:()=> invWadjetWon(), onLose:()=> invWadjetLost() });
 }
 function invWadjetChallenge(){
   if(ui.caTalk) return;
   ui.caTalk = true;
-  r5Ask([caFaceOf('wadjet')], 'Wadjet', `<b>"Back again? Then come. I have all the time in the world."</b><br><br><i>Six waves of three: his aliens, then Wadjet himself (Lv ${INV.wadjetLv}) with two commanders. The princess fights at your side.</i>`, 'Fight Wadjet', 'Not yet')
+  r5Ask([caFaceOf('wadjet')], 'Wadjet', `<b>"Back again? Then come. I have all the time in the world."</b><br><br><i>Wadjet, Lv ${NEM.lv}. He turns back time: hold on for ${NEM.turns} turns and he is spent. From his fifth turn he gathers the Prismatic Laser — bring him down before it fires. The Monkey King will tell you what to do.</i>`, 'Fight Wadjet', 'Not yet')
     .then(yes=>{ ui.caTalk = false; if(yes) invWadjetBattle(); else refreshWalk(); });
 }
 function invPrincessHeal(){
-  return caLines([['princess', `<b>"Hold still."</b> She lays a glowing hand on each of your monsters in turn, and a warm pink light runs through them.`]]).then(()=>{
+  return caLines([['princess', `<b>"Hold still."</b> Without letting go of her father's hand, she reaches out with the other, and a warm pink light runs through each of your monsters in turn.`]]).then(()=>{
     healParty(1);
     toast('Your team is fully healed!');
     refreshWalk();
@@ -882,23 +1261,28 @@ function invPrincessHeal(){
 function invWadjetWon(){
   const v = invState();
   v.won.wadjet = true;
+  v.nem = true;                                                         // he slipped away into the past: the 4.31 chase
   invSet('chase');
   ui.walkFresh = false;
   const w = walkState();
   w.busy = false;
   w.at = w.at || {};
-  w.at.r6_palace = { x:19, y:14 };
   caLion.at = null;
+  /* (4.33) back on the grounds where he struck */
+  if(v.v433){ w.at[CA_KEY] = { x:INV_FOUNT.you.x, y:INV_FOUNT.you.y }; go(CA_KEY); return; }
+  w.at.r6_palace = { x:19, y:14 };
   go('r6_palace');
 }
 function invWadjetLost(){
+  const NEW = invNew();
   return new Promise(res=>{
     storyModal(jgMonImg('fairy_princess1_front', 140), 'The princess',
-      `Wadjet's laughter fills the hall as your last monster falls. Then a pink light wraps around all of you, and drags you clear.<br><br><b>"I've got you. I've got you!"</b>` +
-      `<br><br><i>Talk to the princess to heal your team, then face Wadjet again. He is waiting in the hall.</i>`,
-      ()=>{ res(); invBackToHall(); }, { subtitle:'The battle for the castle', bg:'palace' });
+      `Wadjet's laughter fills the ${NEW ? 'square' : 'hall'} as your last monster falls. Then, from the King's side, a pink light wraps around all of you, and drags you clear.<br><br><b>"I've got you. I've got you!"</b>` +
+      `<br><br><i>Talk to the princess to heal your team, then face Wadjet again. He is waiting ${NEW ? 'by the fountain' : 'in the hall'}.</i>`,
+      ()=>{ res(); NEW ? invBackToFountain() : invBackToHall(); }, { subtitle:'The battle for the castle', bg:'palace' });
   });
 }
+
 function invBackToHall(){
   const w = walkState();
   w.at = w.at || {};
@@ -906,6 +1290,15 @@ function invBackToHall(){
   ui.walkFresh = false;
   caLion.at = null;
   go('r6_palace');
+}
+/* (4.33) back on the path before the palace, the King a few steps off, Wadjet on the fountain's rim beyond him */
+function invBackToFountain(){
+  const w = walkState();
+  w.at = w.at || {};
+  w.at[CA_KEY] = { x:INV_FOUNT.you.x, y:INV_FOUNT.you.y };
+  ui.walkFresh = false;
+  caLion.at = null;
+  go(CA_KEY);
 }
 /* she joins you: Lv 100, her second form (her evolution at 100) */
 function invPrincessJoins(){
@@ -922,8 +1315,35 @@ function invPrincessJoins(){
   return m;
 }
 
-/* ---------- after his fight: he flees; the King sends her after him with you ---------- */
-function invAfterWadjet(){
+/* ---------- (4.31) after his fight: he has slipped away into the past — Lucesco's nose ---------- */
+function invAfterWadjet(){ return invState().nem ? invAfterNem() : invAfterWadjetOld(); }
+function invAfterNem(){
+  return invScene(async ()=>{
+    ui.invClimax = true;
+    if(typeof questRefreshThings === 'function') questRefreshThings();
+    invActor('king', 'fairy_king_c', 19.5, 3, 2.3, { faint:1 });
+    const ke = document.getElementById('sa-king'); if(ke) ke.classList.add('inv-hurt', 'inv-holding');
+    invActor('prin', 'fairy_princess1', 21.2, 4, 1.65);
+    { const pe = document.getElementById('sa-prin'); if(pe) pe.classList.add('inv-princess-glow'); }
+    invActor('adv', 'fairybird1_c', 17, 5, 1.35, { flip:true });
+    invActor('dau', 'fairy_dauphin2', 23, 6, 1.55);
+    await sceneLook({ x:13, y:1, w:14, h:14 }, { ms:900 });
+    await L([
+      `Where Wadjet was, there is nothing: only a cold, coiling smell, and the faint tick of something running backwards.`,
+      ['dauphin', `<b>"He's gone! Where did he go?"</b>`],
+      ['lion', `Lucesco lifts his nose and breathes in, long and slow.<br><br><b>"Not far. He can turn back time, but he can't wash off his smell… He's out of the palace — out of the castle. North, into the jungle… all the way to its northern edge!"</b>`],
+      ['princess', `<b>"Go after him! I'll stay with Father. I won't let go of him — not for a second."</b>`],
+      ['advisor', `<b>"Hoo! Go, go! We'll watch over His Majesty."</b>`],
+      ['lion', `<b>"Follow my nose — come on!"</b>`]]);
+    invSay('fled');
+    /* (4.33) the designer: "Wadjet escapes into the northern edge of the map, not the castle wall" (36-the-return.js) */
+    if(typeof invChaseGoRun === 'function') return invChaseGoRun();
+    await invCut('r6_palace', CA_KEY, [31, 20], 'After Wadjet!');
+    await invRiftChaseRun();
+  });
+}
+/* ---------- after his fight (a save from before 4.31 that beat his six waves): he flees; the King sends her after him with you ---------- */
+function invAfterWadjetOld(){
   return invScene(async ()=>{
     ui.invClimax = true;
     if(typeof questRefreshThings === 'function') questRefreshThings();
@@ -1046,37 +1466,8 @@ async function invChaseRun(){
 async function invTribesRun(){
   await sceneLook({ x:31.5, y:40 }, { zoom:0.55, ms:1300 });
   await L([['princess', `<b>"Look — the market! It's on fire, and they're all still fighting down there!"</b>`],
-                 ['you', `<b>"Then we go and help them. Come on!"</b>`],
-                 `A horn sounds from the south gate. Then another, and another — deep and wild, like nothing from the castle.`]);
-  await sceneLook({ x:31.5, y:56.5 }, { zoom:0.6, ms:1100 });
-  /* in at the gate, four columns: each tribe's ancestor, its guardian, two of its people */
-  const cols = { grass:28.5, water:30.5, earth:32.5, fire:34.5 };
-  const ids = [];
-  JG_TRIBE_KEYS.forEach(k=>{
-    const T = JG_TRIBES[k], x = cols[k];
-    const sp = k === 'earth' ? 'ground' : k;
-    invActor('anc' + k, `tribal_ancestor_${k}`, x, 62, 2.4); invActor('gd' + k, `tribal_guardian_${sp}`, x, 64, 1.9);
-    invActor('f1' + k, T.members[0], x - 0.6, 66, 1.3); invActor('f2' + k, T.members[1], x + 0.6, 66, 1.3);
-    ids.push('anc' + k, 'gd' + k, 'f1' + k, 'f2' + k);
-  });
-  await sceneGlide(ids, 0, -8, 1600);
-  await L([['g_water', `<b>"The tribes keep their word, Fairy King!"</b>`],
-                 ['a_fire', `<b>"Out of our jungle, star-spawn! OUT!"</b>`]]);
-  /* up into the market: the aliens break and run, their saucers lift away */
-  await sceneLook({ x:31.5, y:42 }, { zoom:0.55, ms:900 });
-  const glide = sceneGlide(ids, 0, -10, 1700);
-  await sceneWait(700);
-  document.querySelectorAll('.inv-clash-alien').forEach(el=> el.classList.add('inv-fleeing'));
-  document.querySelectorAll('.inv-ufo').forEach((el, i)=>{ el.style.transitionDelay = (i * 260 * SCENE_SPEED) + 'ms'; el.classList.add('inv-ufo-off'); });
-  await glide;
-  ui.invRouted = true;
-  if(typeof questRefreshThings === 'function') questRefreshThings();
-  document.querySelectorAll('.inv-clash-knight').forEach(el=> el.classList.add('war-won'));
-  document.querySelectorAll('.inv-smoke').forEach(el=> el.classList.add('inv-smoke-out'));
-  await L([['a_earth', `<b>"…Stone… stands… with the castle."</b>`],
-                 ['g_grass', `<b>"Tag! You're ALL it!"</b>`],
-                 `The aliens break and run. Their saucers lift off one by one, and streak away over the walls.`,
-                 ['knight', `<b>"They're running! The tribes have come — the tribes have come!"</b>`]]);
+           ['you', `<b>"Then we go and help them. Come on!"</b>`]]);
+  const ids = await invTribesMarch({ smokeOut:true });
   await sceneCurtain(true, 700);
   await sceneCurtainText('By nightfall, the last of the aliens have fled, back through the crack in the north wall.', 2200);
   ids.forEach(id=> sceneActorGone(id));
@@ -1094,8 +1485,9 @@ async function invTribesRun(){
   await invFinaleRun();
 }
 
-/* ---------- THE FINALE: the great hall, that night ---------- */
+/* ---------- THE FINALE: the great hall, that night (before 4.31; (4.31) invFinaleNem for the story told the new way) ---------- */
 async function invFinaleRun(){
+  if(invState().nem) return invFinaleNem();
   const gx = { grass:15, water:17, earth:22, fire:24 }, ax = { grass:14.6, water:17.4, earth:21.6, fire:24.4 };
   const ids = [];
   JG_TRIBE_KEYS.forEach(k=>{
@@ -1128,7 +1520,237 @@ async function invFinaleRun(){
   const here = state.party.some(m=> m.species === 'fairy_princess');
   await new Promise(res=> storyModal(jgMonImg('fairy_princess1_front', 140), 'The battle for the castle is won',
     `The tribes and the castle stand together at last. The Little Princess has joined you${here ? '' : ' (she is waiting in storage: your six were full)'}.` +
-    `<br><br><i>The Royal Commander holds the rift in the north wall, behind the palace. Go inside the perimeter any day: every alien there counts for the King's challenge and the tribes' and the castle's daily thanks. A third of the jungle's aliens are still out there, too, and now and then one leaps out on its paths.</i>`,
+    `<br><br><i>The Royal Commander holds the rift at the jungle's northern edge (the crack in the wall led there). Go inside the perimeter any day: every alien there counts for the King's challenge and the tribes' and the castle's daily thanks. Half of the jungle's aliens are still out there, too, and now and then one leaps out on its paths.</i>`,
+    ()=> res(), { subtitle:"The Fairy King's castle", bg:'palace' }));
+  ui.walkFresh = false;
+  go('r6_palace');
+}
+
+/* ---------- (4.31) THE CHASE: Lucesco's nose, across the grounds to the north wall; the rift; the army out of it ---------- */
+async function invRiftChaseRun(){
+  const w = walkState(), key = CA_KEY, v = invState(), st = INV_RIFT.stand;
+  w.busy = true;
+  const path = invPathTo(key, { x:31, y:20 }, { x:st.x, y:st.y + 1 });
+  const lionEl = document.getElementById('caLion');
+  if(lionEl) lionEl.style.display = 'none';
+  const at = i=> path[Math.max(0, Math.min(path.length - 1, i))];
+  const end = path.length - 1;
+  const pos = { lion:3, you:0 };
+  invActor('lion', 'lucesco', at(pos.lion).x, at(pos.lion).y, 1.45);
+  invActor('wadjet', WADJET, st.x, st.y - 0.3, 2.0);                   // at the foot of the wall, waiting for no one
+  w.at[key] = { x:at(0).x, y:at(0).y };
+  const world = $('#walkWorld');
+  if(world) world.style.transition = `transform ${Math.round(150 * SCENE_SPEED)}ms linear`;
+  refreshWalk();
+  await L([['lion', `He drops his nose to the flagstones. <b>"…There. Cold scales, and something burnt. This way!"</b>`]]);
+  const step = 150;
+  const move = (id, i)=>{
+    const el = document.getElementById('sa-' + id);
+    if(!el) return;
+    const s = el._o.w, p = at(i), nx = p.x + 0.5 - s / 2, ny = p.y + 1 - s;
+    if(Math.abs(nx - el._o.x) > 0.05) actorFace(el, nx > el._o.x);
+    el.style.transition = `left ${step * SCENE_SPEED}ms linear, top ${step * SCENE_SPEED}ms linear`;
+    el._o.x = nx; el._o.y = ny;
+    el.style.left = (nx * WALK_T) + 'px'; el.style.top = (ny * WALK_T) + 'px';
+    el.style.zIndex = 10 + Math.floor(p.y + 1);
+  };
+  const youTo = i=>{
+    const yp = at(i), was = w.at[key];
+    if(yp.x !== was.x) w.faceX = yp.x > was.x ? 'r' : 'l';
+    w.at[key] = { x:yp.x, y:yp.y };
+    refreshWalk();
+  };
+  const stop = Math.max(4, end - 2), half = Math.floor(stop / 2);
+  let sniffed = false;
+  while(pos.lion < stop){
+    pos.lion++; pos.you = Math.max(0, pos.lion - 3);
+    move('lion', pos.lion); youTo(pos.you);
+    await sceneWait(step);
+    if(!sniffed && pos.lion >= half){
+      sniffed = true;
+      if(world) world.style.transition = '';
+      await L([['lion', `He stops dead, nose up. <b>"Stronger… he's close. The north wall!"</b>`]]);
+      if(world) world.style.transition = `transform ${Math.round(150 * SCENE_SPEED)}ms linear`;
+    }
+  }
+  pos.you = Math.max(0, stop - 2); youTo(pos.you); await sceneWait(step);
+  if(world) world.style.transition = '';
+  /* Wadjet, at the foot of the wall: the stones tear open */
+  await sceneLook({ x:st.x - 4, y:0, w:9, h:8 }, { ms:700 });
+  const rift = invRiftEl(world, INV_RIFT.x, INV_RIFT.y, 2.3, 'invRiftGrounds', '');
+  if(rift){ rift.style.transform = 'scale(.05)'; rift.style.opacity = '0'; }
+  await L([`There he is — coiled at the foot of the north wall, his hood flared wide against the stones.`]);
+  try { playSfx('timestop'); } catch(e){}
+  if(rift){ void rift.offsetWidth; rift.style.transform = ''; rift.style.opacity = ''; }
+  sceneShake(700, ms=> 0.06 * (1 - ms / 700));
+  await sceneWait(1000);
+  await L([`The stones split with a sound like tearing silk. A crack of purple light opens in the wall — and it is getting wider.`,
+           ['wadjet', `<b>"Hsss… The lion's nose. I should have guessed."</b>`],
+           ['wadjet', `<b>"Follow me if you like, lion. Where I'm going, your trail goes cold a thousand years before you were born."</b>`]]);
+  /* in he goes */
+  await invHopTo('wadjet', INV_RIFT.x - 0.5, INV_RIFT.y + 0.4, 0.8, 600);
+  const we = document.getElementById('sa-wadjet');
+  if(we){ we.style.transition = `transform ${600 * SCENE_SPEED}ms ease-in, opacity ${600 * SCENE_SPEED}ms ease-in`; void we.offsetWidth; we.style.transform = 'scale(.15)'; we.style.opacity = '0'; }
+  await sceneWait(650);
+  sceneActorGone('wadjet');
+  /* Lucesco after him — and out of it, the other way, an army */
+  await L([['lion', `<b>"Oh no you don't — RAAH!"</b>`]]);
+  const lionJump = invHopTo('lion', st.x, st.y, 1.4, 520);
+  await sceneWait(380);
+  if(rift) rift.classList.add('inv-rift-flare');
+  try { playSfx('ambush'); } catch(e){}
+  const out = [['ra0', JG_COMMANDER, 2.0, st.x, st.y + 1], ['ra1', JG_CAPTAIN, 1.7, st.x - 2, st.y + 1], ['ra2', JG_CAPTAIN, 1.7, st.x + 2, st.y + 1],
+               ['ra3', JG_ALIEN_IDS[2], 1.45, st.x - 3, st.y + 2], ['ra4', JG_ALIEN_IDS[5], 1.45, st.x + 3, st.y + 2]];
+  await lionJump;
+  /* he is thrown back down beside you */
+  const you = caYou() || { x:st.x, y:st.y + 4 };
+  const back = invHopTo('lion', you.x + 1, you.y, 1.1, 520);
+  sceneShake(500, ms=> 0.08 * (1 - ms / 500));
+  const pours = out.map(([id, sp, size, x, y], i)=>{
+    invActor(id, sp, INV_RIFT.x - 0.5, INV_RIFT.y + 0.6, size);
+    const el = document.getElementById('sa-' + id); if(el){ el.style.opacity = '0'; el.classList.add('inv-band-actor'); }
+    return sceneWait(i * 160).then(()=> Promise.all([invActorIn(id, 300), invHopTo(id, x, y, 0.9, 560)]));
+  });
+  await Promise.all([back].concat(pours));
+  if(rift) rift.classList.remove('inv-rift-flare');
+  await L([`The rift flares — and something comes out of it the other way. Aliens: captains, soldiers, and at their head a hulking commander!`,
+           ['lion', `<b>"Grr! They're coming THROUGH it! Get ready!"</b>`]]);
+  v.said.riftOut = true; saveProfile();
+  ui.sceneRunning = false;
+  invFight(invRiftBand());
+}
+/* ---------- (4.31) the commander's army beaten: more behind them — and the castle's soldiers up behind you ---------- */
+async function invRiftHoldRun(){
+  const w = walkState(), st = INV_RIFT.stand;
+  w.busy = true;
+  const you = caYou() || { x:st.x, y:st.y + 3 };
+  const lionEl = document.getElementById('caLion');
+  if(lionEl) lionEl.style.display = 'none';
+  invActor('lion', 'lucesco', you.x + 1, you.y, 1.45);
+  await sceneLook({ x:st.x - 5, y:0, w:10, h:you.y + 6 }, { ms:700 });
+  const rift = document.getElementById('invRiftGrounds');
+  await L([`The commander's army breaks and scatters — but the rift flares again, brighter than before.`]);
+  if(rift) rift.classList.add('inv-rift-flare');
+  try { playSfx('ambush'); } catch(e){}
+  const al = [['rb0', JG_CAPTAIN, 1.7, st.x - 3, st.y], ['rb1', JG_CAPTAIN, 1.7, st.x + 3, st.y], ['rb2', JG_ALIEN_IDS[1], 1.45, st.x - 1, st.y + 1],
+              ['rb3', JG_ALIEN_IDS[4], 1.45, st.x + 1, st.y + 1], ['rb4', JG_ALIEN_IDS[7], 1.45, st.x - 4, st.y + 2], ['rb5', JG_ALIEN_IDS[9], 1.45, st.x + 4, st.y + 2]];
+  await Promise.all(al.map(([id, sp, size, x, y], i)=>{
+    invActor(id, sp, INV_RIFT.x - 0.5, INV_RIFT.y + 0.6, size);
+    const el = document.getElementById('sa-' + id); if(el){ el.style.opacity = '0'; el.classList.add('inv-band-actor'); }
+    return sceneWait(i * 140).then(()=> Promise.all([invActorIn(id, 280), invHopTo(id, x, y, 0.9, 520)]));
+  }));
+  if(rift) rift.classList.remove('inv-rift-flare');
+  await L([`More of them come pouring out — captains, soldiers, more and more, spreading out along the wall to cut you off.`,
+           ['lion', `<b>"There are too many of them! We can't fight them all — we have to get out of here before they surround us!"</b>`]]);
+  /* a trumpet: the castle's own */
+  const kn = [['cm', 'chestnut_knight2_c', 1.6, you.x, you.y + 5], ['k1', 'chestnut_knight2', 1.45, you.x - 2, you.y + 6], ['k2', 'bug_knight1', 1.45, you.x + 2, you.y + 6],
+              ['k3', 'duck_knight2', 1.45, you.x - 1, you.y + 7], ['k4', 'chestnut_knight2', 1.45, you.x + 1, you.y + 7]];
+  kn.forEach(([id, sp, size, x, y])=>{ invActor(id, sp, x, y, size); const el = document.getElementById('sa-' + id); if(el) el.style.opacity = '0'; });
+  await L([`Then a trumpet sounds behind you — the castle's own.`]);
+  await Promise.all(kn.map(([id])=> invActorIn(id, 400)).concat([sceneGlide(kn.map(k=> k[0]), 0, -3, 1000)]));
+  await L([['commander', `<b>"FOR THE KING! Shields up — drive them back into that hole!"</b>`]]);
+  /* they charge past you; the aliens are driven back through the crack */
+  const charge = sceneGlide(['k1', 'k2', 'k3', 'k4'], 0, -5, 900);
+  await sceneWait(500);
+  sceneShake(700, ms=> 0.09 * (1 - ms / 700));
+  try { playSfx('hit_dealt'); } catch(e){}
+  await Promise.all(al.map(([id], i)=> sceneWait(i * 90).then(()=> Promise.all([invHopTo(id, INV_RIFT.x - 0.5, INV_RIFT.y + 0.6, 0.5, 600), invActorFade(id, 600)]))).concat([charge]));
+  await invActorTo('cm', you.x, you.y + 1, 600);
+  await L([`The castle's soldiers crash into them shield-first. Step by step they drive the aliens back — and back through the crack they came out of.`,
+           ['commander', `<b>"Ha! And STAY in there!"</b>`],
+           ['commander', `<b>"So this is where they've been coming from… a hole in my own wall, right under my nose. And you two sniffed it out. You have my thanks — the whole castle's."</b>`],
+           ['commander', `<b>"Soldiers! A perimeter round that crack: stakes, shields, and a guard on it day and night. Nothing comes out of there without going through us!"</b>`],
+           ['knight', `<b>"Yes, Commander!"</b>`],
+           ['commander', `<b>"As for you two — back to His Majesty. He needs his friends around him far more than he needs me. Go on. We'll hold here."</b>`]]);
+  invSay('perimSet');
+  invSet('done');
+  await sceneCurtain(true, 700);
+  await sceneCurtainText(`Back in the great hall, the princess never once lets go of her father's hand. That evening, the King opens his eyes.`, 2600);
+  ['lion', 'cm', 'k1', 'k2', 'k3', 'k4'].forEach(id=> sceneActorGone(id));
+  const w2 = walkState();
+  w2.at = w2.at || {}; w2.at.r6_palace = { x:19, y:12 };
+  ui.walkFresh = false; caLion.at = null;
+  ui.sceneRunning = true;
+  go('r6_palace');
+  await invWaitDeck('r6_palace');
+  ui.invSceneKey = 'r6_palace';
+  walkState().busy = true;
+  await sceneCurtainText('', 300);
+  await sceneCurtain(false, 700);
+  await invFinaleNem();
+}
+
+/* ---------- (4.31) THE FINALE: the King awake; Lucesco's whiff of a land in the past; the King's promise; the Advisor;
+   the princess goes in her father's place ---------- */
+async function invFinaleNem(){
+  const v = invState();
+  const ids = [];
+  if(v.said.tribes){
+    const gx = { grass:15, water:17, earth:22, fire:24 }, ax = { grass:14.6, water:17.4, earth:21.6, fire:24.4 };
+    JG_TRIBE_KEYS.forEach(k=>{
+      const sp = k === 'earth' ? 'ground' : k;
+      invActor('fg' + k, `tribal_guardian_${sp}`, gx[k], 7, 1.6); invActor('fa' + k, `tribal_ancestor_${k}`, ax[k], 9.6, 2.2);
+      ids.push('fg' + k, 'fa' + k);
+    });
+  }
+  invActor('prin', 'fairy_princess1', 19.5, 5, 1.5);
+  { const pe = document.getElementById('sa-prin'); if(pe) pe.classList.add('inv-princess-glow'); }
+  ids.push('prin');
+  await sceneLook({ x:12, y:0.5, w:16, h:12 }, { ms:900 });
+  const tribes = v.said.tribes ? [
+    ['king', `<b>"Two hundred years ago, I sealed your ancestors to end a war. Today, they came to save my castle."</b>`],
+    ['a_fire', `<b>"Don't get sentimental, King. We came for the aliens, not for you."</b>`],
+    ['a_water', `<b>"…And yet, we came. It is a beginning."</b>`],
+    ['g_water', `<b>"The tribes will not hide from the castle again. You have our word."</b>`]] : [];
+  await L([].concat(
+    v.said.tribes ? [`That evening, the great hall is fuller than it has been in two hundred years.`] : [],
+    [['king', `The King sits on his throne, pale, wrapped in his daughter's soft pink light.<br><br><b>"…So. I am still here. I hear I have a great many people to thank for that."</b>`]],
+    tribes,
+    [['king', `<b>"And you, my friends. You stood between that serpent and my family. Did it get away?"</b>`],
+     ['lion', `<b>"Through a rift at the jungle's northern edge, Your Majesty. But the chase wasn't for nothing."</b>`],   // (4.33) not the north wall
+     ['lion', `<b>"I caught a whiff of the other side as he went through. Hot sand. Old stone. A great river… and something buried deep beneath it. That place isn't far away — it's long ago. He has gone back into the past."</b>`],
+     ['king', `<b>"Into the past…"</b> The King is quiet for a long moment.`],
+     ['king', `<b>"I made you a promise, my friends: once the aliens were dealt with, this castle would stand with you against Nemesis. I keep my promises. Wherever that serpent has gone, I will follow you there myself."</b>`],
+     ['advisor', `<b>"Hoo! Your Majesty will do no such thing! You were struck down not a day ago. You will stay in that bed and CONVALESCE — by order of… of everyone!"</b>`],
+     ['king', `<b>"But a promise is—"</b>`],
+     ['princess', `<b>"…Then I'll go. In your place, Father."</b>`],
+     `The whole hall turns to look at her.`,
+     ['dauphin', `<b>"You? Little sister — you used to hide from thunderstorms!"</b>`],
+     ['princess', `<b>"I used to. Father made them a promise, and I'm his daughter. I'll keep it for him."</b>`],
+     ['king', `The King looks at her for a long moment — and then he smiles, the first smile anyone has seen on him in days.<br><br><b>"All these years we tried to coax you out from behind that wardrobe… and it took a serpent to do it."</b>`],
+     ['advisor', `<b>"Hoo hoo! The little one, a hero! Oh, I may need to sit down."</b>`],
+     ['king', `<b>"Go, then, with my blessing — and keep my promise for me. Lucesco, my old friend: keep her safe."</b>`],
+     ['lion', `<b>"With my life."</b>`],
+     ['dauphin', `<b>"Come home and spar with me sometimes, all right? I want to see this new you."</b>`],
+     ['princess', `<b>"You're on!"</b>`]]));
+  invPrincessJoins();
+  /* (4.33) the King's gift, here now (until 4.33 it came in the throne room after the fourth ancestor, before the alarm) */
+  const w = warState();
+  if(!w.stone){
+    const had = typeof ownsStone === 'function' && ownsStone('psychicStone');
+    await L([['king', `<b>"One thing more. Four ancestors woken, four tribes standing with the castle again, my family safe… In two hundred years, nobody has done what you have done."</b>`],
+             ['king', had ? `<b>"I would give you the Psychic Stone of my house — but I see you carry one already. Then take my thanks, and my kingdom's friendship, always."</b>`
+                          : `He holds out a stone that glows a soft violet.<br><br><b>"The Psychic Stone of my house. A Psychic monster that carries it learns half again as fast. Take it, with my thanks."</b>`]]);
+    w.stone = true;
+    if(!had && typeof addStone === 'function'){ addStone('psychicStone', 1); toast('🔮 You received the Psychic Stone!'); try { playSfx('stone_high'); } catch(e){} }
+    saveProfile();
+  }
+  invSay('finale');
+  /* (4.34) the epilogue: the guardians' strength for the King, the Earth Ancestor's thanks and the tribes' pledge, the
+     Ground Stone for the princess (37-peace.js) */
+  if(typeof peaceEpilogue === 'function'){
+    if(!v.said.tribes){ JG_TRIBE_KEYS.forEach(k=>{ const sp = k === 'earth' ? 'ground' : k;
+      invActor('fg' + k, `tribal_guardian_${sp}`, PEACE_HALL.guard[k], 7, 1.6); invActor('fa' + k, `tribal_ancestor_${k}`, PEACE_HALL.anc[k], 9.6, 2.2); ids.push('fg' + k, 'fa' + k); });
+      await L([`The four tribes come to the castle — guardians, ancestors and all.`]); }
+    await peaceEpilogue();
+  }
+  ids.forEach(id=> sceneActorGone(id));
+  await sceneCamFree(500);
+  const here = state.party.some(m=> m.species === 'fairy_princess');
+  await new Promise(res=> storyModal(jgMonImg('fairy_princess1_front', 140), 'The battle for the castle is won',
+    typeof peaceLastPage === 'function' && v.said.epilogue ? peaceLastPage(here) :
+    `The castle is saved, and the tribes stand with it. The Little Princess has joined you in her father's place${here ? '' : ' (she is waiting in storage: your six were full)'}.` +
+    `<br><br><i>The Royal Commander holds the rift at the jungle's northern edge, where his soldiers fight the aliens that keep coming through it. Go inside the perimeter any day: every alien there counts for the King's challenge and the tribes' and the castle's daily thanks. Half of the jungle's aliens are still out there, too, and now and then one leaps out on its paths.</i>`,
     ()=> res(), { subtitle:"The Fairy King's castle", bg:'palace' }));
   ui.walkFresh = false;
   go('r6_palace');
@@ -1141,8 +1763,9 @@ async function invFinaleRun(){
        her own for it (never below 1) — once, and once more each time the 100-word recharge meter fills.
      · Regeneration: 10% of her health back at the start of every round.
    As one of your team, wherever she stands (out front or waiting her turn), so long as she is standing herself;
-   against Wadjet, as an ally at your side (04-battle.js: the vault's ally, `kind:'princess'`): never on the field,
-   never struck, singing Prism Lullaby over every one of them after your leader's turn.
+   against Wadjet before 4.31, as an ally at your side (04-battle.js: the vault's ally, `kind:'princess'`): never on the
+   field, never struck, singing Prism Lullaby over every one of them after your leader's turn. ((4.31) She no longer
+   fights him with you: she stays at her father's side. The ally's workings are kept, unused.)
    ============================================================ */
 const PRINCESS = { species:'fairy_princess', heal:0.4, cost:0.2, regen:0.1, sing:0.8 };
 function princessSource(exclude){
@@ -1600,29 +2223,36 @@ if(typeof document !== 'undefined') princessKitCss();
 
 /* ============================================================
    AFTERWARDS: THE RIFT'S PERIMETER (r6_perimeter)
-   The crack in the north wall, behind the palace: a compound fenced round
-   it, the aliens that still creep through it inside, pushing against the
-   palisade, the Commander's soldiers outside holding them in. Go in by its
-   gate: its bands (ten a day, as the jungle's: beaten for the day) are
-   fought as the jungle's, their captives the tribes' people and the
-   castle's — so they count for the King's week and every daily thanks.
+   (4.33) The rift at the jungle's north edge (until 4.33: the crack in the
+   north wall, behind the palace): a compound fenced round it, the aliens
+   that still creep through it inside, pushing against the palisade, the
+   Commander's soldiers outside holding them in. Go in by its gate (on the
+   jungle, 36-the-return.js): its bands (ten a day, as the jungle's: beaten
+   for the day) are fought as the jungle's, their captives the tribes'
+   people and the castle's — so they count for the King's week and every
+   daily thanks.
    ============================================================ */
 let _invRiftMap = null;
 function invRiftMap(){
   if(_invRiftMap) return _invRiftMap;
-  const T = CA_T, W = 26, H = 20, m = caGrid(W, H, T.COBBLE);
-  caFill(m, 0, 0, W, 3, T.WALL);
-  for(let x = 0; x < W; x++){ m.spr[x] = 'wallTop'; m.spr[W + x] = 'wallTop'; m.spr[2 * W + x] = 'wallN'; }
+  const T = CA_T, W = 26, H = 20, m = caGrid(W, H, T.GRASS);
+  /* (4.33) the jungle's edge along the top, the rift opening in front of it; the trees close in at either side */
+  const tree = (x, y, w)=>{ caPut(m, x, y, T.TREE); caDeco(m, 'tree', x + 0.5 - w / 2, y - 1.3, w, 2.3, { variant:'jungle', z:y + 0.9 }); };
+  for(let x = 0; x < W; x++){ tree(x, 0, 2.1); tree(x, 1, 2.1); }
+  for(let y = 2; y < H; y++){ tree(0, y, 1.7); tree(W - 1, y, 1.7); }
   caFill(m, 4, 3, 18, 12, T.PATH);                                       // the compound: the ground torn up
   for(let y = 3; y <= 15; y++){ caPut(m, 3, y, T.PLANTER, 'cobble:' + (y % 6)); caPut(m, 22, y, T.PLANTER, 'cobble:' + ((y + 3) % 6)); }
   for(let x = 4; x <= 21; x++) if(x !== 12 && x !== 13) caPut(m, x, 15, T.PLANTER, 'cobble:' + (x % 6));
   caPut(m, 12, 15, T.PATH); caPut(m, 13, 15, T.PATH);                    // its gate
-  m.tags.rift = { x:13, y:1.4 };
+  for(let y = 16; y < H; y++){ caPut(m, 12, y, T.PATH); caPut(m, 13, y, T.PATH); }   // the way out to the glade
+  m.tags.rift = { x:13, y:2.1 };
   m.tags.gate = { x:12, y:15, w:2 };
   m.tags.exit = { x:9, y:19, w:8 };
   for(let i = 0; i < W * H; i++) if(!m.spr[i]) m.spr[i] = caDefaultSpr(m, i % W, Math.floor(i / W));
+  m.deco.sort((a, b)=> a.z - b.z);
   return (_invRiftMap = m);
 }
+/* (4.33) the knights outside the palisade a square in from the trees (x 1 and 24 were the old compound's wall-foot) */
 const INV_RIFT_CLASH = [['chestnut_knight2', 1, 5, 'alien_robot_steel', 4, 5], ['bug_knight1', 1, 10, 'alien_crocodilian_fire', 4, 10],
                         ['duck_knight2', 24, 6, 'alien_golem_ground', 21, 6], ['chestnut_knight2', 24, 11, 'alien_gremlin_fairy', 21, 11],
                         ['bug_knight1', 7, 17, 'alien_insect_physical', 7, 14], ['duck_knight2', 18, 17, 'alien_dolphin_water', 18, 14]];
@@ -1654,7 +2284,7 @@ function invPerimBands(){
   return list;
 }
 function invRiftThings(T){
-  T({ x:9, y:19, w:8, walk:true, icon:'', verb:'Out', where:'Back into the castle', arrow:'down', act:()=> caGo(CA_KEY, INV_PERIM.out) });
+  T({ x:9, y:19, w:8, walk:true, icon:'', verb:'Out', where:'Back into the jungle', arrow:'down', act:()=> typeof invRiftOut === 'function' ? invRiftOut() : caGo(CA_KEY, INV_PERIM.out) });   // (4.33) the jungle's north edge
   T({ x:15, y:16, still:true, cls:'ca-npc', html:()=> caMonImg('chestnut_knight2_c', WALK_T * 1.6, false), verb:'Talk', sub:'The Royal Commander', act:()=> invPerimCommanderTalk() });
   invClashThings(T, INV_RIFT_CLASH, ()=> invAfter(), { talk:()=> caLines([['knight', caTurn('invPerimSoldier', INV_LINES.perimSoldier)]]) });
   /* today's bands: a deck's things are made once, so all ten places are made, and each shows while its band is up */
@@ -1670,7 +2300,7 @@ function invRiftThings(T){
 }
 function invPerimEnter(){
   if(!invSaid('perimIn')){
-    return caLines([['commander', `<b>"The perimeter. My soldiers keep them penned in here, round the crack. Go in whenever you like: there are always more of them."</b>`],
+    return caLines([['commander', `<b>"The perimeter. My soldiers keep them penned in here, round the rift. Go in whenever you like: there are always more of them."</b>`],
                     ['commander', `<b>"Every one you beat in there counts for His Majesty's challenge, and frees whoever they've taken — the tribes' people and ours."</b>`]])
       .then(()=>{ invSay('perimIn'); caGo('r6_perimeter', [12, 17]); });
   }
@@ -1681,7 +2311,7 @@ function invPerimCommanderTalk(){
   const wk = q.wk ? `${q.wk.paid ? 'done' : (q.wk.n || 0) + '/' + QUEST.weekly}` : '—';
   const castle = `${Math.min(CA_RESCUE.need, j.rescued.castle || 0)}/${CA_RESCUE.need}`;
   return caLines([['commander', caTurn('invPerimCmd', [
-    `<b>"They keep coming through that crack, but fewer every day. We'll hold them."</b>`,
+    `<b>"They keep coming through that rift, but fewer every day. We'll hold them."</b>`,
     `<b>"In you go. Mind the big ones."</b>`,
     `<b>"His Majesty is mending. The tribes send fruit and firewood. Strange days, good days."</b>`]) +
     `<br><br><i>${left ? `${left} of today's ${invPerimBands().length} bands are inside.` : `Today's bands are all beaten. More come through tomorrow.`} The King's week: ${wk}. The castle's people freed today: ${castle}.</i>`]]);
@@ -1690,7 +2320,7 @@ function invPerimCommanderTalk(){
 /* ---------- the deck ---------- */
 if(typeof CA_MAPS !== 'undefined'){
   CA_MAPS.r6_perimeter = ()=> invRiftMap();
-  CA_PLACES.r6_perimeter = { title:'The Rift Perimeter', backLabel:'Castle', music:'zone_perimeter', spawn:()=> [12, 17] };
+  CA_PLACES.r6_perimeter = { title:'The Rift Perimeter', backLabel:'Jungle', backTo:'r6_jungle', music:'zone_perimeter', spawn:()=> [12, 17] };   // (4.33) at the jungle's north edge
   caMakeDeck('r6_perimeter', CA_PLACES.r6_perimeter);
 }
 
@@ -1917,6 +2547,8 @@ function invCss(){
     background:radial-gradient(closest-side, rgba(255,210,90,.95), rgba(255,120,40,.7) 55%, rgba(255,90,30,0)); animation:invFlame .5s ease-in-out infinite alternate; }
   @keyframes invFlame{ from{ transform:scale(.85, .8); opacity:.75; } to{ transform:scale(1.1, 1.25) translateY(-8%); opacity:1; } }
   body.inv-scene #backBtn, body.inv-scene #walkParty{ visibility:hidden; }
+  /* (4.33) "movement and hamburger menu locked out": while a scene of the story plays, nothing to tap but its words */
+  body.inv-scene #hamburgerBtn, body.inv-scene #walkSide, body.inv-scene #walkActs, body.inv-scene #walkPath, body.inv-scene #walkSteps{ visibility:hidden !important; pointer-events:none !important; }
   @keyframes invPuff{ 0%{ transform:translate(0,0) scale(.45); opacity:0; } 12%{ opacity:.95; } 100%{ transform:translate(calc(var(--sm) * .9), calc(var(--sm) * -4.2)) scale(2.7); opacity:0; } }
   .inv-rift{ position:absolute; pointer-events:none; filter:drop-shadow(0 0 10px rgba(190,90,255,.9)); animation:invRiftPulse 1.8s ease-in-out infinite; transition:transform .9s ease, opacity .9s ease; }
   .inv-rift svg{ width:100%; height:100%; display:block; overflow:visible; }
@@ -1952,6 +2584,41 @@ function invCss(){
     clip-path:polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); filter:drop-shadow(0 0 4px #ff8fcf); animation:igSpark 1.6s ease-in-out both; }
   @keyframes igSpark{ 0%{ opacity:0; transform:scale(.2) rotate(0deg); } 40%{ opacity:1; transform:scale(1.25) rotate(45deg); } 100%{ opacity:0; transform:translateY(-34px) scale(.4) rotate(90deg); } }
   @media (prefers-reduced-motion: reduce){ .inv-glitter .ig-spark, .inv-smoke i, .inv-ufo-body, .inv-rift .ir-swirl, .inv-penned{ animation-duration:6s; } }
+  /* (4.31) the tribes' march seen from the palace: you are not on the grounds */
+  body.inv-away #walkYou, body.inv-away #caLion, body.inv-away #walkGhost{ visibility:hidden !important; }
+  /* the tribes' ancestors, holding the market */
+  .walk-ent.inv-tribe-post{ overflow:visible; }
+  .walk-ent.inv-tribe-post .war-fig{ animation:invIdle 2.4s ease-in-out infinite; filter:drop-shadow(0 3px 2px rgba(35,32,25,.3)); }
+  /* his laser, seen from the corridor: every colour at once */
+  .inv-prism-flash{ position:fixed; inset:0; z-index:95; pointer-events:none; animation:invPrismFlash 1.1s ease-out both;
+    background:linear-gradient(100deg, rgba(255,255,255,.95) 0%, rgba(255,246,252,.7) 32%, rgba(255,255,255,0) 78%),
+               linear-gradient(180deg, rgba(255,90,90,.4), rgba(255,213,74,.4) 25%, rgba(108,240,106,.4) 50%, rgba(90,180,255,.4) 75%, rgba(184,108,255,.4)); }
+  @keyframes invPrismFlash{ 0%{ opacity:0; } 10%{ opacity:1; } 40%{ opacity:.85; } 100%{ opacity:0; } }
+  /* the light gathering in his hood */
+  /* (as the fight's, 34-nemesis.js: a prism of every colour, turning, wreathed in white) */
+  .scene-actor .inv-prism-glow{ position:absolute; left:50%; top:24%; width:22%; aspect-ratio:1; translate:-50% -50%; rotate:45deg; border-radius:24%; pointer-events:none; z-index:3;
+    background:conic-gradient(#ff4d4d, #ffe34d, #5be06a, #4db8ff, #c86cff, #ff4d4d);
+    box-shadow:0 0 12px 4px rgba(255,255,255,.9), 0 0 32px 12px rgba(200,170,255,.7);
+    animation:invPrismSpin 1.2s linear infinite, invPrismPulse 1.1s ease-in-out infinite; transition:opacity .6s ease, scale .6s ease; }
+  .scene-actor .inv-prism-glow.out{ animation:none; opacity:0; scale:.2; }
+  @keyframes invPrismPulse{ 0%,100%{ scale:.85; } 50%{ scale:1.15; } }
+  @keyframes invPrismSpin{ from{ rotate:45deg; filter:hue-rotate(0deg); } to{ rotate:405deg; filter:hue-rotate(360deg); } }
+  /* his shadows: dark copies of him; blades pass through them; her light burns them away */
+  .scene-actor.inv-shade img{ filter:brightness(.24) contrast(1.35) saturate(.4) drop-shadow(0 0 6px rgba(150,100,255,.85)) drop-shadow(0 0 14px rgba(90,40,200,.5)); opacity:.9; }
+  .scene-actor.inv-dispel img{ animation:invDispel 1.2s ease-in both; }
+  @keyframes invDispel{ 0%{ filter:brightness(.24) contrast(1.35) saturate(.4) drop-shadow(0 0 6px rgba(150,100,255,.85)); opacity:.9; }
+    35%{ filter:brightness(2.4) saturate(0) drop-shadow(0 0 14px #ff9fd8); opacity:1; } 100%{ filter:brightness(3) blur(6px) drop-shadow(0 0 20px #ffc2e6); opacity:0; transform:scale(1.25); } }
+  .scene-actor.inv-lunge .sa-in{ animation:invLungeL 1.1s ease-in-out infinite; }
+  .scene-actor.inv-lunge.face-r .sa-in{ animation-name:invLungeR; }
+  .scene-actor.inv-lunge-b .sa-in{ animation-delay:-.55s; }
+  @keyframes invLungeL{ 0%,100%{ translate:0 0; } 35%{ translate:-9% -2%; } 50%{ translate:2% 0; } }
+  @keyframes invLungeR{ 0%,100%{ translate:0 0; } 35%{ translate:9% -2%; } 50%{ translate:-2% 0; } }
+  .scene-actor .war-slash{ position:absolute; width:78%; height:78%; translate:-50% -50%; pointer-events:none; overflow:visible; z-index:4; }
+  .scene-actor.inv-band-actor img{ filter:drop-shadow(0 0 6px rgba(220,30,40,.85)); }
+  /* the crack flaring as they come through it */
+  .inv-rift.inv-rift-flare{ animation:invRiftFlare .5s ease-in-out infinite alternate; }
+  @keyframes invRiftFlare{ from{ filter:drop-shadow(0 0 14px rgba(220,130,255,1)) brightness(1.2); } to{ filter:drop-shadow(0 0 30px rgba(255,190,255,1)) brightness(1.6); } }
+  @media (prefers-reduced-motion: reduce){ .scene-actor.inv-lunge .sa-in, .scene-actor .inv-prism-glow{ animation:none; } }
   `;
   document.head.appendChild(s);
 }
