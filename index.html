@@ -756,6 +756,10 @@
   .ht-view::-webkit-scrollbar{display:none;}
   .ht-track{display:flex;align-items:flex-end;gap:4px;padding:0 10px 7px calc(var(--ht-s, 78px) * 0.8);width:max-content;}
   .home-team.ht-alone .ht-track{padding-left:10px;}
+  /* (4.32) too few to go round: they stand still, right beside you, none of them behind you, no fading edges */
+  .home-team.ht-static .ht-track{padding-left:calc(var(--ht-s, 52px) * 0.98);}
+  .home-team.ht-static.ht-alone .ht-track{padding-left:10px;}
+  .home-team.ht-static .ht-view{-webkit-mask-image:none;mask-image:none;}
   .ht-mon{flex:0 0 auto;position:relative;line-height:0;}
   .ht-mon img{display:block;filter:drop-shadow(0 3px 2px rgba(35,32,25,.3));}
   .home-team .ht-mon .crowned-aura{filter:drop-shadow(0 3px 2px rgba(35,32,25,.3)) drop-shadow(0 0 10px rgba(255,209,102,.95))
@@ -782,13 +786,32 @@
   .home-card:focus-visible{outline:3px solid var(--jade);outline-offset:2px;}
   .hc-icon{flex:0 0 auto;font-size:26px;line-height:1;}
   body.has-bg .home-card{background:rgba(244,236,216,0.34);border-color:rgba(35,32,25,0.22);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);}
+  /* (4.32) "Can you have transparent buttons and the continue region's art at the back? I want the art to come through":
+     the home page's buttons are glass over the art of the region Continue goes to — Continue a cinnabar glass, the
+     cards and the daily a pale one with their words lifted off it; under Region 6's live sky, its violet glass */
+  body.has-bg .home-go{background:linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0) 55%), rgba(200,69,58,.72);
+    -webkit-backdrop-filter:blur(3px) saturate(1.1);backdrop-filter:blur(3px) saturate(1.1);
+    box-shadow:0 4px 0 rgba(158,47,39,.55), 0 10px 22px rgba(60,20,10,.22);text-shadow:0 1px 3px rgba(80,20,14,.55);}
+  body.has-bg .home-card{background:rgba(250,244,230,.28);border-color:rgba(255,255,255,.5);box-shadow:0 3px 0 rgba(35,32,25,.16);
+    -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);}
+  body.has-bg .home-card .hc-title{text-shadow:0 1px 2px rgba(255,255,255,.95), 0 0 8px rgba(255,255,255,.6);}
+  body.r6-glass .home-go{background:linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0) 55%), rgba(186,56,44,.66);
+    border:1px solid rgba(255,190,170,.38);box-shadow:0 4px 0 rgba(122,40,34,.5), 0 10px 24px rgba(0,0,0,.3);
+    -webkit-backdrop-filter:blur(2.5px) saturate(1.15);backdrop-filter:blur(2.5px) saturate(1.15);text-shadow:0 1px 3px rgba(0,0,0,.6);}
+  body.r6-glass .home-card, body.r6-glass .daily-card.dz{--ink:#f4efff;--ink-soft:#cdc2f0;--line:rgba(206,186,255,.30);
+    background:rgba(28,16,60,.38);border:1px solid rgba(206,186,255,.30);color:#f4efff;
+    box-shadow:0 3px 0 rgba(122,96,206,.34), 0 6px 18px rgba(0,0,0,.28);
+    -webkit-backdrop-filter:blur(2.5px) saturate(1.15);backdrop-filter:blur(2.5px) saturate(1.15);text-shadow:0 1px 3px rgba(0,0,0,.75);}
+  body.r6-glass .daily-card.dz{border-color:rgba(232,196,110,.55);}
+  body.r6-glass .dz-bar{background:rgba(255,255,255,.16);}
   /* the daily, folded: the day it is, all it pays, and the day's count; opened, the cycle's six days and all each pays.
      (4.29, "the daily rewards can be a little more prominent") a card of the medals' gold, as big as the others */
   .daily-card.dz{margin:0;padding:13px 16px 14px;border-radius:16px;border:1.5px solid rgba(201,154,63,.72);
     background:linear-gradient(180deg, rgba(255,244,214,.95), rgba(245,224,168,.9));
     box-shadow:0 3px 0 rgba(176,128,40,.42), 0 10px 22px rgba(201,154,63,.16);}
-  body.has-bg .daily-card.dz{background:linear-gradient(180deg, rgba(255,244,214,.72), rgba(245,224,168,.6));
-    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);}
+  body.has-bg .daily-card.dz{background:linear-gradient(180deg, rgba(255,244,214,.5), rgba(245,224,168,.4));
+    -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);}   /* (4.32) more of the art through it */
+  .daily-card.dz{margin-top:16px;}
   .dz-head{display:flex;align-items:center;gap:13px;width:100%;margin:0;padding:0;border:0;background:none;cursor:pointer;color:var(--ink);text-align:left;}
   .dz-head:focus-visible{outline:2px solid var(--jade);outline-offset:4px;border-radius:10px;}
   .dz-icon{flex:0 0 auto;font-size:28px;line-height:1;}
@@ -1387,13 +1410,13 @@
   @keyframes genPulse{ 0%{transform:scale(.45);opacity:0;} 18%{transform:scale(1);opacity:1;} 75%{opacity:.9;} 100%{opacity:0;} }
   @keyframes genRipple{ 0%{transform:scale(.5);opacity:1;} 100%{transform:scale(2.1);opacity:0;} }
   .gen-pulse.gone{ animation:none;opacity:0;transition:opacity .25s; }
-  /* asleep: the monster tips over and dreams */
+  /* asleep: the monster dozes and dreams */
   .enemy-card.is-asleep{ position:relative; }
+  /* (4.31) no longer tipped over on its side: "a slight forward tilt which should apply to sleep as well" (35-status-look.js) */
   .enemy-card.is-asleep .enemy-sprite,
   .enemy-card.is-asleep img{
-    transform:rotate(14deg) translateY(6px);
     filter:saturate(.7) brightness(.92);
-    transition:transform .5s cubic-bezier(.3,1.4,.5,1), filter .5s;
+    transition:filter .5s;
   }
   .enemy-card.is-asleep::after{
     content:'z';
@@ -2028,6 +2051,10 @@
   <script src="js/31-huts.js"></script>
   <script src="js/32-castle-walls.js"></script>
   <script src="js/33-catch.js"></script>
+  <script src="js/34-nemesis.js"></script>
+  <script src="js/35-status-look.js"></script>
+  <script src="js/36-the-return.js"></script>
+  <script src="js/37-peace.js"></script>
   <script src="js/11-app.js"></script>
 
 </body>
