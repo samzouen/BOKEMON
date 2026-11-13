@@ -1641,6 +1641,11 @@ function resolveBattleMove(mv, target, results, opts){
     return setTimeout(advanceTurn, 1100);
   }
 
+  /* (4.39) the Painter's: Crosshair, Imitation, Target Board — none of them a blow (39-painter.js) */
+  if(mv.crosshair || mv.imitate || mv.targetBoard){
+    if(correct < mv.words){ playSfx('move_miss'); battleMsg(`${mv.name} failed! (${wordsTag(correct, mv)} words)`); return setTimeout(advanceTurn, 900); }
+    return yourPainterMove(mon, mv, target);
+  }
   /* Tactical moves resolve before the ordinary damage path. */
   /* Vita — a pulse now, and a light that stays. */
   if(mv.vita){
@@ -2404,6 +2409,8 @@ function landStrike(h, opts){
   const before = t.hp;
   if(before <= 0){ h.dmg = 0; h.oldHp = h.newHp = 0; return 0; }   // already down: nothing left to strike
   const raw = h.raw;
+  /* (4.39) a painter's Target Board standing for it: the whole of one attack lands on the board, three times in four */
+  if(raw > 0 && typeof boardTakesYours === 'function' && boardTakesYours(t)){ h.dmg = 0; h.blocked = 0; h.oldHp = h.newHp = before; h.boarded = true; return 0; }
   /* (3.13) Your Dragon Dance breaks some of their shields first — once an
      attack, as its first strike on this one lands (breakShields). */
   if(raw > 0) breakShields('player', null, t, yourStrikeKey(opts), 'enemyBlk-' + h.idx, 'enemy-' + h.idx);
@@ -4728,6 +4735,7 @@ function enemyActs(i, e){
      Copycat's first copied attack, goes on as an ordinary blow */
   const sx = (move && move[2] == null && move[6]) || null;
   if(sx && (sx.mend || sx.transfuse || sx.kindle || sx.gallop || sx.enchant || sx.stargaze)) return enemyPsySupport(e, move, next);
+  if(sx && (sx.crosshair || sx.imitate || sx.targetBoard) && typeof enemyPainterMove === 'function') return enemyPainterMove(e, move, next);   // (4.39) a painter's (39-painter.js)
   if(sx && sx.glitch){ const g = enemyGlitch(e, move, next); if(g === true) return; move = g; }
   if(sx && sx.copy){
     const c = enemyCopycat(e, move);
@@ -4971,6 +4979,17 @@ function enemyStrikeOn(ctx, step, done){
     return;
   }
 
+  /* (4.39) the Painter's Target Board: a blow on the one it stands for lands on the board instead, three times in four —
+     after the dodges, so a blow that would have missed spares it; a blow nothing can dodge, too — and breaks it */
+  if(!ex.stoop && typeof boardIntercepts === 'function' && boardIntercepts('player', mon)){
+    setTimeout(()=>{
+      battleMsg(`${PAINTER.sym.targetBoard} The target board takes ${escapeHtml(name)}'s blow for ${displayName(mon)} — and breaks!` + seen);
+      if(last()){ e._ambush = 0; burnOut(e, ex); }
+      const rip = playerRiposte(e);
+      pause(rip ? 1500 : 1000);
+    }, 300);
+    return;
+  }
   playEffect(move[1], { type: e.types[0], at:pid('playerBob', mon), from:'enemy-' + idx });   // (4.15) from it, at the one of yours it strikes
   if(ex && ex.ultraTier != null){ ctx.inverted = true; invertScreen(330 + fxHoldMs(move[1]) + 1300); }   // (4.18) their Ultra turns the screen over too — held from its first strike to the end of its last (each one of yours it reaches takes it on)
 
@@ -5046,7 +5065,7 @@ function enemyStrikeOn(ctx, step, done){
           b.eCombo = 0; e.comboStacks = 0;
         }
         /* Rage: a free 20% critical, or a bought certainty. */
-        ctx.mults.rage = rageMultiplier(e);
+        ctx.mults.rage = rageMultiplier(e, mon);                   // (4.39) and a crosshair on the one it strikes
       }
       if(ctx.mults.combo !== 1) dmg = Math.ceil(dmg * ctx.mults.combo);
       if(ctx.mults.rage !== 1) dmg = Math.ceil(dmg * ctx.mults.rage);

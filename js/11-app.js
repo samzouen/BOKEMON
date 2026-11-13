@@ -212,7 +212,7 @@ function renderStub(title, emoji, msg, back){
 /* ---------- SCREEN: spelling list admin (password-gated) ---------- */
 /* The old default is now the *starting* password; this is the master override,
    which is never shown as a hint. */
-const MASTER_CODE  = '10110507605';
+const MASTER_CODE  = BOKEMON_HOME === 'backup' ? '101105' : '10110507605';   // (4.40) each home its own (02-core.js: BOKEMON_HOME)
 const DEFAULT_PASS = '101105';
 const RESET_CODE   = MASTER_CODE;
 function currentPass(){ return (state && state.settings && state.settings.password) || DEFAULT_PASS; }

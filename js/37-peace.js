@@ -94,7 +94,7 @@ async function peaceEpilogue(){
   await L([['g_earth', `<b>"Fairy King. At every one of our villages you gave the last of your strength for us. Now let the four of us give some of ours back."</b>`],
            ['g_water', `<b>"Hold still, Your Majesty. This will feel like spring rain."</b>`]]);
   await Promise.all(K.map(k=> invActorTo('fg' + k, PEACE_HALL.up[k].x, PEACE_HALL.up[k].y, 700)));
-  try { playSfx('power_up'); } catch(e){}
+  peacePowerUp();                                                           // (4.37) the boosts' power-up: "the healing beams can use the same!"
   /* their light, streaming to the throne while it is told */
   const beams = [];
   K.forEach((k, i)=> setTimeout(()=>{ const u = PEACE_HALL.up[k]; beams.push(peaceBeam(u.x + 0.5, u.y + 0.2, PEACE_HALL.king.x, PEACE_HALL.king.y, PEACE_HALL.colour[k])); }, i * 220 * SCENE_SPEED));
@@ -189,6 +189,11 @@ async function peaceEpilogueRun(){
 }
 
 /* ---------- the pictures: the guardians' light, the stone, sparkles ---------- */
+/* (4.37) The designer: "boosts should have a power up sound that's more strong and not high pitched, and the healing
+   beams can use the same!" — a boost used and the guardians' light both play the power-up made in the catch's hall
+   (33-catch.js's czSound.powerUp: a low charge, a boom and a power chord struck): until 4.37 'power_up', which has no
+   file of its own (level_up.mp3, bright, stood in), and a Slate Shield the stones' sound. */
+function peacePowerUp(level){ try { if(typeof czSound !== 'undefined' && czSound.powerUp) czSound.powerUp({ level:level == null ? 1 : level }); } catch(e){} }
 /* a stream of light from (x0, y0) to (x1, y1), squares — it stays till it is put out (.off), or `ms` if given */
 function peaceBeam(x0, y0, x1, y1, colour, ms){
   const world = $('#walkWorld');
@@ -543,7 +548,7 @@ function boostUse(id){
     say = `${PEACE_SYM.fruitPunch} <b>Fruit Punch!</b> ` + (poured || `Everyone is well already — there will be more each turn.`);
   }
   if(typeof logBattle === 'function') logBattle(`🎒 Boost: ${def.name} (${b.boostsUsed}/${BOOST.perBattle} this fight)`);
-  try { playSfx(id === 'slateShield' ? 'stone_mid' : 'power_up'); } catch(e){}
+  peacePowerUp();                                                           // (4.37) every boost's (until 4.37 'power_up' — the level-up's fanfare stood in — or a stone's)
   renderBattle();
   battleMsg(say);
   saveProfile();

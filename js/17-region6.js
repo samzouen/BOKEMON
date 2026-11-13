@@ -465,7 +465,7 @@ function talentTakeMult(def, att){
    one already. Returns the multiplier, or 1. */
 function talentCrit(att, def){
   const a = talentHolder(att), fx = a ? talentFxOf(a) : null;
-  if(!fx || !(fx.crit > 0) || !(Math.random() < fx.crit - critCut(a))) return 1;   // (3.86) less, Unlucky; (4.14) no cap
+  if(!fx || !(fx.crit > 0) || !(Math.random() < fx.crit - critCut(a) + (typeof crossBonus === 'function' ? crossBonus(def) : 0))) return 1;   // (3.86) less, Unlucky; (4.14) no cap; (4.39) more on a crosshair
   const d = def ? (talentHolder(def) || def) : null;
   if(d && d.species) floatOver(d, 'CRITICAL');
   const b = ui.battle;
@@ -1213,7 +1213,7 @@ function foeShatterAmp(m){
 function foeForesightOn(e){ return foeHolds(e, 'Psychic', 'ultra'); }
 function foeForesightDodge(t){ return foeForesightOn(t) ? FORESIGHT.dodge : 0; }
 function foeForesightCrit(e, def){
-  if(!foeForesightOn(e) || !(Math.random() < FORESIGHT.crit - critCut(e))) return 1;   // (3.86) less, Unlucky
+  if(!foeForesightOn(e) || !(Math.random() < FORESIGHT.crit - critCut(e) + (typeof crossBonus === 'function' ? crossBonus(def) : 0))) return 1;   // (3.86) less, Unlucky; (4.39) more on a crosshair
   const m = def && def.uid ? realMon(def) : null;
   if(m) floatOver(m, 'CRITICAL');
   return FORESIGHT.mult;

@@ -468,9 +468,11 @@ function tickStatuses(){
     if(st.turnsLeft <= 0){ delete ps[k]; afterStatusGone(k, 'player'); expired.push(STATUS_LABELS[k]||k); ranOut++; }
   });
   /* Each of your monsters' own debuffs ages the same way (2.83). */
-  Object.values(b.monStatus || {}).forEach(list=>{
+  const onField = new Set(playerField().map(m=> m.uid));
+  Object.entries(b.monStatus || {}).forEach(([uid, list])=>{
     list.slice().forEach(st=>{
       if(st.permanent) return;
+      if(st.type === 'targetBoard' && !onField.has(uid)) return;           // (4.39) the Painter's board: its turns wait while its partner is off the field
       /* (3.16) A nap waits for the turn it costs, and lasts to the end of that
          turn: it goes now if it has cost it (`spent`), never by the clock. A
          freeze counts its own turns (`byTurn`), not the rounds. */
@@ -808,6 +810,9 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
     dmg *= talentDealMult(attacker, defender, isPlayerAttacking, peek, opts);
     if(!peek && !noCrit && fc === 1){ const tc = talentCrit(attacker, defender); if(tc > 1){ dmg *= tc; fc = tc; } }
   }
+  /* (4.39) the Painter's crosshair on the one struck: a critical of its own (20% at 1.5×) for a blow by one with no
+     critical of its own (crossCrit, 39-painter.js) — one that has gets 20% more on its chance (crossBonus) */
+  if(typeof crossCrit === 'function' && !peek && !noCrit && fc === 1){ const xc = crossCrit(attacker, defender); if(xc > 1){ dmg *= xc; fc = xc; } }
 
   // defender-side modifiers
   /* (3.86) its cuts, gathered into one figure (`cut`) so a Vicious Hex
@@ -1723,7 +1728,7 @@ function yourDiscombobulate(){ return !!(ui.battle && getPStatus(0, 'confusionFi
 function foresightDodge(m){ return elemPassiveOn(m, 'Psychic', 'ultra') ? FORESIGHT.dodge : 0; }   // (3.77) no Discombobulate needed
 function foresightCrit(attacker, defender){
   const m = attacker && attacker.uid ? realMon(attacker) : null;
-  if(!m || !elemPassiveOn(m, 'Psychic', 'ultra') || !(Math.random() < FORESIGHT.crit - critCut(m))) return 1;   // (3.86) less, Unlucky
+  if(!m || !elemPassiveOn(m, 'Psychic', 'ultra') || !(Math.random() < FORESIGHT.crit - critCut(m) + (typeof crossBonus === 'function' ? crossBonus(defender) : 0))) return 1;   // (3.86) less, Unlucky; (4.39) more on one with the Painter's crosshair
   if(defender && !defender.uid) floatOver(defender, 'CRITICAL');
   const b = ui.battle;
   if(b._critAt !== b.actionSeq){ b._critAt = b.actionSeq; b._crits = 0; }
@@ -3996,7 +4001,7 @@ function rageDef(holder){
   return mv ? mv[6].rage : null;
 }
 /* Returns the damage multiplier for this swing: 1, or the critical figure. */
-function rageMultiplier(holder){
+function rageMultiplier(holder, against){                 // (4.39) `against`: the one it strikes (a crosshair on it)
   const def = rageDef(holder);
   if(!def) return 1;
   const st = rageState(holder);
@@ -4007,7 +4012,7 @@ function rageMultiplier(holder){
     return def.crit || 1.5;
   }
   if(st.muted > 0) return 1;             // spent, and quiet for a while yet
-  if(Math.random() < (def.chance || 0.20) - critCut(holder)){   // (3.86) less, Unlucky
+  if(Math.random() < (def.chance || 0.20) - critCut(holder) + (typeof crossBonus === 'function' ? crossBonus(against) : 0)){   // (3.86) less, Unlucky; (4.39) more on a crosshair
     battleMsg(`💥 A critical!`);
     return def.crit || 1.5;
   }
@@ -6368,7 +6373,7 @@ function marksOnMon(t){
    attack's own line). */
 function critStrike(attacker, struck){
   const p = attacker ? passiveOf(attacker) : null;
-  if(!p || !p.crit || !(Math.random() < (p.crit.chance || 0.15) - critCut(attacker))) return 1;   // (3.86) less, Unlucky
+  if(!p || !p.crit || !(Math.random() < (p.crit.chance || 0.15) - critCut(attacker) + (typeof crossBonus === 'function' ? crossBonus(struck) : 0))) return 1;   // (3.86) less, Unlucky; (4.39) more on a crosshair
   if(struck) floatOver(struck, 'CRITICAL');
   const b = ui.battle;
   if(b && attacker && attacker.uid){

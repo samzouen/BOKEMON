@@ -389,9 +389,11 @@ function czFrame(now, dt){
   if(M.el){
     M.el.style.width = M.el.style.height = px + 'px';
     M.el.style.transform = `translate(${(M.x - px / 2 + sx).toFixed(1)}px, ${(M.y - px / 2 + bob + sy + M.lift + M.sink).toFixed(1)}px) scale(${M.scale.toFixed(3)})`;
-    M.el.style.opacity = M.alpha.toFixed(3);
-    if(M.white_el) M.white_el.style.opacity = M.white.toFixed(3);
-    if(M.sprite_el) M.sprite_el.style.filter = M.white > 0.01 ? `brightness(${(1 + M.white * 1.4).toFixed(2)})` : '';
+    /* (4.39) its fade, its whitening and its white light: each picture's own (czCss), not its frame's — a frame faded or
+       brightened as a whole is a layer, and Safari cuts a layer's light off at its edge: a square round the monster */
+    M.el.style.setProperty('--cza', M.alpha.toFixed(3));
+    M.el.style.setProperty('--czw', (M.white * M.alpha).toFixed(3));
+    M.el.style.setProperty('--czb', M.white > 0.01 ? (1 + M.white * 1.4).toFixed(2) : '1');
   }
   /* the ball: as big as the square to write in, and a little more with every word in it; breathing; a pulse as one comes in */
   const B = Z.ball;
@@ -576,6 +578,14 @@ async function czFlee(soft){
    without a tap, and from memory it stayed silent. So the tap itself readies it: the sound woken, and the jingle's own
    player (and the miss's) started silently and stopped, which an iPad then lets play without another tap. czJingle
    plays it from memory while the sound is up, else from that player. */
+/* (4.40) The designer: "the 'monster has run away' track is still playing when a monster catch attempt is successfully
+   spelt but fails (at least the first time it does). it should only play when the monster catch attempt is unsuccessfully
+   spelt AND the monster unfortunately runs away". It was this readying: each player was started on its own jingle, muted,
+   and stopped (and unmuted) once it had begun — but on an iPad a player can be heard for a moment before it stops, and
+   the stopping came late the first time, while the file was still on its way: the fleeing's jingle, at the first throw of
+   each catch. Now each player is readied on a moment of silence (CZ_HUSH), never on its jingle; its jingle is put in only
+   when it is meant to be heard (czJingle). An iPad lets a player readied in a tap play again later, whatever it plays. */
+const CZ_HUSH = 'data:audio/wav;base64,UklGRgQCAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YeABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA=';
 function czPrime(){
   try { if(typeof wakeAudio === 'function') wakeAudio(); } catch(e){}
   const Z = CZ;
@@ -585,10 +595,11 @@ function czPrime(){
     const f = SFX_MAP[ev];
     if(!f || Z.primed[ev]) return;
     try {
-      const el = new Audio(SFX_DIR + f);
+      const el = new Audio(CZ_HUSH);
       el.preload = 'auto'; el.muted = true;
+      el._jingle = SFX_DIR + f;
       const p = el.play();
-      if(p && p.then) p.then(()=>{ el.pause(); el.currentTime = 0; el.muted = false; }).catch(()=>{});
+      if(p && p.then) p.then(()=>{ el.pause(); }).catch(()=>{});
       Z.primed[ev] = el;
     } catch(e){}
   });
@@ -600,7 +611,9 @@ function czJingle(ev){
   const el = Z && Z.primed && Z.primed[ev];
   if(el && typeof audio !== 'undefined' && audio.unlocked && !audio.missing[f]){
     try {
-      el.muted = false; el.volume = Math.max(0, Math.min(1, typeof sfxVolume === 'function' ? sfxVolume() : 0.55)); el.currentTime = 0;
+      if(el._jingle && el.src !== new URL(el._jingle, location.href).href) el.src = el._jingle;   // (4.40) its jingle, only now
+      el.muted = false; el.volume = Math.max(0, Math.min(1, typeof sfxVolume === 'function' ? sfxVolume() : 0.55));
+      try { el.currentTime = 0; } catch(e){}
       const p = el.play();
       if(p && p.catch) p.catch(()=> playSfxSoon(ev, 2500));
       return el;
@@ -1020,6 +1033,90 @@ const CZS = {
     return 1.5 + CZS_VERB.secs;
   },
 };
+/* (4.37) Two more, for elsewhere, made the same way in the same hall. The designer: "boosts should have a power up sound
+   that's more strong and not high pitched, and the healing beams can use the same!" and "when the king unseals … can it
+   have some rumbling and vibrations please?"
+     powerUp — low and strong (37-peace.js: a boost used, the guardians' gift to the King; 28-unseal.js: each of the King's
+               four chants): a charge rising (a power chord's voices sliding up an octave as a low-pass opens, low air
+               swelling). (4.39) The designer: "it has a correct growing pulsing sound, but then the chord at the end is
+               strange … can we build on just the growing pulsing sound before the chord and have it play four times,
+               rising a little in pitch each pulse?" So only the charge now (CZS_POWER): four of them, each a whole tone
+               above the last and a little stronger, the last let go a little more gently; no boom, no chord, no glow
+               after. (4.40) "Could we double the speed of the power up and also make it less revvy and more
+               smooth/gliding please?" Twice as quick (a swell every 0.21s), and gliding: each swell slides up only to
+               where the next begins (a whole tone, not an octave and back down, which was the revving), the next
+               coming in as it fades; the filter opening steadily through all four; one breath of air under them all,
+               faded, never cut off; the voices less out of tune with each other (less beating). Next to nothing above
+               2 kHz. `level` 0–1.
+     rumble  — the earth's (28-unseal.js): deep noise, its loudness wandering; two notes far down, beating (felt in
+               headphones); a grinding band round 320 Hz, wandering too, that a phone's speaker can play. `set(level)`
+               0–1, `stop(secs)`.
+     crack   — the ground cracking: a thump and a crunch of noise. `level` 0–1. */
+/* (4.39) the power-up: four swells, each `step` semitones above the last (E2 B2 E3, then F♯, G♯, A♯), `gap` s apart;
+   (4.40) each `dur` s long, so it is still fading as the next comes in, gliding up to where the next begins; the low-pass
+   opening from cut[0] to cut[1] Hz through them all; `grow`: each one's strength; the last `lastDur` s, let go over
+   `lastRel` s */
+const CZS_POWER = { pulses:4, gap:0.21, dur:0.36, lastDur:0.5, step:2, chord:[40, 47, 52], pad:0.15, air:0.05, att:0.12, rel:0.2, lastRel:0.32,
+  cut:[450, 1900], detune:5, grow:[0.74, 0.83, 0.92, 1] };
+Object.assign(CZS, {
+  powerUp(ctx, out, t, o){
+    o = o || {};
+    const B = czsBusOf(ctx, out), k = o.level == null ? 1 : Math.max(0.2, Math.min(1, o.level)), P = CZS_POWER;
+    const cutAt = i=> P.cut[0] * Math.pow(P.cut[1] / P.cut[0], i / P.pulses), slide = Math.pow(2, P.step / 12);
+    for(let i = 0; i < P.pulses; i++){
+      const at = t + i * P.gap, last = i === P.pulses - 1, dur = last ? P.lastDur : P.dur;
+      czsPad(ctx, B, at, dur, P.chord.map(m=> m + i * P.step), { vol:P.pad * k * P.grow[i], att:P.att, rel:last ? P.lastRel : P.rel,
+        glide:slide, glideAt:P.gap / dur, cut0:cutAt(i), cut1:cutAt(i + 1), cutAt:P.gap / dur, detune:P.detune, width:0.5 });   // a swell, gliding into the next
+    }
+    const all = (P.pulses - 1) * P.gap + P.lastDur;
+    czsAir(ctx, B.in, t, all, 280, 1400, P.air * k, { q:0.7, peak:0.8 });                          // one breath of air under them all
+    return all + CZS_VERB.secs;
+  },
+  rumble(ctx, out, t){
+    const B = czsBusOf(ctx, out), master = ctx.createGain(), srcs = [];
+    master.gain.value = 0;                                               // (silent from the first: a first set() comes before `t`, and holds what is there then)
+    master.gain.setValueAtTime(0, t); master.connect(B.in);
+    const lfo = (hz, depth, param)=>{ const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = hz * (0.9 + 0.2 * Math.random()); g.gain.value = depth; o.connect(g); g.connect(param); srcs.push(o); };
+    /* deep: noise under two low-passes, its loudness wandering */
+    const n1 = ctx.createBufferSource(), l1 = ctx.createBiquadFilter(), l2 = ctx.createBiquadFilter(), deep = ctx.createGain();
+    n1.buffer = czsNoiseBuf(ctx); n1.loop = true;
+    l1.type = l2.type = 'lowpass'; l1.frequency.value = 110; l1.Q.value = 0.9; l2.frequency.value = 180;
+    deep.gain.value = 1.6; lfo(0.6, 0.7, deep.gain); lfo(1.7, 0.5, deep.gain);
+    n1.connect(l1); l1.connect(l2); l2.connect(deep); deep.connect(master);
+    /* far down: two notes beating */
+    [41.2, 43.1].forEach(f=>{ const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = f; g.gain.value = 0.2; o.connect(g); g.connect(master); srcs.push(o); });
+    /* the grind a phone can play: noise in a band wandering round 320 Hz, its loudness wandering too */
+    const n2 = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), grind = ctx.createGain();
+    n2.buffer = czsNoiseBuf(ctx); n2.loop = true;
+    bp.type = 'bandpass'; bp.frequency.value = 320; bp.Q.value = 1.4; lfo(0.45, 110, bp.frequency);
+    grind.gain.value = 1.0; lfo(2.6, 0.5, grind.gain); lfo(0.9, 0.25, grind.gain);
+    n2.connect(bp); bp.connect(grind); grind.connect(master);
+    n1.start(t, Math.random()); n2.start(t, Math.random()); srcs.forEach(o=> o.start(t));
+    srcs.push(n1, n2);
+    let stopped = false;
+    return {
+      set(level, secs, at){
+        if(stopped) return;
+        const now = at != null ? at : ctx.currentTime, L = Math.max(0, Math.min(1, level)), tc = Math.max(0.05, (secs || 0.8) / 3);
+        czsGlide(master.gain, 0.38 * L * L, now, tc); czsGlide(l1.frequency, 100 + 140 * L, now, tc);
+      },
+      stop(secs, at){
+        if(stopped) return;
+        stopped = true;
+        const now = at != null ? at : ctx.currentTime, d = Math.max(0.05, secs || 1);
+        czsGlide(master.gain, 0.0001, now, d / 4);
+        srcs.forEach(s=>{ try { s.stop(now + d + 0.2); } catch(e){} });
+      },
+    };
+  },
+  crack(ctx, out, t, o){
+    o = o || {};
+    const B = czsBusOf(ctx, out), k = o.level == null ? 1 : o.level;
+    czsBoom(ctx, B, t, { vol:0.22 * k, f0:70, f1:34, dur:0.8, n0:700, n1:120 });
+    czsAir(ctx, B.in, t, 0.35, 1400, 260, 0.1 * k, { q:0.9, peak:0.02 });                     // the crunch
+    return 0.9 + CZS_VERB.secs;
+  },
+});
 /* played now, while the sound is on (audio.unlocked) and running: through the catch's hall, into the effects' volume */
 const czSound = {
   live(){
@@ -1050,6 +1147,23 @@ const czSound = {
     return CZ.snd;
   },
   intent(o, secs){ try { if(CZ && CZ.snd) CZ.snd.set(o, secs); } catch(e){} },
+  /* (4.37) for elsewhere: the power-up and a crack (`o.level`), and the rumble (its voice: set, stop) */
+  /* (4.41) The designer, with a recording of a power-up of their own: "could you model the power up sound on this exact
+     wave but downpitched please?" Their recording, slowed to sound a fourth (5 semitones) lower — the same wave, longer
+     (0.94s → 1.25s): assets/sfx/power_up.mp3, the effects' long-awaited 'power_up' (02-core.js: SFX_MAP, until now the
+     level-up standing in). Played as the others are (playSfx), `level` its loudness; the one made here (CZS.powerUp)
+     only while that file is not there. (4.42) Of 3, 5 and 7 semitones lower, the designer liked 7 best: a fifth lower
+     now, 0.94s → 1.40s. */
+  powerUp(o){
+    const f = typeof SFX_MAP !== 'undefined' ? SFX_MAP.power_up : null, lvl = o && o.level != null ? Math.max(0.2, Math.min(1, o.level)) : 1;
+    if(f && typeof audio !== 'undefined' && !audio.missing[f] && typeof playSfx === 'function'){
+      const v = playSfx('power_up', { vol:lvl });
+      if(v) return v;
+    }
+    return czSound.play(CZS.powerUp, o);
+  },
+  crack(o){ return czSound.play(CZS.crack, o); },
+  rumble(){ const L = czSound.live(); if(!L) return null; try { return CZS.rumble(L.ctx, L.out, L.t); } catch(e){ return null; } },
   stopAttempt(secs){
     try {
       const v = CZ && CZ.snd;
@@ -1068,11 +1182,14 @@ function czCss(){
   st.textContent = `
   #czStage{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
   #czFx{ position:fixed; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; display:block; }
-  .cz-mon{ position:absolute; left:0; top:0; width:160px; height:160px; will-change:transform, opacity; }
+  /* (4.39) The designer: "in the catching sequence … the glows get cut off by the sprite's borders". Its frame only moves it
+     (--cza its fade, --czw the white one's, --czb its whitening): the pictures fade, whiten and glow each on their own,
+     so nothing holds their light in a box */
+  .cz-mon{ position:absolute; left:0; top:0; width:160px; height:160px; will-change:transform; --cza:1; --czw:0; --czb:1; }
   .cz-mon .cz-sprite, .cz-mon .cz-white{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
-  .cz-mon img{ width:100% !important; height:100% !important; filter:drop-shadow(0 6px 14px rgba(0,0,0,.5)); }
-  .cz-mon .cz-white{ opacity:0; }
-  .cz-mon .cz-white img{ filter:brightness(0) invert(1) drop-shadow(0 0 8px #fff) drop-shadow(0 0 22px rgba(205,228,255,.95)); }
+  .cz-mon img{ width:100% !important; height:100% !important; }
+  .cz-mon .cz-sprite img{ opacity:var(--cza); filter:brightness(var(--czb)) drop-shadow(0 6px 14px rgba(0,0,0,.5)); }
+  .cz-mon .cz-white img{ opacity:var(--czw); filter:brightness(0) invert(1) drop-shadow(0 0 8px #fff) drop-shadow(0 0 22px rgba(205,228,255,.95)); }
   /* the ball: solid white light, a little blue at its rim, glowing */
   .cz-ball{ position:absolute; left:0; top:0; width:10px; height:10px; border-radius:50%; opacity:0; will-change:transform, opacity, width;
     background:radial-gradient(circle at 46% 42%, #ffffff 0%, #ffffff 58%, #f6f8ff 72%, #e9eeff 86%, #dbe5ff 100%);

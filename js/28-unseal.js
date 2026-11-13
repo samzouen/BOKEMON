@@ -1166,6 +1166,7 @@ function unPillarPulse(){
   el.classList.remove('up-pulse'); void el.offsetWidth; el.classList.add('up-pulse');
   setTimeout(()=> el.classList.remove('up-pulse'), 950);
   unRing();
+  unQuakeCrack(false);                                                   // (4.37) the ground cracks with it
 }
 function unRing(big){
   const pool = document.getElementById('unPool'), world = $('#walkWorld');
@@ -1176,13 +1177,76 @@ function unRing(big){
   world.appendChild(r);
   setTimeout(()=> r.remove(), 1500);
 }
+/* (4.37) The designer: "when the king unseals (perfect poem in elvish by the way! :)) can it have some rumbling and
+   vibrations please?" While he chants, the ground rumbles (33-catch.js's czSound.rumble, in the catch's hall), louder
+   each chant; each chant's surge is the power-up (czSound.powerUp, stronger each time); the whole scene trembles with it
+   (unQuake: smooth — three swings mixed, never quite the same twice — and stronger each chant); the ground cracks at each
+   pulse of light (czSound.crack, and a jolt); and where the device can buzz (an Android phone: a page cannot make an iPhone
+   buzz), a buzz each chant, longer each time. The seal giving way: all of it at its height, the ancestor rising out of
+   it; then the ground stills as it stands. A device asking for less motion: the rumble and the buzz, no trembling. */
+const UN_QUAKE = {
+  chant:[0.03, 0.045, 0.065, 0.09],                                    // the tremor each chant (tiles, either way)
+  rumble:[0.35, 0.5, 0.68, 0.85],                                      // the rumble each chant (and 1 as the seal gives way)
+  power:[0.55, 0.7, 0.85, 1],                                          // the power-up each chant
+  buzz:[[50, 60, 70], [70, 50, 90, 50, 110], [90, 40, 120, 40, 150], [110, 40, 140, 40, 170, 40, 220]],
+  jolt:0.05, peak:0.16,                                                // a crack's jolt; the seal giving way
+};
+function unQuakeStill(){ return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; }
+/* the tremor: towards `level` (tiles), smoothly; with any jolt on top, dying away */
+function unQuake(level){
+  const Q = ui.unQuake || (ui.unQuake = { cur:0, target:0, jolt:0, raf:0, ph:[0, 1, 2, 3].map(()=> Math.random() * 6.28) });
+  Q.target = Math.max(0, level || 0);
+  if(Q.raf || unQuakeStill() || (!Q.target && !Q.jolt)) return;
+  let last = performance.now();
+  const step = now=>{
+    const el = $('#walkStage'), dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    Q.cur += (Q.target - Q.cur) * Math.min(1, dt * 2.5);
+    Q.jolt = Math.max(0, Q.jolt - dt * Math.max(0.06, Q.jolt * 1.4));
+    if(!el || (!Q.target && Q.cur < 0.0006 && Q.jolt < 0.0006)){ if(el) el.style.translate = ''; Q.raf = 0; Q.cur = Q.target ? Q.cur : 0; return; }
+    const a = (Q.cur + Q.jolt) * WALK_T, s = now / 1000, P = Q.ph, w = f=> 2 * Math.PI * f * s;
+    const x = a * (0.55 * Math.sin(w(9.1) + P[0]) + 0.3 * Math.sin(w(13.3) + P[1]) + 0.15 * Math.sin(w(4.7) + P[2]));
+    const y = a * 0.7 * (0.6 * Math.sin(w(7.7) + P[3]) + 0.4 * Math.sin(w(11.9) + P[0]));
+    el.style.translate = `${x.toFixed(1)}px ${y.toFixed(1)}px`;
+    Q.raf = requestAnimationFrame(step);
+  };
+  Q.raf = requestAnimationFrame(step);
+}
+/* the n-th chant (1–4): its surge, the rumble and the tremor that much stronger, a buzz */
+function unQuakeStage(n){
+  const i = Math.max(0, Math.min(3, n - 1));
+  if(!ui.unRumble && typeof czSound !== 'undefined' && czSound.rumble) ui.unRumble = czSound.rumble();
+  if(ui.unRumble) ui.unRumble.set(UN_QUAKE.rumble[i], 1.2);
+  if(typeof czSound !== 'undefined' && czSound.powerUp) czSound.powerUp({ level:UN_QUAKE.power[i] });
+  unQuake(UN_QUAKE.chant[i]);
+  if(typeof buzz === 'function') buzz(UN_QUAKE.buzz[i]);
+}
+/* a crack in the ground (`big`: the seal giving way): its sound, a jolt */
+function unQuakeCrack(big){
+  if(typeof czSound !== 'undefined' && czSound.crack) czSound.crack({ level:big ? 1 : 0.6 });
+  unQuake(ui.unQuake ? ui.unQuake.target : 0);                            // (made, if it was not yet)
+  const Q = ui.unQuake;
+  Q.jolt = Math.max(Q.jolt, big ? UN_QUAKE.peak : UN_QUAKE.jolt);
+  unQuake(Q.target);                                                     // (going, for the jolt)
+}
+/* the ground stills: the rumble fading over `secs`, the tremor with it (`now`: the tremor gone at once — the scene left) */
+function unQuakeEnd(secs, now){
+  if(ui.unRumble){ try { ui.unRumble.stop(secs == null ? 2.5 : secs); } catch(e){} ui.unRumble = null; }
+  unQuake(0);
+  const Q = ui.unQuake;
+  if(now && Q){
+    if(Q.raf) cancelAnimationFrame(Q.raf);
+    Q.raf = 0; Q.cur = Q.jolt = 0;
+    const el = $('#walkStage'); if(el) el.style.translate = '';
+  }
+}
 function unRiteStage(k, i){
   const n = i + 1;
   ['king', 'blade'].forEach(id=>{ for(let j = 1; j <= 4; j++) unActCls(id, 'un-glow' + j, j === n); });
   unActCls('king', 'un-tremble', n >= 3);
   if(n === 1){ unActCls('blade', 'un-in', false); unActCls('blade', 'un-rise', true); setTimeout(()=> unActCls('blade', 'un-hover', true), 1300); }
   unPillar(k, n);
-  playSfx('power_up');
+  unQuakeStage(n);                                                       // (4.37) the power-up, the ground rumbling and trembling (was 'power_up': the level-up's fanfare)
 }
 async function unRitual(k){
   const r = unRite(k);
@@ -1211,6 +1275,7 @@ async function unRitual(k){
     await unLines([['anc', WAR_WAKE[k]], ['lion', `<b>"It does not know friend from foe. Get ready!"</b>`]], k);
     return !unGone();
   });
+  unQuakeEnd(0.6, unGone());                                             // (4.37) (left part-way: the ground stilled, at once)
   if(unGone()) return;
   await sceneCamFree(400);
   if(go) unFightAncestor(k);
@@ -1219,6 +1284,8 @@ async function unAncestorRise(k){
   const B = unB(k), pil = document.getElementById('unPillar');
   playSfx('timestop');
   if(typeof buzz === 'function') buzz('unseal');                         // (4.28) the seal gives way: felt too
+  if(ui.unRumble) ui.unRumble.set(1, 0.4);                               // (4.37) the rumble and the tremor at their height
+  unQuake(UN_QUAKE.chant[3] * 1.5); unQuakeCrack(true);
   if(pil){ pil.classList.remove('up-pulse'); pil.classList.add('up-end'); }
   const pool = document.getElementById('unPool'); if(pool) pool.classList.add('up-end');
   unRing(true);
@@ -1232,7 +1299,9 @@ async function unAncestorRise(k){
   await unWaitMs(80);
   unActCls('anc', 'un-emerge', false);
   unActCls('blade', 'un-out', true);
-  playSfx('evolution');
+  /* (4.39) The designer: "it's also weird that when the sealed weapon becomes the ancestor, the evolving soundtrack is used
+     … please also remove the evolution soundtrack from the ancestor unsealing" ('evolution' played here until 4.38) */
+  unQuakeEnd(2.6);                                                       // (4.37) …and the ground stills as it stands
   await unWaitMs(1300);
   unActGone('blade');
   ['unPillar', 'unPool'].forEach(id=>{ const x = document.getElementById(id); if(x) x.remove(); });

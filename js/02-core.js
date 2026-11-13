@@ -65,7 +65,11 @@ const SFX_MAP = {
      and everything that only powers up has its own sound now: a summons (and
      a bond), Overgrowth, the Monkey King's casts and his clones, every surge
      in the vault's story, Nemesis made whole. Until power_up.mp3 is there
-     the level-up sound stands in (SFX_STANDIN). */
+     the level-up sound stands in (SFX_STANDIN). (4.41) It is there: the
+     designer's own recording, slowed to sound 5 semitones lower (33-catch.js:
+     czSound.powerUp — the boosts, the healing light, the King's chants too).
+     (4.42) The designer, of 3, 5 and 7 semitones lower: "I like 7 semitones
+     down better!" — a fifth lower now, 0.94s → 1.40s. */
   power_up:         'power_up.mp3',
   core_tinkle:      'core_tinkle.mp3',    // (3.51) a core coming down onto its legendary, glowing
   rumble:           'rumble.mp3',         // (3.51) the giant hand rising out of the rift (until the file is there: SFX_SYNTH)
@@ -91,7 +95,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.36';
+const GAME_VERSION = '4.42';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -1220,14 +1224,30 @@ function computeMaxStat(species, level, supplements, mon, forHp){
    Anonymous auth ties the cloud identity to THIS BROWSER's local storage. If
    that's ever cleared, the link is lost even though the cloud data survives —
    the JSON backup file remains the manual safety net for that case. */
-const firebaseConfig = {
-  apiKey: "AIzaSyBEg78ygTrSF7RPnfxrjcZ_Bg_2DQ4FrD0",
-  authDomain: "b0kemon.firebaseapp.com",
-  projectId: "b0kemon",
-  storageBucket: "b0kemon.firebasestorage.app",
-  messagingSenderId: "91724853668",
-  appId: "1:91724853668:web:6d22831d0da10717189131"
+/* (4.40) Two homes, one code. The game lives at samzouen.github.io/BOKEMON and, as a backup on another account, at
+   bokemongame.github.io/BOKEMON, which keeps its saves in a Firebase project of its own (bokem0n). Until 4.39 the backup
+   carried its own copy of this file (and of 11-app.js, for its own master code); now each home is known by its address,
+   so the same files serve both. Anywhere else (a test, a computer of your own) is the first home. */
+const FIREBASE_HOMES = {
+  main:{
+    apiKey: "AIzaSyBEg78ygTrSF7RPnfxrjcZ_Bg_2DQ4FrD0",
+    authDomain: "b0kemon.firebaseapp.com",
+    projectId: "b0kemon",
+    storageBucket: "b0kemon.firebasestorage.app",
+    messagingSenderId: "91724853668",
+    appId: "1:91724853668:web:6d22831d0da10717189131"
+  },
+  backup:{
+    apiKey: "AIzaSyB4yTj6fz5mA5CAh7XBYwU5p0XElxiYCt8",
+    authDomain: "bokem0n.firebaseapp.com",
+    projectId: "bokem0n",
+    storageBucket: "bokem0n.firebasestorage.app",
+    messagingSenderId: "465337644075",
+    appId: "1:465337644075:web:97f4a8347d4525e511266e"
+  },
 };
+const BOKEMON_HOME = (typeof location !== 'undefined' && /^bokemongame\./i.test(location.hostname || '')) ? 'backup' : 'main';
+const firebaseConfig = FIREBASE_HOMES[BOKEMON_HOME];
 const CLOUD_COLLECTION = 'saves';
 let cloudUid = null;
 let cloudReady = false;
@@ -1958,11 +1978,12 @@ function monPortrait(species, size, opts){
   // hidden until it actually loads, so a 404 never flashes a broken image
   const startHidden = (cached === undefined);
   const bg = opts.bare ? 'transparent' : s.color;
+  /* (4.39) a bare sprite (no tile behind it) has no rounded corners either: they only ever cut the picture, and its light */
   const wrapOpen  = opts.crowned ? `<span class="crowned-wrap" style="width:${px}px;height:${px}px;">${crownSparkles(px)}` : '';
   const wrapClose = opts.crowned ? '</span>' : '';
   return wrapOpen + `<img src="${primary}" alt="${escapeHtml(s.name)}" class="${cls}"
     data-species="${species}" data-px="${px}" data-view="${view}" data-stage-n="${stage}" data-crowned="${crowned?1:0}" data-exalted="${exalted?1:0}" data-try="0"
-    style="width:${px}px;height:${px}px;border-radius:${radius}px;object-fit:contain;background:${bg};${startHidden?'visibility:hidden;':''}"
+    style="width:${px}px;height:${px}px;border-radius:${opts.bare ? 0 : radius}px;object-fit:contain;background:${bg};${startHidden?'visibility:hidden;':''}"
     onload="spriteLoaded(this)" onerror="spriteFallback(this)">` + wrapClose;
 }
 

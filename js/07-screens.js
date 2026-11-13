@@ -364,9 +364,12 @@ function teamBannerHtml(){
   /* the room the page has: big where there is room — (4.32) "reduce the size of the sprite and monsters by about 33%. This
      will allow for more monsters to scroll at once" (78–150 until 4.32) */
   const S = Math.round(Math.max(52, Math.min(100, window.innerHeight * 0.114)));
-  const mon = ([m, comp])=> `<span class="ht-mon${comp ? ' ht-comp' : ''}">${monPortrait(m.species, Math.round(S * (comp ? 0.8 : 1)), { view:'front', bare:true, stage:monStage(m), crowned:isCrowned(m) })}</span>`;
+  /* (4.38) a portrait put up (38-portraits.js: the Painter's) instead of its picture; your photo instead of your look */
+  const pic = (m, px)=> (typeof ptMonPic === 'function' && ptMonPic(m, Math.round(px * 0.86))) || monPortrait(m.species, px, { view:'front', bare:true, stage:monStage(m), crowned:isCrowned(m) });
+  const mon = ([m, comp])=> `<span class="ht-mon${comp ? ' ht-comp' : ''}">${pic(m, Math.round(S * (comp ? 0.8 : 1)))}</span>`;
+  const me = px=> (typeof ptMyPic === 'function' && ptMyPic(Math.round(px * 0.86))) || avatarImg(playerAvatar(), px, { bare:true });
   return `<div class="home-team${playerAvatar() ? '' : ' ht-alone'}" id="homeTeam" role="button" tabindex="0" aria-label="Your team: open the party page" style="--ht-s:${S}px">
-    ${playerAvatar() ? `<span class="ht-me">${avatarImg(playerAvatar(), Math.round(S * 1.08), { bare:true })}</span>` : ''}
+    ${playerAvatar() ? `<span class="ht-me">${me(Math.round(S * 1.08))}</span>` : ''}
     <div class="ht-view" id="htView"><div class="ht-track" id="htTrack">${team.map(mon).join('')}</div></div>
   </div>`;
 }
@@ -543,7 +546,7 @@ function partyHeadHtml(m, opts){
   const maxHp = monMaxHp(m);
   const ready = breakthroughReady(m);          // its breakthrough waits for a tap (2.82)
   const px = opts.pair ? 44 : 52;
-  const portrait = monPortrait(m.species, px, { stage:monStage(m), crowned:isCrowned(m) });
+  const portrait = (typeof ptMonPic === 'function' && ptMonPic(m, px)) || monPortrait(m.species, px, { stage:monStage(m), crowned:isCrowned(m) });   // (4.38) its portrait, if put up
   return `<div class="party-head${opts.pair ? ' pair-head' : ''}${ui.partyOpen === m.uid ? ' open' : ''}" ${isSeed(m) ? '' : `data-tap="${m.uid}"`}>
         ${ready ? `<span class="bt-ready" title="Ready to break through">${portrait}</span>` : portrait}
         <div style="flex:1;min-width:0;">
@@ -587,6 +590,7 @@ function renderPartyList(){
         <div class="party-actions">
           ${ready ? `<button class="mini-btn bt-btn" data-break="${m.uid}">⚡ Break through to Lv ${Math.min(LEVEL_MAX, monCeiling(m) + CEILING_STEP)}</button>` : ''}
           <button class="mini-btn" data-stats="${m.uid}">📊 Stats &amp; Moves</button>
+          ${typeof ptTalkBtn === 'function' ? ptTalkBtn(m) : ''}
           ${comp ? `<button class="mini-btn" data-comps="1">🤝 Companions</button>` : `
           <button class="mini-btn" data-up="${idx}" ${idx===0?'disabled':''}>▲ Up</button>
           <button class="mini-btn" data-down="${idx}" ${idx===state.party.length-1?'disabled':''}>▼ Down</button>
@@ -629,6 +633,7 @@ function renderPartyList(){
     renderPartyList();
   }));
   list.querySelectorAll('[data-comps]').forEach(b=>b.addEventListener('click', e=>{ e.stopPropagation(); go('companions'); }));
+  if(typeof ptTalkWire === 'function') ptTalkWire(list);                   // (4.38) Cuain and the Monkey King: Talk
   list.querySelectorAll('[data-stats]').forEach(b=>b.addEventListener('click', e=>{ e.stopPropagation(); ui.statsUid=b.dataset.stats; go('stats'); }));
   list.querySelectorAll('[data-break]').forEach(b=>b.addEventListener('click', e=>{
     e.stopPropagation();
@@ -2339,6 +2344,7 @@ function renderStorage(){
     renderStoneList();
     wireRecycleAll();
     if(typeof recStorageWire === 'function') recStorageWire();   // (3.89) your records
+    if(typeof ptStorageWire === 'function') ptStorageWire();     // (4.38) your paintings
     const os = $('#openStones');
     if(os) os.addEventListener('click', ()=>go('elementStones'));
     const sf = ui.stoneFilter || (ui.stoneFilter = { type:'' });
@@ -2405,6 +2411,7 @@ function storageItemsPageHtml(){
     </div>
     ${heldStones().length ? `<button class="btn btn-ghost stone-page-btn" id="openStones">💠 Element Stones <span>${totalStones()} held</span></button>` : ''}
     ${typeof recStorageHtml === 'function' ? (caCss(), recStorageHtml()) : ''}
+    ${typeof ptStorageHtml === 'function' ? ptStorageHtml() : ''}
     <div class="stor-sec-head">💎 Skill Stones <span>${state.moveStones.length}</span></div>
     ${state.moveStones.length ? `<div class="stor-filter">
         <label class="sf-pick${sf.type ? ' on' : ''}" ${sf.type ? `style="--tc:${TYPE_COLORS[sf.type] || '#888'}"` : ''}>${elemIcon(sf.type || 'Universal', 18, { title:false })}<span>Type</span>

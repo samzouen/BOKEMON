@@ -558,7 +558,7 @@ function jgBands(){
   const spots = [];
   for(let y = 1; y < H - 1; y++) for(let x = 1; x < W - 1; x++){
     const t = G.g[y * W + x];
-    if((t === JG_T.PATH || t === JG_T.GLADE || t === JG_T.SHORE) && !tooNear(x, y)) spots.push(y * W + x);
+    if((t === JG_T.PATH || t === JG_T.GLADE || t === JG_T.SHORE) && !tooNear(x, y) && !(typeof strangeSpotAt === 'function' && strangeSpotAt(x, y))) spots.push(y * W + x);   // (4.39) not where a strange tree may stand
   }
   mix(spots);
   /* the lone aliens' kinds: 22 each, and today's six one more */
@@ -646,7 +646,7 @@ const JG_DECK = {
   rows:Array.from({ length:JG.H }, ()=> JG_ROW),
   bx:0, by:0, bs:1 / 32, nat:[1, 1],
   get spawn(){ const s = jgGround().places.entry.stand; return [s.x, s.y]; },
-  occupied:(x, y)=> jgSolidAt(x, y) || !!jgBandAt(x, y) || jgFolkAt(x, y),   // (3.96) and the villages' people
+  occupied:(x, y)=> jgSolidAt(x, y) || !!jgBandAt(x, y) || jgFolkAt(x, y) || (typeof strangeTreeAt === 'function' && !!strangeTreeAt(x, y)),   // (3.96) and the villages' people; (4.39) a strange tree (39-painter.js)
   get things(){ return jgThings(); },
   /* (3.96) its 100 finds (jgFinds): the deck's prizes, as the ship's and the catacombs' are — glinting near you (ownTwinkles: jgShowFinds) */
   get prizes(){ return jgFinds(); },
@@ -687,6 +687,7 @@ function jgThings(){
   if(typeof questJungleThings === 'function') questJungleThings(list, P);   // (3.99) the tribes' barricades
   if(typeof hutJungleThings === 'function') hutJungleThings(list, P);       // (4.25) a door into every house in the villages (31-huts.js)
   if(typeof riftJungleThings === 'function') riftJungleThings(list, P);     // (4.33) the rift at the north edge, its perimeter (36-the-return.js)
+  if(typeof painterJungleThings === 'function') painterJungleThings(list, P); // (4.39) the strange trees a Painter hides in (39-painter.js)
   _jgThings = list;
   return list;
 }

@@ -163,6 +163,16 @@ const CA_FOLK = {
     ['Power1', 'Encore', null, 'Self', 4, 5, { enchant:{ deal:1.25, turns:3 } }],
     ['Power2', 'Rousing Rhythm', null, 'Passive', 0, 18, { passive:{ speed:1, cleanseEnd:1 } }],
     ['Ultimate', 'Crescendo', 0.8, 'AOE', 8, 25]] },
+  /* (4.39) the Painter — the designer: "painter is mono fairy, wild and has an interesting moveset. he can paint a
+     crosshair … onto an enemy monster with his power[1] that grants +20% crit chance against that monster for 5 turns, and
+     paint a target board … that lasts 5 turns with his ultimate that has a 75% chance of taking a hit for the partner
+     monster even on moves that pierce evasion"; "his power2 is 'imitation' - copies 3 buffs on the enemies' side to your
+     own side". Their workings: 39-painter.js. Not one of the bands' captives: he hides in the jungle's strange trees. */
+  painter:        { name:'Painter', tier:'wild', types:['Fairy'], evo:[], glyph:'画', color:'#cfc79a', moves:[
+    ['Basic', 'Brush Flick', 0.25, 'Single', 2, 1],
+    ['Power1', 'Crosshair', null, 'Single', 4, 5, { crosshair:{ crit:0.2, turns:5 } }],
+    ['Power2', 'Imitation', null, 'Self', 4, 18, { imitate:{ n:3 } }],
+    ['Ultimate', 'Target Board', null, 'Self', 8, 25, { targetBoard:{ chance:0.75, turns:5 } }]] },
   mantis:         { name:'Mantis', tier:'wild', types:['Grass', 'Psychic'], evo:[115], evoMult:1.5, glyph:'螳', color:'#e7809e', citizen:true, moves:[
     ['Basic', 'Petal Scythe', 0.25, 'Single', 2, 1],
     ['Power1', 'Sleep Pollen', 0.4, 'AOE', 4, 5, { sleepHit:0.2 }],
@@ -563,6 +573,32 @@ function caPaintTick(now){
   }
   CA_P.raf = requestAnimationFrame(caPaintTick);
 }
+/* (4.39) The designer: "the tribes' homes have the same issue of the character not being obscured by 2 tile-tall objects.
+   could we make this the rule that when the character can walk on the upper tile of a 2-tile object, the character and
+   any companions go translucent please?" (4.41) …and of 4.39's, which faded the whole figure: "only the parts that overlap
+   should be made translucent. the oar handles barely cover the sprite yet the whole sprite is now translucent." So,
+   indoors (a room of the castle's, a home, a hut, a lodge, the ramparts), whatever stands `tall` squares or more is one of
+   the things you walk behind (CA_BEHIND_KINDS): drawn again over whoever stands behind it, you, Lucesco and whoever
+   follows you faded through it (caPaintOver, caSeeCut: CA_BEHIND.cut) — only where it covers you. caUpperSet: the open
+   squares behind such things (for the tests). */
+const CA_UPPER = { tall:1.85, cover:0.5, wide:0.35 };
+function caTallIndoors(m, d){ return !!(m && m.room && d && d.h >= CA_UPPER.tall && !CA_BEHIND_KINDS.has(d.kind)); }
+function caUpperSet(m){
+  if(!m) return new Set();
+  if(m._upper) return m._upper;
+  const set = new Set();
+  if(m.room && m.deco) m.deco.forEach(d=>{
+    if(!caTallIndoors(m, d)) return;
+    const base = Math.floor(d.z != null ? d.z : d.y + d.h);           // the row it stands in
+    for(let y = Math.floor(d.y); y <= base - 1; y++) for(let x = Math.floor(d.x); x <= Math.ceil(d.x + d.w) - 1; x++){
+      if(caSolidCode(caAt(m, x, y))) continue;
+      const vy = Math.min(y + 1, d.y + d.h) - Math.max(y, d.y), vx = Math.min(x + 1, d.x + d.w) - Math.max(x, d.x);
+      if(vy >= CA_UPPER.cover && vx >= CA_UPPER.wide) set.add(x + ',' + y);
+    }
+  });
+  return (m._upper = set);
+}
+function caUpperAt(m, p){ return !!(p && caUpperSet(m).has(p.x + ',' + p.y)); }
 function caSpr(key){
   const A = CA_P.atlas || (CA_P.atlas = new Map());
   let c = A.get(key);
@@ -629,9 +665,10 @@ function caPaintOver(m, k, ox, oy, x0, y0, x1, y1, dpr, now){
   if(gb) gb.clearRect(0, 0, bh.width, bh.height);
   let any = false, anyB = false;
   m.deco.forEach(d=>{
-    if(!CA_OVER_KINDS.has(d.kind) && !CA_BEHIND_KINDS.has(d.kind)) return;
+    const tall = caTallIndoors(m, d);                                   // (4.41) indoors, two squares tall: one you walk behind
+    if(!tall && !CA_OVER_KINDS.has(d.kind) && !CA_BEHIND_KINDS.has(d.kind)) return;
     if(d.x + d.w < x0 - 1 || d.x > x1 + 1 || d.y + d.h < y0 - 1 || d.y > y1 + 1) return;
-    const low = CA_BEHIND_KINDS.has(d.kind), c = low ? gb : g;
+    const low = tall || CA_BEHIND_KINDS.has(d.kind), c = low ? gb : g;
     if(!c) return;
     const base = Math.floor(d.z != null ? d.z : d.y + d.h);           // the row it stands in
     const sx0 = Math.max(x0, Math.floor(d.x)), sx1 = Math.min(x1, Math.ceil(d.x + d.w) - 1);
@@ -671,7 +708,7 @@ function caSeeCut(g, dpr, cut){
   });
   g.globalCompositeOperation = 'source-over';
 }
-function caSeeEls(){ return ['walkYou', 'caLion'].map(id=> document.getElementById(id)).filter(Boolean); }
+function caSeeEls(){ return ['walkYou', 'caLion'].map(id=> document.getElementById(id)).filter(Boolean).concat([...document.querySelectorAll('.walk-ent.inv-follow')]); }   // (4.41) and whoever follows you
 /* (3.97) strings of little flags, sagging, swaying a little; says whether any was in view */
 const CA_FLAGS = ['#e8414f', '#f2c23a', '#3c6fc4', '#3f9d5a', '#f07aa6', '#ffffff'];
 function caBunting(g, strings, k, ox, oy, x0, y0, x1, y1, now){
@@ -736,7 +773,7 @@ function caPetals(g, m, k, ox, oy, x0, y0, x1, y1, now){
 }
 /* where you and Lucesco are drawn now (to the pixel, mid-step too): a change redraws the layer */
 function caSeeKey(){
-  if(!CA_P.overAny) return '';
+  if(!CA_P.overAny && !CA_P.behindAny) return '';                     // (4.41) the faded ones follow you as closely
   return caSeeEls().map(el=>{ const r = el.getBoundingClientRect(); return Math.round(r.left) + ',' + Math.round(r.top); }).join(';');
 }
 /* the seams between squares: water's stone rim, the shade a wall or a hedge throws to the south */
@@ -2834,7 +2871,7 @@ function caLook(what){
   }
   const L = {
     well:[`A wishing well. You drop a pebble in and make a wish. Far below, it goes <i>plink</i>.`, ['lion', `<b>"What did you wish for? …No, don't tell me. Then it won't come true."</b>`]],
-    board:[`📜 <b>CASTLE NOTICES</b><br>• <b>The Tavern</b> — rest by the fire.<br>• <b>The Record Store</b> — music for every journey.<br>• <b>The Fairybunnies' stall</b> — special bargains, this week only!<br>• <b>The Painter</b> — portraits coming soon!<br>• From the walls, by order of the Commander: <i>"Do not get in the patrols' way."</i>`],
+    board:[`📜 <b>CASTLE NOTICES</b><br>• <b>The Tavern</b> — rest by the fire.<br>• <b>The Record Store</b> — music for every journey.<br>• <b>The Fairybunnies' stall</b> — special bargains, this week only!<br>• <b>The Painter</b> — portraits, ten silver medals!<br>• From the walls, by order of the Commander: <i>"Do not get in the patrols' way."</i>`],
     fountain:[`The grand fountain. A golden fairy holds a star high above the spray, and coins glitter at the bottom of the basin.`],
     hearth:[`The fire crackles and pops. The whole room smells of pine wood and cinnamon buns.`],
     easel:[`A half-finished painting of the grand fountain, still wet. Beside it, a row of blank canvases, waiting.`],
@@ -3256,6 +3293,7 @@ function caCommanderTalk(){
 }
 /* the painter, home now with his paints: his portraits are still to come */
 function caPainterTalk(){
+  if(typeof ptPainterTalk === 'function') return ptPainterTalk();          // (4.38) his shop open: portraits (38-portraits.js)
   return caLines([['painter', caTurn('painter', [
     `<b>"Ah, visitors! Forgive the mess — my paints only arrived this morning."</b>`,
     `<b>"Portraits! Soon I shall paint portraits. Come back when my canvases are ready."</b>`,
@@ -3339,6 +3377,7 @@ function caCss(){
   .ca-ground{ position:absolute; inset:0; width:100%; height:100%; display:block; z-index:0; pointer-events:none; }
   .ca-over{ position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; z-index:2; }   /* over the world (z-index 1), under the stage's buttons */
   .ca-behind{ position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; z-index:2; }   /* (4.08) the low things over you, under .ca-over (before it in the page) */
+
   /* (3.97) the market's people: a word over a head, sitting on a bench, a busker's notes */
   .walk-ent.ca-walker .ca-bub{ position:absolute; left:50%; bottom:122%; translate:-50% 0; z-index:5; pointer-events:none; white-space:nowrap;
     background:#fffdf6; color:#4a3a2a; border-radius:10px; padding:2px 7px; font:800 calc(var(--wt, 40px) * .26)/1.25 system-ui, sans-serif;
