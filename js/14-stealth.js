@@ -943,6 +943,7 @@ function cataPainting(d){
   return null;
 }
 function paintCatacomb(d){
+  if(typeof R5ART !== 'undefined' && R5ART.handles(d)) return '';   // (4.44) drawn on its own canvas now (40-r5-art.js)
   const own = cataPainting(d);
   if(own) return own;
   if(_cataArt[d.key]) return _cataArt[d.key];

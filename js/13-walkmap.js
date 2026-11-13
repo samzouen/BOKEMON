@@ -893,6 +893,8 @@ function renderWalkDeck(id){
   if(lock && lock.auto && !ui.sceneRunning) lock.auto();
   /* A deck with more going on (the catacombs' guards and their light) sets it
      up once everything else is in place. */
+  /* (4.44) Region 5's places, drawn at the screen's own sharpness on a canvas under the walk (40-r5-art.js) */
+  if(typeof deckArtStart === 'function') deckArtStart(world, d);
   if(d.onRender) d.onRender(world, d);
 }
 /* What you look like on a deck: yourself — or, where a deck says so, someone

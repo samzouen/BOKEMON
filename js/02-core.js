@@ -95,7 +95,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.42';
+const GAME_VERSION = '4.47';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',

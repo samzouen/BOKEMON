@@ -2050,12 +2050,18 @@ function renderCatacombs(){
     return left ? `${left} of the Family on watch${where}` : `Nobody left on watch today${where}`;
   };
   const all = [...R5_FLOORS, ...R5_FLOORS_T2, ...R5_FLOORS_T3];
+  /* (4.43) once the Whalelord knows what they feed: each floor's three charms, lit until taken */
+  const shown = r5CharmsShown();
+  if(shown) r5SenseCss();
+  const charms = f=> shown && r5FloorCharms(f).length
+    ? `<div class="r5-charm-row" aria-label="Charms: ${r5CharmLeftWord(f).toLowerCase()}">${r5CharmRow(f, 16)}<span>${r5CharmLeftWord(f)}</span></div>` : '';
   const card = f=> `
         <div class="challenge-card" data-floor="${f}">
           <div class="region-num">${all.indexOf(f) + 1}</div>
           <div style="flex:1;">
             <div class="cc-title">${escapeHtml(DECKS[f].title)}</div>
             <div class="cc-desc">${escapeHtml(note(f))}</div>
+            ${charms(f)}
           </div>
         </div>`;
   const upper = floors.filter(f=> R5_FLOORS_T2.includes(f));
@@ -2979,6 +2985,7 @@ function r5SenseCard(){
         </button>`).join('')}
       </div>
       <div class="refine-sub">Tap a monster to see it bigger. ✓ means you have caught one.</div>` : ''}
+      ${r5SenseCharms(d)}
       <button class="btn btn-ghost" id="r5SenseBack" style="margin-top:10px;">Back</button>
     </div>`;
   document.body.appendChild(ov);
@@ -3031,6 +3038,19 @@ function r5SenseCss(){
     .r5-sz-name{font-family:'Baloo 2',cursive;font-weight:800;font-size:28px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.6);}
     .r5-sz-got{font:800 14px system-ui;color:#c9f5cf;}
     .r5-sz-got.not{color:#f3e2b8;}
+    /* (4.43) the charms: lit until taken, then grey and cracked */
+    .r5-charm-ico{flex:none;display:block;filter:drop-shadow(0 0 2px rgba(110,255,200,.95)) drop-shadow(0 0 5px rgba(170,110,255,.8));}
+    .r5-charm-ico.taken{filter:grayscale(1) brightness(.8);opacity:.5;}
+    .r5-charm-hud{position:absolute;left:8px;top:48px;z-index:8;display:flex;align-items:center;gap:4px;
+      background:rgba(244,236,216,.9);border:1px solid var(--line);border-radius:10px;padding:4px 7px 4px 8px;
+      font:800 11px/1 system-ui;color:var(--ink-soft);pointer-events:none;}
+    .r5-charm-hud span{margin-right:2px;}
+    .r5-sense-charm{margin-top:12px;text-align:left;}
+    .r5-sense-charms{display:flex;align-items:center;justify-content:center;gap:6px;margin:8px 0 2px;
+      font:700 12px/1.2 system-ui;color:var(--ink-soft);}
+    .r5-sense-charms span{margin-left:4px;}
+    .r5-charm-row{display:flex;align-items:center;gap:4px;margin-top:5px;font:700 12px/1 system-ui;color:var(--ink-soft);}
+    .r5-charm-row span{margin-left:3px;}
   `;
   document.head.appendChild(st);
 }
@@ -3052,6 +3072,7 @@ function r5FloorRender(world, d){
   r5PaintDroppedCharms(world, d);                 // (3.43) a charm on the floor where its man stood
   r5WispRender(d);                                // (3.02) the little light, where it waits
   r5SenseButton(d);                               // (3.35) the Whalelord's "Sense monsters"
+  r5CharmHud(d);                                  // (4.43) this floor's three charms, under it
   /* (3.18) under the villa: the first time on each floor, its scene; after
      that Nino at his stop, then the floor's word as on any other */
   if(d.under){
@@ -4583,6 +4604,7 @@ function renderOldTownZone(){
    down in the corner. Seeded by position, so it never shimmers. */
 const _churchArt = {};
 function paintChurch(d){
+  if(typeof R5ART !== 'undefined' && R5ART.handles(d)) return '';     // (4.47) drawn as the castle is: 40-r5-art.js
   const own = cataPainting(d);
   if(own) return own;
   if(_churchArt[d.key]) return _churchArt[d.key];
@@ -9954,7 +9976,7 @@ function r5CharmCount(){ return r5Charms().taken.filter(k=> R5_CHARM_CHAMBERS.so
 /* The siphons still up: 3 until six are taken, 2 until twelve, 1 until all
    eighteen — none once the hold is broken. */
 function r5SiphonsUp(){
-  if(r5().holdBroken) return [];
+  if(r5TowerDone()) return [];                    // (4.44) the tower won: nothing left to feed
   const n = r5CharmCount();
   return [1, 2, 3].filter(s=> n < (4 - s) * R5_CHARMS_PER_SIPHON);
 }
@@ -9969,7 +9991,13 @@ function r5CharmTag(n){ return r5CharmCountdown(n).join('-'); }
    drain, 12 for the theft, 18 for the curse (each pill's card says it). */
 function r5CharmsToBreak(s){ return Math.max(0, (4 - s) * R5_CHARMS_PER_SIPHON - r5CharmCount()); }
 /* The seventeen carried ones wake once Ugo's uniform is yours. */
-function r5CharmsAwake(){ const r = r5(); return !!r.disguise && !r.holdBroken; }
+function r5CharmsAwake(){ const r = r5(); return !!r.disguise && !r5TowerDone(); }
+/* (4.44) The designer, of 4.43's charms: "once the psychic tower is defeated you can remove the charm indicators
+   regardless of how many were left! both on the floor as well as the whalelord (charms shouldn't be on soldatos once
+   psychic tower is defeated anyhow)". The tower is done with from the moment its top floor is won — before the Fairy
+   Stone is taken and the hold on the dead breaks (r5HoldBreaks), not only after: the charms with it, carried, lying on
+   the Armoury's floor, counted on the floors and in the Whalelord's Sense, and the siphons they fed. */
+function r5TowerDone(){ const r = r5(); return !!r.holdBroken || !!(r.tower && (r.tower.beaten || []).includes(13)); }
 /* The chamber whose charm guard `id` on `deck` still carries, or null. */
 function r5CharmChamberOf(deck, id){
   if(!r5CharmsAwake()) return null;
@@ -9979,7 +10007,7 @@ function r5CharmChamberOf(deck, id){
 function r5CharmBearer(deck, id){ return !!r5CharmChamberOf(deck, id); }
 /* The charm lying on `deck`'s floor, until it is picked up: [{ ch, x, y }]. */
 function r5CharmDropped(deck){
-  if(r5().holdBroken) return [];
+  if(r5TowerDone()) return [];                    // (4.44) nor the one in the Armoury, once the tower is won
   const c = r5Charms();
   return R5_CHARM_CHAMBERS.filter(ch=> ch.deck === deck && ch.floor && !c.taken.includes(ch.key))
     .map(ch=> ({ ch, x:ch.floor[0], y:ch.floor[1] }));
@@ -10078,12 +10106,95 @@ function r5SiphonRevealLines(){
     `<b>"Three siphons. The first curses us every round, and makes them so hard to hit and so hard to hurt that we would barely scratch them. The second takes everything we build up and hands it to them. The third drinks a third of our strength every turn and gives it to them — and muddles us before we even start."</b>`,
     `<b>"Six charms feed each one. Six-six-six! Take six and the drain breaks; six more, the theft; six more, the curse."</b>` +
       (n ? `<br><br><b>"We have taken ${n} already. That leaves ${r5CharmTag(n)}."</b>` : ''),
+    /* (4.43) and what to do about it */
+    `<b>"Those charms are the source of its power — and every one of them is down in the catacombs. Three on each floor where the Family's men stand and fight, one in each part of it. Find them, and break them."</b>`,
     `<b>"We can fight them now, if you like. I would not."</b>`,
   ];
 }
 async function r5SiphonReveal(){
   if(!r5SiphonsUp().length || !r5Once('siphonReveal')) return;
   for(const html of r5SiphonRevealLines()) await sceneSay([faceMon('whalelord')], whaleName(), html);
+  toast('Each catacomb floor now shows its three charms. Sense monsters tells you when one is close.');
+}
+
+/* ============================================================
+   EACH FLOOR'S CHARMS, SHOWN (4.43)
+   The designer: "once figlio grants access to the hilltop and the whalelord senses that the tower is draining the
+   energies of ghosts in the catacombs to fuel its incredible power and advises the player to find and destroy the
+   source of its power in the catacombs, please add three charm indicators to each level of the catacombs (levels
+   1-8). Each one is cleared when a soldier of that level is defeated. in addition, sense monsters should also sense
+   whether a charm is present in the room from that point on." Of levels 3 and 5, the Bone Halls and the Garrison
+   (evade floors: nobody there can be beaten), the designer's pick: no charms there, the count still 6-6-6; and a
+   charm clears when the man carrying it is beaten, as since 3.43.
+   From the Whalelord's word in the tower (r5SiphonReveal) until the tower is won (4.44: r5TowerDone): each of the six floors'
+   three charms — a little stone eye each, lit until it is taken, grey and cracked after — on its card in the
+   Catacombs list and on the floor itself and its side rooms (under the Whalelord's Sense, top left); and his Sense
+   says whether a charm is in the room you are in.
+   ============================================================ */
+function r5CharmsShown(){ return !!r5().said.siphonReveal && r5CharmsAwake(); }
+/* the floor a deck belongs to: a side room's is the floor it opens off */
+function r5CharmFloorOf(deck){
+  if(R5_ROOMS[deck]) return deck;
+  return Object.keys(R5_ROOMS).find(f=> R5_ROOMS[f].includes(deck)) || deck;
+}
+/* a floor's charms, its parts in order: [{ ch, taken }] (none on the Bone Halls or the Garrison) */
+function r5FloorCharms(floor){
+  const c = r5Charms();
+  return R5_CHARM_CHAMBERS.filter(ch=> r5CharmFloorOf(ch.deck) === floor).map(ch=> ({ ch, taken:c.taken.includes(ch.key) }));
+}
+/* one charm, drawn: a stone eye on a cord, lit — or, once taken, grey and cracked */
+function r5CharmIcon(px, taken){
+  return `<svg class="r5-charm-ico${taken ? ' taken' : ''}" width="${px}" height="${px}" viewBox="0 0 24 24" aria-hidden="true">` +
+    `<path d="M9.2 5.6C9 2.6 15 2.6 14.8 5.6" fill="none" stroke="#a3824a" stroke-width="1.5" stroke-linecap="round"/>` +
+    `<circle cx="12" cy="14" r="9" fill="#2350a8" stroke="#e0bd66" stroke-width="1.3"/>` +
+    `<circle cx="12" cy="14" r="6.1" fill="#f6f2e4"/><circle cx="12" cy="14" r="4.2" fill="#5aa8e2"/>` +
+    `<circle cx="12" cy="14" r="2.2" fill="#12122a"/><circle cx="10.9" cy="12.8" r=".85" fill="#fff"/>` +
+    (taken ? `<path d="M6.2 8.6l4.6 4.3-2.3 2.4 5.6 6.4" fill="none" stroke="#2a2a30" stroke-width="1.5" stroke-linejoin="round"/>` : '') +
+    `</svg>`;
+}
+function r5CharmRow(floor, px){ return r5FloorCharms(floor).map(o=> r5CharmIcon(px, o.taken)).join(''); }
+/* how many of a floor's are still out, said */
+function r5CharmLeftWord(floor){
+  const all = r5FloorCharms(floor), left = all.filter(o=> !o.taken).length;
+  return left ? `${left} of ${all.length} left` : 'All taken';
+}
+/* on the floor: under the Whalelord's Sense, top left */
+function r5CharmHud(d){
+  const stage = $('#walkStage');
+  const old = document.getElementById('r5CharmHud');
+  const floor = d && r5CharmFloorOf(d.key);
+  if(!stage || !d || !r5SenseDue(d) || !r5CharmsShown() || !r5FloorCharms(floor).length){ if(old) old.remove(); return null; }
+  r5SenseCss();
+  const el = old || document.createElement('div');
+  el.id = 'r5CharmHud';
+  el.className = 'r5-charm-hud';
+  el.setAttribute('role', 'img');
+  el.setAttribute('aria-label', `Charms on this floor: ${r5CharmLeftWord(floor)}`);
+  el.innerHTML = `<span>Charms</span>${r5CharmRow(floor, 18)}`;
+  if(!old) stage.appendChild(el);
+  return el;
+}
+/* What the Sense says of them, in the room you are in: each part of it whose charm is still out — carried, or (the
+   Armoury's) lying on the floor — or that there is none. '' before his word in the tower, or once the hold breaks. */
+function r5SenseCharms(d){
+  if(!d || !r5CharmsShown()) return '';
+  const room = R5_ALL_ROOMS.includes(d.key), here = room ? 'in this room' : 'on this floor';
+  const c = r5Charms(), chs = R5_CHARM_CHAMBERS.filter(ch=> ch.deck === d.key);
+  const out = chs.filter(ch=> !c.taken.includes(ch.key));
+  const floor = r5CharmFloorOf(d.key), row = r5FloorCharms(floor).length
+    ? `<div class="r5-sense-charms">${r5CharmRow(floor, 22)}<span>${room ? 'This floor and its rooms' : 'This floor'}: ${r5CharmLeftWord(floor).toLowerCase()}</span></div>` : '';
+  let say;
+  if(!chs.length) say = r5FloorCharms(floor).length ? `"I sense no charm ${here}."`
+                                                    : `"I sense no charm ${here}. They only gave them to the men on the floors where they stand and fight."`;
+  else if(!out.length) say = chs.length > 1 ? `"No charms left ${here}. We have taken all ${chs.length}."` : `"No charm ${here} any more. We took it."`;
+  else if(chs.length > 1){
+    const part = ch=> ch.name.split(' — ')[1] || ch.name;
+    const names = out.map(part), list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0];
+    say = `"${out.length === 1 ? 'A charm' : (out.length === 2 ? 'Two charms' : 'Three charms')} ${here}: ${list}. Whoever carries one glows when I am near him."`;
+  }
+  else if(out[0].floor) say = `"And a charm — lying on the floor somewhere ${here}, not carried."`;
+  else say = `"And a charm ${here}. One of the men here is carrying it — he glows when I am near him."`;
+  return `<div class="r5-sense-say r5-sense-charm"><b>${say}</b></div>${row}`;
 }
 /* What the challenge says about them, while any is up. */
 function r5SiphonNote(up){
@@ -10572,6 +10683,7 @@ async function r5HoldBreaks(){
    — and the stairs, down at the bottom and up at the top. */
 const _towerArt = {};
 function paintTower(d){
+  if(typeof R5ART !== 'undefined' && R5ART.handles(d)) return '';     // (4.47) drawn as the castle is: 40-r5-art.js
   const own = cataPainting(d) || (d.artAlt ? cataPainting({ art:d.artAlt }) : null);
   if(own) return own;
   if(_towerArt[d.key]) return _towerArt[d.key];
@@ -11059,6 +11171,7 @@ function paintTown(d){
    racks of the Family's dark coats, the cutting table with its cloth and
    shears, two dummies, bolts of cloth, the long mirror, the lamp. */
 function paintTailor(d){
+  if(typeof R5ART !== 'undefined' && R5ART.handles(d)) return '';     // (4.47) drawn as the castle is: 40-r5-art.js
   const own = cataPainting(d);
   if(own) return own;
   if(_townArt[d.key]) return _townArt[d.key];
@@ -11200,6 +11313,7 @@ const R5_ROOM_LOOKS = {
 };
 const _roomArt = {};
 function paintRoom(d){
+  if(typeof R5ART !== 'undefined' && R5ART.handles(d)) return '';     // (4.46) drawn as the castle is: 40-r5-art.js
   const own = cataPainting(d);
   if(own) return own;
   if(_roomArt[d.key]) return _roomArt[d.key];
