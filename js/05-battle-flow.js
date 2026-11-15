@@ -982,8 +982,9 @@ function feedRecharge(words){
 }
 /* (4.09) The designer: "when the recharge meter resets, can we have the very high auto proc passives from steel, fairy
    and dragon proc immediately again if the holder is already on field?" The refined Very High stones that work by
-   themselves — Steel Aegis + / ✦ (its shields for the team), Diamond Dust + / ✦ (swept up again, its turns new) and
-   Dragon Dance + / ✦ (Mach Dragon) — carried by one of yours standing on the field work again the moment the meter
+   themselves — Steel Aegis + / ✦ (its shields for the team), Diamond Dust + (swept up again, its turns new; ✦ since
+   4.51 only with none up: dustStarRefill) and Dragon Dance + / ✦ (Mach Dragon) — carried by one of yours standing on
+   the field work again the moment the meter
    fills, rather than waiting for the carrier to come in again (a carrier on the bench still has its firing waiting for
    when it does: once a meter, as ever). What they did is said with the second wind (secondWindMsg). */
 function rechargeFieldPassives(){
@@ -991,6 +992,9 @@ function rechargeFieldPassives(){
   if(!b || typeof livingField !== 'function' || typeof applyStonePassives !== 'function') return [];
   const said = [];
   livingField().forEach(m=>{ said.push(...applyStonePassives(m, { refill:true, quiet:true })); });
+  /* (4.51) a ✦ Diamond Dust: renews none already up — with none up, one falls, from the field or the bench */
+  const star = typeof dustStarRefill === 'function' ? dustStarRefill() : '';
+  if(star) said.push(star);
   return said;
 }
 
@@ -1013,14 +1017,14 @@ function secondWindSoon(){
    named one by one until 4.14). */
 function secondWindMsg(){
   /* (3.59) …and a refined stone's free cast on taking the field (Diamond
-     Dust + / ✦ above all: bring its carrier in to renew the dust) */
+     Dust + above all: bring its carrier in to renew the dust; ✦ since 4.50 waits for no arrival) */
   /* (4.09) those whose carriers stand on the field have worked already (rechargeFieldPassives): what they did; the rest,
      on the bench, as they come in */
   const b = ui.battle, did = (b && b.refillSaid) || [];
   if(b) b.refillSaid = null;
   const out = new Set(typeof livingField === 'function' ? livingField().map(m=> m.uid) : []);
   const free = [...new Set(battleParty().concat(bondedCompanions()).filter(m=> m && !out.has(m.uid)).flatMap(m=> [m.equippedStone, m.power1Stone])
-    .filter(st=> st && st.tier === 'veryhigh' && (veryHighDef(st.type, stonePlus(st)) || {}).passive).map(st=> stoneDisplayName(st)))];
+    .filter(st=> st && st.tier === 'veryhigh' && (veryHighDef(st.type, stonePlus(st)) || {}).passive && !(st.type === 'Fairy' && stonePlus(st) === 2)).map(st=> stoneDisplayName(st)))];   // (4.50) a ✦ dust waits for no arrival (dustPreTurn)
   const freeLine = free.length ? ` ${free.join(' and ')} work${free.length === 1 ? 's' : ''} again as ${free.length === 1 ? 'its carrier comes' : 'their carriers come'} in.` : '';
   const didLine = did.length ? '<br>' + did.join('<br>') : '';
   /* (4.12) The designer: "keep the name Second Wind [a talent to come], but let the recharge meter's one be renamed
@@ -1455,7 +1459,8 @@ function castOvergrowth(mon, mv){
   const b = ui.battle, og = overgrowthState();
   og.stacks = Math.min(FOREST_GIFT.maxStacks, (og.stacks || 0) + 1);
   og.cast = b.roundNo || 0;
-  playSfx('power_up');                             // (3.51) the Forest Fairy's ATK up: the power-up
+  /* (4.48) silent: the designer, "remove Forest Fairy's Overgrowth sound" (the power-up stays for items and the
+     overworld). Its art still plays. */
   playEffect(mv.name, { type:'Grass' });
   logBattle(`${displayName(mon)} used ${mv.name} (quick): ${og.stacks} of ${FOREST_GIFT.maxStacks}`);
   b.phase = 'player';
@@ -1625,16 +1630,18 @@ function resolveBattleMove(mv, target, results, opts){
                                                 : moveFactor(mv.slot, mv.mult, mv.words, correct);
     if(f > 0) return muddledSelfStrike(mv, mon, f);
   }
-  /* Their Diamond Dust: nothing of yours takes hold while it lasts. Say so,
+  /* Their Diamond Dust: (4.48) what its count stops this turn does not take hold. Say so,
      rather than letting the cast go quiet. A quick cast costs no turn, so the
      turn is still yours; anything else spends it, as it would have anyway.
      (3.09) Not the Haunting Aria: a state he goes into, which no dust stops. */
   const castOnly = (mv.shell && mv.mult == null) || mv.tachy || mv.grant ||
                    mv.charm || mv.disrupt || mv.soul || mv.clones || mv.dot || mv.overpower;   // (3.55) Overpower too
-  if(castOnly && dustBlocks('player') && correct >= mv.words){
+  /* (4.48) the dust's count: the move's kind against it (a grant's stances meet it one by one, applyPassiveGrant) */
+  const castKind = (mv.shell && mv.mult == null) ? 'shell' : mv.tachy ? 'tachy' : mv.charm ? 'charm' : mv.disrupt ? 'disrupt'
+                 : mv.soul ? 'steelSoul' : mv.clones ? 'clones' : mv.dot ? 'dot' : mv.overpower ? 'overpower' : null;
+  if(castOnly && castKind && correct >= mv.words && dustStop('player', castKind, { quiet:!!(mv.soul || mv.tachy) })){   // (3.77) a turn spent on it counts for Unstable Magic; a quick cast, not spent, does not
     playSfx('move_miss');
-    battleMsg(`✨ Their diamond dust scatters your ${mv.name} — nothing takes hold.`);
-    if(!(mv.soul || mv.tachy)) dustStopped('player', 1);   // (3.77) a turn spent on it: Unstable Magic counts it (it bursts at the next step)
+    battleMsg(`✨ Their diamond dust scatters your ${mv.name} — nothing takes hold.`);   // (3.77) Unstable Magic counts it (dustStop), bursting at the next step
     if(mv.soul && ui.battle.usedSoul) ui.battle.usedSoul[mon.uid] = false;   // not spent, as a stone is not (2.93)
     if(mv.tachy) spendTachy(mon, false);                                      // (3.63) nor Tachypsychia
     if(mv.soul || mv.tachy){ ui.battle.phase = 'player'; return renderBattle(); }
@@ -3163,7 +3170,7 @@ function enemyIceBarrier(e, move, then){
    has none up, your dust would not scatter it, something of yours could
    dodge them — and it has not been tried this turn. */
 function enemyQuickStargazer(e){
-  if(!e || e._forcedMove || (e._copyQueue && e._copyQueue.length) || getESide('stargaze') || dustBlocks('enemy')) return null;
+  if(!e || e._forcedMove || (e._copyQueue && e._copyQueue.length) || getESide('stargaze') || dustBlocks('enemy', 'stargaze')) return null;
   if(e._gazeRound === roundNo()) return null;
   const gz = (MOVES[e.species] || []).find(m=> m[6] && m[6].stargaze && (e.level || 1) >= m[5]);
   if(!gz || !livingField().some(m=> playerEvasionFrom(e, m) > 0 || untouchable(m))) return null;
@@ -3190,7 +3197,7 @@ function foeSupportPick(e){
   /* (3.36) a Firefox's spell: the strongest it knows, while its side has none
      as strong up (and your dust would not scatter it) */
   const spells = rows.filter(r=> r[6].enchant).sort((a, b)=> ((b[6].enchant.deal || 0) - (a[6].enchant.deal || 0)) || ((b[6].enchant.burn || 0) - (a[6].enchant.burn || 0)));   // (3.87) Fiery Enchantment first
-  if(spells.length && !dustBlocks('enemy')){
+  if(spells.length && !dustBlocks('enemy', 'enchant')){
     const up = getESide('enchant'), top = spells[0][6].enchant;
     if(!up || (up.deal || 0) < top.deal || ((up.burn || 0) < (top.burn || 0))) return spells[0];
   }
@@ -3206,8 +3213,8 @@ function foeSupportPick(e){
     }
     if(x.mend && livingEnemies().some(m=> hurt(m) < 0.6)) return r;
     if(x.transfuse){ const p = partnerOf('enemy', e); if(p && p !== e && hurt(p) < 0.5 && hurt(e) > 0.5) return r; continue; }
-    if(x.kindle && !getESide('kindle') && !dustBlocks('enemy')) return r;
-    if(x.gallop && !getESide('gallop') && !dustBlocks('enemy')) return r;
+    if(x.kindle && !getESide('kindle') && !dustBlocks('enemy', 'kindle')) return r;
+    if(x.gallop && !getESide('gallop') && !dustBlocks('enemy', 'gallop')) return r;
     if(x.glitch && Math.random() < 0.35) return r;
   }
   return null;
@@ -4008,7 +4015,7 @@ function checkThresholdStuns(){
         const mon = activeMon();
         if(mon && mon.currentHp > 0 && !getPStatus(0,'stunned')){
           if(ironWillHolds(mon, { type:'stunned' })){ floatOver(mon, 'IRON WILL'); setTimeout(()=> battleMsg(`💪 ${SPECIES[e.species].name} howls — ${displayName(mon)}'s Iron Will does not flinch.`), 500); return; }
-          if(enemyStatusBlocked('stunned')){ battleMsg('✨ The diamond dust turns the howl aside.'); return; }   // (it went on to say "stunned")
+          if(enemyStatusStopped('stunned')){ battleMsg('✨ The diamond dust turns the howl aside.'); return; }   // (it went on to say "stunned")
           setPStatus(0, { type:'stunned', turnsLeft:2 });
           renderStatusBadges();
           setTimeout(()=> battleMsg(`💫 ${SPECIES[e.species].name} howls — ${displayName(mon)} is stunned!`), 500);
@@ -4058,17 +4065,23 @@ function resolveStatusMove(mv, mon, target, correct){
   /* Their Diamond Dust scatters any stone of yours — except your own dust,
      which sweeps theirs away first. The stone is not spent, and a cast is
      instant, so the turn is still yours. */
-  if(mv.stoneType !== 'Fairy' && dustBlocks('player')){
-    /* (3.77) the designer: "buffs/debuffs that are prevented by an enemy's
-       diamond dust can still be deliberately triggered for damage" — with an
-       Unstable Magic holder of yours standing, the stone is spent into the
-       dust and its magic bursts at once (once a stone, as a cast that took
-       hold would be; still your turn). With none, as before: not spent. */
-    const burst = detonateHolders().length > 0;
+  /* (4.48) A stone of yours meets their dust's count as its effect would form: stopped if it has a try left for its
+     kind this turn (or took that kind already), and the stone is not spent — still your turn, so another can follow
+     it in (baiting is allowed). A Curse with a working Binding Curse, and a Steel Aegis with Tempering, go through.
+     Your own Diamond Dust sweeps theirs first, unless theirs swept yours this turn (dustCastBarred). */
+  const vhKind = veryHighStatusKey(mv.stoneType);
+  /* (3.77) the designer: "buffs/debuffs that are prevented by an enemy's
+     diamond dust can still be deliberately triggered for damage" — with an
+     Unstable Magic holder of yours standing, the stone is spent into the
+     dust and its magic bursts at once (once a stone, as a cast that took
+     hold would be; still your turn). With none, as before: not spent, and
+     not counted (it could be tried again at once). */
+  const burst = detonateHolders().length > 0;
+  if(mv.stoneType === 'Fairy' ? dustCastBarred('player') : dustStop('player', vhKind, { quiet:!burst })){
+    if(mv.stoneType === 'Fairy' && burst) dustStopped('player');
     if(!burst) ui.battle.usedVeryHigh[mon.uid] = false;
     playSfx('move_miss');
     if(burst){
-      dustStopped('player', 1);
       const det = detonateNow();
       renderStatusBadges();
       logBattle(`${displayName(mon)} used ${mv.name} (Very High, instant) — scattered by their dust: Unstable Magic`);
@@ -4366,7 +4379,7 @@ function enemyMoveFor(e){
     /* (2.93) it opens with Steel Soul — a quick cast, once a battle — and
        swings its Max in the same action. Not while your Diamond Dust is up:
        it would only be scattered, so it waits for the dust to settle. */
-    if(!e._soulUsed && !dustBlocks('enemy')){
+    if(!e._soulUsed && !dustBlocks('enemy', 'steelSoul')){
       const ss = (MOVES[e.species] || []).find(m=> m[6] && m[6].soul && e.level >= m[5]);
       if(ss) return ss;
     }
@@ -4511,7 +4524,7 @@ function enemyActs(i, e){
 
   /* A trainer's stone, cast on its first action. Under your dust it waits —
      except Diamond Dust itself, which sweeps yours away first. */
-  if(e.stone && e.stone.cast && !e.stone.used && (e.stone.type === 'Fairy' || !dustBlocks('enemy'))){
+  if(e.stone && e.stone.cast && !e.stone.used && (e.stone.type === 'Fairy' ? !dustCastBarred('enemy') : !dustBlocks('enemy', veryHighStatusKey(e.stone.type)))){   // (4.48) your dust's count; their Binding Curse's Curse and Tempering's Aegis go through
     e.stone.used = true;
     const msg = castEnemyVeryHigh(e, e.stone.type, e.stone.plus || 0);
     renderStatusBadges();
@@ -4522,7 +4535,7 @@ function enemyActs(i, e){
   /* (3.16) Caladrius's Ice Barrier is a quick cast now, as yours is: up
      whenever it is down (and your dust would not scatter it), and then its
      action goes on. Not mid-way through a Copycat's queue. */
-  if(e.species === 'caladrius' && !e._forcedMove && !getESide('iceBarrier') && !dustBlocks('enemy')){
+  if(e.species === 'caladrius' && !e._forcedMove && !getESide('iceBarrier') && !dustBlocks('enemy', 'iceBarrier')){
     const ib = (MOVES.caladrius || []).find(m=> m[6] && m[6].iceBarrier && (e.level || 1) >= m[5]);
     if(ib) return enemyIceBarrier(e, ib, ()=> enemyActs(i, e));
   }
@@ -4547,7 +4560,7 @@ function enemyActs(i, e){
       if(op && e.ai !== 'tricer') castOverpower(e, op[6].overpower);
     }
     const ss = kit.find(m=> m[6].soul);
-    if(ss && e.ai !== 'ankylo' && !e._soulUsed && !dustBlocks('enemy')) fierceSoul = ss;
+    if(ss && e.ai !== 'ankylo' && !e._soulUsed && !dustBlocks('enemy', 'steelSoul')) fierceSoul = ss;
   }
   /* Removed: a call to initiativeMoveFor(), which never existed as a function.
      It was guarded by b.turnOrder, which the per-monster initiative rewrite
@@ -4618,7 +4631,7 @@ function enemyActs(i, e){
     const list = MOVES.horned_lynx || [];
     const pounce = list.find(m=>m[0]==='Max' && e.level >= m[5]) || list.find(m=>m[0]==='Ultimate' && e.level >= m[5]);
     const stalk = list.find(m=>m[6] && m[6].grant && m[6].grant.lurk && e.level >= m[5]);
-    move = (!e.lurk && stalk && !dustBlocks('enemy')) ? stalk : (pounce || move);
+    move = (!e.lurk && stalk && !dustBlocks('enemy', 'lurk')) ? stalk : (pounce || move);
   }
   /* (3.15) the psychics' support moves, when each is worth it (foeSupportPick). */
   if(PSY_SUPPORTERS.has(e.species) && !e._forcedMove){
@@ -4636,7 +4649,7 @@ function enemyActs(i, e){
     const list = MOVES.mime || [];
     const by = n=> list.find(m=> m[1] === n && e.level >= m[5]);
     const wall = by('Invisible Wall'), copy = by('Copycat Max') || by('Copycat');
-    if(wall && !e._mimeWalled && !dustBlocks('enemy')){ move = wall; e._mimeWalled = true; }
+    if(wall && !e._mimeWalled && !dustBlocks('enemy', 'barrier')){ move = wall; e._mimeWalled = true; }
     else { if(copy) move = copy; e._mimeWalled = false; }
   }
   /* (3.24) The Ladybird. (3.25) The designer: "The AI should spam the max
@@ -4665,7 +4678,7 @@ function enemyActs(i, e){
     const fury = by('Pent-up Fury Max') || by('Pent-up Fury'), yawn = by('Mocking Yawn');
     if(fury && yawn){
       const taunting = livingField().some(m=>{ const t = tauntOf(m); return t && t.taunter === e; });
-      move = (!taunting && !dustBlocks('enemy')) ? yawn : fury;
+      move = (!taunting && !dustBlocks('enemy', 'taunted')) ? yawn : fury;
     }
   }
   /* (3.38) Taunted — your Hermit Sloth's Mocking Yawn: this turn its
@@ -4700,7 +4713,7 @@ function enemyActs(i, e){
      dummy told to use it included. Spent, or about to be scattered by your
      Diamond Dust (which would only send it round again), it swings its Max,
      or its usual move, instead. */
-  if(move && move[6] && move[6].soul && (e._soulUsed || dustBlocks('enemy')))
+  if(move && move[6] && move[6].soul && (e._soulUsed || dustBlocks('enemy', 'steelSoul')))
     move = (MOVES[e.species] || []).find(m=> m[0] === 'Max' && e.level >= m[5] && m[2] != null) || e.move;
   /* Amnesia (2.97): a move it has forgotten is shut for this turn. It uses
      the best one it still remembers — or, remembering none, stands there. */
@@ -4727,7 +4740,7 @@ function enemyActs(i, e){
      it): quick, so its action goes on — or, standing already (or about to be
      scattered by your dust), Conversio instead, or its usual move. */
   if(move && move[6] && move[6].iceBarrier){
-    if(!getESide('iceBarrier') && !dustBlocks('enemy')) return enemyIceBarrier(e, move, ()=> enemyActs(i, e));
+    if(!getESide('iceBarrier') && !dustBlocks('enemy', 'iceBarrier')) return enemyIceBarrier(e, move, ()=> enemyActs(i, e));
     move = (MOVES[e.species] || []).find(m=> m[6] && m[6].conversio && (e.level || 1) >= m[5]) || e.move;
     if(move && move[6] && move[6].conversio) return enemyConversio(e, move[6].conversio, next);
   }
@@ -4789,11 +4802,11 @@ function enemyActs(i, e){
     bob(document.getElementById('enemyBob-'+idx), -1);
     playEffect(move[1], { type:e.types[0], at:pid('playerBob'), from:'enemy-' + idx });
     if(ex.charm){
-      if(enemyStatusBlocked('charmed')) battleMsg(`${name} uses ${move[1]} — the diamond dust scatters the charm.`);
+      if(enemyStatusStopped('charmed')) battleMsg(`${name} uses ${move[1]} — the diamond dust scatters the charm.`);
       else { setPStatus(0, { type:'charmed', turnsLeft:(ex.charm.turns || 5) + 1, chance:ex.charm.chance || 0.20 });
              battleMsg(`💗 ${name} uses <b>${move[1]}</b> — your team is charmed, and may lose a turn!`); }
     } else {
-      if(enemyStatusBlocked('disrupt')) battleMsg(`${name} uses ${move[1]} — the diamond dust holds your signal clear.`);
+      if(enemyStatusStopped('disrupt')) battleMsg(`${name} uses ${move[1]} — the diamond dust holds your signal clear.`);
       else { setPStatus(0, { type:'disrupt', turnsLeft:ex.disrupt.turns || 5, stun:ex.disrupt.stun || 0.15 });
              battleMsg(`📡 ${name} uses <b>${move[1]}</b> — your signals are jammed: they move first, and you may seize up!`); }
     }
@@ -5238,7 +5251,7 @@ function enemyStrikeOn(ctx, step, done){
        the one it hit may land soft. */
     const sf = ex.softenHit;
     if(sf && totalTaken > 0 && Math.random() < sf.chance){
-      if(enemyStatusBlocked('softened')){ msg += ' The diamond dust holds your strength intact.'; }
+      if(enemyStatusStopped('softened')){ msg += ' The diamond dust holds your strength intact.'; }
       else { setPStatus(0, { type:'softened', turnsLeft:2, amount:sf.amount }); msg += pair ? ` ${displayName(mon)}'s next attack is weakened!` : ' Your next attack is weakened!'; }
       renderStatusBadges();
     }
@@ -5249,7 +5262,7 @@ function enemyStrikeOn(ctx, step, done){
     const stunPct = ex.stunHit || ex.paralyse || ex.stun;
     if(stunPct && totalTaken > 0 && mon.currentHp > 0 && !getPStatus(0,'stunned') && rollAny(stunPct, gotThrough)){
       if(ironWillHolds(mon, { type:'stunned' })){ floatOver(mon, 'IRON WILL'); msg += ` ${displayName(mon)}'s Iron Will — it will not be stunned!`; }
-      else if(enemyStatusBlocked('stunned')){ msg += ' The diamond dust keeps you steady.'; }
+      else if(enemyStatusStopped('stunned')){ msg += ' The diamond dust keeps you steady.'; }
       else { setPStatus(0, { type:'stunned', turnsLeft:2 }); msg += ` ${displayName(mon)} is stunned!`; }
       renderStatusBadges();
     }
@@ -5274,7 +5287,7 @@ function enemyStrikeOn(ctx, step, done){
     /* (3.26) a gaze that confuses (the Squid's Abyssal Gaze Max) */
     if(ex.confuseHit && totalTaken > 0 && mon.currentHp > 0 && !getMStatus(mon,'discombobulate') && Math.random() < (ex.confuseHit.chance || 0.25)){
       if(ironWillHolds(mon, { type:'discombobulate' })){ floatOver(mon, 'IRON WILL'); msg += ` 💪 ${displayName(mon)}'s Iron Will — it will not be muddled!`; }
-      else if(enemyStatusBlocked('discombobulate')){ msg += ' ✨ The diamond dust keeps your head clear.'; }
+      else if(enemyStatusStopped('discombobulate')){ msg += ' ✨ The diamond dust keeps your head clear.'; }
       else {
         withFocus(mon, ()=> markPlayerConfused(ex.confuseHit.ffPower || 1.0, true));
         if(getMStatus(mon,'discombobulate')) msg += ` 🌀 ${displayName(mon)} is confused — its next swing turns on its own side!`;
@@ -5336,7 +5349,7 @@ function enemyStrikeWrap(ctx){
     if(said){ renderStatusBadges(); setTimeout(()=> battleMsg(said), 900); }
   }
   /* Fiery Jaws: it takes hold, and what it has hold of does not leave. */
-  if(ex.jaws && !enemyStatusBlocked('jaws')){
+  if(ex.jaws && !enemyStatusStopped('jaws')){
     ui.battle.noFlee = true;
     setPStatus(0, { type:'jaws', turnsLeft:3 });
     livingEnemies().forEach(x=>{ if(x.elusive) pinDown(x); });   // dispel first
@@ -5358,7 +5371,7 @@ function enemyStrikeWrap(ctx){
      (its next blow lands on its partner, or itself alone). Your dust keeps it
      out. (2.88: it used to muddle their own side, and yours did nothing.) */
   const lun = ex.lunacy;
-  if(lun && Math.random() < (lun.chance || 0.25) && !enemyStatusBlocked('discombobulate')){
+  if(lun && Math.random() < (lun.chance || 0.25) && !enemyStatusStopped('discombobulate')){
     livingField().forEach(pm=> withFocus(pm, ()=> markPlayerConfused(lun.ffPower || 1.0, true)));
     renderStatusBadges();
     msg += lun.you || (lun.glow ? ' ✨ The flash leaves you seeing spots — confused!' : ' The moonlight gets into your heads!');   // (3.24) a Ladybird's Dazzle; (3.90) its own words

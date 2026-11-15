@@ -653,6 +653,7 @@ const JG_DECK = {
   ownTwinkles:true,
   get prizeLines(){ return JG_FIND_LINES; },
   nearActs:(d, p)=> jgNearActs(p),
+  padMoves:{ html:()=> jgPadHtml(), wire:(box)=> jgPadWire(box), refresh:(box, d, p)=> jgPadRefresh(box, p) },   // (4.49) his Jump, Glare and Ambush, fixed in place
   youArt:()=> jgRiding() ? jgRideArt() : null,                       // (4.03) on Lucesco's back (walkYouArt, 13-walkmap.js)
   onStep:(p, d)=> jgStep(p, d),
   onRender:(world, d)=> jgRender(world, d),
@@ -2448,10 +2449,11 @@ async function jgJump(J){
   if(!p || !J || w.busy || ui.jgAlert || ui.jgTalk || jgJumpIn()) return;
   const world = $('#walkWorld'), me = $('#walkYou'), lion = document.getElementById('jgLion');
   if(!world || !me) return;
-  releaseKeys();
+  /* (4.49) a direction held on the pad is not let go: you walk on that way as you land (walkMove waits while busy) */
   w.busy = true;
   const T = WALK_T, from = { x:p.x, y:p.y }, v = JG_DIR[J.dir];
   const faceR = v[0] ? v[0] > 0 : w.faceX === 'r';
+  w.face = J.dir;                                                          // (4.49) the way he leapt, which a held key may have chosen
   if(v[0]) w.faceX = v[0] > 0 ? 'r' : 'l';
   const ride = document.createElement('div');
   ride.className = 'walk-ent jg-ride' + (faceR ? ' face-r' : '');
@@ -2508,17 +2510,8 @@ async function jgJump(J){
   if(typeof checkPrize === 'function' && checkPrize()){ releaseKeys(); return; }   // landed on a find
   jgLook();
 }
-/* the button beside you, while you face a wall he can leap */
-function jgJumpAct(p){
-  const J = jgJumpFrom(p, walkState().face);
-  if(!J) return null;
-  const n = jgJumpIn();
-  const j = jgState();
-  if(!j.talk.jumpHint){ j.talk.jumpHint = 1; setTimeout(()=> toast('🦁 Lucesco can carry you over this wall — tap Jump!'), 50); }
-  if(n) return { key:'jgJump' + n, cls:'lion off', html:lucescoActHtml('Jump', `in ${n} step${n === 1 ? '' : 's'}`),
-                 act:()=> toast(`🦁 Lucesco is catching his breath — ${n} more step${n === 1 ? '' : 's'}.`) };
-  return { key:'jgJump', cls:'lion leap', html:lucescoActHtml('Jump!', 'over the trees'), act:()=> jgJump(J) };
-}
+/* (4.49) his leap from p, the way a held key points, else the way you face (jgPadPress, jgPadState) */
+function jgJumpAim(p){ const w = walkState(); return jgJumpFrom(p, walkHeldDir() || w.face); }
 
 /* ============================================================
    (4.03) ON LUCESCO'S BACK
@@ -2610,24 +2603,127 @@ function jgReachable(p, reach){
     .sort((a, c)=> a.d - c.d || a.ahead - c.ahead).map(o=> o.b);
 }
 /* his glare: the nearest that is not already twitching; his ambush: one he has glared first, else the nearest — never
-   into or out of a tribe's village while its magic walls it off (questSealedAt, 25-quest.js) */
-function jgGlareTarget(p){ const all = jgReachable(p, JG_GLARE.reach); return all.find(b=> !jgBandStunned(b)) || all[0] || null; }
+   into or out of a tribe's village while its magic walls it off (questSealedAt, 25-quest.js). (4.49) With a direction
+   held on the pad (`dir`), the ones that way go first (jgAim). */
+function jgGlareTarget(p, dir){ return jgAim(p, jgReachable(p, JG_GLARE.reach), dir, b=> !jgBandStunned(b)); }
 function jgAmbushable(p, b){ return !(typeof questSealedAt === 'function' && (questSealedAt(b.x, b.y) || questSealedAt(p.x, p.y))); }
-function jgAmbushTarget(p){ const all = jgReachable(p, JG_AMBUSH.reach).filter(b=> jgAmbushable(p, b)); return all.find(b=> jgBandStunned(b)) || all[0] || null; }
-/* the buttons (jgNearActs) */
-function jgLucescoActs(p){
-  const acts = [];
-  if(!jgRiding()) return acts;
-  const g = jgGlareTarget(p);
-  if(g){
-    const n = jgGlareIn();
-    acts.push(n ? { key:'jgGlareIn' + n, cls:'lion off', html:lucescoActHtml('Pulsar Glare', `in ${n} step${n === 1 ? '' : 's'}`),
-                    act:()=> toast(`Lucesco's eyes are still dim. ${n} more step${n === 1 ? '' : 's'}.`) }
-                : { key:'jgGlare:' + g.id, cls:'lion glare', at:{ x:g.x, y:g.y }, html:lucescoActHtml('Pulsar Glare', jgBandName(g)), act:()=> jgGlare(g) });
+function jgAmbushTarget(p, dir){ return jgAim(p, jgReachable(p, JG_AMBUSH.reach).filter(b=> jgAmbushable(p, b)), dir, b=> jgBandStunned(b)); }
+/* (4.49) Aiming with the pad. The designer: "When a direction button is held while jumping, glaring or ambushing, it
+   influences the direction of the jump or target selection." Held, the bands that way (in front of you that way, by a
+   square or two, straight or slanting) are his: the straightest that way first, then the one he would choose anyway
+   (`want`), then the nearest. None that way, or none held: as before — the one he would choose, nearest first. */
+function jgAim(p, all, dir, want){
+  const v = dir && JG_DIR[dir];
+  if(v){
+    const ahead = all.map(b=>{ const dx = b.x - p.x, dy = b.y - p.y, fwd = dx * v[0] + dy * v[1];
+                               return { b, fwd, slant:Math.atan2(Math.abs(dx * v[1] - dy * v[0]), fwd), w:want(b) ? 0 : 1, d:Math.hypot(dx, dy) }; })
+      .filter(o=> o.fwd > 0)
+      .sort((a, c)=> (a.slant - c.slant) || (a.w - c.w) || (a.d - c.d));
+    if(ahead.length) return ahead[0].b;
   }
-  const a = jgAmbushTarget(p);
-  if(a) acts.push({ key:'jgAmb:' + a.id, cls:'lion ambush', at:{ x:a.x, y:a.y }, html:lucescoActHtml('Rift Ambush', jgBandName(a)), act:()=> jgAmbush(a) });
-  return acts;
+  return all.find(want) || all[0] || null;
+}
+
+/* ============================================================
+   (4.49) HIS MOVES, FIXED IN PLACE
+   The designer: "The UI for Lucesco in the jungle is a little off. The directional buttons keep moving when other
+   buttons appear or disappear. Could we have Lucesco's jump, pulsar glare and rift ambush all live on the UI at all
+   times for muscle memory? I think the fixed buttons should be jump, then glare and ambush sharing a row without
+   Lucesco's sprite (can shorten to glare and ambush), but perhaps announce Lucesco's moves at the bottom (Lucesco uses
+   Pulsar Glare on Gremlin! Lucesco uses Rift Ambush on Crocodilian!). They light up only when conditions are
+   fulfilled. Can we also have directional jumping and attacking please? … The goal is to make movement and attacking
+   seamless without buttons shifting. Talk to Lucesco lives below and talking to other monsters even further down."
+   So: under Party and Map, Jump across the side, Glare and Ambush beside each other under it (the deck's padMoves,
+   13-walkmap.js), each lit in its own colour while it can go, its wait counted on it; pressed as the finger comes down
+   (another may be holding the pad); a direction held aims it (jgJumpAim, jgAim); what he does, or why he cannot yet,
+   said along the bottom of the map (jgTell). The buttons beside you — his Talk first — below them all.
+   ============================================================ */
+function jgPadHtml(){
+  const b = (k, label)=> `<button class="wmove ${k}" data-mv="${k}" aria-disabled="true"><b>${label}</b><small></small></button>`;
+  return b('jump', 'Jump') + b('glare', 'Glare') + b('ambush', 'Ambush');
+}
+function jgPadWire(box){
+  box.querySelectorAll('[data-mv]').forEach(btn=>{
+    btn.addEventListener('pointerdown', e=>{
+      e.preventDefault();
+      btn.classList.remove('press'); void btn.offsetWidth; btn.classList.add('press');
+      setTimeout(()=> btn.classList.remove('press'), 160);
+      jgPadPress(btn.dataset.mv);
+    });
+    btn.addEventListener('click', e=>{ if(e.detail === 0) jgPadPress(btn.dataset.mv); });   // a key's Enter or Space (a finger's went on pointerdown)
+    btn.addEventListener('contextmenu', e=> e.preventDefault());
+  });
+}
+/* nothing else going on: no leap, beam or ambush under way, nobody talking, no alien coming for you */
+function jgPadFree(){
+  const w = walkState();
+  return !(w.busy || ui.jgAlert || ui.jgTalk || ui.jgFx || ui.jgFighting || ui.sceneRunning || document.querySelector('.scene-say') ||
+           (typeof eyeBreakActive === 'function' && eyeBreakActive()));
+}
+const jgSteps = n=> `${n} step${n === 1 ? '' : 's'}`;
+function jgPadState(p){
+  const free = !!p && jgPadFree(), riding = jgRiding();
+  const jn = jgJumpIn(), gn = jgGlareIn();
+  const J = p ? jgJumpAim(p) : null;
+  return {
+    J:!!J,
+    jump:{ lit:free && !!J && !jn, sub:jn ? 'in ' + jgSteps(jn) : '' },
+    glare:{ lit:free && riding && !gn && !!(p && jgGlareTarget(p)), sub:gn ? 'in ' + jgSteps(gn) : '' },
+    ambush:{ lit:free && riding && !!(p && jgAmbushTarget(p)), sub:'' },
+  };
+}
+function jgPadRefresh(box, p){
+  const st = jgPadState(p);
+  /* the first wall he could leap: a word on it, once (as since 3.96) */
+  if(st.J){ const j = jgState(); if(!j.talk.jumpHint){ j.talk.jumpHint = 1; setTimeout(()=> toast('🦁 Lucesco can carry you over this wall — tap Jump!'), 50); } }
+  const sig = ['jump', 'glare', 'ambush'].map(k=> (st[k].lit ? 1 : 0) + st[k].sub).join('|');
+  if(box._sig === sig) return;
+  box._sig = sig;
+  ['jump', 'glare', 'ambush'].forEach(k=>{
+    const btn = box.querySelector(`[data-mv="${k}"]`);
+    if(!btn) return;
+    btn.classList.toggle('lit', st[k].lit);
+    btn.setAttribute('aria-disabled', st[k].lit ? 'false' : 'true');
+    btn.querySelector('small').textContent = st[k].sub;
+  });
+}
+/* pressed: done at once if it is lit — aimed the way the pad is held — else why not, along the bottom */
+function jgPadPress(mv){
+  const w = walkState(), p = w.at && w.at[JG_KEY];
+  if(!p || ui.screen !== JG_KEY || !jgPadFree()) return;
+  const held = walkHeldDir();
+  if(mv === 'jump'){
+    const n = jgJumpIn(), J = jgJumpAim(p);
+    if(n) return jgTell(`Lucesco is catching his breath. ${jgSteps(n)} to go.`);
+    if(!J) return jgTell('Face a wall one tree thick, and Lucesco can jump it.');
+    return jgJump(J);
+  }
+  if(!jgRiding()) return jgTell('Lucesco needs you on his back for that.');
+  if(mv === 'glare'){
+    const n = jgGlareIn();
+    if(n) return jgTell(`Lucesco's eyes are still dim. ${jgSteps(n)} to go.`);
+    const g = jgGlareTarget(p, held);
+    if(!g) return jgTell('No alien close enough to glare at.');
+    return jgGlare(g);
+  }
+  if(mv === 'ambush'){
+    const a = jgAmbushTarget(p, held);
+    if(!a) return jgTell('No alien close enough to ambush.');
+    return jgAmbush(a);
+  }
+}
+/* (4.49) along the bottom of the map: what he does — "Lucesco uses Pulsar Glare on Gremlin!" — or why he cannot yet */
+function jgTell(html, kind){
+  const stage = $('#walkStage');
+  if(!stage) return;
+  let el = document.getElementById('jgTell');
+  if(!el){ el = document.createElement('div'); el.id = 'jgTell'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); stage.appendChild(el); }
+  el.className = 'jg-tell' + (kind ? ' ' + kind : '');
+  el.innerHTML = html;
+  void el.offsetWidth;
+  el.classList.add('on');
+  clearTimeout(jgTell._t);
+  jgTell._t = setTimeout(()=> el.classList.remove('on'), kind ? 2600 : 2000);
 }
 
 /* Time stops: the world and everyone in it held where they are drawn this instant — a band halfway between two squares
@@ -2753,8 +2849,9 @@ async function jgGlare(b){
   if(!p || !b || w.busy || ui.jgAlert || ui.jgTalk || ui.jgFx || ui.jgFighting || jgGlareIn() || jgBandBeaten(b) || !jgRiding()) return;
   const world = $('#walkWorld'), me = $('#walkYou');
   if(!world || !me) return;
-  releaseKeys();
+  /* (4.49) a direction held on the pad is not let go: you walk on when he is done (walkMove waits while busy) */
   w.busy = true; ui.jgFx = 'glare';
+  jgTell(`Lucesco uses <b>Pulsar Glare</b> on ${escapeHtml(jgBandName(b))}!`, 'glare');
   const closeUp = jgZoomIn();                                           // (4.08) close up first (at once if it is already)
   if(closeUp){ await closeUp; if(ui.screen !== JG_KEY || jgBandBeaten(b)){ ui.jgFx = null; w.busy = false; return; } }
   const thaw = jgFreeze(b, closeUp ? false : undefined);                // (4.08) just come in: the camera still, nothing of it to hold
@@ -2777,7 +2874,7 @@ async function jgGlare(b){
     if(ui.jgBandEls && ui.jgBandEls[b.id]) jgZapStart(b, false);         // the beam gone: paralysed, for the rest of its 5 s
     thaw();
     ui.jgFx = null; w.busy = false;
-    w.actSig = null;                                                     // his button: "in 50 steps" now
+    w.actSig = null;                                                     // (4.49) the buttons below redrawn; his Glare button shows its wait (jgPadRefresh)
     jgSave(false);
     if(ui.screen === JG_KEY) refreshWalk();
     clearTimeout(b._zapEndT);
@@ -2872,6 +2969,7 @@ async function jgAmbush(b){
   if(!world || !me) return;
   releaseKeys();
   w.busy = true; ui.jgFx = 'ambush';
+  jgTell(`Lucesco uses <b>Rift Ambush</b> on ${escapeHtml(jgBandName(b))}!`, 'ambush');   // (4.49)
   const closeUp = jgZoomIn();                                           // (4.08) close up first (at once if it is already)
   if(closeUp){ await closeUp; if(ui.screen !== JG_KEY || jgBandBeaten(b)){ ui.jgFx = null; w.busy = false; return; } }
   const glared = jgBandStunned(b);
@@ -3071,15 +3169,13 @@ function jgHold(on){
 
 /* ---------- the buttons beside you ---------- */
 function jgNearActs(p){
+  /* (4.49) below the pad now (13-walkmap.js's #walkActs.below): his Talk first, then whoever else is beside you. His
+     Jump, Glare and Ambush are buttons of their own, fixed in place (jgPadHtml). */
   const acts = [{ key:'jgLion', cls:'lion', html:lucescoActHtml('Talk'), act:()=> jgLionTalk() }];   // (3.96) his face on it
-  const jump = jgJumpAct(p);                                                                          // (3.96) his leap, facing a wall he can clear
-  if(jump) acts.push(jump);
   const f = jgFolkNear(p);                                                                            // (3.96) one of the villagers beside you
   if(f) acts.push({ key:'jgF' + f.id, at:{ x:f.x, y:f.y }, html:`💬 Talk<small>${escapeHtml(jgFolkName(f.sprite))}</small>`, act:()=> jgFolkTalk(f) });
-  /* (4.03) his Pulsar Glare and Rift Ambush, at an alien within two squares; the ambush is the challenge now — a plain
-     Challenge is left only for a band beside you that he cannot ambush (across a tribe's sealed wall) */
-  const lu = jgLucescoActs(p);
-  acts.push(...lu);
+  /* (4.03) his Rift Ambush is the challenge now — a plain Challenge is left only for a band beside you that he cannot
+     ambush (across a tribe's sealed wall) */
   const ambushing = jgRiding();
   jgBands().forEach(b=>{
     if(jgBandBeaten(b) || Math.abs(b.x - p.x) + Math.abs(b.y - p.y) !== 1) return;
@@ -3772,7 +3868,35 @@ function jgCss(){
   .jg-ride .jg-ride-rider{ position:absolute; pointer-events:none; }
   .jg-ride .jg-ride-lion{ filter:drop-shadow(0 0 5px rgba(255,140,60,.6)); }
   .jg-ride .jg-ride-shadow{ position:absolute; left:4%; right:4%; bottom:-10%; height:26%; border-radius:50%; background:rgba(0,0,0,.3); }
-  .wact.lion.leap{ background:#c0702c; border-color:#8e4f1a; color:#fff; }
+  /* (4.49) his moves, fixed under Party (jgPadHtml): pale while they cannot go, lit in their own colours when they can */
+  .walk-moves .wmove{ height:68px; min-width:0; border-radius:14px; border:1px solid var(--line); background:var(--paper-2); color:var(--ink-soft);
+    position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:4px 8px; cursor:pointer;
+    touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
+    transition:background-color .15s, border-color .15s, box-shadow .15s, transform .08s; }
+  .walk-moves .wmove b{ font:800 18px/1.05 'Baloo 2',cursive; opacity:.42; }
+  .walk-moves .wmove small{ position:absolute; left:4px; right:4px; bottom:7px; font:700 10.5px/1.2 'Nunito',sans-serif; text-align:center; }   /* its wait: under the word, which never moves */
+  .walk-moves .wmove.jump{ grid-column:1 / -1; }
+  .walk-moves .wmove.jump b{ color:#a85f22; }
+  .walk-moves .wmove.glare b{ color:#8e1d22; }
+  .walk-moves .wmove.ambush b{ color:#3b2a7a; }
+  .walk-moves .wmove.lit{ box-shadow:inset 0 -3px 0 rgba(0,0,0,.22), 0 2px 6px rgba(0,0,0,.2); animation:jgMoveLit .45s ease-out; }
+  .walk-moves .wmove.lit b{ color:#fff; opacity:1; }
+  .walk-moves .wmove.lit small{ color:rgba(255,255,255,.85); }
+  .walk-moves .wmove.lit.jump{ background:#c0702c; border-color:#8e4f1a; }
+  .walk-moves .wmove.lit.glare{ background:#8e1d22; border-color:#5e1014; }
+  .walk-moves .wmove.lit.ambush{ background:#3b2a7a; border-color:#251a52; }
+  .walk-moves .wmove.press{ transform:scale(.95); }
+  @keyframes jgMoveLit{ 0%{ filter:brightness(1.5); } 100%{ filter:brightness(1); } }
+  @media (max-width:420px){ .walk-moves .wmove{ padding:4px 3px; } .walk-moves .wmove b{ font-size:16px; } }   /* a phone's narrower side: Ambush still fits */
+  /* (4.49) what he does, along the bottom of the map (jgTell) */
+  .jg-tell{ position:absolute; left:10px; right:10px; bottom:10px; z-index:30; width:fit-content; max-width:calc(100% - 20px); margin:0 auto;
+    padding:7px 14px; border-radius:12px; background:rgba(24,20,15,.86); color:#f6efe0; box-shadow:0 2px 10px rgba(0,0,0,.3);
+    font:700 15px/1.3 'Nunito',sans-serif; text-align:center; pointer-events:none; opacity:0; transform:translateY(8px); transition:opacity .18s, transform .18s; }
+  .jg-tell.on{ opacity:1; transform:none; }
+  .jg-tell b{ font:800 16px/1 'Baloo 2',cursive; }
+  .jg-tell.glare b{ color:#ff9c9c; }
+  .jg-tell.ambush b{ color:#cbbcff; }
+  @media (prefers-reduced-motion: reduce){ .walk-moves .wmove.lit{ animation:none; } .jg-tell{ transform:none; } }
   /* (4.03) riding him: you astride his back as you walk (#walkYou, the deck's youArt); his own picture put away */
   .walk-ent.jg-lion.jg-off{ display:none !important; }
   .walk-you .jg-mount{ position:absolute; inset:0; pointer-events:none; }
@@ -3864,8 +3988,6 @@ function jgCss(){
     transition:rotate .18s ease-in, translate .18s ease-in; filter:drop-shadow(0 0 3px #000) drop-shadow(0 0 7px rgba(210,20,30,.9)) brightness(.9) !important; }
   .jg-band.jg-pounced .jg-alien-art.face-r .jg-art{ rotate:-90deg; translate:50% -8%; }
   .jg-band.jg-pounced .jg-mark, .jg-band.jg-pounced .jg-cone{ display:none !important; }
-  .wact.lion.glare{ background:#8e1d22; border-color:#5e1014; color:#fff; }
-  .wact.lion.ambush{ background:#3b2a7a; border-color:#251a52; color:#fff; }
   @media (prefers-reduced-motion: reduce){ .jg-band.jg-zap .jg-alien-art .jg-art, .jg-band.jg-stun .jg-alien-art .jg-art, .walk-you.jg-starry .jg-stars, .walk-you.jg-swirl .jg-ride-arc, .jg-beam i, .jg-beam em{ animation:none !important; } }
   .walk-ent.jg-band{ transition:transform .3s linear; overflow:visible; pointer-events:none; }
   .jg-band .jg-alien-art{ position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:center; }

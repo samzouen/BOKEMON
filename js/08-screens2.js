@@ -967,7 +967,7 @@ function arenaStoneLine(s){
       : ''),
     Steel:  ()=> `it takes <b>${Math.round(d.reduce * 100)}% less</b>` + (((d.block || 0) + (d.passiveBlock || 0)) ? ` and its side starts with <b>${(d.block || 0) + (d.passiveBlock || 0)} shields</b>, shared by them all` : ''),   // (3.64) the wave's
     Flying: ()=> `nothing touches it on its first turn, and it dodges <b>${Math.round((d.after || 0.15) * 100)}%</b> after`,
-    Fairy:  ()=> `Diamond Dust: your effects are swept away, and nothing of yours takes hold for ${d.turns || 5} turns — but your shields stand, and still form`,
+    Fairy:  ()=> `Diamond Dust: for ${d.turns || 5} turns, each turn it sweeps away or stops <b>${DUST_COUNT[Math.max(0, Math.min(2, vh.plus || 0))]}</b> kind${(vh.plus || 0) ? 's' : ''} of your buffs and cleans or stops as many of your effects on their side, the worst first — but your shields stand, and still form`,   // (4.48) its count
   }[vh.type];
   return `💎 <b>${who}: ${name}</b>, carried — ${what ? what() : 'in effect from the moment it arrives'}.`;
 }

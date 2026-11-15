@@ -34,7 +34,8 @@
      stones and its whole sky — (4.04) at one of three tiers (FUTURE_TIERS:
      Corona, no element passives; Event Horizon, both of its element's;
      Singularity, those and 7 more of every minor node). Over every four
-     weeks all twelve elements come round once, three a week (futureWeek); a
+     weeks all twelve elements come round once, three a week (futureWeek;
+     (4.51) counted from 2 November 2026, none back within two weeks); a
      lost fight meets the same three again. SPACETIME DISTORTION
      (DISTORTION_POOL): (4.04) seven of eleven drawn for the week, each
      switched on or off before the fight; a win pays the tier's Starlight ×
@@ -742,6 +743,7 @@ function futureEndlessDust(){
   const b = ui.battle;
   if(!battleDistortion('dust') || !livingEnemies().length) return '';
   const es = enemySideStatuses();
+  dustCastBegin('enemy', 0);                        // (4.48) a cast of theirs: its count, or one more of each
   const n = diamondDustCleanse('enemy');            // (3.77) its own Unstable Magic count (magicBurst)
   es.diamondDust = { type:'diamondDust', turnsLeft:2, owner:livingEnemies()[0], by:'enemy', tier:0, fresh:true };
   renderStatusBadges();
@@ -779,9 +781,52 @@ function futureCycleOrder(cycle){
   }
   return order;
 }
+/* (4.51) The designer: "the future fight is supposed to cycle through all 12 future monster types every 4 weeks, with 4
+   consecutive weeks being randomised but guaranteeing the whole set of future monsters will be encountered before a
+   reset, but it just went back to the original 3: psychic, electric and steel". The cycles above were counted from
+   5 January: 2 November (Electric, Steel, Psychic: the first three met) was the LAST week of one, and the rule keeping a
+   cycle's first week clear of the last one's three swapped them into its second week — 16 November — where they made
+   the same three again. Now the cycles are counted from 2 November 2026 (FUTURE_CYCLE_FROM: 2–29 November is the first,
+   so its last two weeks have the six not yet met), and from 16 November (FUTURE_DRAWN_FROM) each week's three are drawn
+   from the elements its cycle has not had yet: none met in the two weeks before it, and never the same three as any
+   week of the eight before it. So every element comes back no sooner than three weeks after it was last met (the
+   most a fresh cycle allows: any sooner than four, and one that keeps every four weeks whole has no choice left).
+   The weeks before 16 November stay as they were. */
+const FUTURE_CYCLE_FROM = 43;                               // 2 November 2026, as futureWeekNo counts
+const FUTURE_DRAWN_FROM = 45;                               // 16 November 2026
+const FUTURE_FRESH = 2, FUTURE_NO_SAME = 8;                 // no element of the last 2 weeks; no three of the last 8
+const _futureTrios = new Map();
+function futureOldTrio(no){ const cycle = Math.floor(no / 4), pos = ((no % 4) + 4) % 4; return futureCycleOrder(cycle).slice(pos * 3, pos * 3 + 3); }
+function futureCycleStart(no){ return FUTURE_CYCLE_FROM + Math.floor((no - FUTURE_CYCLE_FROM) / 4) * 4; }
+function futureTrio(no){
+  if(no < FUTURE_DRAWN_FROM) return futureOldTrio(no);
+  if(_futureTrios.has(no)) return _futureTrios.get(no).slice();
+  for(let w = FUTURE_DRAWN_FROM; w < no; w++) if(!_futureTrios.has(w)) futureTrio(w);   // in order: each week asks the ones before it
+  const start = futureCycleStart(no), had = new Set(), recent = new Set(), same = [];
+  for(let w = start; w < no; w++) futureTrio(w).forEach(t=> had.add(t));
+  for(let w = no - FUTURE_FRESH; w < no; w++) futureTrio(w).forEach(t=> recent.add(t));
+  for(let w = no - FUTURE_NO_SAME; w < no; w++) same.push(futureTrio(w).slice().sort().join());
+  const left = LEGACY_TYPES.filter(t=> !had.has(t));
+  const fresh = left.filter(t=> !recent.has(t)), stale = left.filter(t=> recent.has(t));
+  const last = no - start === 2;                            // its last week will be what this one leaves
+  const rnd = seededRandom(7727 * (no + 8192));
+  for(let k = 0; k < 7; k++) rnd();
+  const mix = a=>{ a = a.slice(); for(let i = a.length - 1; i > 0; i--){ const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  let pick = null, first = null;
+  for(let tries = 0; tries < 120 && !pick; tries++){
+    const f = mix(fresh), t = f.slice(0, 3).concat(mix(stale)).slice(0, 3);    // the fresh first: there are always 3
+    if(!first) first = t;
+    const rest = left.filter(x=> !t.includes(x));
+    if(same.includes(t.slice().sort().join())) continue;
+    if(last && same.includes(rest.slice().sort().join())) continue;
+    pick = t;
+  }
+  pick = pick || first;
+  _futureTrios.set(no, pick);
+  return pick.slice();
+}
 function futureWeek(d){
-  const no = futureWeekNo(d), cycle = Math.floor(no / 4), pos = ((no % 4) + 4) % 4;
-  const types = futureCycleOrder(cycle).slice(pos * 3, pos * 3 + 3);
+  const no = futureWeekNo(d), types = futureTrio(no);
   return { no, key:tearWeekKey(d), types, picks:types.map(type=> ({ type, species:futureId(type) })) };
 }
 /* This week's record. A new week starts it afresh. */
@@ -1173,6 +1218,9 @@ function futureMaxText(type){
    ============================================================ */
 function foeHolders(el, slot){ return ui.battle ? livingEnemies().filter(e=> (e.vhPassive || e.ultraPassive) && elemPassiveOn(e, el, slot)) : []; }
 function foeHolds(e, el, slot){ return !!(e && !e.uid && e.hp > 0 && (e.vhPassive || e.ultraPassive) && elemPassiveOn(e, el, slot)); }
+/* (4.50) their Burgeon, the mirror of yours (burgeonParty, 04-battle.js): one of theirs holding it at full health, and
+   their whole side deals 20% more */
+function foeBurgeon(){ return foeHolders('Grass', 'ultra').some(e=> e.hp >= e.maxHp); }
 function foeNm(e){ return escapeHtml(SPECIES[e.species].name); }
 function foeIdx(e){ return ui.battle ? ui.battle.enemies.indexOf(e) : -1; }
 function foeBuffCount(){ const es = enemySideStatuses(); return Object.keys(es).filter(k=> STATUS_KIND[k] === 'buff').length; }
@@ -1185,9 +1233,9 @@ function foeSelfAmp(e){
   if(!e || e.uid || !ui.battle) return 1;
   let a = 1;
   if(getESide('diamondDust') && foeHolders('Fairy', 'vh').length) a *= 1 + Math.min(CORUSCATE.cap, CORUSCATE.per * foeBuffCount());
+  if(foeBurgeon()) a *= BURGEON_AMP;                                   // (4.50) the whole side's, while a holder is at full health
   if(!(e.vhPassive || e.ultraPassive)) return a;
   if(foeHolds(e, 'Fire', 'ultra')) a *= 1 + Math.max(0, Math.min(CONSUME_CAP, 1 - Math.max(0, e.hp) / Math.max(1, e.maxHp)));
-  if(foeHolds(e, 'Grass', 'ultra') && e.hp >= e.maxHp) a *= BURGEON_AMP;
   if(foeHolds(e, 'Flying', 'ultra')) a *= 1 + Math.min(MOMENTUM.cap, MOMENTUM.per * Math.max(0, initiativeOf('enemy', e, true)));
   if(foeHolds(e, 'Physical', 'ultra')) a *= 1 + DEADLY_COMBO.per * Math.min(DEADLY_COMBO.max, e._dcombo || 0);   // (3.77) no Counter needed
   if(foeHolds(e, 'Ground', 'ultra')) a *= 1 + METAMORPH.per * Math.min(METAMORPH.max, e._metamorph || 0);        // (3.77) damage, not ATK
@@ -1307,16 +1355,18 @@ function foeAtkBonus(e){
 /* ---- their casts (castEnemyVeryHigh) ---- */
 function foeFuryHolder(){ return foeHolders('Physical', 'vh')[0] || null; }              // Focused Fury's Deflect (deflectSweep)
 function foeMindControl(){ return !!(getESide('confusionField') && foeHolders('Psychic', 'vh').length); }   // your muddled swing hits all of your side
-/* (3.86) Their Tempering standing: no more than 2 of their buffs swept or
-   stolen a turn, their Diamond Dust last (temperSweepLeft, 04-battle.js). */
+/* (3.86) Their Tempering standing — (4.48) your dust's first 2 tries a turn at their buffs turned aside, and their
+   Steel Aegis cast through it, never swept or stolen (dustGuarded, dustThrough, 04-battle.js). */
 function foeTemperingGuards(){ return foeHolders('Steel', 'vh').length > 0; }
 
 /* ---- (3.86) their Binding Curse (Deadly Curse until 3.86): their Curse on
-   your side, a holder of it standing above 34% of its health. Cast through
-   your dust; each time it is cast, or would be swept, washed off or run out,
-   it holds one more turn instead, and their holder and every one of yours on
-   the field lose 11% of the holder's max HP — HP lost, past shields and
-   cuts. Their Vicious Hex counts each as its damage. ---- */
+   your side, a holder of it standing above (4.48) 33% of its health. Cast
+   through your dust, never lifted by it; each time it is cast, or would be
+   washed off or run out, it holds one more turn instead — and (4.48) your
+   dust's first 2 tries a turn at their debuffs on you are turned aside — and
+   at each, their holder and every one of yours on the field lose 6.66% of
+   the holder's max HP: HP lost, past shields and cuts. Their Vicious Hex
+   counts each as its damage. ---- */
 function foeBindingWorks(e){ return !!(e && !e.uid && e.hp > 0 && foeHolds(e, 'Ghost', 'vh') && e.hp > BINDING.floor * e.maxHp); }
 /* (3.94) the strongest of theirs who can (the most max HP), chosen afresh each time, as yours */
 function foeBinder(){
@@ -1324,7 +1374,7 @@ function foeBinder(){
   const able = livingEnemies().filter(foeBindingWorks);
   return able.length ? able.slice().sort((x, y)=> (y.maxHp || 0) - (x.maxHp || 0))[0] : null;
 }
-function foeBindingPulse(h, why){
+function foeBindingPulse(h, why, opts){
   const b = ui.battle;
   if(!b || !h) return '';
   const loss = Math.ceil(BINDING.pct * h.maxHp), idx = foeIdx(h), was = h.hp;
@@ -1343,7 +1393,8 @@ function foeBindingPulse(h, why){
   });
   if(hurt && typeof noteWrath === 'function') noteWrath();          // (3.94) a hit, for your Gathering Wrath
   logBattle(`Their Binding Curse (${SPECIES[h.species].name}, ${why}): ${loss} HP from it and from ${mine.length} of yours`);
-  return `🔗 Their ${foeNm(h)}'s <b>Binding Curse</b> — ${why}: it holds one more turn, and it and every one of yours on the field lose <b>${loss}</b> HP.` +
+  const hold = !(opts && opts.hold === false);       // (4.48) a try of your dust turned aside
+  return `🔗 Their ${foeNm(h)}'s <b>Binding Curse</b> — ${why}: ${hold ? 'it holds one more turn, and ' : ''}it and every one of yours on the field lose <b>${loss}</b> HP.` +
     (foeBindingWorks(h) ? '' : ` Their ${foeNm(h)} is too weak to hold it any longer.`);
 }
 /* Their Curse on you would go: bound, it holds a turn more and pulses. Returns its line, or ''. */
@@ -1523,7 +1574,13 @@ function foeUpkeepPassives(done){
     const sa = getESide('spikeArmour');                                         // (3.77) 0.2 / 0.3 / 0.4× by its tier
     return sa ? foeOneStrike(e, spikePct(sa), `🪨 Their ${foeNm(e)}'s Spike Formation — a spike strikes`) : '';
   }));
-  (b.foeCapacitor || []).splice(0).forEach(st=> jobs.push(()=> foeCapacitorStrike(st)));
+  /* (4.51) a stack is spent only as it strikes: with none of yours to strike it waits for the next upkeep, as yours do
+     (the designer: "stored until it finally gets spent") — until 4.51 all were taken up at once, and what was left lost */
+  (b.foeCapacitor || []).slice().forEach(st=> jobs.push(()=>{
+    const said = foeCapacitorStrike(st);
+    if(said){ const i = (b.foeCapacitor || []).indexOf(st); if(i >= 0) b.foeCapacitor.splice(i, 1); }
+    return said;
+  }));
   jobs.push(()=> foeDetonatePending() ? foeDetonateNow() : '');
   let k = 0;
   const step = ()=>{

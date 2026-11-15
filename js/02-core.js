@@ -95,7 +95,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.47';
+const GAME_VERSION = '4.51';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -854,11 +854,11 @@ const ELEMENT_PASSIVES = {
   Grass: { vh:   { name:'Nourish', sym:'🌱',
                    text:'Every time your Leech Seed drinks (on the field or off it), your team gains <b>+3% / +4% / +5% ATK</b> for a turn (by the Leech Seed\'s tier), up to 5 stacks (<b>+15% / +20% / +25%</b>). Each new stack starts the turn again for all of them. It adds to every other ATK bonus, never multiplies.' },
            ultra:{ name:'Burgeon', sym:'🌳',
-                   text:'At full health it deals <b>25% more</b> damage.' } },
+                   text:'While it is at full health, on the field or off it, your whole team deals <b>20% more</b> damage (one at full health or several: 20%).' } },   /* (4.50) "the whole party gains +20% damage even from off-field" */
   Electric: { vh:   { name:'Catalyse', sym:'⚗️',
                       text:'When your Overcharge is cast while it is in your team, your next move that lands after the Overcharge\'s first gets one more chance to repeat: <b>50% / 75% / 100%</b> (by the Overcharge\'s tier: base, + or ✦).' },
               ultra:{ name:'Capacitor', sym:'🔋',
-                      text:'<b>25%</b> of the damage it deals is stored, and strikes a random enemy at the end of the round (or, with none left, one of the next wave as its first turn begins). Each attack stores its own, repeats and extra actions too.' } },
+                      text:'<b>25%</b> of the damage it deals is stored, and strikes a random enemy at the end of the round. With none left, it waits: it strikes last of the next turn\'s start, the next wave\'s or the next fight\'s. Each attack stores its own, repeats and extra actions too; never more than the health it took.' } },   /* (4.51) the designer: "stored until it finally gets spent" */
   Flying:   { vh:   { name:'Elusive', sym:'🪶',
                       text:'While your Mirage is up, it takes less damage: as much as its best dodge chance, up to <b>30%</b> — and the rest of your team a third as much, while it is in your team. Every attack on it leaves afterimages, dodged or not.' },
               ultra:{ name:'Momentum', sym:'🌪️',
@@ -881,16 +881,17 @@ const ELEMENT_PASSIVES = {
                       text:'Each hit it lands (its quick attacks and afterimages too) makes its attacks <b>10%</b> stronger, up to <b>+30%</b>, for the rest of the battle.' } },
   /* (3.86) "rework curse very high passive: binding curse" — and Vicious Hex's debuffs */
   Ghost:    { vh:   { name:'Binding Curse', sym:'🔗',
-                      text:'While it is in your team, on the field or off it, your Curse can be cast through their Diamond Dust. Each time your Curse is cast, or would be stopped, swept away or run out, it lasts <b>1 more turn</b> instead, and this monster and every cursed enemy on the field lose <b>11%</b> of this monster\'s max HP — straight from their health, past every shield and cut. All of it works only while this monster is above <b>34%</b> of its health: at 34% or below, nothing holds the Curse and nobody loses any health, until it is above 34% again. With several holders, the one with the most max HP above 34% holds it, and the next takes over when it falls to 34% or below. Each pulse counts as a hit for Gathering Wrath.' },
+                      text:'While it is in your team, on the field or off it, your Curse is cast through their Diamond Dust and is never lifted by it, and their dust cleans <b>2 fewer</b> of your debuffs off their side a turn (cleansing them or stopping them): a base or + dust none, a ✦ one 1. Casting their dust again gives it one more only if it is ✦. Each time their dust is turned aside, each time your Curse is cast, and each time it would run out (it lasts <b>1 more turn</b> instead), this monster and every cursed enemy on the field lose <b>6.66%</b> of this monster\'s max HP — straight from their health, past every shield and cut. All of it works only while this monster is above <b>33%</b> of its health: at 33% or below, nothing holds the Curse and nobody loses any health, until it is above 33% again. With several holders, the one with the most max HP above 33% holds it, and the next takes over when it falls to 33% or below. Each pulse counts as a hit for Gathering Wrath.' },
               ultra:{ name:'Vicious Hex', sym:'🕸️',
                       text:'Every time it deals damage, on the field or off it (its afterimages, a Whalelord\'s Haunting Aria from the bench, its Binding Curse too), the enemy it hits gets a random debuff until the end of that turn, each <b>15%</b>: it takes more damage, dodges less, has its hits cut (with any Ice Barrier and Ice Tomb\'s chill, each cutting what the others leave), deals less damage (taken off its damage bonuses), lands fewer critical hits, or its damage cuts are weaker. Each one that runs out counts for Unstable Magic.' } },
   Dragon:   { vh:   { name:'Violent Dance', sym:'🐲',
                       text:'While your Dragon Dance is up and it is on the field, at the start of each turn it strikes <b>1 / 2 / 3</b> times (the Dance\'s base, + or ✦), each at one enemy at random, for <b>0.25× its ATK</b> — an attack of its own, as a quick attack is: it can be dodged, its type counts (super effective, resisted; Destruction makes it super effective), and it can land a critical hit. Before each strike it breaks <b>1 / 2 / 3</b> of that enemy\'s shields, as the Dance does, and any shield left still blocks it. And it deals <b>+20%</b> damage to anything slower than it (Mach Dragon counts).' },
               ultra:{ name:'Destruction', sym:'☄️',
                       text:'Its attacks are super effective (<b>1.5×</b>) against every element except Fairy.' } },
-  /* (3.86) "steel very high passive might need a rework as it could be overpowered with heals" */
+  /* (3.86) "steel very high passive might need a rework as it could be overpowered with heals" — (4.48) its sweeps
+     part: the Aegis through their dust, and 2 fewer of your buffs to their dust a turn */
   Steel:    { vh:   { name:'Tempering', sym:'🔨',
-                      text:'While your Steel Aegis is up, once, a blow that would take it below half its health leaves it at half instead, with <b>3 shields</b> — ready again each time the meter fills. And while it is in your team, on the field or off it, no more than <b>2</b> of your side\'s buffs can be swept or stolen in a turn, by a Diamond Dust, a Nova, Greed or anything else, and your Diamond Dust is the last to go.' },
+                      text:'While your Steel Aegis is up, once, a blow that would take it below half its health leaves it at half instead, with <b>3 shields</b> — ready again each time the meter fills. And while it is in your team, on the field or off it, your Steel Aegis is cast through their Diamond Dust and is never swept or stolen, and their dust takes <b>2 fewer</b> of your buffs a turn (sweeping them or stopping them): a base or + dust none, a ✦ one 1. Casting their dust again gives it one more only if it is ✦.' },
               ultra:{ name:'Fortress', sym:'🏰',
                       text:'It resists every element except Dragon: attacks on it deal <b>⅔</b>.' } },
   /* (3.76) "reduce the damage gain per buff to 1.5% per active buff … reduce the damage caused by
@@ -898,7 +899,7 @@ const ELEMENT_PASSIVES = {
   Fairy:    { vh:   { name:'Coruscate', sym:'🎇',
                       text:'While your Diamond Dust is up and it is in your team (on the field or off it), every one of your team deals <b>1.5% more</b> damage for each buff your side has up (Diamond Dust counts), up to <b>+15%</b>.' },
               ultra:{ name:'Unstable Magic', sym:'🔮',
-                      text:'Every buff or debuff — either side\'s — swept away (a Diamond Dust, a Nova), kept from forming by a Diamond Dust, or running out makes your magic burst: <b>0.2×</b> the ATK of your strongest holder to every enemy, once for each, with no limit a turn. So their dust sweeping your effects pays them back, and a buff of yours their dust stops still bursts. On the field or off it. Damage buffs and cuts count.' } },
+                      text:'Every buff or debuff — either side\'s — swept away (a Diamond Dust, a Nova), kept from forming by a Diamond Dust, or running out makes your magic burst: <b>0.25×</b> the ATK of your strongest holder to every enemy, once for each, with no limit a turn. So their dust sweeping your effects pays them back, and a buff of yours their dust stops still bursts. On the field or off it. Damage buffs and cuts count.' } },
 };
 /* (3.78) the designer: "change the cost to 2 same-element very high and 1
    same element ultra" — [tier, how many] of its element's stones */
@@ -1224,10 +1225,11 @@ function computeMaxStat(species, level, supplements, mon, forHp){
    Anonymous auth ties the cloud identity to THIS BROWSER's local storage. If
    that's ever cleared, the link is lost even though the cloud data survives —
    the JSON backup file remains the manual safety net for that case. */
-/* (4.40) Two homes, one code. The game lives at samzouen.github.io/BOKEMON and, as a backup on another account, at
-   bokemongame.github.io/BOKEMON, which keeps its saves in a Firebase project of its own (bokem0n). Until 4.39 the backup
-   carried its own copy of this file (and of 11-app.js, for its own master code); now each home is known by its address,
-   so the same files serve both. Anywhere else (a test, a computer of your own) is the first home. */
+/* (4.40) Two homes, one code: the first home, and a backup on another account that keeps its saves in a Firebase
+   project of its own. Until 4.39 the backup carried its own copy of this file (and of 11-app.js, for its own master
+   code); now each home is known by its address, so the same files serve both. Anywhere else (a test, a computer of
+   your own, another site) is the first home. (4.48) The backup's address is not written here: it is known by a
+   fingerprint of its first part (bokemonHomeOf). */
 const FIREBASE_HOMES = {
   main:{
     apiKey: "AIzaSyBEg78ygTrSF7RPnfxrjcZ_Bg_2DQ4FrD0",
@@ -1246,7 +1248,14 @@ const FIREBASE_HOMES = {
     appId: "1:465337644075:web:97f4a8347d4525e511266e"
   },
 };
-const BOKEMON_HOME = (typeof location !== 'undefined' && /^bokemongame\./i.test(location.hostname || '')) ? 'backup' : 'main';
+function bokemonHomeOf(host){
+  const h = String(host || '').toLowerCase();
+  if(h.indexOf('.') < 1) return 'main';
+  let x = 2166136261;                                  // FNV-1a of the address's first part
+  for(const c of h.slice(0, h.indexOf('.'))) x = Math.imul(x ^ c.charCodeAt(0), 16777619) >>> 0;
+  return x === 0xaa580a3e ? 'backup' : 'main';
+}
+const BOKEMON_HOME = (typeof location !== 'undefined') ? bokemonHomeOf(location.hostname) : 'main';
 const firebaseConfig = FIREBASE_HOMES[BOKEMON_HOME];
 const CLOUD_COLLECTION = 'saves';
 let cloudUid = null;

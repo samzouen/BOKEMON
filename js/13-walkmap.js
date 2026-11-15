@@ -613,6 +613,14 @@ function walkCss(){
     .wact.party.side{flex-direction:column;gap:1px;font-size:11px;line-height:1.1;padding:3px 6px;}
     .wact.party.side b{font-size:17px;line-height:1;}
     .wact.party.side.on{background:#2f3346;color:#f1e9d6;border-color:#1d2130;}
+    /* (4.49) a deck's own moves, fixed under Party (d.padMoves); the pad and they at the top of their row, so nothing
+       below them can move them; what you stand beside, below it all — the first across the whole width, the rest two
+       to a row (one alone takes the row) */
+    .walk-pads.fixed{align-items:flex-start;}
+    .walk-moves{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+    .walk-acts.below{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px;margin-top:10px;min-height:122px;align-content:flex-start;}
+    .walk-acts.below > .wact{flex:1 1 calc(50% - 3px);width:auto;min-width:0;}
+    .walk-acts.below > .wact:first-child{flex-basis:100%;}
     /* (2.95) every picture is drawn facing left: face-r turns it round, on
        top of whatever else it is doing */
     .walk-ent.face-r > img, .walk-ent.face-r > .walk-emoji, .walk-ent.face-r > .crowned-wrap,
@@ -693,6 +701,13 @@ function renderWalkDeck(id){
   WALK_VIEW = d.view || walkView();
   const avail = Math.min(window.innerWidth - 24, Math.max(220, window.innerHeight - 330));
   WALK_T = Math.max(30, Math.round(avail / WALK_VIEW));
+  /* (4.49) A deck's own moves, fixed in place under Party (the jungle: Lucesco's Jump, Glare and Ambush, 20-jungle.js):
+     d.padMoves = { html(d), wire(box, d), refresh(box, d, p) }. The designer: "The directional buttons keep moving when
+     other buttons appear or disappear … Be sure that the direction and Lucesco move buttons don't shift relative to the
+     screen even when more buttons for talking appear below". So with them the pad and the moves sit at the top of
+     their row, and the buttons for what you stand beside go below it all (#walkActs.below), where their coming and
+     going moves nothing above them. */
+  const pad = d.padMoves || null;
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← ${escapeHtml(d.backLabel || 'Explore')}</button>
     ${(state.progress.currentRegion === 4 && typeof expeditionBar === 'function') ? expeditionBar(true) : ''}
@@ -705,7 +720,7 @@ function renderWalkDeck(id){
         background-size:${nat[0]*d.bs*WALK_T}px ${nat[1]*d.bs*WALK_T}px;
         background-position:${d.bx*WALK_T}px ${d.by*WALK_T}px;"></div>
     </div>
-    <div class="walk-pads">
+    <div class="walk-pads${pad ? ' fixed' : ''}">
       <div class="walk-dpad">
         <i></i><button class="wkey" data-d="u">${TRI('u')}</button><i></i>
         <button class="wkey" data-d="l">${TRI('l')}</button><i></i><button class="wkey" data-d="r">${TRI('r')}</button>
@@ -713,9 +728,9 @@ function renderWalkDeck(id){
       </div>
       <div class="walk-side">
         <div class="walk-side-top" id="walkSideTop"><button class="wact party" id="walkParty">Party</button></div>
-        <div class="walk-acts" id="walkActs"></div>
+        ${pad ? `<div class="walk-moves" id="walkMoves">${pad.html(d)}</div>` : '<div class="walk-acts" id="walkActs"></div>'}
       </div>
-    </div>`;
+    </div>${pad ? '<div class="walk-acts below" id="walkActs"></div>' : ''}`;
   walkSideRefresh();
   $('#backBtn').addEventListener('click', ()=>{ walkTeardown(); go(d.backTo || 'explore'); });   // (3.79) the Rift's goes to its region
   /* remember where to come back to, so Party does not dump you on the region
@@ -880,6 +895,7 @@ function renderWalkDeck(id){
 
   buildAquarium(world, d);
   wireWalkKeys();
+  walkPadWire(d);                        // (4.49) the deck's own moves, if it has them
   refreshWalk();
   /* Everyone is put straight where they stand. Without this the sprites were
      created at the map's corner and then slid across to their places. */
@@ -926,10 +942,36 @@ function walkSideRefresh(){
   });
   top.appendChild(b);
 }
+/* (4.49) A deck's own moves (d.padMoves, renderWalkDeck): wired once, then asked again on every step, every redraw and
+   four times a second besides — what lights them (an alien wandering into reach, a cooldown run out, a talk over) can
+   change while you stand still. A deck's refresh only touches the buttons when what they show has changed. */
+let _walkPadT = 0;
+function walkPadWire(d){
+  clearInterval(_walkPadT); _walkPadT = 0;
+  const box = document.getElementById('walkMoves');
+  if(!box || !d || !d.padMoves) return;
+  if(d.padMoves.wire) d.padMoves.wire(box, d);
+  _walkPadT = setInterval(()=>{
+    if(!box.isConnected){ clearInterval(_walkPadT); _walkPadT = 0; return; }
+    walkPadRefresh();
+  }, 250);
+}
+function walkPadRefresh(){
+  const box = document.getElementById('walkMoves');
+  if(!box) return;
+  const w = walkState(), d = DECKS[w.deck];
+  if(!d || !d.padMoves || !d.padMoves.refresh) return;
+  d.padMoves.refresh(box, d, w.at && w.at[w.deck]);
+}
+/* (4.49) the way the D-pad is held right now (the latest press), or null: a move made while it is held goes that way —
+   the designer: "When a direction button is held while jumping, glaring or ambushing, it influences the direction of
+   the jump or target selection." */
+function walkHeldDir(){ return _walkHeld.size ? [..._walkHeld.values()].pop() : null; }
 /* Everything a deck leaves running — the rail, the aquarium, the catacomb
    guards' clocks — stopped in one place. Every way off a deck calls this. */
 function walkTeardown(){
   releaseKeys();
+  clearInterval(_walkPadT); _walkPadT = 0;   // (4.49) the moves' own clock (walkPadWire)
   stopRail();
   stopAquarium();
   if(typeof stopStealth === 'function') stopStealth();
@@ -1124,6 +1166,7 @@ function refreshWalk(){
   const p = w.at[w.deck];
   const world = $('#walkWorld'), me = $('#walkYou'), steps = $('#walkSteps');
   if(!world || !me) return;
+  walkPadRefresh();                                // (4.49) the deck's own moves: lit, or not
   const c = walkCamXY();
   world.style.transform = `translate3d(${c.tx}px, ${c.ty}px, 0)` + (c.s !== 1 ? ` scale(${c.s.toFixed(4)})` : '');
   me.style.transform = `translate3d(${p.x*WALK_T}px,${p.y*WALK_T}px,0)`;
@@ -1192,7 +1235,7 @@ function refreshWalk(){
   acts.innerHTML = '';
   /* Cuain can be spoken to from anywhere — he is behind you, not beside you. */
   const withGhost = near.length + extra.length + (cuainAboard() ? 1 : 0);
-  acts.classList.toggle('single', withGhost <= 1);
+  acts.classList.toggle('single', withGhost <= 1 && !acts.classList.contains('below'));   // (4.49) below the pad: one size
   if(cuainAboard()){
     const b = document.createElement('button');
     b.className = 'wact live ghost';
@@ -1306,6 +1349,7 @@ function walkMove(dir){
     }
     refreshWalk();
     if(d.onStep && d.onStep(p, d)) releaseKeys();   // a guard saw you, a ghost found you
+    walkPadRefresh();                               // (4.49) a step counted down the deck's moves' waits (the jungle's jgStep)
     walkMusicSync(d);                               // (4.29) into a village under attack, or the castle attacked
     return;
   }

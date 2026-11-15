@@ -6822,7 +6822,7 @@ const R5_MK_STONE_LINES = {
   Flying:   `<b>"Mirage! The first attack on us passes straight through, and every dodge after leaves two copies of us that strike back. Up before they attack — it cannot help once they have."</b>`,
   Steel:    `<b>"Steel Aegis: four layers of block to soak their blows, and 40% less from whatever gets through."</b>`,
   Psychic:  `<b>"Discombobulate — they cannot tell friend from foe. Watch them hit themselves!"</b>`,
-  FairyLine:`<b>"And the stone you took from the tower. Diamond Dust sweeps away everything they put on us, and holds our own stones in the air. Cast it just before your buffs run out — they stay up as long as it does."</b>`,
+  FairyLine:`<b>"And the stone you took from the tower. Diamond Dust sweeps away the worst of what they put on us, a little every turn, and holds our own stones in the air. Cast it just before your buffs run out — they stay up as long as it does."</b>`,
   FairyHeld:`<b>"They were about to fade. The dust holds them — five more rounds."</b>`,
 };
 function r5Vault(){ const r = r5(); r.vault = r.vault || { scene:false, tries:0, won:false }; return r.vault; }

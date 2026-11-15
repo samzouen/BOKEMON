@@ -1641,3 +1641,139 @@ function fxShake(px, ms){
   for(let i = 0; i <= 6; i++) k.push({ transform:i === 6 ? 'translate(0,0)' : `translate(${(i % 2 ? -1 : 1) * px * (1 - i / 6)}px,${(i % 3 - 1) * px * 0.5 * (1 - i / 6)}px)` });
   try { st.animate(k, { duration:ms || 140, easing:'linear' }); } catch(e){}
 }
+
+/* ============================================================
+   DYNAMITE FRUIT (4.51) — its look, ready for the Grass keystone that will grow it (the designer's, in the Talents
+   Handover: a fruit on their side that stores your team's overheal and bursts on all of them). The designer: "Make
+   dynamite fruit about a third the size of an enemy's sprite on screen. Where should it sit on the enemy's side? Please
+   create a green explosion fx whenever it is set off, and an orange glow and fuse sparkle whenever heals recharge it."
+   - The fruit (assets/ui/dynamite_fruit.png: a sandbox tree's capsule, green, in an orange aura) is drawn at their
+     sprites' own pixel size — 40 pixels square to their 96, about 34 of them standing — so it is a third of theirs,
+     its pixels the same size as theirs. It sits on the ground in front of their row, under the row's middle: on their
+     side, clear of their names and health, facing yours. Under it, its charge, a thin orange bar.
+   - It is drawn while ui.battle.dynFruit is set ({ hp, max }: dynFruitHtml, from renderBattle) and placed again after
+     every drawing and every change of their row (dynFruitPlace).
+   - dynFruitCharge(): heals storing into it — an orange glow swells round it and its fuse (the stalk) sparks; its bar
+     moves to its charge.
+   - dynFruitBlast(done): set off — a green flash and a green fireball where it stands, two green rings running out over
+     their row, its seeds thrown (a sandbox tree's pods burst and fling them), and a green burst on each of theirs as the
+     ring reaches it; the screen shakes. The fruit recoils and stays (nothing removes it), its charge halved.
+   Nothing grows one yet: until the talent is built none of this is ever seen in a fight.
+   ============================================================ */
+const DYN_FRUIT = { src:'assets/ui/dynamite_fruit.png', px:40, fuse:[0.525, 0.33], blastMs:560 };
+function dynFruitCss(){
+  if(document.getElementById('dynFruitCss')) return;
+  const s = document.createElement('style');
+  s.id = 'dynFruitCss';
+  s.textContent = `
+    .dyn-fruit{position:absolute;z-index:2;pointer-events:none;display:flex;flex-direction:column;align-items:center;}
+    .dyn-fruit .dyn-img{display:block;width:100%;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;transform-origin:50% 92%;}
+    .dyn-fruit .dyn-bar{width:62%;height:5px;margin-top:-3px;background:rgba(35,32,25,.38);border-radius:3px;overflow:hidden;}
+    .dyn-fruit .dyn-bar i{display:block;height:100%;background:linear-gradient(90deg,#f05a16,#ffd040);transition:width .5s ease;}
+    .dyn-fruit.charging .dyn-img{animation:dynCharge .75s ease-out;}
+    @keyframes dynCharge{0%{filter:none;}25%{filter:brightness(1.3) drop-shadow(0 0 5px rgba(255,148,32,.95)) drop-shadow(0 0 12px rgba(255,120,20,.6));}100%{filter:none;}}
+    .dyn-fruit.blasting .dyn-img{animation:dynRecoil .62s ease-out;}
+    @keyframes dynRecoil{0%{transform:scale(1);filter:brightness(2.6) saturate(.4);}18%{transform:scale(1.22,.8);}42%{transform:scale(.9,1.1);filter:none;}70%{transform:scale(1.04,.97);}100%{transform:scale(1);}}
+    @media (prefers-reduced-motion: reduce){ .dyn-fruit.charging .dyn-img, .dyn-fruit.blasting .dyn-img{animation:none;} }
+  `;
+  document.head.appendChild(s);
+}
+function dynFruitPct(f){ return Math.max(0, Math.min(100, Math.round((f.hp || 0) / Math.max(1, f.max || 1) * 100))); }
+function dynFruitHtml(b){
+  const f = b && b.dynFruit;
+  if(!f) return '';
+  dynFruitCss();
+  const p = dynFruitPct(f);
+  return `<div class="dyn-fruit" id="dynFruit" role="img" aria-label="Dynamite Fruit, ${p}% charged">` +
+    `<img class="dyn-img" src="${DYN_FRUIT.src}" alt="" draggable="false"><div class="dyn-bar"><i style="width:${p}%"></i></div></div>`;
+}
+/* On the ground in front of their row: under its middle, just below the lowest of their health bars. The row as it is
+   laid out (a fallen one's place kept), so the fruit does not move as they fall. */
+function dynFruitPlace(){
+  const el = document.getElementById('dynFruit'), st = document.getElementById('battleStage');
+  if(!el || !st || !ui.battle) return;
+  const cards = [...st.querySelectorAll('.enemy-row .enemy-card')];
+  if(!cards.length) return;
+  const sr = st.getBoundingClientRect();
+  let l = Infinity, r = -Infinity, bot = -Infinity;
+  cards.forEach(c=>{ const q = c.getBoundingClientRect(); l = Math.min(l, q.left); r = Math.max(r, q.right); bot = Math.max(bot, q.bottom); });
+  const size = Math.round(enemySpriteSize(enemyFieldSlots(ui.battle)) * DYN_FRUIT.px / 96);   // their own pixel size
+  el.style.width = size + 'px';
+  el.style.left = Math.round((l + r) / 2 - sr.left - size / 2) + 'px';
+  el.style.top = Math.round(bot - sr.top + 6) + 'px';
+}
+function dynFruitBar(){
+  const b = ui.battle, f = b && b.dynFruit, i = document.querySelector('#dynFruit .dyn-bar i');
+  if(f && i) i.style.width = dynFruitPct(f) + '%';
+  const el = document.getElementById('dynFruit');
+  if(f && el) el.setAttribute('aria-label', `Dynamite Fruit, ${dynFruitPct(f)}% charged`);
+}
+function dynFruitPulse(cls, ms){
+  const el = document.getElementById('dynFruit');
+  if(!el) return;
+  el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+  setTimeout(()=> el.classList.remove(cls), ms);
+}
+/* Its fuse's tip, on the canvas (pixels). */
+function dynFruitFuse(){
+  const img = document.querySelector('#dynFruit .dyn-img');
+  if(!img) return null;
+  const q = img.getBoundingClientRect();
+  if(!(q.width > 0)) return null;
+  return { x:(q.left + q.width * DYN_FRUIT.fuse[0] - FX.ox) / FX.P, y:(q.top + q.height * DYN_FRUIT.fuse[1] - FX.oy) / FX.P };
+}
+/* Heals storing into it: the glow swells behind it (the canvas under every sprite), the fuse sputters in front. */
+function dynFruitCharge(){
+  dynFruitBar();
+  dynFruitPulse('charging', 780);
+  fxCue(()=>{
+    const at = fxAnchor('dynFruit'), tip = dynFruitFuse();
+    if(!at) return;
+    const F = FX_FIRE, R = at.w * 0.42;
+    fxAdd({ layer:'under', dur:700, step(L, t){
+      const u = t / 700, sw = fxEaseOut(Math.min(1, t / 260)), fade = u < 0.35 ? 1 : 1 - (u - 0.35) / 0.65;
+      fxDisc(L, at.x, at.y, R * (0.7 + 0.5 * sw), F[3], 0.55 * fade);
+      fxDisc(L, at.x, at.y, R * (0.55 + 0.4 * sw), F[2], 0.75 * fade);
+      fxDisc(L, at.x, at.y, R * (0.35 + 0.3 * sw), F[1], 0.85 * fade);
+    } });
+    fxAdd({ layer:'back', dur:420, step(L, t){ if(t < 300) fxRing(L, at.x, at.y, R * (0.8 + t / 300 * 0.6), 1, F[1], 1 - t / 300); } });
+    if(!tip) return;
+    for(let k = 0; k < 3; k++){                    // three sputters, as a fuse fizzes
+      fxSpray('back', fxBurstParts(tip.x, tip.y, 13, { seed:31 + k * 17, ang:-Math.PI / 2, spread:2.4, vmin:45, vmax:135, grav:170, drag:1.4,
+        lmin:220, lmax:520, delay:50, ramp:[FX_ELEC[0], F[1], F[1], F[2], F[3]] }).map(p=>{ p.delay = (p.delay || 0) + k * 140; return p; }), 1000);
+    }
+    fxAdd({ layer:'back', dur:640, step(L, t){       // the fuse's tip, flickering
+      const rnd = fxRand(7 + ((t / 60) | 0) * 13), on = rnd() < 0.85, r = (3 + Math.round(rnd() * 2)) * (t < 460 ? 1 : 0.6);
+      if(on) fxStar4(L, tip.x, tip.y, r, F[1], FX_ELEC[0]);
+      if(on && t < 460) fxDisc(L, tip.x, tip.y, 1, FX_ELEC[0]);
+    } });
+  }, { need:['dynFruit'] });
+}
+/* Set off: the green blast, out over all of theirs. `done` once the ring has reached them. */
+function dynFruitBlast(done){
+  const b0 = ui.battle;
+  dynFruitBar();
+  dynFruitPulse('blasting', 640);
+  fxCue(()=>{
+    const at = fxAnchor('dynFruit');
+    if(!at) return;
+    const G = FX_GRASS, T = DYN_FRUIT.blastMs;
+    const foes = (ui.battle.enemies || []).map((e, i)=> e && e.hp > 0 ? fxAnchor('enemy-' + i) : null).filter(Boolean);
+    const far = Math.max(at.w * 2, ...foes.map(f=> Math.hypot(f.x - at.x, f.y - at.y) + 14));
+    fxFlash('back', at, at.w * 0.5, G[0], 90);
+    fxFireBurst(at, 'back', { big:2.1, pal:G, seed:41 });
+    fxAdd({ layer:'back', dur:T + 160, step(L, t){
+      const u = fxEaseOut(Math.min(1, t / T));
+      if(t <= T) fxRingWide(L, at.x, at.y, 6 + u * far, 3, G[1], 1 - u * 0.85, 0.6);
+      if(t > 90){ const v = fxEaseOut(Math.min(1, (t - 90) / T)); if(v < 1) fxRingWide(L, at.x, at.y, 4 + v * far * 0.82, 2, G[2], 0.9 - v * 0.8, 0.6); }
+    } });
+    fxSpray('back', fxBurstParts(at.x, at.y, 24, { seed:7, vmin:90, vmax:230, grav:260, drag:1.1, lmin:380, lmax:820, ramp:[G[1], G[2], G[3], G[4]] }), 1000);
+    fxSpray('back', fxBurstParts(at.x, at.y - 2, 10, { seed:9, vmin:60, vmax:160, ang:-Math.PI / 2, spread:2.2, grav:300, drag:0.8, lmin:500, lmax:900, size:2.4, ramp:[G[4], G[4], G[5]] }), 1100);   // its seeds, flung
+    foes.forEach((f, k)=>{
+      const d = Math.hypot(f.x - at.x, f.y - at.y), u = Math.min(0.99, Math.max(0, (d - 6) / far));
+      fxLater(Math.round(T * (1 - Math.sqrt(1 - u))), ()=> fxFireBurst(f, 'back', { big:1.15, pal:G, seed:53 + k * 11 }));
+    });
+    fxShake(5, 280);
+  }, { need:['dynFruit'] });
+  if(done) setTimeout(()=>{ if(ui.battle === b0) done(); }, DYN_FRUIT.blastMs + 140);
+}
