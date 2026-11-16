@@ -346,7 +346,7 @@ function invGroundsThings(T){
   T({ x:F.king.x, y:F.king.y, still:true, cls:'ca-npc inv-king-wait', who:null,
       html:()=> caMonImg('fairy_king_c', WALK_T * 1.75, false, CA_WHO.king.icon, 'back'),
       verb:'Talk', sub:'The Fairy King', mark:()=> invAt('escort') && invRouted(),
-      when:()=> NEW() && invAt('palace', 'tower', 'escort') && !ui.invClimax, act:()=> invKingFountTalk() });
+      when:()=> NEW() && invAt('palace', 'tower', 'escort') && !ui.invClimax && !(typeof khOn === 'function' && khOn()), act:()=> invKingFountTalk() });   // (4.56) on his horse, hunting them, till the tribes come (36-the-return.js)
   /* his fight lost or left: Wadjet on the fountain's rim; the King on the path, she beside him, the Dauphin and the
      Advisor standing guard */
   const waiting = ()=> NEW() && invAt('wadjet') && !ui.invClimax;

@@ -621,6 +621,38 @@ function walkCss(){
     .walk-acts.below{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px;margin-top:10px;min-height:122px;align-content:flex-start;}
     .walk-acts.below > .wact{flex:1 1 calc(50% - 3px);width:auto;min-width:0;}
     .walk-acts.below > .wact:first-child{flex-basis:100%;}
+    /* (4.52) Lucesco's dial beside the D-pad: level with it (their bottoms together), Party and Map over the dial;
+       the map fitted to the screen (walkFitStage); the bar along the bottom, its room always kept */
+    .walk-stage.fit{max-width:100%;}
+    .walk-pads.dial{align-items:flex-end;justify-content:space-between;}
+    .walk-pads.dial .walk-side{flex:0 0 auto;width:min(196px, calc(100% - 208px));min-width:0;max-width:none;gap:8px;}
+    .walk-pads.dial .walk-side-top .wact.party{min-height:36px;font-size:13px;border-radius:12px;}
+    .walk-pads.dial .walk-side-top .wact.party.side{flex-direction:row;gap:5px;font-size:13px;padding:3px 6px;}
+    .walk-pads.dial .walk-side-top .wact.party.side b{font-size:15px;}
+    @media (max-width:480px){
+      .walk-pads.dial .walk-dpad{grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);}
+      .walk-pads.dial .walk-side{width:min(196px, calc(100% - 184px));}
+    }
+    .walk-acts.bar{display:flex;flex-direction:row;gap:8px;margin-top:10px;height:62px;overflow-x:auto;overflow-y:hidden;
+      scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+    .walk-acts.bar::-webkit-scrollbar{display:none;}
+    .walk-acts.bar > .wbar{flex:1 1 0;min-width:calc((100% - 16px) / 3);width:auto;height:100%;min-height:0;flex-direction:row;
+      align-items:center;justify-content:flex-start;gap:8px;padding:5px 10px 5px 6px;text-align:left;scroll-snap-align:start;border-radius:16px;
+      box-shadow:inset 0 -3px 0 rgba(0,0,0,.16);}
+    .walk-acts.bar.many > .wbar{flex:0 0 calc((100% - 16px) / 3);}
+    .wbar-face{flex:0 0 auto;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+      background:radial-gradient(circle at 50% 38%, rgba(255,255,255,.42), rgba(255,255,255,.12) 70%);box-shadow:inset 0 0 0 2px rgba(255,255,255,.28);overflow:hidden;}
+    .wbar-face{position:relative;}
+    .wbar-face img{width:118%;height:118%;object-fit:contain;image-rendering:pixelated;transform:translateY(6%);filter:drop-shadow(0 1px 1px rgba(0,0,0,.35));pointer-events:none;}
+    .wbar-face img.fit{position:absolute;max-width:none;object-fit:fill;transform:none;}
+    .wbar-ic{display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:#fff;}
+    .wbar-ic svg{width:26px;height:26px;}
+    .wbar-words{display:flex;flex-direction:column;align-items:flex-start;min-width:0;line-height:1.1;}
+    .wbar-words b{font:800 16px/1.05 'Baloo 2',cursive;}
+    .wbar-words small{font:700 11.5px/1.2 'Nunito',sans-serif;opacity:.9;margin-top:1px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .wbar-empty{flex:1;border:1.5px dashed rgba(60,50,30,.2);border-radius:16px;display:flex;align-items:center;justify-content:center;
+      font:700 12.5px/1.2 'Nunito',sans-serif;color:var(--ink-soft);opacity:.7;}
+    @media (max-width:480px){ .wbar-face{width:42px;height:42px;} .wbar-words b{font-size:14.5px;} .walk-acts.bar > .wbar{padding:4px 8px 4px 5px;gap:6px;} }
     /* (2.95) every picture is drawn facing left: face-r turns it round, on
        top of whatever else it is doing */
     .walk-ent.face-r > img, .walk-ent.face-r > .walk-emoji, .walk-ent.face-r > .crowned-wrap,
@@ -708,10 +740,14 @@ function renderWalkDeck(id){
      their row, and the buttons for what you stand beside go below it all (#walkActs.below), where their coming and
      going moves nothing above them. */
   const pad = d.padMoves || null;
+  /* (4.52) …or, riding Lucesco, his dial (pad.dial: 20-jungle.js) — level with the D-pad, Party and Map over it — and
+     whatever you stand beside in a bar along the bottom, its room always kept; the map as tall as the screen leaves
+     it (walkFitStage), so the page never scrolls */
+  const dial = !!(pad && pad.dial);
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← ${escapeHtml(d.backLabel || 'Explore')}</button>
     ${(state.progress.currentRegion === 4 && typeof expeditionBar === 'function') ? expeditionBar(true) : ''}
-    <div class="walk-stage walk-still" id="walkStage">
+    <div class="walk-stage walk-still${dial ? ' fit' : ''}" id="walkStage">
       <button class="walk-path" id="walkPath">Path</button>
       <div class="walk-world" id="walkWorld" style="
         --wt:${WALK_T}px;
@@ -720,7 +756,7 @@ function renderWalkDeck(id){
         background-size:${nat[0]*d.bs*WALK_T}px ${nat[1]*d.bs*WALK_T}px;
         background-position:${d.bx*WALK_T}px ${d.by*WALK_T}px;"></div>
     </div>
-    <div class="walk-pads${pad ? ' fixed' : ''}">
+    <div class="walk-pads${pad ? ' fixed' : ''}${dial ? ' dial' : ''}">
       <div class="walk-dpad">
         <i></i><button class="wkey" data-d="u">${TRI('u')}</button><i></i>
         <button class="wkey" data-d="l">${TRI('l')}</button><i></i><button class="wkey" data-d="r">${TRI('r')}</button>
@@ -728,9 +764,9 @@ function renderWalkDeck(id){
       </div>
       <div class="walk-side">
         <div class="walk-side-top" id="walkSideTop"><button class="wact party" id="walkParty">Party</button></div>
-        ${pad ? `<div class="walk-moves" id="walkMoves">${pad.html(d)}</div>` : '<div class="walk-acts" id="walkActs"></div>'}
+        ${pad ? `<div class="walk-moves${dial ? ' dial' : ''}" id="walkMoves">${pad.html(d)}</div>` : '<div class="walk-acts" id="walkActs"></div>'}
       </div>
-    </div>${pad ? '<div class="walk-acts below" id="walkActs"></div>' : ''}`;
+    </div>${pad ? `<div class="walk-acts ${dial ? 'bar' : 'below'}" id="walkActs"></div>` : ''}`;
   walkSideRefresh();
   $('#backBtn').addEventListener('click', ()=>{ walkTeardown(); go(d.backTo || 'explore'); });   // (3.79) the Rift's goes to its region
   /* remember where to come back to, so Party does not dump you on the region
@@ -912,6 +948,30 @@ function renderWalkDeck(id){
   /* (4.44) Region 5's places, drawn at the screen's own sharpness on a canvas under the walk (40-r5-art.js) */
   if(typeof deckArtStart === 'function') deckArtStart(world, d);
   if(d.onRender) d.onRender(world, d);
+  walkFitStage();                        // (4.52) the dial's deck: the map fitted to the screen
+}
+/* (4.52) With Lucesco's dial (renderWalkDeck): the map keeps the full width, and is square while the screen has the
+   room — on a shorter one it gives up height (to two fifths of its width at the least), so the dial and the bar along the bottom
+   are on the screen with no scrolling. Again when the screen turns (walkFitWatch), or a row of counters comes or goes. */
+function walkFitStage(){
+  walkFitWatch();
+  const st = $('#walkStage');
+  if(!st || !st.classList.contains('fit')) return;
+  const W = st.clientWidth;
+  if(!W) return;
+  st.style.height = W + 'px';
+  const over = document.documentElement.scrollHeight - window.innerHeight;
+  const h = over > 0 ? Math.max(Math.round(W * 0.4), W - over) : W;
+  if(h !== W) st.style.height = h + 'px';
+  const pads = document.querySelector('.walk-pads.dial');
+  if(pads && typeof pads._fit === 'function') pads._fit();          // the dial's own sizes (its words, its face)
+  refreshWalk();
+}
+let _walkFitT = 0;
+function walkFitWatch(){
+  if(walkFitWatch.on) return;
+  walkFitWatch.on = true;
+  window.addEventListener('resize', ()=>{ clearTimeout(_walkFitT); _walkFitT = setTimeout(()=>{ if(document.querySelector('#walkStage.fit')) walkFitStage(); }, 160); });
 }
 /* What you look like on a deck: yourself — or, where a deck says so, someone
    else (Cosa Nostia's disguise, 2.91: d.youArt(d) → picture HTML, or null). */
@@ -1232,6 +1292,7 @@ function refreshWalk(){
   if(sig === w.actSig) return;
   w.actSig = sig;
   const acts = $('#walkActs');
+  if(acts.classList.contains('bar')) return walkBarFill(acts, near, extra);   // (4.52) the bar along the bottom
   acts.innerHTML = '';
   /* Cuain can be spoken to from anywhere — he is behind you, not beside you. */
   const withGhost = near.length + extra.length + (cuainAboard() ? 1 : 0);
@@ -1286,6 +1347,103 @@ function refreshWalk(){
       acts.appendChild(e);
     }
   });
+}
+
+/* (4.52) The bar along the bottom (renderWalkDeck, with Lucesco's dial). The designer: "conversation buttons with other
+   NPCs should not fall below the bottom of the screen to prevent scrolling, so make those live at the bottom, and
+   side by side if multiple options are available, with sprite images to show who is talking." One card for each
+   thing beside you — whoever it is in it (walkThingFace), then what it is and who — side by side across the bar (one
+   alone takes it all; past three, it scrolls sideways). Its height is always kept, so nothing over it moves. */
+function walkBarFill(acts, near, extra){
+  acts.innerHTML = '';
+  const card = (cls, face, verb, sub, act)=>{
+    const b = document.createElement('button');
+    b.className = 'wact live wbar' + (cls ? ' ' + cls : '');
+    b.innerHTML = `<span class="wbar-face">${face}</span><span class="wbar-words"><b>${escapeHtml(verb)}</b>${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</span>`;
+    b.addEventListener('click', act);
+    acts.appendChild(b);
+    return b;
+  };
+  extra.forEach(a=>{
+    const words = a.verb ? { verb:a.verb, sub:a.sub || '' } : walkActWords(a.html);
+    card(a.cls, a.face || walkVerbIcon(words.verb), words.verb, words.sub, ()=>{ if(walkState().busy) return; if(a.at) walkFaceToward(a.at.x + 0.5); a.act(); });
+  });
+  near.forEach(t=>{
+    card(t.barCls || '', walkThingFace(t), t.verb, t.where || t.sub || '', ()=>{
+      const ws = walkState(); if(ws.busy) return;
+      const pp = ws.at && ws.at[ws.deck];
+      if(pp && !thingCovers(t, pp.x, pp.y)) walkFaceToward(thingMidX(t));
+      t.act();
+    });
+    const ex = t.extra && t.extra();
+    if(ex) card('suspect', walkVerbIcon(ex.verb), ex.verb, '', ()=>{ if(!walkState().busy) ex.act(); });
+  });
+  if(!acts.children.length) acts.innerHTML = '<div class="wbar-empty">Walk up to someone to talk</div>';
+  acts.classList.toggle('many', acts.children.length > 3);
+  acts.scrollLeft = 0;
+  acts.querySelectorAll('.wbar-face img').forEach(walkFaceFit);
+}
+/* (4.52) Who is in a card, filling its circle: the picture's drawn part measured once (its see-through margin left out),
+   then the head and shoulders of a tall figure, or all of a small one, set in the middle. A picture that cannot be
+   measured (opened from a file) stays as the stylesheet draws it. */
+const _walkFaceBox = new Map();
+function walkFaceFit(img){
+  const run = ()=>{
+    let b = _walkFaceBox.get(img.src);
+    if(b === undefined){
+      b = null;
+      try {
+        const w = img.naturalWidth, h = img.naturalHeight, cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0);
+        const d = cx.getImageData(0, 0, w, h).data;
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for(let y = 0; y < h; y++) for(let x = 0; x < w; x++) if(d[(y * w + x) * 4 + 3] > 24){ if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; }
+        if(x1 >= 0) b = { w, h, x0, y0, x1:x1 + 1, y1:y1 + 1 };
+      } catch(e){ b = null; }
+      _walkFaceBox.set(img.src, b);
+    }
+    const box = img.parentElement;
+    if(!b || !box) return;
+    let { x0, y0, x1, y1 } = b;
+    const bw = x1 - x0;
+    if(y1 - y0 > bw * 1.15) y1 = y0 + bw * 1.15;                       // a tall one: from the top, as far down as it is wide and a bit
+    const S = box.clientWidth || 48, k = S * 0.86 / Math.max(x1 - x0, y1 - y0);
+    img.classList.add('fit');
+    Object.assign(img.style, { width:(b.w * k).toFixed(1) + 'px', height:(b.h * k).toFixed(1) + 'px',
+      left:(S / 2 - (x0 + x1) / 2 * k).toFixed(1) + 'px', top:(S / 2 - (y0 + y1) / 2 * k).toFixed(1) + 'px' });
+  };
+  if(img.complete && img.naturalWidth) run(); else img.addEventListener('load', run, { once:true });
+}
+/* a button's words, from its html ("💬 Talk<small>Name</small>"): what it is, and who */
+function walkActWords(html){
+  const el = document.createElement('div'); el.innerHTML = html || '';
+  const sm = el.querySelector('small'), sub = sm ? sm.textContent.trim() : '';
+  if(sm) sm.remove();
+  el.querySelectorAll('img').forEach(i=> i.remove());
+  return { verb:el.textContent.replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF\uFE0F]/gu, '').trim() || 'Talk', sub };
+}
+/* who a thing is, for its card: its own face (t.face), else the picture it stands on the deck as, else a sign for what
+   it is (a door, a way up, a portal) */
+function walkThingFace(t){
+  if(t.face) return typeof t.face === 'function' ? t.face(t) : t.face;
+  if(typeof t.html === 'function'){
+    try { const m = /<img[^>]*\bsrc="([^"]+)"/.exec(t.html(t, WALK_T) || ''); if(m) return `<img src="${m[1]}" alt="" onerror="this.replaceWith(document.createTextNode('💬'))">`; } catch(e){}
+  }
+  if(t.icon) return `<span class="wbar-ic">${t.icon}</span>`;
+  return walkVerbIcon(t.verb, t.arrow);
+}
+const WALK_BAR_IC = {
+  talk:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-4.5 3.5V17H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><circle cx="8.5" cy="11" r="1.1" fill="currentColor"/><circle cx="12" cy="11" r="1.1" fill="currentColor"/><circle cx="15.5" cy="11" r="1.1" fill="currentColor"/></svg>',
+  door:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M6 21V5.5A2.5 2.5 0 0 1 8.5 3h7A2.5 2.5 0 0 1 18 5.5V21"/><path d="M3.5 21h17"/><circle cx="14.6" cy="12.5" r="1.2" fill="currentColor"/></svg>',
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V5"/><path d="M5.5 11.5 12 5l6.5 6.5"/></svg>',
+  fight:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l9.5 9.5M4 4h4M4 4v4"/><path d="M20 4l-9.5 9.5M20 4h-4M20 4v4"/><path d="M7 17l-3 3M17 17l3 3M9 15l-2 2M15 15l2 2"/></svg>',
+  portal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 12.5a1.6 1.6 0 1 1 1.6-1.6M12 12.5c-2.4 0-3.6-1.6-3.6-3.2s1.6-3.6 4-3.6 4.6 2 4.6 4.8-2.6 5.6-6 5.6-6.4-2.8-6.4-6.6"/></svg>',
+};
+function walkVerbIcon(verb, arrow){
+  const v = String(verb || '');
+  const k = /challenge|fight/i.test(v) ? 'fight' : /portal/i.test(v) ? 'portal' : (arrow === 'up' || /^up$/i.test(v)) ? 'up' : /enter|door|gate|in$/i.test(v) ? 'door' : 'talk';
+  return `<span class="wbar-ic ${k}">${WALK_BAR_IC[k]}</span>`;
 }
 
 /* You and the Whalelord turn to each other (2.95): to talk. */

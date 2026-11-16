@@ -321,7 +321,9 @@ async function invRushRun(){
            ['king', `<b>"I must trust my daughters… the Dauphin, and her little sister. And you, my friends."</b>`],
            ['king', `<b>"Please. Go into the palace, and bring my little one out to me."</b>`],
            ['lion', `<b>"We'll bring her back to you. Come on!"</b>`],
-           `The King slides down from his saddle and plants himself on the path before his palace, between his people and the fighting.`]);
+           /* (4.56) he does not get down: he turns on them (the King's hunt, below) */
+           `The King wheels his horse round to face the market. Out there the knights' line has broken: aliens are loose among the running townsfolk — more of them than there are knights to hold them.`,
+           ['king', `Violet light kindles in his hands, and his voice drops to something you have never heard from him before.<br><br><b>"Not one of my people. Not ONE."</b>`]]);
   /* the story on: the palace (the things drawn now stand where the scene's did) */
   const v = invState();
   v.said.arrived = true;
@@ -1018,8 +1020,9 @@ function invCocoonEls(world){
     world.appendChild(el);
   });
 }
-/* one in flight, from (x0, y0) to (x1, y1) in squares, over everything; resolves as it is gone */
-function invCocoonFly(world, x0, y0, x1, y1, ms){
+/* one in flight, from (x0, y0) to (x1, y1) in squares, over everything; resolves as it is gone. (4.56) `quiet`: the
+   King's hunt's, every few seconds — no alarm, and not counted with the scenes' */
+function invCocoonFly(world, x0, y0, x1, y1, ms, quiet){
   world = world || $('#walkWorld');
   if(!world) return sceneWait(ms);
   invReturnCss();
@@ -1033,8 +1036,10 @@ function invCocoonFly(world, x0, y0, x1, y1, ms){
   const t = Math.max(1, ms * SCENE_SPEED);
   el.style.transition = `left ${t}ms cubic-bezier(.3,.1,.6,1), top ${t}ms cubic-bezier(.2,0,.7,1), opacity ${t * 0.25}ms ease ${t * 0.75}ms, transform ${t}ms ease-in`;
   el.style.left = (x1 * T) + 'px'; el.style.top = (y1 * T) + 'px'; el.style.opacity = '0'; el.style.transform = 'scale(.55)';
-  try { playSfx('alert'); } catch(e){}
-  ui.invCocoonsFlown = (ui.invCocoonsFlown || 0) + 1;                   // (the test looks)
+  if(!quiet){
+    try { playSfx('alert'); } catch(e){}
+    ui.invCocoonsFlown = (ui.invCocoonsFlown || 0) + 1;                 // (the test looks)
+  }
   return sceneWait(ms).then(()=> el.remove());
 }
 
@@ -1085,4 +1090,526 @@ function invReturnCss(){
   @media (prefers-reduced-motion: reduce){ .inv-cocoon .ic-in, .inv-cocoon-smoke i, .scene-actor.inv-fleeing-run .sa-in{ animation-duration:6s; } }
   `;
   document.head.appendChild(s);
+}
+
+/* ============================================================
+   THE KING'S KH (4.56)
+   The designer, 2026-11-16: "can you help me upgrade the fairy king's urgent return to the castle? I love the cocoon
+   animations and sprites! Please have more running citizens and aliens roaming, more than soldiers available. Have the
+   king on his horse track and hunt down aliens on his steed automatically, and laser them down with his purple beam.
+   Hold the laser and play the alien electrocution animation for much longer but without the sound until the alien
+   turns black, then fades into dust that floats off. … The king will only target roaming aliens, not the ones who are
+   fighting his soldiers. Furthermore the king will occasionally stop, lean forward a little, and have a black shadow
+   over his head to show how spent he is. Talking to the king will show a message about how exhausted it is, to the
+   point it seems like he might fade away at any moment, yet his fierce protectiveness makes him terrifying as he
+   ruthlessly channels his life force into intensely hot psychic beams. He then speaks, telling the player to please
+   hurry and save his beloved daughters, especially the younger princess."
+   While the castle is invaded and the tribes have not come yet (the new way: the palace, the tower, the escort), the
+   grounds have, besides the knights' fights: townsfolk running for their lives from door to door; aliens loose about
+   the market and the streets, more of them than there are knights to hold them, and another cocoon dropping in over
+   the walls whenever one is burnt away; and the King on his horse, riding down the nearest loose one and holding his
+   beam on it — the alien crackling, blackening, then dust on the wind. After two or three he stops, bowed in the
+   saddle, a shadow over his head. He never turns on the ones the knights are fighting. All of it silent: the
+   fighting's own sounds are the music's.
+   ============================================================ */
+const KH = {
+  aliens:10, folk:16,                      // loose at once (the knights: eight, and the Commander), and running
+  tick:100, kingMs:230, alienMs:620, folkMs:190,
+  reach:4, close:2.5, holdMs:3200, dustMs:1700,   // his beam's reach (squares) — he rides in to within `close` first; held this long; then dust
+  restEvery:[2, 3], restMs:3600, firstMs:900,
+  near:5,                                  // the castle's camera shows about eight squares across: the loose ones prowl within this of you, so you see them
+  folkNear:16,                             // the doors the townsfolk run between: within this of you (all of them, when none is)
+  dropMs:[2200, 4600],                     // a burnt one's cocoon-borne replacement, so long after
+  kinds:['alien_insect_physical', 'alien_magnet_electric', 'alien_crocodilian_fire', 'alien_golem_ground', 'alien_gremlin_fairy',
+         'alien_toxic_gas_ghost', 'alien_dolphin_water', 'alien_flower_grass', 'alien_robot_steel', 'alien_grimgate_psychic'],
+};
+let _kh = null;
+/* while it goes on: the castle invaded, the new way, before the tribes come — and not in one of its scenes */
+function khOn(){
+  return typeof invOn === 'function' && invOn() && invNew() && invAt('palace', 'tower', 'escort') && !invRouted() && !ui.invClimax;
+}
+const KH_ZONE = { x0:3, y0:31, x1:60, y1:53 };                        // where the loose ones prowl: the market and the streets below it (the forecourt and the gate kept clear)
+const KH_FOLK = ['choux_fairy', 'choux_fairy1', 'fairybunny', 'fairybunny1', 'fairybird', 'fairybird1', 'cream_fairy', 'cream_fairy1', 'melody_fairy', 'mantis'];
+function khStart(world){
+  khStop();
+  if(!world || !khOn()) return;
+  khCss();
+  const m = CA_MAPS[CA_KEY](), T = WALK_T;
+  const H = _kh = { world, m, T, clock:0, last:performance.now(), aliens:[], folk:[], dust:[], kills:0, restAt:2 + (Math.random() < 0.5 ? 1 : 0), n:0, beams:0 };
+  ui.kingHunt = H;
+  /* where the townsfolk run to: the doors of the houses and the tavern, the records hall, the streets' ends */
+  const doors = Object.entries(typeof questCastleDoors === 'function' ? questCastleDoors() : {}).filter(([k])=> !/palace|tower/.test(k)).map(([, d])=> ({ x:d.x, y:d.y }));
+  H.doors = doors.concat([{ x:5, y:46 }, { x:58, y:46 }, { x:5, y:52 }, { x:58, y:52 }]).map(d=> khNearestOpen(m, d)).filter(Boolean);
+  /* the loose aliens, about the market and the streets */
+  const spots = khSpots(m, KH.aliens);
+  spots.forEach((s, i)=> khAlien(H, KH.kinds[i % KH.kinds.length], s.x, s.y, false));
+  /* the townsfolk, already running */
+  const near = khDoorsNear(H);
+  for(let i = 0; i < KH.folk; i++){ const d = near[i % near.length]; khFolk(H, KH_FOLK[i % KH_FOLK.length], d.x, d.y, i * 260); }
+  /* the King: where the rush left him, before the palace, if you are by it; else riding near you, a few squares off */
+  const p = caYou();
+  let k = INV_FOUNT.king;
+  if(p && khFromYou(k.x, k.y) > 6){
+    let best = null, bd = Infinity;
+    for(let y = p.y - 6; y <= p.y + 6; y++) for(let x = p.x - 6; x <= p.x + 6; x++){
+      if(!khGround(m, x, y) || khTaken(x, y)) continue;
+      const d = Math.abs(Math.hypot(x - p.x, y - p.y) - 4.5) + (y < p.y - 1 ? 3 : 0);   // about four or five off, not above you
+      if(d < bd){ bd = d; best = { x, y }; }
+    }
+    if(best) k = best;
+  }
+  H.king = { kind:'king', x:k.x, y:k.y, state:'hunt', next:KH.firstMs, el:khEl(H, 'kh-king', khKingImg('front'), k.x, k.y) };
+  H.king.el.id = 'khKing';
+  H.iv = setInterval(khTick, KH.tick);
+}
+function khStop(){
+  if(!_kh) return;
+  const H = _kh;
+  clearInterval(H.iv);
+  (H.timers || []).forEach(t=> clearTimeout(t));
+  H.aliens.forEach(a=> clearTimeout(a._boltT));
+  if(H.world) H.world.querySelectorAll('.kh-ent, .kh-beam, .kh-dustcloud, .kh-landed').forEach(el=> el.remove());
+  _kh = null; ui.kingHunt = null;
+}
+/* the tribes march in (invTribesMarch): the loose ones break and run with the rest, the townsfolk get indoors, and the
+   King rides back to the fountain to wait for her (the things drawn there take over: 26-invasion.js) */
+function khRout(H){
+  H.routed = true;
+  if(H.king && H.king.beam){ H.king.beam.remove(); H.king.beam = null; }
+  H.aliens.forEach(a=>{ clearTimeout(a._boltT); a.state = 'gone'; a.el.style.transition = 'transform 1.4s ease-in, opacity 1.4s ease-in'; khPlace(a.el, a.x, a.y + 6); a.el.style.opacity = '0'; });
+  H.folk.forEach(f=>{ f.el.style.transition = 'opacity .8s ease'; f.el.style.opacity = '0'; });
+  if(H.king){ H.king.el.style.transition = 'opacity .9s ease'; H.king.el.style.opacity = '0'; }
+  const t = setTimeout(()=>{ if(_kh === H) khStop(); }, 1600);
+  (H.timers = H.timers || []).push(t);
+}
+/* the nearest square anyone can stand on to (x, y), within three */
+function khNearestOpen(m, d){
+  for(let r = 0; r <= 3; r++) for(let dy = -r; dy <= r; dy++) for(let dx = -r; dx <= r; dx++){
+    if(Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+    const x = d.x + dx, y = d.y + dy;
+    if(khGround(m, x, y)) return { x, y };
+  }
+  return null;
+}
+/* a square of the grounds anyone can stand on (the knights' fights and the stalls are things: not those) */
+function khGround(m, x, y){ return !caSolidCode(caAt(m, x, y)) && !wBlockedBy(DECKS[CA_KEY], x, y); }
+/* somebody of the hunt on (x, y) (or you): not two on one square */
+function khTaken(x, y, me){
+  const H = _kh; if(!H) return false;
+  const p = caYou(), L = typeof caLion !== 'undefined' && caLion.at;
+  if(p && p.x === x && p.y === y) return true;
+  if(L && L.x === x && L.y === y) return true;                          // Lucesco, at your side
+  if(H.king && H.king !== me && H.king.x === x && H.king.y === y) return true;
+  return H.aliens.some(a=> a !== me && a.state !== 'gone' && a.x === x && a.y === y) || H.folk.some(f=> f !== me && f.on && f.x === x && f.y === y);
+}
+/* right beside Lucesco (his square or one next to it) */
+function khByLion(x, y){ const L = typeof caLion !== 'undefined' && caLion.at; return !!L && Math.max(Math.abs(x - L.x), Math.abs(y - L.y)) <= 1; }
+/* how far (in squares, either way) from you */
+function khFromYou(x, y){ const p = caYou(); return p ? Math.max(Math.abs(x - p.x), Math.abs(y - p.y)) : 0; }
+/* a square of the prowl: in it, open, not on anyone, never right up against you */
+function khProwl(m, x, y, me){ return x >= KH_ZONE.x0 && x <= KH_ZONE.x1 && y >= KH_ZONE.y0 && y <= KH_ZONE.y1 && khGround(m, x, y) && !khTaken(x, y, me) && khFromYou(x, y) >= 2; }
+/* n squares of the prowl round you (from `lo` to `hi` squares off), spread out; anywhere in it, when there are too few */
+function khSpots(m, n, lo, hi){
+  lo = lo == null ? 3 : lo; hi = hi == null ? KH.near + 1 : hi;
+  const all = [], wide = [];
+  for(let y = KH_ZONE.y0; y <= KH_ZONE.y1; y++) for(let x = KH_ZONE.x0; x <= KH_ZONE.x1; x++){
+    if(!khProwl(m, x, y)) continue;
+    const d = khFromYou(x, y);
+    (d >= lo && d <= hi ? all : wide).push({ x, y });
+  }
+  const out = [];
+  [all, wide].forEach(pool=>{
+    for(let tries = 0; out.length < n && pool.length && tries < 3000; tries++){
+      const c = pool[Math.floor(Math.random() * pool.length)];
+      if(out.some(o=> Math.abs(o.x - c.x) + Math.abs(o.y - c.y) < 3)) continue;
+      out.push(c);
+    }
+  });
+  return out;
+}
+/* ---------- the figures ---------- */
+/* a picture standing on its square's foot, as the castle's people do (.ca-art: 21-castle.js; spriteFeet) */
+function khImg(src, px){ const w = Math.round(px); return `<img class="ca-art kh-art" src="${src}" alt="" style="width:${w}px;height:${w}px" onload="spriteFeet(this)" onerror="this.style.visibility='hidden'">`; }
+function khKingImg(view){ return khImg(`assets/mon/fairy_king_mounted_c_${view}.png`, WALK_T * 2.3); }
+function khEl(H, cls, html, x, y, ms){
+  const el = document.createElement('div');
+  el.className = 'walk-ent kh-ent ' + cls;
+  el.innerHTML = `<div class="kh-fig">${html}</div>`;
+  el.style.transitionDuration = (ms || 0) + 'ms';
+  H.world.appendChild(el);
+  khPlace(el, x, y);
+  return el;
+}
+function khPlace(el, x, y, ms){
+  if(ms != null) el.style.transitionDuration = ms + 'ms';
+  el.style.transform = `translate3d(${x * WALK_T}px,${y * WALK_T}px,0)`;
+  el.style.zIndex = 10 + y;
+}
+/* one of them, loose: out of a cocoon (`fresh`), or already about */
+function khAlien(H, sp, x, y, fresh){
+  const a = { kind:'alien', id:'ha' + (H.n++), sp, x, y, state:'roam', next:H.clock + 300 + Math.random() * 1500, goal:null, faceR:Math.random() < 0.5 };
+  a.el = khEl(H, 'kh-alien' + (fresh ? ' kh-new' : ''), khImg(`assets/mon/${sp}.png`, WALK_T * 1.5), x, y);
+  faceRight(a.el, a.faceR);
+  H.aliens.push(a);
+  return a;
+}
+/* someone running for their life: out of a door (after `wait`), to another, and in */
+function khFolk(H, sp, x, y, wait){
+  const f = { kind:'folk', id:'hf' + (H.n++), sp, x, y, on:false, next:H.clock + (wait || 0), goal:null };
+  f.el = khEl(H, 'kh-folk', khImg(`assets/mon/${sp}_front.png`, WALK_T * 1.3), x, y);
+  f.el.style.opacity = '0';
+  H.folk.push(f);
+  return f;
+}
+/* ---------- the clock: a tenth of a second at a time, stopped while anyone talks or a scene plays ---------- */
+function khPaused(){
+  return !!(ui.caTalk || ui.sceneRunning || walkState().busy || document.querySelector('.scene-say') || (typeof eyeBreakActive === 'function' && eyeBreakActive()));
+}
+function khTick(){
+  const H = _kh;
+  if(!H) return;
+  if(ui.screen !== CA_KEY || !H.world.isConnected || !khOn()){ khStop(); return; }
+  const now = performance.now(), dt = Math.min(250, now - H.last);
+  H.last = now;
+  if(ui.sceneRunning){ if(!H.routed && document.querySelector('.inv-clash-alien.inv-fleeing')) khRout(H); return; }   // (the tribes are driving them out)
+  if(khPaused()) return;
+  H.clock += dt;
+  H.folk.forEach(f=> khFolkStep(H, f));
+  H.aliens.forEach(a=> khAlienStep(H, a));
+  khKingStep(H);
+  H.aliens = H.aliens.filter(a=> a.state !== 'gone');
+}
+/* the next step towards any of `goals` (squares), round whatever is in the way */
+function khPath(H, me, goals){
+  const W = H.m.W, set = new Set(goals.map(g=> g.y * W + g.x));
+  const s = caPathNext(H.m, me, set, (x, y)=> khGround(H.m, x, y) && !khTaken(x, y, me));
+  return s && !khTaken(s.x, s.y, me) ? s : null;                       // (a goal is let in even when someone is on it: not to step on them)
+}
+/* how close a straight run from a to b passes you (squares) */
+function khPastYou(a, b){
+  const p = caYou(); if(!p) return 0;
+  const vx = b.x - a.x, vy = b.y - a.y, L = vx * vx + vy * vy || 1, t = Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / L));
+  return Math.hypot(a.x + vx * t - p.x, a.y + vy * t - p.y);
+}
+/* the doors round you (all of them, when none is near) */
+function khDoorsNear(H){ const n = H.doors.filter(d=> khFromYou(d.x, d.y) <= KH.folkNear); return n.length >= 2 ? n : H.doors; }
+/* the townsfolk: out of a door, running to another (the farther ones), in at it — and out of another a moment later */
+function khFolkStep(H, f){
+  if(H.clock < f.next) return;
+  if(!f.on){
+    if(khTaken(f.x, f.y, f)){ f.next = H.clock + 400; return; }
+    f.on = true;
+    const near = khDoorsNear(H), far = near.filter(d=> Math.abs(d.x - f.x) + Math.abs(d.y - f.y) > 8);
+    const past = far.filter(d=> khPastYou(f, d) <= 3);                 // a run that goes by you, where you can see it, if there is one
+    const pick = past.length ? past : far.length ? far : near;
+    f.goal = pick[Math.floor(Math.random() * pick.length)];
+    f.el.style.transition = 'opacity .35s ease'; f.el.style.opacity = '1';
+    f.next = H.clock + 380;
+    return;
+  }
+  if(f.x === f.goal.x && f.y === f.goal.y){
+    /* in at the door; another comes running out of another, soon */
+    f.on = false;
+    f.el.style.transition = 'opacity .3s ease'; f.el.style.opacity = '0';
+    const near = khDoorsNear(H), d = near[Math.floor(Math.random() * near.length)];
+    f.sp = KH_FOLK[Math.floor(Math.random() * KH_FOLK.length)];
+    setTimeout(()=>{ if(!f.el.isConnected) return; f.el.querySelector('.kh-fig').innerHTML = khImg(`assets/mon/${f.sp}_front.png`, WALK_T * 1.3); f.x = d.x; f.y = d.y; khPlace(f.el, d.x, d.y, 0); }, 320);
+    f.next = H.clock + 400 + Math.random() * 1200;
+    return;
+  }
+  const s = khPath(H, f, [f.goal]);
+  if(!s){ f.next = H.clock + 300; if(Math.random() < 0.1) f.goal = H.doors[Math.floor(Math.random() * H.doors.length)]; return; }
+  const ms = KH.folkMs * (0.85 + Math.random() * 0.3);
+  if(s.x !== f.x){ f.faceR = s.x > f.x; faceRight(f.el, f.faceR); }
+  f.x = s.x; f.y = s.y;
+  khPlace(f.el, s.x, s.y, ms);
+  f.next = H.clock + ms;
+}
+/* a loose alien: prowls a few squares at a time, stops, looks about, prowls on */
+function khAlienStep(H, a){
+  if(a.state !== 'roam' || H.clock < a.next) return;
+  if(!a.goal || (a.x === a.goal.x && a.y === a.goal.y)){
+    if(a.goal && Math.random() < 0.5){ a.goal = null; a.next = H.clock + 700 + Math.random() * 1800; return; }   // a look about
+    /* a few squares on — round you: one that has wandered far heads back your way */
+    const p = caYou(), far = p && khFromYou(a.x, a.y) > KH.near + 2, cx = far ? p.x : a.x, cy = far ? p.y : a.y;
+    const opts = [];
+    for(let i = 0; i < 30 && opts.length < 6; i++){
+      const x = cx + Math.round((Math.random() - 0.5) * 12), y = cy + Math.round((Math.random() - 0.5) * 10);
+      if(khProwl(H.m, x, y, a) && khFromYou(x, y) <= KH.near) opts.push({ x, y });
+    }
+    a.goal = opts[0] || null;
+    if(!a.goal){ a.next = H.clock + 600; return; }
+  }
+  const s = khPath(H, a, [a.goal]);
+  if(!s || s.y < KH_ZONE.y0 || s.y > KH_ZONE.y1 || khFromYou(s.x, s.y) < 2){ a.goal = null; a.next = H.clock + 500; return; }   // (never right up against you)
+  const ms = KH.alienMs * (0.85 + Math.random() * 0.4);
+  if(s.x !== a.x){ a.faceR = s.x > a.x; faceRight(a.el, a.faceR); }
+  a.x = s.x; a.y = s.y;
+  khPlace(a.el, s.x, s.y, ms);
+  a.next = H.clock + ms;
+}
+/* ---------- the King ---------- */
+function khKingView(H, view){
+  const k = H.king;
+  if(k.view === view) return;
+  k.view = view;
+  const img = k.el.querySelector('img');
+  if(img) img.src = `assets/mon/fairy_king_mounted_c_${view}.png`;
+}
+/* the loose one he can reach from where he stands (his beam's reach, straight), the nearest */
+function khInReach(H, at, among, reach){
+  let best = null, bd = Infinity;
+  (among || H.aliens).forEach(a=>{ if(a.state !== 'roam') return; const d = Math.hypot(a.x - at.x, a.y - at.y); if(d <= (reach || KH.reach) && d < bd){ bd = d; best = a; } });
+  return best;
+}
+function khKingStep(H){
+  const k = H.king;
+  if(!k || H.clock < k.next) return;
+  if(k.state === 'rest'){ k.el.classList.remove('kh-spent'); k.state = 'hunt'; k.next = H.clock + 300; return; }
+  if(k.state === 'beam') return khBeamEnd(H);
+  /* bowed in the saddle, a shadow over his head: after two or three */
+  if(H.kills >= H.restAt){
+    H.restAt = H.kills + KH.restEvery[0] + Math.floor(Math.random() * (KH.restEvery[1] - KH.restEvery[0] + 1));
+    k.state = 'rest'; k.el.classList.add('kh-spent'); khKingView(H, 'front');
+    k.next = H.clock + KH.restMs;
+    H.rests = (H.rests || 0) + 1;
+    return;
+  }
+  /* the loose ones you can see first (the castle's camera shows four squares round you): he rides in among them where
+     you can see him too, and fires from there; else the ones round you, else any */
+  const loose = H.aliens.filter(a=> a.state === 'roam'), seen = loose.filter(a=> khFromYou(a.x, a.y) <= 4), round = loose.filter(a=> khFromYou(a.x, a.y) <= KH.near + 3);
+  const inView = seen.length > 0, kIn = khFromYou(k.x, k.y) <= 3;
+  /* he rides in close before he fires — to within `close` of it, where you can see him (level with you or below) — or,
+     having tried a while and been kept off, from as far as his beam reaches */
+  const py = caYou() ? caYou().y : k.y, tried = H.clock - (k.waitFrom || H.clock) > 2500;
+  const near = khInReach(H, k, inView ? seen : null, tried ? KH.reach : KH.close);
+  if(near && (!inView || (kIn && (k.y >= py - 1 || tried)))) return khBeam(H, near);
+  const any = khInReach(H, k, inView ? seen : null, KH.reach);
+  if(any) k.waitFrom = k.waitFrom || H.clock; else k.waitFrom = 0;
+  const goals = [];
+  (inView ? seen : round.length ? round : loose).forEach(a=>{
+    for(let dy = -KH.reach; dy <= KH.reach; dy++) for(let dx = -KH.reach; dx <= KH.reach; dx++){
+      const dd = Math.hypot(dx, dy); if(dd > KH.close || dd < 1.8) continue;   // (two squares or so off: not on top of it)
+      const x = a.x + dx, y = a.y + dy;
+      if(khGround(H.m, x, y) && (!inView || khFromYou(x, y) <= 3)) goals.push({ x, y });
+    } });
+  /* in view, he stands level with you or below — his picture is tall, and above you the top of the screen cuts off his head */
+  const p = caYou(), low = inView && p ? goals.filter(g=> g.y >= p.y - 1) : [];
+  if(low.length) goals.splice(0, goals.length, ...low);
+  /* never right beside you or Lucesco (his picture is tall: he would stand over you) */
+  const off = goals.filter(g=> khFromYou(g.x, g.y) >= 2 && !khByLion(g.x, g.y));
+  goals.splice(0, goals.length, ...off);
+  /* you have come up to him: he holds still for you (a word with him: khKingNear) */
+  if(khFromYou(k.x, k.y) <= 2){ k.next = H.clock + 300; return; }
+  const s = goals.length ? khPath(H, k, goals) : null;
+  if(!s || khFromYou(s.x, s.y) < 2 || khByLion(s.x, s.y)){ k.next = H.clock + 400; return; }
+  if(s.x !== k.x){ k.faceR = s.x > k.x; faceRight(k.el, k.faceR); }
+  khKingView(H, s.y < k.y ? 'back' : 'front');
+  k.x = s.x; k.y = s.y;
+  khPlace(k.el, s.x, s.y, KH.kingMs);
+  k.next = H.clock + KH.kingMs;
+}
+/* his beam: from his raised hand to it, held — it crackles, blackens; then dust */
+function khBeam(H, a){
+  const k = H.king, T = WALK_T;
+  a.state = 'zap';
+  k.state = 'beam'; k.target = a;
+  k.faceR = a.x > k.x || (a.x === k.x && k.faceR); faceRight(k.el, k.faceR);
+  khKingView(H, 'front');
+  const fx = (k.x + 0.5 + (k.faceR ? 0.18 : -0.18)) * T, fy = (k.y - 0.62) * T, tx = (a.x + 0.5) * T, ty = (a.y + 0.3) * T;
+  const len = Math.hypot(tx - fx, ty - fy), ang = Math.atan2(ty - fy, tx - fx) * 180 / Math.PI;
+  const beam = document.createElement('div');
+  beam.className = 'kh-beam';
+  beam.style.cssText = `left:${fx.toFixed(1)}px;top:${fy.toFixed(1)}px;width:${len.toFixed(1)}px;transform:rotate(${ang.toFixed(2)}deg);z-index:${Math.round(12 + Math.max(k.y, a.y))};`;
+  beam.innerHTML = '<i></i><b></b><em></em>';
+  H.world.appendChild(beam);
+  k.beam = beam;
+  k.el.classList.add('kh-cast');
+  a.el.classList.add('kh-zap');
+  a.el.style.setProperty('--hold', KH.holdMs + 'ms');
+  khBolts(a);
+  H.beams++;
+  k.next = H.clock + KH.holdMs;
+}
+/* the alien under it: bolts, purple and white, flickering round it all the while */
+function khBolts(a){
+  let svg = a.el.querySelector('.kh-bolts');
+  if(!svg){ svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'kh-bolts'); svg.setAttribute('viewBox', '0 0 180 180'); svg.setAttribute('aria-hidden', 'true'); a.el.appendChild(svg); }
+  const tick = ()=>{
+    if(!svg.isConnected || a.state !== 'zap'){ svg.innerHTML = ''; return; }
+    let h = '';
+    for(let i = 0; i < 5; i++){ const pts = typeof jgBoltPts === 'function' ? jgBoltPts(true) : ''; h += `<polyline class="g" points="${pts}"></polyline><polyline class="c" points="${pts}"></polyline>`; }
+    svg.innerHTML = h;
+    a._boltT = setTimeout(tick, 55);
+  };
+  tick();
+}
+function khBeamEnd(H){
+  const k = H.king, a = k.target;
+  k.state = 'hunt'; k.target = null; k.next = H.clock + 450;
+  k.el.classList.remove('kh-cast');
+  if(k.beam){ const b = k.beam; b.classList.add('out'); setTimeout(()=> b.remove(), 300); k.beam = null; }
+  if(!a) return;
+  H.kills++;
+  khDust(H, a);
+  /* another drops in over the walls before long */
+  const t = setTimeout(()=> khDrop(), KH.dropMs[0] + Math.random() * (KH.dropMs[1] - KH.dropMs[0]));
+  (H.timers = H.timers || []).push(t);
+}
+/* black as soot, it comes apart: dust, drifting off on the wind */
+function khDust(H, a){
+  a.state = 'dust';
+  clearTimeout(a._boltT);
+  const svg = a.el.querySelector('.kh-bolts'); if(svg) svg.remove();
+  a.el.classList.remove('kh-zap'); a.el.classList.add('kh-dust');
+  const T = WALK_T, box = document.createElement('div');
+  box.className = 'kh-dustcloud';
+  box.style.cssText = `left:${(a.x + 0.5) * T}px;top:${(a.y + 0.35) * T}px;z-index:${Math.round(11 + a.y)};--t:${T}px;`;
+  let h = '';
+  for(let i = 0; i < 40; i++){
+    const dx = (-0.4 + Math.random() * 2.6) * T, dy = (-2.1 + Math.random() * 1.5) * T, r = 2.5 + Math.random() * 5;
+    const sx = (Math.random() - 0.5) * 0.9 * T, sy = (Math.random() - 0.55) * 1.1 * T;
+    h += `<i style="left:${sx.toFixed(1)}px;top:${sy.toFixed(1)}px;width:${r.toFixed(1)}px;height:${r.toFixed(1)}px;--dx:${dx.toFixed(1)}px;--dy:${dy.toFixed(1)}px;animation-delay:${Math.round(Math.random() * 380)}ms;animation-duration:${Math.round(KH.dustMs * (0.75 + Math.random() * 0.5))}ms"></i>`;
+  }
+  box.innerHTML = h;
+  H.world.appendChild(box);
+  setTimeout(()=>{ a.state = 'gone'; a.el.remove(); }, Math.round(KH.dustMs * 0.7));
+  setTimeout(()=> box.remove(), KH.dustMs * 1.4);
+}
+/* another, down out of the sky in its cocoon, over the walls: it lands, splits, and it climbs out */
+function khDrop(){
+  const H = _kh;
+  if(!H || !H.world.isConnected) return;
+  if(khPaused()){ const t = setTimeout(khDrop, 800); (H.timers = H.timers || []).push(t); return; }
+  if(H.aliens.filter(a=> a.state === 'roam' || a.state === 'zap').length >= KH.aliens) return;
+  const [s] = khSpots(H.m, 1, 2, 6);
+  if(!s) return;
+  const side = Math.random() < 0.5 ? -1 : 1, from = { x:s.x + side * (10 + Math.random() * 4), y:s.y - 9 - Math.random() * 4 };   // in from over the roofs, out of sight
+  invCocoonFly(H.world, from.x, from.y, s.x + 0.5, s.y + 0.2, 1300, true).then(()=>{
+    if(_kh !== H || !H.world.isConnected) return;
+    const T = WALK_T, c = document.createElement('div');
+    c.className = 'inv-cocoon kh-landed';
+    c.style.cssText = `left:${(s.x + 0.5 - 0.92) * T}px;top:${(s.y + 1 - 1.3) * T}px;width:${1.84 * T}px;height:${1.38 * T}px;z-index:${Math.round(9 + s.y)};`;
+    c.innerHTML = invCocoonSvg(false) + `<div class="inv-cocoon-smoke" style="--sm:${T}px"><i></i><i></i><i></i></div>`;
+    H.world.appendChild(c);
+    setTimeout(()=> c.classList.add('kh-fade'), 4500);
+    setTimeout(()=> c.remove(), 6600);
+    if(khTaken(s.x, s.y)) return;
+    const a = khAlien(H, KH.kinds[Math.floor(Math.random() * KH.kinds.length)], s.x, s.y, true);
+    a.next = H.clock + 900;
+    H.drops = (H.drops || 0) + 1;
+  });
+}
+/* ---------- talking to him ---------- */
+const KH_LINES = {
+  look:[`The King reins in beside you. He is grey to the lips, and the light round him gutters like a candle burnt down to the last of its wick. He looks as if he might fade away at any moment.`,
+        `And yet he is terrifying. Whenever an alien so much as turns towards his people, he pours his own life into his psychic beam without a moment's thought for what it costs him — and it burns white-hot.`],
+  palace:[`<b>"Please… hurry. Save my daughters. My little one most of all — she is so small, and she will be so frightened."</b>`,
+          `<b>"I can hold them here a little longer. Not long. Go — bring my girls out to me. My little one first."</b>`],
+  tower:[`<b>"She is in the tower? Then she is hiding — she always hides. Please, hurry… bring her out before they find her."</b>`],
+  escort:[`<b>"You have her? Oh, my little one… keep her close, keep her away from them, and bring her to me."</b>`],
+};
+function khKingNear(key, p){
+  const H = _kh;
+  if(key !== CA_KEY || !H || !H.king || !p) return null;
+  const k = H.king;
+  if(Math.max(Math.abs(k.x - p.x), Math.abs(k.y - p.y)) > 2) return null;   // (he is tall: two squares off is beside him)
+  return { key:'khKing', at:{ x:k.x, y:k.y }, html:`💬 Talk<small>The Fairy King</small>`, face:`<img src="assets/mon/fairy_king_mounted_c_front.png" alt="">`, act:()=> khKingTalk() };
+}
+function khKingTalk(){
+  const H = _kh;
+  if(H && H.king && H.king.state === 'beam') khBeamEnd(H);            // (he lets it go to look at you)
+  const st = invAt('tower') ? 'tower' : invAt('escort') ? 'escort' : 'palace';
+  const first = !invSaid('khTalk');
+  if(first) invSay('khTalk');
+  return caLines((first ? KH_LINES.look : [KH_LINES.look[0]]).concat([['king', caTurn('khKing' + st, KH_LINES[st])]]));
+}
+/* ---------- how it looks ---------- */
+let _khCss = false;
+function khCss(){
+  if(_khCss || typeof document === 'undefined') return;
+  _khCss = true;
+  invReturnCss();
+  const s = document.createElement('style');
+  s.id = 'khCss';
+  s.textContent = `
+  .walk-ent.kh-ent{ position:absolute; left:0; top:0; width:${WALK_T}px; height:${WALK_T}px; pointer-events:none; overflow:visible; transition-property:transform, opacity; transition-timing-function:linear; }
+  .kh-ent .kh-fig{ position:absolute; left:0; right:0; bottom:0; display:flex; justify-content:center; align-items:flex-end; }
+  .kh-ent .kh-fig img{ max-width:none; }
+  .kh-ent.face-r .kh-fig img{ scale:-1 1; }
+  .walk-ent.kh-ent .kh-art{ filter:brightness(1) saturate(1) drop-shadow(0 0 0 rgba(0,0,0,0)) drop-shadow(0 3px 2px rgba(0,0,0,.35)); }
+  /* the townsfolk: running, bobbing, a little blurred with haste */
+  .walk-ent.kh-folk .kh-fig{ animation:invRun .3s ease-in-out infinite; }
+  /* a loose alien: a red menace about it; one fresh out of its cocoon climbs out of it */
+  .walk-ent.kh-alien .kh-art{ filter:brightness(1) saturate(1) drop-shadow(0 0 4px rgba(255,40,40,.75)) drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+  .walk-ent.kh-alien.kh-new .kh-fig{ animation:khClimb .9s ease-out both; }
+  @keyframes khClimb{ 0%{ opacity:0; translate:0 12px; scale:.7; } 60%{ opacity:1; } 100%{ opacity:1; translate:0 0; scale:1; } }
+  /* under his beam: shaking, crackling, and going black from the edges in, over the whole of the hold */
+  .walk-ent.kh-alien.kh-zap .kh-fig{ animation:khShake .09s steps(2) infinite; }
+  .walk-ent.kh-alien.kh-zap .kh-art{ transition:filter var(--hold, 3200ms) cubic-bezier(.4,0,.75,1);
+    filter:brightness(0) saturate(1) drop-shadow(0 0 3px #e6ccff) drop-shadow(0 0 10px rgba(170,90,255,.95)); }
+  @keyframes khShake{ 0%{ rotate:-6deg; translate:-2px 0; } 50%{ rotate:6deg; translate:2px -1px; } 100%{ rotate:-3deg; translate:0 1px; } }
+  .walk-ent.kh-ent .kh-bolts{ position:absolute; left:-40%; top:-110%; width:180%; height:180%; overflow:visible; pointer-events:none; }
+  .kh-bolts polyline{ fill:none; stroke-linecap:round; stroke-linejoin:round; }
+  .kh-bolts .g{ stroke:#b77cff; stroke-width:6; opacity:.7; }
+  .kh-bolts .c{ stroke:#fff; stroke-width:1.8; }
+  /* then dust: the black shape falls apart, its specks drifting up and away on the wind */
+  .walk-ent.kh-alien.kh-dust .kh-fig{ transition:opacity .9s ease-in, translate .9s ease-in, scale .9s ease-in; opacity:0; translate:0 -6px; scale:.92; }
+  .walk-ent.kh-alien.kh-dust .kh-art{ filter:brightness(0) saturate(1) drop-shadow(0 0 2px rgba(60,40,80,.6)) drop-shadow(0 0 0 rgba(0,0,0,0)); }
+  .kh-dustcloud{ position:absolute; width:0; height:0; pointer-events:none; }
+  .kh-dustcloud i{ position:absolute; border-radius:50%; background:radial-gradient(circle at 40% 35%, #5a5262, #17141a 70%); opacity:0; animation:khDust 1.6s ease-out both; }
+  .kh-dustcloud i:nth-child(3n){ background:radial-gradient(circle at 40% 35%, #8a7aa0, #3a2f48 70%); }   /* a little of his violet still in it */
+  @keyframes khDust{ 0%{ opacity:.95; translate:0 0; scale:1; } 70%{ opacity:.55; } 100%{ opacity:0; translate:var(--dx) var(--dy); scale:.4; } }
+  /* the King on his horse: casting, a violet blaze about him; spent, bowed forward, a shadow over his head */
+  .walk-ent.kh-king .kh-art{ filter:brightness(1) saturate(1) drop-shadow(0 0 6px rgba(200,150,255,.55)) drop-shadow(0 3px 2px rgba(0,0,0,.35)); transition:filter .6s ease; }
+  .walk-ent.kh-king.kh-cast .kh-art{ filter:brightness(1.08) saturate(1) drop-shadow(0 0 8px rgba(240,200,255,1)) drop-shadow(0 0 18px rgba(170,90,255,.95)); }
+  .walk-ent.kh-king.kh-spent .kh-art{ filter:brightness(.72) saturate(.55) drop-shadow(0 0 6px rgba(20,0,35,.9)) drop-shadow(0 3px 2px rgba(0,0,0,.35)); }
+  .walk-ent.kh-king .kh-fig{ transition:rotate .6s ease, translate .6s ease; }
+  .walk-ent.kh-king.kh-spent .kh-fig{ rotate:-7deg; translate:0 3px; }
+  .walk-ent.kh-king.kh-spent.face-r .kh-fig{ rotate:7deg; }
+  .walk-ent.kh-king .kh-fig::before{ content:''; position:absolute; left:42%; bottom:calc(${WALK_T}px * 1.6); width:calc(${WALK_T}px * 1.25); height:calc(${WALK_T}px * .9);
+    translate:-50% 0; border-radius:50%; pointer-events:none; opacity:0; transition:opacity .6s ease; z-index:2;
+    background:radial-gradient(closest-side, rgba(8,4,14,.92), rgba(20,8,30,.7) 45%, rgba(20,8,30,0)); filter:blur(3px); }
+  .walk-ent.kh-king.kh-spent .kh-fig::before{ opacity:1; animation:khGloom 2.4s ease-in-out infinite; }
+  @keyframes khGloom{ 0%,100%{ scale:1; translate:-50% 0; } 50%{ scale:1.12 .92; translate:-50% -6%; } }
+  /* his beam: violet, white at its heart, held — flickering with what it costs him */
+  .kh-beam{ position:absolute; height:0; pointer-events:none; transform-origin:0 0; }
+  .kh-beam i{ position:absolute; left:0; right:0; top:-10px; height:20px; border-radius:10px; transform-origin:0 50%;
+    background:linear-gradient(to bottom, rgba(150,70,255,0), rgba(150,70,255,.75) 25%, rgba(214,170,255,.95) 45%, rgba(214,170,255,.95) 55%, rgba(150,70,255,.75) 75%, rgba(150,70,255,0));
+    filter:blur(1.5px); animation:khBeamIn .18s ease-out both, khBeamFlick .11s steps(2) .18s infinite; }
+  .kh-beam b{ position:absolute; left:0; right:0; top:-2.5px; height:5px; border-radius:3px; background:#fff; box-shadow:0 0 6px #fff, 0 0 16px #c58cff, 0 0 30px rgba(150,70,255,.8); transform-origin:0 50%; animation:khBeamIn .18s ease-out both; }
+  .kh-beam em{ position:absolute; right:-22px; top:-22px; width:44px; height:44px; border-radius:50%;
+    background:radial-gradient(circle, #fff 0 18%, rgba(214,170,255,.85) 40%, rgba(150,70,255,0) 70%); animation:khSplash .16s ease-in-out infinite alternate; }
+  .kh-beam.out{ opacity:0; transition:opacity .28s ease-out; }
+  @keyframes khBeamIn{ from{ scale:0 1; } to{ scale:1 1; } }
+  @keyframes khBeamFlick{ 0%{ opacity:.85; scale:1 .8; } 100%{ opacity:1; scale:1 1.15; } }
+  @keyframes khSplash{ from{ scale:.8; opacity:.8; } to{ scale:1.15; opacity:1; } }
+  /* a cocoon of theirs, landed in the hunt: in a while, it fades */
+  .inv-cocoon.kh-landed{ animation:khLand .45s cubic-bezier(.3,1.6,.6,1) both; }
+  @keyframes khLand{ from{ scale:.6 1.4; translate:0 -30%; } to{ scale:1; translate:0 0; } }
+  .inv-cocoon.kh-landed.kh-fade{ opacity:0; transition:opacity 2s ease; }
+  @media (prefers-reduced-motion: reduce){ .walk-ent.kh-folk .kh-fig, .walk-ent.kh-alien.kh-zap .kh-fig, .kh-beam i, .kh-beam em, .walk-ent.kh-king.kh-spent .kh-fig::before{ animation:none; } }
+  `;
+  document.head.appendChild(s);
+}
+/* ---------- into the game ---------- */
+/* the grounds drawn: the hunt, while it goes on (and stopped, anywhere else) */
+if(typeof invRender === 'function'){
+  const _khRender = invRender;
+  invRender = function(key, world){ const r = _khRender.apply(this, arguments); if(key === CA_KEY) setTimeout(()=>{ if(ui.screen === CA_KEY) khStart(world); }, 60); else khStop(); return r; };
+}
+/* beside him: a word with him */
+if(typeof caNearActs === 'function'){
+  const _khNear = caNearActs;
+  caNearActs = function(key, p){ const acts = _khNear.apply(this, arguments); const k = khKingNear(key, p); if(k) acts.push(k); return acts; };
+}
+/* he and the loose ones stand in your way (the townsfolk dodge round you) */
+if(typeof caWalkerAt === 'function'){
+  const _khAt = caWalkerAt;
+  caWalkerAt = function(key, x, y){
+    if(_khAt.apply(this, arguments)) return true;
+    const H = _kh;
+    if(key !== CA_KEY || !H) return false;
+    return !!(H.king && H.king.x === x && H.king.y === y) || H.aliens.some(a=> (a.state === 'roam' || a.state === 'zap') && a.x === x && a.y === y);
+  };
 }

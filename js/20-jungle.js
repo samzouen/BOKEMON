@@ -653,7 +653,7 @@ const JG_DECK = {
   ownTwinkles:true,
   get prizeLines(){ return JG_FIND_LINES; },
   nearActs:(d, p)=> jgNearActs(p),
-  padMoves:{ html:()=> jgPadHtml(), wire:(box)=> jgPadWire(box), refresh:(box, d, p)=> jgPadRefresh(box, p) },   // (4.49) his Jump, Glare and Ambush, fixed in place
+  padMoves:{ dial:true, html:()=> jgPadHtml(), wire:(box)=> jgPadWire(box), refresh:(box, d, p)=> jgPadRefresh(box, p) },   // (4.49) his moves, fixed in place; (4.52) on his dial
   youArt:()=> jgRiding() ? jgRideArt() : null,                       // (4.03) on Lucesco's back (walkYouArt, 13-walkmap.js)
   onStep:(p, d)=> jgStep(p, d),
   onRender:(world, d)=> jgRender(world, d),
@@ -2638,9 +2638,95 @@ function jgAim(p, all, dir, want){
    (another may be holding the pad); a direction held aims it (jgJumpAim, jgAim); what he does, or why he cannot yet,
    said along the bottom of the map (jgTell). The buttons beside you — his Talk first — below them all.
    ============================================================ */
+/* (4.52) HIS DIAL. The designer: "can we make Lucesco's UI in the overworld nice and exciting? This is for when the player
+   is riding him only. Make his controls four buttons surrounding his sprite in the middle: Leap, Pulsar Glare, Ambush,
+   Talk (locate/conversation). It should fit into the rightmost area next to the Dpad." A ring beside the D-pad, level
+   with it: his face in a sun-gold badge at its middle (his mane is a sun), his four moves the ring's four quarters in a
+   diamond, as a controller's face buttons stand — Leap at the top, Glare on the left, Ambush on the right, Talk at the
+   bottom — Party and Map over it. Each quarter dark until it can go, then lit in its own colour (amber, crimson,
+   violet, jade), glowing; a wait fills it from the middle outward as the steps count down, the steps left on it. A
+   finger on the badge talks to him too. Each quarter is a button cut to its shape (clip-path), so a finger finds the
+   one it is on. */
+/* (4.55) The designer: "Please shift the talk function to his face, and change the bottom button to 'Track' … Maybe a
+   target reticle, and when a particular objective is being tracked, the corresponding sprite appears under the
+   reticle? By default it should track aliens if storyline is over." — "I want buttons to be lit in full colour
+   saturation when recharged at all times, but put a glowing cycling border or perhaps change the hue to glowing galaxy
+   prism shimmer in the general hue the button - orange for leap, purple for ambush, red for glare? when it can be used?
+   Track does not need to glow because it's always on, though perhaps while active it can have a cycling shimmering
+   border." — "model the glare eye after Lucesco's eye, space navy blue border like his forehead for the lines of the
+   eye (no eyelashes) but red inside with a bright glowing centre like a laser waiting to explode out."
+   So each of his moves is, recharged, in its full colour, still; usable this moment, a prism shimmer in its own hues
+   flowing round the ring, a few stars twinkling on it, a light running round its edge, its glow under it; waiting,
+   filled from the middle as its steps count down (as since 4.52). Track, at the bottom: a lock-on frame round a picture
+   of what he follows (the nearest alien itself, the Fairy King for the castle, a tribe's guardian, a ticket, the rift),
+   always in its own jade; while he follows something, two soft lights circle its edge. His face: talk, there to be
+   found (the designer: "I don't want a conversation speech bubble … Let the face pressing dialogue be an intuitive
+   discovery"). Glare's eye: his visor's navy for its lids, edged in his gold, red inside, a white-hot core that
+   swells and shrinks while it can fire. */
+const JG_EYE = '<svg viewBox="0 0 24 24" class="eye" aria-hidden="true"><defs>' +
+  '<radialGradient id="jgEyeRed" cx=".5" cy=".56" r=".62"><stop offset="0" stop-color="#ff7a5c"/><stop offset=".42" stop-color="#f3182f"/><stop offset="1" stop-color="#8c0617"/></radialGradient>' +
+  '<radialGradient id="jgEyeCore" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff"/><stop offset=".24" stop-color="#fff8c4"/><stop offset=".5" stop-color="#ffc24a" stop-opacity=".95"/><stop offset=".76" stop-color="#ff4b2b" stop-opacity=".5"/><stop offset="1" stop-color="#ff2a2a" stop-opacity="0"/></radialGradient></defs>' +
+  '<path d="M1.9 12.6C5.1 7.5 8.6 6.1 12 6.1s6.9 1.4 10.1 6.5c-3.2 5-6.7 6.4-10.1 6.4s-6.9-1.4-10.1-6.4z" fill="none" stroke="#f2c24e" stroke-width="3.9" stroke-linejoin="round"/>' +
+  '<path d="M1.9 12.6C5.1 7.5 8.6 6.1 12 6.1s6.9 1.4 10.1 6.5c-3.2 5-6.7 6.4-10.1 6.4s-6.9-1.4-10.1-6.4z" fill="url(#jgEyeRed)" stroke="#0a04a6" stroke-width="2.3" stroke-linejoin="round"/>' +
+  '<path d="M5.7 10.1c1.9-1.8 4-2.6 6.3-2.6" fill="none" stroke="#5aacec" stroke-width="1" stroke-linecap="round"/>' +
+  '<circle class="eye-core" cx="12" cy="12.6" r="5.4" fill="url(#jgEyeCore)"/>' +
+  '<path class="eye-glint" d="M12 9.3l.75 2.55 2.55.75-2.55.75L12 15.9l-.75-2.55-2.55-.75 2.55-.75z" fill="#fff"/></svg>';
+/* Track's lock-on frame: four corner brackets and four ticks round a round window, the picture in the window */
+const JG_RETICLE = (()=>{
+  const br = 'M4.5 13V8.2a3.7 3.7 0 0 1 3.7-3.7H13M27 4.5h4.8a3.7 3.7 0 0 1 3.7 3.7V13M35.5 27v4.8a3.7 3.7 0 0 1-3.7 3.7H27M13 35.5H8.2a3.7 3.7 0 0 1-3.7-3.7V27';
+  const tk = 'M20 1.6v4M38.4 20h-4M20 38.4v-4M1.6 20h4';
+  return `<svg class="trk-ret" viewBox="0 0 40 40" aria-hidden="true"><g fill="none" stroke-linecap="round" stroke-linejoin="round">` +
+    `<path d="${br}" stroke="rgba(8,40,30,.5)" stroke-width="4.6"/><path d="${tk}" stroke="rgba(8,40,30,.5)" stroke-width="4"/>` +
+    `<path d="${br}" stroke="#fff" stroke-width="2.6"/><path d="${tk}" stroke="#fff" stroke-width="2.1"/></g></svg>`;
+})();
+const JG_DIAL = [
+  { k:'jump', at:'n', label:'Leap', ic:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 19.5C5 11 9.5 6.5 13.5 6.5s5.6 3.1 6.4 7"/><path d="M16.6 12.6l3.4 1.6 1.4-3.6"/><path d="M8 20.5h3M14.5 20.5h3"/></svg>' },
+  { k:'glare', at:'w', label:'Glare', ic:JG_EYE },
+  { k:'ambush', at:'e', label:'Ambush', ic:'<svg viewBox="0 0 24 24" class="paw"><defs><linearGradient id="jgPawSky" x1="0.1" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="#ffe0fb"/><stop offset=".3" stop-color="#ff7ad9"/><stop offset=".6" stop-color="#a874ff"/><stop offset="1" stop-color="#4fd8ff"/></linearGradient></defs><g fill="url(#jgPawSky)" stroke="#fff" stroke-width=".9" stroke-linejoin="round"><path d="M12 12.2c-3 0-5.8 2.7-6.6 5.4-.6 2.1 1 3.7 2.9 3.5 1.4-.1 2.3-.9 3.7-.9s2.3.8 3.7.9c1.9.2 3.5-1.4 2.9-3.5-.8-2.7-3.6-5.4-6.6-5.4z"/><ellipse cx="5" cy="10" rx="2" ry="2.5" transform="rotate(-22 5 10)"/><ellipse cx="9.2" cy="6.1" rx="2.1" ry="2.7" transform="rotate(-8 9.2 6.1)"/><ellipse cx="14.8" cy="6.1" rx="2.1" ry="2.7" transform="rotate(8 14.8 6.1)"/><ellipse cx="19" cy="10" rx="2" ry="2.5" transform="rotate(22 19 10)"/></g><g fill="#fff"><path d="M10.4 15.6l.35.9.9.35-.9.35-.35.9-.35-.9-.9-.35.9-.35z"/><path d="M14.3 17.6l.25.65.65.25-.65.25-.25.65-.25-.65-.65-.25.65-.25z"/><circle cx="9.4" cy="5.4" r=".45"/><circle cx="15.3" cy="6.9" r=".4"/><circle cx="4.6" cy="9.3" r=".38"/><circle cx="12.6" cy="19.2" r=".35"/></g></svg>' },
+  { k:'track', at:'s', label:'Track', ic:`<span class="trk-win"><span class="trk-pic"></span></span>${JG_RETICLE}` },
+];
+/* the ring's proportions (of its width): out to the edge, in to just outside the badge; the gaps between the quarters
+   an even width all along */
+const JG_DIAL_R = { out:0.5, in:0.235, gap:0.034, face:0.41 };
+/* a quarter's outline, in the box's own units (0–1): `at` n, e, s or w */
+function jgSegPath(at){
+  const c = { n:-90, e:0, s:90, w:180 }[at] * Math.PI / 180, R = JG_DIAL_R.out, r = JG_DIAL_R.in, h = JG_DIAL_R.gap / 2;
+  const pt = (a, rho, side)=>{ const t = Math.sqrt(rho * rho - h * h), n = a + side * Math.PI / 2;
+    return [0.5 + t * Math.cos(a) + h * Math.cos(n), 0.5 + t * Math.sin(a) + h * Math.sin(n)].map(v=> v.toFixed(4)).join(' '); };
+  const a1 = c - Math.PI / 4, a2 = c + Math.PI / 4;
+  return `M ${pt(a1, R, 1)} A ${R} ${R} 0 0 1 ${pt(a2, R, -1)} L ${pt(a2, r, -1)} A ${r} ${r} 0 0 0 ${pt(a1, r, 1)} Z`;
+}
+/* (4.55) how long that outline is, in the same units (each quarter's the same): its arcs and its two sides — the light
+   running round it goes once round in one length */
+function jgSegLen(){
+  const R = JG_DIAL_R.out, r = JG_DIAL_R.in, h = JG_DIAL_R.gap / 2;
+  return R * (Math.PI / 2 - 2 * Math.asin(h / R)) + r * (Math.PI / 2 - 2 * Math.asin(h / r)) + 2 * (Math.sqrt(R * R - h * h) - Math.sqrt(r * r - h * h));
+}
+/* (4.55) a few stars on a quarter, across its ring (the same for everyone: from a seed), as background dots */
+function jgSegStars(at, n, seed){
+  const c = { n:-90, e:0, s:90, w:180 }[at] * Math.PI / 180;
+  let s = seed;
+  const R = ()=> (s = (s * 16807) % 2147483647) / 2147483647;
+  const out = [];
+  for(let i = 0; i < n; i++){
+    const a = c + (R() - 0.5) * 1.15, rho = 0.27 + R() * 0.2, big = 0.0035 + R() * 0.003;
+    const x = (50 + rho * 100 * Math.cos(a)).toFixed(1), y = (50 + rho * 100 * Math.sin(a)).toFixed(1);
+    out.push(`radial-gradient(circle at ${x}% ${y}%, #fff 0 calc(var(--dpx) * ${big.toFixed(4)}), rgba(255,255,255,.5) calc(var(--dpx) * ${(big * 1.6).toFixed(4)}), transparent calc(var(--dpx) * ${(big * 2.6).toFixed(4)}))`);
+  }
+  return out.join(', ');
+}
 function jgPadHtml(){
-  const b = (k, label)=> `<button class="wmove ${k}" data-mv="${k}" aria-disabled="true"><b>${label}</b><small></small></button>`;
-  return b('jump', 'Jump') + b('glare', 'Glare') + b('ambush', 'Ambush');
+  const clips = ['n', 'e', 's', 'w'].map(a=> `<clipPath id="jgSeg-${a}" clipPathUnits="objectBoundingBox"><path d="${jgSegPath(a)}"/></clipPath>`).join('');
+  const edge = at=>{ const d = jgSegPath(at); return `<svg class="seg-edge" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><path class="e-base" d="${d}"/><path class="e-glow" d="${d}"/><path class="e-run" d="${d}"/></svg>`; };
+  return `<div class="jg-dial" id="jgDial">
+    <svg class="jg-dial-defs" width="0" height="0" aria-hidden="true" focusable="false"><defs>${clips}</defs></svg>
+    <div class="jg-dial-plate"></div>
+    ${JG_DIAL.map(m=> `<div class="seg-glow ${m.k}" aria-hidden="true"><i style="clip-path:url(#jgSeg-${m.at})"></i></div>`).join('')}
+    ${JG_DIAL.map((m, i)=> `<button class="wmove seg ${m.k} at-${m.at}" data-mv="${m.k}" aria-disabled="true"${m.k === 'track' ? ' aria-label="Track"' : ''} style="clip-path:url(#jgSeg-${m.at})">` +
+      `<span class="seg-fx a" aria-hidden="true" style="background:${jgSegStars(m.at, 3, 7 + i * 31)}"></span><span class="seg-fx b" aria-hidden="true" style="background:${jgSegStars(m.at, 3, 1013 + i * 57)}"></span>` +
+      `${edge(m.at)}<span class="seg-in"><i class="seg-ic">${m.ic}</i><b>${m.label}</b><small></small></span></button>`).join('')}
+    <button class="jg-dial-face" type="button" aria-label="Talk to Lucesco"><i></i></button>
+  </div>`;
 }
 function jgPadWire(box){
   box.querySelectorAll('[data-mv]').forEach(btn=>{
@@ -2653,6 +2739,35 @@ function jgPadWire(box){
     btn.addEventListener('click', e=>{ if(e.detail === 0) jgPadPress(btn.dataset.mv); });   // a key's Enter or Space (a finger's went on pointerdown)
     btn.addEventListener('contextmenu', e=> e.preventDefault());
   });
+  /* (4.52) his face: talk to him — (4.55) the only way now: the bottom quarter is Track */
+  const face = box.querySelector('.jg-dial-face');
+  if(face){
+    face.addEventListener('pointerdown', e=>{ e.preventDefault(); jgPadPress('talk'); });
+    face.addEventListener('click', e=>{ if(e.detail === 0) jgPadPress('talk'); });
+    face.addEventListener('contextmenu', e=> e.preventDefault());
+  }
+  /* (4.52) its words and pictures sized to the ring as it is drawn (a phone's is smaller) */
+  const pads = box.closest('.walk-pads');
+  const fit = ()=>{
+    const dl = box.querySelector('.jg-dial'); if(!dl || !dl.clientWidth) return;
+    const D = dl.clientWidth;
+    dl.style.setProperty('--dpx', D + 'px');
+    /* a word too long for its quarter (Ambush, on a phone's smaller ring) made smaller until it fits: the sides' quarters
+       are as wide as the ring is thick, the top's and bottom's half the ring */
+    const segs = [...dl.querySelectorAll('.seg')];
+    segs.forEach(btn=>{ const b = btn.querySelector('b'); if(b) b.style.fontSize = ''; });
+    const want = segs.map(btn=>{
+      const b = btn.querySelector('b'); if(!b) return null;
+      const room = /at-[ew]/.test(btn.className) ? (JG_DIAL_R.out - JG_DIAL_R.in) * D - 4 : 0.5 * D, w = b.scrollWidth, f = parseFloat(getComputedStyle(b).fontSize);
+      return { b, side:/at-[ew]/.test(btn.className), f:w > room ? f * room / w : f };
+    }).filter(Boolean);
+    /* the two sides' words the same size (the smaller), so neither looks shrunk */
+    const sideF = Math.min(...want.filter(o=> o.side).map(o=> o.f));
+    want.forEach(o=>{ const f = o.side ? sideF : o.f; if(f < parseFloat(getComputedStyle(o.b).fontSize) - 0.05) o.b.style.fontSize = f.toFixed(1) + 'px'; });
+  };
+  if(pads) pads._fit = fit;
+  fit();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
 }
 /* nothing else going on: no leap, beam or ambush under way, nobody talking, no alien coming for you */
 function jgPadFree(){
@@ -2661,30 +2776,110 @@ function jgPadFree(){
            (typeof eyeBreakActive === 'function' && eyeBreakActive()));
 }
 const jgSteps = n=> `${n} step${n === 1 ? '' : 's'}`;
+/* (4.55) the nearest alien band still standing today, from p (Track's picture, and Lucesco's pulse: questTarget) */
+function jgNearestBand(p){
+  if(!p) return null;
+  let best = null, bd = Infinity;
+  jgBands().forEach(b=>{ if(jgBandBeaten(b)) return; const d = (b.x - p.x) * (b.x - p.x) + (b.y - p.y) * (b.y - p.y); if(d < bd){ bd = d; best = b; } });
+  return best;
+}
+/* (4.55) what Track follows: on (something to follow), what (questTrack's key), and the picture in its window —
+   'mon:<file>' (a monster's picture, its head and shoulders), 'ui:<file>' (a ticket), 'rift' (drawn) */
+function jgTrackNow(p){
+  if(!(typeof questPulseOn === 'function' && questPulseOn())) return { on:false, what:'', pic:'' };
+  const k = questTrack();
+  let pic = '';
+  if(k === 'alien'){ const b = jgNearestBand(p); pic = 'mon:' + (b ? b.lead : 'alien_captain_humanoid'); }
+  else if(k === 'castle') pic = 'mon:fairy_king_c_front';
+  else if(JG_TRIBES[k]) pic = 'mon:' + JG_TRIBES[k].guardian;
+  else if(k === 'find') pic = 'ui:skill_token';
+  else if(k === 'rift') pic = 'rift';
+  const tgt = p && typeof questTarget === 'function' ? questTarget(p) : null;
+  return { on:!!tgt, what:k, pic };
+}
+/* (4.55) the picture in Track's window, put in only when it changes: a monster's cut to its head and shoulders (as the
+   bar's faces are, walkFaceFit), in shares of the window so it keeps its place whatever size the ring is drawn */
+function jgTrackPicSet(btn, pic){
+  const box = btn.querySelector('.trk-pic');
+  if(!box || box.dataset.pic === (pic || '')) return;
+  box.dataset.pic = pic || '';
+  if(!pic){ box.innerHTML = ''; return; }
+  if(pic === 'rift'){ box.innerHTML = typeof RIFT_ICON === 'function' ? RIFT_ICON(28) : ''; return; }
+  const i = pic.indexOf(':'), kind = pic.slice(0, i), name = pic.slice(i + 1);
+  box.innerHTML = `<img src="assets/${kind === 'ui' ? 'ui' : 'mon'}/${name}.png" alt="" draggable="false" onerror="this.remove()">`;
+  const img = box.querySelector('img');
+  if(img && kind === 'mon') jgTrackFit(img);
+}
+function jgTrackFit(img){
+  const run = ()=>{
+    const cache = typeof _walkFaceBox !== 'undefined' ? _walkFaceBox : null;
+    let b = cache ? cache.get(img.src) : undefined;
+    if(b === undefined){
+      b = null;
+      try {
+        const w = img.naturalWidth, h = img.naturalHeight, cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0);
+        const d = cx.getImageData(0, 0, w, h).data;
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for(let y = 0; y < h; y++) for(let x = 0; x < w; x++) if(d[(y * w + x) * 4 + 3] > 24){ if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y; }
+        if(x1 >= 0) b = { w, h, x0, y0, x1:x1 + 1, y1:y1 + 1 };
+      } catch(e){ b = null; }
+      if(cache) cache.set(img.src, b);
+    }
+    if(!b) return;
+    let { x0, y0, x1, y1 } = b;
+    const bw = x1 - x0;
+    if(y1 - y0 > bw * 1.15) y1 = y0 + bw * 1.15;                       // a tall one: its head and shoulders
+    const k = 1 / Math.max(x1 - x0, y1 - y0);                         // its head filling the window
+    img.classList.add('fit');
+    Object.assign(img.style, { width:(b.w * k * 100).toFixed(2) + '%', height:(b.h * k * 100).toFixed(2) + '%',
+      left:(50 - (x0 + x1) / 2 * k * 100).toFixed(2) + '%', top:(50 - (y0 + y1) / 2 * k * 100).toFixed(2) + '%' });
+  };
+  if(img.complete && img.naturalWidth) run(); else img.addEventListener('load', run, { once:true });
+}
 function jgPadState(p){
   const free = !!p && jgPadFree(), riding = jgRiding();
   const jn = jgJumpIn(), gn = jgGlareIn();
   const J = p ? jgJumpAim(p) : null;
+  const T = jgTrackNow(p);
+  /* (4.52) a wait: the steps left on it, and how far it has filled (0–1); (4.55) ready: recharged (its full colour),
+     lit: it can go this moment (its shimmer) */
   return {
     J:!!J,
-    jump:{ lit:free && !!J && !jn, sub:jn ? 'in ' + jgSteps(jn) : '' },
-    glare:{ lit:free && riding && !gn && !!(p && jgGlareTarget(p)), sub:gn ? 'in ' + jgSteps(gn) : '' },
-    ambush:{ lit:free && riding && !!(p && jgAmbushTarget(p)), sub:'' },
+    jump:{ ready:!jn, lit:free && !!J && !jn, sub:jn ? jgSteps(jn) : '', fill:jn ? 1 - jn / JG_JUMP.steps : 0 },
+    glare:{ ready:!gn, lit:free && riding && !gn && !!(p && jgGlareTarget(p)), sub:gn ? jgSteps(gn) : '', fill:gn ? 1 - gn / JG_GLARE.steps : 0 },
+    ambush:{ ready:true, lit:free && riding && !!(p && jgAmbushTarget(p)), sub:'', fill:0 },
+    track:{ ready:true, lit:free, on:T.on, what:T.what, pic:T.pic, sub:'', fill:0 },
+    talk:{ lit:free },                                                   // his face
   };
 }
 function jgPadRefresh(box, p){
   const st = jgPadState(p);
   /* the first wall he could leap: a word on it, once (as since 3.96) */
-  if(st.J){ const j = jgState(); if(!j.talk.jumpHint){ j.talk.jumpHint = 1; setTimeout(()=> toast('🦁 Lucesco can carry you over this wall — tap Jump!'), 50); } }
-  const sig = ['jump', 'glare', 'ambush'].map(k=> (st[k].lit ? 1 : 0) + st[k].sub).join('|');
+  if(st.J){ const j = jgState(); if(!j.talk.jumpHint){ j.talk.jumpHint = 1; setTimeout(()=> toast('🦁 Lucesco can carry you over this wall — tap Leap!'), 50); } }
+  const K = ['jump', 'glare', 'ambush', 'track'];
+  const sig = K.map(k=> [st[k].ready ? 1 : 0, st[k].lit ? 1 : 0, st[k].on ? 1 : 0, st[k].sub, st[k].pic || ''].join(',')).join('|');
   if(box._sig === sig) return;
   box._sig = sig;
-  ['jump', 'glare', 'ambush'].forEach(k=>{
+  const dial = box.querySelector('.jg-dial');
+  K.forEach(k=>{
     const btn = box.querySelector(`[data-mv="${k}"]`);
     if(!btn) return;
+    const was = btn.classList.contains('lit'), move = k !== 'track';
+    btn.classList.toggle('ready', !!st[k].ready && !st[k].sub);
     btn.classList.toggle('lit', st[k].lit);
+    btn.classList.toggle('wait', !!st[k].sub);
+    btn.classList.toggle('on', !!st[k].on);
     btn.setAttribute('aria-disabled', st[k].lit ? 'false' : 'true');
     btn.querySelector('small').textContent = st[k].sub;
+    btn.style.setProperty('--fill', (47 + 53 * st[k].fill).toFixed(1) + '%');      // from the ring's inside edge outward
+    if(move && st[k].lit && !was){ btn.classList.remove('shine'); void btn.offsetWidth; btn.classList.add('shine'); }   // just usable: a gleam across it
+    if(dial){ const g = dial.querySelector(`.seg-glow.${k}`); if(g) g.classList.toggle('on', move && st[k].lit); }
+    if(!move){
+      jgTrackPicSet(btn, st[k].pic);
+      btn.setAttribute('aria-label', st[k].what && typeof questTrackLabel === 'function' ? `Track: ${questTrackLabel(st[k].what)}` : 'Track');
+    }
   });
 }
 /* pressed: done at once if it is lit — aimed the way the pad is held — else why not, along the bottom */
@@ -2692,6 +2887,9 @@ function jgPadPress(mv){
   const w = walkState(), p = w.at && w.at[JG_KEY];
   if(!p || ui.screen !== JG_KEY || !jgPadFree()) return;
   const held = walkHeldDir();
+  jgDialFlash(mv);
+  if(mv === 'talk') return jgLionTalk();                                   // (4.55) his face: what he has to say
+  if(mv === 'track') return jgTrackPress();                                // (4.55) what he follows
   if(mv === 'jump'){
     const n = jgJumpIn(), J = jgJumpAim(p);
     if(n) return jgTell(`Lucesco is catching his breath. ${jgSteps(n)} to go.`);
@@ -2711,6 +2909,18 @@ function jgPadPress(mv){
     if(!a) return jgTell('No alien close enough to ambush.');
     return jgAmbush(a);
   }
+}
+/* (4.55) Track: what shall he follow (25-quest.js), once his nose is free to choose */
+function jgTrackPress(){
+  if(!(typeof questPulseOn === 'function' && questPulseOn()) || typeof questTrackChoose !== 'function') return jgTell('Lucesco has no trail to follow yet.');
+  return questTrackChoose();
+}
+/* (4.52) a press: his badge flares in that move's colour */
+function jgDialFlash(mv){
+  const f = document.querySelector('#jgDial .jg-dial-face');
+  if(!f) return;
+  f.dataset.fl = mv;
+  f.classList.remove('flare'); void f.offsetWidth; f.classList.add('flare');
 }
 /* (4.49) along the bottom of the map: what he does — "Lucesco uses Pulsar Glare on Gremlin!" — or why he cannot yet */
 function jgTell(html, kind){
@@ -2760,13 +2970,15 @@ function jgFreeze(keep, camera){
    on a phone, 13 on a tablet); then the move. The camera follows you so (walkZoomS, 13-walkmap.js) and goes back out
    over 0.5 s, 5 s after the move or at your third step. A move made meanwhile goes off at once and starts the 5 s
    again. */
-const JG_ZOOM = { squares:7, ms:500, hold:5000, steps:2 };
+const JG_ZOOM = { squares:7, ms:500, hold:5000, steps:2, tall:4.5 };
 function jgZoomed(){ const z = ui.walkZoom; return !!(z && z.deck === JG_KEY); }
-/* how much nearer: the stage's squares across, down to 7 (1 if it shows no more than that already) */
+/* how much nearer: the stage's squares across, down to 7 (1 if it shows no more than that already). (4.52) The map is
+   only as tall as the screen leaves it now (walkFitStage) — wider than tall on a short one — so across it is, as long
+   as four and a half squares still show from top to bottom. */
 function jgZoomScale(){
   const st = $('#walkStage');
   if(!st || !WALK_T) return 1;
-  return Math.max(1, Math.min(st.clientWidth, st.clientHeight) / WALK_T / JG_ZOOM.squares);
+  return Math.max(1, Math.min(st.clientWidth / WALK_T / JG_ZOOM.squares, st.clientHeight / WALK_T / JG_ZOOM.tall));
 }
 /* back out: the camera to where it should be now (refreshWalk), gliding there over `ms` (as you may be walking meanwhile,
    a glide the steps' own glides join) — the ground drawn first for where it is going (jgPaintDraw) */
@@ -3169,11 +3381,12 @@ function jgHold(on){
 
 /* ---------- the buttons beside you ---------- */
 function jgNearActs(p){
-  /* (4.49) below the pad now (13-walkmap.js's #walkActs.below): his Talk first, then whoever else is beside you. His
-     Jump, Glare and Ambush are buttons of their own, fixed in place (jgPadHtml). */
-  const acts = [{ key:'jgLion', cls:'lion', html:lucescoActHtml('Talk'), act:()=> jgLionTalk() }];   // (3.96) his face on it
+  /* (4.52) in the bar along the bottom (13-walkmap.js's walkBarFill), each with who it is: whoever is beside you. His own
+     Talk is on his dial now (jgPadHtml), with his moves. */
+  const acts = [];
   const f = jgFolkNear(p);                                                                            // (3.96) one of the villagers beside you
-  if(f) acts.push({ key:'jgF' + f.id, at:{ x:f.x, y:f.y }, html:`💬 Talk<small>${escapeHtml(jgFolkName(f.sprite))}</small>`, act:()=> jgFolkTalk(f) });
+  if(f) acts.push({ key:'jgF' + f.id, at:{ x:f.x, y:f.y }, html:`💬 Talk<small>${escapeHtml(jgFolkName(f.sprite))}</small>`, act:()=> jgFolkTalk(f),
+    verb:'Talk', sub:jgFolkName(f.sprite), face:`<img src="assets/mon/${f.sprite}_front.png" alt="" onerror="this.replaceWith(document.createTextNode('🧚'))">` });
   /* (4.03) his Rift Ambush is the challenge now — a plain Challenge is left only for a band beside you that he cannot
      ambush (across a tribe's sealed wall) */
   const ambushing = jgRiding();
@@ -3181,9 +3394,10 @@ function jgNearActs(p){
     if(jgBandBeaten(b) || Math.abs(b.x - p.x) + Math.abs(b.y - p.y) !== 1) return;
     if(ambushing && jgAmbushable(p, b)) return;
     const nm = SPECIES[b.lead].name;
+    const who = b.rank === 'alien' ? nm : (b.rank === 'captain' ? 'Captain ' : 'Commander ') + nm;
     acts.push({ key:'jgB' + b.id, cls:'jg-fight', at:{ x:b.x, y:b.y },
-      html:`⚔️ Challenge<small>${escapeHtml(b.rank === 'alien' ? nm : (b.rank === 'captain' ? 'Captain ' : 'Commander ') + nm)}</small>`,
-      act:()=> jgFight(b, false) });
+      html:`⚔️ Challenge<small>${escapeHtml(who)}</small>`,
+      act:()=> jgFight(b, false), verb:'Challenge', sub:who, face:`<img src="assets/mon/${b.lead}.png" alt="" onerror="this.replaceWith(document.createTextNode('👾'))">` });
   });
   return acts;
 }
@@ -3207,6 +3421,8 @@ function jgHud(){
   if(typeof questHudBits === 'function') bits.push(...questHudBits());                 // (3.99) the King's fifty, then his week's challenge
   hud.innerHTML = bits.join('');
   hud.style.display = bits.length ? '' : 'none';
+  /* (4.52) the row of counters come or gone: the map fitted again to what is left (walkFitStage) */
+  if(hud._shown !== !!bits.length){ hud._shown = !!bits.length; if(typeof walkFitStage === 'function') walkFitStage(); }
 }
 
 /* ---------- the map of where you have been ---------- */
@@ -3562,7 +3778,7 @@ const JG_LION_LINES = [
   `<b>"Face a wall of trees only one tree thick, and I can leap it with you on my back. Then I need fifty steps to get my breath back."</b>`,   // (3.96)
 ];
 function jgLionTalk(){
-  if(typeof questLionTalk === 'function') return questLionTalk();     // (3.99) what to sniff out, and where the story is
+  if(typeof questLionTalk === 'function') return questLionTalk();     // (3.99) where the story is; (4.55) only talk now: what he follows is Track's
   return jgLionChat();
 }
 function jgLionChat(){
@@ -3771,6 +3987,7 @@ let _jgCss = false;
 function jgCss(){
   if(_jgCss || typeof document === 'undefined') return;
   _jgCss = true;
+  const L = jgSegLen();                                                  // (4.55) a dial quarter's outline (its edge lights)
   const s = document.createElement('style');
   s.id = 'jgCss';
   s.textContent = `
@@ -3868,26 +4085,121 @@ function jgCss(){
   .jg-ride .jg-ride-rider{ position:absolute; pointer-events:none; }
   .jg-ride .jg-ride-lion{ filter:drop-shadow(0 0 5px rgba(255,140,60,.6)); }
   .jg-ride .jg-ride-shadow{ position:absolute; left:4%; right:4%; bottom:-10%; height:26%; border-radius:50%; background:rgba(0,0,0,.3); }
-  /* (4.49) his moves, fixed under Party (jgPadHtml): pale while they cannot go, lit in their own colours when they can */
-  .walk-moves .wmove{ height:68px; min-width:0; border-radius:14px; border:1px solid var(--line); background:var(--paper-2); color:var(--ink-soft);
-    position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:4px 8px; cursor:pointer;
-    touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
-    transition:background-color .15s, border-color .15s, box-shadow .15s, transform .08s; }
-  .walk-moves .wmove b{ font:800 18px/1.05 'Baloo 2',cursive; opacity:.42; }
-  .walk-moves .wmove small{ position:absolute; left:4px; right:4px; bottom:7px; font:700 10.5px/1.2 'Nunito',sans-serif; text-align:center; }   /* its wait: under the word, which never moves */
-  .walk-moves .wmove.jump{ grid-column:1 / -1; }
-  .walk-moves .wmove.jump b{ color:#a85f22; }
-  .walk-moves .wmove.glare b{ color:#8e1d22; }
-  .walk-moves .wmove.ambush b{ color:#3b2a7a; }
-  .walk-moves .wmove.lit{ box-shadow:inset 0 -3px 0 rgba(0,0,0,.22), 0 2px 6px rgba(0,0,0,.2); animation:jgMoveLit .45s ease-out; }
-  .walk-moves .wmove.lit b{ color:#fff; opacity:1; }
-  .walk-moves .wmove.lit small{ color:rgba(255,255,255,.85); }
-  .walk-moves .wmove.lit.jump{ background:#c0702c; border-color:#8e4f1a; }
-  .walk-moves .wmove.lit.glare{ background:#8e1d22; border-color:#5e1014; }
-  .walk-moves .wmove.lit.ambush{ background:#3b2a7a; border-color:#251a52; }
-  .walk-moves .wmove.press{ transform:scale(.95); }
-  @keyframes jgMoveLit{ 0%{ filter:brightness(1.5); } 100%{ filter:brightness(1); } }
-  @media (max-width:420px){ .walk-moves .wmove{ padding:4px 3px; } .walk-moves .wmove b{ font-size:16px; } }   /* a phone's narrower side: Ambush still fits */
+  /* (4.52) his dial (jgPadHtml): a dark ring rimmed in gold, its four quarters dark until they can go, then lit in their
+     own colours and glowing; a wait fills a quarter from the inside out; his face and mane, cut out, in a sun's glow at
+     its middle. Its words and pictures sized from the ring's own width (--dpx, jgPadWire).
+     (4.55) Recharged (.ready): its full colour, still. Usable this moment (.lit): a prism shimmer in its own hues flowing
+     round the ring (::before, turning), stars twinkling (.seg-fx), a light running round its edge (.seg-edge), its glow
+     under it. Track always in its jade; following something (.on), two soft lights circle its edge. */
+  .walk-moves.dial{ display:block; }
+  .jg-dial{ --dpx:196px; position:relative; width:100%; aspect-ratio:1/1; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+  .jg-dial-defs{ position:absolute; width:0; height:0; overflow:hidden; }
+  .jg-dial-plate{ position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle closest-side, #2a1f45 0 45%, #18122d 80%, #120d22 100%);
+    box-shadow:0 0 0 2px rgba(242,196,90,.75), 0 0 0 5px rgba(28,20,48,.85), 0 8px 22px rgba(20,12,30,.42); }
+  .jg-dial .seg{ position:absolute; inset:0; width:auto; height:auto; border:0; padding:0; margin:0; border-radius:0; cursor:pointer; color:var(--tint);
+    background:radial-gradient(circle closest-side, #3d3163 47%, #2d244b 76%, #241c3d 100%); transform-origin:50% 50%;
+    transition:transform .08s, filter .15s; -webkit-tap-highlight-color:transparent; touch-action:none; overflow:hidden; }
+  .jg-dial .seg.jump{ --c1:#ffc27a; --c2:#ff8a1f; --c3:#b4450b; --charge:rgba(255,128,24,.8); --tint:#ffa04d; --p1:#ffe066; --p2:#ff4f2e; --p3:#ff9ec9; --edge:#ffe7bd; }
+  .jg-dial .seg.glare{ --c1:#ffb0ad; --c2:#e2353e; --c3:#7a141a; --charge:rgba(226,53,62,.55); --tint:#ff9198; --p1:#ff9a5c; --p2:#ff2a78; --p3:#ffd2da; --edge:#ffd9d9; }
+  .jg-dial .seg.ambush{ --c1:#dacdff; --c2:#7c5ef2; --c3:#31226c; --charge:rgba(124,94,242,.55); --tint:#bcaaff; --p1:#ff7ad9; --p2:#4fd8ff; --p3:#c6a8ff; --edge:#efe6ff; }
+  .jg-dial .seg.track{ --c1:#b8f2d9; --c2:#3fae86; --c3:#195a45; --charge:rgba(63,174,134,.55); --tint:#8bdeba; --edge:#e2fff3; }
+  .jg-dial .seg.wait{ background:radial-gradient(circle closest-side, var(--charge) 0 var(--fill, 47%), transparent var(--fill, 47%)),
+    radial-gradient(circle closest-side, #3d3163 47%, #2d244b 76%, #241c3d 100%); }
+  .jg-dial .seg.jump.wait{ background:radial-gradient(circle closest-side, #ffb35c 47%, #ff8a1f calc((47% + var(--fill, 47%)) / 2), #e8650f var(--fill, 47%), transparent var(--fill, 47%)),
+    radial-gradient(circle closest-side, #4a2f3c 47%, #3a2436 76%, #2c1c2c 100%); }
+  .jg-dial .seg.jump .seg-ic{ color:var(--tint); }
+  /* (4.53) the paw: its own colours, lit or not, a white edge round it */
+  .jg-dial .seg.ambush .seg-ic{ width:calc(var(--dpx) * .15); height:calc(var(--dpx) * .15); }
+  .jg-dial .seg.ambush .seg-ic svg{ filter:drop-shadow(0 0 calc(var(--dpx) * .012) rgba(255,160,255,.7)) drop-shadow(0 1px 1px rgba(0,0,0,.45)); }
+  /* (4.55) Glare's eye, his own: navy lids edged in gold, red inside, a white-hot core — dim while his eyes recover,
+     swelling and shrinking while it can fire */
+  .jg-dial .seg.glare .seg-ic{ width:calc(var(--dpx) * .155); height:calc(var(--dpx) * .155); }
+  .jg-dial .seg.glare .seg-ic svg{ overflow:visible; filter:drop-shadow(0 0 calc(var(--dpx) * .012) rgba(255,90,60,.6)) drop-shadow(0 1px 1px rgba(0,0,0,.45)); }
+  .jg-dial .seg.glare .eye-core, .jg-dial .seg.glare .eye-glint{ transform-box:fill-box; transform-origin:center; transition:opacity .3s; }
+  .jg-dial .seg.glare.wait .eye-core{ opacity:.4; } .jg-dial .seg.glare.wait .eye-glint{ opacity:.45; }
+  .jg-dial .seg.glare.lit .eye-core{ animation:jgEyeCharge 1.15s ease-in-out infinite; }
+  .jg-dial .seg.glare.lit .eye-glint{ animation:jgEyeGlint 1.15s ease-in-out infinite; }
+  @keyframes jgEyeCharge{ 0%,100%{ transform:scale(.8); opacity:.8; } 50%{ transform:scale(1.2); opacity:1; } }
+  @keyframes jgEyeGlint{ 0%,100%{ transform:scale(.75) rotate(0deg); } 50%{ transform:scale(1.3) rotate(45deg); } }
+  /* (4.55) Track: the lock-on frame, the picture of what he follows in its window */
+  .jg-dial .seg.track .seg-ic{ position:relative; width:calc(var(--dpx) * .205); height:calc(var(--dpx) * .205); }
+  .jg-dial .seg.track .seg-in{ gap:0; top:85.4%; }
+  .jg-dial .seg.track b{ font-size:calc(var(--dpx) * .066); }
+  .jg-dial .trk-ret{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .jg-dial .trk-win{ position:absolute; left:15%; top:15%; width:70%; height:70%; border-radius:50%; overflow:hidden;
+    background:radial-gradient(circle closest-side, #3c8f71 0%, #1b5845 70%, #12402f 100%); box-shadow:inset 0 0 0 calc(var(--dpx) * .006) rgba(255,255,255,.6); }
+  .jg-dial .trk-pic{ position:absolute; inset:0; }
+  .jg-dial .trk-pic img{ position:absolute; left:6%; top:6%; width:88%; height:88%; object-fit:contain; max-width:none; }
+  .jg-dial .trk-pic img.fit{ object-fit:fill; }
+  .jg-dial .trk-pic svg{ position:absolute; left:22%; top:12%; width:56%; height:76%; }
+  .jg-dial .seg.ready, .jg-dial .seg.lit{ background:radial-gradient(circle closest-side, var(--c1) 47%, var(--c2) 72%, var(--c3) 100%); color:#fff; }
+  .jg-dial .seg-in{ position:absolute; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:calc(var(--dpx) * .006);
+    transform:translate(-50%, -50%); pointer-events:none; opacity:.6; text-shadow:0 1px 2px rgba(0,0,0,.5); transition:opacity .15s; }
+  .jg-dial .seg.ready .seg-in, .jg-dial .seg.lit .seg-in{ opacity:1; }
+  .jg-dial .at-n .seg-in{ left:50%; top:13.4%; } .jg-dial .at-s .seg-in{ left:50%; top:86.6%; }
+  .jg-dial .at-w .seg-in{ left:13.6%; top:50%; } .jg-dial .at-e .seg-in{ left:86.4%; top:50%; }
+  .jg-dial .seg-ic{ display:block; width:calc(var(--dpx) * .13); height:calc(var(--dpx) * .13); }
+  .jg-dial .seg-ic svg{ display:block; width:100%; height:100%; filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
+  .jg-dial .seg b{ font:800 calc(var(--dpx) * .074)/1 'Baloo 2',cursive; }
+  .jg-dial .seg small{ font:800 calc(var(--dpx) * .05)/1.05 'Nunito',sans-serif; white-space:nowrap; color:#fff; opacity:.92; }
+  .jg-dial .seg small:empty{ display:none; }
+  .jg-dial .seg.press{ transform:scale(.95); filter:brightness(1.3); }
+  /* (4.55) usable: the prism, turning round the ring's middle (the quarter shows the part of it passing through) */
+  .jg-dial .seg::before{ content:''; position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .35s; mix-blend-mode:screen;
+    background:conic-gradient(from 0deg, transparent 0deg, var(--p1, transparent) 24deg, transparent 54deg, var(--p2, transparent) 84deg, transparent 112deg,
+      rgba(255,255,255,.85) 127deg, transparent 142deg, var(--p3, transparent) 172deg, transparent 202deg, var(--p1, transparent) 232deg, transparent 262deg,
+      var(--p2, transparent) 292deg, transparent 320deg, rgba(255,255,255,.7) 336deg, transparent 352deg); }
+  .jg-dial .seg.lit:not(.track)::before{ opacity:.6; animation:jgPrism 7s linear infinite; }
+  .jg-dial .seg.glare.lit::before{ animation-delay:-2.3s; } .jg-dial .seg.ambush.lit::before{ animation-delay:-4.6s; }
+  @keyframes jgPrism{ to{ transform:rotate(360deg); } }
+  .jg-dial .seg-fx{ position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .3s; }
+  .jg-dial .seg.lit:not(.track) .seg-fx{ animation:jgTwinkle 2.2s ease-in-out infinite; }
+  .jg-dial .seg.lit:not(.track) .seg-fx.b{ animation-delay:-1.1s; }
+  @keyframes jgTwinkle{ 0%,100%{ opacity:.1; } 50%{ opacity:1; } }
+  /* (4.55) the light round its edge: its outline faintly, a bright light running round it with a softer one about it;
+     Track's: two, slower */
+  .jg-dial .seg-edge{ position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; opacity:0; transition:opacity .3s; overflow:visible; }
+  .jg-dial .seg-edge path{ fill:none; stroke-linecap:round; stroke-linejoin:round; }
+  .jg-dial .seg-edge .e-base{ stroke:var(--edge); stroke-width:.016; opacity:.75; }
+  .jg-dial .seg-edge .e-glow{ stroke:var(--edge); stroke-width:.05; opacity:.5; stroke-dasharray:${(L * 0.2).toFixed(4)} ${(L * 0.8).toFixed(4)}; animation:jgEdgeGlow 2.6s linear infinite; }
+  .jg-dial .seg-edge .e-run{ stroke:#fff; stroke-width:.026; stroke-dasharray:${(L * 0.13).toFixed(4)} ${(L * 0.87).toFixed(4)}; animation:jgEdgeRun 2.6s linear infinite; }
+  .jg-dial .seg.glare .seg-edge path{ animation-delay:-.87s; } .jg-dial .seg.ambush .seg-edge path{ animation-delay:-1.73s; }
+  .jg-dial .seg.lit:not(.track) .seg-edge{ opacity:1; }
+  .jg-dial .seg.track .seg-edge .e-base{ opacity:.45; }
+  .jg-dial .seg.track .seg-edge .e-glow{ stroke-dasharray:${(L * 0.15).toFixed(4)} ${(L * 0.35).toFixed(4)}; animation-duration:6s; opacity:.4; }
+  .jg-dial .seg.track .seg-edge .e-run{ stroke:#f4fff9; stroke-dasharray:${(L * 0.09).toFixed(4)} ${(L * 0.41).toFixed(4)}; animation-duration:6s; opacity:.9; }
+  .jg-dial .seg.track.on .seg-edge{ opacity:1; }
+  @keyframes jgEdgeRun{ from{ stroke-dashoffset:0; } to{ stroke-dashoffset:-${L.toFixed(4)}; } }
+  @keyframes jgEdgeGlow{ from{ stroke-dashoffset:${(L * 0.035).toFixed(4)}; } to{ stroke-dashoffset:-${(L * 0.965).toFixed(4)}; } }
+  .jg-dial .seg::after{ content:''; position:absolute; inset:0; pointer-events:none; opacity:0; transform:translateX(-100%);
+    background:linear-gradient(115deg, transparent 35%, rgba(255,255,255,.6) 50%, transparent 65%); }
+  .jg-dial .seg.shine::after{ animation:jgSegShine .75s ease-out 1; }
+  @keyframes jgSegShine{ 0%{ opacity:1; transform:translateX(-100%); } 100%{ opacity:0; transform:translateX(100%); } }
+  .jg-dial .seg:focus-visible{ outline:none; filter:brightness(1.3); }
+  .jg-dial:has(.seg.jump:focus-visible) .seg-glow.jump, .jg-dial:has(.seg.glare:focus-visible) .seg-glow.glare,
+  .jg-dial:has(.seg.ambush:focus-visible) .seg-glow.ambush, .jg-dial:has(.seg.track:focus-visible) .seg-glow.track{ opacity:.95; }   /* a key's focus: its glow */
+  /* the glow under a quarter that can go, out past its edges */
+  .jg-dial .seg-glow{ position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .3s; filter:blur(calc(var(--dpx) * .045)); }
+  .jg-dial .seg-glow i{ position:absolute; inset:0; display:block; background:var(--g); }
+  .jg-dial .seg-glow.jump{ --g:#ff8a1f; } .jg-dial .seg-glow.glare{ --g:#ff3d48; } .jg-dial .seg-glow.ambush{ --g:#9270ff; } .jg-dial .seg-glow.track{ --g:#45d6a2; }
+  .jg-dial .seg-glow.on{ opacity:.75; animation:jgGlow 2.6s ease-in-out infinite; }
+  @keyframes jgGlow{ 0%,100%{ opacity:.5; } 50%{ opacity:.9; } }
+  /* his face and mane (assets/ui/lucesco_badge.png, cut out of his picture) in a sun's glow; a press flares it.
+     (4.55) A button: talk to him — nothing on it says so (the designer: "I don't want a conversation speech bubble …
+     Let the face pressing dialogue be an intuitive discovery"). His picture a little left of and above the middle (the
+     designer: "Lucesco's face needs to be aligned slightly left and up") */
+  .jg-dial-face{ position:absolute; left:50%; top:50%; width:47%; height:47%; transform:translate(-50%, -50%); border-radius:50%; cursor:pointer; z-index:2;
+    border:0; padding:0; margin:0; color:inherit; font:inherit; -webkit-appearance:none; appearance:none; -webkit-tap-highlight-color:transparent; touch-action:none;
+    background:radial-gradient(circle closest-side, rgba(255,236,160,.95) 0%, rgba(255,190,72,.78) 36%, rgba(238,118,40,.32) 68%, rgba(238,118,40,0) 100%); }
+  .jg-dial-face i{ position:absolute; inset:-2%; transform:translate(-4.5%, -3.5%); background:url(assets/ui/lucesco_badge.png) center / 100% 100% no-repeat;
+    filter:drop-shadow(0 1px 0 rgba(0,0,0,.55)) drop-shadow(0 3px 4px rgba(0,0,0,.35)); pointer-events:none; }
+  .jg-dial-face:focus-visible{ outline:none; box-shadow:0 0 0 calc(var(--dpx) * .012) #fff6e0, 0 0 0 calc(var(--dpx) * .024) #c48a22; }
+  .jg-dial-face::after{ content:''; position:absolute; inset:-5%; border-radius:50%; pointer-events:none; opacity:0; box-shadow:0 0 0 3px var(--fl, #ffd27a), 0 0 18px 4px var(--fl, #ffd27a); }
+  .jg-dial-face[data-fl="jump"]{ --fl:#ff8a1f; } .jg-dial-face[data-fl="glare"]{ --fl:#ff3d48; } .jg-dial-face[data-fl="ambush"]{ --fl:#9270ff; } .jg-dial-face[data-fl="track"]{ --fl:#45d6a2; }
+  .jg-dial-face.flare{ animation:jgFaceFlare .5s ease-out 1; }
+  .jg-dial-face.flare::after{ animation:jgFaceRing .5s ease-out 1; }
+  @keyframes jgFaceFlare{ 0%{ transform:translate(-50%, -50%) scale(1); } 30%{ transform:translate(-50%, -50%) scale(1.09); filter:brightness(1.3); } 100%{ transform:translate(-50%, -50%) scale(1); } }
+  @keyframes jgFaceRing{ 0%{ opacity:.95; transform:scale(.92); } 100%{ opacity:0; transform:scale(1.12); } }
   /* (4.49) what he does, along the bottom of the map (jgTell) */
   .jg-tell{ position:absolute; left:10px; right:10px; bottom:10px; z-index:30; width:fit-content; max-width:calc(100% - 20px); margin:0 auto;
     padding:7px 14px; border-radius:12px; background:rgba(24,20,15,.86); color:#f6efe0; box-shadow:0 2px 10px rgba(0,0,0,.3);
@@ -3896,7 +4208,9 @@ function jgCss(){
   .jg-tell b{ font:800 16px/1 'Baloo 2',cursive; }
   .jg-tell.glare b{ color:#ff9c9c; }
   .jg-tell.ambush b{ color:#cbbcff; }
-  @media (prefers-reduced-motion: reduce){ .walk-moves .wmove.lit{ animation:none; } .jg-tell{ transform:none; } }
+  @media (prefers-reduced-motion: reduce){ .jg-dial .seg-glow.on, .jg-dial .seg.shine::after, .jg-dial-face.flare, .jg-dial-face.flare::after,
+    .jg-dial .seg::before, .jg-dial .seg-fx, .jg-dial .seg-edge path, .jg-dial .eye-core, .jg-dial .eye-glint{ animation:none !important; } .jg-tell{ transform:none; }
+    .jg-dial .seg.lit:not(.track) .seg-fx{ opacity:.7; } .jg-dial .seg-edge .e-run, .jg-dial .seg-edge .e-glow{ stroke-dasharray:none; opacity:.35; } }   /* (4.55) a still, bright edge */
   /* (4.03) riding him: you astride his back as you walk (#walkYou, the deck's youArt); his own picture put away */
   .walk-ent.jg-lion.jg-off{ display:none !important; }
   .walk-you .jg-mount{ position:absolute; inset:0; pointer-events:none; }

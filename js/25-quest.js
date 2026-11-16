@@ -283,6 +283,9 @@ function questTribesSmelt(){
 }
 function questTrack(){
   const q = questState();
+  /* (4.55) the story over: the aliens, once (the designer: "By default it should track aliens if storyline is over");
+     after that, whatever Track is turned to */
+  if(!q.said.trackAfter && typeof invAfter === 'function' && invAfter()){ q.said.trackAfter = true; q.track = 'alien'; saveProfile(); }
   if(q.track === 'find' && !questFindsOn()) q.track = 'alien';           // (4.25) every ticket found: back to the aliens
   let t = q.track;
   if(t === 'find') return 'find';
@@ -297,11 +300,7 @@ function questTarget(p){
   if(t === 'find') return questFindTarget(JG_KEY, p);
   if(t === 'castle'){ const s = P.castle.stand; return { x:s.x + 0.5, y:s.y + 0.5 }; }
   if(t === 'rift' && P.north){ const s = P.north.stand; return { x:s.x + 0.5, y:s.y + 0.5 }; }   // (4.33) the rift's gate
-  if(t === 'alien'){
-    let best = null, bd = Infinity;
-    jgBands().forEach(b=>{ if(jgBandBeaten(b)) return; const d = (b.x - p.x) * (b.x - p.x) + (b.y - p.y) * (b.y - p.y); if(d < bd){ bd = d; best = b; } });
-    return best ? { x:best.x + 0.5, y:best.y + 0.5 } : null;
-  }
+  if(t === 'alien'){ const best = jgNearestBand(p); return best ? { x:best.x + 0.5, y:best.y + 0.5 } : null; }   // (4.55) Track's picture is the same one
   if(JG_TRIBES[t]){
     const V = P.villages[t];
     if(q.found[t]) return { x:V.cx + 0.5, y:V.cy + 0.5 };
@@ -407,24 +406,28 @@ function questPulseSoon(){
   _qPulseSoon = setTimeout(questPulseUpdate, 260);
 }
 
-/* ---------- Lucesco's talk: what to sniff out ---------- */
+/* ---------- Lucesco's talk (his face on the dial) ----------
+   (4.55) Only talk: what he follows is chosen with Track (questTrackChoose), the bottom of his dial — the designer:
+   "Please shift the talk function to his face, and change the bottom button to 'Track'". What was Just talk (4.12–4.54)
+   is what his face says now, after the story's own words. */
 async function questLionTalk(){
   const st = questStage();
   if(st === 'arrive' || st === 'intro') return jgLionChat();
   if(st === 'castle') return jgLines([questFace.lion()], 'Lucesco', [caTurnJ('qLionCastle', [
     `<b>"The castle is that way. See the ripples at the edge of your eyes? That is its smell, reaching my nose. Walk towards them."</b>`,
     `<b>"Follow the pulse. The paths twist, but the smell does not lie."</b>`,
-    `<b>"Where the trees are only one deep, tap Jump, and I will carry you over."</b>`])]);
+    `<b>"Where the trees are only one deep, tap Leap, and I will carry you over."</b>`])]);
   if(questFindsOn() && !questState().said.findSay) return questFindSay();   // (4.25)
-  return questSniff();
+  if(typeof invLionJungle === 'function'){ const r = invLionJungle(); if(r) return r; }   // (4.33) the castle invaded, Wadjet's trail
+  return st === 'unseal' && typeof unLionTalk === 'function' ? unLionTalk() : jgLionChat();   // (4.13) by where the King's ride stands
 }
-/* (4.25) the story over, his nose turns to the tickets still hidden: he says so, once (and from then on you may choose
-   again what he sniffs out) */
+/* (4.25) the story over, his nose catches the tickets still hidden: he says so, once. (4.55) He keeps to the aliens —
+   the designer: "By default it should track aliens if storyline is over" — and Track turns him to the tickets. */
 function questFindSay(){
   const q = questState();
-  q.said.findSay = true; q.track = 'find'; saveProfile();
+  q.said.findSay = true; saveProfile();
   return jgLines([questFace.lion()], 'Lucesco', [`<b>"It is quiet at last. …Do you smell that? Not aliens — something shiny. There are tickets tucked away all over the kingdom: in the jungle, in every house in the villages, in the castle's rooms and homes. ${questFindsLeft()} of them, still hidden."</b>`,
-    `<b>"Follow the ripples: my nose will take you to the nearest. Talk to me if you would rather hunt aliens."</b>`]).then(()=> questPulseSoon());
+    `<b>"I will keep after the aliens. Tap Track, and I will follow the tickets instead."</b>`]).then(()=> questPulseSoon());
 }
 function caTurnJ(key, lines){ const t = jgState().talk; const n = t[key] = (t[key] || 0) + 1; return lines[(n - 1) % lines.length]; }
 /* (4.12) The designer: "when talking to lucesco, please make his nose smell icons sprites instead of emoticons! for
@@ -440,6 +443,9 @@ function questSniffPic(k){
   if(!p) return '';
   return `<img class="jg-go-pic q-sniff-pic" src="assets/mon/${p[0]}.png" alt="" onerror="this.replaceWith(document.createTextNode('${p[1]}'))">`;
 }
+/* (4.55) Track's choice (the bottom of his dial, and the chip over the jungle): what he follows. Just talk is his face's
+   now. */
+function questTrackChoose(){ return questSniff(); }
 function questSniff(){
   if(document.querySelector('.q-sniff')) return;
   releaseKeys();
@@ -450,9 +456,8 @@ function questSniff(){
   if(typeof invRiftSniffOpt === 'function'){ const o = invRiftSniffOpt(); if(o) opts.splice(opts[0] && opts[0].k === 'find' ? 1 : 0, 0, o); }   // (4.33) the rift at the north edge (36-the-return.js)
   const ov = document.createElement('div');
   ov.className = 'refine-scrim jg-choose q-sniff';
-  ov.innerHTML = `<div class="refine-card"><div class="q-sniff-face">${questFace.lion()}</div><div class="refine-name">What shall I sniff out?</div>
-      <div class="jg-choose-list">${opts.map(o=> `<button class="btn btn-ghost jg-go${o.k === cur ? ' q-on' : ''}" data-k="${o.k}">${questSniffPic(o.k)}<span class="jg-go-words">${escapeHtml(questTrackLabel(o.k))}<small>${escapeHtml(o.sub)}${o.k === cur ? ' · now' : ''}</small></span></button>`).join('')}
-      <button class="btn btn-ghost jg-go" data-k="talk">${questSniffPic('talk')}<span class="jg-go-words">Just talk<small>What is on his mind</small></span></button></div>
+  ov.innerHTML = `<div class="refine-card"><div class="q-sniff-face">${questFace.lion()}</div><div class="refine-name">What shall I track?</div>
+      <div class="jg-choose-list">${opts.map(o=> `<button class="btn btn-ghost jg-go${o.k === cur ? ' q-on' : ''}" data-k="${o.k}">${questSniffPic(o.k)}<span class="jg-go-words">${escapeHtml(questTrackLabel(o.k))}<small>${escapeHtml(o.sub)}${o.k === cur ? ' · now' : ''}</small></span></button>`).join('')}</div>
       <button class="btn btn-ghost" id="qSniffNo" style="margin-top:10px;">Cancel</button></div>`;
   document.body.appendChild(ov);
   const close = ()=> ov.remove();
@@ -461,12 +466,8 @@ function questSniff(){
   ov.querySelectorAll('.jg-go').forEach(b=> b.addEventListener('click', ()=>{
     close();
     const k = b.dataset.k;
-    if(k === 'talk'){
-      if(typeof invLionJungle === 'function'){ const r = invLionJungle(); if(r) return r; }   // (4.33) the castle invaded, Wadjet's trail
-      return questStage() === 'unseal' && typeof unLionTalk === 'function' ? unLionTalk() : jgLionChat();   // (4.13) by where the King's ride stands
-    }
     q.track = k; saveProfile();
-    toast(`🦁 Lucesco sniffs out: ${questTrackLabel(k).replace(/^The /, 'the ')}.`);
+    toast(`🦁 Lucesco tracks: ${questTrackLabel(k).replace(/^The /, 'the ')}.`);
     jgHud(); questPulseSoon();
   }));
 }
@@ -623,7 +624,7 @@ function questHudBits(){
   const q = questState(), bits = [];
   if(q.stage === 'fifty') bits.push(`<span class="jg-chip${q.fifty >= QUEST.fifty ? ' done' : ''}" title="Aliens beaten for the King">👑 ${q.fifty >= QUEST.fifty ? '✓' : q.fifty + '/' + QUEST.fifty}</span>`);
   if(q.wk) bits.push(`<span class="jg-chip${q.wk.paid ? ' done' : ''}" title="This week's challenge: a bronze medal for each alien, up to ${QUEST.weekly}">🛡️ ${q.wk.paid ? '✓' : (q.wk.n || 0) + '/' + QUEST.weekly}</span>`);
-  if(questPulseOn()) bits.push(`<button class="jg-chip q-track" type="button" title="What Lucesco is sniffing out">${questPinSvg(15)} ${escapeHtml(questTrackLabel(questTrack()))}</button>`);
+  if(questPulseOn()) bits.push(`<button class="jg-chip q-track" type="button" title="What Lucesco is tracking">${questPinSvg(15)} ${escapeHtml(questTrackLabel(questTrack()))}</button>`);
   return bits;
 }
 /* (4.00) the designer: "please also remove the nose emoticon … a red GPS symbol would be better" — a map pin, drawn
@@ -1096,7 +1097,7 @@ function questJungleAfter(stage){
   const hud = document.getElementById('jgHud');
   if(hud && !hud.dataset.qWired){
     hud.dataset.qWired = '1';
-    hud.addEventListener('click', e=>{ if(e.target.closest && e.target.closest('.q-track') && !ui.jgTalk && !ui.jgAlert) questLionTalk(); });
+    hud.addEventListener('click', e=>{ if(e.target.closest && e.target.closest('.q-track') && !ui.jgTalk && !ui.jgAlert) questTrackChoose(); });   // (4.55) Track's choice
   }
   if(ui.sceneRunning) return;
   /* back from a guardian's fight, won: its words, and its wall comes down */
