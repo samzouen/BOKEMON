@@ -28,7 +28,7 @@
        both away and keeps them off.
      · Return to the Past: never below 1 HP. Brought to 1, and at the start of each of his turns, he vanishes and steps
        back out of the past whole, every mark on him gone (a freeze, a muddle, a Curse: nothing holds him).
-     · His fifth turn: two shadows peel off him and he begins gathering the Prismatic Laser — it fires on his third turn
+     · His fifth turn: two shadows peel off him and he begins gathering the Eraser Beam (4.59; it was the Prismatic Laser) — it fires on his third turn
        after (a turn he is frozen does not count). Meanwhile he turns nothing back. The shadows: blows pass through them;
        half his ATK; Hood of Dread every turn; and their Night Venom (4.5× on one, Curse and Venom) only if you take
        hold of one (Mind Control). Brought to 1 HP while he gathers it: "Argh!" — the light lost, back through time,
@@ -57,19 +57,19 @@ const NEM_MUSIC = ['battle_legendary', 'battle_boss'];
 
 /* ---------- Venom: a mark of theirs on your side (and, by a shadow's Night Venom, on him) ---------- */
 const NEM_DROP = `<svg class="ico-venom" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6C6.1 4.6 3.6 7.2 3.6 10.1a4.4 4.4 0 0 0 8.8 0C12.4 7.2 9.9 4.6 8 1.6z" fill="#5bbf3a" stroke="#2a6a1c" stroke-width="1.3" stroke-linejoin="round"/><circle cx="6.5" cy="10.3" r="1.15" fill="#e2ffd0"/></svg>`;
-const NEM_PRISM = `<svg class="ico-prism" viewBox="0 0 16 16" aria-hidden="true"><defs><linearGradient id="nemPrismG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5a5a"/><stop offset=".25" stop-color="#ffd54a"/><stop offset=".5" stop-color="#6cf06a"/><stop offset=".75" stop-color="#5ab4ff"/><stop offset="1" stop-color="#b86cff"/></linearGradient></defs><path d="M8 1.2 14.4 13.6H1.6Z" fill="url(#nemPrismG)" stroke="#4a3a7a" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 4.6 11.2 11.6H4.8Z" fill="#fff" opacity=".55"/></svg>`;
+const NEM_PRISM = `<svg class="ico-prism" viewBox="0 0 16 16" aria-hidden="true"><defs><radialGradient id="nemHoleG" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000"/><stop offset=".52" stop-color="#000"/><stop offset=".68" stop-color="#7a1ad0"/><stop offset=".84" stop-color="#ff2a55"/><stop offset="1" stop-color="#ff2a55" stop-opacity="0"/></radialGradient></defs><circle cx="8" cy="8" r="7.6" fill="url(#nemHoleG)"/><circle cx="8" cy="8" r="4.1" fill="#000" stroke="#c86cff" stroke-width=".9"/></svg>`;   // (4.59) the Eraser Beam's black hole (it was a prism)
 if(typeof STATUS_KIND !== 'undefined') STATUS_KIND.venom = 'debuff';
 /* the marks as symbols (04-battle.js, 3.52: "symbols for each status that can be pressed for more details"), drawn —
-   no emoji for any of them: Venom's droplet, the Prismatic Laser's prism, Return to the Past's arrow running back, a
+   no emoji for any of them: Venom's droplet, the Eraser Beam's black hole, Return to the Past's arrow running back, a
    shadow's hood. Their keys are private-use characters, so no message's words can ever be taken for one (emoHtml). */
 const NEM_SYM = { venom:'\uE7A1', prism:'\uE7A2', past:'\uE7A3', shadow:'\uE7A4' };
 if(typeof DRAWN_SYMBOLS !== 'undefined' && typeof drawnSvg === 'function'){
   DRAWN_SYMBOLS[NEM_SYM.venom] = drawnSvg('venom',
     '<path d="M32 5C24 18 13 29 13 41a19 19 0 0 0 38 0C51 29 40 18 32 5Z" fill="#5bbf3a" stroke="#2a6a1c" stroke-width="4" stroke-linejoin="round"/>' +
     '<path d="M22 40c0 6 4 10 9 11" fill="none" stroke="#e2ffd0" stroke-width="4.5" stroke-linecap="round"/>');
-  DRAWN_SYMBOLS[NEM_SYM.prism] = drawnSvg('prism',
-    '<defs><linearGradient id="nemSymPrism" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5a5a"/><stop offset=".25" stop-color="#ffd54a"/><stop offset=".5" stop-color="#6cf06a"/><stop offset=".75" stop-color="#5ab4ff"/><stop offset="1" stop-color="#b86cff"/></linearGradient></defs>' +
-    '<path d="M32 5 58 55H6Z" fill="url(#nemSymPrism)" stroke="#4a3a7a" stroke-width="4" stroke-linejoin="round"/><path d="M32 19 45 47H19Z" fill="#fff" opacity=".55"/>');
+  DRAWN_SYMBOLS[NEM_SYM.prism] = drawnSvg('prism',                                   // (4.59) a black hole, red and purple round it (the Eraser Beam)
+    '<defs><radialGradient id="nemSymHole" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000"/><stop offset=".5" stop-color="#000"/><stop offset=".66" stop-color="#7a1ad0"/><stop offset=".84" stop-color="#ff2a55"/><stop offset="1" stop-color="#ff2a55" stop-opacity="0"/></radialGradient></defs>' +
+    '<circle cx="32" cy="32" r="29" fill="url(#nemSymHole)"/><circle cx="32" cy="32" r="15" fill="#000" stroke="#c86cff" stroke-width="3"/><circle cx="51" cy="17" r="3.4" fill="#ff5a7a"/><circle cx="12" cy="44" r="3" fill="#b45cff"/>');
   DRAWN_SYMBOLS[NEM_SYM.past] = drawnSvg('past',
     '<path d="M50 32A18 18 0 1 1 32 14" fill="none" stroke="#7a4fd0" stroke-width="7" stroke-linecap="round"/>' +
     '<path d="M32 3 20 14 32 25Z" fill="#7a4fd0" stroke="#7a4fd0" stroke-width="3" stroke-linejoin="round"/>' +
@@ -93,7 +93,7 @@ if(typeof statusTipText === 'function'){
     }
     if(key === 'nemPast') return `<b>Return to the Past.</b> He can't be brought below 1 HP: brought to 1, and at the start of each of his turns, he slips back into the past and steps out again whole, every mark on him gone. Only while he gathers the Prismatic Laser does he turn nothing back.`;
     if(key === 'nemEnergy'){ const n = nemTurnsLeft(); return `Wadjet can keep this up for <b>${n}</b> more turn${n === 1 ? '' : 's'}, this one included. Then he is spent, and he flees.`; }
-    if(key === 'nemCharge'){ const n = N && N.charging ? N.charging.left : 0; return `The Prismatic Laser: it fires in <b>${n}</b> of his turns — <b>5,000</b> to every monster of yours, bench and companions too, through everything. A turn he is frozen doesn't count. Bring him to <b>1 HP</b> before it fires and the light is lost.`; }
+    if(key === 'nemCharge'){ const n = N && N.charging ? N.charging.left : 0; return `The Eraser Beam: it fires in <b>${n}</b> of his turns — <b>5,000</b> to every monster of yours, bench and companions too, through everything. A turn he is frozen doesn't count. Bring him to <b>1 HP</b> before it fires and the light is lost.`; }
     if(key === 'nemShadow') return `<b>A shadow of Wadjet.</b> Blows pass straight through it. It strikes with half his ATK. Freeze it, or muddle it with Discombobulate, and it loses its blow — and with Mind Control, its <b>Night Venom</b> is yours to aim: <b>${NEM.maxMult}×</b> on one, and a Curse and Venom on it.`;
     return _nemTip.apply(this, arguments);
   };
@@ -278,10 +278,10 @@ async function nemBeginCharge(done){
   N.charging = { left:NEM.charge };
   renderBattle();
   playSfx('power_up');
-  battleMsg(`Light begins to gather in his hood: the <b>Prismatic Laser</b>! It fires in <b>${NEM.charge}</b> of his turns.`);
+  battleMsg(`The air over his head tears open into a black hole, drinking in the light: the <b>Eraser Beam</b>! It fires in <b>${NEM.charge}</b> of his turns.`);
   await nemWait(1400);
   if(ui.battle !== b) return;
-  await nemMKSay(`<b>"He can't turn time back while he gathers that light — bring him down, NOW, before it fires! Freeze him and the light waits. Muddle his shadows and they hit each other instead of you."</b>`);
+  await nemMKSay(`<b>"He can't turn time back while he gathers that darkness — bring him down, NOW, before it fires! Freeze him and the darkness waits. Muddle his shadows and they hit each other instead of you."</b>`);
   done();
 }
 function nemSummonShadows(){
@@ -324,7 +324,7 @@ function nemChargeStep(e, next){
   nemPrismLevel();
   if(N.charging.left > 0){
     playSfx('power_up');
-    battleMsg(`Wadjet gathers the light… The Prismatic Laser fires ${N.charging.left === 1 ? '<b>on his next turn</b>' : `in <b>${N.charging.left}</b> of his turns`}!`);
+    battleMsg(`The dark over Wadjet's head swells… The Eraser Beam fires ${N.charging.left === 1 ? '<b>on his next turn</b>' : `in <b>${N.charging.left}</b> of his turns`}!`);
     return setTimeout(()=>{ if(ui.battle === b) next(); }, 1100);
   }
   return nemFireLaser(next);
@@ -338,15 +338,15 @@ function nemPrismLevel(){
   card.classList.toggle('nem-charging', lv > 0);
   ['nem-c1', 'nem-c2', 'nem-c3'].forEach((k, j)=> card.classList.toggle(k, lv === j + 1));
 }
-/* ---------- the Prismatic Laser: 5,000 to every one of yours, through everything ---------- */
+/* ---------- the Eraser Beam (4.59: was the Prismatic Laser): 5,000 to every one of yours, through everything ---------- */
 function nemFireLaser(next){
   const b = ui.battle, N = b.nem, W = nemWadjet();
   N.charging = null; N.fired = true;
   nemPrismLevel();
   renderStatusBadges();
-  battleMsg(`<b>The Prismatic Laser fires!</b>`);
+  battleMsg(`<b>The Eraser Beam fires!</b>`);
   const field = playerField().filter(m=> m.currentHp > 0);
-  try { playEffect('Prismatic Laser', { type:'Psychic', from:'enemy-' + b.enemies.indexOf(W), targets:field.map(m=> pid('playerBob', m)), foe:true }); } catch(e){}
+  try { playEffect('Eraser Beam', { type:'Ghost', from:'enemy-' + b.enemies.indexOf(W), targets:field.map(m=> pid('playerBob', m)), foe:true }); } catch(e){}
   if(typeof buzz === 'function') buzz('ultra');
   setTimeout(()=>{
     if(ui.battle !== b) return;
@@ -387,8 +387,8 @@ function nemArgh(next){
   N.charging = null; N.broke = true;
   nemPrismLevel();
   renderStatusBadges();
-  battleMsg(`Wadjet: <b>"Argh!"</b> — the light in his hood shatters!`);
-  try { playEffect('Prism Shatter', { type:'Psychic', from:'enemy-' + b.enemies.indexOf(W), foe:true, aside:true }); } catch(e){}
+  battleMsg(`Wadjet: <b>"Argh!"</b> — the black hole over his head collapses!`);
+  try { playEffect('Eraser Collapse', { type:'Ghost', from:'enemy-' + b.enemies.indexOf(W), foe:true, aside:true }); } catch(e){}
   playSfx('hit_taken');
   if(typeof buzz === 'function') buzz('argh');
   setTimeout(()=>{ if(ui.battle === b) nemRewind('argh', next); }, 1500);
@@ -483,8 +483,8 @@ function nemSuggest(mon){
   } else {
     const hard = nemHardest(moves);
     if(picks.length) line = `"${nm(picks[0])}${picks.length > 1 ? ` or ${nm(picks[1])}` : ''}! Then hit him with everything you've got — he can't turn it back now!"`;
-    else if(hard >= 0){ picks.push(hard); line = `"Hit him with ${nm(hard)} — everything you've got, before the light is full!"`; }
-    else line = `"Bring him down — before the light is full!"`;
+    else if(hard >= 0){ picks.push(hard); line = `"Hit him with ${nm(hard)} — everything you've got, before that darkness is full!"`; }
+    else line = `"Bring him down — before that darkness is full!"`;
   }
   return { picks, line, mode };
 }
@@ -619,7 +619,7 @@ if(typeof renderStatusBadges === 'function'){
         const add = [], n = nemTurnsLeft();
         if(!N.charging) add.push(pill('nemPast', NEM_SYM.past, 'Return to the Past'));
         add.push(pill('nemEnergy', '⏳', `${n} turn${n === 1 ? '' : 's'} left`, n, n === 1));
-        if(N.charging) add.push(pill('nemCharge', NEM_SYM.prism, `Prismatic Laser: ${N.charging.left}`, N.charging.left, N.charging.left === 1));
+        if(N.charging) add.push(pill('nemCharge', NEM_SYM.prism, `Eraser Beam: ${N.charging.left}`, N.charging.left, N.charging.left === 1));
         slot.insertAdjacentHTML('afterbegin', add.join(''));
       }
       if(e.nemRole === 'shadow') slot.insertAdjacentHTML('afterbegin', pill('nemShadow', NEM_SYM.shadow, 'Shadow'));
@@ -631,25 +631,38 @@ if(typeof renderStatusBadges === 'function'){
 /* ============================================================
    THE ART
    ============================================================ */
-/* Hood of Dread (his, now a 3.0x blow on all of yours): the hood flares — and a dark wave of venom rolls over them */
+/* (4.59) Hood of Dread, his blow on all of yours: the designer — "a black red-purple explosion (make this his standard
+   aoe attack within the battle fx)". The hood flares; a black wave edged in purple and red rolls out over your side; on
+   each of yours, a blast: black at its heart, purple and red round it, sparks flying */
+const NEM_ERASE = ['#000000', '#14001e', '#6a14b8', '#c21d5a', '#ff2a55', '#ff7aa0'];
 if(typeof FX_MOVES !== 'undefined' && typeof fxAdd === 'function'){
+  const E = NEM_ERASE.map(fxRGB);
+  const burst = (layer, at, seed, big)=>{
+    fxAdd({ layer, dur:760, step(L, t){
+      const u = Math.min(1, t / 520), cv = t < 500 ? 1 : 1 - (t - 500) / 260;
+      fxDisc(L, at.x, at.y, (6 + 10 * u) * big, E[4], cv * 0.5);
+      fxDisc(L, at.x, at.y, (5 + 8 * u) * big, E[2], cv * 0.8);
+      fxDisc(L, at.x, at.y, (3.6 + 6 * u) * big, E[0], cv);
+      fxRing(L, at.x, at.y, (4 + 17 * u) * big, 2, E[5], cv * (1 - u * 0.5));
+      fxRing(L, at.x, at.y, (3 + 12 * u) * big, 2, E[2], cv * (1 - u * 0.4));
+    } });
+    fxSpray(layer, fxBurstParts(at.x, at.y, 18, { seed, vmin:60, vmax:170, ramp:[E[5], E[4], E[3], E[2], E[0]], grav:40, lmin:380, lmax:720 }), 900);
+  };
+  if(typeof window !== 'undefined') window.nemEraseBurst = burst;
   const hood = FX_MOVES['Hood of Dread'] || {};
   FX_MOVES['Hood of Dread'] = { dur:1300, hold:420,
     cast(ctx){
       try { if(hood.cast) hood.cast(ctx); } catch(e){}
       const a = ctx.from;
-      fxTargets(ctx).forEach((t, k)=> fxAdd({ layer:fxLayerFor('player'), dur:700, step(L, tt){
-        if(tt < 240) return;
-        const u = Math.min(1, (tt - 240) / 260), cv = tt < 560 ? 1 : 1 - (tt - 560) / 140;
-        const x = a.x + (t.x - a.x) * u, y = a.y + (t.y - a.y) * u;
-        fxDisc(L, x, y, 7 + 3 * u, FX_NIGHT[4], cv); fxDisc(L, x, y, 5 + 2 * u, FX_NIGHT[2], cv); fxDisc(L, x - 1, y - 1, 2, fxRGB('#8be06a'), cv);
-      } }));
+      fxAdd({ layer:'front', dur:620, step(L, t){
+        if(t < 200) return;
+        const u = Math.min(1, (t - 200) / 380), cv = 1 - u * 0.8;
+        fxRing(L, a.x, a.y - a.h * 0.1, 6 + 60 * u, 3, E[0], cv);
+        fxRing(L, a.x, a.y - a.h * 0.1, 4 + 58 * u, 2, E[3], cv * 0.9);
+        fxRing(L, a.x, a.y - a.h * 0.1, 8 + 62 * u, 1, E[2], cv * 0.8);
+      } });
     },
-    impact(ctx, at, k, side){
-      const layer = fxLayerFor(side);
-      FX_KIT.Ghost.burst(at, layer, { seed:ctx.seed + k, big:1.35 });
-      fxSpray(layer, fxBurstParts(at.x, at.y, 10, { seed:ctx.seed + k + 3, vmin:40, vmax:110, ramp:[fxRGB('#d8ffc2'), fxRGB('#8be06a'), fxRGB('#3f9a2a'), FX_NIGHT[3]], grav:60, lmin:400, lmax:700 }), 900);
-    } };
+    impact(ctx, at, k, side){ burst(fxLayerFor(side), at, ctx.seed + k, 1); } };
   /* a shadow's Night Venom (yours to aim, by Mind Control): a dark fang of venom, trailing, into the one it strikes — and
      a burst of night and green */
   FX_MOVES['Night Venom'] = { dur:1100, hold:500,
@@ -669,33 +682,37 @@ if(typeof FX_MOVES !== 'undefined' && typeof fxAdd === 'function'){
       FX_KIT.Ghost.burst(at, layer, { seed:ctx.seed + k, big:1.6 });
       fxSpray(layer, fxBurstParts(at.x, at.y, 16, { seed:ctx.seed + k + 5, vmin:50, vmax:140, ramp:[fxRGB('#d8ffc2'), fxRGB('#8be06a'), fxRGB('#3f9a2a'), FX_NIGHT[3]], grav:70, lmin:450, lmax:800 }), 1000);
     } };
-  /* the Prismatic Laser: a thick band of every colour from his hood across all of yours, a white heart, then white light */
-  const RAINBOW = ['#ff4d4d', '#ff9a3c', '#ffe34d', '#5be06a', '#4db8ff', '#7a6cff', '#c86cff'].map(fxRGB);
-  FX_MOVES['Prismatic Laser'] = { dur:1600, hold:1300,
+  /* (4.59) the Eraser Beam: from the black hole over his head, a black beam edged in purple and red across all of yours —
+     the hole drinking in the light first, rings drawn into it */
+  FX_MOVES['Eraser Beam'] = { dur:1600, hold:1300,
     cast(ctx){
-      const a = ctx.from;
-      if(typeof fxDimOn === 'function'){ fxDimOn(0.5); fxLater(1700, ()=> fxDimOff()); }
-      fxAdd({ layer:'front', dur:500, step(L, t){ const r = 4 + t / 500 * 14; RAINBOW.forEach((c, j)=> fxRing(L, a.x, a.y - a.h * 0.15, r - j * 1.6, 2, c, 1 - t / 600)); } });
+      const a = ctx.from, hx = a.x, hy = a.y - a.h * 0.62;
+      if(typeof fxDimOn === 'function'){ fxDimOn(0.55); fxLater(1700, ()=> fxDimOff()); }
+      fxAdd({ layer:'front', dur:560, step(L, t){
+        const u = t / 560;
+        for(let j = 0; j < 4; j++){ const w = (u + j / 4) % 1; fxRing(L, hx, hy, (1 - w) * 28 + 3, 2, j % 2 ? E[4] : E[2], 0.9 * w); }
+        fxDisc(L, hx, hy, 5 + 5 * u, E[0], 1);
+      } });
       fxTargets(ctx).forEach(b=> fxAdd({ layer:'front', dur:1500, step(L, t){
         if(t < 420) return;
-        const cv = t < 1250 ? 1 : 1 - (t - 1250) / 250, dx = b.x - a.x, dy = b.y - a.y, n = Math.hypot(dx, dy) || 1, px = -dy / n, py = dx / n;
-        const wob = Math.sin(t * 0.05) * 0.8;
-        RAINBOW.forEach((c, j)=>{ const o = (j - 3) * 2.2 + wob; fxLine(L, a.x + px * o, a.y - a.h * 0.15 + py * o, b.x + px * o, b.y + py * o, c, 3, cv); });
-        fxLine(L, a.x, a.y - a.h * 0.15, b.x, b.y, fxRGB('#ffffff'), 3, cv);
+        const cv = t < 1250 ? 1 : 1 - (t - 1250) / 250, dx = b.x - hx, dy = b.y - hy, n = Math.hypot(dx, dy) || 1, px = -dy / n, py = dx / n;
+        const wob = Math.sin(t * 0.06) * 0.6;
+        [[5.2, E[4], 2], [3.9, E[3], 2.2], [2.6, E[2], 2.4]].forEach(([o, c, w])=> [-1, 1].forEach(sg=>{ const q = (o + wob) * sg; fxLine(L, hx + px * q, hy + py * q, b.x + px * q, b.y + py * q, c, w, cv); }));
+        fxLine(L, hx, hy, b.x, b.y, E[0], 6, cv); fxLine(L, hx, hy, b.x, b.y, E[1], 2.5, cv);
+        fxDisc(L, hx, hy, 6, E[0], cv);
       } }));
-      fxLater(600, ()=>{ try { fxShake(6, 520); } catch(e){} });
+      fxLater(600, ()=>{ try { fxShake(7, 600); } catch(e){} });
     },
-    impact(ctx, at, k, side){
-      const layer = fxLayerFor(side);
-      fxFlash(layer, at, 26, fxRGB('#ffffff'), 140);
-      fxSpray(layer, fxBurstParts(at.x, at.y, 16, { seed:ctx.seed + k, vmin:60, vmax:160, ramp:RAINBOW, lmin:350, lmax:650 }), 800);
-    } };
-  /* the light in his hood shattering: shards of every colour, flying */
-  FX_MOVES['Prism Shatter'] = { side:'self', dur:900,
+    impact(ctx, at, k, side){ const layer = fxLayerFor(side); fxFlash(layer, at, 22, E[4], 120); burst(layer, at, ctx.seed + k, 1.3); } };
+  /* the black hole over his head collapsing ("Argh!"): drawn in to nothing, then dark shards flying */
+  FX_MOVES['Eraser Collapse'] = { side:'self', dur:900,
     cast(ctx){
-      const a = ctx.from;
-      fxFlash(fxLayerFor('enemy'), { x:a.x, y:a.y - a.h * 0.2 }, 16, fxRGB('#ffffff'), 120);
-      fxSpray('front', fxBurstParts(a.x, a.y - a.h * 0.2, 26, { seed:ctx.seed, vmin:90, vmax:220, ramp:RAINBOW, grav:140, lmin:450, lmax:800 }), 900);
+      const a = ctx.from, hx = a.x, hy = a.y - a.h * 0.62;
+      fxAdd({ layer:'front', dur:300, step(L, t){ const u = t / 300; fxDisc(L, hx, hy, 9 * (1 - u) + 1, E[0], 1); fxRing(L, hx, hy, 14 * (1 - u) + 1, 2, E[3], 1 - u); } });
+      fxLater(280, ()=>{
+        fxFlash(fxLayerFor('enemy'), { x:hx, y:hy }, 16, E[4], 120);
+        fxSpray('front', fxBurstParts(hx, hy, 26, { seed:ctx.seed, vmin:90, vmax:220, ramp:[E[5], E[4], E[3], E[2], E[0]], grav:140, lmin:450, lmax:800 }), 900);
+      });
     } };
 }
 
@@ -724,14 +741,20 @@ function nemCss(){
   .enemy-card.nem-leaving .bob{ animation:nemRewind 1.4s steps(16) forwards; }
   .enemy-card.nem-argh{ animation:nemArgh .5s ease-in-out 2; }
   @keyframes nemArgh{ 0%,100%{ transform:none; } 20%{ transform:translateX(-6px) rotate(-3deg); } 40%{ transform:translateX(6px) rotate(3deg); } 60%{ transform:translateX(-4px); } 80%{ transform:translateX(4px); } }
-  /* the light gathering in his hood: a prism of every colour, bigger each turn */
-  .enemy-card.nem-charging .bob::after{ content:''; position:absolute; left:50%; top:22%; width:14%; aspect-ratio:1; z-index:4; pointer-events:none;
-    transform:translate(-50%,-50%) rotate(45deg); border-radius:24%;
-    background:conic-gradient(#ff4d4d, #ffe34d, #5be06a, #4db8ff, #c86cff, #ff4d4d);
-    box-shadow:0 0 10px 3px rgba(255,255,255,.85), 0 0 26px 8px rgba(200,170,255,.6); animation:nemPrism 1.2s linear infinite; }
-  .enemy-card.nem-c2 .bob::after{ width:20%; box-shadow:0 0 14px 5px rgba(255,255,255,.9), 0 0 34px 12px rgba(200,170,255,.7); }
-  .enemy-card.nem-c3 .bob::after{ width:27%; box-shadow:0 0 18px 7px rgba(255,255,255,.95), 0 0 46px 18px rgba(200,170,255,.8); animation-duration:.7s; }
-  @keyframes nemPrism{ from{ transform:translate(-50%,-50%) rotate(45deg); filter:hue-rotate(0deg); } to{ transform:translate(-50%,-50%) rotate(405deg); filter:hue-rotate(360deg); } }
+  /* (4.59) the dark gathering over his head: a black hole, a red and purple ring turning round it, orbs drawn into it —
+     bigger each turn */
+  .enemy-card.nem-charging .bob::after{ content:''; position:absolute; left:50%; top:4%; width:16%; aspect-ratio:1; z-index:4; pointer-events:none; border-radius:50%;
+    transform:translate(-50%,-50%);
+    background:radial-gradient(circle, #000 0 46%, #12001a 54%, rgba(122,26,208,.95) 64%, rgba(255,42,85,.85) 76%, rgba(255,42,85,0) 88%);
+    box-shadow:0 0 10px 3px rgba(150,30,220,.8), 0 0 24px 8px rgba(255,30,90,.5); animation:nemHole 1.1s ease-in-out infinite; }
+  .enemy-card.nem-charging .bob::before{ content:''; position:absolute; left:50%; top:4%; width:5px; height:5px; margin:-2.5px; border-radius:50%; z-index:5; pointer-events:none;
+    background:#ff5a7a; box-shadow:18px 0 0 #b45cff, -18px 4px 0 #ff5a7a, 4px 18px 0 #b45cff, -6px -18px 0 #ff5a7a, 14px -12px 0 #b45cff, -14px 12px 0 #ff5a7a, 13px 13px 0 #b45cff, -13px -13px 0 #ff5a7a;
+    animation:nemOrbs 1.2s cubic-bezier(.4,0,.9,.6) infinite; }
+  .enemy-card.nem-c2 .bob::after{ width:22%; box-shadow:0 0 14px 5px rgba(150,30,220,.85), 0 0 32px 12px rgba(255,30,90,.55); }
+  .enemy-card.nem-c3 .bob::after{ width:29%; box-shadow:0 0 18px 7px rgba(150,30,220,.9), 0 0 44px 18px rgba(255,30,90,.65); animation-duration:.7s; }
+  .enemy-card.nem-c3 .bob::before{ animation-duration:.8s; }
+  @keyframes nemHole{ 0%,100%{ transform:translate(-50%,-50%) scale(.92); } 50%{ transform:translate(-50%,-50%) scale(1.1); } }
+  @keyframes nemOrbs{ from{ transform:rotate(0deg) scale(1.6); opacity:0; } 20%{ opacity:1; } to{ transform:rotate(300deg) scale(.1); opacity:.3; } }
   /* his shadows: him, dark, wreathed in violet; rising off him, and fading */
   .enemy-card.nem-shadow .mon-sprite{ filter:brightness(.24) contrast(1.35) saturate(.4) drop-shadow(0 0 6px rgba(150,100,255,.85)) drop-shadow(0 0 14px rgba(90,40,200,.5)) !important; }
   .enemy-card.nem-shadow .bob{ opacity:.9; }
@@ -742,7 +765,7 @@ function nemCss(){
   .enemy-card.nem-shadow .name-plate .hp-bar, .enemy-card.nem-shadow .name-plate [id^="enemyHp-"]{ opacity:.45; }
   @media (prefers-reduced-motion: reduce){
     .enemy-card.nem-rewinding .bob, .enemy-card.nem-back .bob, .enemy-card.nem-argh, .enemy-card.nem-shadow-in .bob{ animation:none; }
-    .enemy-card.nem-charging .bob::after{ animation:none; }
+    .enemy-card.nem-charging .bob::after, .enemy-card.nem-charging .bob::before{ animation:none; }
     .move-btn.nem-tip{ animation:none; }
   }`;
   document.head.appendChild(st);

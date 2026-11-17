@@ -60,7 +60,7 @@
              the four tribes march in at the south gate and drive the aliens
              out of the market (invTribesEarly); then the King's cry from the
              great hall, and Lucesco: run! Into the hall (invClimax): the King
-             struck down by Wadjet's Prismatic Laser, Wadjet gathering another,
+             struck down by Wadjet's Eraser Beam (4.59: once the Prismatic Laser), Wadjet gathering another,
              his two shadows fighting the Advisor and the Dauphin; her courage,
              her evolution, her pink light — the shadows burn away, the King
              holds on, she stays at his side — and Wadjet turns on you
@@ -193,9 +193,18 @@ const WADJET = 'nemesis_wadjet';
    commander above". Down the palace's east corridor three aliens, the last at the stair; upstairs an alien, a captain's
    band, and a commander's army at her door. (Until 4.33: three captains' bands in the market, two in the palace, the
    commander's army at her door.) */
+/* (4.57) The designer: "The player rescuing the princess should have his path up the stairs blocked by aliens who are near
+   the stairs. Place all 3 near the stairs so he is forced to walk through them instead of finding them around the east
+   wing." All three across the corridor two squares below the stair's foot (the stair: 35–36, 2–4; its foot 35, 5), a
+   square apart: every square of that row between them is next to one, so nobody gets by without a fight — (4.33) and
+   not up the stair while one still stands (26-invasion.js's caGo). Until 4.57: 34,23; 32,13; 35,7.
+   "Have the aliens upstairs fighting servants please": each of the tower's three at a palace servant (a Mantis, as the
+   palace's servants are), the servant on the far side of it from the stair you come up (`foe`: where the servant
+   stands, from the alien). */
 const INV_BANDS = {
-  r6_palace:[ { id:'inv-q1', x:34, y:23, rank:'alien' }, { id:'inv-q2', x:32, y:13, rank:'alien' }, { id:'inv-q3', x:35, y:7, rank:'alien', guards:'stair' } ],
-  r6_tower: [ { id:'inv-u1', x:11, y:13, rank:'alien' }, { id:'inv-u2', x:8, y:14, rank:'captain' }, { id:'inv-t1', x:6, y:12, rank:'commander', guards:'door' } ],
+  r6_palace:[ { id:'inv-q1', x:30, y:6, rank:'alien' }, { id:'inv-q2', x:36, y:6, rank:'alien' }, { id:'inv-q3', x:33, y:6, rank:'alien', guards:'stair' } ],
+  r6_tower: [ { id:'inv-u1', x:11, y:13, rank:'alien', foe:{ dx:-1, dy:0, sp:'mantis1' } }, { id:'inv-u2', x:8, y:14, rank:'captain', foe:{ dx:-1, dy:0, sp:'mantis' } },
+              { id:'inv-t1', x:6, y:12, rank:'commander', guards:'door', foe:{ dx:-1, dy:0, sp:'mantis1' } } ],
 };
 const INV_BAND_STAGE = { r6_palace:'palace', r6_tower:'tower' };
 function invBandsOf(key){
@@ -246,7 +255,7 @@ const INV_CLASH = {
               ['duck_knight2', 24, 24, 'alien_crocodilian_fire', 27, 24], ['bug_knight1', 36, 24, 'alien_magnet_electric', 39, 24] ],
   r6_palace:[ ['chestnut_knight2', 17, 13, 'alien_gremlin_fairy', 15, 13], ['chestnut_knight2', 22, 19, 'alien_toxic_gas_ghost', 24, 19],
               ['chestnut_knight2', 17, 25, 'alien_dolphin_water', 15, 25] ],
-  r6_tower: [ ['chestnut_knight2', 26, 14, 'alien_grimgate_psychic', 23, 14] ],
+  r6_tower: [ ['mantis1', 26, 14, 'alien_grimgate_psychic', 23, 14] ],   // (4.57) a servant at it, not a knight
 };
 /* the saucers, where they come down (the square under each), and the smoke later on: rooftops about the market */
 const INV_UFOS = [{ x:24.5, y:33.2 }, { x:39.5, y:33.2 }, { x:31.5, y:57.6 }];
@@ -261,24 +270,40 @@ const INV_PERIM = { x:45, y:3, w:9, h:3, gate:49, out:[48, 6], soldiers:[[46, 6,
 function invClashThings(T, pairs, when, o){
   o = o || {};
   pairs.forEach(([ks, kx, ky, al, ax, ay], i)=>{
-    const dx = kx - ax, dy = ky - ay;
+    const dx = kx - ax, dy = ky - ay, servant = /^mantis/.test(ks);   // (4.57) up in the tower, a servant at it
     T({ x:ax, y:ay, still:true, cls:'ca-npc war-alien inv-clash-alien', invAlien:true,
         html:()=> `<div class="war-fig">${jgMonImg(al, WALK_T * 1.5, dx > 0)}</div>` + warSlashHtml(dx, dy),
-        verb:'Look', sub:(SPECIES[al] || {}).name || 'An alien', when, act:()=> caLines([`The knight and the alien are locked blade to claw. There's no getting between them!`]) });
-    T({ x:kx, y:ky, still:true, cls:'ca-npc war-knight inv-clash-knight', invKnight:true,
-        html:()=> `<div class="war-fig">${caMonImg(ks, WALK_T * 1.45, dx < 0)}</div>`,
-        verb:'Talk', sub:ks === 'duck_knight2' ? 'Duck Knight' : ks === 'bug_knight1' ? 'Bug Knight' : 'Chestnut Knight',
-        when:o.knightWhen || when, act:()=> o.talk ? o.talk() : invKnightTalk() });
+        verb:'Look', sub:(SPECIES[al] || {}).name || 'An alien', when,
+        act:()=> caLines([servant ? `The servant's blade-arms flash — it is holding the alien off all on its own!` : `The knight and the alien are locked blade to claw. There's no getting between them!`]) });
+    T({ x:kx, y:ky, still:true, cls:'ca-npc war-knight inv-clash-knight' + (servant ? ' inv-servant' : ''), invKnight:true,
+        html:()=> `<div class="war-fig">${caMonImg(ks, WALK_T * (servant ? (ks === 'mantis' ? 1.15 : 1.3) : 1.45), dx < 0)}</div>`,
+        verb:'Talk', sub:servant ? CA_WHO[ks === 'mantis' ? 'servantY' : 'servant'].name : ks === 'duck_knight2' ? 'Duck Knight' : ks === 'bug_knight1' ? 'Bug Knight' : 'Chestnut Knight',
+        when:o.knightWhen || when, act:()=> servant ? invServantTalk(ks, true) : o.talk ? o.talk() : invKnightTalk() });
   });
 }
 function invBandThing(b, when){
-  const nm = (SPECIES[b.lead] || {}).name || 'Alien';
-  const t = { x:b.x, y:b.y, band:b, cls:'ca-npc inv-band inv-band-' + b.rank,
-    html:()=> `<div class="war-fig">${jgMonImg(b.lead, WALK_T * (b.rank === 'commander' ? 1.9 : b.rank === 'captain' ? 1.7 : 1.5), false)}</div>`,
+  const nm = (SPECIES[b.lead] || {}).name || 'Alien', f = b.foe;
+  /* (4.57) one at a servant: lunging at it, the blow between them; you come up behind it */
+  const t = { x:b.x, y:b.y, band:b, cls:'ca-npc inv-band inv-band-' + b.rank + (f ? ' war-alien inv-band-fighting' : ''),
+    html:()=> `<div class="war-fig">${jgMonImg(b.lead, WALK_T * (b.rank === 'commander' ? 1.9 : b.rank === 'captain' ? 1.7 : 1.5), !!f && f.dx > 0)}</div>` + (f ? warSlashHtml(f.dx, f.dy) : ''),
     verb:'Fight', sub:b.rank === 'commander' ? `Commander ${nm}'s army` : b.rank === 'captain' ? `Captain ${nm}'s band` : `${nm} and its captives`,
     when, act:()=> invFight(b) };
   b.thing = t;
   return t;
+}
+/* (4.57) the servant one of the tower's aliens is at: fighting it till you beat it, then cheering (22-war.js's war-won) */
+function invServantThing(b){
+  const f = b.foe, young = f.sp === 'mantis';
+  return { x:b.x + f.dx, y:b.y + f.dy, still:true, who:null, faceR:f.dx < 0,
+    get cls(){ return 'ca-npc war-knight inv-servant' + (invState().won[b.id] ? ' war-won' : ''); },
+    html:()=> `<div class="war-fig">${caMonImg(f.sp, WALK_T * (young ? 1.15 : 1.3), f.dx < 0)}</div>`,
+    verb:'Talk', sub:CA_WHO[young ? 'servantY' : 'servant'].name, when:()=> invAt('tower', 'escort'),
+    act:()=> invServantTalk(f.sp, invBandUp(b)) };
+}
+function invServantTalk(sp, fighting){
+  const who = sp === 'mantis' ? 'servantY' : 'servant';
+  const said = fighting ? INV_LINES.servantFight : invAt('escort') ? INV_LINES.servantEscort : INV_LINES.servantSaved;
+  return caLines([[who, caTurn('invServant' + (fighting ? 'F' : invAt('escort') ? 'E' : 'S'), said)]]);
 }
 
 /* ---------- the things each place shows ---------- */
@@ -430,7 +455,7 @@ function invPalaceThings(T){
 function invTowerThings(T){
   const up = ()=> invAt('tower');
   invClashThings(T, INV_CLASH.r6_tower, up);
-  invBandsOf('r6_tower').forEach(b=> T(invBandThing(b, ()=> invBandUp(b))));
+  invBandsOf('r6_tower').forEach(b=>{ T(invBandThing(b, ()=> invBandUp(b))); if(b.foe) T(invServantThing(b)); });   // (4.57) each at a servant
 }
 
 /* ---------- everyone indoors while the castle is invaded ---------- */
@@ -573,8 +598,15 @@ const INV_LINES = {
   /* (4.33) the new way: in the hall, the Dauphin and the Advisor sending you on; by the fountain, the King and the Commander */
   dauphinHold:[`<b>"She's up in her room! The stair's at the end of the east corridor — go, I've got this one!"</b>`,
                `<b>"Don't look at me, look at the STAIR! My little sister first!"</b>`],
-  advisorHold:[`<b>"Hoo! Through the east door, then all the way up the corridor to the stair! Mind the ones in the corridor!"</b>`,
+  advisorHold:[`<b>"Hoo! Through the east door, then all the way up the corridor to the stair! Three of them are holding it!"</b>`,   // (4.57) all three at the stair
                `<b>"Patience and cleverness, they said. Nobody said anything about tentacles! HOO!"</b>`],
+  /* (4.57) the tower's servants, fighting them off */
+  servantFight:[`<b>"Shoo! SHOO! Not one step nearer the little princess's door!"</b>`,
+                `<b>"Thirty years I've polished this gallery. I am NOT letting that thing track mud on it!"</b>`,
+                `<b>"I-I'm not scared! …I'm a little bit scared. Help!"</b>`],
+  servantSaved:[`<b>"Thank you! Oh, thank you. The little princess is in her room at the end — she'll be hiding. She always hides."</b>`,
+                `<b>"I've swept a great many things out of this tower in my time. Never one of THOSE."</b>`],
+  servantEscort:[`<b>"Go — take her out to His Majesty! We'll keep the tower."</b>`, `<b>"Mind her on the stairs. They're freshly polished."</b>`],
   kingFount:[`<b>"My little one is in there somewhere. Please — bring her out to me."</b>`,
              `<b>"I cannot leave them. Not one of my people will I leave. Go — I trust you."</b>`],
   kingFountTower:[`<b>"Up in the tower? Then she is hiding. She always hides. Good girl… stay hidden till they come for you."</b>`],
@@ -902,7 +934,31 @@ function invHopTo(id, x, y, lift, ms){
 function invSrc(name){ return /\//.test(name) ? name : `assets/mon/${name}${/^(alien_|tribal_guardian_)/.test(name) ? '' : '_front'}.png`; }
 function invActor(id, name, x, y, size, o){
   const s = size || 1.45;
-  return sceneActor(id, Object.assign({ x:x + 0.5 - s / 2, y:y + 1 - s, w:s, h:s, src:invSrc(name), person:false }, o || {}));
+  /* (4.59) the designer: "Please make sure the Z positions of lower sprites are higher than the Z positions of sprites
+     above them, so that they overlay the ones above." Its depth from its feet, as the deck's own things and you have
+     it (10 + the row it stands on) — and kept so as it moves (invZTick) — unless the scene sets one */
+  const own = o && o.z != null;
+  const el = sceneActor(id, Object.assign({ x:x + 0.5 - s / 2, y:y + 1 - s, w:s, h:s, src:invSrc(name), person:false }, own ? {} : { z:10 + Math.floor(y + 1e-3) }, o || {}));
+  if(el){ el.classList.toggle('zf', !own); if(!own) invZWatch(); }
+  return el;
+}
+/* (4.59) every actor of the arc kept at the depth of where its feet are now, as it walks, runs, is flung */
+let _invZIv = null;
+function invZWatch(){ if(!_invZIv && typeof setInterval === 'function') _invZIv = setInterval(invZTick, 70); }
+function invZTick(){
+  const els = document.querySelectorAll('.scene-actor.zf');
+  if(!els.length){ clearInterval(_invZIv); _invZIv = null; return; }
+  const T = WALK_T, set = [];
+  /* every one read first, then the changes written: one look at the page a tick, not one for each */
+  els.forEach(el=>{
+    const o = el._o;
+    if(!o) return;
+    const top = parseFloat(getComputedStyle(el).top) / T;
+    if(!Number.isFinite(top)) return;
+    const z = 10 + Math.floor(top + (o.h || 1) - 1 + 1e-3);
+    if(el._zf !== z) set.push([el, o, z]);
+  });
+  set.forEach(([el, o, z])=>{ el._zf = z; el.style.zIndex = z; o.z = z; });
 }
 function invActorTo(id, x, y, ms){
   const el = document.getElementById('sa-' + id);
@@ -1019,7 +1075,8 @@ function invHallScene(){
 }
 function invTowerIn(){
   return invScene(async ()=>{
-    await L([['lion', `<b>"Listen… They're up here too. Her room is at the west end of the gallery, and look who's standing in front of it."</b>`]]);
+    await L([['lion', invNew() ? `<b>"Listen… They're up here too — and the servants are fighting them off on their own! Her room is at the west end of the gallery, and look who's standing in front of it."</b>`   // (4.57)
+                               : `<b>"Listen… They're up here too. Her room is at the west end of the gallery, and look who's standing in front of it."</b>`]]);
     invSay('towerIn');
   });
 }
@@ -1125,7 +1182,7 @@ async function invKingCry(){
   try { playSfx('core_blast'); } catch(e){}
   if(typeof buzz === 'function') buzz('ultra');
   sceneShake(800, ms=> 0.1 * (1 - ms / 800));
-  await invPrismFlash(1100);
+  await invEraserFlash(1100);
   await L([`Then, from the great hall: a high, thin hum — a flash of light that throws every shadow in the corridor the wrong way — and the King's voice, crying out.`,
            ['princess', `<b>"That was Father!"</b>`],
            ['lion', `<b>"The King! To the great hall — RUN!"</b>`]]);
@@ -1133,23 +1190,21 @@ async function invKingCry(){
   await invCut('r6_palace', 'r6_palace', [21, 13], 'You race for the great hall…');
   await invClimaxRun();
 }
-/* a flash of every colour at once over the screen (his laser, seen from the corridor) */
-function invPrismFlash(ms){
+/* (4.59) his Eraser Beam, seen from the corridor: everything gone dark for an instant, edged in purple and red */
+function invEraserFlash(ms){
   invCss();
   const f = document.createElement('div');
-  f.className = 'inv-prism-flash';
+  f.className = 'inv-eraser-flash';
   f.style.animationDuration = Math.round(ms * SCENE_SPEED) + 'ms';
   document.body.appendChild(f);
   setTimeout(()=> f.remove(), ms * SCENE_SPEED + 60);
   return sceneWait(ms);
 }
-/* the light gathering in his hood (a scene actor's), or gone out */
-function invPrismOn(id, on){
-  const el = document.getElementById('sa-' + id);
-  if(!el) return;
-  let g = el.querySelector('.inv-prism-glow');
-  if(on){ if(!g){ g = document.createElement('i'); g.className = 'inv-prism-glow'; el.appendChild(g); } return; }
-  if(g){ g.classList.add('out'); setTimeout(()=> g.remove(), 700 * Math.max(SCENE_SPEED, 0.2)); }
+/* (4.59) the dark gathering over his head (a scene actor's): a black hole, orbs drawn into it (43-the-duel.js) — or gone */
+function invEraserCharge(id, on){
+  const hid = 'hole-' + id;
+  if(on){ const H = typeof stHoleAt === 'function' ? stHoleAt(id) : null; if(H && typeof stHole === 'function') stHole(hid, H.x, H.y, 1); return; }
+  if(typeof stHoleGone === 'function') stHoleGone(hid, 700);
 }
 
 /* ============================================================
@@ -1182,17 +1237,17 @@ async function invClimaxRun(){
   ['adv', 'dau'].forEach(id=>{ const e = document.getElementById('sa-' + id); if(e) e.classList.add('inv-lunge', 'inv-lunge-b'); });
   /* Wadjet over the King, the light gathering in his hood again */
   invActor('wadjet', WADJET, 19.5, 6.4, 2.4);
-  invPrismOn('wadjet', true);
+  invEraserCharge('wadjet', true);
   await sceneLook({ x:12, y:0.5, w:16, h:13 }, { ms:900 });
   await L([
     `The great hall has gone quiet — all but a high, thin hum.`,
-    `The King lies crumpled on his dais, smoke curling from his robes. Over him rears a great dark cobra, and in its hood a new light is gathering: every colour at once.`,
+    `The King lies crumpled on his dais, smoke curling from his robes. Over him rears a great dark cobra, and over its head the dark is opening again: a black hole, drinking in the light.`,
     ['princess', `<b>"FATHER!"</b>`],
     ['dauphin', `<b>"Get away from him!"</b> The Dauphin's blade sweeps through a shadow of the cobra — and passes clean through it.`],
     ['advisor', `<b>"Hoo! Shadows! Our blows go straight through them!"</b>`],
     ['lion', `<b>"Wadjet! Nemesis's cobra!"</b>`],
     ['wadjet', `<b>"Hsss… Late, lion. Much too late. One beam was all it took."</b>`],
-    ['wadjet', `<b>"The great Fairy King, of the Cosmic Council. One word from him, and every sword in this kingdom would march against Nemesis. Now there will be no word. And this next light makes sure of it."</b>`]]);
+    ['wadjet', `<b>"The great Fairy King, of the Cosmic Council. One word from him, and every sword in this kingdom would march against Nemesis. Now there will be no word. And this next beam makes sure of it."</b>`]]);
   /* she runs to him */
   await invActorTo('prin', 21.4, 4.3, 700);
   await L([['princess', `<b>"Father! Father, please, wake up!"</b>`],
@@ -1214,13 +1269,13 @@ async function invClimaxRun(){
   await sceneWait(450);
   ['sh1', 'sh2'].forEach(id=>{ const e = document.getElementById('sa-' + id); if(e){ e.classList.remove('inv-lunge'); e.classList.add('inv-dispel'); const sl = e.querySelector('.war-slash'); if(sl) sl.remove(); } });
   ['adv', 'dau'].forEach(id=>{ const e = document.getElementById('sa-' + id); if(e) e.classList.remove('inv-lunge', 'inv-lunge-b'); });
-  invPrismOn('wadjet', false);
+  invEraserCharge('wadjet', false);
   if(ke) ke.classList.add('inv-holding');
   document.querySelectorAll('.inv-clash-knight').forEach(el=> el.classList.add('inv-healed', 'war-won'));
   await burst;
   ['sh1', 'sh2'].forEach(id=> sceneActorGone(id));
-  await L([`A wave of pink light rolls out from her, across the whole hall. Where it touches the shadows, they burn away like mist in the sun — and the light in Wadjet's hood gutters out.`,
-           ['wadjet', `<b>"Hsss! My light—!"</b>`],
+  await L([`A wave of pink light rolls out from her, across the whole hall. Where it touches the shadows, they burn away like mist in the sun — and the dark over Wadjet's head shrinks to nothing.`,
+           ['wadjet', `<b>"Hsss! My beam—!"</b>`],
            `The pink light settles over the King like a blanket. He draws a long breath — and holds on.`,
            ['king', `<b>"…My daughter…"</b>`],
            ['princess', `She doesn't let go of his hand.<br><br><b>"I've got you, Father. I'm not leaving you."</b>`]]);
@@ -1228,7 +1283,7 @@ async function invClimaxRun(){
   await Promise.all([invActorTo('adv', 17.2, 4.6, 600), invActorTo('dau', 23.2, 5.2, 600)]);
   { const a = document.getElementById('sa-adv'), d = document.getElementById('sa-dau'); if(a) actorFace(a, true); if(d) actorFace(d, false); }
   await L([['dauphin', `<b>"Little sister…?! — Guard Father! Nothing gets past us now!"</b>`],
-           ['wadjet', `<b>"A late bloomer. How touching. No matter: the light always comes back… and I have all the time in the world."</b>`]]);
+           ['wadjet', `<b>"A late bloomer. How touching. No matter: the dark always comes back… and I have all the time in the world."</b>`]]);
   /* he turns on you */
   await invActorTo('wadjet', 20, 10.4, 700);
   await L([['wadjet', `<b>"But first — you, little trainer. You and your lion have been a thorn in Nemesis's side from the very start. Let's see how long you last against a serpent who can turn back time."</b>`],
@@ -1248,7 +1303,7 @@ function invWadjetBattle(){
 function invWadjetChallenge(){
   if(ui.caTalk) return;
   ui.caTalk = true;
-  r5Ask([caFaceOf('wadjet')], 'Wadjet', `<b>"Back again? Then come. I have all the time in the world."</b><br><br><i>Wadjet, Lv ${NEM.lv}. He turns back time: hold on for ${NEM.turns} turns and he is spent. From his fifth turn he gathers the Prismatic Laser — bring him down before it fires. The Monkey King will tell you what to do.</i>`, 'Fight Wadjet', 'Not yet')
+  r5Ask([caFaceOf('wadjet')], 'Wadjet', `<b>"Back again? Then come. I have all the time in the world."</b><br><br><i>Wadjet, Lv ${NEM.lv}. He turns back time: hold on for ${NEM.turns} turns and he is spent. From his fifth turn he gathers the Eraser Beam — bring him down before it fires. The Monkey King will tell you what to do.</i>`, 'Fight Wadjet', 'Not yet')
     .then(yes=>{ ui.caTalk = false; if(yes) invWadjetBattle(); else refreshWalk(); });
 }
 function invPrincessHeal(){
@@ -2392,6 +2447,12 @@ function invSmokeEl(world, x, y, i){
   world.appendChild(el);
   return el;
 }
+/* (4.59) the designer: "Make the rift larger and with cycling colours on its glowing border. Put a moving purple galaxy
+   background behind it, just like Lucesco's rift ambush silhouette." The crack a third wider; through it, the stars of
+   a purple galaxy drifting by (as his starry silhouette's, 20-jungle.js); round it, a haze of the same; its edge's glow
+   going round the colours */
+const INV_RIFT_EDGE = 'M50 4 L55 18 L64 24 L57 37 L68 48 L59 58 L70 70 L58 81 L64 95 L54 105 L50 121 L46 105 L36 95 L42 81 L30 70 L41 58 L32 48 L43 37 L36 24 L45 18 Z';
+const INV_RIFT_MASK = `url("data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 125' preserveAspectRatio='none'><path d='${INV_RIFT_EDGE}' fill='black'/></svg>`)}")`;
 function invRiftEl(world, cx, cy, size, id, extra){
   world = world || $('#walkWorld');
   if(!world) return null;
@@ -2401,17 +2462,21 @@ function invRiftEl(world, cx, cy, size, id, extra){
   const el = document.createElement('div');
   el.className = 'inv-rift ' + (extra || '');
   el.id = id;
-  el.style.cssText = `left:${cx * T - w / 2}px;top:${cy * T - h / 2}px;width:${w}px;height:${h}px;z-index:${Math.round(12 + cy)};`;
-  el.innerHTML = `<svg viewBox="0 0 100 125" aria-hidden="true"><defs><radialGradient id="irIn" cx=".5" cy=".5" r=".55">` +
-    `<stop offset="0" stop-color="#0a0212"/><stop offset=".55" stop-color="#2a0a46"/><stop offset=".85" stop-color="#7b2fbf"/><stop offset="1" stop-color="#d79bff" stop-opacity=".2"/></radialGradient></defs>` +
-    `<path class="ir-glow" d="M50 2 C58 18 60 30 66 40 C72 52 64 60 70 72 C76 86 62 98 56 110 C54 116 51 121 50 123 C49 121 46 116 44 110 C38 98 24 86 30 72 C36 60 28 52 34 40 C40 30 42 18 50 2 Z" fill="#b65cff" opacity=".35"/>` +
-    `<path class="ir-edge" d="M50 6 L54 20 L61 26 L56 38 L63 48 L57 58 L64 70 L56 80 L60 94 L53 104 L50 120 L47 104 L40 94 L44 80 L36 70 L43 58 L37 48 L44 38 L39 26 L46 20 Z" fill="url(#irIn)"/>` +
-    `<g class="ir-swirl"><path d="M50 63 m-9 0 a9 16 0 1 1 9 16" fill="none" stroke="#d6a3ff" stroke-width="2.4" opacity=".8"/><path d="M50 63 m-4.5 0 a4.5 8 0 1 1 4.5 8" fill="none" stroke="#fbeaff" stroke-width="2" opacity=".85"/></g>` +
-    `<g class="ir-motes"><circle cx="66" cy="34" r="2.2"/><circle cx="33" cy="58" r="1.8"/><circle cx="64" cy="88" r="1.6"/><circle cx="38" cy="96" r="2"/></g>` +
+  el.style.cssText = `left:${cx * T - w / 2}px;top:${cy * T - h / 2}px;width:${w}px;height:${h}px;z-index:${10 + Math.floor(cy)};--t:${T}px;`;   // (4.59) behind whatever stands at its foot
+  el.innerHTML = `<i class="ir-haze"></i>` +
+    `<svg class="ir-back" viewBox="0 0 100 125" preserveAspectRatio="none" aria-hidden="true"><path class="ir-glow" d="M50 -2 C60 16 64 28 72 40 C80 54 70 62 78 74 C86 90 66 102 58 114 C55 120 51 125 50 127 C49 125 45 120 42 114 C34 102 14 90 22 74 C30 62 20 54 28 40 C36 28 40 16 50 -2 Z" fill="#b65cff" opacity=".35"/></svg>` +
+    `<i class="ir-galaxy" style="-webkit-mask-image:${INV_RIFT_MASK};mask-image:${INV_RIFT_MASK}"></i>` +
+    `<svg class="ir-front" viewBox="0 0 100 125" preserveAspectRatio="none" aria-hidden="true"><defs><radialGradient id="irIn" cx=".5" cy=".5" r=".55">` +
+    `<stop offset="0" stop-color="#0a0212" stop-opacity="0"/><stop offset=".6" stop-color="#2a0a46" stop-opacity=".08"/><stop offset=".86" stop-color="#7b2fbf" stop-opacity=".4"/><stop offset="1" stop-color="#d79bff" stop-opacity=".5"/></radialGradient></defs>` +
+    `<path class="ir-edge" d="${INV_RIFT_EDGE}" fill="url(#irIn)"/>` +
+    `<g class="ir-swirl"><path d="M50 63 m-11 0 a11 18 0 1 1 11 18" fill="none" stroke="#d6a3ff" stroke-width="2.4" opacity=".7"/><path d="M50 63 m-5.5 0 a5.5 9 0 1 1 5.5 9" fill="none" stroke="#fbeaff" stroke-width="2" opacity=".75"/></g>` +
+    `<g class="ir-motes"><circle cx="69" cy="34" r="2.2"/><circle cx="30" cy="58" r="1.8"/><circle cx="68" cy="88" r="1.6"/><circle cx="34" cy="96" r="2"/></g>` +
     `</svg>`;
   world.appendChild(el);
   return el;
 }
+/* (4.59) the rift at the jungle's north edge: half as big again as it was (2.8) */
+const INV_RIFT_JG_SIZE = 4.2;
 /* the palisade's stakes along a run of squares, and the compound's people */
 function invStakes(world, squares, cls){
   const T = WALK_T;
@@ -2553,6 +2618,25 @@ function invCss(){
   .inv-rift{ position:absolute; pointer-events:none; filter:drop-shadow(0 0 10px rgba(190,90,255,.9)); animation:invRiftPulse 1.8s ease-in-out infinite; transition:transform .9s ease, opacity .9s ease; }
   .inv-rift svg{ width:100%; height:100%; display:block; overflow:visible; }
   .inv-rift .ir-edge{ stroke:#e6b3ff; stroke-width:2.5; stroke-linejoin:round; }
+  /* (4.59) a purple galaxy through it, drifting; a haze of it round about; the edge's glow going round the colours */
+  .inv-rift .ir-galaxy, .inv-rift .ir-haze{ position:absolute; display:block; pointer-events:none; font-style:normal;
+    background:radial-gradient(1.6px 1.6px at 20% 30%, #fff, rgba(255,255,255,0) 70%), radial-gradient(1.2px 1.2px at 70% 20%, #fff, rgba(255,255,255,0) 70%),
+      radial-gradient(1.8px 1.8px at 45% 65%, #fff, rgba(255,255,255,0) 70%), radial-gradient(1.1px 1.1px at 80% 75%, #dfe8ff, rgba(255,255,255,0) 70%),
+      radial-gradient(1.4px 1.4px at 15% 80%, #fff, rgba(255,255,255,0) 70%), radial-gradient(1.1px 1.1px at 55% 40%, #e6dcff, rgba(255,255,255,0) 70%),
+      radial-gradient(ellipse at 50% 55%, rgba(170,90,255,.55), rgba(90,40,200,0) 60%), linear-gradient(160deg, #1d0f52, #43208a 45%, #140838);
+    background-size:17px 17px, 23px 23px, 29px 29px, 13px 13px, 19px 19px, 11px 11px, 100% 100%, 100% 100%; animation:irDrift 1.4s linear infinite; }
+  .inv-rift .ir-galaxy{ inset:0; -webkit-mask-size:100% 100%; mask-size:100% 100%; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; }
+  .inv-rift .ir-haze{ left:-38%; top:-14%; width:176%; height:128%; border-radius:50%; opacity:.55;
+    -webkit-mask-image:radial-gradient(ellipse closest-side, #000 18%, rgba(0,0,0,.5) 55%, transparent 100%); mask-image:radial-gradient(ellipse closest-side, #000 18%, rgba(0,0,0,.5) 55%, transparent 100%);
+    animation:irDrift 2.6s linear infinite reverse, irHaze 3.2s ease-in-out infinite; }
+  .inv-rift svg{ position:absolute; inset:0; }
+  .inv-rift svg.ir-front{ animation:irCycle 4s linear infinite; }
+  .inv-rift .ir-edge{ stroke-width:3; animation:irEdge 4s linear infinite; }
+  @keyframes irDrift{ from{ background-position:0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; } to{ background-position:17px -17px, -23px 23px, 29px 29px, -13px -13px, 19px -19px, 11px 11px, 0 0, 0 0; } }
+  @keyframes irHaze{ 0%,100%{ opacity:.45; scale:.96; } 50%{ opacity:.7; scale:1.05; } }
+  @keyframes irEdge{ 0%{ stroke:#e6b3ff; } 20%{ stroke:#8fd8ff; } 40%{ stroke:#9dffcf; } 60%{ stroke:#ffe08a; } 80%{ stroke:#ff9ad5; } 100%{ stroke:#e6b3ff; } }
+  @keyframes irCycle{ 0%{ filter:drop-shadow(0 0 6px rgba(200,110,255,.95)); } 20%{ filter:drop-shadow(0 0 7px rgba(90,190,255,.95)); } 40%{ filter:drop-shadow(0 0 7px rgba(90,255,170,.9)); }
+    60%{ filter:drop-shadow(0 0 7px rgba(255,210,90,.95)); } 80%{ filter:drop-shadow(0 0 7px rgba(255,100,200,.95)); } 100%{ filter:drop-shadow(0 0 6px rgba(200,110,255,.95)); } }
   .inv-rift .ir-swirl{ transform-origin:50px 63px; animation:invSwirl 2.6s linear infinite; }
   .inv-rift .ir-glow{ animation:invRiftGlow 1.8s ease-in-out infinite; transform-origin:50px 62px; }
   .inv-rift .ir-motes circle{ fill:#f3d2ff; animation:invMote 2.4s ease-out infinite; }
@@ -2583,26 +2667,16 @@ function invCss(){
   .inv-glitter .ig-spark{ position:absolute; width:var(--sz); height:var(--sz); background:#ffe0f2;
     clip-path:polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); filter:drop-shadow(0 0 4px #ff8fcf); animation:igSpark 1.6s ease-in-out both; }
   @keyframes igSpark{ 0%{ opacity:0; transform:scale(.2) rotate(0deg); } 40%{ opacity:1; transform:scale(1.25) rotate(45deg); } 100%{ opacity:0; transform:translateY(-34px) scale(.4) rotate(90deg); } }
-  @media (prefers-reduced-motion: reduce){ .inv-glitter .ig-spark, .inv-smoke i, .inv-ufo-body, .inv-rift .ir-swirl, .inv-penned{ animation-duration:6s; } }
+  @media (prefers-reduced-motion: reduce){ .inv-glitter .ig-spark, .inv-smoke i, .inv-ufo-body, .inv-rift .ir-swirl, .inv-penned, .inv-rift .ir-galaxy, .inv-rift .ir-haze, .inv-rift svg, .inv-rift .ir-edge{ animation-duration:6s; } }
   /* (4.31) the tribes' march seen from the palace: you are not on the grounds */
   body.inv-away #walkYou, body.inv-away #caLion, body.inv-away #walkGhost{ visibility:hidden !important; }
   /* the tribes' ancestors, holding the market */
   .walk-ent.inv-tribe-post{ overflow:visible; }
   .walk-ent.inv-tribe-post .war-fig{ animation:invIdle 2.4s ease-in-out infinite; filter:drop-shadow(0 3px 2px rgba(35,32,25,.3)); }
-  /* his laser, seen from the corridor: every colour at once */
-  .inv-prism-flash{ position:fixed; inset:0; z-index:95; pointer-events:none; animation:invPrismFlash 1.1s ease-out both;
-    background:linear-gradient(100deg, rgba(255,255,255,.95) 0%, rgba(255,246,252,.7) 32%, rgba(255,255,255,0) 78%),
-               linear-gradient(180deg, rgba(255,90,90,.4), rgba(255,213,74,.4) 25%, rgba(108,240,106,.4) 50%, rgba(90,180,255,.4) 75%, rgba(184,108,255,.4)); }
-  @keyframes invPrismFlash{ 0%{ opacity:0; } 10%{ opacity:1; } 40%{ opacity:.85; } 100%{ opacity:0; } }
-  /* the light gathering in his hood */
-  /* (as the fight's, 34-nemesis.js: a prism of every colour, turning, wreathed in white) */
-  .scene-actor .inv-prism-glow{ position:absolute; left:50%; top:24%; width:22%; aspect-ratio:1; translate:-50% -50%; rotate:45deg; border-radius:24%; pointer-events:none; z-index:3;
-    background:conic-gradient(#ff4d4d, #ffe34d, #5be06a, #4db8ff, #c86cff, #ff4d4d);
-    box-shadow:0 0 12px 4px rgba(255,255,255,.9), 0 0 32px 12px rgba(200,170,255,.7);
-    animation:invPrismSpin 1.2s linear infinite, invPrismPulse 1.1s ease-in-out infinite; transition:opacity .6s ease, scale .6s ease; }
-  .scene-actor .inv-prism-glow.out{ animation:none; opacity:0; scale:.2; }
-  @keyframes invPrismPulse{ 0%,100%{ scale:.85; } 50%{ scale:1.15; } }
-  @keyframes invPrismSpin{ from{ rotate:45deg; filter:hue-rotate(0deg); } to{ rotate:405deg; filter:hue-rotate(360deg); } }
+  /* (4.59) his Eraser Beam, seen from the corridor: dark for an instant, edged in purple and red */
+  .inv-eraser-flash{ position:fixed; inset:0; z-index:95; pointer-events:none; animation:invEraserFlash 1.1s ease-out both;
+    background:radial-gradient(ellipse at 50% 50%, rgba(0,0,0,.92) 0%, rgba(20,0,30,.88) 40%, rgba(122,26,208,.6) 70%, rgba(255,40,90,.5) 100%); }
+  @keyframes invEraserFlash{ 0%{ opacity:0; } 10%{ opacity:1; } 40%{ opacity:.85; } 100%{ opacity:0; } }
   /* his shadows: dark copies of him; blades pass through them; her light burns them away */
   .scene-actor.inv-shade img{ filter:brightness(.24) contrast(1.35) saturate(.4) drop-shadow(0 0 6px rgba(150,100,255,.85)) drop-shadow(0 0 14px rgba(90,40,200,.5)); opacity:.9; }
   .scene-actor.inv-dispel img{ animation:invDispel 1.2s ease-in both; }
@@ -2618,7 +2692,7 @@ function invCss(){
   /* the crack flaring as they come through it */
   .inv-rift.inv-rift-flare{ animation:invRiftFlare .5s ease-in-out infinite alternate; }
   @keyframes invRiftFlare{ from{ filter:drop-shadow(0 0 14px rgba(220,130,255,1)) brightness(1.2); } to{ filter:drop-shadow(0 0 30px rgba(255,190,255,1)) brightness(1.6); } }
-  @media (prefers-reduced-motion: reduce){ .scene-actor.inv-lunge .sa-in, .scene-actor .inv-prism-glow{ animation:none; } }
+  @media (prefers-reduced-motion: reduce){ .scene-actor.inv-lunge .sa-in{ animation:none; } }
   `;
   document.head.appendChild(s);
 }

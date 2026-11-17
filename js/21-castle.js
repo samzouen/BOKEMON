@@ -2659,6 +2659,7 @@ function caLionPlace(){
   faceRight(el, !!at.faceR);
 }
 function caLionStep(p){
+  if(typeof caRideOn === 'function' && caRideOn()){ caLion.at = null; return; }   // (4.57) on his back: where you are, he is
   caLion.trail = (caLion.trail || []).concat([{ x:p.x, y:p.y }]).slice(-3);
   const to = caLion.trail[caLion.trail.length - 2];
   if(to){ const at = caLion.at; caLion.at = { x:to.x, y:to.y, faceR:at ? (to.x !== at.x ? to.x > at.x : at.faceR) : false }; caLionPlace(); }
@@ -2688,9 +2689,11 @@ function caRender(key, world){
   if(stage) stage.classList.add('ca-stage', key === CA_KEY ? 'ca-out' : key.startsWith('r6_wall') || key.startsWith('r6_ramp') ? 'ca-high' : 'ca-in');
   const m = CA_MAPS[key]();
   caPaintStart(stage, world, m, m.views || null, key.startsWith('r6_wall') || key.startsWith('r6_ramp') ? '#2a3417' : key === CA_KEY ? '#3d5a30' : '#1d1a26');
-  /* Lucesco: where he was, or beside you as you arrive */
-  const w = walkState(), p = w.at && w.at[key];
-  if(p && (!caLion.at || Math.abs(caLion.at.x - p.x) + Math.abs(caLion.at.y - p.y) > 2)){
+  /* Lucesco: where he was, or beside you as you arrive — (4.57) or under you: on his back on the grounds while the castle
+     is fought for (caRideOn, 36-the-return.js) */
+  const w = walkState(), p = w.at && w.at[key], riding = typeof caRideOn === 'function' && caRideOn(key);
+  if(riding) caLion.at = null;
+  else if(p && (!caLion.at || Math.abs(caLion.at.x - p.x) + Math.abs(caLion.at.y - p.y) > 2)){
     const free = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy])=> ({ x:p.x + dx, y:p.y + dy })).find(q=> !caSolidCode(caAt(m, q.x, q.y)) && !wBlockedBy(DECKS[key], q.x, q.y) && !caWalkerAt(key, q.x, q.y));
     caLion.at = free ? { x:free.x, y:free.y, faceR:free.x < p.x } : null;
   }

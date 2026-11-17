@@ -1002,6 +1002,7 @@ const JG_SEE = { cut:0.85, solid:0.66, grow:[1.16, 1.08],
    off its picture as the page draws it (scaled up, nudged, as each one is); null if it is not drawn */
 function seeFigure(el){
   if(!el) return null;
+  if(el.id === 'walkYou' && el.querySelector('.jg-ride-lion')){ const f = jgRideFigure(); if(f) return f; }   // (4.57) on his back on the castle's grounds: round the two of you
   const er = el.getBoundingClientRect(), T = er.width;
   if(!T) return null;
   const pic = el.querySelector('img') || el.querySelector('.walk-emoji');
