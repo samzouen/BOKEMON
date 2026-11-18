@@ -132,6 +132,7 @@ function invAfoot(on){
    doors, on his back again. (21-castle.js: caRender puts nobody beside you, caLionStep keeps him under you.)
    ============================================================ */
 function caRideOn(key){
+  if((key || ui.screen) === 'r6_perimeter') return typeof jgRiding === 'function' && jgRiding();   // (4.64) the rift's perimeter: on his back, as on the jungle outside it
   return (key || ui.screen) === CA_KEY && typeof invOn === 'function' && invOn() && invNew() && invAt('arrive', 'palace', 'tower', 'escort', 'wadjet', 'chase') && !ui.caAfoot;
 }
 (function caRideHook(){
@@ -1634,3 +1635,181 @@ if(typeof caWalkerAt === 'function'){
     return !!(H.king && H.king.x === x && H.king.y === y) || H.pairs.some(q=> (khAlienUp(q.a) && q.a.x === x && q.a.y === y) || (q.state !== 'gone' && q.f.x === x && q.f.y === y));
   };
 }
+
+/* ============================================================
+   (4.64) ON HIS BACK IN THE RIFT'S PERIMETER, WITH HIS GLARE AND HIS AMBUSH
+   The designer, 2026-11-19: "please keep the player on lucesco when he enters. he isn't able to use glare or ambush right
+   now while inside the perimeter." In at its gate on his back (as you ride the jungle: jgRiding), you stay on it inside
+   (caRideOn, above; the deck's youArt), and his dial is under Party there (the deck's padMoves): Pulsar Glare and Rift
+   Ambush on today's bands inside it (invPerimBands, 26-invasion.js), two squares any way, a direction held aiming them
+   (jgAim) — as on the jungle's (20-jungle.js: jgGlare, jgAmbush), their looks and their sounds the same. His Glare's
+   wait is the jungle's own (jgState().glareIn), counted down by your steps in here too. A band he has glared at, or
+   pounced on, starts its fight weakened or stunned (invFight's `edge`, as jgEdgeApply has it). No wall to leap in here.
+   ============================================================ */
+const PERIM_KEY = 'r6_perimeter';
+function perimFree(){ const w = walkState(); return ui.screen === PERIM_KEY && !w.busy && !ui.caTalk && !ui.invFighting && !ui.sceneRunning && !ui.jgFx && !document.querySelector('.scene-say'); }
+/* today's bands within `reach` of p: nearest first, then the ones you face */
+function perimInReach(p, reach){
+  if(!p || typeof invPerimBands !== 'function') return [];
+  const fx = walkState().faceX === 'r' ? 1 : -1;
+  return invPerimBands().filter(b=> invBandUp(b) && !(b.x === p.x && b.y === p.y) && Math.max(Math.abs(b.x - p.x), Math.abs(b.y - p.y)) <= reach)
+    .map(b=> ({ b, d:Math.hypot(b.x - p.x, b.y - p.y), ahead:Math.sign(b.x - p.x) === fx ? 0 : 1 })).sort((a, c)=> a.d - c.d || a.ahead - c.ahead).map(o=> o.b);
+}
+function perimGlareTarget(p, dir){ return jgAim(p, perimInReach(p, JG_GLARE.reach), dir, b=> !jgBandStunned(b)); }
+function perimAmbushTarget(p, dir){ return jgAim(p, perimInReach(p, JG_AMBUSH.reach), dir, b=> jgBandStunned(b)); }
+/* a band's figure on the deck (its thing's element: walk-ent) */
+function perimBandEl(b){
+  const d = DECKS[PERIM_KEY];
+  const t = d && d.things.find(t=>{ try { return t.band === b; } catch(e){ return false; } });
+  return (t && t.el && t.el.isConnected) ? t.el : null;
+}
+function perimPadState(p){
+  const free = !!p && perimFree(), riding = caRideOn(PERIM_KEY), gn = jgGlareIn(), z = { ready:false, lit:false, sub:'', fill:0 };
+  return {
+    J:false, jump:z,
+    glare:{ ready:!gn, lit:free && riding && !gn && !!perimGlareTarget(p), sub:gn ? jgSteps(gn) : '', fill:gn ? 1 - gn / JG_GLARE.steps : 0 },
+    ambush:{ ready:true, lit:free && riding && !!perimAmbushTarget(p), sub:'', fill:0 },
+    track:Object.assign({ on:false, what:'', pic:'' }, z),
+    talk:{ lit:free },
+  };
+}
+function perimPadPress(mv){
+  const p = caYou();
+  if(!p || !perimFree()) return;
+  jgDialFlash(mv);
+  if(mv === 'talk') return jgTell(`<b>"They're penned in here. Ride close, and I'll glare at them, or pounce."</b>`);
+  if(mv === 'jump') return jgTell('No wall to leap in here: the palisade keeps them in.');
+  if(mv === 'track') return jgTell('Every band in here is in plain sight.');
+  if(!caRideOn(PERIM_KEY)) return jgTell('Lucesco needs you on his back for that.');
+  const held = walkHeldDir();
+  if(mv === 'glare'){
+    const n = jgGlareIn();
+    if(n) return jgTell(`Lucesco's eyes are still dim. ${jgSteps(n)} to go.`);
+    const b = perimGlareTarget(p, held);
+    if(!b) return jgTell('No alien close enough to glare at.');
+    return perimGlare(b);
+  }
+  if(mv === 'ambush'){
+    const b = perimAmbushTarget(p, held);
+    if(!b) return jgTell('No alien close enough to pounce on.');
+    return perimAmbush(b);
+  }
+}
+/* his glare: the laser from his eyes, the band paralysed (its 5 s), his eyes' wait begun */
+async function perimGlare(b){
+  const w = walkState(), p = caYou(), me = $('#walkYou'), el = perimBandEl(b);
+  if(!p || !me || !el || !perimFree()) return;
+  w.busy = true; ui.jgFx = 'glare';
+  (ui.jgBandEls || (ui.jgBandEls = {}))[b.id] = el;
+  jgTell(`Lucesco uses <b>Pulsar Glare</b> on ${escapeHtml(jgBandName(b))}!`, 'glare');
+  if(b.x !== p.x){ w.faceX = b.x > p.x ? 'r' : 'l'; faceRight(me, w.faceX === 'r'); }
+  const j = jgState();
+  j.glareIn = JG_GLARE.steps; j.glares = (j.glares || 0) + 1;
+  b.zapUntil = Date.now() + JG_GLARE.ms;
+  try { playSfx('timestop'); playSfx('pulsar'); } catch(e){}
+  const beam = jgBeam(b);
+  const eyes = me.querySelector('.jg-eyes');
+  if(eyes){ eyes.classList.remove('on'); void eyes.offsetWidth; eyes.classList.add('on'); }
+  jgZapStart(b, true);
+  try { await new Promise(r=> setTimeout(r, JG_GLARE.beam)); }
+  finally {
+    if(beam){ beam.classList.add('out'); setTimeout(()=> beam.remove(), 220); }
+    if(eyes) eyes.classList.remove('on');
+    if(el.isConnected) jgZapStart(b, false);                              // the beam gone: twitching, for the rest of its 5 s
+    ui.jgFx = null; w.busy = false; w.actSig = null;
+    if(typeof jgSave === 'function') jgSave(false);
+    if(ui.screen === PERIM_KEY) refreshWalk();
+    clearTimeout(b._zapEndT);
+    b._zapEndT = setTimeout(()=>{ jgZapEnd(b); if(ui.screen === PERIM_KEY){ walkState().actSig = null; refreshWalk(); } }, Math.max(0, b.zapUntil - Date.now()) + 40);
+  }
+}
+/* his ambush: the two of you into starlight, across, a red flash on it as it falls flat — and the fight */
+async function perimAmbush(b){
+  const w = walkState(), p = caYou(), me = $('#walkYou'), world = $('#walkWorld'), el = perimBandEl(b);
+  if(!p || !me || !world || !perimFree()) return;
+  if(!battleParty().some(m=> m.currentHp > 0)){ toast('Your team needs healing first. Rest by the tavern fire.'); return; }
+  releaseKeys();
+  w.busy = true; ui.jgFx = 'ambush';
+  jgTell(`Lucesco uses <b>Rift Ambush</b> on ${escapeHtml(jgBandName(b))}!`, 'ambush');
+  const glared = jgBandStunned(b), T = WALK_T, reduce = jgReduced();
+  const from = jgDrawnAt(me) || { x:p.x * T, y:p.y * T }, to = { x:b.x * T, y:b.y * T - 0.34 * T };
+  const at = q=> `translate3d(${q.x.toFixed(1)}px,${q.y.toFixed(1)}px,0)`, wait = ms=> new Promise(r=> setTimeout(r, ms));
+  if(b.x !== p.x){ w.faceX = b.x > p.x ? 'r' : 'l'; faceRight(me, w.faceX === 'r'); }
+  me.style.transition = 'none'; me.style.transform = at(from); me.style.zIndex = 12 + Math.max(p.y, b.y);
+  const fx = [];
+  try {
+    playSfx('ambush');
+    me.classList.add('jg-starry', 'jg-swirl');
+    await wait(reduce ? 120 : JG_AMBUSH.dark);
+    b._pounced = true;
+    if(el){ el.classList.remove('jg-zap', 'jg-stun'); clearTimeout(b._boltT); const svg = el.querySelector('.jg-bolts'); if(svg) svg.remove(); el.classList.add('jg-pounced'); }
+    if(typeof me.animate === 'function' && !reduce){
+      const a = me.animate([{ transform:at(from), opacity:1 }, { transform:at(to), opacity:0.2 }], { duration:JG_AMBUSH.fly + JG_AMBUSH.fadeIn, easing:'cubic-bezier(.55,0,.85,.45)', fill:'forwards' });
+      await a.finished.catch(()=>{});
+    }
+    me.getAnimations().forEach(a=> a.cancel());
+    me.style.opacity = ''; me.style.transform = at(to);
+    me.classList.remove('jg-starry', 'jg-swirl');
+    const cx = to.x + 0.5 * T, cy = to.y + 0.342 * T, z = (parseInt(me.style.zIndex, 10) || 12) - 1;
+    const ring = (cls, size)=>{ const e = document.createElement('i'); e.className = cls;
+      e.style.cssText = `left:${(cx - size / 2).toFixed(1)}px;top:${(cy - size / 2).toFixed(1)}px;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;z-index:${z}`;
+      world.appendChild(e); fx.push(e); };
+    ring('jg-pulse', 2.7 * T);
+    if(!reduce) ring('jg-wave', 1.2 * T);
+    stopSfx('ambush', 60);
+    playSfx('hit_dealt');
+    await wait(reduce ? 200 : JG_AMBUSH.after);
+  } catch(e){}
+  fx.forEach(e=> setTimeout(()=> e.remove(), 900));
+  stopSfx('ambush', 60);
+  me.classList.remove('jg-starry', 'jg-swirl');
+  ui.jgFx = null; w.busy = false;
+  b._pounced = false;
+  invFight(b, { ambush:true, glare:glared });
+  /* it did not begin (the team down, a scene): back where you leapt from */
+  if(!ui.invFighting && !ui.battle && ui.screen === PERIM_KEY){ me.style.transform = at(from); if(el) el.classList.remove('jg-pounced'); w.actSig = null; refreshWalk(); }
+}
+function perimCss(){
+  if(document.getElementById('perimCss')) return;
+  const s = document.createElement('style');
+  s.id = 'perimCss';
+  s.textContent = `
+  .walk-ent.inv-band.jg-zap .war-fig .jg-art{ filter:brightness(0) drop-shadow(0 0 2px #ff3a3a) drop-shadow(0 0 8px rgba(255,0,0,.95)) !important; }
+  .walk-ent.inv-band.jg-stun:not(.jg-zap) .war-fig .jg-art{ filter:drop-shadow(0 0 3px #000) drop-shadow(0 0 9px rgba(255,30,30,.95)) !important; animation:perimTwitch .14s steps(2) infinite; }
+  @keyframes perimTwitch{ from{ translate:-1.5px 0; } to{ translate:1.5px 0; } }
+  .walk-ent.inv-band .jg-bolts{ position:absolute; left:-40%; top:-60%; width:180%; height:180%; overflow:visible; pointer-events:none; z-index:3; }
+  .walk-ent.inv-band.jg-zap .jg-bolts .g{ stroke-width:6; opacity:.75; }
+  .walk-ent.inv-band.jg-zap .jg-bolts .c{ stroke:#fff; stroke-width:1.8; }
+  .walk-ent.inv-band.jg-pounced .war-fig{ transform-origin:50% 92%; rotate:84deg; translate:0 12%; transition:rotate .18s ease-in; }
+  @media (prefers-reduced-motion: reduce){ .walk-ent.inv-band.jg-stun:not(.jg-zap) .war-fig .jg-art{ animation:none; } }
+  `;
+  document.head.appendChild(s);
+}
+/* into the game: his ride and his dial on the perimeter's deck; his dial's state and presses there; your steps there
+   counting his eyes' wait down */
+(function perimHooks(){
+  const d = typeof DECKS !== 'undefined' && DECKS[PERIM_KEY];
+  if(d && typeof jgRideArt === 'function'){
+    const base = d.youArt;
+    d.youArt = function(dd){
+      if(caRideOn(PERIM_KEY)){ if(typeof jgCss === 'function') jgCss(); perimCss(); return jgRideArt(); }
+      return base ? base.apply(this, arguments) : null;
+    };
+    d.padMoves = { dial:true, html:()=>{ if(typeof jgCss === 'function') jgCss(); perimCss(); return jgPadHtml(); }, wire:(box)=> jgPadWire(box), refresh:(box, dd, p)=> jgPadRefresh(box, p) };
+  }
+  if(typeof jgPadState === 'function'){
+    const _ps = jgPadState;
+    jgPadState = function(p){ if(ui.screen === PERIM_KEY) return perimPadState(p); return _ps.apply(this, arguments); };
+  }
+  if(typeof jgPadPress === 'function'){
+    const _pp = jgPadPress;
+    jgPadPress = function(mv){ if(ui.screen === PERIM_KEY) return perimPadPress(mv); return _pp.apply(this, arguments); };
+  }
+  if(typeof caStep === 'function'){
+    const _cs = caStep;
+    caStep = function(key, p){
+      if(key === PERIM_KEY){ const j = jgState(); if(j.glareIn > 0){ j.glareIn = Math.min(JG_GLARE.steps, j.glareIn) - 1; walkState().actSig = null; } }
+      return _cs.apply(this, arguments);
+    };
+  }
+})();

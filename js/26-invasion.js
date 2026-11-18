@@ -482,7 +482,7 @@ function invWaves(b){
   };
   return b.aliens.map(sp=>{ const boss = !!JG_ALIENS[sp].rank; return [fairy(boss), alien(sp), fairy(boss)]; });
 }
-function invFight(b){
+function invFight(b, opts){
   if(!b || ui.invFighting || ui.caTalk || ui.sceneRunning) return;
   if(!invBandUp(b)) return;
   if(!battleParty().some(m=> m.currentHp > 0)){ b.calm = Date.now() + 8000; toast('Your team needs healing first. Rest by the tavern fire.'); return; }
@@ -491,14 +491,19 @@ function invFight(b){
   const deck = walkState().deck;
   const waves = invWaves(b), nm = (SPECIES[b.lead] || {}).name || 'Alien';
   const name = b.rank === 'commander' ? `Commander ${nm}'s army` : b.rank === 'captain' ? `Captain ${nm}'s band` : `${nm} and its captives`;
+  /* (4.64) Lucesco's moves in the perimeter (perimGlare, perimAmbush, 36-the-return.js): still twitching from his Pulsar
+     Glare, or ambushed — the first alien weakened or stunned, as the jungle's (jgEdgeApply, at jgWaveStart's first wave) */
+  const edge = { id:b.id, glare:!!((opts && opts.glare) || (typeof jgBandStunned === 'function' && jgBandStunned(b))), ambush:!!(opts && opts.ambush) };
   const begin = ()=>{
     ui.invFighting = false;
     ui.invFight = { id:b.id, deck, perim:!!b.perim };
+    ui.jgEdge = (edge.glare || edge.ambush) ? edge : null;
     beginBattle({ waves, isNpc:false, allowCatch:true, name, bgKey:(deck === 'r6_palace' || deck === 'r6_tower') ? 'battle_palace' : 'battle_castle', foeRegion:6,
       encounter:true, encounterMusic:JG_FIGHT_MUSIC,
       onWaveStart:(i)=> jgWaveStart(i),
       onWin:(levelUps)=> invBandWon(b, levelUps),
       onLose:()=> invLost(b) });
+    ui.jgEdge = null;
     if(ui.battle){ ui.battle.inv = b.id; ui.battle.noFoeRecharge = true; }   // the aliens' own rules (jgEnemyMove), as in the jungle
   };
   if(typeof walkEncounter === 'function') walkEncounter(begin, JG_FIGHT_MUSIC); else begin();
@@ -2346,7 +2351,7 @@ function invRiftThings(T){
   for(let i = 0; i < 10; i++){
     const slot = { get b(){ return invPerimBands()[i]; } };
     const t = { get x(){ return slot.b ? slot.b.x : -5; }, get y(){ return slot.b ? slot.b.y : -5; }, get band(){ const b = slot.b; if(b) b.thing = t; return b; },
-      get cls(){ return 'ca-npc inv-band inv-band-' + (slot.b ? slot.b.rank : 'alien'); },
+      get cls(){ return 'ca-npc inv-band inv-band-' + (slot.b ? slot.b.rank : 'alien') + (slot.b && typeof jgBandStunned === 'function' && jgBandStunned(slot.b) ? ' jg-stun' : ''); },   // (4.64) still twitching from his glare
       html:()=> slot.b ? `<div class="war-fig">${jgMonImg(slot.b.lead, WALK_T * (slot.b.rank === 'commander' ? 1.9 : slot.b.rank === 'captain' ? 1.7 : 1.5), false)}</div>` : '',
       verb:'Fight', get sub(){ const b = slot.b, nm = b ? (SPECIES[b.lead] || {}).name : ''; return !b ? '' : b.rank === 'commander' ? `Commander ${nm}'s army` : b.rank === 'captain' ? `Captain ${nm}'s band` : `${nm} and its captives`; },
       when:()=> !!slot.b && invBandUp(slot.b), act:()=> invFight(slot.b) };
@@ -2379,33 +2384,11 @@ if(typeof CA_MAPS !== 'undefined'){
   caMakeDeck('r6_perimeter', CA_PLACES.r6_perimeter);
 }
 
-/* ---------- the jungle, afterwards: a wild one now and then on its paths (as the catacombs' were) ---------- */
-const INV_WILD = { rate:1 / 45, calm:24 };
-function invJungleRoll(p){
-  const s = ui.invWild || (ui.invWild = { calm:INV_WILD.calm });
-  if(ui.jgTalk || ui.jgFighting || ui.sceneRunning || walkState().busy) return false;
-  if(s.calm > 0){ s.calm--; return false; }
-  if(!p || jgVillageAt(p.x, p.y) || jgBandAt(p.x, p.y)) return false;
-  const C = jgGround().places.castle;
-  if(Math.abs(p.x - (C.x + C.w / 2)) < C.w / 2 + 6 && Math.abs(p.y - (C.y + C.h / 2)) < C.h / 2 + 6) return false;   // not right by the castle
-  if(Math.random() >= INV_WILD.rate) return false;
-  s.calm = INV_WILD.calm;
-  const sp = JG_ALIEN_IDS[Math.floor(Math.random() * JG_ALIEN_IDS.length)];
-  const b = { id:'wild' + Date.now(), rank:'alien', x:p.x, y:p.y, hx:p.x, hy:p.y, face:'d', tribe:jgTribeOf(p.x, p.y),
-              lv:JG.aliens.lv[0] + Math.floor(Math.random() * 10), aliens:[sp], lead:sp, wild:true };
-  toast('An alien leaps out of the undergrowth!');
-  jgFight(b, true);
-  return true;
-}
-if(typeof jgStep === 'function'){
-  const _invJgStep = jgStep;
-  jgStep = function(p, d){
-    const r = _invJgStep.apply(this, arguments);
-    if(!r && invAfter() && invJungleRoll(p)) return true;
-    return r;
-  };
-  if(typeof JG_DECK !== 'undefined') JG_DECK.onStep = (p, d)=> jgStep(p, d);
-}
+/* ---------- the jungle, afterwards ---------- */
+/* (4.64) No wild one leaps out on its paths any more. Until 4.64 one did, 1 step in 45 after a calm of 24 (INV_WILD,
+   invJungleRoll, wrapped round jgStep), as the catacombs' did. The designer: "please remove the chance to encounter
+   aliens while walking as long as they aren't a sprite that patrols (the mechanic in the catacombs should not apply
+   here)". The bands you can see on the map are the only fights. */
 
 /* ============================================================
    THE PICTURES: saucers, smoke, the crack, the palisade, the black beam, her pink light
@@ -2534,16 +2517,100 @@ function invSlitLoop(){
 }
 /* (4.59) the rift at the jungle's north edge: half as big again as it was (2.8) */
 const INV_RIFT_JG_SIZE = 4.2;
-/* the palisade's stakes along a run of squares, and the compound's people */
+/* the palisade's stakes along a run of squares, and the compound's people — (4.64) drawn finer: the designer, "for the
+   rift perimeter, please make the fences look more detailed and finely drawn". Each square: three logs of differing
+   height, barked and knotted, their tips cut to two facets; two rails lashed on with rope; the soldiers' shields hung
+   on some, a torch on others, moss and grass at their feet. The gate's two squares: its two halves of planks, iron
+   bands and studs, the posts either side capped, the King's banner on them. The same for any square (by where it is). */
+function invStakeDefs(){
+  if(document.getElementById('invStakeDefs')) return;
+  const d = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  d.id = 'invStakeDefs'; d.setAttribute('aria-hidden', 'true'); d.setAttribute('width', '0'); d.setAttribute('height', '0');
+  d.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;';
+  d.innerHTML = `<defs>
+    <linearGradient id="invWoodG" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#c08c58"/><stop offset=".32" stop-color="#9c6b3d"/><stop offset=".72" stop-color="#6f4727"/><stop offset="1" stop-color="#452a14"/></linearGradient>
+    <linearGradient id="invWoodD" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#a8784a"/><stop offset=".4" stop-color="#835631"/><stop offset="1" stop-color="#3c2410"/></linearGradient>
+    <linearGradient id="invRailG" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#b8875a"/><stop offset=".45" stop-color="#83582f"/><stop offset="1" stop-color="#4a2e16"/></linearGradient>
+    <linearGradient id="invPlankG" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#a87444"/><stop offset="1" stop-color="#6a4224"/></linearGradient>
+    <radialGradient id="invShieldG" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#e8564a"/><stop offset=".6" stop-color="#b8322a"/><stop offset="1" stop-color="#7a1c16"/></radialGradient>
+    <radialGradient id="invShieldB" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#5a8ad8"/><stop offset=".6" stop-color="#2f5aa8"/><stop offset="1" stop-color="#1c3470"/></radialGradient>
+    <radialGradient id="invGlowG"><stop offset="0" stop-color="rgba(255,190,90,.75)"/><stop offset="1" stop-color="rgba(255,150,60,0)"/></radialGradient>
+  </defs>`;
+  document.body.appendChild(d);
+}
+function invStakeHash(x, y, k){ let h = (Math.imul(x + 101, 374761393) + Math.imul(y + 37, 668265263) + Math.imul(k + 7, 1442695041)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function invStakeSvg(x, y, cls, right){
+  const R = k=> invStakeHash(x, y, k), f = n=> n.toFixed(1);
+  let o = `<ellipse cx="42" cy="111" rx="45" ry="5.5" fill="rgba(28,16,6,.38)"/>`;
+  const gate = /inv-stake-gate/.test(cls || '');
+  if(gate){
+    /* a half of the gate: planks bound with iron, its post at the outer edge, the King's banner on the post */
+    const outer = right ? 1 : 0, px = outer ? 64 : 0;                     // the left half's post at its left, the right's at its right
+    for(let i = 0; i < 4; i++){ const xx = outer ? 2 + i * 15.5 : 20 + i * 15.5, top = 16 + (outer ? i : 3 - i) * 2;
+      o += `<rect x="${f(xx)}" y="${top}" width="15" height="${112 - top}" fill="url(#invPlankG)" stroke="#3a2412" stroke-width="1.3"/>` +
+           `<path d="M${f(xx + 3)} ${top + 6} V108" stroke="rgba(40,22,10,.4)" stroke-width=".9"/><path d="M${f(xx + 1.6)} ${top + 3} V108" stroke="rgba(255,226,180,.28)" stroke-width="1.4"/>`; }
+    [34, 76].forEach(yy=>{ o += `<rect x="${outer ? 0 : 18}" y="${yy}" width="66" height="6" fill="#5a5f66" stroke="#2c2f33" stroke-width="1"/><rect x="${outer ? 0 : 18}" y="${yy}" width="66" height="1.6" fill="#9aa0a8"/>`;
+      for(let k = 0; k < 5; k++) o += `<circle cx="${(outer ? 6 : 24) + k * 13}" cy="${yy + 3}" r="1.6" fill="#c8ccd2"/>`; });
+    o += `<path d="M${outer ? 6 : 24} 40 L${outer ? 60 : 78} 76" stroke="#5a5f66" stroke-width="4"/>`;
+    o += `<rect x="${px}" y="6" width="20" height="109" fill="url(#invWoodD)" stroke="#2a1608" stroke-width="1.6"/>` +
+         `<path d="M${px - 2} 6 L${px + 10} -6 L${px + 22} 6 Z" fill="#7a7f86" stroke="#2c2f33" stroke-width="1.2"/>` +
+         `<path d="M${px + 3} 12 V110" stroke="rgba(255,226,180,.3)" stroke-width="2"/>`;
+    const bx = outer ? px - 15 : px + 21;
+    o += `<path d="M${bx} 16 h16 v34 l-8 -6 l-8 6 z" fill="#b8322a" stroke="#5a1410" stroke-width="1.2"/>` +
+         `<path d="M${bx + 3} 22 l2 6 l3 -4 l3 4 l2 -6 v8 h-10 z" fill="#e9b736"/>` +
+         `<rect x="${bx - 1}" y="14" width="18" height="3" fill="#6a4220"/>`;
+    return o;
+  }
+  /* three logs */
+  const stakes = [0, 1, 2].map(i=>{ const w = 19 + R(i) * 4, cx = 13 + i * 28 + (R(i + 10) - 0.5) * 3, tip = 2 + R(i + 20) * 14, tilt = (R(i + 30) - 0.5) * 5; return { w, cx, tip, tilt, i }; });
+  /* the far rail first, then the logs, then the near rail and its lashings */
+  const rail = (yy, dark)=> `<rect x="-2" y="${yy}" width="88" height="8.5" rx="3.5" fill="url(#invRailG)" stroke="#3a2210" stroke-width="1.3"${dark ? ' opacity=".9"' : ''}/>` +
+    `<path d="M0 ${yy + 2.2} H84" stroke="rgba(255,226,180,.35)" stroke-width="1.6"/><path d="M6 ${yy + 5.4} q6 1.2 12 0 M40 ${yy + 5.8} q8 1.4 16 0" stroke="rgba(40,22,10,.4)" stroke-width=".8" fill="none"/>`;
+  o += rail(44, true);
+  stakes.forEach(({ w, cx, tip, tilt, i })=>{
+    const l = cx - w / 2, r = cx + w / 2, tb = tip + 15;
+    o += `<g transform="rotate(${f(tilt)} ${f(cx)} 113)">`;
+    o += `<path d="M${f(l)} 114 C${f(l - 1)} 90 ${f(l + 1)} 60 ${f(l)} ${f(tb)} L${f(r)} ${f(tb)} C${f(r + 1)} 60 ${f(r - 1)} 90 ${f(r)} 114 Z" fill="url(#invWoodG)" stroke="#2e1a0a" stroke-width="1.5"/>`;
+    o += `<path d="M${f(l)} ${f(tb)} L${f(cx)} ${f(tip)} L${f(cx - 1)} ${f(tb + 4)} Z" fill="#f0d6a6" stroke="#2e1a0a" stroke-width="1"/>` +
+         `<path d="M${f(r)} ${f(tb)} L${f(cx)} ${f(tip)} L${f(cx - 1)} ${f(tb + 4)} Z" fill="#c09460" stroke="#2e1a0a" stroke-width="1"/>` +
+         `<path d="M${f(cx - w * 0.3)} ${f(tb + 1)} Q${f(cx - w * 0.1)} ${f(tb - 4)} ${f(cx)} ${f(tip + 4)}" stroke="rgba(150,100,50,.55)" stroke-width=".8" fill="none"/>`;
+    for(let k = 0; k < 4; k++){ const xx = l + w * (0.25 + k * 0.17) + (R(i * 7 + k) - 0.5) * 2; o += `<path d="M${f(xx)} ${f(tb + 6 + R(k + 40) * 8)} q${f((R(k + 50) - 0.5) * 3)} 22 0 ${f(30 + R(k + 60) * 30)}" stroke="rgba(36,20,8,.45)" stroke-width=".9" fill="none"/>`; }
+    o += `<path d="M${f(l + 3)} ${f(tb + 4)} V110" stroke="rgba(255,230,190,.32)" stroke-width="2"/>`;
+    const ky = tb + 18 + R(i + 70) * 50;
+    o += `<ellipse cx="${f(cx + (R(i + 80) - 0.5) * w * 0.4)}" cy="${f(ky)}" rx="2.6" ry="1.8" fill="#4a2c14" stroke="rgba(200,160,110,.5)" stroke-width=".7"/>`;
+    if(R(i + 90) < 0.4) o += `<ellipse cx="${f(l + 4)}" cy="${f(96 + R(i + 91) * 10)}" rx="4" ry="2.6" fill="rgba(96,140,52,.85)"/><ellipse cx="${f(l + 3)}" cy="${f(94 + R(i + 91) * 10)}" rx="2" ry="1.2" fill="rgba(150,190,80,.7)"/>`;
+    o += `</g>`;
+  });
+  o += rail(82, false);
+  stakes.forEach(({ cx })=>{ [46, 84].forEach(yy=>{ o += `<path d="M${f(cx - 6)} ${yy - 2} L${f(cx + 6)} ${yy + 10} M${f(cx + 6)} ${yy - 2} L${f(cx - 6)} ${yy + 10}" stroke="#d8c08a" stroke-width="1.7"/>` +
+    `<path d="M${f(cx - 7)} ${yy + 1.5} h14 M${f(cx - 7)} ${yy + 5} h14" stroke="#b89a5a" stroke-width="1.2"/>`; }); });
+  /* the soldiers' shields hung on it here and there; a torch on others */
+  const h = R(200);
+  if(h < 0.22){
+    const sc = stakes[1].cx, blue = R(201) < 0.5;
+    o += `<path d="M${f(sc)} 50 v6" stroke="#3a2412" stroke-width="1.4"/><circle cx="${f(sc)}" cy="66" r="13.5" fill="#8f949b" stroke="#2c2f33" stroke-width="1.4"/>` +
+         `<circle cx="${f(sc)}" cy="66" r="11" fill="url(#${blue ? 'invShieldB' : 'invShieldG'})"/>` +
+         `<path d="M${f(sc - 11)} 66 H${f(sc + 11)} M${f(sc)} 55 V77" stroke="#e9b736" stroke-width="2.4"/>` +
+         `<circle cx="${f(sc)}" cy="66" r="3.4" fill="#d8dce2" stroke="#5a5f66" stroke-width="1"/><path d="M${f(sc - 8)} 59 a11 11 0 0 1 9 -4" stroke="rgba(255,255,255,.5)" stroke-width="1.6" fill="none"/>`;
+  } else if(h < 0.34){
+    const tc = stakes[2].cx - 3;
+    o += `<circle cx="${f(tc + 6)}" cy="30" r="16" fill="url(#invGlowG)"/><path d="M${f(tc)} 62 L${f(tc + 7)} 38" stroke="#5a3418" stroke-width="3.4" stroke-linecap="round"/>` +
+         `<path d="M${f(tc + 3)} 40 q2 -12 5 -18 q1 7 5 9 q-1 6 -4 10 z" fill="#ff9a2a"/><path d="M${f(tc + 6)} 39 q1 -7 3 -11 q1 5 2 6 q-1 3 -3 5 z" fill="#ffe27a"/>` +
+         `<path d="M${f(tc - 2)} 52 h9" stroke="#d8c08a" stroke-width="1.6"/>`;
+  }
+  /* grass and a stone at their feet */
+  for(let k = 0; k < 4; k++){ const gx = 4 + R(300 + k) * 76; o += `<path d="M${f(gx)} 113 l-3 -8 M${f(gx + 2)} 113 l0 -10 M${f(gx + 4)} 113 l3 -7" stroke="${k % 2 ? '#5f8f34' : '#7aa83f'}" stroke-width="1.6" stroke-linecap="round"/>`; }
+  if(R(310) < 0.5){ const sx = 10 + R(311) * 60; o += `<ellipse cx="${f(sx)}" cy="111" rx="6" ry="3.6" fill="#8a8a7a" stroke="#4a4a40" stroke-width=".9"/><ellipse cx="${f(sx - 1.5)}" cy="109.8" rx="2.6" ry="1.2" fill="rgba(255,255,240,.45)"/>`; }
+  return o;
+}
 function invStakes(world, squares, cls){
   const T = WALK_T;
-  squares.forEach(([x, y])=>{
+  invStakeDefs();
+  squares.forEach(([x, y], i)=>{
     const s = document.createElement('div');
     s.className = 'inv-stake ' + (cls || '');
     s.style.cssText = `left:${(x + 0.08) * T}px;top:${(y - 0.15) * T}px;width:${0.84 * T}px;height:${1.15 * T}px;z-index:${11 + y};`;
-    s.innerHTML = `<svg viewBox="0 0 84 115" preserveAspectRatio="none" aria-hidden="true">` +
-      [6, 34, 62].map(px=> `<path d="M${px} 115 V20 L${px + 8} 4 L${px + 16} 20 V115 Z" fill="#8a5a33" stroke="#4a2d16" stroke-width="2.5"/><path d="M${px + 4} 112 V24" stroke="#b07c4a" stroke-width="3" opacity=".7"/>`).join('') +
-      `<rect x="0" y="44" width="84" height="9" fill="#6b4426" stroke="#3a2412" stroke-width="2"/><rect x="0" y="82" width="84" height="9" fill="#6b4426" stroke="#3a2412" stroke-width="2"/></svg>`;
+    s.innerHTML = `<svg viewBox="0 0 84 115" preserveAspectRatio="none" aria-hidden="true">${invStakeSvg(x, y, cls, i === squares.length - 1 && squares.length > 1)}</svg>`;
     world.appendChild(s);
   });
 }
