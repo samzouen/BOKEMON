@@ -1996,6 +1996,10 @@ const FORTRESS_TAKE = 0.67;
 const TEMPER = { floor:0.50, shields:3 };   // (3.86) half its health, 3 shields — (4.48) its 2 a turn is the dust's guard now (DUST_GUARD)
 const CORUSCATE = { per:0.015, cap:0.15 };   // (3.76) "1.5% per active buff instead of 5%" (the cap: still 10 buffs)
 const DETONATE_PCT = 0.25;                    // (3.76) "0.2*atk per detonated buff/debuff" — (4.48) "let's increase the damage to 0.25x"
+const DETONATE_OFF = 0.2;                     // (4.63) "reduce unstable magic off-field damage to 0.2x ATK instead of 0.25x ATK when on-field"
+/* (4.63) a holder's burst a count: 0.25× its ATK on the field (out front, or the companion beside it), 0.2× off it (the
+   bench, a benched one's companion). Theirs always stand on the field (foeHolders: the living), so theirs is 0.25×. */
+function detonatePct(m){ return (m && playerField().includes(m)) ? DETONATE_PCT : DETONATE_OFF; }
 /* (3.86) "it should hit once for the highest damage instance amongst the
    holders". (3.93) No cap any more (it was 3 bursts a turn, a side): "do
    not cap unstable magic. it's meant to hurt if many buffs/debuffs are
@@ -2130,8 +2134,43 @@ function temperFloor(m, dmg){
 /* Does `side` keep its Steel Aegis from a sweep or a theft? */
 function aegisKept(side){ return dustThrough(side, 'steelAegis'); }
 /* A blow of theirs (or a recoil, a thorn) on one of yours: Tempering's floor,
-   then the floors — a fight where yours cannot fall, Bedrock holding on. */
-function dropHp(m, dmg){ m.currentHp = Math.max(hpFloorOf(m), m.currentHp - temperFloor(m, dmg)); }
+   then the floors — a fight where yours cannot fall, Bedrock holding on —
+   (4.62) and Metamorph's last stand (lastStand). */
+function dropHp(m, dmg){ m.currentHp = Math.max(hpFloorOf(m), m.currentHp - lastStand(m, temperFloor(m, dmg))); }
+/* (4.62) The designer: "the ground ultra not granting 1 turn immunity to fatal damage despite not being cursed". Its
+   last stand was the attack's alone (enemyStrikeOn): a burst of their Unstable Magic, a spike, their Wildfire, a
+   Capacitor's charge, their Violent Dance, a seed's bite, a thorn — everything else of theirs that lands through
+   dropHp — knocked it out past it. Now whatever would knock it out, once until the meter fills, leaves it on 1 HP with
+   a shield, holding on that turn and the next; and an Undying talent the same (it was the attack's alone too), as
+   theirs already hold against everything of yours (landStrike). Its line goes with the fight's next (holdSay).
+   Returns what it takes. */
+function lastStand(m, d){
+  const b = ui.battle;
+  if(!b || !m || !m.uid || !(d > 0) || !(m.currentHp > 0) || d < m.currentHp || hpFloorOf(m) > 0) return d;
+  let how = '';
+  if(bedrockReady(m)){ bedrockSave(m); how = 'Metamorph'; }
+  else if(typeof talentUndyingReady === 'function' && talentUndyingReady(m)) how = talentUndyingUse(m);
+  if(!how) return d;
+  const nm = escapeHtml(displayName(m));
+  floatOver(m, 'HOLDS ON');
+  holdSay(how === 'Metamorph' ? `🦋 <b>Metamorph!</b> ${nm} holds on at 1 HP — a shield forms, and it holds on through the next turn.`
+                              : `♾️ <b>${escapeHtml(how)}!</b> ${nm} holds on at 1 HP.`);
+  logBattle(`${how} (${displayName(m)}): held on at 1 HP, ${d} would have knocked it out`);
+  return m.currentHp - 1;
+}
+/* (4.62) A line said with the fight's next line (battleMsg adds it), or added to the one showing if none comes soon:
+   the hold happens inside a strike whose own line is said a moment later. */
+function holdSay(line){
+  const b = ui.battle;
+  if(!b || !line) return;
+  (b.holdSaid || (b.holdSaid = [])).push(line);
+  setTimeout(()=>{
+    if(ui.battle !== b || !b.holdSaid || !b.holdSaid.length) return;
+    const said = b.holdSaid.join(' '), el = document.getElementById('battleMsg');
+    b.holdSaid = null;
+    if(el) el.innerHTML += ' ' + ((typeof emoHtml === 'function') ? emoHtml(said) : said);
+  }, 700);
+}
 /* Coruscate: each buff your side has up (Diamond Dust itself among them). */
 function yourBuffCount(){
   const ps = partyStatuses();
@@ -2169,8 +2208,9 @@ function queueDetonate(n){
    side's effect (3.77: yours stopped by theirs counts for you too). */
 function dustStopped(owner, n){ if(ui.battle) magicBurst(n == null ? 1 : n); }
 function detonatePending(){ return !!(ui.battle && ui.battle.detonateN > 0); }
-/* All that is waiting goes off now: 0.2× ATK a count — (3.86) the strongest
-   holder's alone, the one whose burst would deal the most; (3.93) every count,
+/* All that is waiting goes off now: 0.25× ATK a count from a holder on the field, (4.63) 0.2× from one off it
+   (detonatePct) — (3.86) the strongest
+   holder's alone, the one whose burst would deal the most (its place counted); (3.93) every count,
    no cap — on every enemy, as one strike each, every damage buff and cut of
    yours counted (its own Feeble too). Its hits give no Vicious Hex debuff
    (`noHex`). Returns its line. */
@@ -2182,7 +2222,7 @@ function detonateNow(){
   const foes = livingEnemies();
   if(!(n > 0) || !foes.length) return '';
   const burstOf = (me, t)=>{
-    let dmg = Math.ceil(DETONATE_PCT * n * monAtk(me) * ownBuffMultiplier(me) * elemAttackAmp(monRef(me), t) * hexAmp(t));
+    let dmg = Math.ceil(detonatePct(me) * n * monAtk(me) * ownBuffMultiplier(me) * elemAttackAmp(monRef(me), t) * hexAmp(t));   // (4.63) its place
     const cur = getEStatus(t, 'curse');
     dmg = Math.ceil(dmg * curseBucket(cur, 'enemy'));
     return dmg;
@@ -2557,7 +2597,7 @@ const VERY_HIGH = {
     'Each turn, sweeps away or stops <b>1</b> kind of enemy buff, and cleans or stops <b>1</b> kind of their debuffs on your side — the worst first (their Diamond Dust; disables). Cast again while it is up: <b>+1</b> of each that turn. Your own effects keep going. Shields are not touched.',
     'Each turn, sweeps away or stops <b>2</b> kinds of enemy buffs, and cleans or stops <b>2</b> kinds of their debuffs on your side, the worst first. Works upon taking the field, and again each time the recharge meter fills (renewing one already up); cast again while it is up: <b>+1</b> of each that turn. Active skill also casts one random other Very High skill at <b>+</b> strength.',
     /* (4.50) at the start of a turn with none up, not as it comes in (dustPreTurn) */
-    'Each turn, sweeps away or stops <b>3</b> kinds of enemy buffs, and cleans or stops <b>3</b> kinds of their debuffs on your side, the worst first. At the start of each turn with no Diamond Dust of yours up, it casts one, from the field or the bench (one a turn, however many of yours carry it), and so does the recharge meter filling with none up; one already up is left to run. Cast again while it is up: <b>+1</b> of each that turn, which no Tempering or Binding Curse turns aside. Active skill also casts a Very High skill of your choice at <b>✦</b> strength, and a second one at random.',
+    'Each turn, sweeps away or stops <b>3</b> kinds of enemy buffs, and cleans or stops <b>3</b> kinds of their debuffs on your side, the worst first. At the start of each turn with no Diamond Dust of yours up, it casts one, from the field or the bench (one a turn, however many of yours carry it), and so does the recharge meter filling with none up; one already up is left to run. Each carrier\'s dust falls by itself once a meter, as well as the cast you write. Cast again while it is up: <b>+1</b> of each that turn, which no Tempering or Binding Curse turns aside. Active skill also casts a Very High skill of your choice at <b>✦</b> strength, and a second one at random.',
   ]},
 };
 function veryHighDef(type, plus){
@@ -4504,16 +4544,25 @@ function enemyStonePassive(e, opts){
    most once a turn, however many carry one. As cast, it is the stone's dust alone (no borrowed Very High skill), at ✦.
    One their dust swept away this turn still can't settle again until the next (dustCastBarred). (4.51) The meter's
    refill renews none already up: with none of yours up, it casts one (dustStarRefill). Whose falls first, when both
-   sides have none: the side with the turn's initiative (initiativeSide). */
+   sides have none: the side with the turn's initiative (initiativeSide).
+   (4.62) The designer: "the auto triggering of diamond dust doesn't consume its once per recharge limit" — "there's
+   two falls per recharge (since earlier versions)… one automatic and one written. The automatic was unlimited in the
+   latest patch when it should have been once per recharge. Automatic fall only uses its own count, not the manually
+   written one". So each carrier's dust falls by itself once a meter (b.dustStarFell, by uid; the written cast keeps
+   its own, usedVeryHigh): one whose dust has fallen by itself casts none by itself again until the meter fills —
+   another carrier whose fall is still to come can. The refill gives them back (and, with none up, one falls at once:
+   that meter's). Theirs the mirror: once each of their recharges (e._starFell, foeRecharge), apart from their cast by
+   hand (e.stone.used). */
 function dustStarStone(m){ return m ? [m.equippedStone, m.power1Stone].find(st=> st && st.tier === 'veryhigh' && st.type === 'Fairy' && stonePlus(st) === 2) || null : null; }
 function dustStarCarrier(side){
-  if(!ui.battle) return null;
-  if(side === 'enemy') return livingEnemies().find(e=> e.stone && e.stone.type === 'Fairy' && (e.stone.plus || 0) === 2) || null;
-  const seen = new Set(), team = [];
+  const b = ui.battle;
+  if(!b) return null;
+  if(side === 'enemy') return livingEnemies().find(e=> e.stone && e.stone.type === 'Fairy' && (e.stone.plus || 0) === 2 && !e._starFell) || null;   // (4.62) its fall this recharge to come
+  const seen = new Set(), team = [], fell = b.dustStarFell || {};
   playerField().concat(battleParty(), companionsAllowed() ? bondedCompanions() : []).forEach(m=>{
     if(m && m.uid && !seen.has(m.uid)){ seen.add(m.uid); team.push(m); }
   });
-  return team.find(m=> m.currentHp > 0 && !!dustStarStone(m)) || null;
+  return team.find(m=> m.currentHp > 0 && !!dustStarStone(m) && !fell[m.uid]) || null;   // (4.62) its fall this meter to come
 }
 /* One of yours casts its ✦ dust, by itself: its line, or '' (swept away by theirs this turn: it waits). What it swept
    is said — theirs first, when theirs was up. */
@@ -4521,6 +4570,7 @@ function dustStarCastYours(m){
   const hadTheirs = !!getESide('diamondDust');
   const res = applyVeryHighEffect('Fairy', m, monAtk(m), livingEnemies(), 2);
   if(res.barred) return '';
+  (ui.battle.dustStarFell || (ui.battle.dustStarFell = {}))[m.uid] = true;   // (4.62) its fall this meter (the written cast is its own)
   const benched = !playerField().includes(m), n = res.cleared || 0, took = hadTheirs && !getESide('diamondDust');
   playPassiveArt('Diamond Dust', benched ? (leaderMon() || m) : m, 'Fairy');   // a bench carrier's falls over the one out front
   return `✨ None in the air: ${escapeHtml(displayName(m))}'s Diamond Dust ✦ falls${benched ? ' from the bench' : ''}` +
@@ -4529,6 +4579,7 @@ function dustStarCastYours(m){
 }
 function dustStarCastTheirs(e){
   const d = veryHighDef('Fairy', 2) || {}, hadYours = !!getPStatus(0, 'diamondDust');
+  e._starFell = true;                                         // (4.62) its fall this recharge (their cast by hand is its own)
   dustCastBegin('enemy', 2);
   const n = diamondDustCleanse('enemy');
   setESide({ type:'diamondDust', turnsLeft:(d.turns || 5) + 1, owner:e, tier:2 });
@@ -7263,6 +7314,7 @@ function foeRecharge(){
   const fired = [];
   livingEnemies().forEach(e=>{
     if(e.stone && e.stone.cast && e.stone.used){ e.stone.used = false; any = true; }
+    if(e._starFell){ e._starFell = false; any = true; }        // (4.62) a ✦ Diamond Dust's fall by itself, once a recharge
     if(e.futureUltra && e.futureUltra.used){ e.futureUltra.used = false; e._fuActs = 0; any = true; }
     if(e._soulUsed){ e._soulUsed = false; any = true; }
     if(e._lastStand){ e._lastStand = false; any = true; }
@@ -7696,7 +7748,7 @@ function siphonDrain(){
   let pool = 0;
   mine.forEach(me=>{
     const max = monMaxHp(me), before = me.currentHp;
-    me.currentHp = Math.max(0, before - Math.ceil(max * SIPHON.drain));
+    me.currentHp = Math.max(hpFloorOf(me), before - lastStand(me, Math.ceil(max * SIPHON.drain)));   // (4.62) a last stand, a hold: every source
     pool += before - me.currentHp;
     flashHit(document.getElementById(pid('playerBob', me)));
     drainHp(pid('playerHp', me), before, me.currentHp, max);
@@ -11081,7 +11133,7 @@ function statusTipText(key, st, c, pill){
     case 'fortress': return `${c.W} resists every element except Dragon: attacks on it deal <b>⅔</b>.`;
     case 'coruscate': { const r = m ? coruscateBonus(m) : 0;
       return `While your Diamond Dust is up, every one of your team deals <b>+${+(r * 100).toFixed(1)}%</b>: ${+(CORUSCATE.per * 100).toFixed(1)}% for each buff your side has up (${yourBuffCount()} now), up to +${Math.round(CORUSCATE.cap * 100)}% — with ${c.w} anywhere in your team.`; }
-    case 'detonate': return `Unstable Magic: every buff or debuff — either side's — swept away, kept from forming by a Diamond Dust, or running out makes your magic burst: <b>${DETONATE_PCT}×</b> the ATK of your strongest holder to every enemy, once for each, with no limit a turn. On the field or off it.`;   // (3.86) once, the strongest holder; (3.93) no cap
+    case 'detonate': return `Unstable Magic: every buff or debuff — either side's — swept away, kept from forming by a Diamond Dust, or running out makes your magic burst: <b>${DETONATE_PCT}×</b> the ATK of your strongest holder to every enemy (<b>${DETONATE_OFF}×</b> from one off the field), once for each, with no limit a turn.`;   // (4.63) 0.2× off the field   // (3.86) once, the strongest holder; (3.93) no cap
     case 'mindControl': return `While your Discombobulate is up, when one of them is confused into swinging at its own side, you choose the move it uses — one of its own, no words to write — or let it swing as usual.`;
     case 'focusedFury': return `While ${c.w} is on the field, your Counter stacks become <b>Deflect</b> stacks: each turns away <b>${pc(DEFLECT_REDUCTION)}%</b> of an attack. A + or ✦ one's Combo and Enrage come at once, as it turns (the Enrage to the Counter's caster). Stacks that come while ${c.w} is off the field wait as Counter stacks.`;
     case 'deadlyCurse': { const works = m ? bindingWorks(m) : false, P = +(BINDING.pct * 100).toFixed(2), F = Math.round(BINDING.floor * 100);   // (3.86) Binding Curse now (the pill's key kept); (4.48) its guard
@@ -11097,7 +11149,7 @@ function statusTipText(key, st, c, pill){
     case 'metamorph': { const n = m ? metamorphStacks(m) : 0;
       return (m && endureActive(m) ? `${c.W} is holding on: nothing takes it below <b>1 HP</b> this turn or the next (a Curse of theirs ends it). ` : '') +
         `${c.W} deals <b>+${Math.round(n * METAMORPH.per * 100)}%</b> damage for the battle. It grows ${Math.round(METAMORPH.per * 100)}% each turn, on the field or off it, up to +${Math.round(METAMORPH.max * METAMORPH.per * 100)}%` +
-        (m && bedrockReady(m) ? `, and the next blow that would knock it out leaves it on 1 HP with a shield, holding on for that turn and the next (once until the meter fills).` : `. Its last stand is used until the meter fills.`); }
+        (m && bedrockReady(m) ? `, and the next time anything would knock it out (an attack, a burst, a spike, a strike before the turn) it is left on 1 HP with a shield, holding on for that turn and the next (once until the meter fills).` : `. Its last stand is used until the meter fills.`); }
     case 'legacy': { const n = m ? legacyOf(m) : 0;
       return n ? `${c.W}'s ${n === 1 ? 'next attack deals' : `next ${n} attacks each deal`} <b>×${LEGACY_AMP}</b> damage, one charge an attack.` : ''; }
     case 'passive': {

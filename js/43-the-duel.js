@@ -43,10 +43,15 @@ const DUEL = {
    THE PICTURES
    ============================================================ */
 const duelWorld = ()=> $('#walkWorld');
+/* (4.60) the same pictures in his fight (34-nemesis.js): `o` { host, t, px, z } — drawn in `host`, `t` px its unit (a
+   square's worth), at px (`px`) rather than squares, at depth `z` */
+const duelHost = o=> (o && o.host) || duelWorld();
+const duelT = o=> (o && o.t) || WALK_T;
+const duelU = o=> (o && o.px) ? 1 : duelT(o);
 /* his black hole: over his head, red and purple orbs drawn spiralling into it; `scale` its size */
-function stHole(id, x, y, scale){
+function stHole(id, x, y, scale, o){
   duelCss();
-  const world = duelWorld();
+  const world = duelHost(o);
   if(!world) return null;
   let h = document.getElementById(id);
   if(!h){
@@ -57,8 +62,8 @@ function stHole(id, x, y, scale){
     h.innerHTML = `<div class="sh-in"><i class="sh-halo"></i><i class="sh-disc"></i>${orbs}<i class="sh-core"></i></div>`;
     world.appendChild(h);
   }
-  const T = WALK_T;
-  h.style.cssText = `left:${(x * T).toFixed(1)}px;top:${(y * T).toFixed(1)}px;--t:${T}px;--hs:${(scale || 1).toFixed(2)};z-index:${Math.round(12 + y + 3)};`;
+  const T = duelT(o), U = duelU(o);
+  h.style.cssText = `left:${(x * U).toFixed(1)}px;top:${(y * U).toFixed(1)}px;--t:${T}px;--hs:${(scale || 1).toFixed(2)};z-index:${o && o.z != null ? o.z : Math.round(12 + y + 3)};`;
   return h;
 }
 function stHoleSize(id, scale){ const h = document.getElementById(id); if(h) h.style.setProperty('--hs', scale.toFixed(2)); }
@@ -77,11 +82,12 @@ function stHoleAt(actorId){
 /* the Eraser Beam: black, edged in purple and red, from (x0, y0) to (x1, y1) (squares) */
 function stEBeam(x0, y0, x1, y1, o){
   duelCss();
-  const world = duelWorld();
+  const world = duelHost(o);
   if(!world) return null;
   const b = document.createElement('div');
   b.className = 'st-ebeam' + (o && o.big ? ' big' : '');
-  b.style.setProperty('--t', WALK_T + 'px');
+  b.style.setProperty('--t', duelT(o) + 'px');
+  b._u = duelU(o); if(o && o.z != null) b._z = o.z;
   b.innerHTML = '<i class="eb-body"></i><i class="eb-flow"></i><i class="eb-tip"></i>';
   world.appendChild(b);
   stBeamSet(b, x0, y0, x1, y1);
@@ -102,28 +108,116 @@ function stRBeam(x0, y0, x1, y1){
 /* a beam laid from (x0, y0) to (x1, y1): where it starts, how long, which way */
 function stBeamSet(b, x0, y0, x1, y1){
   if(!b) return;
-  const T = WALK_T, len = Math.max(1, Math.hypot(x1 - x0, y1 - y0) * T), ang = Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI;
+  const T = b._u || WALK_T, len = Math.max(1, Math.hypot(x1 - x0, y1 - y0) * T), ang = Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI;
   b.style.left = (x0 * T).toFixed(1) + 'px'; b.style.top = (y0 * T).toFixed(1) + 'px';
   b.style.width = len.toFixed(1) + 'px';
   b.style.transform = `rotate(${ang.toFixed(2)}deg)`;
-  b.style.zIndex = Math.round(60 + Math.max(y0, y1));
+  b.style.zIndex = b._z != null ? b._z : Math.round(60 + Math.max(y0, y1));
 }
 function stBeamOut(b, ms){ if(!b) return; b.classList.add('out'); setTimeout(()=> b.remove(), ms || 320); }
 /* a blast: black at its heart, purple and red round it, sparks — `r` squares across; kind: 'local' (a hit), 'huge' (the
    castle, or Lucesco), 'win' (Lucesco's beam home: red and white over the black) */
-function stBlast(x, y, r, kind){
+function stBlast(x, y, r, kind, o){
   duelCss();
-  const world = duelWorld();
+  const world = duelHost(o);
   if(!world) return null;
   const el = document.createElement('div');
   el.className = 'st-blast ' + (kind || 'local');
-  const n = kind === 'local' ? 14 : 26;
-  el.style.cssText = `left:${(x * WALK_T).toFixed(1)}px;top:${(y * WALK_T).toFixed(1)}px;--t:${WALK_T}px;--r:${r};z-index:${Math.round(70 + y)};`;
-  el.innerHTML = '<i class="bl-flash"></i><i class="bl-core"></i><i class="bl-ring"></i><i class="bl-ring b2"></i>' +
+  const n = kind === 'local' ? 14 : 26, U = duelU(o);
+  el.style.cssText = `left:${(x * U).toFixed(1)}px;top:${(y * U).toFixed(1)}px;--t:${duelT(o)}px;--r:${r};z-index:${o && o.z != null ? o.z : Math.round(70 + y)};`;
+  el.innerHTML = '<i class="bl-flash"></i><i class="bl-core"></i><i class="bl-ring"></i><i class="bl-ring b2"></i>' + (/erase/.test(kind || '') ? '<i class="bl-ring b3"></i>' : '') +
     Array.from({ length:n }, (_, i)=> `<b style="--a:${Math.round(i * 360 / n + Math.random() * 12)}deg;--s:${(0.6 + Math.random() * 0.8).toFixed(2)};--c:${['#ff2a55', '#b45cff', '#14001e', '#ff7aa0'][i % 4]};animation-delay:${Math.round(Math.random() * 120)}ms"></b>`).join('');
   world.appendChild(el);
   setTimeout(()=> el.remove(), (kind === 'local' ? 1000 : 1800));
   return el;
+}
+/* ============================================================
+   (4.61) WHERE THE ERASER BEAM STRIKES. The designer: "Can we make eraser beam do a stronger shake over the duration it
+   hits both in the overworld and in the battle UI, with a glowing pulsing black centre-red-purple as it goes outwards
+   aura, then multiple large black with purple-red blast wave explosions (currently 3, let's make it at least 7 rapid
+   explosions or more of various sizes) and significant shake, over a longer duration to accommodate the explosions?"
+   Where it strikes, while it holds: an aura — black at its heart, red, then purple outwards — pulsing, rings running out
+   of it, and the ground shaking hard; then blasts, eight of them in quick succession round it, of all sizes (the first
+   the biggest), each a black heart and a purple-red blast wave rolling out, each a kick to the shaking; the shaking dying
+   away after the last. The same on the field (squares, the scene's clock) and in his fight (px, real time)
+   ============================================================ */
+const ERASE_HIT = { booms:8, gap:[85, 150], size:[0.55, 1.05], first:1.3, spread:0.6, after:650,
+                    shake:{ base:0.13, pulse:0.07, kick:0.3, fall:170, max:0.62 } };   // the shaking in squares (the field) or units of `t` (his fight)
+function stEraseAura(x, y, r, o){
+  duelCss();
+  const world = duelHost(o);
+  if(!world) return null;
+  const el = document.createElement('div'), U = duelU(o);
+  el.className = 'st-eaura';
+  el._u = U;
+  el.style.cssText = `left:${(x * U).toFixed(1)}px;top:${(y * U).toFixed(1)}px;--t:${duelT(o)}px;--r:${r};z-index:${o && o.z != null ? o.z : Math.round(66 + y)};`;
+  el.innerHTML = '<i class="ea-glow"></i><i class="ea-ring"></i><i class="ea-ring r2"></i><i class="ea-ring r3"></i><i class="ea-core"></i>';
+  world.appendChild(el);
+  return el;
+}
+function stAuraAt(el, x, y){ if(!el) return; const U = el._u || WALK_T; el.style.left = (x * U).toFixed(1) + 'px'; el.style.top = (y * U).toFixed(1) + 'px'; }
+function stAuraOut(el, ms){ if(!el) return; el.classList.add('out'); setTimeout(()=> el.remove(), ms || 420); }
+/* when each blast goes off (ms after the first) */
+function stEraseBoomPlan(n){
+  const t = [];
+  let at = 0;
+  for(let i = 0; i < (n || ERASE_HIT.booms); i++){ t.push(Math.round(at)); at += ERASE_HIT.gap[0] + Math.random() * (ERASE_HIT.gap[1] - ERASE_HIT.gap[0]); }
+  return t;
+}
+/* the blasts round (x, y), `r` their size, on `plan`'s times; `wait` the clock they keep */
+async function stEraseBooms(x, y, r, plan, o, wait, spread){
+  const sp = (spread == null ? ERASE_HIT.spread : spread) * r * ((o && o.px) ? duelT(o) : 1);   // (in px, a unit is `t`)
+  for(let i = 0; i < plan.length; i++){
+    if(i) await wait(plan[i] - plan[i - 1]);
+    const a = Math.random() * Math.PI * 2, d = i ? sp * Math.sqrt(0.15 + 0.85 * Math.random()) : 0;
+    const k = i === 0 ? ERASE_HIT.first : ERASE_HIT.size[0] + Math.random() * (ERASE_HIT.size[1] - ERASE_HIT.size[0]);
+    stBlast(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.8, r * k, 'huge erase', o);
+    try { if(i % 3 === 0) playSfx('core_blast'); else if(i % 3 === 1) playSfx('hit_taken'); } catch(e){}
+    if((i === 0 || i === plan.length - 1) && typeof buzz === 'function') buzz('ultra');
+  }
+}
+/* how hard it all shakes at `ms`: hard while the aura holds (`A` ms), a kick at each blast, dying away by `end` */
+function stEraseAmp(A, plan, end){
+  const S = ERASE_HIT.shake, kicks = plan.map(t=> A + t), last = kicks.length ? kicks[kicks.length - 1] : A;
+  const calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.35 : 1;   // (asked for less motion: a third of it)
+  return ms=> calm * stEraseAmpRaw(ms);
+  function stEraseAmpRaw(ms){
+    let a = ms < last ? S.base + S.pulse * Math.abs(Math.sin(ms / 55)) : S.base * Math.max(0, 1 - (ms - last) / Math.max(1, end - last));
+    for(const k of kicks) if(ms >= k) a += S.kick * Math.exp(-(ms - k) / S.fall);
+    return Math.min(S.max, a);
+  }
+}
+/* (his fight) the shaking, on the fight's own elements: `amp(ms)` in px, real time */
+function stShakeEls(els, ms, amp){
+  els = (els || []).filter(Boolean);
+  if(!els.length) return new Promise(res=> setTimeout(res, ms));
+  const t0 = performance.now();
+  return new Promise(done=>{
+    const frame = now=>{
+      const e = now - t0;
+      if(e >= ms){ els.forEach(el=> el.style.translate = ''); return done(); }
+      const a = Math.max(0, amp(e)), dx = ((Math.random() * 2 - 1) * a).toFixed(1), dy = ((Math.random() * 2 - 1) * a).toFixed(1);
+      els.forEach(el=> el.style.translate = `${dx}px ${dy}px`);
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  });
+}
+/* the whole of it, at (x, y): the aura for `aura` ms, then `n` blasts of size `boom`, the shaking all through it. On the
+   field (`o` none, or squares): the scene's clock and its shaking. In his fight (`o.px`): real time, `shake` the elements
+   to shake (none: another strike's shaking does it) */
+async function stEraseHit(x, y, opt){
+  const o = opt.o || null, px = !!(o && o.px);
+  const wait = px ? (ms=> new Promise(res=> setTimeout(res, ms))) : sceneWait;
+  const A = opt.aura == null ? 1200 : opt.aura, plan = stEraseBoomPlan(opt.n), end = A + plan[plan.length - 1] + ERASE_HIT.after;
+  const aura = stEraseAura(x, y, opt.r || 2.4, o);
+  const amp = stEraseAmp(A, plan, end);
+  const shaking = px ? (opt.shake ? stShakeEls(opt.shake, end, ms=> amp(ms) * duelT(o)) : wait(end)) : sceneShake(end, amp);
+  await wait(A);
+  if(opt.onBoom) try { opt.onBoom(); } catch(e){}
+  await stEraseBooms(x, y, opt.boom || 2.8, plan, o, wait, opt.spread);
+  stAuraOut(aura, 420);
+  await shaking;
 }
 /* smoke rising off something, for as long as it is there */
 function stSmoke(id, x, y, z){
@@ -395,6 +489,8 @@ function duelCss(){
   @keyframes shHalo{ 0%,100%{ scale:.92; opacity:.85; } 50%{ scale:1.1; opacity:1; } }
   .st-hole.fire .sh-in{ animation:shFire .7s cubic-bezier(.3,0,.7,1) forwards; }
   @keyframes shFire{ 0%{ scale:var(--hs, 1); } 25%{ scale:calc(var(--hs, 1) * 1.45); } 100%{ scale:0; opacity:0; } }
+  .st-hole.implode .sh-in{ animation:shImplode .4s cubic-bezier(.6,0,.9,.4) forwards; }
+  @keyframes shImplode{ 0%{ scale:var(--hs, 1); filter:brightness(1); } 60%{ filter:brightness(1.8); } 100%{ scale:0; opacity:.2; filter:brightness(2.4); } }
   /* the Eraser Beam: black, edged in purple and red, dark energy running down it */
   .st-ebeam{ position:absolute; height:0; transform-origin:0 0; pointer-events:none; --k:1; }
   .st-ebeam i{ position:absolute; left:0; right:0; font-style:normal; }
@@ -446,6 +542,29 @@ function duelCss(){
   .st-blast.win .bl-flash{ background:radial-gradient(circle, #fff 0 14%, rgba(255,220,200,.95) 24%, rgba(255,80,50,.85) 40%, rgba(200,20,40,.45) 56%, rgba(0,0,0,0) 72%); animation-duration:.9s; }
   .st-blast.win .bl-core{ background:radial-gradient(circle, #fff 0 16%, #ffd7c7 26%, #ff5a2a 42%, #b8102a 58%, rgba(40,0,20,.85) 70%, rgba(120,20,200,0) 86%); animation-duration:1.2s; }
   .st-blast.win .bl-ring{ border-color:rgba(255,150,110,.95); box-shadow:0 0 16px 5px rgba(255,80,60,.85), inset 0 0 12px rgba(255,200,160,.7); }
+  /* (4.61) the eraser's aura where it strikes: black at its heart, red, then purple outwards, pulsing; rings running out */
+  .st-eaura{ position:absolute; width:0; height:0; pointer-events:none; animation:eaIn .25s ease-out both; }
+  .st-eaura i{ position:absolute; left:0; top:0; border-radius:50%; translate:-50% -50%; font-style:normal; }
+  .st-eaura .ea-glow{ width:calc(var(--t) * var(--r) * 1.5); height:calc(var(--t) * var(--r) * 1.5);
+    background:radial-gradient(circle, #000 0 17%, #14000c 23%, rgba(205,18,62,.96) 33%, rgba(255,46,92,.82) 43%, rgba(160,44,236,.62) 57%, rgba(110,22,196,.26) 69%, rgba(80,0,140,0) 79%);
+    animation:eaPulse .3s ease-in-out infinite alternate; }
+  .st-eaura .ea-core{ width:calc(var(--t) * var(--r) * .3); height:calc(var(--t) * var(--r) * .3);
+    background:radial-gradient(circle, #000 0 62%, #2a0010 78%, rgba(255,40,90,.95) 91%, rgba(255,40,90,0));
+    box-shadow:0 0 calc(var(--t) * .3) calc(var(--t) * .08) rgba(255,40,90,.85), 0 0 calc(var(--t) * .7) calc(var(--t) * .2) rgba(150,40,230,.7); animation:eaCore .15s ease-in-out infinite alternate; }
+  .st-eaura .ea-ring{ width:calc(var(--t) * var(--r) * .36); height:calc(var(--t) * var(--r) * .36); box-sizing:border-box;
+    border:calc(var(--t) * .07) solid rgba(255,42,85,.92); box-shadow:0 0 calc(var(--t) * .22) rgba(160,40,240,.9), inset 0 0 calc(var(--t) * .15) rgba(255,42,85,.8);
+    animation:eaRing .6s cubic-bezier(.2,.6,.4,1) infinite; }
+  .st-eaura .ea-ring.r2{ animation-delay:-.2s; border-color:rgba(176,64,255,.92); } .st-eaura .ea-ring.r3{ animation-delay:-.4s; border-color:rgba(20,0,26,.9); }
+  .st-eaura.out{ opacity:0; scale:1.35; transition:opacity .38s ease, scale .38s ease; }
+  @keyframes eaIn{ from{ opacity:0; scale:.3; } to{ opacity:1; scale:1; } }
+  @keyframes eaPulse{ from{ scale:.86; opacity:.84; } to{ scale:1.16; opacity:1; } }
+  @keyframes eaCore{ from{ scale:.9; } to{ scale:1.1; } }
+  @keyframes eaRing{ 0%{ scale:.4; opacity:1; } 100%{ scale:3.3; opacity:0; } }
+  /* its blasts: a third ring, the blast wave — black, edged in purple and red, rolling out */
+  .st-blast .bl-ring.b3{ box-sizing:border-box; border:calc(var(--t) * .17) solid rgba(10,0,16,.9);
+    box-shadow:0 0 0 calc(var(--t) * .05) rgba(255,50,110,.92), 0 0 calc(var(--t) * .5) calc(var(--t) * .12) rgba(170,40,255,.8), inset 0 0 calc(var(--t) * .3) rgba(255,40,90,.75);
+    animation:blWave .8s cubic-bezier(.15,.7,.35,1) both; }
+  @keyframes blWave{ 0%{ scale:.15; opacity:1; } 70%{ opacity:.85; } 100%{ scale:3.9; opacity:0; } }
   @keyframes blFlash{ 0%{ scale:.2; opacity:0; } 15%{ scale:1; opacity:1; } 100%{ scale:1.3; opacity:0; } }
   @keyframes blCore{ 0%{ scale:.1; opacity:1; } 25%{ scale:1; opacity:1; } 50%{ opacity:.8; } 100%{ scale:1.4; opacity:0; } }
   @keyframes blRing{ 0%{ scale:.2; opacity:1; } 100%{ scale:3.4; opacity:0; } }
@@ -509,6 +628,7 @@ function duelCss(){
   @keyframes duelGlow{ from{ filter:blur(calc(var(--dpx, 160px) * .04)) brightness(1.1); scale:1.02; } to{ filter:blur(calc(var(--dpx, 160px) * .075)) brightness(1.7); scale:1.14; } }
   @media (prefers-reduced-motion: reduce){
     .st-hole .sh-disc, .st-hole b, .st-ebeam .eb-flow, .st-meet b, .st-smoke i, .st-aura i, .st-hand .sh-fin, .st-tap-hint, .walk-you.st-pant .jg-ride-arc{ animation-duration:3s; }
+    .st-eaura .ea-glow, .st-eaura .ea-core, .st-eaura .ea-ring{ animation-duration:2s; }
   }
   `;
   document.head.appendChild(s);

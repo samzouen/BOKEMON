@@ -785,20 +785,19 @@ async function stEraserKing(S){
   await look;
   /* the dome in its way: shattered */
   if(S.dome){ stShatter(S.dome); S.dome = null; S.shattered = (S.shattered || 0) + 1; try { playSfx('stone_high'); } catch(e){} }
-  /* held on him: he shakes in it */
+  /* held on him: he shakes in it — (4.61) harder, and longer, the eraser's aura pulsing on him */
   stKingSpent(S, false);
   k.el.classList.add('st-erased');
-  const sparks = stClashEl(h.x, h.y); if(sparks) sparks.classList.add('dark');
-  await sceneShake(1500, ms=> 0.07 + 0.05 * Math.abs(Math.sin(ms / 70)));
-  /* flung back against the palace wall, the beam after him all the way */
-  if(sparks) sparks.remove();
-  await stThrowKing(beam, H, ST.kingWall, 360);
-  /* the wall: a black and purple-red flash, there, and the shadow-steed gone to smoke */
+  const aura = stEraseAura(h.x, h.y, 2.4);
+  await sceneShake(1800, ms=> ERASE_HIT.shake.base + 0.02 + ERASE_HIT.shake.pulse * Math.abs(Math.sin(ms / 55)));
+  /* flung back against the palace wall, the beam and its aura after him all the way */
+  await stThrowKing(beam, H, ST.kingWall, 360, aura);
+  /* the wall: (4.61) the blasts, eight of them, the biggest first — the shadow-steed gone to smoke at it */
   const ke = document.getElementById('sa-king'), o = ke ? Object.assign({}, ke._o) : { x:30.35, y:18.0, w:2.3, h:2.3 };
-  stBlast(o.x + o.w / 2, o.y + o.h * 0.55, 3.2, 'local');
-  try { playSfx('core_blast'); } catch(e){}
-  sceneShake(700, ms=> 0.18 * (1 - ms / 700));
-  stBeamOut(beam);
+  const at = { x:o.x + o.w / 2, y:o.y + o.h * 0.55 }, plan = stEraseBoomPlan(8), end = plan[plan.length - 1] + ERASE_HIT.after;
+  stAuraAt(aura, at.x, at.y);
+  const shaking = sceneShake(end, stEraseAmp(0, plan, end));
+  const booms = stEraseBooms(at.x, at.y, 3, plan, null, sceneWait, 0.55);
   if(ke){ ke.classList.remove('st-erased', 'st-cast'); ke.classList.add('st-steed-gone'); setTimeout(()=> ke.remove(), 1000 * Math.max(0.2, SCENE_SPEED)); ke.id = 'sa-kingSteed'; }
   /* the King himself, down on the stones where he fell: dark, smoke rising off him */
   const fx = Math.round(o.x + o.w / 2 - 0.5), fy = Math.round(o.y + o.h - 1);
@@ -806,12 +805,16 @@ async function stEraserKing(S){
   const kd = document.getElementById('sa-king'); if(kd) kd.classList.add('inv-hurt', 'st-burnt');
   stSmoke('stKingSmoke', fx + 0.5, fy + 0.55, 12 + fy);
   S.kingDown = true;
+  await booms;
+  stAuraOut(aura);
+  stBeamOut(beam);
+  await shaking;
   /* the aliens: at it again */
   stSurge(S);
-  await sceneWait(900);
+  await sceneWait(700);
 }
 /* the King in the beam's grip, thrown back to `to` (his feet) in ms: fast, then slammed to a stop — its end after him */
-function stThrowKing(beam, H, to, ms){
+function stThrowKing(beam, H, to, ms, aura){
   const ke = document.getElementById('sa-king');
   if(!ke) return Promise.resolve();
   const o = ke._o, x0 = o.x, y0 = o.y, x1 = to.x + 0.5 - o.w / 2, y1 = to.y + 1 - o.h;
@@ -823,6 +826,7 @@ function stThrowKing(beam, H, to, ms){
       const x = x0 + (x1 - x0) * e, y = y0 + (y1 - y0) * e;
       ke.style.left = (x * WALK_T) + 'px'; ke.style.top = (y * WALK_T) + 'px';
       if(beam) stBeamSet(beam, H.x, H.y, x + o.w / 2, y + o.h * 0.45);
+      if(aura) stAuraAt(aura, x + o.w / 2, y + o.h * 0.45);
       if(t < 1) requestAnimationFrame(frame);
       else { o.x = x1; o.y = y1; done(); }
     };
@@ -919,14 +923,10 @@ async function stChargeLost(S){
   stHoleGone('stHole', 900);
   const look = sceneLook(ST.wideCam, { ms:320 });
   const b = stEBeam(H.x, H.y, aim.x, aim.y, { big:true });
-  sceneShake(1500, ms=> 0.1 + 0.14 * Math.min(1, ms / 600));
+  /* (4.61) it holds on the castle, its aura pulsing there, all of it shaking; then nine blasts across the palace front */
+  const hit = stEraseHit(aim.x, aim.y, { r:4.8, boom:5.4, n:9, aura:1300, spread:0.8 });
   await look;
-  await sceneWait(800);
-  stBlast(aim.x, aim.y, 8, 'huge');
-  S.timers.push(setTimeout(()=> stBlast(aim.x - 2.6, aim.y + 0.9, 3.8, 'huge'), 180 * Math.max(0.2, SCENE_SPEED)));
-  S.timers.push(setTimeout(()=> stBlast(aim.x + 2.7, aim.y + 0.6, 3.8, 'huge'), 340 * Math.max(0.2, SCENE_SPEED)));
-  try { playSfx('core_blast'); } catch(e){}
-  await sceneShake(1100, ms=> 0.32 * (1 - ms / 1100));
+  await hit;
   stBeamOut(b);
 }
 /* the deadlock lost: his beam home, on Lucesco — a black blast */
@@ -936,13 +936,14 @@ async function stClashLost(S){
     stBeamSet(D.wb, D.H.x, D.H.y, D.E.x, D.E.y);
     stBeamOut(D.lb, 200);
     if(D.cl) D.cl.remove();
-    stBlast(D.E.x, D.E.y + 0.3, 5.5, 'huge');
   }
   try { playSfx('core_blast'); } catch(e){}
   if(typeof buzz === 'function') buzz('ultra');
   stChargeOff();
   const eyes = $('#walkYou .jg-eyes'); if(eyes) eyes.classList.remove('on', 'st-hold');
-  await sceneShake(1200, ms=> 0.32 * (1 - ms / 1200));
+  /* (4.61) its aura on him, shaking; then eight blasts round him */
+  if(D) await stEraseHit(D.E.x, D.E.y + 0.3, { r:2.6, boom:3.4, n:8, aura:1000, spread:0.6 });
+  else await sceneShake(1200, ms=> 0.32 * (1 - ms / 1200));
   if(D) stBeamOut(D.wb);
 }
 /* "fade to black which holds 3 seconds. Text appears, 'Game over. Try again.' Then, reset to wadjet charging his eraser

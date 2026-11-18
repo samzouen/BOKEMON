@@ -111,7 +111,7 @@ async function invJgScene(fn, o){
     ui.sceneRunning = false; ui.unBusy = false; ui.invSceneKey = null; ui.invClimax = false;
     document.body.classList.remove('inv-scene', 'inv-lion-off');
     if(typeof jgHold === 'function') jgHold(false);
-    invAfoot(false);
+    if(!ui.jgAfootHold) invAfoot(false);                              // (4.60: still on foot into Wadjet's fight, 42-the-hunt.js)
     walkState().busy = false;
     if(ui.screen && DECKS[ui.screen]) refreshWalk();
   }
@@ -151,8 +151,8 @@ async function invJgRun(path, ahead, ms, lionPath){
   if(!p || !me || !world || !path || !path.length) return;
   const t = Math.max(1, Math.round(ms * SCENE_SPEED));
   me.style.transition = `transform ${t}ms linear`; world.style.transition = `transform ${t}ms linear`;
-  const lp = lionPath || path;
-  const lionTo = i=>{ const q = lp[Math.min(lp.length - 1, i)], el = document.getElementById('sa-lion'); if(!q || !el) return;
+  const lp = lionPath === false ? null : (lionPath || path);          // (4.60: false — he isn't with you; leave him be)
+  const lionTo = i=>{ if(!lp) return; const q = lp[Math.min(lp.length - 1, i)], el = document.getElementById('sa-lion'); if(!q || !el) return;
     const s = el._o.w, nx = q.x + 0.5 - s / 2, ny = q.y + 1 - s;
     if(Math.abs(nx - el._o.x) > 0.05) actorFace(el, nx > el._o.x);
     el.style.transition = `left ${t}ms linear, top ${t}ms linear`; el._o.x = nx; el._o.y = ny;
@@ -491,12 +491,12 @@ async function invStrikeRun(){
   /* the laser: through the King's back */
   try { playSfx('core_blast'); } catch(e){}
   if(typeof buzz === 'function') buzz('ultra');
-  { const H = stHoleAt('wadjet'); invEraserBeam(H.x, H.y, F.king.x + 0.5, F.king.y + 0.15, 1100); }
-  sceneShake(800, ms=> 0.1 * (1 - ms / 800));
+  const hit = (()=>{ const H = stHoleAt('wadjet'); return invEraserBeam(H.x, H.y, F.king.x + 0.5, F.king.y + 0.15, 1100); })();
   invEraserFlash(900);
   await sceneWait(500);
   invEraserCharge('wadjet', false);
   if(ke){ sceneActor('king', { faint:1 }); ke.classList.add('inv-hurt'); }
+  await hit;
   await invHopTo('prin', F.prin.x + 0.6, F.prin.y - 0.6, 0.4, 350);
   await L([`The black beam strikes the King full in the back. He falls without a sound.`,
            ['princess', `<b>"FATHER!"</b>`],
@@ -557,11 +557,12 @@ async function invStrikeRun(){
   ui.sceneRunning = false;
   invWadjetBattle();
 }
-/* (4.59) his Eraser Beam, seen: black, edged in purple and red, from (x0, y0) to (x1, y1) in squares, for ms */
+/* (4.59) his Eraser Beam, seen: black, edged in purple and red, from (x0, y0) to (x1, y1) in squares — (4.61) its aura on
+   what it strikes for ms, then eight blasts round it, all of it shaking (43-the-duel.js's stEraseHit); done when they are */
 function invEraserBeam(x0, y0, x1, y1, ms){
-  if(typeof stEBeam !== 'function') return;
+  if(typeof stEBeam !== 'function') return Promise.resolve();
   const b = stEBeam(x0, y0, x1, y1, {});
-  setTimeout(()=> stBeamOut(b), ms * SCENE_SPEED);
+  return stEraseHit(x1, y1, { r:2.2, boom:2.8, n:8, aura:ms, spread:0.6 }).then(()=> stBeamOut(b));
 }
 
 /* ============================================================

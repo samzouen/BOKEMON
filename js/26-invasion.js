@@ -2447,15 +2447,18 @@ function invSmokeEl(world, x, y, i){
   world.appendChild(el);
   return el;
 }
-/* (4.59) the designer: "Make the rift larger and with cycling colours on its glowing border. Put a moving purple galaxy
-   background behind it, just like Lucesco's rift ambush silhouette." The crack a third wider; through it, the stars of
-   a purple galaxy drifting by (as his starry silhouette's, 20-jungle.js); round it, a haze of the same; its edge's glow
-   going round the colours */
-const INV_RIFT_EDGE = 'M50 4 L55 18 L64 24 L57 37 L68 48 L59 58 L70 70 L58 81 L64 95 L54 105 L50 121 L46 105 L36 95 L42 81 L30 70 L41 58 L32 48 L43 37 L36 24 L45 18 Z';
-const INV_RIFT_MASK = `url("data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 125' preserveAspectRatio='none'><path d='${INV_RIFT_EDGE}' fill='black'/></svg>`)}")`;
+/* (4.60) the designer: "the rift should have well-delineated borders, red on one edge and blue on the other, and the
+   galaxy background should be a deeper purple and on the inside of the rift, not spilling out. can you make the rift more
+   smooth in shape? a slit with shifting wavy edges?" (4.59's was a jagged crack in a purple haze, its edge going round the
+   colours.) A slit: two smooth edges meeting in points at the top and the bottom, each rippling — waves running along it,
+   the two sides out of step — the left edge red, the right blue, sharp; inside it and only inside it, a deep purple galaxy
+   drifting. Its outline is drawn afresh thirty times a second (invSlitLoop), faster and wilder while it flares */
+const INV_SLIT = { n:24, hw:16.5, amp:3.1, top:4, bot:121, fps:30 };
+const INV_SLIT_CALM = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 function invRiftEl(world, cx, cy, size, id, extra){
   world = world || $('#walkWorld');
   if(!world) return null;
+  invCss();                                                               // (its look, wherever it is drawn first)
   const old = document.getElementById(id);
   if(old) old.remove();
   const T = WALK_T, w = size * T, h = size * 1.25 * T;
@@ -2463,17 +2466,71 @@ function invRiftEl(world, cx, cy, size, id, extra){
   el.className = 'inv-rift ' + (extra || '');
   el.id = id;
   el.style.cssText = `left:${cx * T - w / 2}px;top:${cy * T - h / 2}px;width:${w}px;height:${h}px;z-index:${10 + Math.floor(cy)};--t:${T}px;`;   // (4.59) behind whatever stands at its foot
-  el.innerHTML = `<i class="ir-haze"></i>` +
-    `<svg class="ir-back" viewBox="0 0 100 125" preserveAspectRatio="none" aria-hidden="true"><path class="ir-glow" d="M50 -2 C60 16 64 28 72 40 C80 54 70 62 78 74 C86 90 66 102 58 114 C55 120 51 125 50 127 C49 125 45 120 42 114 C34 102 14 90 22 74 C30 62 20 54 28 40 C36 28 40 16 50 -2 Z" fill="#b65cff" opacity=".35"/></svg>` +
-    `<i class="ir-galaxy" style="-webkit-mask-image:${INV_RIFT_MASK};mask-image:${INV_RIFT_MASK}"></i>` +
-    `<svg class="ir-front" viewBox="0 0 100 125" preserveAspectRatio="none" aria-hidden="true"><defs><radialGradient id="irIn" cx=".5" cy=".5" r=".55">` +
-    `<stop offset="0" stop-color="#0a0212" stop-opacity="0"/><stop offset=".6" stop-color="#2a0a46" stop-opacity=".08"/><stop offset=".86" stop-color="#7b2fbf" stop-opacity=".4"/><stop offset="1" stop-color="#d79bff" stop-opacity=".5"/></radialGradient></defs>` +
-    `<path class="ir-edge" d="${INV_RIFT_EDGE}" fill="url(#irIn)"/>` +
-    `<g class="ir-swirl"><path d="M50 63 m-11 0 a11 18 0 1 1 11 18" fill="none" stroke="#d6a3ff" stroke-width="2.4" opacity=".7"/><path d="M50 63 m-5.5 0 a5.5 9 0 1 1 5.5 9" fill="none" stroke="#fbeaff" stroke-width="2" opacity=".75"/></g>` +
-    `<g class="ir-motes"><circle cx="69" cy="34" r="2.2"/><circle cx="30" cy="58" r="1.8"/><circle cx="68" cy="88" r="1.6"/><circle cx="34" cy="96" r="2"/></g>` +
-    `</svg>`;
+  const k = 'rc' + id;
+  /* the stars: two of the same field, one under the other, drifting up through it for ever */
+  let rnd = 7;
+  const r = ()=> (rnd = (rnd * 9301 + 49297) % 233280) / 233280;
+  const field = Array.from({ length:34 }, (_, i)=> [r() * 100, r() * 125, 0.35 + r() * 0.9, i % 5 === 0 ? '#ffd6f4' : i % 3 === 0 ? '#cfe0ff' : '#fff', i % 4 === 0 ? ' class="tw"' : '']);
+  const stars = [0, 125].map(dy=> field.map(([x, y, rr, c, tw])=> `<circle cx="${x.toFixed(1)}" cy="${(y + dy).toFixed(1)}" r="${rr.toFixed(2)}" fill="${c}"${tw}/>`).join('')).join('');
+  el.innerHTML = `<svg viewBox="0 0 100 125" preserveAspectRatio="none" aria-hidden="true"><defs>` +
+    `<clipPath id="${k}C"><path class="rc-out"/></clipPath>` +
+    `<radialGradient id="${k}D" cx=".5" cy=".55" r=".55"><stop offset="0" stop-color="#4c1488"/><stop offset=".5" stop-color="#2a0857"/><stop offset="1" stop-color="#0d0326"/></radialGradient>` +
+    `<radialGradient id="${k}N"><stop offset="0" stop-color="#b44dff" stop-opacity=".6"/><stop offset="1" stop-color="#b44dff" stop-opacity="0"/></radialGradient>` +
+    `<radialGradient id="${k}M"><stop offset="0" stop-color="#ff3d8b" stop-opacity=".32"/><stop offset="1" stop-color="#ff3d8b" stop-opacity="0"/></radialGradient></defs>` +
+    `<g clip-path="url(#${k}C)"><rect width="100" height="125" fill="url(#${k}D)"/>` +
+    `<g class="rc-neb"><ellipse cx="45" cy="46" rx="19" ry="30" fill="url(#${k}N)"/><ellipse cx="57" cy="84" rx="15" ry="25" fill="url(#${k}M)"/><ellipse cx="50" cy="66" rx="9" ry="16" fill="url(#${k}N)"/></g>` +
+    `<g class="rc-stars">${stars}</g><path class="rc-rim"/></g>` +
+    `<path class="rc-glow l"/><path class="rc-glow r"/><path class="rc-edge l"/><path class="rc-edge r"/><path class="rc-hot l"/><path class="rc-hot r"/></svg>`;
   world.appendChild(el);
+  invSlitShape(el, performance.now());
+  invSlitLoop();
   return el;
+}
+/* its two edges at time `t` (seconds): points from the top down; the waves die away into the points */
+function invSlitEdges(t, seed, k){
+  const L = [], R = [], TAU = Math.PI * 2;
+  for(let i = 0; i <= INV_SLIT.n; i++){
+    const u = i / INV_SLIT.n, y = INV_SLIT.top + (INV_SLIT.bot - INV_SLIT.top) * u, s = Math.sin(Math.PI * u);
+    const hw = INV_SLIT.hw * Math.pow(s, 0.78), env = INV_SLIT.amp * (k || 1) * Math.pow(s, 1.3);
+    const wl = env * (0.62 * Math.sin(TAU * (2.1 * u - 0.42 * t) + seed) + 0.38 * Math.sin(TAU * (3.4 * u + 0.27 * t) + 1.7 + seed));
+    const wr = env * (0.62 * Math.sin(TAU * (2.3 * u - 0.37 * t) + 2.4 + seed) + 0.38 * Math.sin(TAU * (3.1 * u + 0.31 * t) + 0.4 + seed));
+    L.push([50 - hw + wl, y]); R.push([50 + hw + wr, y]);
+  }
+  return { L, R };
+}
+/* a smooth curve through points (Catmull-Rom, as Béziers); `head`: start it with a move */
+function invSlitCurve(P, head){
+  const f = p=> p[0].toFixed(1) + ' ' + p[1].toFixed(1);
+  let d = head ? 'M' + f(P[0]) : '';
+  for(let i = 0; i < P.length - 1; i++){
+    const a = P[Math.max(0, i - 1)], b = P[i], c = P[i + 1], e = P[Math.min(P.length - 1, i + 2)];
+    d += 'C' + f([b[0] + (c[0] - a[0]) / 6, b[1] + (c[1] - a[1]) / 6]) + ' ' + f([c[0] - (e[0] - b[0]) / 6, c[1] - (e[1] - b[1]) / 6]) + ' ' + f(c);
+  }
+  return d;
+}
+function invSlitShape(el, now){
+  const R = el._rc || (el._rc = { t:(el.id.length * 1.7) % 9, last:now, seed:(el.id.charCodeAt(el.id.length - 1) || 0) % 7 });
+  const fl = el.classList.contains('inv-rift-flare');
+  const calm = !!(INV_SLIT_CALM && INV_SLIT_CALM.matches);
+  R.t += Math.min(0.1, Math.max(0, now - R.last) / 1000) * (calm ? 0.35 : fl ? 2.4 : 1);
+  R.last = now;
+  const E = invSlitEdges(R.t, R.seed, fl ? 1.4 : 1);                         // (flaring: the waves higher, and quicker)
+  const dl = invSlitCurve(E.L, true), dr = invSlitCurve(E.R, true), out = dl + invSlitCurve(E.R.slice().reverse(), false) + 'Z';
+  if(!R.els) R.els = { out:el.querySelector('.rc-out'), rim:el.querySelector('.rc-rim'), l:el.querySelectorAll('.l'), r:el.querySelectorAll('.r') };
+  R.els.out.setAttribute('d', out); R.els.rim.setAttribute('d', out);
+  R.els.l.forEach(p=> p.setAttribute('d', dl)); R.els.r.forEach(p=> p.setAttribute('d', dr));
+}
+function invSlitLoop(){
+  if(invSlitLoop.on) return;
+  invSlitLoop.on = true;
+  let last = -1e9;
+  const frame = now=>{
+    const els = document.querySelectorAll('.inv-rift');
+    if(!els.length){ invSlitLoop.on = false; return; }
+    if(now - last >= 1000 / INV_SLIT.fps - 1){ last = now; els.forEach(el=>{ try { invSlitShape(el, now); } catch(e){} }); }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
 }
 /* (4.59) the rift at the jungle's north edge: half as big again as it was (2.8) */
 const INV_RIFT_JG_SIZE = 4.2;
@@ -2615,37 +2672,25 @@ function invCss(){
   /* (4.33) "movement and hamburger menu locked out": while a scene of the story plays, nothing to tap but its words */
   body.inv-scene #hamburgerBtn, body.inv-scene #walkSide, body.inv-scene #walkActs, body.inv-scene #walkPath, body.inv-scene #walkSteps{ visibility:hidden !important; pointer-events:none !important; }
   @keyframes invPuff{ 0%{ transform:translate(0,0) scale(.45); opacity:0; } 12%{ opacity:.95; } 100%{ transform:translate(calc(var(--sm) * .9), calc(var(--sm) * -4.2)) scale(2.7); opacity:0; } }
-  .inv-rift{ position:absolute; pointer-events:none; filter:drop-shadow(0 0 10px rgba(190,90,255,.9)); animation:invRiftPulse 1.8s ease-in-out infinite; transition:transform .9s ease, opacity .9s ease; }
-  .inv-rift svg{ width:100%; height:100%; display:block; overflow:visible; }
-  .inv-rift .ir-edge{ stroke:#e6b3ff; stroke-width:2.5; stroke-linejoin:round; }
-  /* (4.59) a purple galaxy through it, drifting; a haze of it round about; the edge's glow going round the colours */
-  .inv-rift .ir-galaxy, .inv-rift .ir-haze{ position:absolute; display:block; pointer-events:none; font-style:normal;
-    background:radial-gradient(1.6px 1.6px at 20% 30%, #fff, rgba(255,255,255,0) 70%), radial-gradient(1.2px 1.2px at 70% 20%, #fff, rgba(255,255,255,0) 70%),
-      radial-gradient(1.8px 1.8px at 45% 65%, #fff, rgba(255,255,255,0) 70%), radial-gradient(1.1px 1.1px at 80% 75%, #dfe8ff, rgba(255,255,255,0) 70%),
-      radial-gradient(1.4px 1.4px at 15% 80%, #fff, rgba(255,255,255,0) 70%), radial-gradient(1.1px 1.1px at 55% 40%, #e6dcff, rgba(255,255,255,0) 70%),
-      radial-gradient(ellipse at 50% 55%, rgba(170,90,255,.55), rgba(90,40,200,0) 60%), linear-gradient(160deg, #1d0f52, #43208a 45%, #140838);
-    background-size:17px 17px, 23px 23px, 29px 29px, 13px 13px, 19px 19px, 11px 11px, 100% 100%, 100% 100%; animation:irDrift 1.4s linear infinite; }
-  .inv-rift .ir-galaxy{ inset:0; -webkit-mask-size:100% 100%; mask-size:100% 100%; -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat; }
-  .inv-rift .ir-haze{ left:-38%; top:-14%; width:176%; height:128%; border-radius:50%; opacity:.55;
-    -webkit-mask-image:radial-gradient(ellipse closest-side, #000 18%, rgba(0,0,0,.5) 55%, transparent 100%); mask-image:radial-gradient(ellipse closest-side, #000 18%, rgba(0,0,0,.5) 55%, transparent 100%);
-    animation:irDrift 2.6s linear infinite reverse, irHaze 3.2s ease-in-out infinite; }
-  .inv-rift svg{ position:absolute; inset:0; }
-  .inv-rift svg.ir-front{ animation:irCycle 4s linear infinite; }
-  .inv-rift .ir-edge{ stroke-width:3; animation:irEdge 4s linear infinite; }
-  @keyframes irDrift{ from{ background-position:0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; } to{ background-position:17px -17px, -23px 23px, 29px 29px, -13px -13px, 19px -19px, 11px 11px, 0 0, 0 0; } }
-  @keyframes irHaze{ 0%,100%{ opacity:.45; scale:.96; } 50%{ opacity:.7; scale:1.05; } }
-  @keyframes irEdge{ 0%{ stroke:#e6b3ff; } 20%{ stroke:#8fd8ff; } 40%{ stroke:#9dffcf; } 60%{ stroke:#ffe08a; } 80%{ stroke:#ff9ad5; } 100%{ stroke:#e6b3ff; } }
-  @keyframes irCycle{ 0%{ filter:drop-shadow(0 0 6px rgba(200,110,255,.95)); } 20%{ filter:drop-shadow(0 0 7px rgba(90,190,255,.95)); } 40%{ filter:drop-shadow(0 0 7px rgba(90,255,170,.9)); }
-    60%{ filter:drop-shadow(0 0 7px rgba(255,210,90,.95)); } 80%{ filter:drop-shadow(0 0 7px rgba(255,100,200,.95)); } 100%{ filter:drop-shadow(0 0 6px rgba(200,110,255,.95)); } }
-  .inv-rift .ir-swirl{ transform-origin:50px 63px; animation:invSwirl 2.6s linear infinite; }
-  .inv-rift .ir-glow{ animation:invRiftGlow 1.8s ease-in-out infinite; transform-origin:50px 62px; }
-  .inv-rift .ir-motes circle{ fill:#f3d2ff; animation:invMote 2.4s ease-out infinite; }
-  .inv-rift .ir-motes circle:nth-child(2){ animation-delay:-.6s; } .inv-rift .ir-motes circle:nth-child(3){ animation-delay:-1.2s; } .inv-rift .ir-motes circle:nth-child(4){ animation-delay:-1.8s; }
-  @keyframes invRiftGlow{ 0%,100%{ transform:scale(1); opacity:.3; } 50%{ transform:scale(1.12, 1.05); opacity:.55; } }
-  @keyframes invMote{ 0%{ transform:translate(0,0); opacity:0; } 20%{ opacity:1; } 100%{ transform:translate(0,-14px); opacity:0; } }
+  /* (4.60) the rift: a slit, red down its left edge and blue down its right, sharp; a deep purple galaxy inside it and
+     nowhere else (its outline drawn by invSlitShape) */
+  .inv-rift{ position:absolute; pointer-events:none; transition:transform .9s ease, opacity .9s ease; }
+  .inv-rift svg{ position:absolute; inset:0; width:100%; height:100%; display:block; overflow:visible; }
+  .inv-rift path{ fill:none; stroke-linecap:round; stroke-linejoin:round; }
+  .inv-rift .rc-rim{ stroke:#05010f; stroke-opacity:.6; stroke-width:7; }
+  .inv-rift .rc-glow{ stroke-width:6.5; opacity:.42; animation:rcGlow 1.6s ease-in-out infinite alternate; }
+  .inv-rift .rc-glow.l{ stroke:#ff2b3a; } .inv-rift .rc-glow.r{ stroke:#2b86ff; animation-delay:-.8s; }
+  .inv-rift .rc-edge{ stroke-width:2.4; } .inv-rift .rc-edge.l{ stroke:#ff3d3d; } .inv-rift .rc-edge.r{ stroke:#3d9bff; }
+  .inv-rift .rc-hot{ stroke-width:.8; opacity:.9; } .inv-rift .rc-hot.l{ stroke:#ffe1e1; } .inv-rift .rc-hot.r{ stroke:#e1f0ff; }
+  .inv-rift .rc-stars{ animation:rcDrift 14s linear infinite; }
+  .inv-rift .rc-stars .tw{ animation:rcTwinkle 1.7s ease-in-out infinite alternate; }
+  .inv-rift .rc-stars .tw:nth-child(3n){ animation-delay:-.6s; } .inv-rift .rc-stars .tw:nth-child(3n+1){ animation-delay:-1.1s; }
+  .inv-rift .rc-neb{ transform-origin:50px 64px; animation:rcNeb 26s linear infinite; }
+  @keyframes rcDrift{ from{ transform:translateY(0); } to{ transform:translateY(-125px); } }
+  @keyframes rcTwinkle{ from{ opacity:.25; } to{ opacity:1; } }
+  @keyframes rcNeb{ to{ transform:rotate(360deg); } }
+  @keyframes rcGlow{ from{ opacity:.3; } to{ opacity:.55; } }
   .inv-rift.small{ transform:scale(.45); }
-  @keyframes invRiftPulse{ 0%,100%{ filter:drop-shadow(0 0 7px rgba(190,90,255,.75)); } 50%{ filter:drop-shadow(0 0 16px rgba(220,130,255,1)); } }
-  @keyframes invSwirl{ to{ transform:rotate(360deg); } }
   .inv-stake{ position:absolute; pointer-events:none; }
   .inv-stake svg{ width:100%; height:100%; display:block; }
   .inv-penned{ position:absolute; pointer-events:none; animation:invPush 1.1s ease-in-out infinite; filter:drop-shadow(0 0 5px rgba(220,30,40,.8)); }
@@ -2667,7 +2712,7 @@ function invCss(){
   .inv-glitter .ig-spark{ position:absolute; width:var(--sz); height:var(--sz); background:#ffe0f2;
     clip-path:polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); filter:drop-shadow(0 0 4px #ff8fcf); animation:igSpark 1.6s ease-in-out both; }
   @keyframes igSpark{ 0%{ opacity:0; transform:scale(.2) rotate(0deg); } 40%{ opacity:1; transform:scale(1.25) rotate(45deg); } 100%{ opacity:0; transform:translateY(-34px) scale(.4) rotate(90deg); } }
-  @media (prefers-reduced-motion: reduce){ .inv-glitter .ig-spark, .inv-smoke i, .inv-ufo-body, .inv-rift .ir-swirl, .inv-penned, .inv-rift .ir-galaxy, .inv-rift .ir-haze, .inv-rift svg, .inv-rift .ir-edge{ animation-duration:6s; } }
+  @media (prefers-reduced-motion: reduce){ .inv-glitter .ig-spark, .inv-smoke i, .inv-ufo-body, .inv-penned, .inv-rift .rc-glow, .inv-rift .rc-stars .tw{ animation-duration:6s; } .inv-rift .rc-stars, .inv-rift .rc-neb{ animation-duration:40s; } }
   /* (4.31) the tribes' march seen from the palace: you are not on the grounds */
   body.inv-away #walkYou, body.inv-away #caLion, body.inv-away #walkGhost{ visibility:hidden !important; }
   /* the tribes' ancestors, holding the market */
@@ -2691,7 +2736,8 @@ function invCss(){
   .scene-actor.inv-band-actor img{ filter:drop-shadow(0 0 6px rgba(220,30,40,.85)); }
   /* the crack flaring as they come through it */
   .inv-rift.inv-rift-flare{ animation:invRiftFlare .5s ease-in-out infinite alternate; }
-  @keyframes invRiftFlare{ from{ filter:drop-shadow(0 0 14px rgba(220,130,255,1)) brightness(1.2); } to{ filter:drop-shadow(0 0 30px rgba(255,190,255,1)) brightness(1.6); } }
+  .inv-rift.inv-rift-flare .rc-glow{ stroke-width:10; opacity:.7; animation:none; }
+  @keyframes invRiftFlare{ from{ filter:brightness(1.1); } to{ filter:brightness(1.55); } }
   @media (prefers-reduced-motion: reduce){ .scene-actor.inv-lunge .sa-in{ animation:none; } }
   `;
   document.head.appendChild(s);

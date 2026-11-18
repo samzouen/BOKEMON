@@ -270,6 +270,10 @@ async function huntRiftRun(){
   await huntCompanions(fell);
   invSay('riftWadjet');
   ui.sceneRunning = false;
+  /* (4.60) the designer: "the player, however, incorrectly gets up on lucesco instead of as just the player sprite.
+     lucesco has been separated by the knockback." On your own feet into his fight — not back on his back as the scene
+     ends (invJgScene) — and he still where the burst threw him */
+  ui.jgAfootHold = true;
   huntWadjetBattle();
 }
 /* the one move he wants (`mv`): only it lit, brighter than bright, a word along the bottom; nothing else answers */
@@ -363,10 +367,15 @@ async function huntLaugh(){
   } finally { shaking = false; }
 }
 /* up from under you, in a black and purple-red blast: you off his back and thrown one way, he the other */
+/* a square near (x, y) that isn't a tree */
+function huntFree(x, y){ for(const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1]]) if(!jgSolidAt(x + dx, y + dy)) return { x:x + dx, y:y + dy }; return { x, y }; }
+/* where the burst throws you, and him; (4.60) where you stand after his fight, and where Lucesco still lies */
+const huntKnockYou = ()=>{ const N = invNorth(); return huntFree(N.x - 3, 6); };
+const huntKnockLion = ()=>{ const N = invNorth(); return huntFree(N.x + 3, 6); };
+const huntAfterYou = ()=>{ const N = invNorth(); return huntFree(N.x - 3, N.stand.y); };
 async function huntBurst(){
   const N = invNorth(), w = walkState(), me = $('#walkYou'), T = WALK_T, c = { x:N.x, y:3 };
-  const near = (x, y)=>{ for(const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1]]) if(!jgSolidAt(x + dx, y + dy)) return { x:x + dx, y:y + dy }; return { x, y }; };
-  const youTo = near(c.x - 3, c.y + 3), lionTo = near(c.x + 3, c.y + 3);
+  const youTo = huntKnockYou(), lionTo = huntKnockLion();
   try { playSfx('core_blast'); playSfx('hit_taken'); } catch(e){}
   if(typeof buzz === 'function') buzz('ultra');
   stBlast(c.x + 0.5, c.y + 0.3, 6, 'huge');
@@ -395,7 +404,8 @@ async function huntBurst(){
   return youTo;
 }
 /* the Monkey King and the Whalelord, at your side: "Get up!" */
-function huntWhaleSprite(){ return typeof whaleName === 'function' && whaleName() === 'Cuain' ? 'whalelord_c' : 'whalelord'; }
+/* (4.60) the designer: "crowned monkey king and whalelord … (they're always crowned at this point in the story)" */
+function huntWhaleSprite(){ return 'whalelord_c'; }
 async function huntCompanions(at){
   invActor('mk', 'monkey_king_c', at.x - 1.2, at.y, 1.7);
   invActor('wl', huntWhaleSprite(), at.x + 1.3, at.y + 0.2, 2.2, { flip:true });
@@ -410,14 +420,16 @@ async function huntCompanions(at){
   await sceneWait(300);
 }
 function huntWadjetBattle(){
-  if(!battleParty().some(m=> m.currentHp > 0)){ toast('Your team needs healing first.'); return go('region'); }
+  if(!battleParty().some(m=> m.currentHp > 0)){ huntAfootDone(); toast('Your team needs healing first.'); return go('region'); }
   nemBeginBattle({ bg:'battle_jungle', onWin:()=> huntWadjetWon(), onLose:()=> huntWadjetLost() });
 }
+/* on his back again from here on (off the jungle, only the flag: the jungle draws you so next time) */
+function huntAfootDone(){ ui.jgAfootHold = false; if(typeof invAfoot === 'function') invAfoot(false); }
 async function huntWadjetWon(){
   const v = invState();
   v.won.wadjet = true; saveProfile();
-  const N = invNorth();
-  invPlaceJungle({ x:N.stand.x, y:N.stand.y + 2 });
+  huntAfootDone();
+  invPlaceJungle(huntAfterYou());
   /* into the dark, and the jungle drawn under it with its scene already set (Wadjet, the rift, the two beside you):
      huntAfterRun lifts it — no bare jungle for a moment first. (If no scene comes, it lifts by itself.) */
   const c = sceneCurtainEl();
@@ -427,6 +439,7 @@ async function huntWadjetWon(){
   setTimeout(()=>{ if(document.getElementById('sceneCurtain') === c && !ui.sceneRunning) invCurtainUp(); }, 4000);
 }
 function huntWadjetLost(){
+  huntAfootDone();
   return new Promise(res=>{
     storyModal(jgMonImg('lucesco_front', 140), 'Lucesco',
       `Wadjet's laughter rings through the mist as your last monster falls. Lucesco snatches you up by the collar and bolts for the trees.<br><br><b>"He can't leave the rift yet — he's holding it open. Heal up, and we'll go straight back for him!"</b>` +
@@ -445,14 +458,20 @@ function huntWadjetLost(){
    ============================================================ */
 async function huntAfterRun(){
   const N = invNorth(), w = walkState(), world = $('#walkWorld');
-  const you = w.at[JG_KEY] || { x:N.stand.x, y:N.stand.y + 2 };
+  /* (4.60) all of it set in the dark (down already, straight out of his fight; after a break, drawn now): you where a
+     push of two squares ends at the trees' edge; Lucesco still lying where the burst threw him */
+  if(!document.getElementById('sceneCurtain')) await sceneCurtain(true, 350);
+  const you = huntAfterYou(), down = huntKnockLion();
+  w.at[JG_KEY] = { x:you.x, y:you.y }; jgState().at = { x:you.x, y:you.y }; refreshWalk();
   stCss(); duelCss();
   invActor('wadjet', WADJET, N.x, 3, 2.2);
   const we = document.getElementById('sa-wadjet'); if(we) we.classList.add('inv-hurt');
   const rift = invRiftEl(world, N.rift.x, N.rift.y + 0.9, INV_RIFT_JG_SIZE, 'invRiftJg', '');
   invActor('mk', 'monkey_king_c', you.x - 1.2, you.y, 1.7);
   invActor('wl', huntWhaleSprite(), you.x + 1.3, you.y + 0.2, 2.2, { flip:true });
-  invActor('lion', 'lucesco', you.x + 3, you.y + 1, 1.45, { flip:true });
+  invActor('lion', 'lucesco', down.x, down.y, 1.45, { flip:true });
+  sceneActor('lion', { faint:-1 });
+  { const le = document.getElementById('sa-lion'); if(le) le.classList.add('inv-hurt'); }
   await invCurtainUp();
   await sceneLook({ x:N.x - 6, y:-0.5, w:13, h:you.y + 6 }, { ms:700 });
   await L([`Wadjet sways at the very edge of the jungle, his light guttering — spent. Behind him the rift tears all the way open with a sound like ripping silk.`,
@@ -470,7 +489,7 @@ async function huntAfterRun(){
   /* the epilogue, as it was */
   await sceneCurtain(true, 700);
   await sceneCurtainText(`Back in the great hall, the princess never once lets go of her father's hand. That evening, the King opens his eyes.`, 2600);
-  ['lion', 'mk', 'wl', 'cm', 'k1', 'k2', 'k3', 'k4'].concat(HUNT_POUR.map(a=> a[0])).forEach(id=> sceneActorGone(id));
+  ['lion', 'mk', 'wl', 'cm'].concat(HUNT_POUR.map(a=> a[0]), HUNT_ARMY.map((_, i)=> 'hs' + i)).forEach(id=> sceneActorGone(id));
   const w2 = walkState();
   w2.at = w2.at || {}; w2.at.r6_palace = { x:19, y:12 };
   ui.walkFresh = false; caLion.at = null;
@@ -484,10 +503,20 @@ async function huntAfterRun(){
   await invFinaleNem();
 }
 /* his last pulse — blocked: the Monkey King and the Whalelord before you, white shields up, all of you driven back two
-   squares */
+   squares. (4.60) the designer: "have them stop at the edges of the treeline, do not go in. sprites should not cross
+   trees." — each driven back as far as two squares goes before the trees, and no further (not even into a gap between
+   two of them) */
+function huntClearAt(x, y){ return !jgSolidAt(x, y) && !(jgSolidAt(x - 1, y) && jgSolidAt(x + 1, y)); }
+/* how many of `n` squares back (down) an actor at (x, y) of size `s` can go: every square its feet span, clear */
+function huntRoom(x, y, s, n){
+  const c = x + 0.5, a = Math.floor(c - s * 0.25), b = Math.floor(c + s * 0.25 - 1e-3), row = Math.floor(y + 1 - 1e-3);
+  for(let k = 1; k <= n; k++) for(let cx = a; cx <= b; cx++) if(!huntClearAt(cx, row + k)) return k - 1;
+  return n;
+}
 async function huntShieldBlock(you){
   const we = document.getElementById('sa-wadjet'), wo = we && we._o;
-  await Promise.all([invActorTo('mk', you.x - 0.7, you.y - 1, 260), invActorTo('wl', you.x + 0.8, you.y - 0.8, 260)]);
+  const mk0 = { x:you.x - 0.7, y:you.y - 1 }, wl0 = { x:you.x + 0.8, y:you.y - 0.8 };
+  await Promise.all([invActorTo('mk', mk0.x, mk0.y, 260), invActorTo('wl', wl0.x, wl0.y, 260)]);
   const sh = ['mk', 'wl'].map(id=> huntShield(id));
   try { playSfx('stone_high'); } catch(e){}
   await sceneWait(350);
@@ -497,10 +526,11 @@ async function huntShieldBlock(you){
   sh.forEach(e=> e && e.classList.add('hit'));
   sceneShake(900, ms=> 0.22 * (1 - ms / 900));
   await sceneWait(250);
-  /* driven back */
-  const back = { x:you.x, y:you.y + 2 };
-  await Promise.all([invActorTo('mk', you.x - 0.7, you.y + 1, 520), invActorTo('wl', you.x + 0.8, you.y + 1.2, 520),
-                     invJgRun([{ x:back.x, y:back.y - 1 }, back], 0, 260), huntShieldsFollow(sh, 520)]);
+  /* driven back — to the trees' edge at most */
+  const rk = huntRoom(mk0.x, mk0.y, 1.7, 2), rw = huntRoom(wl0.x, wl0.y, 2.2, 2), ry = huntRoom(you.x, you.y, 1, 2);
+  const path = [{ x:you.x, y:you.y + 1 }, { x:you.x, y:you.y + 2 }].slice(0, ry);
+  await Promise.all([invActorTo('mk', mk0.x, mk0.y + rk, 520), invActorTo('wl', wl0.x, wl0.y + rw, 520),
+                     path.length ? invJgRun(path, 0, 520 / path.length, false) : sceneWait(520), huntShieldsFollow(sh, 520)]);
   await sceneWait(300);
   sh.forEach(e=> e && e.classList.add('out'));
   setTimeout(()=> sh.forEach(e=> e && e.remove()), 600);
@@ -547,24 +577,50 @@ const HUNT_POUR = [['ra0', JG_COMMANDER, 2.0, 0, 3], ['ra1', JG_CAPTAIN, 1.7, -2
                    ['ra3', JG_ALIEN_IDS[2], 1.45, -3, 4], ['ra4', JG_ALIEN_IDS[5], 1.45, 3, 4],
                    ['rb0', JG_CAPTAIN, 1.7, -4, 2], ['rb1', JG_CAPTAIN, 1.7, 4, 2], ['rb2', JG_ALIEN_IDS[1], 1.45, -1, 4],
                    ['rb3', JG_ALIEN_IDS[4], 1.45, 1, 4], ['rb4', JG_ALIEN_IDS[7], 1.45, -5, 4], ['rb5', JG_ALIEN_IDS[9], 1.45, 5, 4]];
+/* (4.60) the designer: "When lucesco pounces in, he does so alone from where he had been knocked back to. let him travel
+   all the way into the rift, disappear for a while, before getting knocked back out by the aliens." Up from where the
+   burst threw him, alone, in one bound into the rift's mouth, and swallowed by it; for a while nothing but the rift
+   churning, a roar, blows from inside; then flung back out, tumbling, to land between you and them — and after him, the
+   first of them */
 async function huntLionThrown(rift){
-  const N = invNorth(), le = document.getElementById('sa-lion');
-  const home = le ? { x:Math.round(le._o.x + le._o.w / 2 - 0.5), y:Math.round(le._o.y + le._o.h - 1) } : { x:N.x + 2, y:8 };
+  const N = invNorth(), mouth = { x:N.rift.x - 0.5, y:N.rift.y + 0.6 };
+  const le = document.getElementById('sa-lion');
+  if(le) le.classList.remove('inv-hurt');
+  sceneActor('lion', { faint:0 });
   try { playSfx('roar'); } catch(e){}
-  await invHopTo('lion', N.x, 4, 1.4, 480);
+  await sceneWait(220);
+  await invHopTo('lion', mouth.x, mouth.y, 1.8, 560);
   if(rift) rift.classList.add('inv-rift-flare');
   try { playSfx('ambush'); } catch(e){}
-  /* out of it the other way: the first of them */
+  const l2 = document.getElementById('sa-lion');
+  if(l2){ l2.style.transition = `transform ${300 * SCENE_SPEED}ms ease-in, opacity ${300 * SCENE_SPEED}ms ease-in`; void l2.offsetWidth; l2.style.transform = 'scale(.12)'; l2.style.opacity = '0'; }
+  await sceneWait(340);
+  if(rift) rift.classList.remove('inv-rift-flare');
+  /* gone; the rift churning, the sounds of it from inside */
+  let churning = true;
+  (async ()=>{ while(churning && ui.screen === JG_KEY){ await sceneShake(500, ms=> 0.025 + 0.02 * Math.sin(ms / 40)); } })();
+  try {
+    await sceneWait(650); try { playSfx('hit_taken'); } catch(e){}
+    if(rift) rift.classList.add('inv-rift-flare');
+    await sceneWait(600); try { playSfx('roar'); } catch(e){}
+    await sceneWait(650); try { playSfx('hit_taken'); } catch(e){}
+  } finally { churning = false; }
+  /* flung back out — tumbling — and after him, the first of them */
+  const land = huntFree(N.x - 1, 5);
+  if(l2){ l2.style.transition = `transform ${160 * SCENE_SPEED}ms ease-out, opacity ${160 * SCENE_SPEED}ms ease-out`; void l2.offsetWidth; l2.style.transform = ''; l2.style.opacity = '1'; }
+  sceneShake(700, ms=> 0.15 * (1 - ms / 700));
+  try { playSfx('core_blast'); playSfx('hit_taken'); } catch(e){}
   const first = HUNT_POUR.slice(0, 5);
-  first.forEach(([id, sp, size])=>{ invActor(id, sp, N.rift.x - 0.5, N.rift.y + 0.6, size); const el = document.getElementById('sa-' + id); if(el){ el.style.opacity = '0'; el.classList.add('inv-band-actor'); } });
-  sceneShake(600, ms=> 0.12 * (1 - ms / 600));
-  await Promise.all([invHopTo('lion', home.x, home.y, 1.2, 520)].concat(first.map(([id, , , dx, y], i)=> sceneWait(i * 110).then(()=> Promise.all([invActorIn(id, 220), invHopTo(id, N.x + dx, y, 0.9, 520)])))));
+  first.forEach(([id, sp, size])=>{ invActor(id, sp, mouth.x, mouth.y, size); const el = document.getElementById('sa-' + id); if(el){ el.style.opacity = '0'; el.classList.add('inv-band-actor'); } });
+  const tumble = l2 && typeof l2.animate === 'function' ? l2.animate([{ rotate:'0deg' }, { rotate:'-720deg' }], { duration:600 * SCENE_SPEED, easing:'ease-out' }) : null;
+  await Promise.all([invHopTo('lion', land.x, land.y, 1.4, 600)].concat(first.map(([id, , , dx, y], i)=> sceneWait(200 + i * 110).then(()=> Promise.all([invActorIn(id, 220), invHopTo(id, N.x + dx, y, 0.9, 520)])))));
+  if(tumble) tumble.cancel();
   sceneActor('lion', { faint:-1 });
   if(document.getElementById('sa-lion')) document.getElementById('sa-lion').classList.add('inv-hurt');
   if(rift) rift.classList.remove('inv-rift-flare');
   await L([`The rift flares — and Lucesco is flung back out of it, tumbling over and over. Behind him, aliens come leaping out: captains, soldiers, and at their head a hulking commander.`]);
   sceneActor('lion', { faint:0 });
-  const l2 = document.getElementById('sa-lion'); if(l2) l2.classList.remove('inv-hurt');
+  const l3 = document.getElementById('sa-lion'); if(l3) l3.classList.remove('inv-hurt');
 }
 /* more and more */
 async function huntPour(rift){
@@ -575,24 +631,65 @@ async function huntPour(rift){
   await Promise.all(more.map(([id, , , dx, y], i)=> sceneWait(i * 120).then(()=> Promise.all([invActorIn(id, 220), invHopTo(id, N.x + dx, y, 0.9, 500)]))));
   if(rift) rift.classList.remove('inv-rift-flare');
 }
-/* the Commander's soldiers, up out of the jungle behind you: at them — and his word to Lucesco */
+/* the Commander's soldiers, up out of the jungle behind you: at them — and his word to Lucesco.
+   (4.60) the designer: "the number of aliens is correct, but the number of soldiers must be commensurate too. also,
+   soldiers should file in from the different paths, obeying the impassable trees. please have 1.5x the number of
+   soldiers, approximately, to make defeating the aliens convincing." Eleven aliens: sixteen soldiers and their
+   Commander, in four files up four of the jungle's paths from the south, each its own way round the trees, a square at a
+   time; each to one of them — the commander and the captains two apiece */
+const HUNT_FILES = [[-7, 17], [-1, 17], [3, 17], [9, 17]];                 // where each file comes up from: (dx from his rift, y)
+const HUNT_ARMY = Array.from({ length:16 }, (_, i)=> ['chestnut_knight2', 'duck_knight2', 'bug_knight1'][i % 3]);
+const HUNT_MARCH = { step:150, gap:1.25 };                                 // ms a square; a file's next a square and a bit behind
+/* an actor walked along `path`, a square at a time */
+async function huntMarch(id, path, ms){
+  for(const q of path || []){
+    if(ui.screen !== JG_KEY) throw INV_ABORT;
+    invActorStep(id, q, ms);
+    await sceneWait(ms);
+  }
+}
+/* who goes at which of them, and where each stands to do it: the squares round each alien, none of them a tree, none
+   taken (by an alien, by you and yours, by another soldier) */
+function huntArmyPlan(taken){
+  const N = invNorth(), aliens = HUNT_POUR.map(([id, , , dx, y])=> ({ id, x:N.x + dx, y }));
+  aliens.forEach(a=> taken.add(a.x + ',' + a.y));
+  const order = aliens.concat(aliens.filter(a=> /^(ra0|ra1|ra2|rb0|rb1)$/.test(a.id)));
+  return order.slice(0, HUNT_ARMY.length).map(a=>{
+    const at = [[0, 1], [-1, 0], [1, 0], [-1, 1], [1, 1], [0, 2]].map(([dx, dy])=> ({ x:a.x + dx, y:a.y + dy })).find(q=> !jgSolidAt(q.x, q.y) && !taken.has(q.x + ',' + q.y));
+    if(at) taken.add(at.x + ',' + at.y);
+    return { alien:a.id, at };
+  });
+}
 async function huntCommander(){
   const N = invNorth(), w = walkState(), you = w.at[JG_KEY] || { x:N.x, y:9 };
-  const kn = [['cm', 'chestnut_knight2_c', 1.6, you.x, you.y + 5], ['k1', 'chestnut_knight2', 1.45, you.x - 2, you.y + 6], ['k2', 'bug_knight1', 1.45, you.x + 2, you.y + 6],
-              ['k3', 'duck_knight2', 1.45, you.x - 1, you.y + 7], ['k4', 'chestnut_knight2', 1.45, you.x + 1, you.y + 7]];
-  kn.forEach(([id, sp, size, x, y])=>{ invActor(id, sp, x, y, size); const el = document.getElementById('sa-' + id); if(el) el.style.opacity = '0'; });
-  await sceneLook({ x:N.x - 7, y:-0.5, w:15, h:you.y + 9 }, { ms:700 });
+  /* the squares not to walk through or stand on: you, the two beside you, Lucesco */
+  const taken = new Set([you.x + ',' + you.y]);
+  ['mk', 'wl', 'lion'].forEach(id=>{ const e = document.getElementById('sa-' + id), o = e && e._o; if(!o) return;
+    const row = Math.floor(o.y + o.h - 1e-3), c = o.x + o.w / 2; for(let x = Math.floor(c - o.w * 0.25); x <= Math.floor(c + o.w * 0.25 - 1e-3); x++) taken.add(x + ',' + row); });
+  const cmAt = huntFree(you.x + 2, you.y);
+  taken.add(cmAt.x + ',' + cmAt.y);
+  const plan = huntArmyPlan(taken);
+  const routeOf = (from, to)=> unPath(from, to, (x, y)=> taken.has(x + ',' + y)) || unPath(from, to);
+  const starts = HUNT_FILES.map(([dx, y])=> huntFree(N.x + dx, y));
+  await sceneLook({ x:N.x - 8, y:-0.5, w:17, h:16 }, { ms:700 });
   await L([`Then a trumpet sounds behind you — the castle's own.`]);
-  await Promise.all(kn.map(([id])=> invActorIn(id, 400)).concat([sceneGlide(kn.map(k=> k[0]), 0, -3, 1000)]));
+  /* the Commander up the middle path, the files behind and beside him */
+  invActor('cm', 'chestnut_knight2_c', starts[1].x, starts[1].y, 1.6);
+  const cmGo = huntMarch('cm', routeOf(starts[1], cmAt), HUNT_MARCH.step);
+  const marches = HUNT_ARMY.map((sp, i)=>{
+    const f = i % HUNT_FILES.length, rank = Math.floor(i / HUNT_FILES.length) + (f === 1 ? 1 : 0), P = plan[i], from = starts[f];
+    if(!P || !P.at) return null;
+    const route = routeOf(from, P.at);
+    return sceneWait(HUNT_MARCH.step * HUNT_MARCH.gap * (rank + 0.4 * f)).then(()=>{
+      invActor('hs' + i, sp, from.x, from.y, 1.45);
+      return huntMarch('hs' + i, route || [P.at], HUNT_MARCH.step);
+    }).then(()=>{ invDuel(P.alien, 'hs' + i); try { playSfx('hit_dealt'); } catch(e){} });
+  });
+  await cmGo;
   await L([['commander', `<b>"FOR THE KING! Soldiers — at them!"</b>`]]);
-  /* the charge: each knight at one of them */
-  const pairs = [['k1', 'ra1'], ['k2', 'ra2'], ['k3', 'ra3'], ['k4', 'ra4']];
-  await Promise.all(pairs.map(([k, a], i)=>{ const ae = document.getElementById('sa-' + a); if(!ae) return null;
-    const tx = Math.round(ae._o.x + ae._o.w / 2 - 0.5) + (i % 2 ? 1 : -1), ty = Math.round(ae._o.y + ae._o.h - 1) + 1;
-    return sceneWait(i * 90).then(()=> invActorTo(k, tx, ty, 650)).then(()=> invDuel(a, k)); }));
+  await Promise.all(marches);
   sceneShake(600, ms=> 0.08 * (1 - ms / 600));
   try { playSfx('hit_dealt'); } catch(e){}
-  await invActorTo('cm', you.x + 1, you.y + 1, 600);
   await L([`The castle's soldiers crash into the aliens shield-first, and the edge of the jungle rings with blades.`,
            ['commander', `<b>"Leave the aliens to us, Lucesco. You two have done more than enough today."</b>`],
            ['commander', `<b>"So this is where they've been coming from… a hole in the world, right at the edge of the jungle. Soldiers! A perimeter round that rift: stakes, shields, and a guard on it day and night. Nothing comes out of there without going through us!"</b>`],

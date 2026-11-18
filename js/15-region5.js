@@ -7694,7 +7694,7 @@ async function r5ClimaxBreak(done){
   await mkNow(`<b>"It is yours, little one. Finish it! I will keep your stones in the air."</b>`);
   /* the last phase: every cooldown reset — your Very Highs and Ultras, Steel
      Soul, Rebirth — every stone of his again, and the blows are yours */
-  b.usedVeryHigh = {}; b.usedUltra = {}; b.usedSoul = {}; b.rebirthUsed = false;
+  b.usedVeryHigh = {}; b.usedUltra = {}; b.usedSoul = {}; b.rebirthUsed = false; b.dustStarFell = {};   // (4.62) a ✦ dust's fall too
   if(A){ A.passive = true; allyRecharge(); }
   renderBattle();
   battleMsg(`⚡ Every move is ready again! Clear Cyborg's bar — all the way down.`);

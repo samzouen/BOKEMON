@@ -126,7 +126,7 @@ function nemVenomTick(){
     const hit = [];
     livingField().forEach(m=>{
       const max = monMaxHp(m), before = m.currentHp, d = Math.max(1, Math.ceil(max * (pv.pct || NEM.afflict.venom)));
-      m.currentHp = Math.max(0, before - d);
+      m.currentHp = Math.max(typeof hpFloorOf === 'function' ? hpFloorOf(m) : 0, before - (typeof lastStand === 'function' ? lastStand(m, d) : d));   // (4.62) every source
       drainHp(pid('playerHp', m), before, m.currentHp, max);
       showDamageNumber(pid('playerBob', m), before - m.currentHp);
       hit.push(`${escapeHtml(displayName(m))} ${before - m.currentHp}`);
@@ -329,6 +329,25 @@ function nemChargeStep(e, next){
   }
   return nemFireLaser(next);
 }
+/* (4.60) the designer: "wadjet's in battle eraser beam should be the same animation as the one in the overworld,
+   please." The black hole over his head here is the overworld's own (43-the-duel.js's stHole: its halo, its black disc,
+   red and purple orbs drawn spiralling in), bigger each turn it gathers; the beam (FX_MOVES['Eraser Beam'], below) the
+   same black beam edged in purple and red (stEBeam), and a dark blast on each it strikes */
+const NEM_HOLE = { at:0.08, t:0.26, hs:[0.62, 0.8, 1],      // over his picture: how far down it (of its height); its unit (of its width); its size each turn
+                   beamAt:230, aura:1100, booms:8, hitMs:3000 };   // (4.61) the beam out after; its aura held on yours; the blasts; the blow struck at (ms)
+function nemFxLayer(){
+  let L = document.getElementById('nemFxDom');
+  if(!L){ L = document.createElement('div'); L.id = 'nemFxDom'; L.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:50;'; document.body.appendChild(L); }
+  return L;
+}
+/* where his hole is on the screen (px), and its unit — or, with none, over his picture */
+function nemHolePoint(fromId){
+  const h = document.getElementById('nemHole');
+  if(h && h.isConnected){ const r = h.getBoundingClientRect(); return { x:r.left, y:r.top, t:parseFloat(h.style.getPropertyValue('--t')) || 44 }; }
+  const e = fromId && document.getElementById(fromId), bob = e && (e.querySelector('.bob') || e), r = bob ? bob.getBoundingClientRect() : { left:0, top:0, width:170, height:170 };
+  return { x:r.left + r.width / 2, y:r.top + r.height * NEM_HOLE.at, t:r.width * NEM_HOLE.t };
+}
+function nemCentre(el){ if(!el) return null; const r = (el.querySelector('img') || el).getBoundingClientRect(); return r.width ? { x:r.left + r.width / 2, y:r.top + r.height * 0.5 } : null; }
 function nemPrismLevel(){
   const b = ui.battle, N = b && b.nem, W = nemWadjet();
   if(!W) return;
@@ -337,11 +356,22 @@ function nemPrismLevel(){
   const lv = N && N.charging ? NEM.charge - N.charging.left + 1 : 0;
   card.classList.toggle('nem-charging', lv > 0);
   ['nem-c1', 'nem-c2', 'nem-c3'].forEach((k, j)=> card.classList.toggle(k, lv === j + 1));
+  /* the hole itself, in his picture (drawn again with it), its size for the turn */
+  const bob = card.querySelector('.bob');
+  let h = document.getElementById('nemHole');
+  if(h && (h.classList.contains('fire') || h.classList.contains('implode'))) return;   // (firing, collapsing: let it play)
+  if(lv > 0 && bob && typeof stHole === 'function'){
+    const hs = NEM_HOLE.hs[Math.min(NEM_HOLE.hs.length, lv) - 1];
+    if(h && h.parentElement !== bob){ h.remove(); h = null; }
+    if(!h) stHole('nemHole', bob.offsetWidth / 2, bob.offsetHeight * NEM_HOLE.at, hs, { host:bob, t:Math.round(bob.offsetWidth * NEM_HOLE.t), px:true, z:6 });
+    else stHoleSize('nemHole', hs);
+  } else if(h) h.remove();
 }
 /* ---------- the Eraser Beam (4.59: was the Prismatic Laser): 5,000 to every one of yours, through everything ---------- */
 function nemFireLaser(next){
   const b = ui.battle, N = b.nem, W = nemWadjet();
   N.charging = null; N.fired = true;
+  if(typeof stHoleGone === 'function') stHoleGone('nemHole', 700);         // (4.60) it fires: swells, and is gone
   nemPrismLevel();
   renderStatusBadges();
   battleMsg(`<b>The Eraser Beam fires!</b>`);
@@ -351,22 +381,25 @@ function nemFireLaser(next){
   setTimeout(()=>{
     if(ui.battle !== b) return;
     const all = healableAllies().filter(m=> m.currentHp > 0);
-    const held = [], fell = [], stood = [];
+    const held = [], fell = [], stood = [], undying = [];
     all.forEach(m=>{
       const before = m.currentHp, max = monMaxHp(m);
       if(before > NEM.laser) { m.currentHp = before - NEM.laser; stood.push(m); }
+      else if(typeof hpFloorOf === 'function' && hpFloorOf(m) > 0){ m.currentHp = 1; held.push(m); }   // (4.62) already holding on: nothing takes it below 1 HP
       else if(typeof bedrockReady === 'function' && bedrockReady(m)){ bedrockSave(m); m.currentHp = 1; held.push(m); }
+      else if(typeof talentUndyingReady === 'function' && talentUndyingReady(m)){ talentUndyingUse(m); m.currentHp = 1; undying.push(m); }   // (4.62) an Undying talent, as against every source
       else { m.currentHp = 0; fell.push(m); }
       const el = document.getElementById(pid('playerBob', m));
       if(el && playerField().includes(m)){ flashHit(el); drainHp(pid('playerHp', m), before, m.currentHp, max); showDamageNumber(pid('playerBob', m), before - m.currentHp); }
     });
-    if(held.length) held.forEach(m=> floatOver(m, 'HOLDS ON'));
+    held.concat(undying).forEach(m=> floatOver(m, 'HOLDS ON'));
     const nm = l=> l.map(m=> escapeHtml(displayName(m)));
     const list = l=> l.length > 1 ? l.slice(0, -1).join(', ') + ' and ' + l[l.length - 1] : l[0];
     const said = `${NEM_PRISM} <b>5,000</b> to every one of yours — through every shield and every dodge.` +
       (held.length ? ` 🦋 Metamorph holds ${list(nm(held))} on 1 HP!` : '') +
+      (undying.length ? ` ♾️ ${list(nm(undying))} hold${undying.length > 1 ? '' : 's'} on at 1 HP!` : '') +
       (stood.length ? ` ${list(nm(stood))} still stand${stood.length > 1 ? '' : 's'}.` : '') +
-      (fell.length && !held.length && !stood.length ? ' Not one of them is left standing…' : '');
+      (fell.length && !held.length && !undying.length && !stood.length ? ' Not one of them is left standing…' : '');
     battleMsg(said);
     renderStatusBadges();
     saveProfile();
@@ -379,12 +412,13 @@ function nemFireLaser(next){
       if(phx) return setTimeout(()=>{ if(ui.battle === b) offerRebirth(on, on, phx); }, 900);
       setTimeout(on, 500);
     }, 800);
-  }, 1500);
+  }, NEM_HOLE.hitMs);                                                     // (4.61: after the blasts)
 }
 /* ---------- "Argh!": brought to 1 HP while he gathers it ---------- */
 function nemArgh(next){
   const b = ui.battle, N = b.nem, W = nemWadjet();
   N.charging = null; N.broke = true;
+  { const h = document.getElementById('nemHole'); if(h){ h.classList.add('implode'); setTimeout(()=> h.remove(), 450); } }   // (4.60) it collapses
   nemPrismLevel();
   renderStatusBadges();
   battleMsg(`Wadjet: <b>"Argh!"</b> — the black hole over his head collapses!`);
@@ -682,37 +716,35 @@ if(typeof FX_MOVES !== 'undefined' && typeof fxAdd === 'function'){
       FX_KIT.Ghost.burst(at, layer, { seed:ctx.seed + k, big:1.6 });
       fxSpray(layer, fxBurstParts(at.x, at.y, 16, { seed:ctx.seed + k + 5, vmin:50, vmax:140, ramp:[fxRGB('#d8ffc2'), fxRGB('#8be06a'), fxRGB('#3f9a2a'), FX_NIGHT[3]], grav:70, lmin:450, lmax:800 }), 1000);
     } };
-  /* (4.59) the Eraser Beam: from the black hole over his head, a black beam edged in purple and red across all of yours —
-     the hole drinking in the light first, rings drawn into it */
-  FX_MOVES['Eraser Beam'] = { dur:1600, hold:1300,
+  /* the Eraser Beam (4.60: as on the field — 43-the-duel.js's): the hole over his head fires, swelling and gone; the
+     black beam edged in purple and red from it to each of yours, throbbing, held — (4.61) the eraser's aura on each,
+     pulsing, the whole fight shaking hard; then eight blasts round each, the biggest first, a kick to the shaking each; the
+     blow struck (nemFireLaser) when they are done */
+  FX_MOVES['Eraser Beam'] = { dur:NEM_HOLE.hitMs + 300, hold:NEM_HOLE.hitMs,
     cast(ctx){
-      const a = ctx.from, hx = a.x, hy = a.y - a.h * 0.62;
-      if(typeof fxDimOn === 'function'){ fxDimOn(0.55); fxLater(1700, ()=> fxDimOff()); }
-      fxAdd({ layer:'front', dur:560, step(L, t){
-        const u = t / 560;
-        for(let j = 0; j < 4; j++){ const w = (u + j / 4) % 1; fxRing(L, hx, hy, (1 - w) * 28 + 3, 2, j % 2 ? E[4] : E[2], 0.9 * w); }
-        fxDisc(L, hx, hy, 5 + 5 * u, E[0], 1);
-      } });
-      fxTargets(ctx).forEach(b=> fxAdd({ layer:'front', dur:1500, step(L, t){
-        if(t < 420) return;
-        const cv = t < 1250 ? 1 : 1 - (t - 1250) / 250, dx = b.x - hx, dy = b.y - hy, n = Math.hypot(dx, dy) || 1, px = -dy / n, py = dx / n;
-        const wob = Math.sin(t * 0.06) * 0.6;
-        [[5.2, E[4], 2], [3.9, E[3], 2.2], [2.6, E[2], 2.4]].forEach(([o, c, w])=> [-1, 1].forEach(sg=>{ const q = (o + wob) * sg; fxLine(L, hx + px * q, hy + py * q, b.x + px * q, b.y + py * q, c, w, cv); }));
-        fxLine(L, hx, hy, b.x, b.y, E[0], 6, cv); fxLine(L, hx, hy, b.x, b.y, E[1], 2.5, cv);
-        fxDisc(L, hx, hy, 6, E[0], cv);
-      } }));
-      fxLater(600, ()=>{ try { fxShake(7, 600); } catch(e){} });
+      if(typeof fxDimOn === 'function'){ fxDimOn(0.55); fxLater(NEM_HOLE.hitMs + 300, ()=> fxDimOff()); }
+      if(typeof stEBeam !== 'function') return;
+      const H = nemHolePoint(ctx.fromId), L = nemFxLayer(), o = { host:L, t:H.t, px:true, z:1 };
+      const to = (ctx.tids || []).map(id=> nemCentre(document.getElementById(id))).filter(Boolean);
+      setTimeout(()=>{
+        const beams = to.map(p=> stEBeam(H.x, H.y, p.x, p.y, o));
+        const shake = [document.getElementById('battleStage'), L];
+        Promise.all(to.map((p, i)=> stEraseHit(p.x, p.y, { r:2.2, boom:2.7, n:NEM_HOLE.booms, aura:NEM_HOLE.aura, spread:0.6, o, shake:i === 0 ? shake : null })))
+          .then(()=> beams.forEach(bm=> stBeamOut(bm, 320)));
+      }, NEM_HOLE.beamAt);
     },
-    impact(ctx, at, k, side){ const layer = fxLayerFor(side); fxFlash(layer, at, 22, E[4], 120); burst(layer, at, ctx.seed + k, 1.3); } };
-  /* the black hole over his head collapsing ("Argh!"): drawn in to nothing, then dark shards flying */
+    impact(){} };
+  /* the hole collapsing ("Argh!"): drawn in to nothing (the hole's own 'implode'), and a ring of dark thrown off */
   FX_MOVES['Eraser Collapse'] = { side:'self', dur:900,
     cast(ctx){
-      const a = ctx.from, hx = a.x, hy = a.y - a.h * 0.62;
-      fxAdd({ layer:'front', dur:300, step(L, t){ const u = t / 300; fxDisc(L, hx, hy, 9 * (1 - u) + 1, E[0], 1); fxRing(L, hx, hy, 14 * (1 - u) + 1, 2, E[3], 1 - u); } });
+      const H = nemHolePoint(ctx.fromId);
+      /* where that is on the art's own canvas: dark shards flung off it as it goes */
+      const cx = (H.x - (FX.ox || 0)) / (FX.P || 1), cy = (H.y - (FX.oy || 0)) / (FX.P || 1);
       fxLater(280, ()=>{
-        fxFlash(fxLayerFor('enemy'), { x:hx, y:hy }, 16, E[4], 120);
-        fxSpray('front', fxBurstParts(hx, hy, 26, { seed:ctx.seed, vmin:90, vmax:220, ramp:[E[5], E[4], E[3], E[2], E[0]], grav:140, lmin:450, lmax:800 }), 900);
+        fxFlash(fxLayerFor('enemy'), { x:cx, y:cy }, 16, E[4], 120);
+        fxSpray('front', fxBurstParts(cx, cy, 26, { seed:ctx.seed, vmin:90, vmax:220, ramp:[E[5], E[4], E[3], E[2], E[0]], grav:140, lmin:450, lmax:800 }), 900);
       });
+      if(typeof stBlast === 'function') setTimeout(()=> stBlast(H.x, H.y, 1.9, 'pulse', { host:nemFxLayer(), t:H.t, px:true, z:1 }), 300);
     } };
 }
 
@@ -741,20 +773,6 @@ function nemCss(){
   .enemy-card.nem-leaving .bob{ animation:nemRewind 1.4s steps(16) forwards; }
   .enemy-card.nem-argh{ animation:nemArgh .5s ease-in-out 2; }
   @keyframes nemArgh{ 0%,100%{ transform:none; } 20%{ transform:translateX(-6px) rotate(-3deg); } 40%{ transform:translateX(6px) rotate(3deg); } 60%{ transform:translateX(-4px); } 80%{ transform:translateX(4px); } }
-  /* (4.59) the dark gathering over his head: a black hole, a red and purple ring turning round it, orbs drawn into it —
-     bigger each turn */
-  .enemy-card.nem-charging .bob::after{ content:''; position:absolute; left:50%; top:4%; width:16%; aspect-ratio:1; z-index:4; pointer-events:none; border-radius:50%;
-    transform:translate(-50%,-50%);
-    background:radial-gradient(circle, #000 0 46%, #12001a 54%, rgba(122,26,208,.95) 64%, rgba(255,42,85,.85) 76%, rgba(255,42,85,0) 88%);
-    box-shadow:0 0 10px 3px rgba(150,30,220,.8), 0 0 24px 8px rgba(255,30,90,.5); animation:nemHole 1.1s ease-in-out infinite; }
-  .enemy-card.nem-charging .bob::before{ content:''; position:absolute; left:50%; top:4%; width:5px; height:5px; margin:-2.5px; border-radius:50%; z-index:5; pointer-events:none;
-    background:#ff5a7a; box-shadow:18px 0 0 #b45cff, -18px 4px 0 #ff5a7a, 4px 18px 0 #b45cff, -6px -18px 0 #ff5a7a, 14px -12px 0 #b45cff, -14px 12px 0 #ff5a7a, 13px 13px 0 #b45cff, -13px -13px 0 #ff5a7a;
-    animation:nemOrbs 1.2s cubic-bezier(.4,0,.9,.6) infinite; }
-  .enemy-card.nem-c2 .bob::after{ width:22%; box-shadow:0 0 14px 5px rgba(150,30,220,.85), 0 0 32px 12px rgba(255,30,90,.55); }
-  .enemy-card.nem-c3 .bob::after{ width:29%; box-shadow:0 0 18px 7px rgba(150,30,220,.9), 0 0 44px 18px rgba(255,30,90,.65); animation-duration:.7s; }
-  .enemy-card.nem-c3 .bob::before{ animation-duration:.8s; }
-  @keyframes nemHole{ 0%,100%{ transform:translate(-50%,-50%) scale(.92); } 50%{ transform:translate(-50%,-50%) scale(1.1); } }
-  @keyframes nemOrbs{ from{ transform:rotate(0deg) scale(1.6); opacity:0; } 20%{ opacity:1; } to{ transform:rotate(300deg) scale(.1); opacity:.3; } }
   /* his shadows: him, dark, wreathed in violet; rising off him, and fading */
   .enemy-card.nem-shadow .mon-sprite{ filter:brightness(.24) contrast(1.35) saturate(.4) drop-shadow(0 0 6px rgba(150,100,255,.85)) drop-shadow(0 0 14px rgba(90,40,200,.5)) !important; }
   .enemy-card.nem-shadow .bob{ opacity:.9; }
@@ -765,7 +783,6 @@ function nemCss(){
   .enemy-card.nem-shadow .name-plate .hp-bar, .enemy-card.nem-shadow .name-plate [id^="enemyHp-"]{ opacity:.45; }
   @media (prefers-reduced-motion: reduce){
     .enemy-card.nem-rewinding .bob, .enemy-card.nem-back .bob, .enemy-card.nem-argh, .enemy-card.nem-shadow-in .bob{ animation:none; }
-    .enemy-card.nem-charging .bob::after, .enemy-card.nem-charging .bob::before{ animation:none; }
     .move-btn.nem-tip{ animation:none; }
   }`;
   document.head.appendChild(st);

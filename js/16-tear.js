@@ -273,7 +273,7 @@ function tearSnapshot(b, opts){
   battleParty().concat(bondedCompanions()).forEach(m=>{ if(m && m.uid) hp[m.uid] = Math.max(0, Math.round(m.currentHp || 0)); });
   const foes = (opts.foes && at === b.waveIndex && livingEnemies().length) ? b.enemies.map(e=> Math.max(0, Math.round(e.hp || 0))) : null;
   return { at, level:b.tearLevel || tearFoeLevel(), foes, hp,
-    used:{ vh:Object.assign({}, b.usedVeryHigh), ultra:Object.assign({}, b.usedUltra), soul:Object.assign({}, b.usedSoul) },
+    used:{ vh:Object.assign({}, b.usedVeryHigh), ultra:Object.assign({}, b.usedUltra), soul:Object.assign({}, b.usedSoul), star:Object.assign({}, b.dustStarFell || {}) },   // (4.62) a ✦ dust's fall this meter
     recharge:b.rechargeWords || 0, rebirth:!!b.rebirthUsed,
     run:{ rounds:run.rounds || 0, medals:Object.assign({}, run.medals || {}), xp:run.xp || 0 },
     when:Date.now() };
@@ -317,6 +317,7 @@ function tearResume(){
   Object.assign(b.usedVeryHigh, u.vh || {});
   Object.assign(b.usedUltra, u.ultra || {});
   Object.assign(b.usedSoul, u.soul || {});
+  b.dustStarFell = Object.assign({}, u.star || {});
   b.rechargeWords = sv.recharge || 0;
   if(sv.rebirth) b.rebirthUsed = true;
   if(Array.isArray(sv.foes)) b.enemies.forEach((e, i)=>{

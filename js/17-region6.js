@@ -1385,7 +1385,7 @@ function foeBindingPulse(h, why, opts){
   let hurt = false;
   mine.forEach(m=>{
     const before = m.currentHp;
-    m.currentHp = Math.max(hpFloorOf(m), m.currentHp - loss);
+    m.currentHp = Math.max(hpFloorOf(m), m.currentHp - lastStand(m, loss));   // (4.62) an Undying talent's hold too (their Curse keeps Metamorph's off)
     if(m.currentHp < before) hurt = true;
     drainHp(pid('playerHp', m), before, m.currentHp, monMaxHp(m));
     showDamageNumber(pid('playerBob', m), before - m.currentHp);

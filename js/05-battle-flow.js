@@ -251,7 +251,12 @@ function playEffect(moveName, opts, done){
    With textContent the tags rendered as literal text on screen. Everything
    passed here is written by the game, never by the player — the one place a
    name could arrive is escaped at the call site. */
-function battleMsg(t){ ui._battleActivity = Date.now(); const el=$('#battleMsg'); if(el) el.innerHTML = (typeof emoHtml === 'function') ? emoHtml(t) : t; }   // (3.53) symbols as this iPad can draw them; the dragon drawn
+function battleMsg(t){
+  ui._battleActivity = Date.now();
+  const b = ui.battle;
+  if(b && b.holdSaid && b.holdSaid.length){ t = (t ? t + ' ' : '') + b.holdSaid.join(' '); b.holdSaid = null; }   // (4.62) a last stand's line (holdSay)
+  const el=$('#battleMsg'); if(el) el.innerHTML = (typeof emoHtml === 'function') ? emoHtml(t) : t;   // (3.53) symbols as this iPad can draw them; the dragon drawn
+}
 
 /* ---------- battle animations (item 4 & 5) ---------- */
 /* ---------- BATTLE LOG (arena debugging) ---------- */
@@ -971,6 +976,7 @@ function feedRecharge(words){
   b.usedUltra = {};
   b.usedSoul = {};                     // and Steel Soul's once-a-battle cast (2.93), Tachypsychia's too (3.63)…
   b.rebirthUsed = false;               // …and the phoenix's Rebirth (3.00, the designer's call)…
+  b.dustStarFell = {};                 // (4.62) …and each ✦ Diamond Dust's fall by itself (dustStarCarrier)…
   /* (theirs come back on their own since 3.86: every 7 turns, foeRecharge) */
   /* A refined stone's free passive re-arms with the same bar that restores a
      cast — so it fires again the next time its carrier takes the field. */

@@ -95,7 +95,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.59';
+const GAME_VERSION = '4.63';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -868,7 +868,7 @@ const ELEMENT_PASSIVES = {
   Ground:   { vh:   { name:'Spike Formation', sym:'🪨',
                       text:'While your Spike Armour is up, a spike forms at the start of each turn, worth <b>0.2× / 0.3× / 0.4×</b> its ATK (by the Spike Armour\'s tier), on the field or off it. On the field, it is driven straight into a random enemy. Off it, up to <b>3</b> wait, and all are driven into the enemy (each at one at random) once it is on the field.' },
               ultra:{ name:'Metamorph', sym:'🦋',
-                      text:'Its damage grows <b>5%</b> at the end of each turn, on the field or off it, up to <b>+20%</b> (5 / 10 / 15 / 20%), and it keeps it for the rest of the battle. And once each time the meter fills, a blow that would knock it out leaves it on 1 HP with a shield; then nothing takes it below 1 HP for the rest of that turn and the next. A Curse of theirs on your side ends that, and stops it starting.' } },
+                      text:'Its damage grows <b>5%</b> at the end of each turn, on the field or off it, up to <b>+20%</b> (5 / 10 / 15 / 20%), and it keeps it for the rest of the battle. And once each time the meter fills, anything that would knock it out (an attack, a burst, a spike, a strike before the turn) leaves it on 1 HP with a shield; then nothing takes it below 1 HP for the rest of that turn and the next. A Curse of theirs on your side ends that, and stops it starting.' } },
   Psychic:  { vh:   { name:'Mind Control', sym:'🧠',
                       text:'With it on the field, when your Discombobulate confuses an enemy, its confused swing is yours to aim: choose one of its own moves to turn on its own side, itself included (an AOE strikes all of them), with no words to write. The damage is multiplied by its confusion\'s own self-hit roll. Or let it swing as usual.' },
               ultra:{ name:'Foresight', sym:'👁️',
@@ -899,7 +899,7 @@ const ELEMENT_PASSIVES = {
   Fairy:    { vh:   { name:'Coruscate', sym:'🎇',
                       text:'While your Diamond Dust is up and it is in your team (on the field or off it), every one of your team deals <b>1.5% more</b> damage for each buff your side has up (Diamond Dust counts), up to <b>+15%</b>.' },
               ultra:{ name:'Unstable Magic', sym:'🔮',
-                      text:'Every buff or debuff — either side\'s — swept away (a Diamond Dust, a Nova), kept from forming by a Diamond Dust, or running out makes your magic burst: <b>0.25×</b> the ATK of your strongest holder to every enemy, once for each, with no limit a turn. So their dust sweeping your effects pays them back, and a buff of yours their dust stops still bursts. On the field or off it. Damage buffs and cuts count.' } },
+                      text:'Every buff or debuff — either side\'s — swept away (a Diamond Dust, a Nova), kept from forming by a Diamond Dust, or running out makes your magic burst: <b>0.25×</b> the ATK of your strongest holder to every enemy (<b>0.2×</b> from one off the field), once for each, with no limit a turn. So their dust sweeping your effects pays them back, and a buff of yours their dust stops still bursts. Damage buffs and cuts count.' } },   // (4.63) "reduce unstable magic off-field damage to 0.2x ATK instead of 0.25x ATK when on-field"
 };
 /* (3.78) the designer: "change the cost to 2 same-element very high and 1
    same element ultra" — [tier, how many] of its element's stones */
