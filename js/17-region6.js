@@ -1503,9 +1503,10 @@ function foeViolentStrike(e, label){
     const nm = escapeHtml(displayName(me)), bob = pid('playerBob', me);
     if(e.lurk || e.cunning){ breakCover(e); e._ambush = 0; }
     noteAriaAttack();                                           // an attack on your side, all the same
-    if(ariaPassesThrough(me, seesThrough(e))){ dodgePlayer(); floatMiss(bob, 'MISS'); return `${label} — it passes harmlessly through ${nm}.`; }
+    const fe = seesThrough(e) ? null : fierySeer(e, bob);   // (4.65) Fiery Eyes
+    if(ariaPassesThrough(me, seesThrough(e), fe)){ dodgePlayer(); floatMiss(bob, 'MISS'); return `${label} — it passes harmlessly through ${nm}.`; }
     if(!seesThrough(e) && rollBlind(e)){ floatMiss(bob, 'MISS'); return `${label} — 🔆 blinded, it misses!`; }
-    if(!seesThrough(e) && rollPlayerDodge(e)){ dodgePlayer(); floatMiss(bob, dodgeWord(me)); return `${label} — ${nm} slips it.`; }
+    if(!seesThrough(e) && rollPlayerDodge(e, fe)){ dodgePlayer(); floatMiss(bob, dodgeWord(me)); return `${label} — ${nm} slips it.`; }
     const omen = e._omen, amb = e._ambush;
     e._omen = 0; e._ambush = 0;                               // kept for its real blow
     e._blow = newBlowId('fvd');                               // an attack of its own

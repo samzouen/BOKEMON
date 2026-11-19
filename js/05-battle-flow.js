@@ -1639,7 +1639,8 @@ function resolveBattleMove(mv, target, results, opts){
   /* Their Diamond Dust: (4.48) what its count stops this turn does not take hold. Say so,
      rather than letting the cast go quiet. A quick cast costs no turn, so the
      turn is still yours; anything else spends it, as it would have anyway.
-     (3.09) Not the Haunting Aria: a state he goes into, which no dust stops. */
+     (3.09) Not the Haunting Aria: a state he goes into, which no dust stops. (4.66) Nor Steel Soul,
+     Tachypsychia or 72 Transformations: a legendary's own kit goes through (KIT_STATES, dustThrough). */
   const castOnly = (mv.shell && mv.mult == null) || mv.tachy || mv.grant ||
                    mv.charm || mv.disrupt || mv.soul || mv.clones || mv.dot || mv.overpower;   // (3.55) Overpower too
   /* (4.48) the dust's count: the move's kind against it (a grant's stances meet it one by one, applyPassiveGrant) */
@@ -2742,7 +2743,8 @@ function postPlayerAction(mon, hits){
        the untouchable turn — or now the Whalelord's reflex, which a riposte
        never used to wake — lets it through */
     noteAriaAttack();
-    if(ariaPassesThrough(mon, seesThrough(k))){         // (3.09: a Third Eye sees straight through it)
+    const fe = seesThrough(k) ? null : fierySeer(k, pid('playerBob'));   // (4.65) Fiery Eyes
+    if(ariaPassesThrough(mon, seesThrough(k), fe)){     // (3.09: a Third Eye sees straight through it)
       floatMiss(pid('playerBob'), 'MISS'); dodgePlayer();
       lines.push(`⚔️ ${who} ripostes — and it passes harmlessly through.`);
       return;
@@ -2753,7 +2755,7 @@ function postPlayerAction(mon, hits){
       lines.push(`⚔️ ${who} ripostes — 🔆 blinded, it misses.`);
       return;
     }
-    if(!seesThrough(k) && rollPlayerDodge(k)){        // (3.63) Tachypsychia's dodge last
+    if(!seesThrough(k) && rollPlayerDodge(k, fe)){    // (3.63) Tachypsychia's dodge last
       floatMiss(pid('playerBob'), dodgeWord(mon)); dodgePlayer();
       lines.push(`⚔️ ${who} ripostes — and finds nothing.`);
       return;
@@ -3685,6 +3687,8 @@ function rollDodge(t, idx, delay, sure, reflex, striker){
      still have their say. */
   const me = striker !== undefined ? striker : activeMon();
   if(!sure && seesThrough(me)) sure = true;
+  /* (4.65) Fiery Eyes: asked only when something of theirs would slip the blow (below) */
+  const seen = sure ? null : fierySeer(me, 'enemy-' + idx, delay);
   /* (3.25) Blinded: its own strike goes wide — before any dodge, so nothing
      of theirs dodged it (no Moonlit Retribution banked, no Mirage copy, no
      Futuresight fracture); their Knight answers it as a blow that dealt
@@ -3699,7 +3703,9 @@ function rollDodge(t, idx, delay, sure, reflex, striker){
      yours is: only a blow nothing else of its slipped meets it, and one it
      slips takes it a step down its ladder. */
   const ev = sure ? 0 : enemyEvasion(t, true);
-  if(!(ev > 0 && Math.random() < ev) && (sure || !tachyDodgeRoll(t, sightFactor('player')))) return false;
+  const slips = ev > 0 && Math.random() < ev;
+  if(slips && seen && seen()) return false;                    // (4.65) his Fiery Eyes saw through it
+  if(!slips && (sure || !tachyDodgeRoll(t, sightFactor('player'), seen))) return false;
   const word = dodgeWord(t);
   setTimeout(()=>{ dodgeEnemy(idx); floatMiss('enemy-'+idx, word); }, delay||0);
   noteFutureDodge(t, delay);                                  // Cyborg's Futuresight (3.00)
@@ -4334,7 +4340,7 @@ function smartValue(e, r, mine){
     if(ex.revenge) one *= revengeFactor(e, ex.revenge);                 // (3.38) by the attacks it has taken
     if(ex.randomMult) one *= (ex.randomMult[0] + ex.randomMult[1]) / 2;
     if(ex.fullHpDouble && e.hp >= e.maxHp) one *= 2;
-    const dodge = (ex.mindRead || seesThrough(e)) ? 0 : Math.min(0.95, playerEvasionFrom(e, m));
+    const dodge = (ex.mindRead || seesThrough(e)) ? 0 : Math.min(0.95, playerEvasionFrom(e, m)) * (1 - fieryEyesOf(e));   // (4.65) Fiery Eyes
     one *= 1 - dodge;
     const left = m.currentHp + shieldSoak(m);                // (3.64) its own shields and its team's
     let gain = Math.min(one, left);
@@ -4931,8 +4937,9 @@ function enemyStrikeOn(ctx, step, done){
      through the haunting too ("evasion piercing moves should hit through the
      evasion"): it lands, and a reflex it wakes is the Aria alone. */
   const sure = !!ex.mindRead || seesThrough(e);   // a Third Eye reads you (2.97); (3.63) a Thunder Newt never misses
+  const fe = sure ? null : fierySeer(e, pid('playerBob'), 300);   // (4.65) Fiery Eyes: this blow, if a dodge would take it
   const ariaCover = ariaFieldEvasion() > 0;
-  if(ariaPassesThrough(mon, sure)){          // (the untouchable turn has done its work this round)
+  if(ariaPassesThrough(mon, sure, fe)){      // (the untouchable turn has done its work this round)
     dodgePlayer(); floatMiss(pid('playerBob'), 'MISS');
     if(ariaCover) battleMsg('The attack passes harmlessly through.');
     if(last()){ e._ambush = 0; burnOut(e, ex); }   // a Ghost Flame spends itself either way
@@ -4955,7 +4962,7 @@ function enemyStrikeOn(ctx, step, done){
      dodge is certain. (The Mirage's window advances once per ROUND, at the
      round's end.) */
   const blindMissed = !sure && rollBlind(e);
-  const slip = (sure || blindMissed) ? false : rollPlayerDodge(e);
+  const slip = (sure || blindMissed) ? false : rollPlayerDodge(e, fe);
   const evaded = !!slip;
 
   if(!ctx.told){
@@ -5546,7 +5553,8 @@ function enemyFollowUps(i, e, move, ctx, next){
        copies' echoes are the copies'. (A stolen Tachypsychia no longer makes
        its thief's blows sure: that was the newt's passive all along.) */
     const sure = seesThrough(e) || !!(repeatOf && move && move[6] && move[6].mindRead);
-    if(ariaPassesThrough(me, sure)){          // (3.09: a Third Eye sees straight through it)
+    const fe = sure ? null : fierySeer(e, pid('playerBob'));   // (4.65) Fiery Eyes
+    if(ariaPassesThrough(me, sure, fe)){      // (3.09: a Third Eye sees straight through it)
       dodgePlayer(); floatMiss(pid('playerBob'), 'MISS');
       if(covered) battleMsg(`${label} — and passes harmlessly through.`);
       return setTimeout(then, 650);
@@ -5557,7 +5565,7 @@ function enemyFollowUps(i, e, move, ctx, next){
       battleMsg(`${label} — 🔆 blinded, it misses.`);
       return setTimeout(then, 650);
     }
-    const slip = sure ? false : rollPlayerDodge(e);   // (a Third Eye cannot miss, 2.97; 3.63 Tachypsychia's dodge last)
+    const slip = sure ? false : rollPlayerDodge(e, fe);   // (a Third Eye cannot miss, 2.97; 3.63 Tachypsychia's dodge last)
     if(slip){
       dodgePlayer(); floatMiss(pid('playerBob'), dodgeWord(me));
       battleMsg(`${label} — ${slip === 'tachy' ? '⚡ lightning reflexes — it ' : 'and '}misses.`);

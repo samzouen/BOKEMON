@@ -155,6 +155,7 @@ function removePStatus(uid, type){
 function setPStatus(uid, status){
   if(!ui.battle || !status) return null;
   if(MON_DEBUFFS.has(status.type)) return setMStatus(activeMon(), status);
+  kitState(status);                                        // (4.66) a legendary's own kit: no dust's
   /* Either side's dust stops the OTHER side's effects forming on this side —
      but not what a creature simply IS (a bog), which no dust would sweep. */
   { const ow = statusOwner(status.type, status, 'player');
@@ -369,7 +370,8 @@ function chillRefreeze(){
    shield soaks what is left); one of the other side's marks on its side
    melts away as it is cast, and one more at the start of every turn while
    it stands (iceBarrierPulse). Its own side's Diamond Dust holds it open;
-   the other side's keeps it from forming and sweeps it. Either side's.
+   (4.66) the other side's neither keeps it from forming nor sweeps it, a
+   legendary's own kit (KIT_STATES). Either side's.
    (The 3.14 Ice Barrier — shields, a half-damage barrier to its next turn
    and two marks off — is gone; castBarrier stays for the Mime's Invisible
    Wall, Pillow Puff, Bandage Wall and the Firewall.) */
@@ -2364,7 +2366,7 @@ function clonesServe(mon){
   return !!(cl && mon && (!cl.uid || cl.uid === mon.uid));
 }
 function applyClones(mv, mon){
-  if(dustStop('player', 'clones')) return;          // their dust: no copies form — (4.48) if it has one left this turn
+  if(dustStop('player', 'clones')) return;          // (4.66) never now: 72 Transformations is the Monkey King's own (KIT_STATES, dustThrough)
   ui.battle.clones = { turnsLeft:mv.clones.turns, mult:mv.clones.mult,
                        evade:mv.clones.evade, full:!!mv.clones.full, uid:mon.uid, fresh:true };   // (4.23) `fresh`: their pictures come in late, the first time
   setPStatus(0, { type:'clones', turnsLeft:mv.clones.turns, evade:mv.clones.evade });
@@ -2594,7 +2596,7 @@ const VERY_HIGH = {
     { cleanse:true, passive:true, borrowPick:1, borrowRandom:1, borrowTier:2 },
   ], text:[
     /* (4.48) the designer's nerf: 1 / 2 / 3 a turn, by kind, each job (DUST_COUNT) */
-    'Each turn, sweeps away or stops <b>1</b> kind of enemy buff, and cleans or stops <b>1</b> kind of their debuffs on your side — the worst first (their Diamond Dust; disables). Cast again while it is up: <b>+1</b> of each that turn. Your own effects keep going. Shields are not touched.',
+    'Each turn, sweeps away or stops <b>1</b> kind of enemy buff, and cleans or stops <b>1</b> kind of their debuffs on your side — the worst first (their Diamond Dust; disables). Cast again while it is up: <b>+1</b> of each that turn. Your own effects keep going. Shields, and a legendary\'s own powers, are not touched.',
     'Each turn, sweeps away or stops <b>2</b> kinds of enemy buffs, and cleans or stops <b>2</b> kinds of their debuffs on your side, the worst first. Works upon taking the field, and again each time the recharge meter fills (renewing one already up); cast again while it is up: <b>+1</b> of each that turn. Active skill also casts one random other Very High skill at <b>+</b> strength.',
     /* (4.50) at the start of a turn with none up, not as it comes in (dustPreTurn) */
     'Each turn, sweeps away or stops <b>3</b> kinds of enemy buffs, and cleans or stops <b>3</b> kinds of their debuffs on your side, the worst first. At the start of each turn with no Diamond Dust of yours up, it casts one, from the field or the bench (one a turn, however many of yours carry it), and so does the recharge meter filling with none up; one already up is left to run. Each carrier\'s dust falls by itself once a meter, as well as the cast you write. Cast again while it is up: <b>+1</b> of each that turn, which no Tempering or Binding Curse turns aside. Active skill also casts a Very High skill of your choice at <b>✦</b> strength, and a second one at random.',
@@ -3056,6 +3058,19 @@ const STATUS_KIND = {
   blinded:'debuff',                                   // (3.25) the Ladybird's Blinding Beam
   hxWeak:'debuff', hxDodge:'debuff', hxAtk:'debuff', hxDmg:'debuff', hxCrit:'debuff', hxDr:'debuff',   // (3.86) Vicious Hex's
 };
+/* (4.66) A legendary's own kit — the designer: "some legendary active quick moves should me made unsweepable like
+   haunting aria since it's an innate part of their kit": Steel Soul, Tachypsychia, 72 Transformations' clones,
+   Vita, Ice Barrier, and the Whalelord's Gathering Wrath beside his Aria. Like the Aria, in either side's hands: no
+   Diamond Dust sweeps one or keeps it from forming, no Nova takes it, nothing steals it — and its own side's dust
+   still holds it open, as it holds anything of that side's. `state`: it still counts down and shows its turns.
+   The Aftershock and the Sacred Flame are upkeep strikes, not statuses (kitPreHit). Overgrowth's stacks, Comet
+   Augury's comets and Portent, and Cataclysm's charges with the Dragon Legacy were never the dust's to take. */
+const KIT_STATES = new Set(['steelSoul', 'tachy', 'clones', 'vita', 'iceBarrier', 'wrath']);
+function kitState(status){
+  if(status && KIT_STATES.has(status.type)){ status.unsweepable = true; status.state = true; }
+  return status;
+}
+function kitPreHit(p){ return !!(p && (p.aftershock || p.sacredFlame)); }
 /* Fields: side-wide effects with a real duration, as opposed to a one-turn
    stun or a nap that is used up. A Diamond Dust holds its OWN side's fields
    open; one-shot debuffs are left to run out. (3.16: the deep freeze and
@@ -3102,6 +3117,7 @@ function enemySideStatuses(){
 function getESide(type){ return ui.battle ? enemySideStatuses()[type] : undefined; }
 function setESide(status){
   if(!ui.battle || !status) return null;
+  kitState(status);                                        // (4.66) a legendary's own kit: no dust's
   if(!status.through && !status.unsweepable && dustStop('enemy', status.type)) return null;   // your dust keeps it from forming (and Detonate counts it, 3.69); (3.86) a Binding Curse's ward goes through; (4.48) its count
   let st = Object.assign({ turnsLeft: STATUS_TURNS }, status, { by:'enemy' });
   if(st.type === 'overheat') st = overheatMerged(enemySideStatuses().overheat, st);   // (3.60) as yours
@@ -3221,6 +3237,7 @@ function dustHalf(kind){ return STATUS_KIND[kind] === 'debuff' ? 'marks' : 'buff
 /* What goes through the other side's dust untried: a Steel Aegis with Tempering in its team; a Curse (and its ward)
    with a working Binding Curse. */
 function dustThrough(owner, kind){
+  if(KIT_STATES.has(kind)) return true;                    // (4.66) a legendary's own kit: no dust stops it
   if(kind === 'steelAegis') return owner === 'player' ? temperHolders().length > 0 : !!(typeof foeTemperingGuards === 'function' && foeTemperingGuards());
   if(kind === 'curse' || kind === 'curseWard') return owner === 'player' ? !!yourBinder() : !!(typeof foeBinder === 'function' && foeBinder());
   return false;
@@ -3352,7 +3369,7 @@ function dustBuffKinds(side){
   }
   /* its queued upkeep strikes (an Overheat's burn and a Fiery Enchantment's go with their spells) */
   (b.preHits || []).forEach(p=>{
-    if((p.by || 'player') !== side || p.src === 'overheat' || p.src === 'enchant') return;
+    if((p.by || 'player') !== side || p.src === 'overheat' || p.src === 'enchant' || kitPreHit(p)) return;   // (4.66) an Aftershock or a Sacred Flame: a legendary's own
     const name = p.sacredFlame ? '🐦‍🔥 Sacred Flame' : p.aftershock ? '💥 Aftershock' : (p.label || 'upkeep strike');
     add('upkeep:' + (p.src || name), name, null, ()=>{ const was = (b.preHits || []).length; b.preHits = (b.preHits || []).filter(x=> x !== p); return was - b.preHits.length; });
   });
@@ -3422,7 +3439,9 @@ function dustMarkKinds(side){
 
    Deliberately NOT swept, on either side: a Cataclysm's charges and the Dragon Legacy they leave. Those were bought
    with written words, and failure should cost practice, never progress. Nor (3.13) shields — block stacks: "remove
-   its effect of breaking shields, in line with fairy's weakness to steel".
+   its effect of breaking shields, in line with fairy's weakness to steel". Nor (4.66) a legendary's own kit:
+   Steel Soul, Tachypsychia, 72 Transformations, Vita, Ice Barrier, Gathering Wrath (KIT_STATES), an Aftershock and
+   a Sacred Flame (kitPreHit), as the Haunting Aria never was.
    ============================================================ */
 function diamondDustCleanse(caster){
   const b = ui.battle;
@@ -3553,7 +3572,7 @@ function sweepableBuffs(side){
   if(tbS && tbS.stacks > fixS) out.push({ key:'teamBlock', shield:true, label:`🔩 Team shields ×${tbS.stacks - fixS}`, take:()=>{ tbS.stacks = fixS; teamVals(tbS); } });
   /* an Overheat's burn goes with its Overheat; the rest are buffs of their own */
   (b.preHits || []).forEach(p=>{
-    if((p.by || 'player') !== side || p.src === 'overheat' || p.src === 'enchant') return;   // (3.87) a Fiery Enchantment's goes with its spell
+    if((p.by || 'player') !== side || p.src === 'overheat' || p.src === 'enchant' || kitPreHit(p)) return;   // (3.87) a Fiery Enchantment's goes with its spell; (4.66) an Aftershock or a Sacred Flame stays
     const name = p.sacredFlame ? '🐦‍🔥 Sacred Flame' : p.aftershock ? '💥 Aftershock' : (p.label || 'upkeep strike');
     out.push({ label:name, take:()=>{ b.preHits = (b.preHits || []).filter(x=> x !== p); } });
   });
@@ -3596,7 +3615,7 @@ function monGains(m, side){
     }
     if(m.ddBreak) add('shieldBreak', '🐲 Shield-breaking', ()=>{ m.ddBreak = 0; });
     if(m.elusive) add('elusive', '💨 Elusive', ()=>{ m.elusive = false; m.gooed = true; });
-    if(m._vita && m._vita.turnsLeft > 0) add('vita', '🕊 Vita', ()=>{ m._vita = null; });
+    /* (4.66) not a wild Caladrius's Vita: a legendary's own kit, as yours is (KIT_STATES) */
   }
   return out;
 }
@@ -4808,19 +4827,20 @@ function spendTachy(m, on){
    ariaPassesThrough first — and every other dodge): true if it slipped the
    blow, and then a step down its ladder. `m`: the one the blow is aimed at,
    either side's. */
-function tachyDodgeRoll(m, sight){
+function tachyDodgeRoll(m, sight, seen){
   const st = tachyOf(m);
   if(!st) return false;
   if(!(Math.random() < tachyDodgeChance(st) * (sight == null ? 1 : sight))) return false;
+  if(seen && seen()) return false;                 // (4.65) Fiery Eyes saw through it: it lands, and no step down
   st.di = (st.di || 0) + 1;
   return true;
 }
 /* One blow of theirs at the one of yours out front, rolled for real: every
    other way of slipping it first, then Tachypsychia's. Returns 'tachy' when
    Tachypsychia took it, true for another dodge, false when it lands. */
-function rollPlayerDodge(e){
-  if(Math.random() < playerEvasionFrom(e, null, true)) return true;
-  return tachyDodgeRoll(activeMon(), sightFactor('enemy')) ? 'tachy' : false;
+function rollPlayerDodge(e, seen){
+  if(Math.random() < playerEvasionFrom(e, null, true)) return (seen && seen()) ? false : true;   // (4.65) seen through
+  return tachyDodgeRoll(activeMon(), sightFactor('enemy'), seen) ? 'tachy' : false;
 }
 /* Its words: 12.5% as 12.5%, the rest whole. */
 const tachyPct = x=> `${Math.round((x || 0) * 1000) / 10}%`;
@@ -5123,8 +5143,11 @@ function noteAriaAttack(){
    through the haunting: it lands, it does not spend the untouchable turn,
    and a reflex it wakes is the Aria alone (he still goes into it; the blow
    still lands). The caller adds ariaPiercedNote() to the blow's line. */
-function ariaPassesThrough(mon, pierce){
+function ariaPassesThrough(mon, pierce, seen){
   const singer = ariaSingerFor(mon);                                      // (3.64) he, or the Whalelord beside it
+  /* (4.65) `seen`: a Fiery Eyes seer (fierySeer) — where the haunting or his reflex would let it through, half the
+     time the eyes see through instead, and it is a blow that cannot be dodged */
+  if(!pierce && seen && (ariaFieldEvasion() > 0 || singer) && seen()) pierce = true;
   if(pierce){
     if(ariaFieldEvasion() > 0 && ui.battle) ui.battle._ariaPierced = ` It sees straight through the haunting.`;
     else if(singer) ariaReflex(singer, true, mon);
@@ -5754,7 +5777,8 @@ function quickStrikeYours(e, mon, done){
   noteAriaAttack();                                           // an attack on your side, all the same
   bob(document.getElementById('enemyBob-' + idx), -1);
   const covered = ariaFieldEvasion() > 0;
-  if(ariaPassesThrough(mon, seesThrough(e))){                 // the untouchable turn, or his reflex (3.08: one rule for every attack; 3.09: a Third Eye sees through)
+  const seen = seesThrough(e) ? null : fierySeer(e, pid('playerBob'));   // (4.65) Fiery Eyes
+  if(ariaPassesThrough(mon, seesThrough(e), seen)){           // the untouchable turn, or his reflex (3.08: one rule for every attack; 3.09: a Third Eye sees through)
     dodgePlayer(); floatMiss(pid('playerBob'), 'MISS');
     if(covered) battleMsg(`⚡ ${name}'s quick attack passes harmlessly through.`);
     return setTimeout(done, 700);
@@ -5764,7 +5788,7 @@ function quickStrikeYours(e, mon, done){
     battleMsg(`⚡ ${name}'s quick attack — 🔆 blinded, it misses!`);
     return setTimeout(done, 650);
   }
-  if(!seesThrough(e) && rollPlayerDodge(e)){   // (a Third Eye cannot miss, 2.97; 3.63 Tachypsychia's dodge last)
+  if(!seesThrough(e) && rollPlayerDodge(e, seen)){   // (a Third Eye cannot miss, 2.97; 3.63 Tachypsychia's dodge last)
     dodgePlayer(); floatMiss(pid('playerBob'), dodgeWord(mon));
     battleMsg(`⚡ ${name}'s quick attack finds nothing.`);
     return setTimeout(done, 650);
@@ -6333,6 +6357,31 @@ function seesThrough(m){
      can be dodged — as a Lock-On, for a while */
   if(ui.battle && (m.uid ? getPStatus(0, 'stargaze') : getESide('stargaze'))) return true;
   return sideAura(m.uid ? 'player' : 'enemy', 'lockOn') > 0;
+}
+/* (4.65) FIERY EYES — the designer: "monkey king's 72 transformations should also carry a passive effect: fiery eyes,
+   that allows him a 50% chance to pierce dodge or evasion techniques. this effect is disabled by curse." The always-on
+   part of his 72 Transformations (`always.fieryEyes`, once he knows it), read through passiveOf, so a ✦ Curse on his
+   side quiets it as any passive (on the field or off it). Either side's Monkey King, and the one who fights beside you.
+   One blow, one roll, made the first time something of theirs would slip it — a dodge, a stance, a Mirage, clones,
+   Tachypsychia, a Foresight, the Whalelord's haunting or his reflex: half the time his eyes see through, and nothing
+   slips that blow. His own blindness is no dodge of theirs: a blinded swing still goes wide. */
+function fieryEyesOf(m){ const p = m ? passiveOf(m) : null; return (p && p.fieryEyes) || 0; }
+/* A seer for one blow of `m`'s: a function asked when a dodge would take the blow — true when his eyes see through it
+   (rolled once; the blow keeps the answer), and FIERY EYES floats over `anchor` (the one it is aimed at; `delay` as
+   the blow's). Null when he has none working. */
+function fierySeer(m, anchor, delay){
+  const c = fieryEyesOf(m);
+  if(!(c > 0)) return null;
+  let rolled = null;
+  return ()=>{
+    if(rolled !== null) return rolled;
+    rolled = Math.random() < c;
+    if(rolled){
+      if(anchor) setTimeout(()=> floatMiss(anchor, 'FIERY EYES', 'fiery', 0.06), delay || 0);   // said over the one it hits
+      if(typeof logBattle === 'function') logBattle(`Fiery Eyes: ${m.uid ? displayName(m) : m.species}'s blow sees through a dodge`);
+    }
+    return rolled;
+  };
 }
 function atFullHealth(m){
   if(!m) return false;
@@ -9206,7 +9255,7 @@ function blowsToFinish(e, m, move){
   if(ex.sleeperMult && getMStatus(m, 'asleep')) one *= ex.sleeperMult;          // (3.16) a Dream Eater goes for the sleeper
   const soak = shieldSoak(m);                                   // (3.64) its own shields and its team's
   const need = Math.ceil((m.currentHp + soak) / Math.max(1, one * hits));
-  const dodge = seesThrough(e) ? 0 : Math.min(0.95, playerEvasionFrom(e, m));   // a Third Eye cannot miss (2.97)
+  const dodge = seesThrough(e) ? 0 : Math.min(0.95, playerEvasionFrom(e, m)) * (1 - fieryEyesOf(e));   // a Third Eye cannot miss (2.97); (4.65) Fiery Eyes half the time
   return need / (1 - dodge);
 }
 function enemyPickTarget(e, move, ownChoice){
@@ -9892,6 +9941,7 @@ function passiveBits(p, atk){
   if(p.focus)        bits.push(`<b>Focus</b>: <b>+${pc(p.focus - 1)}%</b> damage if nothing has hit it this round`);
   if(p.thirdEye)     bits.push(`<b>Third Eye</b>: its attacks can't be dodged`);
   if(p.neverMiss)    bits.push(`<b>Never misses</b>: its attacks can't be dodged`);   // (3.63) the Thunder Newt's
+  if(p.fieryEyes)    bits.push(`<b>Fiery Eyes</b>: <b>${pc(p.fieryEyes)}%</b> chance each blow sees through every dodge and evasion`);   // (4.65) the Monkey King's
   if(p.composure)    bits.push(`<b>Composure</b>: <b>+${pc(p.composure - 1)}%</b> damage at full health`);
   if(p.exploit)      bits.push(`<b>Exploit</b>: <b>+${pc(p.exploit - 1)}%</b> damage on a monster that is asleep, confused, blinded, charmed or forgetting, or under a Discombobulate`);
   if(p.precog)       bits.push(`<b>Precognition</b>: the first attack on it each round does <b>${pc(1 - p.precog)}% less</b>`);
@@ -10789,7 +10839,7 @@ function renderStatusBadges(){
     fr.innerHTML = Object.values(enemySideStatuses()).map(st=>{
       const shown = Math.max(0, st.turnsLeft - 1);
       const saved = (st.type === 'tachy' && st.banked > 0) ? ` · ⚡${st.banked} saved` : '';
-      const n = st.unsweepable ? '' : st.type === 'steelSoul' ? ' · this turn'
+      const n = (st.unsweepable && !st.state) ? '' : st.type === 'steelSoul' ? ' · this turn'   // (4.66) a kit's state still shows its turns
               : st.type === 'tachy' ? tachyPillTail(st)                                                // (3.63) a stolen one: its two chances
               : st.type === 'nourish' ? ` ×${st.stacks || 1}`                                          // (3.76) a future Grass's Nourish
               : st.type === 'barrier' ? ` · −${Math.round((st.reduce || 0.5) * 100)}%` : ' ' + shown;   // a quick buff (2.93); a barrier (3.14)
@@ -11022,7 +11072,7 @@ function statusTipText(key, st, c, pill){
     case 'prep': return m ? `${c.W} has built <b>${m.prep || 0}</b> preparation${m.prep === 1 ? '' : 's'}. Its big move spends them for extra damage.` : '';
     case 'diamondDust': { const n = DUST_COUNT[Math.max(0, vhTier(s))] || 1, L = ui.battle ? dustLeft(c.yours ? 'player' : 'enemy') : null;   // (4.48) its count
       return `Each turn it sweeps away or stops up to <b>${n}</b> kind${n > 1 ? 's' : ''} of ${c.yours ? 'their' : 'your'} buffs, and cleans or stops up to <b>${n}</b> kind${n > 1 ? 's' : ''} of ${c.yours ? 'their debuffs on your side' : 'your debuffs on theirs'} — the worst first` +
-        (L ? ` (${L.buffs} and ${L.marks} left this turn)` : '') + `. Cast again while it is up: one more of each that turn. ${c.yours ? 'Your' : 'Their'} own effects don't run out. Shields stay.`; }
+        (L ? ` (${L.buffs} and ${L.marks} left this turn)` : '') + `. Cast again while it is up: one more of each that turn. ${c.yours ? 'Your' : 'Their'} own effects don't run out. Shields stay, and so does a legendary's own power: Haunting Aria, Gathering Wrath, Steel Soul, Tachypsychia, 72 Transformations, Vita, Ice Barrier, Aftershock, the Sacred Flame.`; }
     case 'charm': case 'charmed': return `Charmed: each turn, ${c.one ? c.w : c.yours ? 'each of your monsters' : 'each of them'} has a <b>${pc(s.chance || 0.2)}%</b> chance to lose its turn.`;
     case 'disrupt': return `${c.W} moves <b>1 step later</b>, and ${c.one ? 'each turn it has' : `each of ${c.its} monsters has, each turn,`} a <b>${pc(s.stun || 0.15)}%</b> chance to lose its turn.`;
     case 'tachy': { const o = tipOwner(s.owner), nm = tipName(o) || c.W;   // (3.63) its two ladders, where they stand

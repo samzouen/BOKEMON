@@ -401,39 +401,72 @@ function caGrounds(){
     caDeco(m, 'fountSmall', x - 0.15, y - 1.94, 3.3, 4.2, { z:y + 2.6 });                       // (4.02) standing in its middle (y - 1.1)
   });
   m.tags.palaceGuards = [{ x:29, y:20 }, { x:34, y:20 }];
-  /* the gardens: west and east of the palace and the avenue — box hedges,
-     flower beds, gravel walks, a pond with its fountain, blossom and cypress */
-  const garden = (x0, y0, w, h, mirror)=>{
-    fill(x0, y0, w, h, T.GRASS);
-    fill(x0, y0, w, 1, T.HEDGE); fill(x0, y0 + h - 1, w, 1, T.HEDGE);
-    fill(x0, y0, 1, h, T.HEDGE); fill(x0 + w - 1, y0, 1, h, T.HEDGE);
-    const gx = x0 + Math.floor(w / 2) - 1, cy = y0 + Math.floor(h / 2);
-    fill(gx, y0, 2, h, T.PATH); fill(x0, cy, w, 2, T.PATH);
-    const bed = (bx, by, bw, bh, c)=> fill(bx, by, bw, bh, T.BED, 'bed:' + c);
-    bed(x0 + 1, y0 + 2, gx - x0 - 2, 2, 'pink'); bed(gx + 3, y0 + 2, x0 + w - gx - 5, 2, 'gold');
-    bed(x0 + 1, y0 + h - 4, gx - x0 - 2, 2, 'violet'); bed(gx + 3, y0 + h - 4, x0 + w - gx - 5, 2, 'white');
-    /* a round pond where the walks cross, its fountain in the middle, the gravel going round it — (4.02) round indeed
-       (caPool: its 4 × 4 squares; until 4.02 a cross of squares), the fountain moved up to stand in its middle */
-    fill(gx - 2, cy - 2, 6, 6, T.PATH);
-    caPool(m, gx + 1, cy + 1, 1.72, 1.72, T.PATH);
-    caPut(m, gx, cy, T.FOUNT, 'water'); caPut(m, gx + 1, cy, T.FOUNT, 'water'); caPut(m, gx, cy + 1, T.FOUNT, 'water'); caPut(m, gx + 1, cy + 1, T.FOUNT, 'water');
-    caDeco(m, 'fountSmall', gx - 0.65, cy - 2.44, 3.3, 4.2, { z:cy + 2.1 });
-    [[x0 + 2, y0 + 5], [x0 + w - 3, y0 + 5], [x0 + 2, y0 + h - 6], [x0 + w - 3, y0 + h - 6]].forEach(([tx, ty], i)=>{
-      if(caAt(m, tx, ty) === T.GRASS){ caPut(m, tx, ty, T.TREE); caDeco(m, 'tree', tx - 0.5, ty - 1.25, 2, 2.2, { variant:(i + (mirror ? 1 : 0)) % 2 ? 'blossom' : 'cypress', z:ty + 0.9 }); }
-    });
+  /* (4.65) THE GARDENS, west and east of the palace — the designer: "the fairy kingdom castle gardens need work compared
+     to the rest of the castle, too! Could you really put in effort to that one, please? the fairy castle is gorgeous."
+     A formal parterre, its ground drawn whole (CA_GARDEN, 44-castle-garden.js; its squares 'gdn:<side>:<dx>:<dy>'): a
+     clipped yew hedge round it, a rose arch over its north and south gates, a clipped ball on each pier of its east
+     and west ones; walks three wide crossing at a round paved court, the pond in the court's middle with its fountain,
+     lilies and koi; four beds edged in box with roses and lavender, a spiral yew in each north one, a marble fairy in
+     each south one; blossom trees in its north corners, a cypress in its outer south one; curved marble seats and
+     urns about the court. `ix` is counted from the side away from the palace (the west garden's west); its inner south
+     corner is the tavern's (the record store's), built after over it. (Until 4.65: grass with a path across, four
+     small beds, a round pond, two cypresses and two blossom trees.) */
+  m.tags.gardens = [];
+  const garden = (x0, y0, side)=>{
+    const W = 11, H = 19, east = side === 1;
+    const X = ix=> east ? x0 + W - 1 - ix : x0 + ix;                  // a square's x, `ix` from the outer side
+    const sp = { side, x0, y0, w:W, h:H, east, cx:x0 + W / 2, cy:y0 + H / 2, pondR:2.15, courtR:3.45, feats:[] };
+    m.tags.gardens[side] = sp;
+    const key = (x, y)=> 'gdn:' + side + ':' + (x - x0) + ':' + (y - y0);
+    const covered = (ix, iy)=> ix >= 9 && iy >= 13;                    // the house's corner
+    for(let iy = 0; iy < H; iy++) for(let ix = 0; ix < W; ix++){
+      const x = X(ix), y = y0 + iy;
+      const ring = ix === 0 || ix === W - 1 || iy === 0 || iy === H - 1;
+      const gateNS = (iy === 0 || iy === H - 1) && ix >= 4 && ix <= 6, gateWE = (ix === 0 || ix === W - 1) && iy >= 8 && iy <= 10;
+      const walk = (ix >= 4 && ix <= 6) || (iy >= 8 && iy <= 10);
+      const court = Math.hypot(x + 0.5 - sp.cx, y + 0.5 - sp.cy) < sp.courtR;
+      caPut(m, x, y, ring && !gateNS && !gateWE ? T.HEDGE : (walk || court || gateNS || gateWE) ? T.PATH : T.BED, key(x, y));
+    }
+    /* the pond, its fountain standing in the middle */
+    caPool(m, sp.cx, sp.cy, sp.pondR, sp.pondR, (x, y)=> key(x, y), { life:true });
+    caPut(m, Math.floor(sp.cx), Math.floor(sp.cy), T.FOUNT, 'water');
+    caDeco(m, 'fountSmall', sp.cx - 1.65, sp.cy - 3.44, 3.3, 4.2, { z:sp.cy + 1.1 });
+    /* what stands in it: on its square (ix, iy), its picture `w` × `h` standing on the square's foot */
+    const stand = (kind, ix, iy, w, h, o, tile)=>{
+      if(covered(ix, iy)) return;
+      const x = X(ix), y = y0 + iy;
+      if(tile) caPut(m, x, y, tile, key(x, y));
+      caDeco(m, kind, x + 0.5 - w / 2, y + 0.95 - h, w, h, Object.assign({ z:y + 0.9, garden:side }, o || {}));
+      sp.feats.push({ kind, x:x + 0.5, y:y + 0.5, o:o || {} });
+    };
+    stand('tree', 1, 1, 3.0, 3.5, { variant:'blossom' }, T.TREE);
+    stand('tree', 9, 1, 3.0, 3.5, { variant:'blossom', flip:true }, T.TREE);
+    stand('tree', 1, 17, 1.5, 3.4, { variant:'cypress' }, T.TREE);
+    stand('gTopiary', 2, 4, 1.3, 2.3, { n:0 });
+    stand('gTopiary', 8, 4, 1.3, 2.3, { n:1 });
+    stand('gStatue', 2, 14, 1.4, 2.6, { n:east ? 1 : 0 });
+    stand('gStatue', 8, 14, 1.4, 2.6, { n:east ? 0 : 1 });
+    /* curved marble seats on the court's north side, facing the fountain; urns on its south side */
+    [[3, 7], [7, 7]].forEach(([ix, iy])=> stand('gBench', ix, iy, 1.5, 1.4, { ccx:sp.cx, ccy:sp.cy }, T.BENCH));
+    [[3, 11], [7, 11]].forEach(([ix, iy], i)=> stand('gUrn', ix, iy, 1.1, 1.9, { n:i + side * 2 }, T.PLANTER));
+    /* a rose arch over the north and south gates, its posts on the hedge's ends either side */
+    [0, H - 1].forEach(iy=>{ const y = y0 + iy; caDeco(m, 'gArch', x0 + 3.05, y + 0.92 - 3.3, 4.9, 3.3, { z:y + 0.95, garden:side, south:iy > 0 }); });
+    /* a clipped ball on each pier of the east and west gates */
+    [[0, 7], [0, 11], [W - 1, 7], [W - 1, 11]].forEach(([ix, iy])=> stand('gBall', ix, iy, 1.0, 1.25, { n:ix + iy }));
+    caDeco(m, 'gFlutter', x0 + 0.5, y0 + 0.5, W - 1, H - 1, { z:y0 + H, garden:side });   // butterflies over it
   };
-  garden(5, 12, 11, 19, false);
-  garden(48, 12, 11, 19, true);
-  /* hedges and gaps: the gardens open onto the ring road and the forecourt */
-  [[5, 21], [5, 22], [15, 21], [15, 22], [58, 21], [58, 22], [48, 21], [48, 22], [10, 12], [11, 12], [53, 12], [54, 12], [10, 30], [11, 30], [53, 30], [54, 30]].forEach(([x, y])=> caPut(m, x, y, T.PATH));
+  garden(5, 12, 0);
+  garden(48, 12, 1);
+  /* hedges and gaps: the gardens open onto the ring road and the forecourt — (4.65) their gates in their layout now,
+     each three wide, on its walks */
   /* the tavern and the record store, fronting the square's north side — (4.02) built after the forecourt and the
      gardens: the forecourt's paving (rows 20–25) had taken the top row of their roofs, the tavern's chimney left
      standing on the paving (the designer: "some of the houses are hidden by the floor tiles, and the chimney sticks
      out above the floor but the roof is hidden by the floor"), and each garden two of their columns */
   m.tags.tavern = house(14, 25, 8, 7, 'tavern', { door:[17, 18], sign:'🍺', chimney:true, front:3 });
   m.tags.records = house(42, 25, 8, 7, 'records', { door:[45, 46], sign:'🎵', front:3 });
-  /* topiary beside the palace */
-  for(let x = 10; x < 18; x += 3){ caPut(m, x, 7, T.HEDGE, 'topiary'); caPut(m, x + 36, 7, T.HEDGE, 'topiary'); }
+  /* topiary beside the palace — (4.65) the gardens' own: a spiral yew, three clipped balls, a spiral, each side */
+  for(let x = 10, i = 0; x < 18; x += 3, i++) [x, 63 - x].forEach(xx=>{ caPut(m, xx, 7, T.PLANTER, 'grass:1'); caDeco(m, 'gTopiary', xx + 0.5 - 0.65, 7.95 - 2.3, 1.3, 2.3, { z:7.9, n:i % 2 }); });
   fill(10, 5, 8, 1, T.PATH); fill(46, 5, 8, 1, T.PATH);
   /* the orchards beside the market */
   const orchard = (x0, y0, w, h)=>{
@@ -513,6 +546,7 @@ const CA_P = { cv:null, ov:null, stage:null, world:null, raf:0, key:'', last:0, 
    stands in front of its keepers' legs, its canopy over whoever passes behind it ("put the fairies properly behind
    their stalls instead of above"). */
 const CA_OVER_KINDS = new Set(['tree', 'lamp', 'palaceTower', 'keep', 'cornerTower', 'gatehouse', 'fountSmall', 'fountGrand', 'chimney', 'column', 'bookcase', 'stall', 'planter', 'well',
+  'gTopiary', 'gStatue', 'gArch', 'gUrn',   /* (4.65) the gardens' */
   /* (3.97) and indoors: whatever stands up high enough to hide someone behind it, and the counters with their keepers behind */
   'candelabra', 'palm', 'armour', 'vase', 'clock', 'globe', 'readingTable', 'harp', 'plantPot', 'desk', 'rockingHorse', 'teaTable', 'armchair',
   'bar', 'table', 'barrels', 'recCounter', 'recBin', 'gramophone', 'jukebox', 'boxes',
@@ -528,7 +562,7 @@ const CA_OVER_KINDS = new Set(['tree', 'lamp', 'palaceTower', 'keep', 'cornerTow
 /* (4.32) The designer: "The castle walls at north and south need to turn the player translucent on the south edge to
    show he is behind the walls and the flames" — the battlements and the parapet before you on a wall's (or a rampart's)
    south edge, and the braziers burning on them, join them: you are drawn faded behind them, no longer clear through. */
-const CA_BEHIND_KINDS = new Set(['fountGrand', 'fountSmall', 'stall', 'well', 'planter', 'column', 'armour', 'battlement', 'parapetW', 'brazier']);
+const CA_BEHIND_KINDS = new Set(['fountGrand', 'fountSmall', 'stall', 'well', 'planter', 'column', 'armour', 'battlement', 'parapetW', 'brazier', 'gUrn', 'gBench']);
 const CA_BEHIND = { cut:0.42 };
 function caPaintStart(stage, world, m, views, bg){
   if(!stage || !world) return;
@@ -639,6 +673,7 @@ function caPaintDraw(cam, now){
       if(key === 'water') key = 'water:' + ((frame + (x * 3 + y) % 4) % 4);
       if(key && (key[0] === 'b' || key[0] === 'p') && /^(bld|pal):/.test(key)) CA_ART.bldSlice(ctx, key, CA_P.S, px, py, pw, ph);
       else if(key && key[0] === 'c' && key[1] === 'w' && typeof CA_WALL !== 'undefined') CA_WALL.slice(ctx, key, CA_P.S, px, py, pw, ph);   // (4.26) the walls
+      else if(key && key[0] === 'g' && key[1] === 'd' && typeof CA_GARDEN !== 'undefined'){ CA_GARDEN.slice(ctx, key, CA_P.S, px, py, pw, ph); continue; }   // (4.65) the gardens, their own edges
       else if(key) ctx.drawImage(caSpr(key), px, py, pw, ph);
       caEdges(ctx, m, x, y, t, px, py, pw, ph);
     }
@@ -649,6 +684,7 @@ function caPaintDraw(cam, now){
     caDrawDeco(ctx, d, ox + d.x * k, oy + d.y * k, d.w * k, d.h * k, now);
   });
   caPaintOver(m, k, ox, oy, x0, y0, x1, y1, dpr, now);
+  if(m.tags && m.tags.gardens && typeof CA_GARDEN !== 'undefined') CA_GARDEN.warm(CA_P.S);   // (4.65) the gardens' textures, made ahead
 }
 /* (3.97) the layer over everyone: each tall thing again, but only over the squares one can stand on behind it, then
    a soft window round you and round Lucesco */
@@ -691,6 +727,7 @@ function caPaintOver(m, k, ox, oy, x0, y0, x1, y1, dpr, now){
   CA_P.behindAny = anyB;
   if(m.tags && m.tags.bunting && caBunting(g, m.tags.bunting, k, ox, oy, x0, y0, x1, y1, now)) any = true;   // (3.97) overhead, over everyone
   CA_P.fast = caPetals(g, m, k, ox, oy, x0, y0, x1, y1, now);
+  if(typeof CA_GARDEN !== 'undefined' && CA_GARDEN.takeFlying()) CA_P.fast = true;   // (4.65) butterflies in sight
   if(CA_P.fast) any = true;
   CA_P.overAny = any;
   if(!any) return;
@@ -848,6 +885,7 @@ function caDrawView(ctx, v, k, ox, oy, x0, y0, x1, y1, frame, now){
           key = td ? 'towerDoor:' + (td.y < 30 ? 's' : 'n') : 'towerTop';
         }
         if(key && /^(bld|pal):/.test(key)) CA_ART.bldSlice(ctx, key, kk, px, py, pw, ph);   // (3.97) its picture, small
+        else if(key && /^gdn:/.test(key) && typeof CA_GARDEN !== 'undefined') CA_GARDEN.slice(ctx, key, kk, px, py, pw, ph);   // (4.65) the gardens'
         else if(key && key.startsWith('cw:') && typeof CA_WALL !== 'undefined') CA_WALL.slice(ctx, key, kk, px, py, pw, ph);   // (4.26) the walls
         else if(key) ctx.drawImage(caSpr(key), px, py, pw, ph);
       }
@@ -1445,7 +1483,7 @@ function caPool(m, cx, cy, rx, ry, land, o){
     m.g[i] = CA_T.WATER;
     m.spr[i] = typeof land === 'function' ? land(x, y) : caLandSpr(land, x, y);
   }
-  caDeco(m, 'pool', cx - RX, cy - RY, RX * 2, RY * 2, { cx, cy, rx, ry, rim, z:-1000 + cy });
+  caDeco(m, 'pool', cx - RX, cy - RY, RX * 2, RY * 2, { cx, cy, rx, ry, rim, life:!!o.life, z:-1000 + cy });   // (4.65) `life`: lilies and koi
   (m.tags.pools || (m.tags.pools = [])).push({ cx, cy, rx, ry, rim });
 }
 /* (4.08) how much of square (x, y) the pool's water covers, 0 to 1 (16 × 16 points over it) */
@@ -1481,6 +1519,7 @@ function caDrawPool(g, d, x, y, w, h, k, t){
     g.beginPath(); g.moveTo(px - len, py + k * 0.03 * Math.sin(ph)); g.quadraticCurveTo(px, py - k * 0.06, px + len, py + k * 0.03 * Math.cos(ph)); g.stroke();
   }
   g.globalAlpha = 1;
+  if(d.life && typeof CA_GARDEN !== 'undefined') CA_GARDEN.pondLife(g, d, cx, cy, rx, ry, k, t);   // (4.65) the gardens' ponds: lilies, koi
   for(let i = 0; i < 2; i++){
     const tw = Math.sin(t * 1.9 + i * 2.6 + d.cx);
     if(tw > 0.4){ const a = jgHash(i, Math.floor(t * 0.5 + i), 64) * Math.PI * 2, r = 0.6 * Math.sqrt(jgHash(Math.floor(t * 0.5 + i), i, 65));
@@ -1493,6 +1532,7 @@ function caDrawDeco(g, d, x, y, w, h, now){
   const t = now / 1000;
   switch(d.kind){
     case 'tree': {
+      if(d.garden != null && typeof CA_GARDEN !== 'undefined') return CA_GARDEN.tree(g, d, x, y, w, h, k);   // (4.65) the gardens' own
       g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.ellipse(x + w * 0.5, y + h * 0.9, w * 0.32, h * 0.08, 0, 0, 7); g.fill();
       if(d.variant === 'cypress'){
         g.fillStyle = '#5a3d22'; g.fillRect(x + w * 0.47, y + h * 0.72, w * 0.06, h * 0.18);
@@ -1608,6 +1648,14 @@ function caDrawDeco(g, d, x, y, w, h, now){
     case 'cwCrest': if(typeof CA_WALL !== 'undefined') return CA_WALL.crest(g, d, x, y, w, h, k); return;
     case 'stall': return CA_ART.stall(g, d, x, y, w, h, k);            // (3.97) the market's stalls, their keepers behind
     case 'planter': return CA_ART.planter(g, d, x, y, w, h, k);
+    /* (4.65) the gardens' */
+    case 'gTopiary': return CA_GARDEN.topiary(g, d, x, y, w, h, k);
+    case 'gStatue':  return CA_GARDEN.statue(g, d, x, y, w, h, k);
+    case 'gBench':   return CA_GARDEN.bench(g, d, x, y, w, h, k);
+    case 'gUrn':     return CA_GARDEN.urn(g, d, x, y, w, h, k);
+    case 'gArch':    return CA_GARDEN.arch(g, d, x, y, w, h, k);
+    case 'gBall':    return CA_GARDEN.ball(g, d, x, y, w, h, k);
+    case 'gFlutter': return CA_GARDEN.flutter(g, d, x, y, w, h, k, t);
     case 'bench': return CA_ART.bench(g, d, x, y, w, h, k);
     case 'well': return CA_ART.well(g, d, x, y, w, h, k);
     default: return caDrawFurniture(g, d, x, y, w, h, k, t);

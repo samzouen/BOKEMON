@@ -332,7 +332,10 @@ const MOVES = {
                     /* (3.63) "have it on both sides with the same stun chance. it's meant to be a
                        controlling move as the damage is not high": `stun` was read by theirs only */
                     ['Power1','Cloud Step',0.8,'Single',4,1,{stunHit:0.5}],
-                    ['Power2','72 Transformations',null,'Self',4,35,{clones:{turns:3, mult:0.5, evade:0.20, full:true}}],
+                    /* (4.65) the designer: "monkey king's 72 transformations should also carry a passive effect: fiery
+                       eyes, that allows him a 50% chance to pierce dodge or evasion techniques. this effect is disabled by
+                       curse" — its always-on part (`always`, read through passiveOf: a ✦ Curse quiets it) */
+                    ['Power2','72 Transformations',null,'Self',4,35,{clones:{turns:3, mult:0.5, evade:0.20, full:true}, always:{fieryEyes:0.5}}],
                     ['Ultimate','Heavensplitter',1.25,'Single',7,45,{bonus:{words:4, mult:2}}],
                     ['Max','Heavensplitter Max',1.5,'Single',7,999,{bonus:{words:4, mult:2}, coreOnly:true}]],
 
