@@ -95,7 +95,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.66';
+const GAME_VERSION = '4.68';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -843,63 +843,63 @@ const ELEMENT_PASSIVES = {
   /* (3.76) "change wildfire to work when the holder is off-field too. it also damages the holder from
      off-field when overheat is active. set values to 0.08/0.16/0.25 for Overheat base/+/star." */
   Fire:  { vh:   { name:'Wildfire', sym:'🔥',
-                   text:'While your Overheat is up, each turn it scorches every enemy for <b>0.08× / 0.16× / 0.25×</b> its ATK (by the Overheat\'s tier: base, + or ✦), and itself too, never below half its health — on the field or off it. Damage buffs count, as on Overheat ✦\'s burn. With several holders in your team, only the one whose scorch would hit hardest burns.' },
+                   text:'While your Overheat is up, each turn it scorches every enemy for <b>0.08× / 0.16× / 0.25×</b> its ATK (by the Overheat\'s tier), and itself too (never below half health), even from the bench. With several holders, only the strongest burns.' },
            ultra:{ name:'Consume', sym:'🕯️',
-                   text:'It deals <b>1% more</b> damage for every 1% of health it has lost, up to <b>+50%</b> at half health or below.' } },
+                   text:'<b>+1%</b> damage for every 1% of health it has lost, up to <b>+50%</b>.' } },
   /* (3.76) the designer's two new ones */
   Water: { vh:   { name:'Cleansing Springs', sym:'⛲',
-                   text:'While your Ice Tomb\'s chill is up, at the end of each turn it heals every one of your team for <b>1% / 2% / 2%</b> of its own max HP — <b>5% / 10% / 10%</b> instead to one below half health (by the Ice Tomb\'s tier) — and lifts one of their marks off your side, a freeze, sleep, stun or muddle first. A Fire monster above half health is not healed. At base and + it must be on the field; at ✦ it works from the bench too. Their ✦ Curse stops it.' },
+                   text:'While your Ice Tomb\'s chill is up, each turn it heals your team <b>1% / 2% / 2%</b> of its max HP (<b>5% / 10% / 10%</b> below half health; not Fire monsters above half) and lifts one of their marks off your side. From the bench only at ✦.' },
            ultra:{ name:'Shatter', sym:'🧊',
-                   text:'Anything chilled takes <b>15% more</b> damage, and anything frozen <b>15% more</b> (both: <b>30%</b>) — from every one of your side, while it is in your team, on the field or off it.' } },
+                   text:'Chilled enemies take <b>15% more</b> damage and frozen ones <b>15% more</b> (both: <b>30%</b>) from your whole team, even while it is on the bench.' } },
   Grass: { vh:   { name:'Nourish', sym:'🌱',
-                   text:'Every time your Leech Seed drinks (on the field or off it), your team gains <b>+3% / +4% / +5% ATK</b> for a turn (by the Leech Seed\'s tier), up to 5 stacks (<b>+15% / +20% / +25%</b>). Each new stack starts the turn again for all of them. It adds to every other ATK bonus, never multiplies.' },
+                   text:'Each time your Leech Seed drinks, your team gains <b>+3% / +4% / +5% ATK</b> for a turn (by the Leech Seed\'s tier), up to 5 stacks; each new stack renews them all.' },
            ultra:{ name:'Burgeon', sym:'🌳',
-                   text:'While it is at full health, on the field or off it, your whole team deals <b>20% more</b> damage (one at full health or several: 20%).' } },   /* (4.50) "the whole party gains +20% damage even from off-field" */
+                   text:'While it is at full health, even on the bench, your whole team deals <b>20% more</b> damage (several holders: still 20%).' } },   /* (4.50) "the whole party gains +20% damage even from off-field" */
   Electric: { vh:   { name:'Catalyse', sym:'⚗️',
-                      text:'When your Overcharge is cast while it is in your team, your next move that lands after the Overcharge\'s first gets one more chance to repeat: <b>50% / 75% / 100%</b> (by the Overcharge\'s tier: base, + or ✦).' },
+                      text:'When your Overcharge is cast, your next move that lands after its first gets another chance to repeat: <b>50% / 75% / 100%</b> (by the Overcharge\'s tier).' },
               ultra:{ name:'Capacitor', sym:'🔋',
-                      text:'<b>25%</b> of the damage it deals is stored, and strikes a random enemy at the end of the round. With none left, it waits: it strikes last of the next turn\'s start, the next wave\'s or the next fight\'s. Each attack stores its own, repeats and extra actions too; never more than the health it took.' } },   /* (4.51) the designer: "stored until it finally gets spent" */
+                      text:'Stores <b>25%</b> of the damage it deals and strikes a random enemy with it at the end of the round, or later if none is left. Never more than the health it took.' } },   /* (4.51) the designer: "stored until it finally gets spent" */
   Flying:   { vh:   { name:'Elusive', sym:'🪶',
-                      text:'While your Mirage is up, it takes less damage: as much as its best dodge chance, up to <b>30%</b> — and the rest of your team a third as much, while it is in your team. Every attack on it leaves afterimages, dodged or not.' },
+                      text:'While your Mirage is up, it takes less damage by its best dodge chance (up to <b>30%</b>), and your team a third as much. Every attack on it leaves afterimages, dodged or not.' },
               ultra:{ name:'Momentum', sym:'🌪️',
-                      text:'It deals <b>+10%</b> damage for every step of initiative it has, its own passives\' too, up to <b>+30%</b>.' } },
+                      text:'<b>+10%</b> damage for every step of initiative it has, up to <b>+30%</b>.' } },
   /* (3.76) "change spike armour very high passive to spike formation … shift the 1HP endurance
      mechanic to the ultra passive instead" */
   Ground:   { vh:   { name:'Spike Formation', sym:'🪨',
-                      text:'While your Spike Armour is up, a spike forms at the start of each turn, worth <b>0.2× / 0.3× / 0.4×</b> its ATK (by the Spike Armour\'s tier), on the field or off it. On the field, it is driven straight into a random enemy. Off it, up to <b>3</b> wait, and all are driven into the enemy (each at one at random) once it is on the field.' },
+                      text:'While your Spike Armour is up, each turn a spike worth <b>0.2× / 0.3× / 0.4×</b> its ATK (by the Spike Armour\'s tier) hits a random enemy. On the bench, up to <b>3</b> wait and strike when it comes in.' },
               ultra:{ name:'Metamorph', sym:'🦋',
-                      text:'Its damage grows <b>5%</b> at the end of each turn, on the field or off it, up to <b>+20%</b> (5 / 10 / 15 / 20%), and it keeps it for the rest of the battle. And once each time the meter fills, anything that would knock it out (an attack, a burst, a spike, a strike before the turn) leaves it on 1 HP with a shield; then nothing takes it below 1 HP for the rest of that turn and the next. A Curse of theirs on your side ends that, and stops it starting.' } },
+                      text:'<b>+5%</b> damage each turn (even on the bench), up to <b>+20%</b>. Once per meter, anything that would knock it out leaves it on 1 HP with a shield, and it can\'t fall below 1 HP that turn or the next. Their Curse stops this.' } },
   Psychic:  { vh:   { name:'Mind Control', sym:'🧠',
-                      text:'With it on the field, when your Discombobulate confuses an enemy, its confused swing is yours to aim: choose one of its own moves to turn on its own side, itself included (an AOE strikes all of them), with no words to write. The damage is multiplied by its confusion\'s own self-hit roll. Or let it swing as usual.' },
+                      text:'On the field, it aims your Discombobulate: each confused enemy uses the move you choose on its own side (an AOE hits all of them), with no words to write.' },
               ultra:{ name:'Foresight', sym:'👁️',
-                      text:'It dodges <b>20%</b> of attacks, and each of its strikes has a <b>20%</b> chance to be critical (<b>2×</b>). Rolled apart from a Hydra\'s own: if both land, they add up to <b>3×</b>.' } },
+                      text:'Dodges <b>20%</b> of attacks, and each strike has a <b>20%</b> chance to crit for <b>2×</b> (<b>3×</b> with a Hydra\'s own crit).' } },
   /* (3.76) "deadly combo (previously very high) is now the ultra passive effect. focused fury is now
      the very high passive …" */
   Physical: { vh:   { name:'Focused Fury', sym:'😡',
-                      text:'While it is on the field, your Counter stacks become <b>Deflect</b> stacks: each turns away <b>90%</b> of an attack, not 80%. If your Counter is + or ✦, each one\'s Combo and Enrage come at once, as it turns — to this monster, the one that turns them (✦: 2 stacks → 2 Deflect, and its next attack +50%, its ATK +40% for the battle). Stacks that come while it is off the field stay Counter stacks until it is back, and turn as it arrives.' },
+                      text:'On the field, your Counter stacks become <b>Deflect</b> stacks: <b>90%</b> off an attack, not 80%. With a + or ✦ Counter, their Combo and Enrage come to this monster at once (✦: next attack <b>+50%</b>, ATK <b>+40%</b>).' },
               ultra:{ name:'Deadly Combo', sym:'🤜',
-                      text:'Each hit it lands (its quick attacks and afterimages too) makes its attacks <b>10%</b> stronger, up to <b>+30%</b>, for the rest of the battle.' } },
+                      text:'Each hit it lands (quick attacks and afterimages too) makes it <b>10%</b> stronger, up to <b>+30%</b>, for the battle.' } },
   /* (3.86) "rework curse very high passive: binding curse" — and Vicious Hex's debuffs */
   Ghost:    { vh:   { name:'Binding Curse', sym:'🔗',
-                      text:'While it is in your team, on the field or off it, your Curse is cast through their Diamond Dust and is never lifted by it, and their dust cleans <b>2 fewer</b> of your debuffs off their side a turn (cleansing them or stopping them): a base or + dust none, a ✦ one 1. Casting their dust again gives it one more only if it is ✦. Each time their dust is turned aside, each time your Curse is cast, and each time it would run out (it lasts <b>1 more turn</b> instead), this monster and every cursed enemy on the field lose <b>6.66%</b> of this monster\'s max HP — straight from their health, past every shield and cut. All of it works only while this monster is above <b>33%</b> of its health: at 33% or below, nothing holds the Curse and nobody loses any health, until it is above 33% again. With several holders, the one with the most max HP above 33% holds it, and the next takes over when it falls to 33% or below. Each pulse counts as a hit for Gathering Wrath.' },
+                      text:'Even from the bench: your Curse can\'t be stopped or lifted by their Diamond Dust, which cleans <b>2</b> fewer of your debuffs. Whenever their dust tries, your Curse is cast, or it would end (it lasts a turn more), it and every cursed enemy lose <b>6.66%</b> of its max HP. Only above <b>33%</b> health.' },
               ultra:{ name:'Vicious Hex', sym:'🕸️',
-                      text:'Every time it deals damage, on the field or off it (its afterimages, a Whalelord\'s Haunting Aria from the bench, its Binding Curse too), the enemy it hits gets a random debuff until the end of that turn, each <b>15%</b>: it takes more damage, dodges less, has its hits cut (with any Ice Barrier and Ice Tomb\'s chill, each cutting what the others leave), deals less damage (taken off its damage bonuses), lands fewer critical hits, or its damage cuts are weaker. Each one that runs out counts for Unstable Magic.' } },
+                      text:'Each time it deals damage, even from the bench, the enemy gets a random <b>15%</b> debuff until the turn ends: it takes more damage, dodges less, has its hits cut, deals less, crits less, or cuts less.' } },
   Dragon:   { vh:   { name:'Violent Dance', sym:'🐲',
-                      text:'While your Dragon Dance is up and it is on the field, at the start of each turn it strikes <b>1 / 2 / 3</b> times (the Dance\'s base, + or ✦), each at one enemy at random, for <b>0.25× its ATK</b> — an attack of its own, as a quick attack is: it can be dodged, its type counts (super effective, resisted; Destruction makes it super effective), and it can land a critical hit. Before each strike it breaks <b>1 / 2 / 3</b> of that enemy\'s shields, as the Dance does, and any shield left still blocks it. And it deals <b>+20%</b> damage to anything slower than it (Mach Dragon counts).' },
+                      text:'While your Dragon Dance is up and it is on the field, it strikes <b>1 / 2 / 3</b> times (by the Dance\'s tier) at random enemies each turn for <b>0.25×</b> its ATK, breaking as many shields first. <b>+20%</b> damage to anything slower.' },
               ultra:{ name:'Destruction', sym:'☄️',
-                      text:'Its attacks are super effective (<b>1.5×</b>) against every element except Fairy.' } },
+                      text:'Its attacks are super effective (<b>1.5×</b>) against every element but Fairy.' } },
   /* (3.86) "steel very high passive might need a rework as it could be overpowered with heals" — (4.48) its sweeps
      part: the Aegis through their dust, and 2 fewer of your buffs to their dust a turn */
   Steel:    { vh:   { name:'Tempering', sym:'🔨',
-                      text:'While your Steel Aegis is up, once, a blow that would take it below half its health leaves it at half instead, with <b>3 shields</b> — ready again each time the meter fills. And while it is in your team, on the field or off it, your Steel Aegis is cast through their Diamond Dust and is never swept or stolen, and their dust takes <b>2 fewer</b> of your buffs a turn (sweeping them or stopping them): a base or + dust none, a ✦ one 1. Casting their dust again gives it one more only if it is ✦.' },
+                      text:'While your Steel Aegis is up, once per meter, a blow that would take it below half health leaves it at half with <b>3 shields</b>, and it can\'t fall below half that turn. Even from the bench, your Steel Aegis can\'t be stopped, swept or stolen, and their Diamond Dust takes <b>2</b> fewer of your buffs.' },
               ultra:{ name:'Fortress', sym:'🏰',
-                      text:'It resists every element except Dragon: attacks on it deal <b>⅔</b>.' } },
+                      text:'Resists every element except Dragon: attacks on it deal <b>⅔</b>.' } },
   /* (3.76) "reduce the damage gain per buff to 1.5% per active buff … reduce the damage caused by
      detonate to 0.2*atk" */
   Fairy:    { vh:   { name:'Coruscate', sym:'🎇',
-                      text:'While your Diamond Dust is up and it is in your team (on the field or off it), every one of your team deals <b>1.5% more</b> damage for each buff your side has up (Diamond Dust counts), up to <b>+15%</b>.' },
+                      text:'While your Diamond Dust is up, your team deals <b>1.5% more</b> damage for each buff your side has up, up to <b>+15%</b>.' },
               ultra:{ name:'Unstable Magic', sym:'🔮',
-                      text:'Every buff or debuff — either side\'s — swept away (a Diamond Dust, a Nova), kept from forming by a Diamond Dust, or running out makes your magic burst: <b>0.25×</b> the ATK of your strongest holder to every enemy (<b>0.2×</b> from one off the field), once for each, with no limit a turn. So their dust sweeping your effects pays them back, and a buff of yours their dust stops still bursts. Damage buffs and cuts count.' } },   // (4.63) "reduce unstable magic off-field damage to 0.2x ATK instead of 0.25x ATK when on-field"
+                      text:'Each buff or debuff, either side\'s, that is swept, stopped by a Diamond Dust, or runs out bursts on every enemy for <b>0.25×</b> your strongest holder\'s ATK (<b>0.2×</b> from the bench).' } },   // (4.63) "reduce unstable magic off-field damage to 0.2x ATK instead of 0.25x ATK when on-field"
 };
 /* (3.78) the designer: "change the cost to 2 same-element very high and 1
    same element ultra" — [tier, how many] of its element's stones */

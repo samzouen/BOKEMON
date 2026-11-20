@@ -126,7 +126,7 @@ function nemVenomTick(){
     const hit = [];
     livingField().forEach(m=>{
       const max = monMaxHp(m), before = m.currentHp, d = Math.max(1, Math.ceil(max * (pv.pct || NEM.afflict.venom)));
-      m.currentHp = Math.max(typeof hpFloorOf === 'function' ? hpFloorOf(m) : 0, before - (typeof lastStand === 'function' ? lastStand(m, d) : d));   // (4.62) every source
+      dropHp(m, d);   // (4.62) every source — (4.68) Tempering's floor and the princess's catch too
       drainHp(pid('playerHp', m), before, m.currentHp, max);
       showDamageNumber(pid('playerBob', m), before - m.currentHp);
       hit.push(`${escapeHtml(displayName(m))} ${before - m.currentHp}`);
@@ -381,10 +381,13 @@ function nemFireLaser(next){
   setTimeout(()=>{
     if(ui.battle !== b) return;
     const all = healableAllies().filter(m=> m.currentHp > 0);
-    const held = [], fell = [], stood = [], undying = [];
+    const held = [], fell = [], stood = [], undying = [], tempered = [];
     all.forEach(m=>{
       const before = m.currentHp, max = monMaxHp(m);
-      if(before > NEM.laser) { m.currentHp = before - NEM.laser; stood.push(m); }
+      /* (4.68) Tempering, as against every hit: at half (with its shields), and held there the rest of the turn */
+      const tf = typeof temperFloor === 'function' ? temperFloor(m, NEM.laser) : NEM.laser, half = typeof temperHoldFloor === 'function' ? temperHoldFloor(m) : 0;
+      if(half > 0 && before - tf <= half){ m.currentHp = Math.max(half, before - tf); tempered.push(m); }
+      else if(before > NEM.laser) { m.currentHp = before - NEM.laser; stood.push(m); }
       else if(typeof hpFloorOf === 'function' && hpFloorOf(m) > 0){ m.currentHp = 1; held.push(m); }   // (4.62) already holding on: nothing takes it below 1 HP
       else if(typeof bedrockReady === 'function' && bedrockReady(m)){ bedrockSave(m); m.currentHp = 1; held.push(m); }
       else if(typeof talentUndyingReady === 'function' && talentUndyingReady(m)){ talentUndyingUse(m); m.currentHp = 1; undying.push(m); }   // (4.62) an Undying talent, as against every source
@@ -397,9 +400,10 @@ function nemFireLaser(next){
     const list = l=> l.length > 1 ? l.slice(0, -1).join(', ') + ' and ' + l[l.length - 1] : l[0];
     const said = `${NEM_PRISM} <b>5,000</b> to every one of yours — through every shield and every dodge.` +
       (held.length ? ` 🦋 Metamorph holds ${list(nm(held))} on 1 HP!` : '') +
+      (tempered.length ? ` 🔨 Tempering holds ${list(nm(tempered))} at half health!` : '') +
       (undying.length ? ` ♾️ ${list(nm(undying))} hold${undying.length > 1 ? '' : 's'} on at 1 HP!` : '') +
       (stood.length ? ` ${list(nm(stood))} still stand${stood.length > 1 ? '' : 's'}.` : '') +
-      (fell.length && !held.length && !undying.length && !stood.length ? ' Not one of them is left standing…' : '');
+      (fell.length && !held.length && !undying.length && !stood.length && !tempered.length ? ' Not one of them is left standing…' : '');
     battleMsg(said);
     renderStatusBadges();
     saveProfile();

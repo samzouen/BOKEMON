@@ -2080,9 +2080,11 @@ function giftCleanse(m){
   });
   return n;
 }
-function giveLife(m, rise){
+/* The gift itself: her health to the fallen one, its marks and your side's lifted. Returns its line and how her own
+   health fared, or null with nobody to give. (4.68: apart from its saying, so a fall can be caught where it happens.) */
+function giveLifeNow(m){
   const src = giftGiver(m);
-  if(!src) return rise();
+  if(!src) return null;
   const give = Math.max(1, Math.ceil((src.currentHp || 0) * PRINCESS_KIT.give));
   const max = monMaxHp(m);
   m.currentHp = Math.min(max, give);
@@ -2095,21 +2097,48 @@ function giveLife(m, rise){
   }
   src.currentHp = Math.max(0, left);
   const lifted = giftCleanse(m);
-  renderBattle();
-  try { drainHp(pid('playerHp', m), 0, m.currentHp, max); } catch(e){}
-  try { playEffect('Life Transfusion', { type:'Fairy' }); } catch(e){}
   const who = escapeHtml(displayName(src)), nm = escapeHtml(displayName(m));
-  battleMsg(`💗 ${who} catches ${nm} as it falls — Life Transfusion! She gives it <b>${give} HP</b>, and it stands again` +
+  const line = `💗 ${who} catches ${nm} as it falls — Life Transfusion! She gives it <b>${give} HP</b>, and it stands again` +
     (lifted ? ` with ${lifted === 1 ? 'a mark' : `${lifted} marks`} of theirs lifted` : '') + '.' +
     (how === 'stand' ? ` 🦋 <b>Metamorph!</b> ${who} holds on at 1 HP — a shield forms, and she holds on through the next turn.`
      : how === 'hold' ? ` ${who} holds on at 1 HP.`
-     : how === 'fall' ? ` It was the last of her light: ${who} falls.` : ''));
+     : how === 'fall' ? ` It was the last of her light: ${who} falls.` : '');
   logBattle(`Life Transfusion: ${displayName(m)} → ${m.currentHp}/${max}; ${displayName(src)} gave ${give} (${before}→${src.currentHp})${how ? ' · ' + how : ''}`);
+  return { src, give, how, line };
+}
+function giveLife(m, rise){
+  const r = giveLifeNow(m);
+  if(!r) return rise();
+  renderBattle();
+  try { drainHp(pid('playerHp', m), 0, m.currentHp, monMaxHp(m)); } catch(e){}
+  try { playEffect('Life Transfusion', { type:'Fairy' }); } catch(e){}
+  battleMsg(r.line);
   setTimeout(()=>{
     if(!ui.battle) return;
-    if(how === 'fall' && src === companionOnField()) companionFalls(src);   // out front beside one of yours: she leaves the field
+    if(r.how === 'fall' && r.src === companionOnField()) companionFalls(r.src);   // out front beside one of yours: she leaves the field
     rise();
   }, 1100);
+}
+/* (4.68) The designer: "Pre turn and post turn hits are killing fairy princess's allies without triggering her rescuing
+   transfusion". A fall to anything but an attack's own blow — a burn of theirs, their Wildfire, Violent Dance, Spike
+   Formation or stored charge, an Unstable Magic burst, an afterimage, a Retribution, their Binding Curse's pulse, the
+   tower's drain, a thorn, a riposte (every one lands through dropHp) — was caught only when the turn came to settle its
+   falls: the pre-turn's end, or, for the end phase, the NEXT round's pre-turn, by which time she might have fallen
+   herself. Now she catches it as it falls: straight after the blow's own number and line, her line said with the
+   fight's next (holdSay). An attack's own blow is caught as before, as the fight settles it (onMonFainted). */
+function catchFallSoon(m){
+  const b = ui.battle;
+  if(!b || !m || !m.uid) return;
+  setTimeout(()=>{
+    if(ui.battle !== b || ui.screen !== 'battle' || !(m.currentHp <= 0)) return;   // the fight is over, or the turn's settling caught it first
+    if(princessAllyHere() || !transfuseDue(m)) return;                            // nobody to catch it: it falls as it would have
+    const r = giveLifeNow(m);
+    if(!r) return;
+    try { if(playerField().includes(m)) drainHp(pid('playerHp', m), 0, m.currentHp, monMaxHp(m)); } catch(e){}
+    try { playEffect('Life Transfusion', { type:'Fairy' }); } catch(e){}
+    renderStatusBadges();
+    holdSay(r.line);
+  }, 0);
 }
 
 /* ---- Lithification ---- */
@@ -2609,7 +2638,10 @@ function invStakes(world, squares, cls){
   squares.forEach(([x, y], i)=>{
     const s = document.createElement('div');
     s.className = 'inv-stake ' + (cls || '');
-    s.style.cssText = `left:${(x + 0.08) * T}px;top:${(y - 0.15) * T}px;width:${0.84 * T}px;height:${1.15 * T}px;z-index:${11 + y};`;
+    /* (4.68) the designer: "the fence of the perimeter … obscures the character and NPC sprites' heads even when they are
+       below and in front of it" — at 11 + its row it ranked with whoever stood a row in front of it (10 + their row), and,
+       added after them, came out on top. Now with its own row: in front of anyone behind it, behind anyone in front. */
+    s.style.cssText = `left:${(x + 0.08) * T}px;top:${(y - 0.15) * T}px;width:${0.84 * T}px;height:${1.15 * T}px;z-index:${10 + y};`;
     s.innerHTML = `<svg viewBox="0 0 84 115" preserveAspectRatio="none" aria-hidden="true">${invStakeSvg(x, y, cls, i === squares.length - 1 && squares.length > 1)}</svg>`;
     world.appendChild(s);
   });

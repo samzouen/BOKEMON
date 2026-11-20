@@ -266,13 +266,11 @@ if(typeof moveEffectText === 'function'){
     const out = _ptxText.apply(this, arguments) || [];
     const pc = x=> Math.round(x * 100);
     if(mv && mv.crosshair){ const d = Object.assign({}, PAINTER.cross, mv.crosshair);
-      out.push(`<b>${escapeHtml(mv.name)}.</b> A crosshair on one foe for <b>${d.turns} turns</b>: every blow on it has a <b>${pc(d.crit)}%</b> greater chance of a critical — ` +
-        `<b>${d.mult}×</b> for one with no critical of its own.`); }
+      out.push(`<b>${escapeHtml(mv.name)}.</b> Marks one foe for <b>${d.turns} turns</b>: blows on it get <b>+${pc(d.crit)}%</b> crit chance (<b>${d.mult}×</b> if they have no crit of their own).`); }
     if(mv && mv.imitate){ const d = Object.assign({}, PAINTER.imitate, mv.imitate);
-      out.push(`<b>${escapeHtml(mv.name)}.</b> Copies up to <b>${d.n}</b> of the other side's buffs to yours — Diamond Dust, Dragon Dance and Steel Aegis first — casting each as it was cast (a Dragon Dance brings its Mach Dragon).`); }
+      out.push(`<b>${escapeHtml(mv.name)}.</b> Copies up to <b>${d.n}</b> of their buffs to your side (Diamond Dust, Dragon Dance and Steel Aegis first).`); }
     if(mv && mv.targetBoard){ const d = Object.assign({}, PAINTER.board, mv.targetBoard);
-      out.push(`<b>${escapeHtml(mv.name)}.</b> A target board beside its partner for <b>${d.turns} turns</b>: a blow on the partner has a <b>${pc(d.chance)}%</b> chance to hit the board instead — ` +
-        `even one that can't be dodged — breaking it. One at a time; never for itself. Off the field with its partner, its turns wait.`); }
+      out.push(`<b>${escapeHtml(mv.name)}.</b> For <b>${d.turns} turns</b> a board beside its partner takes the next blow on the partner <b>${pc(d.chance)}%</b> of the time (even undodgeable ones), then breaks.`); }
     return out;
   };
 }

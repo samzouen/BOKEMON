@@ -415,7 +415,12 @@ function caGrounds(){
   const garden = (x0, y0, side)=>{
     const W = 11, H = 19, east = side === 1;
     const X = ix=> east ? x0 + W - 1 - ix : x0 + ix;                  // a square's x, `ix` from the outer side
-    const sp = { side, x0, y0, w:W, h:H, east, cx:x0 + W / 2, cy:y0 + H / 2, pondR:2.15, courtR:3.45, feats:[] };
+    /* (4.68) the designer: "The palace gardens are beautiful now but cannot be traversed from within" — the pond (2.15)
+       filled the court (3.45) to its walks' crossing, and the seats and urns stood on the only squares round it: each
+       walk led in from its gate to the water and stopped (from the north gate, 23 of the 68 squares one could stand on).
+       Now the pond is smaller (1.6: the nine squares where the walks cross, the fountain in the middle) and the court
+       wider (3.9), two squares of paving all round the water, and the seats and urns stand on its outer corners. */
+    const sp = { side, x0, y0, w:W, h:H, east, cx:x0 + W / 2, cy:y0 + H / 2, pondR:1.6, courtR:3.9, feats:[] };
     m.tags.gardens[side] = sp;
     const key = (x, y)=> 'gdn:' + side + ':' + (x - x0) + ':' + (y - y0);
     const covered = (ix, iy)=> ix >= 9 && iy >= 13;                    // the house's corner
@@ -447,8 +452,8 @@ function caGrounds(){
     stand('gStatue', 2, 14, 1.4, 2.6, { n:east ? 1 : 0 });
     stand('gStatue', 8, 14, 1.4, 2.6, { n:east ? 0 : 1 });
     /* curved marble seats on the court's north side, facing the fountain; urns on its south side */
-    [[3, 7], [7, 7]].forEach(([ix, iy])=> stand('gBench', ix, iy, 1.5, 1.4, { ccx:sp.cx, ccy:sp.cy }, T.BENCH));
-    [[3, 11], [7, 11]].forEach(([ix, iy], i)=> stand('gUrn', ix, iy, 1.1, 1.9, { n:i + side * 2 }, T.PLANTER));
+    [[2, 7], [8, 7]].forEach(([ix, iy])=> stand('gBench', ix, iy, 1.5, 1.4, { ccx:sp.cx, ccy:sp.cy }, T.BENCH));   // (4.68) on the court's outer corners, off the way round
+    [[2, 11], [8, 11]].forEach(([ix, iy], i)=> stand('gUrn', ix, iy, 1.1, 1.9, { n:i + side * 2 }, T.PLANTER));
     /* a rose arch over the north and south gates, its posts on the hedge's ends either side */
     [0, H - 1].forEach(iy=>{ const y = y0 + iy; caDeco(m, 'gArch', x0 + 3.05, y + 0.92 - 3.3, 4.9, 3.3, { z:y + 0.95, garden:side, south:iy > 0 }); });
     /* a clipped ball on each pier of the east and west gates */

@@ -1640,7 +1640,7 @@ function resolveBattleMove(mv, target, results, opts){
      rather than letting the cast go quiet. A quick cast costs no turn, so the
      turn is still yours; anything else spends it, as it would have anyway.
      (3.09) Not the Haunting Aria: a state he goes into, which no dust stops. (4.66) Nor Steel Soul,
-     Tachypsychia or 72 Transformations: a legendary's own kit goes through (KIT_STATES, dustThrough). */
+     Tachypsychia or 72 Transformations: an innate skill goes through (KIT_STATES, dustThrough). */
   const castOnly = (mv.shell && mv.mult == null) || mv.tachy || mv.grant ||
                    mv.charm || mv.disrupt || mv.soul || mv.clones || mv.dot || mv.overpower;   // (3.55) Overpower too
   /* (4.48) the dust's count: the move's kind against it (a grant's stances meet it one by one, applyPassiveGrant) */
@@ -2484,6 +2484,32 @@ function landStrike(h, opts){
     return got;
   }
   return 0;
+}
+/* (4.68) Health of theirs lost to anything of yours that is not a strike (landStrike has its own): your Binding Curse's
+   pulse, a burn's tick at the round's end, a rider. The designer: pre-turn and post-turn hits were "piercing tempering's
+   50% HP threshold" — these went straight to their health. Now their Tempering holds at half as against a strike (once,
+   with its shields), their Metamorph and an Undying hold on at 1 HP, and the distortion's Rewind stands the first of them
+   again. Returns what it took. */
+function foeLoseHp(t, dmg){
+  const b = ui.battle;
+  if(!b || !t || !(t.hp > 0) || !(dmg > 0)) return 0;
+  const before = t.hp;
+  let through = (typeof foeTemperLimit === 'function') ? foeTemperLimit(t, dmg) : dmg;
+  let held = '';
+  if(through >= before && !b.arenaImmortal){
+    if(typeof foeEndures === 'function' && foeEndures(t)) through = before - 1;
+    else if(typeof foeLastStandReady === 'function' && foeLastStandReady(t)){ through = before - 1; held = foeLastStandUse(t); }
+    else if(typeof talentUndyingReady === 'function' && talentUndyingReady(t)){ through = before - 1; held = talentUndyingUse(t); }
+  }
+  t.hp = Math.max(0, before - through);
+  let rewound = false;
+  if(t.hp <= 0 && typeof futureRewindReady === 'function' && futureRewindReady(t)){ t.hp = futureRewind(t); rewound = true; }
+  if(held || rewound){
+    const nm = escapeHtml(SPECIES[t.species].name);
+    floatOver(t, rewound ? 'REWIND' : 'HOLDS ON');
+    holdSay(rewound ? `⏳ Time rewinds — the ${nm} stands again, at half its health!` : `♾️ ${nm}'s ${escapeHtml(held)} — it holds on at 1 HP!`);
+  }
+  return Math.min(through, before);
 }
 /* A multi-strike move is planned before any of its strikes land, so the plan
    has to know what their block will soak — or it would think a shielded enemy
@@ -5165,9 +5191,10 @@ function enemyStrikeOn(ctx, step, done){
         const was = mon.currentHp;
         /* (3.67) Bedrock — (3.76) Metamorph's now: a blow that would knock it
            out leaves it on 1 HP, with a shield — once until the meter fills */
-        if(thisHit >= was && was > 0 && !endureActive(mon) && bedrockReady(mon)){ thisHit = was - 1; bedrockSave(mon); ctx.bedrock = true; }
-        if(thisHit >= was && was > 0 && !endureActive(mon) && typeof talentUndyingReady === 'function' && talentUndyingReady(mon)){ thisHit = was - 1; ctx.undying = talentUndyingUse(mon); }   // (3.75) an Undying constellation
-        mon.currentHp = Math.max(hpFloorOf(mon), mon.currentHp - thisHit);   // (3.68) …and holding on, the turn it did and the next
+        if(thisHit >= was && was > 0 && !(hpFloorOf(mon) > 0) && bedrockReady(mon)){ thisHit = was - 1; bedrockSave(mon); ctx.bedrock = true; }   // (4.68) not while a floor already holds it (Tempering's too)
+        if(thisHit >= was && was > 0 && !(hpFloorOf(mon) > 0) && typeof talentUndyingReady === 'function' && talentUndyingReady(mon)){ thisHit = was - 1; ctx.undying = talentUndyingUse(mon); }   // (3.75) an Undying constellation
+        if(thisHit > 0 && temperHoldOn(mon) && was - thisHit < temperHoldFloor(mon)) floatOver(mon, 'TEMPERED');   // (4.68) Tempering's hold stopped it
+        mon.currentHp = Math.max(hpFloorOf(mon), mon.currentHp - thisHit);   // (3.68) …and holding on, the turn it did and the next — (4.68) and Tempering's half, the turn it caught a blow
         totalTaken += was - mon.currentHp;
         /* Their Leech Seed drinks from every strike that gets through, as
            yours drinks from every strike of yours on a seeded enemy — and
@@ -5212,27 +5239,24 @@ function enemyStrikeOn(ctx, step, done){
       const shell = getPStatus(0,'shell');
       if(shell && shell.thorns && mon.currentHp>0){
         const back = Math.ceil(shell.thorns * monAtk(mon));
-        const oh=e.hp, nh=Math.max(0,e.hp-back);
-        e.hp = nh;
+        const oh = e.hp; foeLoseHp(e, back); const nh = e.hp;   // (4.68) their Tempering's floor, their last stands
         flashHit(document.getElementById('enemy-'+idx));
         drainHp('enemyHp-'+idx, oh, nh, e.maxHp);
         if(nh<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
-        msg += ` Molten slag burned back for ${back}!`;
+        msg += ` Molten slag burned back for ${oh - nh}!`;
       }
       if(spikes && mon.currentHp>0){
         const back = Math.ceil((spikes.thorns||0.20)*monAtk(mon));
-        const oh=e.hp, nh=Math.max(0,e.hp-back);
-        e.hp = nh;
+        const oh = e.hp; foeLoseHp(e, back); const nh = e.hp;   // (4.68) their Tempering's floor, their last stands
         flashHit(document.getElementById('enemy-'+idx));
         drainHp('enemyHp-'+idx, oh, nh, e.maxHp);
         if(nh<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
-        msg += ` Spikes struck back for ${back}!`;
+        msg += ` Spikes struck back for ${oh - nh}!`;
       }
       /* (3.75) a Barbs constellation strikes back, at its own ATK */
       const tb = (typeof talentThorns === 'function') ? talentThorns(mon) : 0;
       if(tb > 0 && mon.currentHp > 0 && e.hp > 0){
-        const oh = e.hp, nh = Math.max(0, e.hp - Math.ceil(tb * monAtk(mon)));
-        e.hp = nh;
+        const oh = e.hp; foeLoseHp(e, Math.ceil(tb * monAtk(mon))); const nh = e.hp;   // (4.68) their floors
         flashHit(document.getElementById('enemy-'+idx));
         drainHp('enemyHp-'+idx, oh, nh, e.maxHp);
         if(nh<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
@@ -5242,8 +5266,7 @@ function enemyStrikeOn(ctx, step, done){
          him is answered in purple fire — 0.3× his ATK, no dodging it. */
       const fire = soulfireBack(mon);
       if(fire > 0 && mon.currentHp > 0 && e.hp > 0){
-        const oh = e.hp, nh = Math.max(0, e.hp - fire);
-        e.hp = nh;
+        const oh = e.hp; foeLoseHp(e, fire); const nh = e.hp;   // (4.68) their floors
         flashHit(document.getElementById('enemy-'+idx));
         drainHp('enemyHp-'+idx, oh, nh, e.maxHp);
         if(nh<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
@@ -5252,8 +5275,7 @@ function enemyStrikeOn(ctx, step, done){
       /* (3.15) your Hermit Sloth's Hermit's Patience: answered, 0.4× its ATK */
       const rb = retaliateBack(mon);
       if(rb > 0 && mon.currentHp > 0 && e.hp > 0){
-        const oh = e.hp, nh = Math.max(0, e.hp - rb);
-        e.hp = nh;
+        const oh = e.hp; foeLoseHp(e, rb); const nh = e.hp;   // (4.68) their floors
         flashHit(document.getElementById('enemy-'+idx));
         drainHp('enemyHp-'+idx, oh, nh, e.maxHp);
         if(nh<=0){ const el=document.getElementById('enemy-'+idx); if(el) el.classList.add('fainted'); }
@@ -5714,7 +5736,7 @@ function onMonFainted(noRebirth){
   if(legacyFallPending()) return legacyOnFall(()=> onMonFainted(noRebirth));
   const comp = companionOnField();
   if(comp && comp.currentHp <= 0){
-    if(!noRebirth && rebirthDue(comp)) return offerRebirth(()=> onMonFainted(true), ()=> onMonFainted(true), comp);
+    if(!noRebirth && rebirthDue(comp)) return offerRebirth(()=> onMonFainted(), ()=> onMonFainted(true), comp);   // (4.68) risen, the leader is still looked at: it fell too, and may be caught
     companionFalls(comp);
     noRebirth = false;                 // (a rise declined was the companion's)
   }

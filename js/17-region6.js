@@ -1299,14 +1299,23 @@ function foeElusiveImages(t){
    its health or more to below half leaves it at half, with 3 shields
    (landStrike). Its share a turn (3.76) is gone. */
 function foeTemperLimit(t, dmg){
-  if(!(dmg > 0) || !t || t.uid || t._temperUsed || !getESide('steelAegis') || !foeHolds(t, 'Steel', 'vh')) return dmg;
+  if(!(dmg > 0) || !t || t.uid) return dmg;
   const half = Math.ceil(TEMPER.floor * t.maxHp);
+  /* (4.68) as yours: held at half the rest of the turn it caught a blow (never above the health it has) */
+  if(t._temperHold === roundNo() && !passivesMuted(t)){
+    const floor = Math.min(Math.max(0, t.hp), half);
+    if(t.hp - dmg >= floor) return dmg;
+    floatOver(t, 'TEMPERED');
+    return Math.max(0, t.hp - floor);
+  }
+  if(t._temperUsed || !getESide('steelAegis') || !foeHolds(t, 'Steel', 'vh')) return dmg;
   if(t.hp < half || t.hp - dmg >= half) return dmg;
   t._temperUsed = true;
+  t._temperHold = roundNo();
   grantBlock(t, TEMPER.shields, enemyAtk(t));
   floatOver(t, 'TEMPERED');
   const nm = foeNm(t), b = ui.battle;
-  setTimeout(()=>{ if(ui.battle === b) battleMsg(`🔨 Their ${nm}'s <b>Tempering</b> — it holds at half its health, with <b>${TEMPER.shields}</b> shields.`); }, 900);
+  holdSay(`🔨 Their ${nm}'s <b>Tempering</b> — it holds at half its health with <b>${TEMPER.shields}</b> shields, and nothing takes it lower this turn.`);   // (4.68) said with the blow's own line
   return t.hp - half;
 }
 /* Metamorph's last stand: once — (3.86) again every 7 turns (foeRecharge);
@@ -1385,7 +1394,7 @@ function foeBindingPulse(h, why, opts){
   let hurt = false;
   mine.forEach(m=>{
     const before = m.currentHp;
-    m.currentHp = Math.max(hpFloorOf(m), m.currentHp - lastStand(m, loss));   // (4.62) an Undying talent's hold too (their Curse keeps Metamorph's off)
+    dropHp(m, loss);   // (4.62) an Undying talent's hold too (their Curse keeps Metamorph's off) — (4.68) Tempering's floor, the princess's catch
     if(m.currentHp < before) hurt = true;
     drainHp(pid('playerHp', m), before, m.currentHp, monMaxHp(m));
     showDamageNumber(pid('playerBob', m), before - m.currentHp);
