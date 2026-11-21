@@ -343,20 +343,21 @@ const MOVES = {
   lanternfish:     [['Basic','Bump',0.2,'Single',2,1],['Power1','Shock Bubble',0.4,'Single',4,5],['Power2','Lantern Flash',0.6,'AOE',8,18],['Ultimate','Deep Current',1.25,'Single',8,25]],
   /* Cataclysm is a CHARGING ultimate — see the charge engine below. Its 'Max'
      upgrade is unlocked by the Dragon Core, not by level. */
-  water_dragon:    [['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tsunami',0.8,'AOE',10,35],
-                    ['Ultimate','Cataclysm',null,'Charge',10,45,{charge:{max:2, unleash:1.0, hyper:1.5}}],
-                    ['Max','Cataclysm Max',null,'Charge',10,999,{charge:{max:3, unleash:1.25, hyper:1.75, unleashBy:[1.25,1.5,1.8,2.15], hyperBy:[1.75,2.25,2.85,3.5]}, coreOnly:true}]],
-  water_dragon_nerfed:[['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tsunami',0.8,'AOE',10,35],
-                    ['Ultimate','Cataclysm',null,'Charge',10,45,{charge:{max:2, unleash:1.0, hyper:1.5}}],
-                    ['Max','Cataclysm Max',null,'Charge',10,999,{charge:{max:3, unleash:1.25, hyper:1.75, unleashBy:[1.25,1.5,1.8,2.15], hyperBy:[1.75,2.25,2.85,3.5]}, coreOnly:true}]],
+  /* (4.69) the designer, Nov 21: "Verdant wrath, tsunami, cataclysm (ultimate and max) to 8 too!" (10 words until 4.69) */
+  water_dragon:    [['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tsunami',0.8,'AOE',8,35],
+                    ['Ultimate','Cataclysm',null,'Charge',8,45,{charge:{max:2, unleash:1.0, hyper:1.5}}],
+                    ['Max','Cataclysm Max',null,'Charge',8,999,{charge:{max:3, unleash:1.25, hyper:1.75, unleashBy:[1.25,1.5,1.8,2.15], hyperBy:[1.75,2.25,2.85,3.5]}, coreOnly:true}]],
+  water_dragon_nerfed:[['Basic','Aqua Fang',0.3,'Single',4,1],['Power1','Torrent Claw',0.6,'Single',8,5],['Power2','Tsunami',0.8,'AOE',8,35],
+                    ['Ultimate','Cataclysm',null,'Charge',8,45,{charge:{max:2, unleash:1.0, hyper:1.5}}],
+                    ['Max','Cataclysm Max',null,'Charge',8,999,{charge:{max:3, unleash:1.25, hyper:1.75, unleashBy:[1.25,1.5,1.8,2.15], hyperBy:[1.75,2.25,2.85,3.5]}, coreOnly:true}]],
   dragon_egg:      [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
 
   phoenix:         [['Basic','Scorch',0.3,'Single',4,1],   /* (3.27) not "Ember" — the Fire starter's Power 1 */['Power1','Firestorm',0.6,'AOE',8,5],['Power2','Nova',1.0,'AOE',8,35,{purge:{enemyBuffs:1, playerDebuffs:1}}],
                     ['Ultimate','Incinerate',1.25,'Single',8,45,{scale:{per:0.15,max:2.0}}],
                     ['Max','Incinerate Max',1.5,'Single',8,55,{scale:{per:0.15,max:2.75,words:15}}]],
   forest_fairy:    [['Basic','Fairy Wind',0.4,'Single',2,1],['Power1','Giga Drain',0.8,'Single',5,5],['Power2','Overgrowth',0.7,'AOE',8,35],
-                    ['Ultimate','Verdant Wrath',1.4,'Single',10,45,{hits:2, split:true}],
-                    ['Max','Verdant Wrath Max',1.8,'Single',10,55,{hits:3, split:true}]],
+                    ['Ultimate','Verdant Wrath',1.4,'Single',8,45,{hits:2, split:true}],      // (4.69) 8 words (10 until 4.69)
+                    ['Max','Verdant Wrath Max',1.8,'Single',8,55,{hits:3, split:true}]],
   newt_baby:       [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],
   newt:            [['Basic','Psyshock',0.2,'Single',4,31,{paralyse:0.20}],
                     ['Power1','Volt Wave',0.6,'AOE',8,31,{paralyse:0.20}],   // (3.26) "Psywave" was the Fox's too; 0.5 until then
@@ -575,7 +576,7 @@ const MOVES = {
                        (3.16) "an instant move (doesn't consume a turn) that reduces enemy attack by
                        30% for 5 turns and purges 1 harmful effect on player monsters per turn. Can
                        be extended by diamond dust" — castIceBarrier, iceBarrierPulse */
-                    ['Power1','Ice Barrier',null,'Self',6,1,{iceBarrier:{cut:0.30, turns:5, purge:1}}],
+                    ['Power1','Ice Barrier',null,'Self',4,1,{iceBarrier:{cut:0.30, turns:5, purge:1}}],   // (4.69) "caladrius's ice barrier to 4 words" (6 until 4.69)
                     ['Power2','Vita',null,'Self',8,1,{vita:{turns:5, pulse:0.2}}],
                     ['Ultimate','Conversio',null,'Self',8,1,{conversio:{revives:2, pct:0.33, direct:0.33}}],
                     ['Max','Pacificus',null,'Passive',0,1,{statNote:true}]],
@@ -594,10 +595,10 @@ const MOVES = {
   /* Every move pays more the worse things are going. */
   whalelord:       [['Basic','Malice',0.3,'Single',2,1],
                     ['Power1','Grudge',null,'AOE',5,1,{grudge:{flat:0.25, missing:0.75}, passive:{noFlee:true}}],
-                    ['Power2','Haunting Aria',null,'Self',5,1,{aria:{turns:5, pulse:0.5, perAttack:1, drift:[0.35, 0.7]}}],   // (3.08) the revenge counter: +1 an attack, +0.35–0.7 a turn, strikes at 1
+                    ['Power2','Haunting Aria',null,'Self',4,1,{aria:{turns:5, pulse:0.5, perAttack:1, drift:[0.35, 0.7]}}],   // (3.08) the revenge counter: +1 an attack, +0.35–0.7 a turn, strikes at 1; (4.69) "aria to 4 words" (5 until 4.69)
                     ['Ultimate','Vengeance',0.6,'Single',8,1,{vengeance:{hits:3},
                        wrath:{turns:5, per:0.2, bonus:0.03, bonusCap:0.30, dmgCap:15}}],
-                    ['Max','Vengeance Max',0.6,'Single',10,1,{vengeance:{hits:3, perFallen:0.06, fallenCap:6},
+                    ['Max','Vengeance Max',0.6,'Single',8,1,{vengeance:{hits:3, perFallen:0.06, fallenCap:6},   // (4.69) "whalelord's vengeance max to 8 words" (10 until 4.69)
                        wrath:{turns:5, per:0.3, bonus:0.05, bonusCap:0.50, dmgCap:15}}]],
 
   sacred_seed:     [['Basic',null,null,null,null,999],['Power1',null,null,null,null,999],['Power2',null,null,null,null,999],['Ultimate',null,null,null,null,999]],

@@ -10455,7 +10455,7 @@ function renderBattle(){
     <div class="bt-moves">
       <div class="bt-grid">
         ${btGridHtml(ctlMon, moves, (mv,i)=>{
-          /* A Haunting Aria already singing shuts its own button, so ten words
+          /* A Haunting Aria already singing shuts its own button, so its words
              can never be spent on nothing. */
           const ok = mv.available && canAct && !(mv.aria && ariaActive()) && !(mv.iceBarrier && getPStatus(0,'iceBarrier')) && !(mv.stargaze && getPStatus(0, 'stargaze'));   // (3.16) nor an Ice Barrier that stands; (3.87) nor a Stargazer
           return `
