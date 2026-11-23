@@ -19,7 +19,11 @@
    and the rest is as it was: Lucesco after him, the army out of the rift, the Commander's soldiers, the perimeter.
    Lost: Lucesco drags you clear; he holds the rift open, waiting, till you are back.
    ============================================================ */
-const HUNT = { ms:180000, phrases:4, ambushMs:6000, calmMs:7000, calmNear:14, near:{ dx:14, y:24 } };
+const HUNT = { ms:180000, phrases:4, ambushMs:6000, calmMs:7000, calmNear:14, near:{ dx:14, y:24 }, leap:5, hintMs:12000 };
+/* (4.79) the designer: "Please reduce the cooldown for leap to 5 steps for the chase sequence to wadjet and make it clear
+   that the player can glare and ambush to get past aliens without a fight" — Leap ready again after 5 steps while the hunt
+   runs (50 elsewhere: 20-jungle.js's jgJumpSteps); Lucesco says plainly that no alien needs fighting, the clock says it
+   under it, and an alien coming near is a reminder: Glare it, or Ambush it and ride over it. */
 
 /* ---------- where the story stands ---------- */
 /* the hunt is on: after the stand, out of the castle — not at the rift yet */
@@ -57,20 +61,25 @@ function huntDueJg(){
   const A = invArriveAt();
   if(!p || p.x !== A.you.x || p.y !== A.you.y){ invPlaceJungle(A.you); goDeck(JG_KEY); return true; }
   invJgScene(async ()=>{
+    huntCss();
     await invCurtainUp();
-    await L([['lion', `<b>"Wadjet's trail — from the gate, north. Three minutes, before it goes cold. GO!"</b>`]]);
+    await L([['lion', `<b>"Wadjet's trail — from the gate, north. Three minutes, before it goes cold."</b>`],
+             ['lion', `<b>"Remember: no fighting! <span class="hunt-key glare">Glare</span> to freeze them, <span class="hunt-key ambush">Ambush</span> to knock one flat and ride over it, <span class="hunt-key jump">Leap</span> over the trees. GO!"</b>`]]);
     huntGo();
   }, { ride:true });
   return true;
 }
 async function huntIntroRun(){
   const A = invArriveAt();
+  huntCss();                                                    // (4.79) Glare, Ambush and Leap in their colours in his words
   await invCurtainUp();
   await sceneLook({ x:A.you.x - 4, y:A.you.y - 6, w:9, h:9 }, { ms:700 });
   await L([['lion', `Lucesco skids to a halt outside the gate and looks back once, at the smoke over the walls. Then he turns away.`],
            ['lion', `<b>"The fairies will hold. Trust them — the tribes are with them now. We have one job."</b>`],
            ['lion', `Wadjet's trail is a cold, coiling thread on the air, running north. Lucesco lowers his head.<br><br><b>"I've got his scent. Three minutes, and it's gone — hurry!"</b>`],
-           ['lion', `<b>"And don't get caught up fighting aliens! If one sees us, it's over. Glare to freeze them. Ambush to knock one flat, and run right over it!"</b>`]]);
+           ['lion', `<b>"And we don't fight a single alien on the way — no time! If one sees us, it's over."</b>`],
+           ['lion', `<b>"<span class="hunt-key glare">Glare</span> freezes one where it stands: it can't see us, and we slip past. <span class="hunt-key ambush">Ambush</span> knocks one flat — no fight — and we run right over it!"</b>`],
+           ['lion', `<b>"And <span class="hunt-key jump">Leap</span> takes us over the trees — every five steps on this run. GO!"</b>`]]);
   await sceneCamFree(400);
   huntGo();
 }
@@ -81,7 +90,8 @@ async function huntIntroRun(){
 function huntGo(){
   huntStop();
   const q = questState(); q.track = 'rift'; saveProfile();
-  ui.hunt = { running:true, left:HUNT.ms, last:performance.now(), iv:null };
+  ui.hunt = { running:true, left:HUNT.ms, last:performance.now(), iv:null, hinted:0 };
+  { const j = jgState(); if((j.jumpIn | 0) > HUNT.leap) j.jumpIn = HUNT.leap; }    // (4.79) Leap's wait cut to this run's
   huntCalm();
   huntHud();
   ui.hunt.iv = setInterval(huntTick, 250);
@@ -121,7 +131,7 @@ function huntHud(){
   if(!hud){ hud = document.createElement('div'); hud.id = 'huntClock'; hud.className = 'hunt-clock'; hud.setAttribute('role', 'timer'); stage.appendChild(hud); }
   const s = Math.ceil(ui.hunt.left / 1000);
   const txt = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  if(hud.dataset.t !== txt){ hud.dataset.t = txt; hud.innerHTML = `${HUNT_CLOCK}<b>${txt}</b>`; hud.setAttribute('aria-label', `${txt} left to catch Wadjet`); }
+  if(hud.dataset.t !== txt){ hud.dataset.t = txt; hud.innerHTML = `${HUNT_CLOCK}<b>${txt}</b><small>No fights: <em class="glare">Glare</em> freezes · <em class="ambush">Ambush</em> knocks flat</small>`; hud.setAttribute('aria-label', `${txt} left to catch Wadjet. No fights: Glare freezes an alien, Ambush knocks one flat.`); }
   hud.classList.toggle('low', s <= 30);
   hud.classList.toggle('crit', s <= 10);
   return hud;
@@ -154,7 +164,7 @@ async function huntFail(why, b){
       sceneCurtain(false, 500);
       huntPhrases(HUNT.phrases, ()=> storyModal(jgMonImg('lucesco_front', 140), 'Lucesco',
         (why === 'time' ? `<b>"Back to the castle gate — his trail starts there. Faster this time!"</b>` : `<b>"We slipped them — just. Back to the gate, and after him again. Don't let them see us!"</b>`) +
-        `<br><br><i>Three minutes more. Glare to freeze them; Ambush to knock one flat and ride over it.</i>`, ()=> again(), { subtitle:"Wadjet's trail" }));
+        `<br><br><i>Three minutes more, and no fighting: Glare freezes an alien so it cannot see you; Ambush knocks one flat, no fight, and you ride over it; Leap is ready every five steps.</i>`, ()=> again(), { subtitle:"Wadjet's trail" }));
     });
     const v = invState(); v.huntTries = (v.huntTries || 0) + 1; saveProfile();
     await back();
@@ -196,6 +206,18 @@ function huntPhrases(n, done){
     });
   };
   step();
+}
+
+/* (4.79) an alien in reach: Lucesco's reminder, along the bottom (once in a while) */
+function huntHintNear(p){
+  const H = ui.hunt;
+  if(!H || !p || typeof jgGlareTarget !== 'function' || typeof jgTell !== 'function') return;
+  const now = Date.now();
+  if(H.hinted && now - H.hinted < HUNT.hintMs) return;
+  const g = jgGlareTarget(p), a = typeof jgAmbushTarget === 'function' ? jgAmbushTarget(p) : null;
+  if(!g && !a) return;
+  H.hinted = now;
+  jgTell(`An alien! No fight — <b>Glare</b> to freeze it, or <b>Ambush</b> to knock it flat and ride over it.`, 'glare');
 }
 
 /* ============================================================
@@ -494,6 +516,7 @@ async function huntAfterRun(){
   w2.at = w2.at || {}; w2.at.r6_palace = { x:19, y:12 };
   ui.walkFresh = false; caLion.at = null;
   go('r6_palace');
+  if(typeof jgHold === 'function') jgHold(false);                      // (4.79) the jungle's hold, off in the great hall
   await invWaitDeck('r6_palace');
   ui.invSceneKey = 'r6_palace';
   document.body.classList.remove('inv-lion-off');
@@ -721,6 +744,7 @@ async function huntCommander(){
     const _step = jgStep;
     jgStep = function(p, d){
       if(huntOn() && huntSees(p)){ huntWon(); return true; }              // (4.59) he is on the screen: it begins
+      if(huntOn()) huntHintNear(p);
       /* ridden off one he knocked flat: it stands in the way again */
       jgBands().forEach(b=>{ if(b.ghost && !b._pounced && !(b.x === p.x && b.y === p.y)) b.ghost = false; });
       return _step.apply(this, arguments);
@@ -760,6 +784,11 @@ async function huntCommander(){
   if(typeof riftJungleDraw === 'function'){
     const _draw = riftJungleDraw;
     riftJungleDraw = function(world){ const r = _draw.apply(this, arguments); try { huntJungleDraw(world); } catch(e){ console.error('hunt draw:', e); } return r; };
+  }
+  /* (4.79) Leap: ready again after five steps while the hunt runs */
+  if(typeof jgJumpSteps === 'function'){
+    const _js = jgJumpSteps;
+    jgJumpSteps = function(){ return huntOn() ? HUNT.leap : _js.apply(this, arguments); };
   }
   /* a band knocked flat: you can ride over it */
   if(typeof jgBandAt === 'function'){
@@ -846,6 +875,18 @@ function huntCss(){
   .hunt-clock.crit{ background:rgba(120,10,20,.9); color:#fff; animation:huntLow .5s ease-in-out infinite; }
   @keyframes huntLow{ 0%,100%{ scale:1; } 50%{ scale:1.08; } }
   body.inv-scene .hunt-clock{ visibility:hidden; }
+  .hunt-clock small{ display:block; flex-basis:100%; font:700 10.5px/1.2 'Nunito', system-ui, sans-serif; color:#f6e7c8; letter-spacing:0; text-align:center; }
+  .hunt-clock{ flex-wrap:wrap; justify-content:center; max-width:min(92%, 300px); }
+  .hunt-clock small em{ font-style:normal; font-weight:900; }
+  .hunt-clock small em.glare{ color:#ff9198; } .hunt-clock small em.ambush{ color:#bcaaff; }
+  .hunt-key{ font-weight:900; padding:0 4px; border-radius:6px; color:#fff; }
+  .hunt-key.glare{ background:#e2353e; } .hunt-key.ambush{ background:#7c5ef2; } .hunt-key.jump{ background:#ff8a1f; }
+  /* (4.79) at the edge, the one move he wants: until 4.79 the jungle's hold over the whole screen (20-jungle.js's
+     jgHold, put up for the scene) took the finger first, so it could not be pressed. Now only that quarter answers. */
+  body.hunt-want-ambush *, body.hunt-want-glare *{ pointer-events:none !important; }
+  body.hunt-want-ambush #walkMoves [data-mv="ambush"], body.hunt-want-glare #walkMoves [data-mv="glare"],
+  body.hunt-want-ambush #eyeBreakOverlay, body.hunt-want-ambush #eyeBreakOverlay *, body.hunt-want-glare #eyeBreakOverlay, body.hunt-want-glare #eyeBreakOverlay *{ pointer-events:auto !important; }
+  body.hunt-want-ambush #walkMoves, body.hunt-want-glare #walkMoves{ visibility:visible !important; }
   /* (4.59) Wadjet at the jungle's edge, waiting for the rift; the white round shields of the Monkey King and the Whalelord */
   .hunt-wadjet{ position:absolute; pointer-events:none; }
   .hunt-wadjet img{ width:100%; height:100%; animation:invIdle 2.4s ease-in-out infinite; filter:drop-shadow(0 0 8px rgba(150,40,220,.85)); }

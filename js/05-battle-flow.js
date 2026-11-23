@@ -1072,7 +1072,11 @@ function runChargeQuiz(mv, mon){
          meant any carry-over guaranteed a "fizzle" despite a perfect run. */
       const carry = (ui.quiz && ui.quiz.config ? (ui.quiz.config.startingWords||0) : 0);
       const correct = results.filter(r=>r.passed).reduce((n,r)=>n+(r.words||countWords(r.text)),0) + carry;
+      /* (4.79) the designer: "Charge for water dragon is not adding its words to the 100 word recharge meter" — its
+         words are words written, right or wrong, as any move's are (resolveBattleMove): until 4.79 a charge's fed nothing */
+      const recharged = feedRecharge(results.reduce((n,r)=>n+(r.words||countWords(r.text)),0));
       go('battle');
+      if(recharged) secondWindSoon();
       if(correct >= mv.words && ui.battle) ui.battle.wordCarry = Math.max(0, correct - mv.words);
       applyChargeResult(mv, mon, correct, def);
     },
@@ -2652,7 +2656,13 @@ function afterPlayerAttackBody(mon, hits){
      repeat had come, so an action that won an extra one lost both. It comes
      last now, once all of them have run (endPlayerAction). */
   const cl = ui.battle && ui.battle.clones;
-  if(cl && cl.turnsLeft>0 && clonesServe(mon) && !ui.battle._cloneEchoing && hits && hits.length && ui.battle.lastMove){   // (3.96) his attacks only
+  /* (4.79) the designer: "Monkey king's 72 transformations seems to be hitting sometimes for his companion. It should hit
+     only for himself, repeating his attack twice." His attacks are the ones HE took: the action's own monster
+     (actionMon, set as a move is chosen), not whoever is passed on to finish it — the Whalelord's Vengeance hands its
+     blow over to the one stepping into his wake (offerVengeanceSwap), and with the Monkey King stepping in, his clones
+     echoed the Whalelord's blow. */
+  const actor = (ui.battle && ui.battle.actionMon) || mon;
+  if(cl && cl.turnsLeft>0 && clonesServe(mon) && clonesServe(actor) && !ui.battle._cloneEchoing && hits && hits.length && ui.battle.lastMove){   // (3.96) his attacks only
     return runCloneEchoes(mon, ui.battle.lastMove, ()=> afterPlayerAttackReal(mon, hits));
   }
   return afterPlayerAttackReal(mon, hits);

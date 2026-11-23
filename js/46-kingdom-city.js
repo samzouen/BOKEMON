@@ -36,7 +36,7 @@
    7 by 7 (4, 5), 9 by 9 (6, 7), 11 by 11 (8, 9), 13 by 13 (10); the wild can be burnt back 2, 3 or 4 plots beyond them
    (palace 1 to 3, 4 to 6, 7 on); the edge of the map stays forest. Palace 1 to 5: the old town, three by three. Palace 6:
    the new plan (kcReplan): the palace's ground, four by three, the palace on it 2 by 2 (6 to 8), 3 by 2 (9), 4 by 3 (10);
-   each main building a 2 by 2 lot, where it stands small until level 6 fills it.
+   each main building a 2 by 2 lot, which it fills at every level ((4.78); until then it stood small in a corner till 6).
    State: kd().city: { v:3, cells:[441 × { k, lv, irr, fer, spells? }], at:{ palace, barracks, market, yard, granary },
    plan, walls, moat, day, last, army, kits, reserves, raids:{ castle level: raids won } }. A cell under a building's
    ground or lot that is not its seat: { k:'part', of:<its key> }.
@@ -51,7 +51,9 @@ const KC_OLD_AT = { palace:[10, 10], barracks:[10, 9], yard:[9, 10], market:[11,
 const KC_LOTS = { barracks:[7, 6], market:[13, 6], yard:[7, 11], granary:[13, 11] };                   // (palace 6) each 2 by 2, its top left
 const kcLotSeat = k=> [KC_LOTS[k][0], KC_LOTS[k][1] + 1];                                               // where it stands until it fills its lot
 const KC_PALACE_GROUND = [9, 8, 4, 3];
-function kcPalaceFoot(L){ return L >= 10 ? [9, 8, 4, 3] : L >= 9 ? [9, 9, 3, 2] : L >= 6 ? [10, 9, 2, 2] : [10, 10, 1, 1]; }
+/* (4.78) from 6 the palace fills its ground at every level, inside walls of its own (the designer: "the empty space looks weird
+   while pending its upgrade … allow the walls to suit the available space inside"); till 4.77 it grew into it, 2 by 2 to 4 by 3 */
+function kcPalaceFoot(L){ return L >= 6 ? KC_PALACE_GROUND.slice() : [10, 10, 1, 1]; }
 const kcHalf = P=> P >= 10 ? 6 : P >= 8 ? 5 : P >= 6 ? 4 : P >= 4 ? 3 : 2;      // the castle's area: 5 by 5 … 13 by 13
 const kcBand = P=> P >= 7 ? 4 : P >= 4 ? 3 : 2;                                  // the wild burnt back beyond the walls
 const kcMaxTowers = P=> P >= 8 ? 4 : P >= 6 ? 3 : P >= 4 ? 2 : P >= 2 ? 1 : 0;
@@ -156,11 +158,11 @@ function kcOwner(C, i){
   if(c.k === 'part') return c.of;
   return KC_B[c.k] && C.at && C.at[c.k] && kcSeatOf(C, c.k) === i ? c.k : null;
 }
-/* a building's ground on the map [x, y, w, h]: the palace's by its level; a main building's lot once it fills it */
+/* a building's ground on the map [x, y, w, h]: the palace's by its level; a main building's lot (from palace 6) */
 function kcFoot(C, key){
   const i = kcSeatOf(C, key), c = C.cells[i], [x, y] = kcXY(i);
   if(key === 'palace') return kcPalaceFoot(c.lv);
-  if(C.plan && KC_MAIN.includes(key) && c.lv >= 6) return [KC_LOTS[key][0], KC_LOTS[key][1], 2, 2];
+  if(C.plan && KC_MAIN.includes(key)) return [KC_LOTS[key][0], KC_LOTS[key][1], 2, 2];          // (4.78) its whole lot, at every level
   return [x, y, 1, 1];
 }
 /* the plots a finger tapping selects as one: a building's whole ground or lot */
@@ -180,6 +182,11 @@ function kcCastle(K){
 const kcRaidsWon = (K, CL)=> (K.city.raids && K.city.raids[CL]) || 0;
 function kcRaidNext(K){
   const CL = kcCastle(K);
+  /* (4.77) the final raid of the level just finished: the whole castle up a level, the three raids of the level below
+     held off — the aliens come a fourth time, all at once; held off, Nótt's dream (50-kingdom-nott.js). Before any raid
+     of the new level. The designer: "new elements should be gained only after each time the entire castle is upgraded
+     and completes its final fight (making a fourth fight)". */
+  if(CL >= 3 && kcRaidsWon(K, CL - 1) === 3) return { n:4, CL:CL - 1, ready:true, why:'', final:true };
   if(CL < 2 || CL >= KC_MAX) return null;
   const n = kcRaidsWon(K, CL) + 1;
   if(n > 3) return null;
@@ -299,7 +306,7 @@ function kcActions(K, i){
     const next = kcNextToCleared(C, x, y), reach = kcReach(C, x, y);
     /* too far: the palace's level that lets the city reach it (the map's edge, never) */
     const far = Math.max(Math.abs(x - KC_C), Math.abs(y - KC_C)), at = [2, 3, 4, 5, 6, 7, 8, 9, 10].find(L=> L > pal && Math.min(KC_C - 1, kcHalf(L) + kcBand(L)) >= far);
-    const why = !has('fire') ? 'Needs the Fire form, from the meadow\'s guardian.' : !reach ? (at ? `Too far out for now: the palace at level ${at} lets the city reach it.` : 'The edge of the map stays wild.') : !next ? 'Clear a plot next to it first.' : '';
+    const why = !has('fire') ? `Needs the Fire form: Nótt brings it in a dream after ${typeof NOTT !== 'undefined' ? NOTT.firstWins : 5} battles won.` : !reach ? (at ? `Too far out for now: the palace at level ${at} lets the city reach it.` : 'The edge of the map stays wild.') : !next ? 'Clear a plot next to it first.' : '';
     out.push({ id:'clear', label:'Burn back the wild', cost:[0, 0, 0, 0], sums:3, ok:!why, why, done:()=>{ c.k = 'clear'; c.lv = 0; }, said:'The wild land is burnt back.' });
     return out;
   }
@@ -393,7 +400,7 @@ async function kcReplanSay(K, moved){
   if(typeof kdSay !== 'function') return;
   ui.kdTalk = true;
   try {
-    await kdSay('The palace is level 6, and the city has a new plan: the palace has its own grounds now, and the barracks, the market, the builders\' yard and the granary each have a lot of four plots. They stand small in a corner of it until they reach level 6, and then they fill it.');
+    await kdSay('The palace is level 6, and the city has a new plan: the palace has its own grounds now, and the barracks, the market, the builders\' yard and the granary each have a lot of four plots. Each of them fills its lot, and grows grander with every level.');
     if(moved.length) await kdSay(`${moved.length} ${moved.length > 1 ? 'buildings' : 'building'} stood in the way, and ${moved.length > 1 ? 'were' : 'was'} moved, just as ${moved.length > 1 ? 'they were' : 'it was'}, to the nearest free plot.`);
   } finally { ui.kdTalk = false; }
 }
@@ -471,9 +478,10 @@ function kcQuiz(title, need, onDone){
    THE KINGDOM SCREEN (screen 'kingdom'): the board, the plot chosen, the city's cards, the partner, what to do
    ============================================================ */
 function renderKingdom(){
-  kdCss();
+  kdCss(); if(typeof kdNottCss === 'function') kdNottCss();
   document.querySelectorAll('.kd-over').forEach(b=> b.remove());
   $('#brandSub').textContent = 'The Kingdom';
+  if(kdLocked()) return kdGateRender();                              // (4.77) the parents' password, while it is being built
   const K = kd();
   if(!K.partner) return kdNameRender();
   const P = K.partner, F = KD_FORMS[P.form], max = kdMaxHp(P, K);
@@ -482,7 +490,7 @@ function renderKingdom(){
   let sel = ui.kcSel != null && C.cells[ui.kcSel] ? ui.kcSel : kcAt(KC_C, KC_C);
   if(C.cells[sel].k === 'part'){ const s = kcSeatOf(C, C.cells[sel].of); if(s >= 0) sel = s; }
   ui.kcSel = sel;
-  const tr = kdTrial(K), pts = kdTalPoints(P), mk = kcLv(K, 'market'), potMax = mk ? Math.min(6, mk + 1) : 0;
+  const pts = kdTalPoints(P), mk = kcLv(K, 'market'), potMax = mk ? Math.min(6, mk + 1) : 0;   // (4.77) no guardians: Nótt (50-kingdom-nott.js)
   const wall = kcWallAct(K), moat = kcMoatAct(K), wat = kcFieldsAct(K, 'irr'), fer = kcFieldsAct(K, 'fer');
   const army = C.army || 0, armyMax = kcArmyMax(K);
   screenEl.innerHTML = `
@@ -521,14 +529,12 @@ function renderKingdom(){
             <div class="kd-pname">${escapeHtml(P.name)} ${kdTypeBadge(F.type)} <span class="kd-lv">Lv ${P.level}</span></div>
             ${kdBar('Health', P.hp, max, 'hp')}
             ${kdBar('Experience', P.xp, kdNeed(P.level), 'xp')}
-            <div class="kd-forms">${P.forms.length > 1 ? `Forms: ${P.forms.map(f=> kdTypeBadge(KD_FORMS[f].name === 'Stronger Physical' ? 'Physical+' : KD_FORMS[f].type)).join(' ')}` : 'Its first new form comes from the meadow\'s guardian.'}</div>
+            <div class="kd-forms">${P.forms.length > 1 ? `Forms: ${P.forms.map(f=> kdTypeBadge(KD_FORMS[f].name === 'Stronger Physical' ? 'Physical+' : KD_FORMS[f].type)).join(' ')}` : 'Its first new form comes from Nótt, in a dream.'}</div>
           </div>
         </div>
         <div class="kd-acts">
           <button class="btn btn-primary kd-go" id="kdMeadow">${kdIcon('sword')}<span>Into the meadow<small>Rescue the mind-controlled monsters</small></span></button>
-          ${tr ? (tr.ready ? `<button class="btn kd-go kd-boss" id="kdTrial">${kdIcon('sword')}<span>${escapeHtml(tr.T.name)}<small>Free it, for the ${KD_FORMS[tr.T.form].name} form</small></span></button>`
-            : `<div class="kd-card kd-next"><b>Next form: ${KD_FORMS[tr.T.form].name}</b><small>${escapeHtml(tr.T.name)} comes out to fight once:</small>
-                ${tr.needs.map(n=> `<div class="kd-need ${n.ok ? 'ok' : ''}"><span>${n.say}</span><em>${n.have} / ${n.want}</em><i><b style="width:${Math.round(n.have * 100 / n.want)}%"></b></i></div>`).join('')}</div>`) : ''}
+          ${typeof kdNottCardHtml === 'function' ? kdNottCardHtml(K) : ''}
           <button class="btn btn-ghost kd-rest" id="kdRest" ${P.hp >= max ? 'disabled' : ''}>Rest at the palace<small>${P.hp >= max ? 'Fully healed' : 'Heals in full'}</small></button>
           ${potMax ? `<button class="btn btn-ghost kd-rest" id="kdPotion" ${K.potions >= potMax || K.coins < KD_POTION ? 'disabled' : ''}>Buy a potion<small>${K.potions} of ${potMax} · ${KD_POTION} coins</small></button>` : ''}
           <button class="btn kd-rest kd-tal ${pts ? 'has' : ''}" id="kdTal">Talents<small>${pts ? `${pts} point${pts > 1 ? 's' : ''} to spend` : 'A point every level'}</small></button>
@@ -541,7 +547,6 @@ function renderKingdom(){
     </div>`;
   $('#backBtn').addEventListener('click', ()=>{ ui.walkFresh = false; go('r6_rift'); });
   $('#kdMeadow').addEventListener('click', ()=> kdBattleStart(kdWild()));
-  const t = $('#kdTrial'); if(t) t.addEventListener('click', ()=>{ const T = tr.T; kdBattleStart([kdFoe(T.sp, P.level + T.lv, { boss:true, hp:T.hp, name:T.name })], T); });
   $('#kdRest').addEventListener('click', async ()=>{ P.hp = kdMaxHp(P, K); await saveProfile(); kcRerender(); });
   const pt = $('#kdPotion'); if(pt) pt.addEventListener('click', async ()=>{ if(K.coins < KD_POTION || K.potions >= potMax) return; K.coins -= KD_POTION; K.potions++; await saveProfile(); kcRerender(); });
   $('#kdTal').addEventListener('click', ()=> go('kdTalents'));
@@ -559,6 +564,7 @@ function renderKingdom(){
   ui.kcPop = null;
   if(!K.met && !ui.kdTalk) setTimeout(kdWelcome, 300);
   else if(!K.vesper && !ui.kdTalk && typeof kdVesperNews === 'function') setTimeout(kdVesperNews, 300);
+  else if(typeof kdDreamDue === 'function' && kdDreamDue(K) && !ui.kdDreaming) setTimeout(kdNottDreamDue, 500);   // (4.77) Nótt
 }
 async function kcRecruit(K, n){
   const C = K.city, room = kcArmyMax(K) - (C.army || 0), can = Math.min(n, room, Math.floor(K.coins / KC_SOLDIER.coins));
@@ -600,8 +606,8 @@ function kcPlotHtml(K, i){
     extra = `<div class="kc-spells"><b>Spells</b> ${sp.length} of ${slots}: ${sp.length ? sp.map(s=> `<span class="kc-sp ${s.k}">${KC_SPELLS[s.k].name} <em>${s.casts}</em></span>`).join('') : '<span class="kc-none">none charged</span>'}</div>`; }
   if(c.k === 'yard' && c.lv) extra = `<div class="kc-spells"><b>Repair kits</b> ${C.kits || 0} of ${kcKitMax(K)}</div>`;
   if(c.k === 'barracks' && c.lv) extra = `<div class="kc-spells"><b>Reserves</b> ${C.reserves || 0} of ${kcReserveMax(K)}</div>`;
-  if(c.k === 'palace' && C.plan) extra = `<div class="kc-spells">The palace grounds are four plots by three: the palace grows over them at levels 9 and 10.</div>`;
-  if(KC_MAIN.includes(c.k) && C.plan && c.lv < 6) extra = `<div class="kc-spells">Its lot is ready: at level 6 it fills all four plots.</div>`;
+  if(c.k === 'palace' && C.plan) extra = `<div class="kc-spells">The palace grounds are four plots by three, inside the palace's own walls; each level makes the palace grander.</div>`;   // (4.78)
+  if(KC_MAIN.includes(c.k) && C.plan && c.lv < 6) extra = `<div class="kc-spells">Its lot is four plots, and it fills them; each level adds to it.</div>`;
   return `<div class="kc-pt">${kcIcon(B ? c.k : c.k === 'wild' ? 'wild' : 'clear')}<div><b>${kcPlotName(C, c, x, y)}</b>${B ? ` <span class="kd-lv">${c.lv ? 'Level ' + c.lv : 'In ruins'}</span>` : ''}<small>${say}</small></div></div>
     ${extra}
     ${acts.length ? `<div class="kc-acts">${acts.map(a=> kcActBtn(K, a)).join('')}</div>` : `<small class="kc-full">As good as it can be.</small>`}`;
@@ -620,11 +626,13 @@ function kcRaidCardHtml(K){
   const spells = T.reduce((a, i)=> a + (C.cells[i].spells || []).length, 0);
   const def = `<div class="kc-def"><span>${kcIcon('soldier')}${C.army || 0} soldiers</span><span>${kcIcon('tower')}${T.length} tower${T.length === 1 ? '' : 's'}, ${spells} spell${spells === 1 ? '' : 's'}</span><span>${kcIcon('kit')}${C.kits || 0} repair kits</span><span>${kcIcon('reserve')}${C.reserves || 0} reserves</span></div>`;
   if(CL < 2) return `<div class="kd-card kc-wall kc-raid"><div class="kc-pt">${kcIcon('raid')}<div><b>The aliens</b> <span class="kd-lv">Castle level ${CL}</span>
-    <small>Once the palace, the four main buildings, the walls and a tower all stand at level 2 or more, the aliens will raid the city: three times a level. Each raid held off lets the city grow.</small></div></div></div>`;
-  const won = kcRaidsWon(K, CL);
+    <small>Once the palace, the four main buildings, the walls and a tower all stand at level 2 or more, the aliens will raid the city: three times a level, and a fourth time, all at once, when the whole castle has gone up a level. Each raid held off lets the city grow; each final raid brings Nótt with a new element.</small></div></div></div>`;
+  /* (4.77) four a level: three, then the final raid once the whole castle has gone up */
+  const RL = nx ? nx.CL : CL, won = kcRaidsWon(K, RL);
   return `<div class="kd-card kc-wall kc-raid ${nx && nx.ready ? 'due' : ''}"><div class="kc-pt">${kcIcon('raid')}<div><b>The aliens</b> <span class="kd-lv">Castle level ${CL}</span>
-    <small>${nx ? `Raid ${nx.n} of 3 is coming. Held off, it opens ${KC_RAID_UNLOCKS[nx.n]}.` : CL >= KC_MAX ? 'The kingdom is at its greatest.' : 'Raise everything to the next level: the raids of the next castle level follow.'}</small></div></div>
-    <div class="kc-raidpips" aria-label="${won} of 3 raids held off">${[1, 2, 3].map(n=> `<i class="${n <= won ? 'on' : nx && nx.n === n ? 'next' : ''}"></i>`).join('')}<span>${won} of 3 held off</span></div>
+    <small>${nx ? (nx.final ? `The final raid of castle level ${RL} is coming: every alien at once. Held off, Nótt comes in a dream with the next element.` : `Raid ${nx.n} of 4 is coming. Held off, it opens ${KC_RAID_UNLOCKS[nx.n]}.`)
+      : CL >= KC_MAX ? 'The kingdom is at its greatest.' : won >= 3 ? `Raise everything to level ${RL + 1}: then the final raid of castle level ${RL}.` : 'Raise everything to the next level: the raids of the next castle level follow.'}</small></div></div>
+    <div class="kc-raidpips" aria-label="${won} of 4 raids of castle level ${RL} held off">${[1, 2, 3, 4].map(n=> `<i class="${n === 4 ? 'fin ' : ''}${n <= won ? 'on' : nx && nx.n === n ? 'next' : ''}"></i>`).join('')}<span>${won} of 4 held off</span></div>
     ${def}
     ${nx ? `<button class="btn ${nx.ready ? 'btn-primary' : 'btn-ghost'} kc-act kc-defend" id="kcDefend" ${nx.ready ? '' : 'disabled'}><span class="kc-an">Defend the city</span>${nx.why ? `<small class="kc-why">${nx.why}</small>` : '<small class="kc-why">Load the towers, the yard and the barracks first: everything is used by itself in the raid.</small>'}</button>` : ''}</div>`;
 }
@@ -781,6 +789,7 @@ function kcCss(){
   .kc-raidpips{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--ink-soft);}
   .kc-raidpips i{width:26px;height:10px;border-radius:999px;background:rgba(35,32,25,.13);}
   .kc-raidpips i.on{background:var(--jade);} .kc-raidpips i.next{background:#b9a6f0;animation:kdbPulse .7s ease-in-out infinite alternate;}
+  .kc-raidpips i.fin{width:34px;box-shadow:inset 0 0 0 2px #8a6bd8;} .kc-raidpips i.fin.on{background:#6d4bd8;}   /* (4.77) the final raid */
   .kc-def{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12.5px;font-weight:700;color:var(--ink-soft);}
   .kc-def span{display:inline-flex;align-items:center;gap:4px;}
   .kc-def .kc-ic{width:17px;height:17px;}

@@ -43,9 +43,11 @@ const krD = (a, b)=> Math.hypot(a.x - b.x, a.y - b.y);
 
 /* ---------- THE RAID, SET UP FROM THE CITY ---------- */
 function krSetup(K){
-  const C = K.city, CL = kcCastle(K), nx = kcRaidNext(K), n = nx ? nx.n : 1, P = kcLv(K, 'palace');
+  /* (4.77) the raid's own castle level (the final raid's is the level below the castle's now: kcRaidNext), and how strong
+     the aliens come: the final raid at the castle's new level */
+  const C = K.city, nx = kcRaidNext(K), n = nx ? nx.n : 1, CL = nx ? nx.CL : kcCastle(K), S = n === 4 ? kcCastle(K) : CL, P = kcLv(K, 'palace');
   const G = KC_ART.geo(C), W = C.walls || 0, M = C.moat || 0, mid = KC_C * 100 + 50;
-  const R = { K, C, CL, n, P, W, M, G, t:0, speed:1, over:false, won:false, x0:G.x0, x1:G.x1,
+  const R = { K, C, CL, n, final:n === 4, P, W, M, G, t:0, speed:1, over:false, won:false, x0:G.x0, x1:G.x1,
               segs:[], towers:[], soldiers:[], aliens:[], reserves:[], fx:[], spawn:[], kits:C.kits || 0, resLeft:C.reserves || 0,
               log:{ killed:0, kits:0, spells:0, fallen:0, breaches:0, towersDown:0 } };
   /* the walls, a stretch for each plot along each side */
@@ -72,10 +74,12 @@ function krSetup(K){
   }
   const bk = kcSeatOf(C, 'barracks'), [bx, by] = kcXY(bk >= 0 ? bk : kcAt(KC_C, KC_C));
   R.barracks = { x:bx * 100 + 50, y:by * 100 + 70, L:Math.max(1, kcLv(K, 'barracks')) };
-  /* the aliens: more, stronger, with each castle level and each raid of it; a captain from raid 2, the commander at 3 */
-  const count = 5 + 2 * CL + 2 * n, hp = 40 + 22 * CL, dmg = 6 + 3 * CL;
+  /* the aliens: more, stronger, with each castle level and each raid of it; a captain from raid 2, the commander at 3;
+     (4.77) the final raid: more again, two captains and the commander */
+  const count = 5 + 2 * S + 2 * n, hp = 40 + 22 * S, dmg = 6 + 3 * S;
   const list = Array.from({ length:count }, ()=> Object.assign({}, KR_ALIENS[krInt(0, KR_ALIENS.length - 1)]));
   if(n >= 2) list.push(Object.assign({}, KR_ELITE));
+  if(n >= 4) list.push(Object.assign({}, KR_ELITE));
   if(n >= 3) list.push(Object.assign({}, KR_BOSS));
   list.forEach((a, k)=>{
     const wave = k % 3, at = KR_WAVES[wave] + krInt(0, 3500);
@@ -230,7 +234,7 @@ async function kdRaidStart(){
   const box = document.createElement('div');
   box.className = 'kr-over'; box.id = 'kdRaid';
   box.innerHTML = `<div class="kr-top">
-      <div class="kr-title"><b>Raid ${R.n} of 3</b><small>Castle level ${R.CL}</small></div>
+      <div class="kr-title"><b>${R.final ? 'The final raid' : `Raid ${R.n} of 4`}</b><small>Castle level ${R.CL}</small></div>
       <div class="kr-pal"><span>The palace</span><i><b id="krPal"></b></i><em id="krPalN"></em></div>
       <div class="kr-btns"><button class="btn btn-ghost" id="krFast" aria-pressed="false">Twice as fast</button><button class="btn btn-ghost" id="krQuit">Give up</button></div></div>
     <div class="kr-stage"><canvas id="krCv" aria-label="The raid, seen from above"></canvas></div>
@@ -328,7 +332,8 @@ async function krEnd(R, box){
   const card = document.createElement('div');
   card.className = 'kd-card kd-overcard kr-end';
   card.innerHTML = `<div class="kd-h">${won ? 'The city held!' : R.quit ? 'The city gave way' : 'The palace fell'}</div>
-    <p class="kd-sub2">${won ? `Raid ${R.n} of castle level ${R.CL} is held off. ${R.n < 3 ? `It opens ${KC_RAID_UNLOCKS[R.n]}.` : 'Everything can go up a level now.'}`
+    <p class="kd-sub2">${won ? (R.final ? `The final raid of castle level ${R.CL} is held off! Tonight, in a dream, Nótt will come with a new element.`
+                                       : `Raid ${R.n} of castle level ${R.CL} is held off. ${R.n < 3 ? `It opens ${KC_RAID_UNLOCKS[R.n]}.` : `Everything can go up a level now; then the final raid.`}`)
                              : 'The aliens fall back for now. Nothing is lost but the spells cast and the reserves who fell. Load the towers, the yard and the barracks, man the walls, and try again.'}</p>
     <p class="kd-sub2">${L.killed} aliens beaten · ${L.spells} spell${L.spells === 1 ? '' : 's'} cast · ${L.kits} repair kit${L.kits === 1 ? '' : 's'} used${L.breaches ? ` · ${L.breaches} breach${L.breaches > 1 ? 'es' : ''}` : ''}${L.fallen ? ` · ${L.fallen} reserve${L.fallen > 1 ? 's' : ''} fell` : ''}</p>
     <div class="kd-row"><button class="btn btn-primary" id="krBack">Back to the city</button></div>`;

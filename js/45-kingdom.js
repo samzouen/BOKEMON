@@ -639,6 +639,33 @@ function kdSpecHtml(f){
 /* ============================================================
    THROUGH THE PORTAL: the steward, and the partner
    ============================================================ */
+/* (4.77) LOCKED WHILE IT IS BEING BUILT. The designer: "please password protect kingdom until it is done! use the main pw
+   that parents use." Each visit asks for the parents' password (11-app.js's passOk: the password they set, or the
+   master code), as the word list and the arena do; inside the kingdom it stays open, and leaving it (06-progress.js's
+   go) locks it again. When the kingdom is done: KD_LOCK.on = false. */
+const KD_LOCK = { on:true };
+const KD_SCREENS = ['kingdom', 'kdBattle', 'kdSums', 'kdTalents'];
+const kdLocked = ()=> KD_LOCK.on && !ui.kdUnlocked;
+function kdGateRender(){
+  screenEl.innerHTML = `
+    <div class="kd kd-gate">
+      <button class="back-link" id="kdGateBack">← Back to the Rift</button>
+      <div class="kd-card">
+        <div class="kd-h">Grown-ups only</div>
+        <p class="kd-sub2">The kingdom is still being built. Enter the password to go in.</p>
+        <input type="password" id="kdGatePw" inputmode="numeric" autocomplete="off" placeholder="Password">
+        <div class="kd-row"><button class="btn btn-primary" id="kdGateGo">Unlock</button></div>
+      </div>
+    </div>`;
+  const go2 = ()=>{
+    const v = $('#kdGatePw').value.trim();
+    if(typeof passOk === 'function' && passOk(v)){ ui.kdUnlocked = true; renderKingdom(); }
+    else toast('Incorrect password.');
+  };
+  $('#kdGateGo').addEventListener('click', go2);
+  $('#kdGatePw').addEventListener('keydown', e=>{ if(e.key === 'Enter') go2(); });
+  $('#kdGateBack').addEventListener('click', ()=> typeof riftGo === 'function' ? riftGo() : go('region'));
+}
 async function kdRiftPortal(){
   if(ui.riftTalk) return;
   walkTeardown();
@@ -827,7 +854,7 @@ function kdTide(B, P){
   return { high, m:high ? kdTideHigh(r) : kdTideLow(r), left };
 }
 function kdBattleRender(){
-  kdCss();
+  kdCss(); if(typeof kdNottCss === 'function') kdNottCss();
   const B = ui.kdB, K = kd(), P = K && K.partner;
   if(!B || !P){ go('kingdom'); return; }
   if(ui.kdF && ui.kdF.B === B) return kdFreeRender();                // (4.75) won: the freeing, where the battle was
@@ -850,6 +877,7 @@ function kdBattleRender(){
               <div class="kdb-st"></div>${f.special ? `<div class="kdb-spec ${f.special}">${kdSpecHtml(f)}</div>` : ''}</div>
             <div class="kdb-foepic mind ${f.special ? 'special' : ''}">${monPortrait(f.sp, px, { view:'front', bare:true })}</div>
           </button>`).join('')}</div>
+        ${typeof kdNottHtml === 'function' ? kdNottHtml(B) : ''}
         <div class="kdb-me">
           <div class="kdb-mepic" id="kdbMePic">${kdPartnerArt(B.form, 'back', n > 1 ? 250 : 290)}</div>
           <div class="kdb-tag"><b>${escapeHtml(P.name)}</b> <span class="kd-lv">Lv ${P.level}</span> ${kdTypeBadge(F.type)}
@@ -1056,6 +1084,7 @@ function kdbSubmit(){
     /* Quick charge (Electric): two in a row, each in time, an energy more */
     if(kdFormTal(B, P, 'electric', 'quick') && B.quickRun >= 2){ gain++; bonus = true; B.quickRun = 0; }
     const before = B.energy; B.energy = Math.min(KD_ENERGY_MAX, B.energy + gain);
+    if(typeof kdNottCharge === 'function') kdNottCharge(B, gain);    // (4.77) Nótt, at the heir's side
     flash('right');
     kdbFloat(B.energy > before ? `+${B.energy - before}${bonus ? ' quick charge!' : ''}` : 'Energy full!', 'energy');
     kdbNextQ();
@@ -1318,6 +1347,7 @@ function kdbDrawLive(){
         slow > 0 ? `<span class="slow">Slowed ${Math.round(slow * 100)}%</span>` : '', B.t < (f.stunUntil || 0) ? '<span class="stun">Stunned</span>' : ''].join('');
       if(st._h !== html){ st._h = html; st.innerHTML = html; } }
   });
+  if(typeof kdNottDraw === 'function') kdNottDraw(B);
   const stun = kdbStunned(B), me = $('#kdbMePic');
   if(me) me.classList.toggle('stunned', stun);
   if(stun){ const lb = $('#kdbStunLab'); if(lb){ const t = `Stunned · ${Math.ceil((B.stunEnd - B.t) / 1000)} s`; if(lb.textContent !== t) lb.textContent = t; } }
@@ -1740,6 +1770,9 @@ function kdCss(){
   .kd-over{position:fixed;inset:0;z-index:900;background:rgba(20,14,8,.55);display:flex;align-items:center;justify-content:center;padding:16px;}
   .kd-overcard{max-width:540px;width:100%;max-height:calc(100vh - 32px);overflow:auto;box-shadow:0 12px 34px rgba(0,0,0,.45);background:var(--paper);display:flex;flex-direction:column;gap:6px;}
   .kd-row{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;}
+  /* (4.77) the password, at the way in */
+  .kd-gate{max-width:440px;margin:0 auto;display:flex;flex-direction:column;gap:12px;}
+  .kd-gate input{font:700 20px 'Nunito',sans-serif;padding:10px 12px;border:2px solid var(--line);border-radius:10px;background:#fff9ec;width:100%;box-sizing:border-box;margin-top:6px;}
   .kd-gain{font:800 17px 'Baloo 2',cursive;display:flex;align-items:center;flex-wrap:wrap;gap:6px;color:#8a6420;margin:2px 0;}
   .kd-evo-pics{display:flex;align-items:center;justify-content:center;gap:14px;margin:6px 0;}
   .kd-evo-pics .was{opacity:.6;filter:grayscale(.4);}

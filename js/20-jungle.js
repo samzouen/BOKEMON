@@ -2405,6 +2405,8 @@ function jgLegMask(av){
 /* (4.03) where his eyes are in his picture (lucesco_front.png, 96 × 96): the middle of the blue band across his face */
 const JG_EYES = { x:30.5 / 96, y:31.5 / 96, w:0.3, h:0.17 };
 function jgJumpIn(){ return Math.max(0, jgState().jumpIn | 0); }
+/* (4.79) the steps a leap's wait lasts: 50, five in the hunt for Wadjet (42-the-hunt.js) */
+function jgJumpSteps(){ return JG_JUMP.steps; }
 function jgJumpFrom(p, dir){
   const v = JG_DIR[dir];
   if(!v || !p) return null;
@@ -2499,7 +2501,7 @@ async function jgJump(J){
   if(jgRiding()){ if(lion) lion.classList.remove('jg-riding'); jgMountSync(); }    // (4.03) you stay on his back: he lands under you
   else if(lion){ lion.classList.add('jg-fresh'); jgLionPlace(); requestAnimationFrame(()=> requestAnimationFrame(()=>{ lion.classList.remove('jg-fresh', 'jg-riding'); })); }
   const j = jgState();
-  j.jumpIn = JG_JUMP.steps;
+  j.jumpIn = jgJumpSteps();
   j.jumps = (j.jumps || 0) + 1;
   w.busy = false;
   jgSave(false);
@@ -2848,7 +2850,7 @@ function jgPadState(p){
      lit: it can go this moment (its shimmer) */
   return {
     J:!!J,
-    jump:{ ready:!jn, lit:free && !!J && !jn, sub:jn ? jgSteps(jn) : '', fill:jn ? 1 - jn / JG_JUMP.steps : 0 },
+    jump:{ ready:!jn, lit:free && !!J && !jn, sub:jn ? jgSteps(jn) : '', fill:jn ? Math.max(0, 1 - jn / jgJumpSteps()) : 0 },
     glare:{ ready:!gn, lit:free && riding && !gn && !!(p && jgGlareTarget(p)), sub:gn ? jgSteps(gn) : '', fill:gn ? 1 - gn / JG_GLARE.steps : 0 },
     ambush:{ ready:true, lit:free && riding && !!(p && jgAmbushTarget(p)), sub:'', fill:0 },
     track:{ ready:true, lit:free, on:T.on, what:T.what, pic:T.pic, sub:'', fill:0 },
@@ -4324,6 +4326,7 @@ function jgCss(){
   .jg-band.alert .jg-mark{ transform:translateX(-50%) scale(1); opacity:1; animation:jgMark .5s ease-in-out .2s 2; }
   @keyframes jgMark{ 0%,100%{ transform:translateX(-50%) scale(1) rotate(0); } 30%{ transform:translateX(-50%) scale(1.15) rotate(-8deg); } 60%{ transform:translateX(-50%) scale(1.15) rotate(8deg); } }
   .jg-hold{ position:fixed; inset:0; z-index:84; }
+  body.in-scene .jg-hold{ display:none; }      /* (4.79) a story's page always takes the finger (the region's last one stuck under it) */
   .jg-hud{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin:2px 0 6px; }
   .jg-chip{ font:800 12px/1 'Nunito',sans-serif; padding:5px 9px; border-radius:12px; background:rgba(20,40,24,.72); color:#e8f6df; box-shadow:0 1px 3px rgba(0,0,0,.3); }
   .jg-chip.done{ background:rgba(46,120,70,.85); }

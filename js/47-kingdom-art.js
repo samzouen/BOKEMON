@@ -158,11 +158,11 @@ function lot(g, x, y, c, i, road){
   /* (4.74) the palace's ground: paved under it, gardens round it; a main building's lot: its own ground once it fills it,
      kept for it till then */
   if(k === 'part'){
-    if(c.of === 'palace') return inRect(x, y, palFoot(CUR.P)) ? stones(g, x0, y0, x0 + 100, y0 + 100, 9) : garden(g, x0, y0, i);
-    return lvOf(C, c.of) >= 6 ? ground(g, c.of, x0, y0, i) : allotted(g, x0, y0, i);
+    if(c.of === 'palace'){ if(C.plan && LOTG.palace) return lawn(g, x0, y0, i * 7 + 3, false); return inRect(x, y, palFoot(CUR.P)) ? stones(g, x0, y0, x0 + 100, y0 + 100, 9) : garden(g, x0, y0, i); }
+    return lvOf(C, c.of) >= 6 || fills(c.of) ? ground(g, c.of, x0, y0, i) : allotted(g, x0, y0, i);
   }
-  if(C.plan && k === 'palace') return stones(g, x0, y0, x0 + 100, y0 + 100, 9);
-  if(C.plan && BIG[k] && (c.lv || 0) >= 6) return ground(g, k, x0, y0, i);
+  if(C.plan && k === 'palace') return LOTG.palace ? lawn(g, x0, y0, i * 7 + 3, false) : stones(g, x0, y0, x0 + 100, y0 + 100, 9);
+  if(C.plan && BIG[k] && ((c.lv || 0) >= 6 || fills(k))) return ground(g, k, x0, y0, i);
   const ruined = !!ART[k] && !c.lv;
   if(k === 'market' && !ruined){ stones(g, x0, y0, x0 + 100, y0 + 100, 8.5); return; }
   if(k === 'yard' && !ruined){ earth(g, x0, y0, i * 7 + 1, '#c9ab7a', '#a98b5c', false); return; }
@@ -1108,6 +1108,10 @@ function lotSign(g, x, y, key){
 }
 const ART = { palace, barracks, market, yard, granary, house, tower };
 const BIG = { palace:palaceBig, barracks:barracksBig, market:marketBig, yard:yardBig, granary:granaryBig };
+/* (4.78) a whole ground's own painter (the palace's, a main building's lot), under everything that stands on it; and a
+   big painter marked `any` draws its building on its lot at every level (51-kingdom-build3d.js): no lot kept empty */
+const LOTG = {}, PALSPOTS = {};
+const fills = k=> !!(BIG[k] && BIG[k].any);
 /* each a little larger than its plot's middle, so that it reads at the board's size */
 const GROW = { palace:1.04, barracks:1.08, market:1.06, yard:1.06, granary:1.08, house:1.12, tower:1.08 };
 
@@ -1312,7 +1316,8 @@ function crewItems(key, L, X, Y, w, h){
 function palaceCrew(L, X, Y, w, h){
   const out = [], key0 = (Y + h * 100) - 12 + 0.5, line = CREW.palace[0], st = stageOf(line, L);
   let spots;
-  if(w === 1) spots = { steward:[34, 97, 0], heir:[63, 98, 1], hs:32, serve:[[86, 99, 1], [14, 99, 0]].slice(0, L >= 4 ? 2 : L >= 2 ? 1 : 0) };
+  if(PALSPOTS.fn) spots = PALSPOTS.fn(L, w, h);
+  else if(w === 1) spots = { steward:[34, 97, 0], heir:[63, 98, 1], hs:32, serve:[[86, 99, 1], [14, 99, 0]].slice(0, L >= 4 ? 2 : L >= 2 ? 1 : 0) };
   else {
     const W = w * 100, cx = W / 2, base = h * 100 - 8, fb = w >= 4 ? base - 78 : base;
     spots = w >= 4 ? { steward:[cx - 28, fb - 1, 0], heir:[cx + 4, fb, 1], hs:42, serve:[[cx - 58, base + 3, 0], [cx + 62, base + 4, 1], [cx - 128, base + 2, 0], [cx + 130, base + 3, 1]] }
@@ -1358,8 +1363,15 @@ function render(K, S, into){
     else if(c.k === 'field') fieldGround(g, free(x, y, G), c, i);
     else clearedFlat(g, free(x, y, G), i);
   });
+  /* (4.78) each whole ground's own painter: the palace's, each main building's lot */
+  if(C.plan && typeof kcFoot === 'function') ['palace'].concat(typeof KC_MAIN !== 'undefined' ? KC_MAIN : []).forEach(key=>{
+    const f = LOTG[key], i = typeof kcSeatOf === 'function' ? kcSeatOf(C, key) : -1, c = C.cells[i];
+    if(!f || !c || c.k !== key || (key !== 'palace' && !fills(key))) return;
+    const [fx, fy, fw, fh] = kcFoot(C, key);
+    try { f(g, fx * 100, fy * 100, fw, fh, c.lv || 0, i); } catch(e){ console.error('kingdom art:', e); }
+  });
   /* the lots kept for main buildings still on their small plots, roped round */
-  if(C.plan && typeof KC_LOTS !== 'undefined') Object.entries(KC_LOTS).forEach(([key, [lx, ly]])=>{ if(lvOf(C, key) < 6) lotRope(g, lx * 100 + 10, ly * 100 + 12, lx * 100 + 190, ly * 100 + 192); });
+  if(C.plan && typeof KC_LOTS !== 'undefined') Object.entries(KC_LOTS).forEach(([key, [lx, ly]])=>{ if(lvOf(C, key) < 6 && !fills(key)) lotRope(g, lx * 100 + 10, ly * 100 + 12, lx * 100 + 190, ly * 100 + 192); });
   mark('ground');
   streets(g, C, G, road); mark('streets');
   if(G.M) moatFlat(g, G);
@@ -1375,13 +1387,13 @@ function render(K, S, into){
     if(c.k === 'part'){
       if(c.of === 'palace'){ if(!inRect(x, y, palFoot(G.Pl))) gardenItems(x0, y0, y).forEach(o=> items.push(o)); return; }
       const lt = typeof KC_LOTS !== 'undefined' && KC_LOTS[c.of];
-      if(lt && lvOf(C, c.of) < 6 && x === lt[0] + 1 && y === lt[1]) items.push({ y:y0 + 74, f:g2=> lotSign(g2, x0 + 52, y0 + 74, c.of) });
+      if(lt && lvOf(C, c.of) < 6 && !fills(c.of) && x === lt[0] + 1 && y === lt[1]) items.push({ y:y0 + 74, f:g2=> lotSign(g2, x0 + 52, y0 + 74, c.of) });
       return;
     }
     const art = ART[c.k];
     if(!art) return;
     /* (4.74) a main building filling its lot, the palace its ground: drawn whole */
-    if(C.plan && BIG[c.k] && (c.lv || 0) >= 6 && typeof kcSeatOf === 'function' && kcSeatOf(C, c.k) === i){
+    if(C.plan && BIG[c.k] && ((c.lv || 0) >= 6 || fills(c.k)) && typeof kcSeatOf === 'function' && kcSeatOf(C, c.k) === i){
       const [fx, fy, fw, fh] = kcFoot(C, c.k);
       items.push({ y:(fy + fh) * 100 - 12, seed:i * 31 + 9, tag:'bld', f:(g2, R)=> BIG[c.k](g2, fx * 100, fy * 100, fw, fh, c.lv, R) });
       crewItems(c.k, c.lv, fx * 100, fy * 100, fw, fh).forEach(o=> items.push(o));
@@ -1424,5 +1436,9 @@ function paint(canvas, K){
   if(canvas.width !== S){ canvas.width = S; canvas.height = S; }
   canvas.getContext('2d').drawImage(kept.cv, 0, 0);
 }
-return { paint, info, render, geo, free, trackRows, pic, figure, preload };
+/* (4.78) what 51-kingdom-build3d.js draws with: these pieces, and the painters it puts in place of these (ART, BIG, LOTG) */
+const kit = { TAU, rng, hash, rr, lin, ell, shade, stones, earth, lawn, windowLit, door, gable, wall, chimney, flag, roundTower, GOLD, BLUE, RED,
+  pyramid, dome, parapet, stair, banner, crown, hall, fountain, stall, barrel, crate, bunting, dummy, target, rack, hay, sacks, sails, windmill,
+  crane, logs, blocks, cart, topiary, parterre, soldier, ruin, cottage, townhouse, cur:()=> CUR };
+return { paint, info, render, geo, free, trackRows, pic, figure, preload, kit, ART, BIG, LOTG, SPOTS, PALSPOTS };
 })();

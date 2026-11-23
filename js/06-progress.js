@@ -727,6 +727,7 @@ function go(screen){
   // for the password after every single bout.
   if(ui.spellingUnlocked && screen !== 'spelling') ui.spellingUnlocked = false;
   if(ui.arenaUnlocked && screen !== 'arena' && screen !== 'battle') ui.arenaUnlocked = false;
+  if(ui.kdUnlocked && typeof KD_SCREENS !== 'undefined' && !KD_SCREENS.includes(screen)) ui.kdUnlocked = false;   // (4.77) the kingdom, locked again
   if(ui.xpUnlocked && screen !== 'sound') ui.xpUnlocked = false;
   /* (A companion keeps its hurts out of a fight now, as the party does — 3.52.) */
   /* Training with the Monkey King ends when you walk away from it (2.87). */

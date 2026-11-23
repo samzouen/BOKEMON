@@ -744,6 +744,7 @@ async function invRiftHoldJungleRun(){
   w2.at = w2.at || {}; w2.at.r6_palace = { x:19, y:12 };
   ui.walkFresh = false; caLion.at = null;
   go('r6_palace');
+  if(typeof jgHold === 'function') jgHold(false);                      // (4.79) the jungle's hold, off in the great hall
   await invWaitDeck('r6_palace');
   ui.invSceneKey = 'r6_palace';
   document.body.classList.remove('inv-lion-off');
