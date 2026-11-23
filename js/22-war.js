@@ -310,10 +310,12 @@ const warFace = {
   guardian:k=> jgFace(JG_TRIBES[k].guardian),
   anc:k=> jgFace(warAncId(k) + '_front'),
   knight:()=> jgFace('chestnut_knight2_front'),
+  duck:()=> jgFace('duck_knight2_front'),                 // (4.70) the war's Duck and Bug Knights speak as themselves
+  bug:()=> jgFace('bug_knight1_front'),
   lion:()=> riftLucescoFace(),
   you:()=> facePlayer(),
 };
-const WAR_NAME = { king:'The Fairy King', knight:'Chestnut Knight', lion:'Lucesco', you:'You' };
+const WAR_NAME = { king:'The Fairy King', knight:'Chestnut Knight', duck:'Duck Knight', bug:'Bug Knight', lion:'Lucesco', you:'You' };
 /* lines in turn in the jungle: each [who, html] — who: 'king', 'knight', 'lion', 'you', or ['guardian'|'anc', k] */
 async function warLines(seq){
   if(ui.jgTalk) return;
@@ -380,9 +382,9 @@ async function warKingVillage(k){
   return warUnseal(k);
 }
 function warKnightTalk(k, b){
-  const w = warState();
-  if(b && !w.beaten[b.id]) return warLines([['knight', caTurn('warKnight', [`<b>"Hold the line! Hold— oof! Help us, traveller!"</b>`, `<b>"There are too many of them! Their captain is right there!"</b>`])]]);
-  return warLines([['knight', caTurn('warKnightWon', [`<b>"We hold the village! Thank you, friend."</b>`, `<b>"For the King! …and for you, of course."</b>`])]]);
+  const w = warState(), kw = b ? ({ duck_knight2:'duck', bug_knight1:'bug' }[b.knight.sprite] || 'knight') : 'knight';   // (4.70)
+  if(b && !w.beaten[b.id]) return warLines([[kw, caTurn('warKnight', [`<b>"Hold the line! Hold— oof! Help us, traveller!"</b>`, `<b>"There are too many of them! Their captain is right there!"</b>`])]]);
+  return warLines([[kw, caTurn('warKnightWon', [`<b>"We hold the village! Thank you, friend."</b>`, `<b>"For the King! …and for you, of course."</b>`])]]);
 }
 async function warUnseal(k){
   const w = warState(), first = !w.said['unseal-' + k];

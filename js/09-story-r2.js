@@ -633,7 +633,7 @@ function showEyeBreak(){
    way through a battle — the battle is finished first); a break already
    running is held on every screen. */
 function enforceEyeBreak(){
-  const midFight = ['battle', 'quiz'].includes(ui.screen);
+  const midFight = ['battle', 'quiz', 'kdBattle'].includes(ui.screen);   // (4.73) a sum battle too: its timers run
   if(!midFight && dailyLimitActive()) return showDailyLock();
   if(dailyOverrideActive()) scheduleDailyRecheck();
   if(eyeBreakActive() && !(midFight && state.eyeBreakDue)) showEyeBreak();

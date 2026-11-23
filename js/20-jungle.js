@@ -3896,6 +3896,11 @@ function jgChooser(withRift){
   JG_TRIBE_KEYS.forEach(k=>{ if(j.found[k]) opts.push({ k, pic:pic(JG_TRIBES[k].guardian, JG_TRIBES[k].icon), name:JG_TRIBES[k].name.replace(/^the /, 'The '), sub:'Their village, by their guardian' }); });
   if(j.found.castle) opts.push({ k:'castle', pic:pic('fairy_king_c_front', '🏰'), name:'The Fairy King\'s castle', sub:(typeof caOpen === 'function' && caOpen()) ? 'Inside its gates' : 'The south gate' });   // (3.89) in, once it is open
   if(typeof unChooserOpt === 'function'){ const o = unChooserOpt(pic); if(o) opts.push(o); }                // (4.13) back to the King, out with you
+  /* (4.73) the designer: "Please grant a direct portal to the rift once the barricade has been set up": once the
+     Commander's soldiers have fenced the rift at the jungle's northern edge (after the invasion), straight to its gate
+     and in (invRiftEnter, 36-the-return.js), with the Commander's word on it the first time */
+  if(typeof invAfter === 'function' && invAfter() && typeof invRiftEnter === 'function')
+    opts.push({ k:'perim', pic:pic('chestnut_knight2_c_front', '🛡️'), name:'The rift', sub:'Inside the Commander\'s perimeter' });
   if(!withRift && opts.length === 1) return jgEnter(opts[0].k);
   const ov = document.createElement('div');
   ov.className = 'refine-scrim jg-choose';
@@ -3912,6 +3917,7 @@ function jgChooser(withRift){
     if(k === 'rift') return riftGo();
     if(k === 'king' && typeof unToKing === 'function') return unToKing();
     if(k === 'castle' && typeof caOpen === 'function' && caOpen() && typeof caEnter === 'function') return caEnter();
+    if(k === 'perim') return invRiftEnter();
     jgEnter(k);
   }));
 }

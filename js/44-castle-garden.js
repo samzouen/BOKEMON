@@ -743,6 +743,101 @@ function drawBall(g, d, x, y, w, h, k){
     g.fillStyle = lit > 0.3 ? 'rgba(170,225,130,.55)' : lit < -0.4 ? 'rgba(8,30,8,.42)' : 'rgba(70,130,55,.5)'; g.beginPath(); g.arc(px, py, k * (0.018 + rnd() * 0.018), 0, TAU); g.fill(); }
 }
 const stillOf = (draw, pad)=> { let f = null; return (g, d, x, y, w, h, k)=> (f || (f = U().still(draw, pad)))(g, d, x, y, w, h, k); };
+/* (4.73) THE ORCHARDS' FRUIT TREES. The designer: "Please improve the castle's apple tree graphics." An apple or a pear
+   tree as the gardens' trees are drawn: a short trunk with its root flare, splitting into limbs; a round crown pruned
+   as an orchard's is, in clouds of leaves lit from the upper left, darker in under; its fruit hanging round the crown's
+   lower and outer parts, each lit with a stalk and a leaf; a windfall or two on the grass in its shade. */
+function drawFruitTree(g, d, x, y, w, h, k){
+  const rnd = U().rng(Math.round(d.x * 61 + d.y * 37) + 17), apple = d.variant !== 'pear', f = rnd() < 0.5 ? -1 : 1;
+  const cx = x + w / 2, base = y + h - 0.1 * k, size = 0.92 + rnd() * 0.16;
+  /* its shade on the grass, and a windfall or two in it */
+  g.fillStyle = 'rgba(28,40,18,.27)'; g.beginPath(); g.ellipse(cx + 0.22 * k, base + 0.02 * k, 0.95 * k * size, 0.26 * k, 0, 0, TAU); g.fill();
+  const fallen = 1 + Math.floor(rnd() * 3);
+  for(let i = 0; i < fallen; i++){ const fx = cx + (rnd() - 0.35) * 1.3 * k, fy = base - 0.02 * k + (rnd() - 0.5) * 0.18 * k; fruitAt(g, fx, fy, 0.065 * k, apple, rnd, true); }
+  /* the trunk and its limbs */
+  const bark = '#5f4029', barkD = '#3d2817', barkL = '#8c6744';
+  const limb = (x0, y0, x1, y1, w0, w1, bend)=>{
+    const mx = (x0 + x1) / 2 + bend * k, my = (y0 + y1) / 2;
+    g.fillStyle = bark; g.beginPath();
+    g.moveTo(x0 - w0 / 2, y0); g.quadraticCurveTo(mx - (w0 + w1) / 4, my, x1 - w1 / 2, y1); g.lineTo(x1 + w1 / 2, y1); g.quadraticCurveTo(mx + (w0 + w1) / 4, my, x0 + w0 / 2, y0); g.closePath(); g.fill();
+    g.strokeStyle = barkL; g.lineWidth = Math.max(1, w1 * 0.28); g.beginPath(); g.moveTo(x0 - w0 * 0.25, y0); g.quadraticCurveTo(mx - (w0 + w1) / 6, my, x1 - w1 * 0.2, y1); g.stroke();
+    g.strokeStyle = barkD; g.lineWidth = Math.max(1, w1 * 0.24); g.beginPath(); g.moveTo(x0 + w0 * 0.3, y0); g.quadraticCurveTo(mx + (w0 + w1) / 6, my, x1 + w1 * 0.25, y1); g.stroke();
+  };
+  const fork = base - 0.72 * k;
+  limb(cx, base, cx + f * 0.05 * k, fork, 0.26 * k, 0.19 * k, f * 0.05);
+  g.fillStyle = bark; g.beginPath(); g.ellipse(cx, base - 0.03 * k, 0.21 * k, 0.065 * k, 0, 0, TAU); g.fill();       // the root flare
+  g.strokeStyle = barkD; g.lineWidth = Math.max(1, 0.02 * k); g.beginPath(); g.moveTo(cx - 0.02 * k, base - 0.1 * k); g.lineTo(cx + 0.01 * k, base - 0.4 * k); g.stroke();
+  [[-0.55, -0.55, 0.1, -0.08], [0.05, -0.8, 0.1, 0.04], [0.5, -0.6, 0.09, 0.08], [-0.2, -0.75, 0.07, -0.03]].forEach(([dx, dy, lw, bend])=>
+    limb(cx + f * 0.05 * k, fork, cx + f * dx * k * size, fork + dy * k, 0.15 * k, lw * k, f * bend));
+  /* the crown: clusters of leaves, back to front, lit from the upper left. (4.73, the designer: "fine tune the apple
+     tree background dark green blob to more closely match the shape of the leaves and to be less simply oval and more
+     organic … missing leaf details on the left side of the tree") No oval behind them: a ring of clusters makes its
+     edge, evenly round it, more fill its middle; each lays its own bumpy shade first, so the crown's dark is the
+     shape of its leaves, and leaves stand out over every edge. */
+  const ccx = cx + f * 0.04 * k, ccy = fork - 0.5 * k, RX = 0.98 * k * size, RY = 0.74 * k * size;
+  const greens = ['#9ccf6e', '#74b552', '#559a3f', '#3f8133', '#2f6829', '#235220'];
+  const clouds = [], ring = 11, a0 = rnd() * TAU;
+  for(let i = 0; i < ring; i++){
+    const a = a0 + (i + (rnd() - 0.5) * 0.35) * TAU / ring, dd = 0.7 + (rnd() - 0.5) * 0.12;
+    clouds.push([ccx + Math.cos(a) * dd * RX, ccy + Math.sin(a) * dd * RY, (0.27 + rnd() * 0.08) * k, true]);
+  }
+  for(let i = 0; i < 9; i++){ const a = rnd() * TAU, dd = Math.sqrt(rnd()) * 0.46; clouds.push([ccx + Math.cos(a) * dd * RX, ccy + Math.sin(a) * dd * RY - 0.04 * k, (0.3 + rnd() * 0.12) * k, false]); }
+  clouds.sort((p, q)=> p[1] - q[1]);
+  const lit = (px, py)=> Math.max(0, Math.min(1, 0.55 - ((px - ccx) / RX) * 0.35 - ((py - ccy) / RY) * 0.45));
+  /* the shade: each cluster a knot of overlapping rounds, darker where the light does not reach */
+  clouds.forEach(([px, py, r])=>{
+    const L = lit(px, py);
+    g.fillStyle = L > 0.55 ? '#2e6428' : L > 0.3 ? '#285a23' : '#214c1d';
+    for(let j = 0; j < 6; j++){
+      const b = j / 6 * TAU + rnd() * 0.6, o = r * (0.32 + rnd() * 0.16);
+      g.beginPath(); g.arc(px + r * 0.06 + Math.cos(b) * o, py + r * 0.1 + Math.sin(b) * o * 0.85, r * (0.5 + rnd() * 0.16), 0, TAU); g.fill();
+    }
+  });
+  /* the leaves: thick over each cluster, its rim included, lit by where they sit */
+  clouds.forEach(([px, py, r, edge])=>{
+    const L = lit(px, py);
+    for(let j = 0; j < 40; j++){
+      const a = rnd() * TAU, dd = Math.sqrt(rnd()) * r * 1.02, qx = px + Math.cos(a) * dd - r * 0.06, qy = py + Math.sin(a) * dd * 0.88 - r * 0.08;
+      const up = ((qx - px) + (qy - py)) / (1.6 * r);
+      const t = Math.max(0, Math.min(5, Math.round((1 - L) * 2.2 + up * 2.2 + rnd() * 0.9)));
+      g.fillStyle = greens[t];
+      g.beginPath(); g.ellipse(qx, qy, k * (0.05 + rnd() * 0.03), k * (0.028 + rnd() * 0.015), a, 0, TAU); g.fill();
+    }
+    /* on the crown's edge, leaves standing out from it, pointing away from the middle */
+    if(edge) for(let j = 0; j < 9; j++){
+      const out = Math.atan2(py - ccy, px - ccx), a = out + (rnd() - 0.5) * 1.9, qx = px + Math.cos(a) * r * (0.85 + rnd() * 0.25), qy = py + Math.sin(a) * r * 0.8 * (0.85 + rnd() * 0.25);
+      const t = Math.max(0, Math.min(5, Math.round((1 - lit(qx, qy)) * 2.4 + 1 + rnd())));
+      g.fillStyle = greens[t];
+      g.beginPath(); g.ellipse(qx, qy, k * (0.055 + rnd() * 0.025), k * 0.026, a, 0, TAU); g.fill();
+    }
+  });
+  /* its fruit: round the crown's lower and outer parts, where it catches the eye; a few leaves before some of them */
+  const n = 11 + Math.floor(rnd() * 5), hung = [];
+  for(let i = 0; i < n; i++){
+    const a = (0.1 + rnd() * 0.8) * Math.PI + (rnd() < 0.3 ? Math.PI : 0), dd = 0.55 + rnd() * 0.38;
+    hung.push([ccx + Math.cos(a) * dd * RX, ccy + Math.sin(a) * dd * RY + 0.06 * k]);
+  }
+  hung.sort((p, q)=> p[1] - q[1]).forEach(([fx, fy])=>{
+    fruitAt(g, fx, fy, (apple ? 0.078 : 0.07) * k, apple, rnd, false);
+    if(rnd() < 0.35){ g.fillStyle = greens[1 + Math.floor(rnd() * 2)]; g.beginPath(); g.ellipse(fx + (rnd() - 0.5) * 0.08 * k, fy - 0.07 * k, 0.055 * k, 0.026 * k, rnd() * 3, 0, TAU); g.fill(); }
+  });
+}
+/* one apple or pear: its shape, its shade, its light, its stalk (`ground`: lying, no stalk) */
+function fruitAt(g, x, y, r, apple, rnd, ground){
+  const col = apple ? (rnd() < 0.25 ? ['#e0503a', '#a32b1f', '#ffd6c4'] : ['#d32f2c', '#8e1d1b', '#ffc9bd']) : ['#d9cd4a', '#a99a2c', '#fffbd0'];
+  if(ground){ g.fillStyle = 'rgba(20,30,10,.3)'; g.beginPath(); g.ellipse(x + r * 0.3, y + r * 0.7, r * 1.1, r * 0.35, 0, 0, TAU); g.fill(); }
+  g.fillStyle = col[0]; g.beginPath();
+  if(apple) g.ellipse(x, y, r, r * 0.92, 0, 0, TAU);
+  else { g.ellipse(x, y + r * 0.25, r * 0.9, r * 0.8, 0, 0, TAU); g.moveTo(x + r * 0.55, y - r * 0.3); g.ellipse(x, y - r * 0.45, r * 0.55, r * 0.6, 0, 0, TAU); }
+  g.fill();
+  if(!ground){ g.strokeStyle = 'rgba(70,45,15,.45)'; g.lineWidth = Math.max(1, r * 0.12); g.stroke(); }   // a fine edge: it reads against the leaves
+  g.fillStyle = col[1]; g.globalAlpha = 0.55; g.beginPath(); g.ellipse(x + r * 0.35, y + r * 0.35, r * 0.55, r * 0.45, 0.6, 0, TAU); g.fill(); g.globalAlpha = 1;
+  g.fillStyle = col[2]; g.beginPath(); g.ellipse(x - r * 0.38, y - r * (apple ? 0.35 : 0.55), r * 0.26, r * 0.18, -0.6, 0, TAU); g.fill();
+  if(!ground){
+    g.strokeStyle = '#4a3218'; g.lineWidth = Math.max(1, r * 0.18); g.beginPath(); g.moveTo(x, y - r * (apple ? 0.85 : 1.05)); g.lineTo(x + r * 0.15, y - r * (apple ? 1.25 : 1.45)); g.stroke();
+  }
+}
+const fruitPic = stillOf(drawFruitTree, 0.6);
 const treePic = stillOf((g, d, x, y, w, h, k)=> d.variant === 'cypress' ? drawCypress(g, d, x, y, w, h, k) : drawBlossom(g, d, x, y, w, h, k), 0.6);
 const topiaryPic = stillOf(drawTopiary, 0.4), statuePic = stillOf(drawStatue, 0.4), benchPic = stillOf(drawBench, 0.8), urnPic = stillOf(drawUrn, 0.4), archPic = stillOf(drawArch, 0.4), ballPic = stillOf(drawBall, 0.3);
 
@@ -819,6 +914,6 @@ function warm(S){
 
 return {
   slice, pondLife, warm, flutter, takeFlying,
-  tree:treePic, topiary:topiaryPic, statue:statuePic, bench:benchPic, urn:urnPic, arch:archPic, ball:ballPic,
+  tree:treePic, fruit:fruitPic, topiary:topiaryPic, statue:statuePic, bench:benchPic, urn:urnPic, arch:archPic, ball:ballPic,
 };
 })();

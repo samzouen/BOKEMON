@@ -278,7 +278,7 @@ function invClashThings(T, pairs, when, o){
     T({ x:kx, y:ky, still:true, cls:'ca-npc war-knight inv-clash-knight' + (servant ? ' inv-servant' : ''), invKnight:true,
         html:()=> `<div class="war-fig">${caMonImg(ks, WALK_T * (servant ? (ks === 'mantis' ? 1.15 : 1.3) : 1.45), dx < 0)}</div>`,
         verb:'Talk', sub:servant ? CA_WHO[ks === 'mantis' ? 'servantY' : 'servant'].name : ks === 'duck_knight2' ? 'Duck Knight' : ks === 'bug_knight1' ? 'Bug Knight' : 'Chestnut Knight',
-        when:o.knightWhen || when, act:()=> servant ? invServantTalk(ks, true) : o.talk ? o.talk() : invKnightTalk() });
+        when:o.knightWhen || when, act:()=> servant ? invServantTalk(ks, true) : o.talk ? o.talk(ks) : invKnightTalk(ks) });   // (4.70) each knight speaks as itself
   });
 }
 function invBandThing(b, when){
@@ -343,6 +343,10 @@ const INV_FOUNT = {
   wadjet:{ x:31, y:32 }, prin:{ x:32, y:29 }, dau:{ x:34, y:28 }, adv:{ x:28, y:28 },
 };
 const knightName = ks=> ks === 'duck_knight2' ? 'Duck Knight' : ks === 'bug_knight1' ? 'Bug Knight' : 'Chestnut Knight';
+/* (4.70) the designer, Nov 22: "some of the sprites at the perimeter show the wrong sprite and name 'chestnut knight' on
+   the dialogue when the sprite being addressed is a duck knight or a bug knight". Every knight at a clash spoke as
+   'knight' (CA_WHO: the Chestnut Knight's picture and name), whoever stood there. Now as itself: CA_WHO.duck, .bug. */
+const knightWho = ks=> ks === 'duck_knight2' ? 'duck' : ks === 'bug_knight1' ? 'bug' : 'knight';
 function invGroundsThings(T){
   const NEW = ()=> invNew();
   /* ---- (4.33) ---- */
@@ -356,7 +360,7 @@ function invGroundsThings(T){
     [[k1, ax - 2, true], [k2, ax + 2, false]].forEach(([ks, kx, faceR])=>
       T({ x:kx, y:ay, still:true, cls:'ca-npc war-knight inv-clash-knight', invKnight:true,
           html:()=> `<div class="war-fig">${caMonImg(ks, WALK_T * 1.45, faceR)}</div>`,
-          verb:'Talk', sub:knightName(ks), when:posted, act:()=> invKnightTalk() }));
+          verb:'Talk', sub:knightName(ks), when:posted, act:()=> invKnightTalk(ks) }));
   });
   /* the Commander, an alien commander and its captain on him at once */
   F.foes.forEach(([al, ax, ay])=>{
@@ -618,7 +622,7 @@ const INV_LINES = {
   kingFountEscort:[`<b>"Is that… is that her? My little one!"</b>`],
   cmdFount:[`<b>"Two on each of them — that's it, hold them, HOLD!"</b>`, `<b>"Don't mind me — this pair is mine. Get the princess!"</b>`, `<b>"For the King!"</b>`],
 };
-function invKnightTalk(){ return caLines([['knight', caTurn('invKnight', INV_LINES.knight)]]); }
+function invKnightTalk(ks){ return caLines([[knightWho(ks), caTurn('invKnight', INV_LINES.knight)]]); }   // (4.70) as the knight it is
 function invKingFightTalk(){ return caLines([['king', caTurn('invKingFight', INV_LINES.kingFight)]]); }
 /* (4.33) the King by the fountain, waiting for his daughter */
 function invKingFountTalk(){
@@ -2375,7 +2379,7 @@ function invPerimBands(){
 function invRiftThings(T){
   T({ x:9, y:19, w:8, walk:true, icon:'', verb:'Out', where:'Back into the jungle', arrow:'down', act:()=> typeof invRiftOut === 'function' ? invRiftOut() : caGo(CA_KEY, INV_PERIM.out) });   // (4.33) the jungle's north edge
   T({ x:15, y:16, still:true, cls:'ca-npc', html:()=> caMonImg('chestnut_knight2_c', WALK_T * 1.6, false), verb:'Talk', sub:'The Royal Commander', act:()=> invPerimCommanderTalk() });
-  invClashThings(T, INV_RIFT_CLASH, ()=> invAfter(), { talk:()=> caLines([['knight', caTurn('invPerimSoldier', INV_LINES.perimSoldier)]]) });
+  invClashThings(T, INV_RIFT_CLASH, ()=> invAfter(), { talk:ks=> caLines([[knightWho(ks), caTurn('invPerimSoldier', INV_LINES.perimSoldier)]]) });   // (4.70) as itself
   /* today's bands: a deck's things are made once, so all ten places are made, and each shows while its band is up */
   for(let i = 0; i < 10; i++){
     const slot = { get b(){ return invPerimBands()[i]; } };

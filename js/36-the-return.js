@@ -786,7 +786,7 @@ function riftJungleThings(list, P){
         verb:'Look', sub:(SPECIES[al] || {}).name || 'An alien', when:after, act:()=> caLines([`It throws itself at the palisade again and again. The knight on the other side never gives an inch.`]) });
     T({ x:kx, y:ky, cls:'jg-npc war-knight inv-clash-knight', html:()=> `<div class="war-fig">${jgMonImg(ks + '_front', WALK_T * 1.45, dx < 0)}</div>`,
         verb:'Talk', sub:ks === 'duck_knight2' ? 'Duck Knight' : ks === 'bug_knight1' ? 'Bug Knight' : 'Chestnut Knight', when:after,
-        act:()=> caLines([['knight', caTurn('invPerimSoldier', INV_LINES.perimSoldier)]]) });
+        act:()=> caLines([[knightWho(ks), caTurn('invPerimSoldier', INV_LINES.perimSoldier)]]) });   // (4.70) a Duck or Bug Knight speaks as itself, not as the Chestnut Knight (26-invasion.js)
   });
 }
 /* drawn with the jungle: the rift (from the chase on), and afterwards its palisade and the aliens penned in it */

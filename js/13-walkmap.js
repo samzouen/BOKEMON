@@ -339,6 +339,29 @@ function TRI(dir){
   return `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">` +
          `<polygon points="${pts}" fill="currentColor"/></svg>`;
 }
+/* (4.71) The D-pad made round. The designer: "Can we also widen the existing directional pad into a circular dial equal
+   in size to Lucesco's moves please? This will make it easier to press a direction without missing the key." Four
+   quarters of one disk, as Lucesco's dial is cut (up at the top, then right, down, left), meeting edge to edge so that
+   every point of the disk is a direction: the lines between them and the knob in the middle are only drawn, and a
+   finger on them falls through to the quarter underneath. Each quarter is still a .wkey with its data-d, cut to its
+   shape (clip-path), so pressing, holding and sliding from one to the next work as they always have (wireWalkKeys). */
+const WALK_DP_SEG = { u:'M .5 .5 L .14645 .14645 A .5 .5 0 0 1 .85355 .14645 Z', r:'M .5 .5 L .85355 .14645 A .5 .5 0 0 1 .85355 .85355 Z',
+                      d:'M .5 .5 L .85355 .85355 A .5 .5 0 0 1 .14645 .85355 Z', l:'M .5 .5 L .14645 .85355 A .5 .5 0 0 1 .14645 .14645 Z' };
+const WALK_DP_NAME = { u:'Up', r:'Right', d:'Down', l:'Left' };
+function walkDpadHtml(){
+  const clips = Object.entries(WALK_DP_SEG).map(([k, d])=> `<clipPath id="walkDp-${k}" clipPathUnits="objectBoundingBox"><path d="${d}"/></clipPath>`).join('');
+  return `<div class="walk-dpad round">
+        <svg class="dp-defs" width="0" height="0" aria-hidden="true" focusable="false"><defs>${clips}</defs></svg>
+        ${['u', 'r', 'd', 'l'].map(k=> `<button class="wkey at-${k}" data-d="${k}" aria-label="${WALK_DP_NAME[k]}" style="clip-path:url(#walkDp-${k})"><span class="dp-ic">${TRI(k)}</span></button>`).join('')}
+        <svg class="dp-lines" viewBox="0 0 100 100" aria-hidden="true"><path d="M14.6 14.6L85.4 85.4M85.4 14.6L14.6 85.4"/></svg>
+        <i class="dp-hub" aria-hidden="true"></i>
+      </div>`;
+}
+/* the quarter being held, lit (a finger slid from one to the next leaves :active on the first) */
+function walkPadShow(){
+  const dir = _walkHeld.size ? [..._walkHeld.values()].pop() : null;
+  document.querySelectorAll('.walk-dpad.round [data-d]').forEach(k=> k.classList.toggle('held', k.dataset.d === dir));
+}
 /* ------------------------------------------------------------
    THE TANKS
    Three specimens drifting in the aquarium at the stern of the laboratory.
@@ -633,6 +656,26 @@ function walkCss(){
       .walk-pads.dial .walk-dpad{grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);}
       .walk-pads.dial .walk-side{width:min(196px, calc(100% - 184px));}
     }
+    /* (4.71) the round D-pad (walkDpadHtml): as wide as the old square one (196 px), and beside Lucesco's dial exactly
+       its size, the two sharing the row between them on a narrow screen */
+    .walk-dpad.round{display:block;position:relative;flex:0 0 auto;width:196px;height:196px;border-radius:50%;
+      background:radial-gradient(circle closest-side, var(--paper-2) 78%, var(--paper-3) 100%);
+      box-shadow:inset 0 0 0 1px var(--line), 0 0 0 2px rgba(255,255,255,.55), 0 3px 8px rgba(40,30,15,.16);}
+    .walk-pads.dial .walk-dpad.round, .walk-pads.dial .walk-side{width:min(196px, calc((100% - 12px) / 2));}
+    .walk-pads.dial .walk-dpad.round{height:auto;aspect-ratio:1/1;}
+    .walk-dpad.round .dp-defs{position:absolute;width:0;height:0;overflow:hidden;}
+    .walk-dpad.round .wkey{position:absolute;inset:0;width:auto;height:auto;border:0;border-radius:0;margin:0;padding:0;background:transparent;
+      color:var(--ink-soft);transition:background .08s, transform .08s;}
+    .walk-dpad.round .wkey:active{background:transparent;transform:none;}
+    .walk-dpad.round .wkey.held{background:var(--paper-3);color:var(--ink);transform:scale(.975);}
+    .walk-dpad.round .dp-ic{position:absolute;display:block;width:17%;height:17%;transform:translate(-50%, -50%);pointer-events:none;}
+    .walk-dpad.round .dp-ic svg{display:block;width:100%;height:100%;}
+    .walk-dpad.round .at-u .dp-ic{left:50%;top:18%;} .walk-dpad.round .at-d .dp-ic{left:50%;top:82%;}
+    .walk-dpad.round .at-l .dp-ic{left:18%;top:50%;} .walk-dpad.round .at-r .dp-ic{left:82%;top:50%;}
+    .walk-dpad.round .dp-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+    .walk-dpad.round .dp-lines path{fill:none;stroke:rgba(35,32,25,.16);stroke-width:1.4;stroke-linecap:round;}
+    .walk-dpad.round .dp-hub{position:absolute;left:50%;top:50%;width:21%;height:21%;transform:translate(-50%, -50%);border-radius:50%;pointer-events:none;
+      background:radial-gradient(circle at 42% 36%, var(--paper) 0 30%, var(--paper-2) 70%, var(--paper-3) 100%);box-shadow:0 0 0 1px var(--line), 0 1px 3px rgba(40,30,15,.18);}
     .walk-acts.bar{display:flex;flex-direction:row;gap:8px;margin-top:10px;height:62px;overflow-x:auto;overflow-y:hidden;
       scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
     .walk-acts.bar::-webkit-scrollbar{display:none;}
@@ -757,11 +800,7 @@ function renderWalkDeck(id){
         background-position:${d.bx*WALK_T}px ${d.by*WALK_T}px;"></div>
     </div>
     <div class="walk-pads${pad ? ' fixed' : ''}${dial ? ' dial' : ''}">
-      <div class="walk-dpad">
-        <i></i><button class="wkey" data-d="u">${TRI('u')}</button><i></i>
-        <button class="wkey" data-d="l">${TRI('l')}</button><i></i><button class="wkey" data-d="r">${TRI('r')}</button>
-        <i></i><button class="wkey" data-d="d">${TRI('d')}</button><i></i>
-      </div>
+      ${walkDpadHtml()}
       <div class="walk-side">
         <div class="walk-side-top" id="walkSideTop"><button class="wact party" id="walkParty">Party</button></div>
         ${pad ? `<div class="walk-moves${dial ? ' dial' : ''}" id="walkMoves">${pad.html(d)}</div>` : '<div class="walk-acts" id="walkActs"></div>'}
@@ -1553,11 +1592,13 @@ function walkHoldLoop(now){
 function walkHoldStart(id, dir){
   _walkHeld.set(id, dir);
   _walkLastStep = performance.now();
+  walkPadShow();
   walkMove(dir);
   if(!_walkRaf && typeof requestAnimationFrame === 'function') _walkRaf = requestAnimationFrame(walkHoldLoop);
 }
 function walkHoldEnd(id){
   if(id == null) _walkHeld.clear(); else _walkHeld.delete(id);
+  walkPadShow();
   if(!_walkHeld.size && _walkRaf){ cancelAnimationFrame(_walkRaf); _walkRaf = 0; }
 }
 function walkHolding(){ return _walkHeld.size > 0; }
@@ -1583,7 +1624,7 @@ function wireWalkKeys(){
     k.addEventListener('pointermove', e=>{
       if(!_walkHeld.has(e.pointerId)) return;
       const el = document.elementFromPoint(e.clientX, e.clientY), to = el && el.closest && el.closest('.walk-dpad [data-d]');
-      if(to && to.dataset.d !== _walkHeld.get(e.pointerId)){ _walkHeld.set(e.pointerId, to.dataset.d); _walkLastStep = performance.now(); walkMove(to.dataset.d); }
+      if(to && to.dataset.d !== _walkHeld.get(e.pointerId)){ _walkHeld.set(e.pointerId, to.dataset.d); _walkLastStep = performance.now(); walkPadShow(); walkMove(to.dataset.d); }
     });
     const stop = e=> walkHoldEnd(e.pointerId);
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev=> k.addEventListener(ev, stop));

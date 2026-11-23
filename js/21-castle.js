@@ -525,8 +525,8 @@ function caGrounds(){
     else m.spr[i] = caDefaultSpr(m, x, y);
   }
   /* (4.26) the towers' doors are drawn on the towers themselves (CA_WALL.cornerBody); until 4.26 a square each ('towerDoor') */
-  ['nw', 'ne', 'sw', 'se'].forEach(k=>{ const t = m.tags.towers[k]; caDeco(m, 'cornerTower', t.x + 0.4, t.y - 1.6, 9.2, 11.4, { corner:k, z:t.y + 9.6, door:k[0] === 'n' ? m.tags.towerDoors[k].x + 0.5 : null }); });   // (4.26) the north ones' doors on their faces
-  caDeco(m, 'gatehouse', 26.6, 59.2, 10.8, 4.8, { z:63.95, clear:{ x:m.tags.gate.x, y:m.tags.gate.y, w:m.tags.gate.w, h:1 } });   // (4.26) the gate in the south wall: drum towers, its arch (CA_WALL.gatehouse); `clear`: the way out before it, not drawn over (its arrow in sight)
+  ['nw', 'ne', 'sw', 'se'].forEach(k=>{ const t = m.tags.towers[k]; caDeco(m, 'cornerTower', t.x + 0.4, t.y - 1.6, 9.2, 11.4, { corner:k, z:t.y + 9.6, door:k[0] === 'n' ? m.tags.towerDoors[k].x + 0.5 : null, behind:k[0] === 's' }); });   // (4.26) the north ones' doors on their faces
+  caDeco(m, 'gatehouse', 26.6, 59.2, 10.8, 4.8, { z:63.95, behind:true, clear:{ x:m.tags.gate.x, y:m.tags.gate.y, w:m.tags.gate.w, h:1 } });   // (4.26) the gate in the south wall: drum towers, its arch (CA_WALL.gatehouse); `clear`: the way out before it, not drawn over (its arrow in sight)
   for(let c = 0; c < W / 8; c++) caDeco(m, 'cwCrest', c * 8, -0.95, 8, 0.95, { part:c, z:0.02 });   // (4.26) the north wall's battlements, against the sky
   m.deco.sort((a, b)=> a.z - b.z);
   _caGrounds = m;
@@ -569,6 +569,9 @@ const CA_OVER_KINDS = new Set(['tree', 'lamp', 'palaceTower', 'keep', 'cornerTow
    south edge, and the braziers burning on them, join them: you are drawn faded behind them, no longer clear through. */
 const CA_BEHIND_KINDS = new Set(['fountGrand', 'fountSmall', 'stall', 'well', 'planter', 'column', 'armour', 'battlement', 'parapetW', 'brazier', 'gUrn', 'gBench']);
 const CA_BEHIND = { cut:0.42 };
+/* (4.73) The designer: "ensure that the player is appropriately made translucent when hidden by the castle's front wall":
+   the gatehouse in the south wall and its two corner towers (`behind` on their deco) fade you behind them as the
+   fountains and the stalls do, where until now you showed through them almost whole (the tall things' 85% window). */
 function caPaintStart(stage, world, m, views, bg){
   if(!stage || !world) return;
   let cv = stage.querySelector('canvas.ca-ground');
@@ -620,7 +623,11 @@ function caPaintTick(now){
    the things you walk behind (CA_BEHIND_KINDS): drawn again over whoever stands behind it, you, Lucesco and whoever
    follows you faded through it (caPaintOver, caSeeCut: CA_BEHIND.cut) — only where it covers you. caUpperSet: the open
    squares behind such things (for the tests). */
-const CA_UPPER = { tall:1.85, cover:0.5, wide:0.35 };
+/* (4.73) The designer: "ensure that the player is appropriately made translucent … when behind objects in the castle's
+   houses such as tables and chairs". Tables (a square and a half), armchairs, settees, chests, tea tables and desks
+   stand over the square behind them too: from 1.25 squares (4.41: 1.85, two squares, so none of them) — the huts'
+   tables and seats with them. Still only where they cover you. */
+const CA_UPPER = { tall:1.25, cover:0.5, wide:0.35 };
 function caTallIndoors(m, d){ return !!(m && m.room && d && d.h >= CA_UPPER.tall && !CA_BEHIND_KINDS.has(d.kind)); }
 function caUpperSet(m){
   if(!m) return new Set();
@@ -709,7 +716,7 @@ function caPaintOver(m, k, ox, oy, x0, y0, x1, y1, dpr, now){
     const tall = caTallIndoors(m, d);                                   // (4.41) indoors, two squares tall: one you walk behind
     if(!tall && !CA_OVER_KINDS.has(d.kind) && !CA_BEHIND_KINDS.has(d.kind)) return;
     if(d.x + d.w < x0 - 1 || d.x > x1 + 1 || d.y + d.h < y0 - 1 || d.y > y1 + 1) return;
-    const low = tall || CA_BEHIND_KINDS.has(d.kind), c = low ? gb : g;
+    const low = tall || CA_BEHIND_KINDS.has(d.kind) || !!d.behind, c = low ? gb : g;   // (4.73) `behind`: the front wall's gatehouse and towers
     if(!c) return;
     const base = Math.floor(d.z != null ? d.z : d.y + d.h);           // the row it stands in
     const sx0 = Math.max(x0, Math.floor(d.x)), sx1 = Math.min(x1, Math.ceil(d.x + d.w) - 1);
@@ -1538,6 +1545,7 @@ function caDrawDeco(g, d, x, y, w, h, now){
   switch(d.kind){
     case 'tree': {
       if(d.garden != null && typeof CA_GARDEN !== 'undefined') return CA_GARDEN.tree(g, d, x, y, w, h, k);   // (4.65) the gardens' own
+      if((d.variant === 'apple' || d.variant === 'pear') && typeof CA_GARDEN !== 'undefined' && CA_GARDEN.fruit) return CA_GARDEN.fruit(g, d, x, y, w, h, k);   // (4.73) the orchards'
       g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.ellipse(x + w * 0.5, y + h * 0.9, w * 0.32, h * 0.08, 0, 0, 7); g.fill();
       if(d.variant === 'cypress'){
         g.fillStyle = '#5a3d22'; g.fillRect(x + w * 0.47, y + h * 0.72, w * 0.06, h * 0.18);

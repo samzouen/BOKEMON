@@ -698,7 +698,8 @@ const RIFT_DECK = {
     { x:1,  y:7,  w:2, h:3, icon:'', verb:'Ancient portal', sub:'To the past', act:()=> riftPortal('ancient') },
     /* (3.84) the upper one wakes once the Council has called: the Fairy King's jungle (20-jungle.js) */
     { x:2,  y:4,  h:2, icon:'', verb:'Portal', get sub(){ return (typeof jgPortalAwake === 'function' && jgPortalAwake()) ? 'To the jungle' : 'To the past'; }, act:()=> riftPortal('jungle') },
-    { x:2,  y:11, h:2, icon:'', verb:'Portal', sub:'To the past', act:()=> riftPortal('small') },
+    /* (4.72) the lower one wakes with Region 6: the kingdom beyond the bottom portal (45-kingdom.js) */
+    { x:2,  y:11, h:2, icon:'', verb:'Portal', get sub(){ return (typeof kdPortalAwake === 'function' && kdPortalAwake()) ? 'To the kingdom' : 'To the past'; }, act:()=> riftPortal('kingdom') },
     { x:4,  y:1,  w:9, h:3, walk:true, icon:'', verb:'The Council', sub:'Vesper’s station', mark:()=> typeof jgCallDue === 'function' && jgCallDue(), act:()=> riftCouncil() },
     { x:4,  y:6,  html:(t, px)=> riftLucescoImg(px), cls:'rift-lion', faceR:true, icon:'🦁', verb:'Talk', sub:'Lucesco', act:()=> riftLucesco() },
     /* (4.09) the starlight pool, in the middle of the room: Region 6's place to heal (riftPool) */
@@ -746,7 +747,8 @@ function riftRoomRender(world, d){
   if(typeof pastOpen === 'function' && pastOpen()){ pastCss(); bigPortal.classList.add('past-portal'); }   // (3.81) awake
   const jgP = art('rift-portal', 2.5 - 0.8, 5.0 - 1.4, 1.6, 2.5, riftPortalSvg(false), 'riftPortalJg');
   if(typeof jgPortalAwake === 'function' && jgPortalAwake()){ if(typeof jgCss === 'function') jgCss(); jgP.classList.add('jg-awake'); }   // (3.84) awake, green
-  art('rift-portal', 2.5 - 0.8, 12.0 - 1.4, 1.6, 2.5, riftPortalSvg(false));
+  const kdP = art('rift-portal', 2.5 - 0.8, 12.0 - 1.4, 1.6, 2.5, riftPortalSvg(false), 'riftPortalKd');
+  if(typeof kdPortalAwake === 'function' && kdPortalAwake()){ kdCss(); kdP.classList.add('kd-awake'); }   // (4.72) awake, gold
   riftPoolRender(world, art);                                          // (4.09) the starlight pool
   const me = $('#walkYou');
   if(me) me.classList.add('rift-person');
@@ -969,6 +971,11 @@ async function riftPortal(which){
   /* (3.84) the upper small one, once the Council has called */
   if(which === 'jungle'){
     if(typeof jgPortalAwake === 'function' && jgPortalAwake()) return jgRiftPortal();
+    which = 'small';
+  }
+  /* (4.72) the lower small one: the kingdom */
+  if(which === 'kingdom'){
+    if(typeof kdPortalAwake === 'function' && kdPortalAwake()) return kdRiftPortal();
     which = 'small';
   }
   /* (3.81) the ancient one is awake — the land of long ago (19-past.js);

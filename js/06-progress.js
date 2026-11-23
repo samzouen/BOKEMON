@@ -717,7 +717,7 @@ function go(screen){
   document.body.classList.remove('in-scene');
   /* A daily reward held back during a fight gets its moment once the player is
      somewhere it can safely take over the screen. */
-  if(!['battle','quiz'].includes(screen) && typeof flushPendingDaily === 'function'){
+  if(!['battle','quiz','kdBattle'].includes(screen) && typeof flushPendingDaily === 'function'){   // (4.73) nor a sum battle: its enemies' timers run
     setTimeout(flushPendingDaily, 350);
   }
   if(!['zone','caverns','battle','quiz'].includes(screen)) document.body.classList.remove('zone-dark','zone-tinted');
@@ -789,7 +789,7 @@ function renderInner(){
   if(!['home','region','battle','recover','challenge','explore','shop','storage','party','companions','coreSpar','stats','monsterIndex','indexDetail','spellingIndex','profileSelect','talents','future'].includes(ui.screen)) setScreenBg(null);
   const hb = $('#hamburgerBtn');
   // hamburger available everywhere except profile setup + (future) fights
-  const noMenu = ['boot','profileSelect','starterSelect','battle','quiz','catch'].includes(ui.screen);
+  const noMenu = ['boot','profileSelect','starterSelect','battle','quiz','catch','kdBattle'].includes(ui.screen);
   hb.disabled = noMenu;
 
   switch(ui.screen){
@@ -837,6 +837,10 @@ function renderInner(){
     case 'catch':         return typeof catchRender === 'function' ? catchRender() : undefined;   // (4.27) a throw, or the caught page
     case 'arena':         return renderArenaGate();
     case 'sound':         return renderSound();
+    case 'kingdom':       return renderKingdom();          // (4.72) the kingdom beyond the bottom portal (45-kingdom.js)
+    case 'kdBattle':      return kdBattleRender();         // (4.72) a sum battle
+    case 'kdSums':        return kdSumsRender();           // (4.72) the sums, for grown-ups
+    case 'kdTalents':     return kdTalentsRender();        // (4.73) the partner's talents
     /* Every walkable place is a screen of its own: the ship's decks above,
        and everything in Cosa Nostia (15-region5.js). */
     default:              return (typeof DECKS !== 'undefined' && DECKS[ui.screen])
