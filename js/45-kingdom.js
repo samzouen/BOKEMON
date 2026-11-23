@@ -25,9 +25,11 @@
    · Talents, a point a level: for every form, and for Fire, Water, Grass and Electric their own (KD_TALENTS).
    · "Players do not earn money from defeating monsters. They earn raw materials." (kdbWin: wood, stone, iron)
 
-   State: state.progress.kingdom (kd()). The partner's own pictures, when the designer draws them:
-   assets/mon/kingdom_<form>_front.png and _back.png (physical, fire, water, grass, electric, flying, psychic, ghost,
-   fairy, physical2); until then a monster of that type from the game stands in (KD_FORMS[form].standIn).
+   State: state.progress.kingdom (kd()). (4.74) The partner's own pictures, the designer's:
+   assets/mon/kingdom_<form>_<male|female>_<front|back>.png (physical, fire, water, grass, electric, flying, psychic,
+   ghost, fairy, physical1: "physical1 instead of physical2 because there's only 1 physical evolution, and there's also
+   male and female bifurcation to allow for a choice at the start when choosing gender"); a monster of that type from the
+   game stands in for any missing (KD_FORMS[form].standIn).
    ========================================================== */
 
 /* ============================================================
@@ -48,7 +50,11 @@ const KQ_FORMS = {
   p4:{ nb:4, ms:13000, pre:'r', name:'Four factors',   eg:'24 = ? × ? × ? × ?' },
 };
 const KQ_FORM_ORDER = ['z', 'f', 'p2', 'p3', 'p4'];
-const KQ_PRE = { m:'z', f:'f', p:'p2', q:'p3', r:'p4' };
+const KQ_PRE = { m:'z', f:'f', p:'p2', q:'p3', r:'p4', w:'w' };
+/* (4.74) the problem sums (48-kingdom-words.js): the final level, not a form of the times tables' facts; listed with them for
+   the grown-ups' choice and the report */
+KQ_FORMS.w = { nb:1, ms:40000, pre:'w', name:'Problem sums', eg:'15 water dragons and 5 monkey kings: how many legs?' };
+const KQ_FORM_SET = [...KQ_FORM_ORDER, 'w'];
 /* the other skills are kept for later: a parent can set them; the adaptive sums leave them out while this is false */
 const KQ_ADAPTIVE_MORE = false;
 /* each other skill's rungs, easiest first: what a sum is, its energy (e), and the time it should take when known (ms) */
@@ -132,6 +138,7 @@ function kqTagsZ(Z){ const out = []; for(let t = 2; t <= 12; t++) if(Z % t === 0
 /* THE SUM FOR A KEY: 'm7x8' 7 × 8 = ?; 'f7x8' 7 × ? = 56 or ? × 8 = 56; 'p56' 56 = ? × ?; 'q24' three factors;
    'r24' four; 'd56/7' 56 ÷ 7 = ? */
 function kqItem(key){
+  if(/^w[temrc]$/.test(key || '') && typeof kqWord === 'function') return kqWord(key[1]);   // (4.74) a problem sum, new numbers every time
   let m = /^([mf])(\d+)x(\d+)$/.exec(key);
   if(m){
     const a = +m[2], b = +m[3], sw = kqRand() < 0.5, x = sw ? b : a, y = sw ? a : b, Z = a * b;
@@ -159,6 +166,7 @@ function kqOther(skill, r, rungAt, keep){
    each ("accept all variations of the answer"; a 1 would answer every one of them), their product the number */
 function kqCheck(q, vals){
   const v = (Array.isArray(vals) ? vals : [vals]).map(s=> String(s == null ? '' : s).trim());
+  if(q.skill === 'word') return kqWordCheck(q, v);
   if(v.length !== q.nb || v.some(s=> !/^\d+$/.test(s))) return false;
   const n = v.map(Number);
   if(q.form === 'p2' || q.form === 'p3' || q.form === 'p4') return n.every(x=> x >= 2) && n.reduce((a, b)=> a * b, 1) === q.Z;
@@ -166,6 +174,7 @@ function kqCheck(q, vals){
 }
 /* a key in words, for the parent's report */
 function kqKeyText(k){
+  if(/^w[temrc]$/.test(k) && typeof KQW_FORMATS !== 'undefined') return `Problem sums: ${KQW_FORMATS[k[1]].name.toLowerCase()}`;
   let m = /^([mf])(\d+)x(\d+)$/.exec(k);
   if(m) return m[1] === 'm' ? `${m[2]} × ${m[3]}` : `${m[2]} × ${m[3]} (missing number)`;
   m = /^([pqr])(\d+)$/.exec(k);
@@ -224,8 +233,9 @@ function kqWeighted(list){ let r = kqRand() * list.reduce((a, x)=> a + x.w, 0); 
 function kqSetItems(set){
   if(!set) return [];
   const out = [], tb = (set.tables || []).filter(t=> t >= 2 && t <= 12), dv = (set.divfacts || []).filter(t=> t >= 2 && t <= 12);
-  const fm = (set.forms && set.forms.length ? set.forms : ['z']).filter(f=> KQ_FORMS[f]);
+  const all = (set.forms && set.forms.length ? set.forms : ['z']).filter(f=> KQ_FORMS[f]), fm = all.filter(f=> f !== 'w');
   if(tb.length && fm.length) out.push({ skill:'tables', tables:tb, forms:fm });
+  if(all.includes('w')) out.push({ skill:'word' });                  // (4.74) problem sums, of every format
   if(dv.length) out.push({ skill:'divfacts', tables:dv });
   /* addition and subtraction: 0 off, else the rung chosen (its index in KQ_RUNGS + 1) */
   if(set.add) out.push({ skill:'add', r:KQ_RUNGS.add[set.add - 1] });
@@ -240,11 +250,16 @@ function kqOpenSkills(S){
   return KQ_SKILLS.filter(k=> open[k]);
 }
 /* THE NEXT SUM. K.sums: { mode:'adaptive' | 'set', set } */
-function kqNext(K){
-  const S = kqSt(K), set = K.sums && K.sums.mode === 'set' ? kqSetItems(K.sums.set) : null;
+/* (4.75) `opt.fight`: a sum for a battle. The designer: "ultra moves (problem sums) no longer grant energy, they directly
+   execute the ultra move": no problem sums among a battle's sums, then (they are the Ultra's, and the builders'). A set
+   of problem sums only: its tables, the answer only, in a battle. */
+function kqNext(K, opt){
+  const fight = !!(opt && opt.fight), S = kqSt(K), all = K.sums && K.sums.mode === 'set' ? kqSetItems(K.sums.set) : null;
+  let set = all && fight ? all.filter(x=> x.skill !== 'word') : all;
+  if(fight && all && all.length && !set.length){ const tb = ((K.sums.set || {}).tables || []).filter(t=> t >= 2 && t <= 12); set = [{ skill:'tables', tables:tb.length ? tb : [2, 5, 10], forms:['z'] }]; }
   S.n++;
-  /* a sum he got wrong comes back two to four sums later */
-  const due = S.retry.findIndex(r=> r.at <= S.n);
+  /* a sum he got wrong comes back two to four sums later (a problem sum, at the builders') */
+  const due = S.retry.findIndex(r=> r.at <= S.n && !(fight && r.q.skill === 'word'));
   if(due >= 0){
     const r = S.retry.splice(due, 1)[0], q = r.q.key ? kqItem(r.q.key) : kqOther(r.q.skill, r.q.rung, -1, r.q);
     if(q){ q.again = true; S.last = q.key || null; return q; }
@@ -253,6 +268,7 @@ function kqNext(K){
   if(set && set.length){
     const it = kqWeighted(set.map(x=> ({ w:1, x }))).x;
     if(it.skill === 'tables') q = kqItem(kqPickKey(S, kqMulKeys(S, it.tables, it.forms, false)));
+    else if(it.skill === 'word') q = kqItem(kqPickKey(S, kqWordKeys(S, false)));
     else if(it.skill === 'divfacts') q = kqItem(kqPickKey(S, kqDivKeys(it.tables)));
     else q = kqOther(it.skill, it.r, -1);
   } else if(KQ_ADAPTIVE_MORE){
@@ -265,6 +281,8 @@ function kqNext(K){
       q = kqOther(pick, KQ_RUNGS[pick][ri], review ? -1 : ri);
     }
   }
+  /* (4.74) adaptive: once the problem sums are open, one sum in six is one of them — (4.75) at the builders' */
+  if(!q && !fight && (!set || !set.length) && typeof kqWordKeys === 'function'){ const wk = kqWordKeys(S, true); if(wk.length && kqRand() < 1 / 6) q = kqItem(kqPickKey(S, wk)); }
   if(!q) q = kqItem(kqPickKey(S, kqMulKeys(S, S.open, KQ_FORM_ORDER, true)));
   S.streak.push(q.skill); if(S.streak.length > 4) S.streak.shift();
   S.last = q.key || null;
@@ -276,7 +294,8 @@ function kqAnswer(K, q, vals, ms, src){
   const S = kqSt(K);
   vals = (Array.isArray(vals) ? vals : [vals]).map(v=> String(v == null ? '' : v).trim());
   const ok = kqCheck(q, vals), quick = ok && ms <= q.ms;
-  (K.log || (K.log = [])).push({ t:Date.now(), s:q.skill, f:q.form || null, q:q.text, a:q.sol.join(' × '), g:vals.join(' × '), ok,
+  const word = q.skill === 'word';
+  (K.log || (K.log = [])).push({ t:Date.now(), s:q.skill, f:q.form || null, q:q.text, a:word ? (q.pick ? q.pick + ' ' : '') + q.sol[0] : q.sol.join(' × '), g:vals.join(word ? ' ' : ' × '), ok,
                                  ms:Math.round(ms), tm:q.ms, src:src || 'fight' });
   if(K.log.length > 400) K.log.splice(0, K.log.length - 400);
   /* wrong: it comes back two to four sums later (once: a sum already waiting to come back is not queued twice) */
@@ -331,7 +350,7 @@ function kqReport(K){
   });
   const stat = xs=>{ const right = xs.filter(x=> x.ok).length, ms = xs.map(x=> x.ms).sort((a, b)=> a - b);
     return { n:xs.length, pct:xs.length ? Math.round(right * 100 / xs.length) : null, mid:ms.length ? ms[Math.floor(ms.length / 2)] : null }; };
-  const forms = KQ_FORM_ORDER.map(f=> Object.assign({ f, name:KQ_FORMS[f].name, eg:KQ_FORMS[f].eg }, stat(log.filter(x=> x.f === f).slice(-50))));
+  const forms = KQ_FORM_SET.map(f=> Object.assign({ f, name:KQ_FORMS[f].name, eg:KQ_FORMS[f].eg }, stat(log.filter(x=> x.f === f).slice(-50))));
   const skills = KQ_SKILLS.filter(k=> k !== 'tables').map(k=> Object.assign({ k, name:KQ_NAME[k],
     at:k === 'divfacts' ? (S.dopen.length ? 'tables ' + S.dopen.join(', ') : 'not yet') : KQ_RUNGS[k][S.rung[k]].say }, stat(log.filter(x=> x.s === k).slice(-50))));
   const weak = Object.entries(S.boxes).filter(([k, b])=> b.b <= 1 && b.w >= 1).sort((a, b)=> b[1].w - a[1].w).slice(0, 16).map(([k])=> kqKeyText(k));
@@ -339,14 +358,14 @@ function kqReport(K){
 }
 /* how many he knows by heart (box 3 or more: right and in time, again and again), form by form */
 function kqMastery(K){
-  const S = kqSt(K), c = { z:0, f:0, p2:0, p3:0, p4:0 };
+  const S = kqSt(K), c = { z:0, f:0, p2:0, p3:0, p4:0, w:0 };
   for(const k in S.boxes){ const f = KQ_PRE[k[0]]; if(f && S.boxes[k].b >= 3) c[f]++; }
   return c;
 }
 /* his pace, for the enemies' timers: the middle of his last ten answers in a fight, kept between 0.6 and 1.5 times what
    those sums should take (so a slow day still meets a timer, and a quick one is not run off his feet) */
 function kqPace(K){
-  const xs = (K.log || []).filter(x=> x.src !== 'build').slice(-10);
+  const xs = (K.log || []).filter(x=> x.src !== 'build' && x.src !== 'free' && x.f !== 'w').slice(-10);   // (4.75) nor the freeing's
   if(xs.length < 3) return 8000;
   const ms = xs.map(x=> x.ms).sort((a, b)=> a - b), mid = ms[Math.floor(ms.length / 2)];
   const tgt = xs.map(x=> x.tm || 6000).sort((a, b)=> a - b)[Math.floor(xs.length / 2)];
@@ -357,7 +376,7 @@ function kqPace(K){
    THE KINGDOM: its state, the partner, its forms and talents
    ============================================================ */
 function kdFresh(){
-  return { v:2, met:false, partner:null, coins:30, food:10, mats:{ wood:10, stone:5, iron:0 }, potions:0, wins:0, trials:0,
+  return { v:2, met:false, vesper:false, partner:null, coins:60, food:10, mats:{ wood:20, stone:10, iron:0 }, potions:0, wins:0, trials:0,
            sums:{ mode:'adaptive', set:kqDefaultSet() }, log:[], stats:{ battles:0, won:0, lost:0 }, city:null };
 }
 function kd(){
@@ -377,9 +396,14 @@ function kd(){
     const P = K.partner;
     if(!P.tal) P.tal = {};
     if(!P.forms || !P.forms.length) P.forms = ['physical'];
+    /* (4.74) the stronger Physical form is physical1 now (the designer's pictures) */
+    if(P.forms.includes('physical2')) P.forms = P.forms.map(f=> f === 'physical2' ? 'physical1' : f);
+    if(P.form === 'physical2') P.form = 'physical1';
     if(!KD_FORMS[P.form]) P.form = P.forms[0];
     if(typeof P.hp !== 'number') P.hp = kdMaxHp(P, K);              // (a partner from a 4.72 save: in full health)
   }
+  /* (4.74) the city's pictures (its workers, the heir in every form) asked for early, so the board has them when drawn */
+  if(K.partner && typeof KC_ART !== 'undefined' && kd._pre !== K.partner){ kd._pre = K.partner; try { KC_ART.preload(K); } catch(e){} }
   return K;
 }
 /* (4.73) a 4.72 kingdom (on no iPad: 4.72 was not uploaded): its partner kept, as the Physical form; its crowns as coins */
@@ -394,7 +418,13 @@ function kdUpgradeSave(K){
 }
 /* the bottom portal is awake once Region 6 is open (18-rift.js asks) */
 function kdPortalAwake(){ return typeof r6Met === 'function' && r6Met(); }
-function kdHeir(){ return (typeof AVATARS !== 'undefined' && AVATARS.female.includes(state.avatar)) ? 'princess' : 'prince'; }
+/* (4.74) the heir's sex: chosen when it is named; for one named before (or not yet), the player's own, from the avatar */
+function kdGender(K){
+  const P = K && K.partner;
+  if(P && (P.gender === 'male' || P.gender === 'female')) return P.gender;
+  return (typeof AVATARS !== 'undefined' && typeof state !== 'undefined' && state && AVATARS.female.includes(state.avatar)) ? 'female' : 'male';
+}
+function kdHeir(){ return kdGender(kd()) === 'female' ? 'princess' : 'prince'; }
 
 /* THE PARTNER'S FORMS, in the order they are earned. Each: its type, the monster standing in for it until the designer's
    pictures come, its four moves' names, what it does for the city */
@@ -411,9 +441,9 @@ const KD_FORMS = {
   psychic:  { type:'Psychic',  standIn:'psychic_starter1',  name:'Psychic',  moves:['Mind Poke', 'Mind Beam', 'Mind Wave', 'Psy Lance'] },
   ghost:    { type:'Ghost',    standIn:'ghost_starter1',    name:'Ghost',    moves:['Spook', 'Shadow Swipe', 'Night Wail', 'Soul Rend'] },
   fairy:    { type:'Fairy',    standIn:'fairybunny',        name:'Fairy',    moves:['Sparkle', 'Moon Beam', 'Star Shower', 'Wish Lance'] },
-  physical2:{ type:'Physical', standIn:'physical_starter2', name:'Stronger Physical', boost:1.25, moves:['Crush', 'Mega Slam', 'Quake Stomp', 'Titan Strike'] },
+  physical1:{ type:'Physical', standIn:'physical_starter2', name:'Stronger Physical', boost:1.25, moves:['Crush', 'Mega Slam', 'Quake Stomp', 'Titan Strike'] },
 };
-const KD_FORM_ORDER = ['physical', 'fire', 'water', 'grass', 'electric', 'flying', 'psychic', 'ghost', 'fairy', 'physical2'];
+const KD_FORM_ORDER = ['physical', 'fire', 'water', 'grass', 'electric', 'flying', 'psychic', 'ghost', 'fairy', 'physical1'];
 /* THE MOVES, the same four for every form ("2,4,8,8 word cost"): power × its attack; Power 1 a fifth more for each
    energy than the basic attack, Power 2 every enemy at once, the Ultimate the strongest blow for its energy */
 const KD_SLOTS = [
@@ -423,20 +453,33 @@ const KD_SLOTS = [
   { key:'ult',   label:'Ultimate', cost:8, pow:12,  at:7 },
 ];
 const KD_GUARD = 1, KD_CHANGE = 2, KD_ENERGY_MAX = 10;
+/* (4.74) the designer: "represent energy using the symbols matching each element. when an evolution is chosen, all energy
+   converts to that type." Each type's symbol, drawn (24 by 24) */
+const KD_ESYM = {
+  Physical:'<path d="M12 1.8l2.3 5.4 5.6-1.6-2.9 5 5 3-5.8.6.6 6-4.8-3.6L7.2 20.2l.6-6-5.8-.6 5-3-2.9-5 5.6 1.6z"/>',
+  Fire:'<path d="M12 1.5c1.2 3.6 5.4 5.6 5.4 11.1A5.4 5.4 0 0 1 12 22.5a5.4 5.4 0 0 1-5.4-5.4c0-3.1 2.1-4.7 2.6-7.4.9 1.3 1.4 2.6 1.3 4.1 1.6-1.6 2.4-6.4 1.5-12.3z"/>',
+  Water:'<path d="M12 2c-3.2 4.8-6.4 8.4-6.4 12.6a6.4 6.4 0 0 0 12.8 0C18.4 10.4 15.2 6.8 12 2z"/>',
+  Grass:'<path d="M4.5 19.5C4.5 9.8 10 3.8 20.5 3.5c-.3 10.5-6.3 16-16 16z"/><path d="M5 19l9.5-9.5" fill="none" stroke="rgba(255,255,255,.75)" stroke-width="1.4" stroke-linecap="round"/>',
+  Electric:'<path d="M13.6 1.5L3.8 13.6h6.4l-1.4 8.9L19.2 9.9h-6.6z"/>',
+  Flying:'<path d="M20.5 2.5C12 3 5.8 9.3 4.9 17.4L3 21l3.7-1.9C14.8 18.2 20.3 11.6 20.5 2.5z"/><path d="M4.6 19.4L15 9" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1.3" stroke-linecap="round"/>',
+  Psychic:'<path d="M1.8 12S6 4.8 12 4.8 22.2 12 22.2 12 18 19.2 12 19.2 1.8 12 1.8 12z"/><circle cx="12" cy="12" r="3.4" fill="rgba(255,255,255,.85)"/><circle cx="12" cy="12" r="1.5"/>',
+  Ghost:'<path d="M12 2.5a7.3 7.3 0 0 0-7.3 7.3v11.7l2.4-2.1 2.5 2.1 2.4-2.1 2.4 2.1 2.5-2.1 2.4 2.1V9.8A7.3 7.3 0 0 0 12 2.5z"/><circle cx="9.3" cy="10.2" r="1.4" fill="rgba(255,255,255,.9)"/><circle cx="14.7" cy="10.2" r="1.4" fill="rgba(255,255,255,.9)"/>',
+  Fairy:'<path d="M12 1.5c.9 5.6 2.6 7.6 9 9-6.4 1.4-8.1 3.4-9 9-.9-5.6-2.6-7.6-9-9 6.4-1.4 8.1-3.4 9-9z"/><circle cx="19.5" cy="4.5" r="1.4"/><circle cx="4.8" cy="19.2" r="1.1"/>',
+};
+const kdESym = t=> `<svg viewBox="0 0 24 24" aria-hidden="true">${KD_ESYM[t] || KD_ESYM.Physical}</svg>`;
+const kdTypeColor = t=> (typeof TYPE_COLORS !== 'undefined' && TYPE_COLORS[t]) || '#c99a3f';
 const kdTal = (P, k)=> (P && P.tal && P.tal[k]) || 0;
 const kdAtk = P=> (8 + 2 * P.level) * (1 + 0.05 * kdTal(P, 'atk'));
 function kdMaxHp(P, K){
-  K = K || (state.progress && state.progress.kingdom) || {};
-  const heal = typeof kcLv === 'function' ? kcLv(K, 'healer') : 0;
-  return Math.round((60 + 12 * P.level) * (1 + 0.08 * kdTal(P, 'hp')) * (1 + 0.06 * Math.max(0, heal - 1)));
+  return Math.round((60 + 12 * P.level) * (1 + 0.08 * kdTal(P, 'hp')));                // (4.74) the healer is the barracks now
 }
 /* a block holds off up to this much of one blow (a same-level enemy's blow and a half); Absorption halves it */
 const kdBlockValue = (P, form)=> Math.round((9 + 3 * P.level) * (form === 'grass' && kdTal(P, 'absorb') ? 0.5 : 1));
 const kdNeed = L=> 20 + 10 * L;
-function kdPartnerArt(form, view, px, cls){
-  const F = KD_FORMS[form] || KD_FORMS.physical;
-  /* the designer's picture first; the stand-in until it is there */
-  return `<img class="kd-mon ${cls || ''}" src="assets/mon/kingdom_${form}_${view}.png" alt="" style="width:${px}px;height:${px}px"
+function kdPartnerArt(form, view, px, cls, sex){
+  const F = KD_FORMS[form] || KD_FORMS.physical, g = sex || kdGender(typeof kd === 'function' ? kd() : null);
+  /* the designer's picture (the heir's sex); a stand-in if it is missing */
+  return `<img class="kd-mon ${cls || ''}" src="assets/mon/kingdom_${KD_FORMS[form] ? form : 'physical'}_${g}_${view}.png" alt="" style="width:${px}px;height:${px}px"
     onerror="this.onerror=null;this.src='assets/mon/${F.standIn}_${view}.png'">`;
 }
 const kdTypeBadge = t=> `<span class="type-badge" style="background:${TYPE_COLORS[t] || '#888'}">${t}</span>`;
@@ -445,6 +488,9 @@ const kdTypeBadge = t=> `<span class="type-badge" style="background:${TYPE_COLOR
 const kdTideLow = r=> +(1 - 0.05 * (r + 1)).toFixed(2), kdTideHigh = r=> +(1 + 0.1 * r).toFixed(2);
 const KD_TALENTS = {
   all:[
+    /* (4.75) the designer: "a very early talent allows for a correction mechanic to prevent this stun or energy loss, up
+       to 1/2 times per battle with investment" (kdbSubmit) */
+    { k:'correct', name:'Correction',     max:2, say:r=> `${r === 1 ? 'Once' : 'Twice'} a battle, a wrong answer can be put right: try it again, and right, no energy lost and no stun.` },
     { k:'ready',  name:'Ready stance',    max:1, say:()=> 'Start every battle with a block already up.' },
     { k:'atk',    name:'Strength',        max:5, say:r=> `Attack +${5 * r}%.` },
     { k:'dmg',    name:'Fury',            max:5, say:r=> `Damage dealt +${5 * r}%.` },
@@ -487,7 +533,7 @@ const KD_TRIALS = [
   { form:'psychic',   sp:'unicorn',        name:'The dreaming guardian',  need:{ level:24, p3:15 },   lv:3, hp:2.2 },
   { form:'ghost',     sp:'ghost_guardian', name:'The barrow\'s guardian', need:{ level:28, p3:30 },   lv:3, hp:2.2 },
   { form:'fairy',     sp:'horned_lynx',    name:'The glade\'s guardian',  need:{ level:32, p4:10 },   lv:3, hp:2.4 },
-  { form:'physical2', sp:'fighting_ape',   name:'The mountain\'s guardian', need:{ level:36, p4:20, z:120 }, lv:4, hp:2.6 },
+  { form:'physical1', sp:'fighting_ape',   name:'The mountain\'s guardian', need:{ level:36, p4:20, z:120 }, lv:4, hp:2.6 },
 ];
 const KD_NEED_SAY = { wins:n=> `${n} meadow battles won`, level:n=> `Level ${n}`, tables:n=> `All ${n} times tables open`,
   z:n=> `${n} times-table answers known by heart`, f:n=> `${n} missing numbers known by heart`, p2:n=> `${n} two-factor sums known by heart`,
@@ -515,11 +561,79 @@ function kdFoe(sp, E, opt){
            dmg:(6 + 2 * E) * (opt.boss ? 1.25 : 1) * (pack > 2 ? 0.45 : pack > 1 ? 0.65 : 1), mat:KD_MAT[types[0]] || 'stone',
            acc:0, interval:8000, slows:[], stunUntil:0, burn:null, poison:[], pNext:0, down:false };
 }
-/* a meadow battle: one wild monster near the partner's level; from Power 2 on, sometimes two or three, each a little weaker */
+/* (4.74) the designer: "For enemies, please use the existing wild roster." The game's wild monsters (SPECIES, tier 'wild'),
+   more of them as the partner grows: those of the first lands at once, the later lands' as it reaches 6, 12, 20 and 28
+   (each fought at the partner's own level, whatever its land) */
+const KD_ROSTER_AT = [[1, 5], [6, 31], [12, 67], [20, 79], [28, 999]];
+function kdRoster(level){
+  const S = typeof SPECIES !== 'undefined' ? SPECIES : {}, cap = KD_ROSTER_AT.filter(([L])=> level >= L).pop()[1];
+  const list = Object.keys(S).filter(k=> S[k].tier === 'wild' && (S[k].base || 0) <= cap);
+  return list.length >= 4 ? list : KD_MEADOW;
+}
+/* a meadow battle: one wild monster near the partner's level; from Power 2 on, sometimes two or three, each a little
+   weaker; (4.74) now and then one of them special */
 function kdWild(){
-  const P = kd().partner, lv = ()=> Math.max(1, Math.min(60, P.level - 1 + kqInt(0, 2))), sp = ()=> KD_MEADOW[kqInt(0, KD_MEADOW.length - 1)];
+  const P = kd().partner, R = kdRoster(P.level), lv = ()=> Math.max(1, Math.min(60, P.level - 1 + kqInt(0, 2))), sp = ()=> R[kqInt(0, R.length - 1)];
   const r = kqRand(), n = P.level >= KD_SLOTS[2].at ? (r < 0.15 ? 3 : r < 0.5 ? 2 : 1) : 1;
-  return Array.from({ length:n }, ()=> kdFoe(sp(), n > 1 ? Math.max(1, lv() - 1) : lv(), { pack:n }));
+  const foes = Array.from({ length:n }, ()=> kdFoe(sp(), n > 1 ? Math.max(1, lv() - 1) : lv(), { pack:n }));
+  if(P.level >= KD_SPECIAL_AT && kqRand() < KD_SPECIAL_ODDS) kdSpecialize(foes[kqInt(0, n - 1)], P);
+  return foes;
+}
+/* (4.74) THE SPECIAL ENEMIES. The designer: "some monsters can only be defeated with a particular element (instead of
+   having super-effective), some monsters only with an ultra move, some monsters only with status effects like burn or
+   poison, and some only by surviving a countdown (their attacks are more frequent and powerful), requiring
+   dodging/guarding". Each says so on its card.
+   · elem: only blows of its one type hurt it (one of the partner's other forms: a change of form);
+   · ultra: only the Ultra's strikes (from level 10; "monsters which require ultra moves to defeat will reset the
+     availability of the ultra move": while one is in the fight, the Ultra comes back after each use);
+   · status: only burning and poison: in the Fire form each blow sets it burning (its damage over 3 s), in the Grass form
+     poisons it (over 5 s); other forms do nothing;
+   · count: nothing hurts it; it strikes about twice as often and half as hard again, till its countdown (30 to 40 s)
+     runs out and the mind control breaks. Guard to block; a guard in the last half second before a blow dodges it. */
+const KD_SPECIAL_AT = 3, KD_SPECIAL_ODDS = 0.2;
+const KD_ULTRA_AT = 10, KD_REVIVE = 10, KD_ULTRA_POW = 4;
+const KD_HOURGLASS = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12v2c0 3.6-2.4 5.6-4.4 8 2 2.4 4.4 4.4 4.4 8v2H6v-2c0-3.6 2.4-5.6 4.4-8C8.4 9.6 6 7.6 6 4z"/></svg>';
+function kdSpecialize(f, P){
+  const mine = [...new Set(P.forms.map(x=> KD_FORMS[x].type))], others = mine.filter(t=> t !== KD_FORMS[P.form].type);
+  const kinds = [];
+  if(others.length) kinds.push('elem');
+  if(P.level >= KD_ULTRA_AT) kinds.push('ultra');
+  if(P.forms.includes('fire') || P.forms.includes('grass')) kinds.push('status');
+  kinds.push('count');
+  const k = kinds[kqInt(0, kinds.length - 1)];
+  f.special = k;
+  if(k === 'elem') f.lock = others[kqInt(0, others.length - 1)];
+  if(k === 'ultra') f.hp = f.maxHp = Math.round(kdAtk(P) * KD_ULTRA_POW * 5.5);          // about one Ultra's strikes
+  if(k === 'count'){ f.count = f.countMax = kqInt(30, 40) * 1000; f.dmg *= 1.5; f.fast = 0.55; }
+  return f;
+}
+/* does it hurt this one? src: 'hit' (a move), 'burn', 'poison', 'ultra'; type: the blow's */
+function kdbGate(f, type, src){
+  switch(f.special){
+    case 'elem':   return src === 'burn' ? f.lock === 'Fire' : src === 'poison' ? f.lock === 'Grass' : type === f.lock;
+    case 'ultra':  return src === 'ultra';
+    case 'status': return src === 'burn' || src === 'poison';
+    case 'count':  return false;
+    default:       return true;
+  }
+}
+/* a blow on a thick hide: in the Fire form, burning; in the Grass form, poison (the blow's damage, over a few seconds) */
+function kdbDot(B, f, type, dmg){
+  const fire = type === 'Fire', grass = type === 'Grass';
+  if(!fire && !grass){ kdbFloatOn(f, 'No effect', 'immune'); return false; }
+  const sec = fire ? 3 : 5;
+  (f.dots || (f.dots = [])).push({ dps:Math.max(1, Math.round(dmg / sec)), until:B.t + sec * 1000 + 50, kind:fire ? 'burn' : 'poison' });
+  if(!f.dNext || f.dNext < B.t) f.dNext = B.t + 1000;
+  kdbFloatOn(f, fire ? 'Burning!' : 'Poisoned!', fire ? 'burn' : 'poison');
+  return true;
+}
+/* what its card says it takes to beat it */
+function kdSpecHtml(f){
+  if(f.special === 'elem') return `<span class="kdb-lock" style="--tc:${kdTypeColor(f.lock)}">${kdESym(f.lock)}</span>Only ${f.lock} can hurt it`;
+  if(f.special === 'ultra') return `<span class="kdb-lock ultra">${kdShield()}</span>Only the Ultra can hurt it`;
+  if(f.special === 'status') return `<span class="kdb-lock" style="--tc:${kdTypeColor('Fire')}">${kdESym('Fire')}</span><span class="kdb-lock" style="--tc:${kdTypeColor('Grass')}">${kdESym('Grass')}</span>Only burning or poison hurts it`;
+  if(f.special === 'count') return `<span class="kdb-lock count">${KD_HOURGLASS}</span>Survive it: <em>${Math.ceil(f.count / 1000)} s</em>`;
+  return '';
 }
 
 /* ============================================================
@@ -530,30 +644,54 @@ async function kdRiftPortal(){
   walkTeardown();
   go('kingdom');
 }
-function kdSay(html, button){ return sceneSay([faceNpc('grandpa', '')], 'The steward', html, button); }
+/* (4.74) THE STORY, as the designer tells it: "This is an alternate future of the fairy kingdom created by the invasion of
+   nemesis. The main monster is a descendant of the fairy king. Although it has not happened yet, the monsters therein need
+   help nonetheless. The main monster, to be named by the player, must restore the fairy kingdom and bring peace back to
+   the realm, which has been ravaged by mind control and now serves an inter dimensional alien empire. Vesper, using his
+   ability to project his mind, can give the main monster the mental prowess he/she needs to rebuild the kingdom. It
+   starts with rescuing mind-controlled kingdom monsters. They leave behind building materials in gratitude when rescued.
+   Rescuing involves defeating." Vesper tells it (his mind, projected through the portal). */
+function kdSay(html, button){ return sceneSay([typeof vesperFace === 'function' ? vesperFace(64) : faceNpc('grandpa', '')], 'Vesper', html, button); }
+const KD_STORY = [
+  'This portal does not open onto a place. It opens onto a time: a future that has not happened. Had Nemesis\'s invasion won, this is what would have become of the Fairy Kingdom.',
+  'Mind control holds its monsters now, and they serve an empire from another dimension: the aliens. The kingdom lies in ruins.',
+  'It has not happened yet. But the monsters there need help all the same.',
+];
 async function kdWelcome(){
-  const K = kd(), heir = kdHeir();
+  const K = kd();
   ui.kdTalk = true;
   try {
-    await kdSay(`Your Highness! The ${heir} has come home at last.`);
-    await kdSay('Look at what is left of the kingdom: the palace, and the few old buildings round it. Everything beyond is wild land, and monsters come out of it.');
-    await kdSay('Your own monsters could not follow you: that portal lets only people through. But a young monster of the kingdom is waiting to meet you. It is plain and small now. It grows: beat the guardians of the wilds, and it learns new forms.');
-    await kdSay('It grows strong on sums. Answer well and quickly, and it fights well. Answer too slowly, and the enemy strikes first.');
+    for(const line of KD_STORY) await kdSay(line);
+    await kdSay('Your own monsters cannot go through this portal. But one monster there is a descendant of the Fairy King himself, and it is waiting for you. You will name it.');
+    await kdSay('I will project my mind into it, and lend it the mental strength it needs to rebuild the kingdom: sums. Answer well and quickly, and it fights well. Answer too slowly, and the enemy strikes first.');
   } finally { ui.kdTalk = false; }
-  K.met = true; await saveProfile();
+  K.met = true; K.vesper = true; await saveProfile();
   if(ui.screen === 'kingdom') renderKingdom();
+}
+/* a kingdom begun before 4.74: the story as it is now, once */
+async function kdVesperNews(){
+  const K = kd(), P = K.partner;
+  ui.kdTalk = true;
+  try {
+    await kdSay('Vesper here. I have watched this place through my mind, and I know now what it is.');
+    for(const line of KD_STORY) await kdSay(line);
+    if(P) await kdSay(`${escapeHtml(P.name)} is a descendant of the Fairy King. I lend it my mind: the sums are my strength in it. Rescue the kingdom's monsters from the mind control, and they will help you rebuild.`);
+  } finally { ui.kdTalk = false; }
+  K.vesper = true; await saveProfile();
 }
 /* the partner, named: plain Physical to start */
 function kdNameRender(){
   kdCss();
   const K = kd();
+  if(ui.kdSex !== 'male' && ui.kdSex !== 'female') ui.kdSex = kdGender(K);
   $('#brandSub').textContent = 'The Kingdom';
   screenEl.innerHTML = `
     <button class="back-link" id="backBtn">← The Time Rift</button>
     <div class="screen-title">Your partner</div>
-    <div class="screen-sub">It will fight beside you in the kingdom, and learn new forms as you go.</div>
+    <div class="screen-sub">A descendant of the Fairy King. Choose a prince or a princess: it will fight beside you, and learn new forms as you go.</div>
     <div class="kd-card kd-meet">
-      <div class="kd-pic big">${kdPartnerArt('physical', 'front', 150)}</div>
+      <div class="kd-sex" role="radiogroup" aria-label="A prince or a princess">${['male', 'female'].map(g=> `
+        <button type="button" class="kd-sexpick ${ui.kdSex === g ? 'on' : ''}" data-sex="${g}" role="radio" aria-checked="${ui.kdSex === g}">${kdPartnerArt('physical', 'front', 132, '', g)}<b>${g === 'male' ? 'A prince' : 'A princess'}</b></button>`).join('')}</div>
       <div class="kd-name">
         ${kdTypeBadge('Physical')}
         <label for="kdNameIn">Give it a name</label>
@@ -564,16 +702,19 @@ function kdNameRender(){
   $('#backBtn').addEventListener('click', ()=>{ ui.walkFresh = false; go('r6_rift'); });
   const done = async ()=>{
     const name = ($('#kdNameIn').value || '').trim().slice(0, 14) || 'Pip';
-    K.partner = { name, form:'physical', forms:['physical'], level:1, xp:0, hp:null, tal:{} };
+    K.partner = { name, gender:ui.kdSex === 'female' ? 'female' : 'male', form:'physical', forms:['physical'], level:1, xp:0, hp:null, tal:{} };
     K.partner.hp = kdMaxHp(K.partner, K);
     await saveProfile();
     renderKingdom();
     ui.kdTalk = true;
     try {
-      await kdSay(`${escapeHtml(name)} it is! Take it out to the meadow beyond the gate. The monsters there carry no coins, but they leave wood, stone and iron behind: what the city is built from.`);
-      await kdSay('Coins come from the city itself: its fields and its people. Repair the granary and build a house to start. Every battle you win is a day in the kingdom.');
+      await kdSay(`${escapeHtml(name)} it is! Start by rescuing the kingdom's monsters. The mind control holds them: beat one in battle, and the spell breaks.`);
+      await kdSay('In thanks, the monsters you rescue leave you what they carry: wood, stone and iron, what the kingdom is rebuilt from. Coins come from the kingdom itself: its fields and its people.');
+      await kdSay('Repair the granary and build a house to start. Every battle you win is a day in the kingdom.');
     } finally { ui.kdTalk = false; }
   };
+  screenEl.querySelectorAll('[data-sex]').forEach(b=> b.addEventListener('click', ()=>{ ui.kdSex = b.dataset.sex;
+    screenEl.querySelectorAll('[data-sex]').forEach(x=>{ x.classList.toggle('on', x === b); x.setAttribute('aria-checked', String(x === b)); }); }));
   $('#kdNameGo').addEventListener('click', done);
   $('#kdNameIn').addEventListener('keydown', e=>{ if(e.key === 'Enter') done(); });
   if(!K.met && !ui.kdTalk) setTimeout(kdWelcome, 300);
@@ -664,10 +805,12 @@ function kdBattleStart(foes, trial){
   const n = foes.length;
   /* two or three at once: each its own timer, as quick as one alone (their blows lighter, kdFoe), and they do not all
      strike together */
-  foes.forEach((f, i)=>{ f.interval = kdTimerMs(K, f); f.acc = -Math.round(i * f.interval / n); });
+  foes.forEach((f, i)=>{ f.interval = Math.round(kdTimerMs(K, f) * (f.fast || 1)); f.acc = -Math.round(i * f.interval / n); });
   ui.kdB = { foes, target:0, trial:trial || null, form:P.form, energy:0, blocks:kdTal(P, 'ready') ? 1 : 0,
              q:null, vals:[''], cur:0, qAt:0, t:0, last:0, paused:true, started:false, over:false, reveal:false, busy:false,
-             chain:0, grow:0, quickRun:0, lastGuard:-1e9, asked:0, right:0, quick:0 };
+             chain:0, grow:0, quickRun:0, lastGuard:-1e9, asked:0, right:0, quick:0,
+             mistakes:[], corrected:0, fixing:false, revealEnd:0, stunEnd:0 };                  // (4.75) kdbSubmit, kdFree
+  ui.kdF = null;
   go('kdBattle');
 }
 const kdbAlive = B=> B.foes.filter(f=> !f.down);
@@ -687,6 +830,7 @@ function kdBattleRender(){
   kdCss();
   const B = ui.kdB, K = kd(), P = K && K.partner;
   if(!B || !P){ go('kingdom'); return; }
+  if(ui.kdF && ui.kdF.B === B) return kdFreeRender();                // (4.75) won: the freeing, where the battle was
   $('#brandSub').textContent = B.trial ? B.trial.name : 'The meadow';
   const F = KD_FORMS[B.form], n = B.foes.length, px = n === 1 ? (B.trial ? 300 : 280) : n === 2 ? 200 : 150;   // (a sprite's creature fills about 40% of its picture)
   screenEl.innerHTML = `
@@ -694,16 +838,17 @@ function kdBattleRender(){
       <div class="kdb-top">
         <button class="back-link" id="kdRun">← Run back to the city</button>
         <div class="kdb-tide" id="kdbTide" hidden></div>
-        <div class="kdb-energy" id="kdbEnergy" role="img" aria-label="Energy">${Array.from({ length:KD_ENERGY_MAX }, ()=> '<i></i>').join('')}<span>Energy</span></div>
+        <div class="kdb-energy ${B.converted && performance.now() - B.converted < 1500 ? 'convert' : ''}" id="kdbEnergy" role="img" aria-label="Energy" style="--tc:${kdTypeColor(F.type)}">${Array.from({ length:KD_ENERGY_MAX }, (_, i)=> `<i style="--i:${i}">${kdESym(F.type)}</i>`).join('')}<span>${F.type} energy</span></div>
       </div>
-      <div class="kdb-arena n${n}">
+      <div class="kdb-arena n${n}" id="kdbArena">
+        <div class="kdb-stop" id="kdbStop" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg><b></b></div>
         <div class="kdb-foes">${B.foes.map((f, i)=> `
           <button class="kdb-foe ${f.down ? 'down' : ''}" data-foe="${i}" aria-label="${escapeHtml(f.name)}: target it">
             <div class="kdb-tag"><b>${escapeHtml(f.name)}</b> <span class="kd-lv">Lv ${f.level}</span> ${f.types.map(kdTypeBadge).join(' ')}
               <div class="kdb-hp"><i><b></b></i><em></em></div>
               <div class="kdb-meter"><i><b></b></i><em></em></div>
-              <div class="kdb-st"></div></div>
-            <div class="kdb-foepic">${monPortrait(f.sp, px, { view:'front', bare:true })}</div>
+              <div class="kdb-st"></div>${f.special ? `<div class="kdb-spec ${f.special}">${kdSpecHtml(f)}</div>` : ''}</div>
+            <div class="kdb-foepic mind ${f.special ? 'special' : ''}">${monPortrait(f.sp, px, { view:'front', bare:true })}</div>
           </button>`).join('')}</div>
         <div class="kdb-me">
           <div class="kdb-mepic" id="kdbMePic">${kdPartnerArt(B.form, 'back', n > 1 ? 250 : 290)}</div>
@@ -716,10 +861,11 @@ function kdBattleRender(){
       <div class="kdb-sum" id="kdbSum"></div>
       <div class="kdb-ctrl">
         ${kdPadHtml('kdbPad')}
-        <div class="kdb-moves" id="kdbMoves">${KD_SLOTS.map((s, i)=> `
-          <button class="kdb-move s${i}" data-mv="${i}"><b>${P.level >= s.at ? F.moves[i] : s.label}</b><span class="kdb-cost">${Array.from({ length:s.cost }, ()=> '<i></i>').join('')}</span><small>${P.level >= s.at ? `${s.label} · ${s.cost}${s.aoe ? ' · hits all' : ''}` : `Learnt at level ${s.at}`}</small></button>`).join('')}
-          <button class="kdb-move guard" data-act="guard"><b>Guard</b><span class="kdb-cost"><i></i></span><small>1 · a block</small></button>
-          <button class="kdb-move change" data-act="change" ${P.forms.length > 1 ? '' : 'hidden'}><b>Change<span class="kdb-long"> form</span></b><span class="kdb-cost"><i></i><i></i></span><small>2 · any form it knows</small></button>
+        <div class="kdb-moves" id="kdbMoves" style="--tc:${kdTypeColor(F.type)}">${KD_SLOTS.map((s, i)=> `
+          <button class="kdb-move s${i}" data-mv="${i}"><span class="kdb-liq" aria-hidden="true"><i></i></span><b>${P.level >= s.at ? F.moves[i] : s.label}</b><span class="kdb-cost">${kdESym(F.type)}<em>${s.cost}</em></span><small>${P.level >= s.at ? `${s.label}${s.aoe ? ' · hits all' : ''}` : `Learnt at level ${s.at}`}</small></button>`).join('')}
+          <button class="kdb-move guard" data-act="guard"><span class="kdb-liq" aria-hidden="true"><i></i></span><b>Guard</b><span class="kdb-cost">${kdESym(F.type)}<em>1</em></span><small>a block</small></button>
+          <button class="kdb-move change" data-act="change" ${P.forms.length > 1 ? '' : 'hidden'}><span class="kdb-liq" aria-hidden="true"><i></i></span><b>Change<span class="kdb-long"> form</span></b><span class="kdb-cost">${kdESym(F.type)}<em>2</em></span><small>any form it knows</small></button>
+          <button class="kdb-move ultra" data-act="ultra"><span class="kdb-liq" aria-hidden="true"><i></i></span><b>Ultra</b><small>A problem sum</small></button>
           <button class="kdb-move potion" data-act="potion"><b>Potion</b><small></small></button></div>
       </div>
     </div>`;
@@ -729,36 +875,180 @@ function kdBattleRender(){
   screenEl.querySelector('[data-act="guard"]').addEventListener('click', kdbGuard);
   screenEl.querySelector('[data-act="change"]').addEventListener('click', kdbChangeForm);
   screenEl.querySelector('[data-act="potion"]').addEventListener('click', kdbPotion);
+  screenEl.querySelector('[data-act="ultra"]').addEventListener('click', kdbUltra);
   screenEl.querySelectorAll('[data-foe]').forEach(b=> b.addEventListener('click', ()=>{ const i = +b.dataset.foe; if(!B.foes[i].down){ B.target = i; kdbDraw(); } }));
-  $('#kdbSum').addEventListener('click', e=>{ const bl = e.target.closest('[data-bi]'); if(bl && !B.reveal){ B.cur = +bl.dataset.bi; kdbDraw(); } });
+  $('#kdbSum').addEventListener('click', e=>{ const bl = e.target.closest('[data-bi]'); if(bl && !B.reveal && !kdbStunned(B)){ B.cur = +bl.dataset.bi; kdbDraw(); } });
   kdbKeysWire();
   if(!B.q) kdbNextQ();
   kdbDraw();
   if(!B.started){ B.started = true; B.paused = false; B.last = performance.now(); B.qAt = performance.now(); }
   cancelAnimationFrame(kdbTick._raf); kdbTick._raf = requestAnimationFrame(kdbTick);
 }
-function kdbNextQ(){ const B = ui.kdB; B.q = kqNext(kd()); B.vals = Array.from({ length:B.q.nb }, ()=> ''); B.cur = 0; B.qAt = performance.now(); kdbDraw(); }
+function kdbNextQ(){
+  const B = ui.kdB, K = kd();
+  B.q = kqNext(K, { fight:true });                                 // (4.75) never a problem sum: those are the Ultra's
+  if(B.q.skill === 'word') B.q = kqItem(kqPickKey(kqSt(K), kqMulKeys(kqSt(K), kqSt(K).open, ['z'], true)));
+  B.vals = Array.from({ length:B.q.nb }, ()=> ''); B.cur = 0; B.qAt = performance.now(); B.fixing = false;
+  kdbDraw();
+}
+/* (4.75) A WRONG ANSWER. The designer: "i need a wrong answer mechanic to prevent skipping questions. a wrong answer stuns
+   the user's own monster, preventing it from solving sums (seeing the next sum) for X seconds if no energy is available,
+   or causing a one-energy loss if energy is available. a very early talent allows for a correction mechanic to prevent
+   this stun or energy loss, up to 1/2 times per battle with investment." Until 4.75 a wrong answer only showed the right
+   one, the enemies waiting while it was shown: a free pause, and the next sum — a hard one could be skipped for nothing.
+   Now the enemies never wait for it. With energy, an energy goes, and the right answer is shown a moment (`reveal`)
+   before the next sum; with none, he is stunned (`stun`): the right answer, and no sum to answer until it wears off.
+   Correction (KD_TALENTS): the first wrong answers of a battle (one, or two) are cleared to be tried again instead; right
+   the second time, nothing is lost (and nothing gained). In battle time (B.t): held with everything else. */
+const KD_WRONG = { reveal:1500, stun:3000 };
+const kdbStunned = B=> !!B && B.stunEnd > B.t;
+const kdbFixLeft = (B, P)=> Math.max(0, kdTal(P, 'correct') - (B.corrected || 0));
+/* a sum missed (not put right): kept, to be put right when the monsters are freed (kdFree) — once each */
+function kdbMissed(B, q){
+  const id = q.key || q.text || q.view.join(' ');
+  if(!B.mistakes.some(m=> (m.key || m.text || m.view.join(' ')) === id)) B.mistakes.push(q);
+}
+/* (4.74) THE ULTRA'S PROBLEM SUM: its own card over the battle. The designer: "problem sums get up to 5min of waiting
+   time, then one monster attack lands per minute after that." (Counted only while the game is in front of him; the card
+   says how long is left. Knocked out meanwhile, the card closes and the battle is lost.) (4.75) Only the Ultra's now:
+   the battle's own sums are never problem sums (kdbNextQ). */
+const KD_WORD = { wait:300000, every:60000, tick:1000 };        // (the tests shorten them)
+const kdMmss = ms=>{ const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+async function kdbWord(){
+  const B = ui.kdB, K = kd(), P = K.partner, q = B.q;
+  if(!B || B.over) return;
+  B.wording = true;
+  const sig = {}; let waited = 0, nextAt = KD_WORD.wait, turn = 0;
+  const note = ()=> waited < KD_WORD.wait ? `The monsters wait for you: ${kdMmss(KD_WORD.wait - waited)}` : `The monsters are restless: one attacks every minute (next in ${kdMmss(nextAt - waited)})`;
+  const wait = setInterval(()=>{
+    if(ui.kdB !== B || B.over){ clearInterval(wait); if(sig.close) sig.close('gone'); return; }
+    if(document.hidden) return;
+    waited += KD_WORD.tick;
+    if(waited >= nextAt){
+      nextAt += KD_WORD.every;
+      const a = kdbAlive(B);
+      if(a.length){ kdbFoeAttack(a[turn++ % a.length]); if(P.hp <= 0){ clearInterval(wait); if(sig.close) sig.close('down'); return; } }
+    }
+    if(sig.note) sig.note(note());
+  }, KD_WORD.tick);
+  B.waitTimer = wait;
+  let r;
+  try {
+    r = await kqwOpen(q, { title:'The Ultra: solve it to unleash it', sub:note(), signal:sig,
+      grade:(vals, ms)=> kqAnswer(K, q, vals, ms, 'fight'), rightBtn:'Unleash it!',
+      right:()=> 'Five to seven strikes, and time stops for 15 seconds.' });
+  } catch(e){
+    /* (4.75) the card could not be drawn: the battle goes on as it was, never left standing still under nothing */
+    console.error('ultra card:', e); r = { ok:false, aborted:'error' };
+    document.querySelectorAll('.kqw-over').forEach(x=> x.remove());
+  }
+  clearInterval(wait); B.waitTimer = null;
+  B.wording = false;
+  if(ui.kdB !== B || B.over) return;
+  if(r.aborted === 'down' || P.hp <= 0){ B.ultraQ = false; return kdbLose(); }
+  if(r.aborted !== 'error') B.asked++;
+  B.last = performance.now();
+  /* the sum he was on comes back, as it was */
+  const s = B.saved; B.saved = null; B.ultraQ = false;
+  if(s){ B.q = s.q; B.vals = s.vals; B.cur = s.cur; B.fixing = !!s.fixing; } else kdbNextQ();
+  B.qAt = performance.now();
+  /* right: it is unleashed, then and there (no energy: 4.75) */
+  if(r.ok){
+    B.right++; B.ultraUsed = true; B.timeStop = 15000;
+    kdbSay(`${escapeHtml(P.name)} unleashes its Ultra! Time stops for 15 seconds.`);
+    kdbUltraStrikes(B, P);
+    /* a monster only the Ultra can hurt brings it back */
+    if(B.foes.some(f=> f.special === 'ultra')) B.ultraUsed = false;
+  }
+  else kdbSay('Not this time: the Ultra is still there when you are ready.');
+  kdbDraw();
+}
+/* (4.74) THE ULTRA. The designer: "there will be an ultra move unlocked by level 10 which enables the player to complete a
+   problem sum relevant to the current selected field (e.g. 3 and 4 times tables). it does damage equivalent to an ultra
+   move in the tingxie side of the game, and can be completed once per battle. monsters which require ultra moves to defeat
+   will reset the availability of the ultra move. unlike in the game where 100 words reinvigorates all moves,
+   reinvigorates have to be purchased for 10 energy in this side." And, as he first had it, it "buys 15 seconds of time
+   stop". Its strikes as the spelling side's Ultra: 5 to 7 (45/35/20) at random among the enemies (those only the Ultra
+   can hurt first), each twice a basic attack (the spelling Ultra's 0.5 a strike to a Low move's 0.25).
+   The field: the grown-ups' chosen tables; adaptive, the two he is learning now (the last opened) */
+function kdbUltraTables(K){
+  const set = K.sums && K.sums.mode === 'set' && K.sums.set, tb = set ? (set.tables || []).filter(t=> t >= 2 && t <= 12) : [];
+  if(tb.length) return tb;
+  return kqSt(K).open.filter(t=> t >= 2 && t <= 12).slice(-2);
+}
+function kdbUltraQ(K){
+  const keys = typeof kqWordKeys === 'function' ? kqWordKeys(kqSt(K), true) : [], fmts = keys.length ? keys.map(k=> k.slice(1)) : ['t', 'e'];
+  return kqWord(fmts[kqInt(0, fmts.length - 1)], kdbUltraTables(K));
+}
+const kdbUltraOpen = P=> !!P && P.level >= KD_ULTRA_AT;
+function kdbUltra(){
+  const B = ui.kdB, K = kd(), P = K.partner;
+  if(!kdbCan(B) || !kdbUltraOpen(P) || B.ultraQ || B.wording) return;
+  /* spent: reinvigorated for ten energy */
+  if(B.ultraUsed){
+    if(B.energy < KD_REVIVE) return;
+    B.energy -= KD_REVIVE; B.ultraUsed = false;
+    kdbFloat('Ultra ready!', 'energy'); kdbSay(`${escapeHtml(P.name)} is reinvigorated: the Ultra is ready again.`); kdbDraw();
+    return;
+  }
+  if(B.timeStop > 0) return;
+  if(B.reveal || kdbStunned(B)) return;                            // (4.75) not with a wrong answer still on show
+  B.saved = { q:B.q, vals:B.vals, cur:B.cur, fixing:B.fixing };
+  B.ultraQ = true;
+  B.q = kdbUltraQ(K); B.vals = ['']; B.cur = 0; B.qAt = performance.now();
+  kdbDraw();
+  kdbWord();
+}
+function kdbUltraStrikes(B, P){
+  const F = KD_FORMS[B.form], atk = kdAtk(P), r = kqRand(), n = r < 0.45 ? 5 : r < 0.8 ? 6 : 7;
+  if(typeof invertScreen === 'function') try { invertScreen(n * 220 + 900); } catch(e){}
+  if(typeof playSfx === 'function') try { playSfx('stone_ultra'); } catch(e){}
+  let k = 0;
+  const one = ()=>{
+    if(ui.kdB !== B || B.over) return;
+    const alive = kdbAlive(B), only = alive.filter(f=> f.special === 'ultra'), pool = only.length ? only : alive;
+    if(pool.length){
+      const f = pool[kqInt(0, pool.length - 1)], type = typeMultiplier([F.type], f.types);
+      const dmg = Math.max(1, Math.round(atk * KD_ULTRA_POW * (F.boost || 1) * (1 + 0.05 * kdTal(P, 'dmg')) * type * (0.9 + kqRand() * 0.2)));
+      if(kdbGate(f, F.type, 'ultra')){ f.hp = Math.max(0, f.hp - dmg); kdbFloatOn(f, `−${dmg}`, 'big'); } else kdbFloatOn(f, 'No effect', 'immune');
+      const el = screenEl.querySelectorAll('.kdb-foe')[B.foes.indexOf(f)], pic = el && el.querySelector('.kdb-foepic');
+      if(pic){ pic.classList.remove('hurt'); void pic.offsetWidth; pic.classList.add('hurt'); }
+      kdbCheckDown(B); kdbDraw();
+    }
+    if(++k < n && !B.over && kdbAlive(B).length) setTimeout(one, 220);
+    else if(typeof releaseInvert === 'function') try { releaseInvert(450); } catch(e){}
+  };
+  setTimeout(one, 120);
+}
 function kdbKey(k){
   const B = ui.kdB;
-  if(!B || B.over || B.reveal || !B.started || document.querySelector('.kd-over')) return;
+  if(!B || B.over || B.reveal || kdbStunned(B) || !B.started || document.querySelector('.kd-over')) return;   // (4.75) nor stunned
   if(kdQKey(B, k) === 'submit') return kdbSubmit();
   kdbDraw();
 }
 function kdbKeysWire(){
   if(kdbKeysWire.on) return; kdbKeysWire.on = true;
   addEventListener('keydown', e=>{
-    if(ui.screen !== 'kdBattle' || document.querySelector('.kd-over, .scene-say')) return;
-    if(/^\d$/.test(e.key)){ kdbKey(e.key); e.preventDefault(); }
-    else if(e.key === 'Backspace'){ kdbKey('del'); e.preventDefault(); }
-    else if(e.key === 'Enter'){ kdbKey('ok'); e.preventDefault(); }
-    else if(e.key === 'Tab' || e.key === 'x' || e.key === '*'){ kdbKey('next'); e.preventDefault(); }
+    if(ui.screen !== 'kdBattle' || document.querySelector('.kd-over, .scene-say, #kdfAsk')) return;
+    const key = ui.kdF ? kdFreeKey : kdbKey;                         // (4.75) the freeing's sums
+    if(/^\d$/.test(e.key)){ key(e.key); e.preventDefault(); }
+    else if(e.key === 'Backspace'){ key('del'); e.preventDefault(); }
+    else if(e.key === 'Enter'){ key('ok'); e.preventDefault(); }
+    else if(e.key === 'Tab' || e.key === 'x' || e.key === '*'){ key('next'); e.preventDefault(); }
   });
 }
 function kdbSubmit(){
-  const B = ui.kdB, K = kd(), P = K.partner;
+  const B = ui.kdB, K = kd(), P = K.partner, sum = $('#kdbSum');
+  const flash = cls=>{ if(sum){ sum.classList.remove('right', 'wrong'); void sum.offsetWidth; sum.classList.add(cls); } };
+  /* (4.75) a correction's second try: right, nothing lost (and nothing gained, the sum already counted); wrong, a wrong
+     answer after all */
+  if(B.fixing){
+    B.fixing = false;
+    if(kqCheck(B.q, B.vals)){ flash('right'); kdbFloat('Put right!', 'fix'); kdbNextQ(); return; }
+    return kdbWrong(B, P, flash);
+  }
   const r = kqAnswer(K, B.q, B.vals, performance.now() - B.qAt, 'fight');
   B.asked++;
-  const sum = $('#kdbSum');
   if(r.ok){
     B.right++;
     let gain = r.energy, bonus = false;
@@ -766,18 +1056,46 @@ function kdbSubmit(){
     /* Quick charge (Electric): two in a row, each in time, an energy more */
     if(kdFormTal(B, P, 'electric', 'quick') && B.quickRun >= 2){ gain++; bonus = true; B.quickRun = 0; }
     const before = B.energy; B.energy = Math.min(KD_ENERGY_MAX, B.energy + gain);
-    if(sum){ sum.classList.remove('right', 'wrong'); void sum.offsetWidth; sum.classList.add('right'); }
+    flash('right');
     kdbFloat(B.energy > before ? `+${B.energy - before}${bonus ? ' quick charge!' : ''}` : 'Energy full!', 'energy');
     kdbNextQ();
-  } else {
-    /* wrong: a right answer for a moment (the enemies wait while it is shown), then the next sum */
-    B.quickRun = 0; B.reveal = true; B.paused = true;
-    if(sum){ sum.classList.remove('right', 'wrong'); void sum.offsetWidth; sum.classList.add('wrong'); sum.innerHTML = kdQHtml(B.q, B.vals, -1, B.q.sol); }
-    setTimeout(()=>{ if(ui.kdB !== B) return; B.reveal = false; B.paused = false; B.last = performance.now(); if(sum) sum.classList.remove('wrong'); kdbNextQ(); }, 1700);
+    return;
   }
+  B.quickRun = 0;
+  /* Correction: cleared, to be tried again */
+  if(kdbFixLeft(B, P) > 0){
+    B.corrected++; B.fixing = true;
+    B.vals = B.vals.map(()=> ''); B.cur = 0;
+    flash('wrong');
+    kdbSay('Not quite. Correction: put it right!');
+    kdbDraw();
+    return;
+  }
+  kdbWrong(B, P, flash);
+}
+/* wrong, and not put right: an energy, or a stun; the right answer shown meanwhile; kept to be put right when freeing */
+function kdbWrong(B, P, flash){
+  kdbMissed(B, B.q);
+  B.reveal = true;
+  if(B.energy > 0){
+    B.energy--; B.revealEnd = B.t + KD_WRONG.reveal;
+    kdbFloat('−1', 'energy lose');
+    kdbSay('Not right: an energy lost.');
+  } else {
+    B.stunEnd = B.revealEnd = B.t + KD_WRONG.stun;
+    kdbFloat('Stunned!', 'me stunned');
+    kdbSay(`Not right, and no energy: ${escapeHtml(P.name)} is stunned!`);
+  }
+  flash('wrong');
+  const sum = $('#kdbSum'); if(sum) sum.innerHTML = kdbRevealHtml(B);
   kdbDraw();
 }
-const kdbCan = B=> B && !B.over && B.started && !B.busy && !B.reveal;
+/* the right answer, his struck through; stunned, how long for */
+function kdbRevealHtml(B){
+  return kdQHtml(B.q, B.vals, -1, B.q.sol) + (kdbStunned(B) ? `<small class="kdb-stunlab" id="kdbStunLab">Stunned · ${Math.ceil((B.stunEnd - B.t) / 1000)} s</small>` : '');
+}
+/* (4.75) a wrong answer on show (or a stun) holds the sums only: the moves are his, as the enemies' timers run on */
+const kdbCan = B=> B && !B.over && B.started && !B.busy;
 /* A MOVE: on the enemy chosen (Power 2: on all of them); then what the form's talents add */
 function kdbMove(i){
   const B = ui.kdB, K = kd(), P = K.partner, sl = KD_SLOTS[i];
@@ -791,16 +1109,19 @@ function kdbMove(i){
     const tide = kdTide(B, P), pierce = kdFormTal(B, P, 'fire', 'pierce');
     let mult = sl.pow * (F.boost || 1) * (1 + 0.05 * kdTal(P, 'dmg')) * (tide ? tide.m : 1) * (pierce ? Math.pow(1 + 0.06 * pierce, Math.min(5, B.chain)) : 1);
     const hitOne = f=>{
-      const type = typeMultiplier([F.type], f.types), dmg = Math.max(1, Math.round(atk * mult * type * (0.9 + kqRand() * 0.2)));
-      f.hp = Math.max(0, f.hp - dmg);
-      kdbFloatOn(f, `−${dmg}`, type > 1 ? 'big' : '');
+      const type = typeMultiplier([F.type], f.types), raw = Math.max(1, Math.round(atk * mult * type * (0.9 + kqRand() * 0.2)));
+      /* (4.74) the special ones: a thick hide burns or is poisoned; the others shrug it off */
+      if(f.special === 'status'){ kdbDot(B, f, F.type, raw); kdbAfterHit(B, P, f, atk); return { f, dmg:0, type }; }
+      if(!kdbGate(f, F.type, 'hit')){ kdbFloatOn(f, f.special === 'count' ? 'Hold on!' : f.special === 'ultra' ? 'Shielded' : 'No effect', 'immune'); kdbAfterHit(B, P, f, atk); return { f, dmg:0, type }; }
+      f.hp = Math.max(0, f.hp - raw);
+      kdbFloatOn(f, `−${raw}`, type > 1 ? 'big' : '');
       kdbAfterHit(B, P, f, atk);
-      return { f, dmg, type };
+      return { f, dmg:raw, type };
     };
     const hits = sl.aoe ? kdbAlive(B).map(hitOne) : [hitOne(tgt)];
     /* Splash (Fire): a hit on one, a share of it on every other */
     const sp = kdFormTal(B, P, 'fire', 'splash');
-    if(sp && !sl.aoe) kdbAlive(B).filter(f=> f !== tgt).forEach(f=>{ const d = Math.max(1, Math.round(hits[0].dmg * 0.1 * sp)); f.hp = Math.max(0, f.hp - d); kdbFloatOn(f, `−${d}`, 'splash'); });
+    if(sp && !sl.aoe && hits[0].dmg) kdbAlive(B).filter(f=> f !== tgt && kdbGate(f, F.type, 'hit')).forEach(f=>{ const d = Math.max(1, Math.round(hits[0].dmg * 0.1 * sp)); f.hp = Math.max(0, f.hp - d); kdbFloatOn(f, `−${d}`, 'splash'); });
     /* Absorption (Grass): healed by each attack; Rapid growth: stronger for it */
     const ab = kdFormTal(B, P, 'grass', 'absorb');
     if(ab){ const h = Math.round(atk * 0.15 * ab), mx = kdMaxHp(P, K); if(P.hp < mx){ P.hp = Math.min(mx, P.hp + h); kdbFloat(`+${h}`, 'me heal'); } }
@@ -852,16 +1173,16 @@ function kdbChangeForm(){
   box.querySelectorAll('[data-f]').forEach(b=> b.addEventListener('click', async ()=>{
     box.remove();
     if(B.over || B.energy < KD_CHANGE) return;
-    B.energy -= KD_CHANGE; B.form = b.dataset.f; P.form = B.form; B.last = performance.now();
+    B.energy -= KD_CHANGE; B.form = b.dataset.f; P.form = B.form; B.last = performance.now(); B.converted = performance.now();
     await saveProfile();
     kdBattleRender();
-    kdbSay(`${escapeHtml(P.name)} takes its ${KD_FORMS[B.form].name} form!`);
+    kdbSay(`${escapeHtml(P.name)} takes its ${KD_FORMS[B.form].name} form! Its energy turns ${KD_FORMS[B.form].type}.`);
   }));
 }
 function kdbPotion(){
   const B = ui.kdB, K = kd(), P = K.partner, mx = kdMaxHp(P, K), mk = typeof kcLv === 'function' ? kcLv(K, 'market') : 0;
   if(!B || B.over || !B.started || !K.potions || P.hp >= mx) return;
-  K.potions--; P.hp = Math.min(mx, P.hp + Math.round(mx * (35 + 5 * Math.max(1, mk)) / 100));
+  K.potions--; P.hp = Math.min(mx, P.hp + Math.round(mx * Math.min(80, 35 + 5 * Math.max(1, mk)) / 100));
   kdbSay(`${escapeHtml(P.name)} drinks a potion.`); kdbDraw();
 }
 function kdbTick(now){
@@ -869,18 +1190,28 @@ function kdbTick(now){
   if(ui.screen !== 'kdBattle' || !B) return;
   kdbTick._raf = requestAnimationFrame(kdbTick);
   const dt = Math.min(250, now - (B.last || now)); B.last = now;
-  if(B.over || B.paused || !B.started || document.hidden || document.querySelector('.kd-over, .scene-say')) return kdbDrawLive();
+  if(B.over || B.paused || B.wording || !B.started || document.hidden || document.querySelector('.kd-over, .scene-say')) return kdbDrawLive();
   B.t += dt;
   const P = kd().partner;
+  /* (4.75) a wrong answer's moment (the right answer shown; stunned, longer): over, the next sum */
+  if(B.reveal && B.t >= B.revealEnd){ B.reveal = false; B.stunEnd = 0; const sm = $('#kdbSum'); if(sm) sm.classList.remove('wrong'); kdbNextQ(); }
+  /* (4.74) the Ultra: time stopped, the enemies' timers stand still (burning and poison go on) */
+  const stopped = B.timeStop > 0;
+  if(stopped){ B.timeStop = Math.max(0, B.timeStop - dt); if(!B.timeStop){ kdbSay('Time moves again!'); kdbDraw(); } }
   for(const f of B.foes){
     if(f.down) continue;
-    /* burning (Fire) and poison (Grass), a tick a second */
-    if(f.burn && B.t >= f.burn.next){ f.burn.next += 1000; f.hp = Math.max(0, f.hp - f.burn.dps); kdbFloatOn(f, `−${f.burn.dps}`, 'burn'); if(B.t >= f.burn.until) f.burn = null; }
+    /* burning (Fire) and poison (Grass), a tick a second (on a special one, only where they can hurt it) */
+    if(f.burn && B.t >= f.burn.next){ f.burn.next += 1000; if(kdbGate(f, 'Fire', 'burn')){ f.hp = Math.max(0, f.hp - f.burn.dps); kdbFloatOn(f, `−${f.burn.dps}`, 'burn'); } if(B.t >= f.burn.until) f.burn = null; }
     f.poison = f.poison.filter(p=> p.until > B.t);
-    if(f.poison.length && B.t >= f.pNext){ f.pNext = B.t + 1000; const d = f.poison.reduce((a, p)=> a + p.dps, 0); f.hp = Math.max(0, f.hp - d); kdbFloatOn(f, `−${d}`, 'poison'); }
+    if(f.poison.length && B.t >= f.pNext){ f.pNext = B.t + 1000; if(kdbGate(f, 'Grass', 'poison')){ const d = f.poison.reduce((a, p)=> a + p.dps, 0); f.hp = Math.max(0, f.hp - d); kdbFloatOn(f, `−${d}`, 'poison'); } }
+    /* (4.74) a thick hide's burning and poison, from the blows that could not hurt it */
+    if(f.dots && f.dots.length){ f.dots = f.dots.filter(d=> d.until > B.t);
+      if(f.dots.length && B.t >= f.dNext){ f.dNext = B.t + 1000; const d = f.dots.reduce((a, x)=> a + x.dps, 0); f.hp = Math.max(0, f.hp - d); kdbFloatOn(f, `−${d}`, f.dots.some(x=> x.kind === 'burn') ? 'burn' : 'poison'); } }
+    /* (4.74) one that must be outlasted: its countdown runs (time stopped too); at nought, the mind control breaks */
+    if(f.special === 'count'){ f.count = Math.max(0, f.count - dt); if(!f.count){ f.hp = 0; kdbFloatOn(f, 'Free!', 'free'); kdbSay(`${escapeHtml(f.name)} is worn out: the mind control breaks!`); } }
     if(f.hp <= 0){ kdbCheckDown(B); if(B.over) return; continue; }
     /* its timer: stopped while stunned (Electric), slower while slowed (Water's currents, added up, to 60%) */
-    if(B.t < (f.stunUntil || 0)) continue;
+    if(stopped || B.t < (f.stunUntil || 0)) continue;
     f.slows = f.slows.filter(s=> s.until > B.t);
     const slow = Math.min(0.6, f.slows.reduce((a, s)=> a + s.pct, 0));
     f.acc += dt * (1 - slow);
@@ -896,8 +1227,8 @@ function kdbFoeAttack(f){
   const el = screenEl.querySelectorAll('.kdb-foe')[B.foes.indexOf(f)], pic = el && el.querySelector('.kdb-foepic');
   if(pic){ pic.classList.remove('strike'); void pic.offsetWidth; pic.classList.add('strike'); }
   B.chain = 0;                                                     // Armour piercing: the run is broken
-  const dg = kdFormTal(B, P, 'electric', 'dodge');
-  if(dg && B.t - B.lastGuard <= 400 + 200 * dg){
+  const dg = kdFormTal(B, P, 'electric', 'dodge'), win = (dg ? 400 + 200 * dg : 0) + (f.special === 'count' ? 500 : 0);
+  if(win && B.t - B.lastGuard <= win){
     B.lastGuard = -1e9;
     kdbFloat('Dodged!', 'me dodge'); kdbSay(`${escapeHtml(P.name)} dodges ${escapeHtml(f.name)}'s blow!`); kdbDraw(); return;
   }
@@ -933,21 +1264,40 @@ function kdbDraw(){
   const mx = kdMaxHp(P, K);
   const hp = (el, v, m)=>{ if(!el) return; const pct = Math.max(0, v * 100 / m); el.querySelector('b').style.width = pct + '%'; el.querySelector('em').textContent = `${v} / ${m}`; el.classList.toggle('low', pct <= 25); };
   screenEl.querySelectorAll('.kdb-foe').forEach((el, i)=>{
-    const f = B.foes[i]; hp(el.querySelector('.kdb-hp'), f.hp, f.maxHp);
+    const f = B.foes[i]; if(f.special !== 'count' || f.down) hp(el.querySelector('.kdb-hp'), f.hp, f.maxHp);
     el.classList.toggle('tgt', i === B.target && !f.down && kdbAlive(B).length > 1);
     el.classList.toggle('down', f.down);
   });
   hp($('#kdbMeHp'), P.hp, mx);
   const bl = $('#kdbBlocks'); if(bl) bl.innerHTML = B.blocks ? `<span class="kdb-shield" aria-label="${B.blocks} blocks">${kdShield()}<b>×${B.blocks}</b></span>` : '';
   const en = $('#kdbEnergy'); if(en){ en.querySelectorAll('i').forEach((p, i)=> p.classList.toggle('on', i < B.energy)); en.setAttribute('aria-label', `Energy ${B.energy} of ${KD_ENERGY_MAX}`); }
-  const sum = $('#kdbSum'); if(sum && B.q && !B.reveal) sum.innerHTML = kdQHtml(B.q, B.vals, B.cur) + (B.q.nb > 1 ? `<small class="kq-hint">✓ moves to the next blank</small>` : '');
+  const sum = $('#kdbSum');
+  /* (4.75) a wrong answer on show stays as it is (drawn again only if the page was: a change of form); putting one right,
+     it says so */
+  if(sum && B.q){
+    if(B.reveal){ if(!sum.querySelector('.shown')){ sum.innerHTML = kdbRevealHtml(B); sum.classList.add('wrong'); } }
+    else sum.innerHTML = B.q.skill === 'word' ? `<span class="kq-wording">The Ultra: working it out…</span>`
+                       : kdQHtml(B.q, B.vals, B.cur) + (B.q.nb > 1 ? `<small class="kq-hint">✓ moves to the next blank</small>` : '')
+                         + (B.fixing ? `<small class="kdb-fixlab">Correction: put it right${kdbFixLeft(B, P) ? ` (${kdbFixLeft(B, P)} more this battle)` : ''}</small>` : '');
+    sum.classList.toggle('fixing', !!B.fixing && !B.reveal);
+  }
   const can = kdbCan(B);
+  /* (4.74) "show how fully charged each move is with a bar sparkling liquid fill within the move" */
+  const fill = (b, cost, ok)=>{ const f = Math.max(0, Math.min(1, B.energy / cost)); b.style.setProperty('--f', f.toFixed(3)); b.classList.toggle('full', f >= 1); b.classList.toggle('ready', ok); b.disabled = !ok; };
   screenEl.querySelectorAll('[data-mv]').forEach(b=>{ const s = KD_SLOTS[+b.dataset.mv], ok = can && P.level >= s.at && B.energy >= s.cost;
-    b.classList.toggle('ready', ok); b.classList.toggle('locked', P.level < s.at); b.disabled = !ok;
-    b.querySelectorAll('.kdb-cost i').forEach((p, i)=> p.classList.toggle('on', i < B.energy)); });
-  const g = screenEl.querySelector('[data-act="guard"]'); if(g){ const ok = can && B.energy >= KD_GUARD; g.classList.toggle('ready', ok); g.disabled = !ok; g.querySelectorAll('.kdb-cost i').forEach((p, i)=> p.classList.toggle('on', i < B.energy)); }
-  const c = screenEl.querySelector('[data-act="change"]'); if(c){ const ok = can && B.energy >= KD_CHANGE && P.forms.length > 1; c.classList.toggle('ready', ok); c.disabled = !ok; c.querySelectorAll('.kdb-cost i').forEach((p, i)=> p.classList.toggle('on', i < B.energy)); }
-  const pb = screenEl.querySelector('[data-act="potion"]'); if(pb){ const mk = typeof kcLv === 'function' ? kcLv(K, 'market') : 0; pb.hidden = !K.potions; pb.disabled = !K.potions || P.hp >= mx || B.over; pb.querySelector('small').textContent = `${K.potions} left · heals ${35 + 5 * Math.max(1, mk)}%`; }
+    b.classList.toggle('locked', P.level < s.at); fill(b, s.cost, ok); });
+  const g = screenEl.querySelector('[data-act="guard"]'); if(g) fill(g, KD_GUARD, can && B.energy >= KD_GUARD);
+  const c = screenEl.querySelector('[data-act="change"]'); if(c) fill(c, KD_CHANGE, can && B.energy >= KD_CHANGE && P.forms.length > 1);
+  const u = screenEl.querySelector('[data-act="ultra"]');
+  if(u){
+    const open = kdbUltraOpen(P), used = !!B.ultraUsed;
+    u.classList.toggle('locked', !open); u.classList.toggle('used', used);
+    u.querySelector('b').textContent = used ? 'Reinvigorate' : 'Ultra';
+    u.querySelector('small').textContent = !open ? `Learnt at level ${KD_ULTRA_AT}` : used ? `${KD_REVIVE} energy: the Ultra again` : B.timeStop > 0 ? 'Time is stopped' : 'A problem sum: strikes, and time stops';
+    if(used) fill(u, KD_REVIVE, can && open && B.energy >= KD_REVIVE && !B.wording);
+    else { const ok = can && open && !B.timeStop && !B.wording && !B.ultraQ && !B.reveal; u.style.setProperty('--f', ok ? '1' : '0'); u.classList.remove('full'); u.classList.toggle('ready', ok); u.disabled = !ok; }
+  }
+  const pb = screenEl.querySelector('[data-act="potion"]'); if(pb){ const mk = typeof kcLv === 'function' ? kcLv(K, 'market') : 0; pb.hidden = !K.potions; pb.disabled = !K.potions || P.hp >= mx || B.over; pb.querySelector('small').textContent = `${K.potions} left · heals ${Math.min(80, 35 + 5 * Math.max(1, mk))}%`; }
   kdbDrawLive();
 }
 /* what moves every frame: the enemies' timers, their burning, poison, slows and stuns, the tide */
@@ -957,13 +1307,23 @@ function kdbDrawLive(){
   screenEl.querySelectorAll('.kdb-foe').forEach((el, i)=>{
     const f = B.foes[i], m = el.querySelector('.kdb-meter');
     if(m){ const frac = f.down ? 0 : Math.max(0, Math.min(1, f.acc / f.interval)); m.querySelector('b').style.width = (frac * 100).toFixed(1) + '%';
-      m.querySelector('em').textContent = f.down ? '' : Math.max(0, (f.interval - Math.max(0, f.acc)) / 1000).toFixed(1) + ' s'; m.classList.toggle('near', frac > 0.75); }
+      m.querySelector('em').textContent = f.down ? '' : Math.max(0, (f.interval - Math.max(0, f.acc)) / 1000).toFixed(1) + ' s'; m.classList.toggle('near', frac > 0.75);
+      m.classList.toggle('dodge', f.special === 'count' && !f.down && f.interval - f.acc <= 500 && !(B.timeStop > 0)); }
+    if(f.special === 'count'){ const c = el.querySelector('.kdb-spec em'); if(c) c.textContent = `${Math.ceil(f.count / 1000)} s`;
+      const h = el.querySelector('.kdb-hp'); if(h && !f.down){ h.querySelector('b').style.width = (f.count * 100 / f.countMax).toFixed(1) + '%'; h.querySelector('em').textContent = `${Math.ceil(f.count / 1000)} s to go`; h.classList.add('count'); } }
     const st = el.querySelector('.kdb-st');
     if(st){ const slow = Math.min(0.6, f.slows.filter(s=> s.until > B.t).reduce((a, s)=> a + s.pct, 0));
-      const html = [f.burn ? '<span class="burn">Burning</span>' : '', f.poison.length ? '<span class="poison">Poisoned</span>' : '',
+      const dots = (f.dots || []).filter(d=> d.until > B.t);
+      const html = [f.burn || dots.some(d=> d.kind === 'burn') ? '<span class="burn">Burning</span>' : '', f.poison.length || dots.some(d=> d.kind === 'poison') ? '<span class="poison">Poisoned</span>' : '',
         slow > 0 ? `<span class="slow">Slowed ${Math.round(slow * 100)}%</span>` : '', B.t < (f.stunUntil || 0) ? '<span class="stun">Stunned</span>' : ''].join('');
       if(st._h !== html){ st._h = html; st.innerHTML = html; } }
   });
+  const stun = kdbStunned(B), me = $('#kdbMePic');
+  if(me) me.classList.toggle('stunned', stun);
+  if(stun){ const lb = $('#kdbStunLab'); if(lb){ const t = `Stunned · ${Math.ceil((B.stunEnd - B.t) / 1000)} s`; if(lb.textContent !== t) lb.textContent = t; } }
+  const ts = $('#kdbStop'), ar = $('#kdbArena');
+  if(ts){ ts.hidden = !(B.timeStop > 0); if(B.timeStop > 0) ts.querySelector('b').textContent = `Time stopped · ${Math.ceil(B.timeStop / 1000)} s`; }
+  if(ar) ar.classList.toggle('stopped', B.timeStop > 0);
   const td = $('#kdbTide'), P = kd().partner, tide = kdTide(B, P);
   if(td){ td.hidden = !tide; if(tide){ td.className = 'kdb-tide ' + (tide.high ? 'high' : 'low'); td.textContent = `${tide.high ? 'High' : 'Low'} tide ×${tide.m} · ${Math.ceil(tide.left / 1000)} s`; } }
 }
@@ -986,15 +1346,23 @@ function kdbSay(html){
   s.innerHTML = html; s.classList.remove('on'); void s.offsetWidth; s.classList.add('on');
   clearTimeout(kdbSay._t); kdbSay._t = setTimeout(()=> s.classList.remove('on'), 2200);
 }
-/* WON: experience, the materials they leave, a talent point a level, a new form for a trial; and a day passes in the city */
-async function kdbWin(){
-  const B = ui.kdB, K = kd(), P = K.partner;
+/* WON: (4.75) first the freeing (kdFree); then experience, the materials they leave, a talent point a level, a new form
+   for a trial; and a day passes in the city */
+function kdbWin(){
+  const B = ui.kdB;
   if(B.over) return; B.over = true;
+  if(B.waitTimer){ clearInterval(B.waitTimer); B.waitTimer = null; }
+  setTimeout(()=>{ if(ui.kdB === B && ui.screen === 'kdBattle') kdFreeStart(B); }, 700);
+}
+const kdNames = xs=> xs.length > 1 ? xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1] : xs[0];
+/* what they leave, counted and kept: { html, buttons } for the page that says so */
+async function kdbRewards(B, F){
+  const K = kd(), P = K.partner;
   const got = { wood:0, stone:0, iron:0 };
   let xp = 0;
   B.foes.forEach(f=>{
-    xp += Math.round((8 + 4 * f.level) * (f.pack > 1 ? 0.7 : 1)) + (f.boss ? 30 : 0);
-    got[f.mat] += 1 + Math.floor(f.level / 3) + (f.boss ? 6 : 0);
+    xp += Math.round((8 + 4 * f.level) * (f.pack > 1 ? 0.7 : 1)) + (f.boss ? 30 : 0) + (f.special ? 12 : 0);
+    got[f.mat] += 1 + Math.floor(f.level / 3) + (f.boss ? 6 : 0) + (f.special ? 3 : 0);
     if(kqRand() < 0.3){ const other = ['wood', 'stone', 'iron'].filter(m=> m !== f.mat)[kqInt(0, 1)]; got[other]++; }
   });
   Object.keys(got).forEach(m=> K.mats[m] += got[m]);
@@ -1009,15 +1377,173 @@ async function kdbWin(){
   if(B.trial){ K.trials = (K.trials || 0) + 1; if(!P.forms.includes(form)) P.forms.push(form); P.form = form; }
   await saveProfile();
   const mats = Object.entries(got).filter(([, n])=> n).map(([m, n])=> `${typeof kcIcon === 'function' ? kcIcon(m) : ''}+${n} ${KD_MAT_NAME[m]}`).join(' · ');
-  const learnt = KD_SLOTS.filter(s=> ups.includes(s.at));
-  kdbEnd(`<div class="kd-h">${B.trial ? `${escapeHtml(B.trial.name)} is beaten!` : 'You won!'}</div>
+  const learnt = KD_SLOTS.filter(s=> ups.includes(s.at)), many = B.foes.length > 1;
+  const html = `
+    <p class="kd-sub2">In thanks, ${many ? 'they leave' : 'it leaves'} you:</p>
     <p class="kd-gain">${mats}</p>
     <p class="kd-sub2">+${xp} experience${ups.length ? ` · <b>${escapeHtml(P.name)} grew to level ${P.level}!</b> ${ups.length > 1 ? ups.length + ' talent points' : 'A talent point'} to spend.` : ''}</p>
     ${learnt.map(s=> `<p class="kd-sub2"><b>New move: ${KD_FORMS[P.form].moves[KD_SLOTS.indexOf(s)]}</b> (${s.label}, ${s.cost} energy${s.aoe ? ', hits every enemy' : ''}).</p>`).join('')}
     ${day && typeof kcDayHtml === 'function' ? kcDayHtml(day) : ''}
-    <p class="kd-sub2">${B.right} of ${B.asked} sums right${B.quick ? `, ${B.quick} of them in time` : ''}.</p>`,
-    B.trial ? [['On to the city', async ()=>{ go('kingdom'); await kdEvolve(form, was); if(ui.screen === 'kingdom') renderKingdom(); }]]
-            : [['Battle on', ()=> kdBattleStart(kdWild())], ['Back to the city', ()=> go('kingdom'), true]]);
+    ${B.asked ? `<p class="kd-sub2">${B.right} of ${B.asked} sums right${B.quick ? `, ${B.quick} of them in time` : ''}${F && F.mistakes ? `; ${F.mistakes === 1 ? 'the one missed' : 'the ' + F.mistakes + ' missed'} put right to free ${many ? 'them' : 'it'}` : ''}.</p>` : ''}`;
+  const buttons = B.trial ? [['On to the city', async ()=>{ go('kingdom'); await kdEvolve(form, was); if(ui.screen === 'kingdom') renderKingdom(); }]]
+                          : [['Battle on', ()=> kdBattleStart(kdWild())], ['Back to the city', ()=> go('kingdom'), true]];
+  return { html, buttons };
+}
+
+/* ============================================================
+   (4.75) FREEING THEM. The designer: "freeing a monster from mind control always involves a single question at minimum
+   using the catching interface. if no errors were made, grant a single question and a 100% chance to free from mind
+   control. however, if mistakes were made, retest all mistakes to free the monster and get its resources."
+   The catching page (33-catch.js): the night sky, the monster over a ball of white light, and in the ball, where the
+   square to write in is when catching, the sum. No mistakes in the battle: one new sum. Else every sum he missed (and did
+   not put right), each until it is right: a wrong one shows its answer and goes to the back, to come again. Each right
+   one sends its light into the ball; the last, and the ball is thrown — the catch's own throw, always caught. Then what
+   they leave. All of the pack is freed at once (the others beside the first, in its light). ui.kdF: the freeing.
+   ============================================================ */
+const KD_FREE = { reveal:1800, orbs:2 };
+function kdFreeStart(B){
+  const K = kd(), lead = B.foes.find(f=> f.boss) || B.foes[0];
+  const qs = B.mistakes.length ? B.mistakes.slice() : [kqNext(K, { fight:true })];
+  ui.kdF = { B, lead, queue:qs, need:qs.length, got:0, missed:0, mistakes:B.mistakes.length, s:null, reveal:false, busy:false, done:null };
+  document.body.classList.add('writing');
+  if(typeof quizSkyOn === 'function') quizSkyOn();
+  ui.catching = { enemy:{ species:lead.sp, level:lead.level, stage:0 }, tier:'kd', throws:0, carry:0, queue:[], phase:'spell', id:++_czId, kd:true };
+  czStage(ui.catching.enemy);
+  /* the rest of the pack, smaller, either side of it, in its light (their pictures in its frame: faded, whitened with it) */
+  const mon = document.getElementById('czMon');
+  if(mon) B.foes.filter(f=> f !== lead).slice(0, 2).forEach((f, i)=>{
+    const pic = monPortrait(f.sp, 140, { view:'front', bare:true }), side = i ? 'r' : 'l';
+    mon.insertAdjacentHTML('beforeend', `<div class="cz-sprite kdf-side ${side}">${pic}</div><div class="cz-white kdf-side ${side}">${pic}</div>`);
+  });
+  kdFreeNext(true);
+}
+/* the next sum (the first in the queue) */
+function kdFreeNext(first){
+  const F = ui.kdF; if(!F) return;
+  const q = F.queue[0];
+  F.s = { q, vals:Array.from({ length:q.nb }, ()=> ''), cur:0, at:performance.now() };
+  F.reveal = false;
+  if(first) kdFreeRender(); else kdFreeDraw();
+}
+function kdFreeRender(){
+  kdCss();
+  const F = ui.kdF, B = F.B;
+  $('#brandSub').textContent = 'Freeing';
+  if(F.done) return kdFreeDoneRender();
+  const names = kdNames(B.foes.map(f=> f.name));
+  screenEl.innerHTML = `
+    <div class="kdf">
+      <button class="cz-x" id="kdfX" aria-label="Leave them">✕</button>
+      <div class="kdf-head">
+        <div class="kdf-title">Free ${escapeHtml(names)}!</div>
+        <div class="kdf-sub">${F.mistakes ? `Put right the ${F.mistakes === 1 ? 'sum' : F.mistakes + ' sums'} you missed, and the mind control breaks.` : 'No mistakes in the battle: one sum breaks the mind control.'}</div>
+        <div class="kdf-pips" id="kdfPips" ${F.need > 1 ? '' : 'hidden'}></div>
+      </div>
+      <div class="kdf-play">
+        <div class="kdf-ball" id="czAt"><div class="kdf-sum" id="kdfSum"></div><div class="kdf-note" id="kdfNote"></div></div>
+        ${kdPadHtml('kdfPad')}
+      </div>
+    </div>`;
+  kdPadWire(screenEl, kdFreeKey);
+  $('#kdfSum').addEventListener('click', e=>{ const bl = e.target.closest('[data-bi]'); if(bl && F.s && !F.reveal){ F.s.cur = +bl.dataset.bi; kdFreeDraw(); } });
+  $('#kdfX').addEventListener('click', kdFreeAsk);
+  kdbKeysWire();
+  kdFreeDraw();
+}
+function kdFreeDraw(){
+  const F = ui.kdF; if(!F || F.done) return;
+  const sum = $('#kdfSum'), s = F.s; if(!sum || !s) return;
+  /* its size, to sit inside the ball */
+  const len = s.q.view.reduce((a, v)=> a + (v === KQ_BL ? 3 : String(v).length + 1), 0);
+  sum.style.setProperty('--fs', (len <= 9 ? 42 : len <= 12 ? 36 : len <= 15 ? 30 : 25) + 'px');
+  if(!F.reveal) sum.innerHTML = kdQHtml(s.q, s.vals, s.cur);
+  const pips = $('#kdfPips'); if(pips && F.need > 1) pips.innerHTML = Array.from({ length:F.need }, (_, i)=> `<i class="${i < F.got ? 'on' : ''}"></i>`).join('');
+}
+function kdFreeKey(k){
+  const F = ui.kdF;
+  if(!F || F.done || F.busy || F.reveal || !F.s || document.getElementById('kdfAsk')) return;
+  if(k === 'ok' && typeof czPrime === 'function') czPrime();          // the tap readies the throw's fanfare (an iPad: czPrime)
+  if(kdQKey(F.s, k) === 'submit') return kdFreeSubmit();
+  kdFreeDraw();
+}
+function kdFreeSubmit(){
+  const F = ui.kdF, K = kd(), s = F.s, ball = $('#czAt'), note = $('#kdfNote');
+  const r = kqAnswer(K, s.q, s.vals, performance.now() - s.at, 'free');
+  if(ball){ ball.classList.remove('right', 'wrong'); void ball.offsetWidth; ball.classList.add(r.ok ? 'right' : 'wrong'); }
+  if(r.ok){
+    F.got++; F.queue.shift();
+    if(ui.catching) ui.catching.carry = F.got * KD_FREE.orbs;
+    if(typeof czAbsorb === 'function') czAbsorb(KD_FREE.orbs);
+    if(note) note.textContent = '';
+    if(!F.queue.length){ kdFreeDraw(); return kdFreeThrow(); }
+    return kdFreeNext();
+  }
+  /* wrong: it shudders, the ball flushes; the answer shown, and the sum to the back of the queue, to come again */
+  F.missed++; F.reveal = true;
+  F.queue.push(F.queue.shift());
+  const Z = typeof CZ !== 'undefined' ? CZ : null;
+  if(Z){ czTween(650, t=>{ Z.mon.shake = 5 * (1 - t); }); if(Z.ball.el){ Z.ball.el.classList.add('kdf-miss'); setTimeout(()=>{ if(Z.ball.el) Z.ball.el.classList.remove('kdf-miss'); }, 900); } }
+  const sum = $('#kdfSum'); if(sum) sum.innerHTML = kdQHtml(s.q, s.vals, -1, s.q.sol);
+  if(note) note.textContent = F.queue.length > 1 ? 'Not right. It will come again.' : 'Not right. Again!';
+  setTimeout(()=>{ if(ui.kdF !== F || F.done) return; if(note) note.textContent = ''; kdFreeNext(); }, KD_FREE.reveal);
+}
+/* all right: the ball thrown, and caught (the catch's own throw, 33-catch.js); then what they leave */
+async function kdFreeThrow(){
+  const F = ui.kdF; if(!F) return;
+  F.busy = true;
+  if(ui.catching) ui.catching.phase = 'throw';
+  await new Promise(r=> setTimeout(r, 650 * (typeof CZ_SPEED !== 'undefined' ? CZ_SPEED.k : 1)));   // the last light in
+  if(ui.kdF !== F) return;
+  if(typeof czThrow === 'function' && typeof CZ !== 'undefined' && CZ) await czThrow('win');
+  if(ui.kdF !== F) return;
+  if(ui.catching) ui.catching.phase = 'caught';
+  F.done = await kdbRewards(F.B, F);
+  if(ui.kdF !== F) return;
+  kdFreeDoneRender();
+}
+function kdFreeDoneRender(){
+  const F = ui.kdF, B = F.B, freed = B.foes.map(f=> f.name);
+  document.body.classList.remove('cz-throwing');
+  if(typeof CZ !== 'undefined' && CZ){ CZ.mon.white = 0; CZ.mon.alpha = 1; CZ.mon.lift = 0; CZ.mon.sink = 0; CZ.ball.alpha = 0; CZ.sparkle = true; CZ.ring = null; }
+  screenEl.innerHTML = `
+    <div class="cz-caught kdf-done">
+      <div class="cz-msg">${B.trial ? `${escapeHtml(B.trial.name)} is free!` : `${escapeHtml(kdNames(freed))} ${freed.length > 1 ? 'are' : 'is'} free!`}</div>
+      <div class="kd-card kdf-card">${F.done.html}<div class="kd-row"></div></div>
+    </div>`;
+  const row = screenEl.querySelector('.kdf-card .kd-row');
+  F.done.buttons.forEach(([label, fn, alt])=>{ const b = document.createElement('button'); b.className = 'btn ' + (alt ? 'btn-ghost' : 'btn-primary'); b.textContent = label;
+    b.addEventListener('click', ()=>{ kdFreeEnd(); fn(); }); row.appendChild(b); });
+  setTimeout(()=>{ const b = row.querySelector('button'); if(b) try { b.focus({ preventScroll:true }); } catch(e){} }, 30);
+}
+/* the freeing over (or left): the night and the light go */
+function kdFreeEnd(){
+  ui.kdF = null;
+  const a = document.getElementById('kdfAsk'); if(a) a.remove();
+  if(ui.catching && ui.catching.kd && typeof catchTeardown === 'function') catchTeardown();
+  document.body.classList.remove('writing', 'cz-throwing');
+  if(typeof quizSkyOff === 'function') quizSkyOff();
+}
+/* ✕: asked first — nothing from this battle if they are left */
+function kdFreeAsk(){
+  const F = ui.kdF;
+  if(!F || F.busy || F.done || document.getElementById('kdfAsk')) return;
+  const ask = document.createElement('div');
+  ask.id = 'kdfAsk'; ask.className = 'cz-ask';
+  ask.innerHTML = `
+    <div class="cz-ask-box" role="dialog" aria-modal="true" aria-labelledby="kdfAskMsg">
+      <div class="cz-msg cz-ask-msg" id="kdfAskMsg">Leave them under the mind control?</div>
+      <div class="kdf-ask-sub">Nothing from this battle: no materials, no experience.</div>
+      <div class="cz-acts">
+        <button class="btn cz-btn" id="kdfGo">Leave</button>
+        <button class="btn cz-btn cz-keep" id="kdfStay">Keep going</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ask);
+  const close = ()=> ask.remove();
+  ask.addEventListener('click', e=>{ if(e.target === ask) close(); });
+  ask.querySelector('#kdfStay').addEventListener('click', close);
+  ask.querySelector('#kdfGo').addEventListener('click', async ()=>{ close(); kdFreeEnd(); await saveProfile(); go('kingdom'); });
+  try { ask.querySelector('#kdfStay').focus({ preventScroll:true }); } catch(e){}
 }
 async function kdbLose(){
   const B = ui.kdB, K = kd(), P = K.partner;
@@ -1027,7 +1553,7 @@ async function kdbLose(){
   await saveProfile();
   const me = $('#kdbMePic'); if(me) me.classList.add('down');
   kdbEnd(`<div class="kd-h">${escapeHtml(P.name)} is worn out</div>
-    <p>The steward's people carry you both back to the city. Nothing is lost but time.</p>
+    <p>My mind draws you both back to the city. Nothing is lost but time. <small>(Vesper)</small></p>
     <p class="kd-sub2">${B.right} of ${B.asked} sums right. Guard (1 energy) holds off a blow; quicker answers charge more energy before they strike.</p>`,
     [['Back to the city', ()=> go('kingdom')]]);
 }
@@ -1050,7 +1576,7 @@ async function kdBattleLeave(){
   go('kingdom');
 }
 /* leaving the battle screen any other way (the menu): its loop and its windows go with it */
-function kdTeardown(){ document.querySelectorAll('.kd-over').forEach(b=> b.remove()); if(ui.kdB && !ui.kdB.over) ui.kdB.over = true; }
+function kdTeardown(){ document.querySelectorAll('.kd-over').forEach(b=> b.remove()); if(ui.kdB && !ui.kdB.over) ui.kdB.over = true; if(ui.kdF) kdFreeEnd(); }
 
 /* ============================================================
    THE TALENTS (screen 'kdTalents')
@@ -1130,12 +1656,12 @@ function kdSumsRender(){
     <div class="kd-card kds">
       <div class="kd-h">What to ask</div>
       <div class="kds-mode">
-        <button class="kds-m ${adaptive ? 'on' : ''}" data-mode="adaptive"><b>Adaptive</b><small>The times tables, 2, 5 and 10 first, a table more as he knows them. Each fact moves on as he knows it: the answer, then the missing number, then two, three and four factors. Missed sums come back soon.</small></button>
+        <button class="kds-m ${adaptive ? 'on' : ''}" data-mode="adaptive"><b>Adaptive</b><small>The times tables, 2, 5 and 10 first, a table more as he knows them. Each fact moves on as he knows it: the answer, then the missing number, then two, three and four factors; then problem sums (the Ultra's, and the builders'), once five three-factor sums are known by heart. Missed sums come back soon, and are put right to free the monsters.</small></button>
         <button class="kds-m ${adaptive ? '' : 'on'}" data-mode="set"><b>A set you choose</b><small>Only what you pick below. Missed sums still come back soon.</small></button>
       </div>
       <div class="kds-set" ${adaptive ? 'hidden' : ''}>
         <div class="kds-row"><span>Times tables</span><div>${chips('t', set.tables || [])}</div></div>
-        <div class="kds-row"><span>Asked as</span><div>${KQ_FORM_ORDER.map(f=> `<button class="btn pill kds-chip ${forms.includes(f) ? 'sel' : ''}" data-fm="${f}">${KQ_FORMS[f].name} <small>${KQ_FORMS[f].eg}</small></button>`).join('')}</div></div>
+        <div class="kds-row"><span>Asked as</span><div>${KQ_FORM_SET.map(f=> `<button class="btn pill kds-chip ${forms.includes(f) ? 'sel' : ''}" data-fm="${f}">${KQ_FORMS[f].name} <small>${KQ_FORMS[f].eg}</small></button>`).join('')}</div></div>
         <details class="kds-more"><summary>Other sums, kept for later</summary>
           <div class="kds-row"><span>Division facts</span><div>${chips('d', set.divfacts || [])}</div></div>
           <div class="kds-row"><span>Addition</span><div>${ladder('add', set.add || 0)}</div></div>
@@ -1164,7 +1690,7 @@ function kdSumsRender(){
   const flip = (arr, v)=>{ const i = arr.indexOf(v); if(i >= 0) arr.splice(i, 1); else arr.push(v); arr.sort((a, b)=> a - b); };
   screenEl.querySelectorAll('[data-t]').forEach(b=> b.addEventListener('click', ()=>{ flip(set.tables || (set.tables = []), +b.dataset.t); save(); }));
   screenEl.querySelectorAll('[data-fm]').forEach(b=> b.addEventListener('click', ()=>{ const a = set.forms || (set.forms = []), f = b.dataset.fm, i = a.indexOf(f);
-    if(i >= 0) a.splice(i, 1); else a.push(f); a.sort((x, y)=> KQ_FORM_ORDER.indexOf(x) - KQ_FORM_ORDER.indexOf(y)); save(); }));
+    if(i >= 0) a.splice(i, 1); else a.push(f); a.sort((x, y)=> KQ_FORM_SET.indexOf(x) - KQ_FORM_SET.indexOf(y)); save(); }));
   screenEl.querySelectorAll('[data-d]').forEach(b=> b.addEventListener('click', ()=>{ flip(set.divfacts || (set.divfacts = []), +b.dataset.d); save(); }));
   screenEl.querySelectorAll('[data-add]').forEach(b=> b.addEventListener('click', ()=>{ set.add = +b.dataset.add; save(); }));
   screenEl.querySelectorAll('[data-sub]').forEach(b=> b.addEventListener('click', ()=>{ set.sub = +b.dataset.sub; save(); }));
@@ -1197,6 +1723,11 @@ function kdCss(){
   .kd-sub2{font-size:13px;font-weight:600;color:var(--ink-soft);margin:4px 0;}
   .kd-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:700;color:var(--ink-soft);margin:10px 0 20px;}
   .kd-meet{display:flex;gap:16px;align-items:center;flex-wrap:wrap;justify-content:center;}
+  .kd-sex{display:flex;gap:10px;justify-content:center;}
+  .kd-sexpick{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 10px 8px;border-radius:16px;border:3px solid transparent;background:rgba(255,255,255,.55);cursor:pointer;font:inherit;color:var(--ink);}
+  .kd-sexpick b{font:800 15px 'Baloo 2',cursive;}
+  .kd-sexpick.on{border-color:var(--jade, #3f8f6b);background:#fff;box-shadow:0 3px 0 rgba(0,0,0,.08);}
+  .kd-sexpick:focus-visible{outline:3px solid #ffd34d;outline-offset:2px;}
   .kd-name{display:flex;flex-direction:column;gap:8px;align-items:flex-start;min-width:220px;}
   .kd-name label{font:800 16px 'Baloo 2',cursive;}
   .kd-name input, .kd-overcard input{font:700 20px 'Nunito',sans-serif;padding:10px 12px;border:2px solid var(--line);border-radius:10px;background:#fff9ec;}
@@ -1220,8 +1751,12 @@ function kdCss(){
   .kdb-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
   .kdb-top .back-link{margin:0;}
   .kdb-energy{display:flex;align-items:center;gap:4px;margin-left:auto;}
-  .kdb-energy i{width:16px;height:22px;border-radius:5px;background:rgba(35,32,25,.13);box-shadow:inset 0 0 0 1px var(--line);transition:background .15s, transform .15s;}
-  .kdb-energy i.on{background:linear-gradient(#ffe48a, #f0b531);box-shadow:0 0 6px rgba(240,181,49,.65);transform:translateY(-1px);}
+  .kdb-energy i{width:21px;height:21px;display:block;transition:transform .15s;}
+  .kdb-energy i svg{width:100%;height:100%;display:block;fill:rgba(35,32,25,.12);stroke:rgba(35,32,25,.28);stroke-width:1;transition:fill .15s;}
+  .kdb-energy i.on svg{fill:var(--tc);stroke:rgba(255,255,255,.85);filter:drop-shadow(0 0 3px var(--tc));}
+  .kdb-energy i.on{transform:translateY(-1px) scale(1.08);}
+  .kdb-energy.convert i{animation:kdbConvert .7s ease-out both;animation-delay:calc(var(--i) * 55ms);}
+  @keyframes kdbConvert{0%{transform:rotateY(90deg) scale(.6);filter:brightness(2.4);}60%{transform:rotateY(-15deg) scale(1.2);}100%{transform:none;}}
   .kdb-energy span{font:800 12px 'Nunito',sans-serif;color:var(--ink-soft);margin-left:4px;}
   .kdb-tide{font:800 12.5px 'Nunito',sans-serif;border-radius:999px;padding:4px 10px;}
   .kdb-tide.low{background:#dbe7ef;color:#3c5d78;}
@@ -1236,7 +1771,11 @@ function kdCss(){
   .kdb-foe.tgt .kdb-tag{box-shadow:0 0 0 3px var(--cinnabar), 0 2px 6px rgba(0,0,0,.18);}
   .kdb-foe.tgt::after{content:'';position:absolute;left:50%;bottom:-4px;width:0;height:0;border:9px solid transparent;border-bottom-color:var(--cinnabar);transform:translateX(-50%);}
   .kdb-foe.down{pointer-events:none;}
-  .kdb-foe.down .kdb-foepic{transition:opacity .6s, transform .6s;opacity:0;transform:translateY(18px) scale(.9);}
+  .kdb-foe.down .kdb-foepic{transition:opacity 1.2s .5s, transform 1.2s .5s, filter .5s;opacity:0;transform:translateY(-14px) scale(.95);filter:drop-shadow(0 0 14px rgba(255,236,160,.95)) brightness(1.15) !important;}
+  /* (4.74) under mind control: a red glow, a slow throb; rescued, the glow goes gold and it leaves */
+  .kdb-foepic.mind{animation:kdbMind 2.4s ease-in-out infinite;}
+  @keyframes kdbMind{0%,100%{filter:drop-shadow(0 0 5px rgba(214,30,50,.85)) drop-shadow(0 6px 4px rgba(0,0,0,.25)) saturate(1.15);}50%{filter:drop-shadow(0 0 14px rgba(214,30,50,.95)) drop-shadow(0 6px 4px rgba(0,0,0,.25)) saturate(1.3) hue-rotate(-8deg);}}
+  .kdb-foe.down .kdb-foepic.mind{animation:none;}
   .kdb-foe.down .kdb-tag{opacity:.45;}
   .kdb-me{position:absolute;left:3%;bottom:8px;width:62%;display:flex;align-items:flex-end;gap:8px;pointer-events:none;}
   .kdb-tag{background:rgba(244,236,216,.94);border-radius:12px;padding:6px 10px;font-size:13px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.18);min-width:190px;text-align:left;}
@@ -1312,18 +1851,107 @@ function kdCss(){
     background:var(--paper-2);color:var(--ink-soft);box-shadow:inset 0 0 0 1px var(--line);font:inherit;transition:background .15s, color .15s, transform .08s;}
   .kdb-move b{font:800 16px/1.1 'Baloo 2',cursive;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .kdb-move small{font-size:11px;font-weight:700;opacity:.85;}
-  .kdb-cost{display:flex;gap:3px;}
-  .kdb-cost i{width:8px;height:11px;border-radius:3px;background:rgba(35,32,25,.15);}
-  .kdb-cost i.on{background:#f0b531;}
+  /* (4.74) each move fills with its form's energy, a liquid that sparkles when it is full */
+  .kdb-move{position:relative;overflow:hidden;isolation:isolate;}
+  .kdb-liq{position:absolute;left:0;right:0;bottom:0;height:calc(var(--f, 0) * 100%);z-index:-1;pointer-events:none;
+    background:linear-gradient(to top, rgba(0,0,0,.18), rgba(255,255,255,.12)), var(--tc);transition:height .32s cubic-bezier(.3,1.4,.5,1);}
+  .kdb-liq::before{content:'';position:absolute;left:0;right:0;top:-5px;height:10px;background:radial-gradient(ellipse 9px 5px at 50% 100%, var(--tc) 98%, transparent 100%) 0 0 / 16px 10px repeat-x;
+    animation:kdbWave 1.3s linear infinite;opacity:.95;}
+  .kdb-move:not(.full) .kdb-liq{opacity:.78;}
+  .kdb-liq i{position:absolute;inset:0;}
+  .kdb-move.full .kdb-liq i{background:radial-gradient(circle at 18% 30%, #fff 0 1.4px, transparent 2px), radial-gradient(circle at 62% 70%, #fff 0 1.2px, transparent 2px),
+    radial-gradient(circle at 84% 24%, #fff 0 1.6px, transparent 2.2px), radial-gradient(circle at 38% 82%, #fff 0 1px, transparent 1.8px);animation:kdbSparkle 1.1s ease-in-out infinite alternate;}
+  @keyframes kdbWave{to{background-position:16px 0;}}
+  @keyframes kdbSparkle{0%{opacity:.25;transform:translateY(2px);}100%{opacity:1;transform:translateY(-2px);}}
+  .kdb-cost{display:flex;align-items:center;gap:2px;font:800 12px 'Nunito',sans-serif;}
+  .kdb-cost svg{width:13px;height:13px;fill:var(--tc);stroke:rgba(255,255,255,.6);stroke-width:1;}
+  .kdb-cost em{font-style:normal;}
   .kdb-move.locked{opacity:.55;}
-  .kdb-move.ready{background:var(--cinnabar);color:#fff8ea;box-shadow:0 4px 0 var(--cinnabar-dark);}
-  .kdb-move.ready.s1{background:#b4561f;box-shadow:0 4px 0 #84390f;}
-  .kdb-move.ready.s2{background:#6a3fb0;box-shadow:0 4px 0 #46267d;}
-  .kdb-move.ready.s3{background:#9b1f4e;box-shadow:0 4px 0 #6a1133;}
-  .kdb-move.ready.guard{background:#2f6f9e;box-shadow:0 4px 0 #1d4a6c;}
-  .kdb-move.ready.change{background:#3f7d5a;box-shadow:0 4px 0 #285539;}
-  .kdb-move.ready .kdb-cost i{background:#ffe48a;}
+  .kdb-move.ready{color:#fffaf0;text-shadow:0 1px 1px rgba(0,0,0,.45);box-shadow:0 4px 0 rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.25);}
+  .kdb-move.ready .kdb-cost svg{fill:#fffaf0;stroke:none;}
   .kdb-move.ready:active{transform:translateY(2px);}
+  .kdb-move.ultra{grid-column:1 / -1;flex-direction:row;align-items:center;gap:10px;background:linear-gradient(90deg, #2c2450, #4a3a8f);color:#d8d0ff;}
+  .kdb-move.ultra.ready{background:linear-gradient(90deg, #3b2f86, #7a5cff);color:#fff;box-shadow:0 4px 0 #241c55, 0 0 14px rgba(122,92,255,.5);}
+  .kdb-move.ultra.used{opacity:1;background:linear-gradient(90deg, #3a3350, #5a4f7a);color:#e9e4ff;}
+  .kdb-move.ultra.used.full{background:linear-gradient(90deg, #3b2f86, #7a5cff);color:#fff;}
+  .kdb-move.ultra.locked{opacity:.55;}
+  /* (4.74) the special enemies: what beats each, on its card; the moment to dodge; its countdown for a health bar */
+  .kdb-spec{display:flex;align-items:center;gap:4px;margin-top:4px;font-size:11px;font-weight:800;color:#5a3b8f;background:#efe7ff;border-radius:8px;padding:2px 7px 2px 3px;line-height:1.25;}
+  .kdb-spec.count{color:#8a3a12;background:#ffe9d6;} .kdb-spec.ultra{color:#3b2f86;background:#e6e0ff;} .kdb-spec.status{color:#6b3b12;background:#fff0dc;}
+  .kdb-spec em{font-style:normal;font-variant-numeric:tabular-nums;}
+  .kdb-lock{flex:0 0 auto;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--tc, #7a5cff);}
+  .kdb-lock svg{width:12px;height:12px;fill:#fff;}
+  .kdb-lock.ultra{background:#5a46c8;} .kdb-lock.count{background:#c8642a;}
+  .kdb-foepic.special{filter:drop-shadow(0 0 8px rgba(122,92,255,.55));}
+  .kdb-hp.count b{background:#c8642a !important;}
+  .kdb-meter.dodge b{background:#ffd21f !important;animation:kdbPulse .12s ease-in-out infinite alternate;}
+  .kdb-float.foe.immune{color:#efe9ff;font-size:17px;-webkit-text-stroke:1px #4a3a8f;}
+  .kdb-float.foe.free{color:#fff7a8;font-size:22px;-webkit-text-stroke:1px #8a6a00;}
+  .kdb-stop{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:4;display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;
+    background:rgba(32,24,80,.86);color:#e8e2ff;font:800 14px 'Nunito',sans-serif;box-shadow:0 0 16px rgba(122,92,255,.7);}
+  .kdb-stop svg{width:18px;height:18px;fill:none;stroke:#c9bfff;stroke-width:2;stroke-linecap:round;}
+  .kdb-stop[hidden]{display:none;}
+  .kdb-arena.stopped .kdb-foepic{filter:grayscale(1) brightness(1.05) sepia(.35) hue-rotate(195deg) drop-shadow(0 0 8px rgba(122,92,255,.8));}
+  .kdb-arena.stopped .kdb-meter b{background:#8f86c8 !important;animation:none !important;}
+  .kdb-arena.stopped::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 40%, transparent 40%, rgba(70,50,160,.25));pointer-events:none;}
+  .kq-wording{font:700 18px 'Nunito',sans-serif;color:var(--ink-soft);}
+  /* (4.74) a problem sum, worked out */
+  .kqw-over{z-index:950;}
+  .kqw-card{max-width:760px;gap:8px;}
+  .kqw-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;}
+  .kqw-head b{font:800 20px/1.1 'Baloo 2',cursive;}
+  .kqw-head small{font-size:12.5px;font-weight:700;color:var(--ink-soft);}
+  .kqw-top{display:flex;gap:12px;align-items:center;}
+  .kqw-pics{display:flex;gap:8px;flex:0 0 auto;}
+  .kqw-fig{margin:0;display:flex;flex-direction:column;align-items:center;gap:0;width:96px;text-align:center;font-size:11.5px;font-weight:700;color:var(--ink-soft);line-height:1.2;}
+  .kqw-fig .mon-portrait{background:none !important;image-rendering:pixelated;}
+  .kqw-fig b{display:block;font:800 15px 'Baloo 2',cursive;color:var(--ink);}
+  .kqw-drawn{display:block;margin:4px auto;}
+  .kqw-basket{position:relative;display:block;margin:4px auto;} .kqw-basket svg{display:block;} .kqw-basket img{position:absolute;image-rendering:pixelated;}
+  .kqw-text{flex:1;min-width:0;font:600 18.5px/1.45 'Nunito',sans-serif;}
+  .kqw-text p{margin:0 0 4px;}
+  .kqw-ask{font-weight:800;color:var(--ink);}
+  .kqw-picks{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font:700 15px 'Nunito',sans-serif;}
+  .kqw-pick{font:800 17px 'Baloo 2',cursive;padding:6px 16px;border-radius:999px;border:0;cursor:pointer;background:var(--paper-2);box-shadow:inset 0 0 0 2px var(--line);color:var(--ink);}
+  .kqw-pick.on{background:var(--sky);color:#fff;box-shadow:0 3px 0 rgba(0,0,0,.2);}
+  .kqw-picks.need .kqw-pick{animation:kqwNeed .8s ease-in-out infinite alternate;}
+  @keyframes kqwNeed{to{box-shadow:inset 0 0 0 3px var(--cinnabar);}}
+  .kqw-work{background:#fffdf6;border:2px solid var(--line);border-radius:12px;padding:6px 8px;min-height:64px;max-height:190px;overflow:auto;display:flex;flex-direction:column;gap:4px;}
+  .kqw-empty{font:600 14px 'Nunito',sans-serif;color:var(--ink-soft);padding:12px 4px;}
+  .kqw-row{display:flex;align-items:center;gap:8px;border-bottom:1px dashed var(--line);padding:2px 0;}
+  .kqw-row:last-child{border-bottom:0;}
+  .kqw-row.bad{background:#fdece8;border-radius:8px;}
+  .kqw-n{font:700 12px 'Nunito',sans-serif;color:var(--ink-soft);width:18px;text-align:right;}
+  .kqw-eq{flex:1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;font:800 24px/1.2 'Baloo 2',cursive;font-variant-numeric:tabular-nums;}
+  .kqw-num{font:inherit;color:var(--ink);background:none;border:0;padding:0 3px;border-radius:8px;cursor:pointer;}
+  .kqw-op{color:var(--ink-soft);}
+  .kqw-x{border:0;background:none;color:var(--ink-soft);font:800 20px/1 'Nunito',sans-serif;cursor:pointer;padding:4px 8px;}
+  .kqw-mark{font-style:normal;font:800 20px 'Nunito',sans-serif;margin-left:6px;}
+  .kqw-mark.ok{color:var(--jade);} .kqw-mark.no{color:var(--cinnabar);}
+  .kqw-over.choosing .kqw-num{background:#fff0c8;box-shadow:inset 0 0 0 2px var(--gold);animation:kqwChoose 1s ease-in-out infinite alternate;}
+  @keyframes kqwChoose{to{background:#ffe08a;}}
+  .kqw-num.chosen{background:var(--sky) !important;color:#fff !important;animation:none !important;}
+  .kqw-line{min-height:48px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 10px;border-radius:12px;border:2px dashed var(--line);
+    font:800 28px/1.2 'Baloo 2',cursive;font-variant-numeric:tabular-nums;background:#fff;}
+  .kqw-line.on{border-color:var(--sky);}
+  .kqw-line .kqw-num{cursor:default;}
+  .kqw-ph{font:600 15px 'Nunito',sans-serif;color:var(--ink-soft);}
+  .kqw-say{font:700 14px/1.35 'Nunito',sans-serif;color:var(--ink-soft);min-height:19px;}
+  .kqw-say b{color:var(--ink);} .kqw-yes{color:var(--jade-dark) !important;} .kqw-no{color:var(--cinnabar-dark) !important;}
+  .kqw-pad{display:grid;grid-template-columns:repeat(4, 1fr);gap:7px;}
+  .kqw-key{height:54px;border:0;border-radius:12px;background:var(--paper-2);box-shadow:0 3px 0 var(--paper-3), inset 0 0 0 1px var(--line);
+    font:800 26px/1 'Baloo 2',cursive;color:var(--ink);cursor:pointer;touch-action:manipulation;}
+  .kqw-key.op{color:#2f6f9e;background:#e8f1f8;}
+  .kqw-key.del{color:var(--ink-soft);font-size:22px;}
+  .kqw-key.send{grid-column:span 2;background:var(--sky);color:#fff;box-shadow:0 3px 0 rgba(0,0,0,.2);font-size:21px;}
+  .kqw-key.final{grid-column:1 / -1;background:var(--jade);color:#fff;box-shadow:0 3px 0 var(--jade-dark);font-size:21px;}
+  .kqw-over.choosing .kqw-key:not(.final){opacity:.4;}
+  .kqw-over.choosing .kqw-key.final{background:var(--paper-2);color:var(--ink);box-shadow:inset 0 0 0 2px var(--line);}
+  .kqw-over.choosing .kqw-key.final::after{content:' (back to my working)';font:700 13px 'Nunito',sans-serif;}
+  .kqw-go{grid-column:1 / -1;font-size:19px;}
+  .kqw-card.right{box-shadow:0 0 0 4px var(--jade), 0 12px 34px rgba(0,0,0,.45);}
+  .kqw-card.wrong{box-shadow:0 0 0 4px var(--cinnabar), 0 12px 34px rgba(0,0,0,.45);}
+  @media (max-width:560px){ .kqw-top{flex-direction:column;align-items:stretch;} .kqw-pics{justify-content:center;} .kqw-text{font-size:16px;} .kqw-key{height:46px;font-size:22px;} .kqw-eq{font-size:20px;} .kqw-line{font-size:22px;} }
   .kdb-move:disabled{cursor:default;}
   .kdb-move.potion{grid-column:1 / -1;flex-direction:row;align-items:center;gap:8px;padding:7px 12px;}
   .kdb-move[hidden]{display:none;}
@@ -1342,9 +1970,10 @@ function kdCss(){
     .kdb-arena.n3 .kdb-tag .type-badge{display:none;}
     .kdb-mepic .kd-mon{width:210px !important;height:210px !important;}
     .kdb-mepic{margin:0 -44px -26px -40px;}
-    .kdb-cost i{width:5px;height:9px;border-radius:2px;}
-    .kdb-cost{gap:2px;}
-    .kdb-energy i{width:11px;height:18px;}
+    .kdb-cost{gap:1px;font-size:11px;}
+    .kdb-cost svg{width:11px;height:11px;}
+    .kdb-energy i{width:15px;height:15px;}
+    .kdb-move.ultra small{display:inline;}
     .kdb-energy span{display:none;}
     .kdb-tag{min-width:0;font-size:12px;padding:5px 8px;}
     .kdb-ctrl{grid-template-columns:minmax(0,1fr);}
@@ -1399,6 +2028,61 @@ function kdCss(){
   .rift-portal.kd-awake{filter:hue-rotate(-28deg) saturate(1.5) brightness(1.08) drop-shadow(0 0 10px rgba(255,205,110,.7));}
   .rift-portal.kd-awake .rp-swirl{opacity:.85 !important;animation-duration:10s !important;}
   .rift-portal.kd-awake .rp-sleep{animation:none !important;opacity:1 !important;}
+  /* (4.75) a wrong answer: an energy lost, or stunned; Correction's second try */
+  .kdb-float.energy.lose{color:#ffd0c8;-webkit-text-stroke:1px #9e2f27;font-size:24px;}
+  .kdb-float.fix{left:50%;bottom:6px;transform:translateX(-50%);color:#fff3c4;-webkit-text-stroke:1px #a5741c;font-size:22px;}
+  .kdb-float.me.stunned{color:#fff3a0;-webkit-text-stroke:1px #7a5a00;bottom:52%;}
+  .kdb-mepic.stunned{animation:kdbDaze 1.1s ease-in-out infinite;filter:drop-shadow(0 6px 4px rgba(0,0,0,.25)) saturate(.55) brightness(.92);}
+  @keyframes kdbDaze{0%,100%{transform:rotate(-4deg) translateX(-4px);}50%{transform:rotate(4deg) translateX(4px);}}
+  .kdb-mepic{position:relative;}
+  .kdb-mepic.stunned::after{content:'';position:absolute;left:50%;top:18%;width:96px;height:30px;margin-left:-48px;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle at 12% 50%, #ffe36b 0 5px, transparent 6px), radial-gradient(circle at 50% 18%, #fff4b0 0 4px, transparent 5px), radial-gradient(circle at 88% 50%, #ffe36b 0 5px, transparent 6px);
+    animation:kdbStars 1.1s linear infinite;}
+  @keyframes kdbStars{to{transform:rotate(360deg);}}
+  .kdb-stunlab{position:absolute;left:12px;top:4px;font:800 12px 'Nunito',sans-serif;color:var(--cinnabar-dark);}
+  .kdb-fixlab{position:absolute;left:12px;top:4px;font:800 12px 'Nunito',sans-serif;color:#9a6a10;}
+  .kdb-sum.fixing{border-color:var(--gold);background:#fff6dc;}
+  /* (4.75) the freeing: the catching page's night (33-catch.js), and in the ball of light, the sum */
+  .kdf{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;color:#fff;padding-bottom:12px;}
+  .kdf .cz-x{position:fixed;}
+  .kdf-head{text-align:center;max-width:560px;padding:0 8px;}
+  .kdf-title{font:800 25px/1.15 'Baloo 2',cursive;color:#fff;text-shadow:0 0 16px rgba(200,225,255,.85), 0 2px 8px rgba(0,0,0,.6);}
+  .kdf-sub{font:700 14px/1.35 'Nunito',sans-serif;color:#dcd6f4;margin-top:3px;text-shadow:0 1px 6px rgba(0,0,0,.9);}
+  .kdf-pips{display:flex;gap:7px;justify-content:center;margin-top:9px;}
+  .kdf-pips[hidden]{display:none;}
+  .kdf-pips i{width:13px;height:13px;border-radius:50%;border:1.5px solid rgba(230,240,255,.6);background:rgba(8,10,28,.35);transition:background .3s, box-shadow .3s;}
+  .kdf-pips i.on{background:#fff;box-shadow:0 0 10px rgba(220,235,255,.95);}
+  .kdf-play{display:flex;flex-direction:column;align-items:center;gap:18px;}
+  .kdf-ball{--d:min(330px, calc(100vw - 48px), calc(100vh - var(--cz-top) - 400px));width:var(--d);height:var(--d);min-width:180px;min-height:180px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;flex:0 0 auto;}
+  .kdf-sum{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;max-width:86%;font:800 var(--fs, 40px)/1.12 'Baloo 2',cursive;
+    color:#29244f;font-variant-numeric:tabular-nums;text-shadow:0 0 10px rgba(255,255,255,.9);}
+  .kdf-sum .kq-t.op{color:#6c6795;}
+  .kdf-sum .kq-bl{border-bottom-color:#29244f;color:#2c5cb0;}
+  .kdf-sum .kq-bl.cur{background:rgba(255,232,160,.6);border-bottom-color:var(--cinnabar);}
+  .kdf-sum .kq-bl.shown{color:var(--jade-dark);}
+  .kdf-note{min-height:1.25em;margin-top:8px;max-width:76%;text-align:center;font:800 15px/1.2 'Nunito',sans-serif;color:#8a2f28;}
+  .kdf-ball.right .kdf-sum{animation:kdfRight .5s ease-out;}
+  @keyframes kdfRight{40%{transform:scale(1.08);}}
+  .kdf-ball.wrong .kdf-sum{animation:kdbWrong .35s;}
+  .cz-ball.kdf-miss{background:radial-gradient(circle at 46% 42%, #fff 0%, #fff3f1 56%, #ffdcd6 80%, #ffc4ba 100%) !important;}
+  .kdf .kdb-pad{width:min(300px, calc(100vw - 48px));}
+  .kdf .kdb-key{height:58px;background:rgba(8,10,28,.42);color:#fff;box-shadow:inset 0 0 0 1.5px rgba(230,240,255,.5), 0 0 12px rgba(200,225,255,.14);text-shadow:0 0 10px rgba(200,225,255,.7);}
+  .kdf .kdb-key.del{color:#dcd6f4;}
+  .kdf .kdb-key.ok{background:rgba(240,246,255,.16);box-shadow:inset 0 0 0 1.5px #eef4ff, 0 0 16px rgba(225,238,255,.45);}
+  .kdf .kdb-key.hit{animation:kdfKey .14s;}
+  @keyframes kdfKey{50%{transform:translateY(2px);background:rgba(240,246,255,.24);}}
+  @media (min-aspect-ratio:1/1){
+    .kdf-play{flex-direction:row;gap:44px;}
+    .kdf-ball{--d:min(330px, calc(100vh - var(--cz-top) - 150px));}
+  }
+  /* the rest of a pack, either side of the first, in its light */
+  .cz-mon .cz-sprite.kdf-side, .cz-mon .cz-white.kdf-side{inset:auto;top:34%;width:58%;height:58%;}
+  .cz-mon .kdf-side.l{left:-47%;}
+  .cz-mon .kdf-side.r{right:-47%;}
+  .kdf-done{width:100%;margin-top:clamp(18px, 5vh, 60px);}
+  .kdf-card{max-width:520px;width:100%;box-shadow:0 12px 34px rgba(0,0,0,.45);background:var(--paper);color:var(--ink);display:flex;flex-direction:column;gap:6px;text-align:left;}
+  .kdf-ask-sub{font:700 14px/1.35 'Nunito',sans-serif;color:#dcd6f4;text-align:center;margin-top:-8px;}
   `;
   document.head.appendChild(st);
 }

@@ -364,8 +364,9 @@ function czFrame(now, dt){
   const top = czTop(H), drop = czDrop(top);
   if(Z.top !== top){ Z.top = top; document.body.style.setProperty('--cz-top', (top + drop) + 'px'); }
   const px = Math.round(Math.min(240, top * 0.84));
-  /* the ball: where the square you write in is (while there is one to see) */
-  const box = ui.screen === 'quiz' ? document.getElementById('qbox-0') : null;
+  /* the ball: where the square you write in is (while there is one to see) — (4.75) or, freeing the kingdom's monsters,
+     where the sum is (#czAt, 45-kingdom.js) */
+  const box = ui.screen === 'quiz' ? document.getElementById('qbox-0') : document.getElementById('czAt');
   if(box){ const r = box.getBoundingClientRect(); if(r.width > 40 && r.height > 40){ Z.ball.cx = r.left + r.width / 2; Z.ball.cy = r.top + r.height / 2; Z.ball.base = r.width; if(!Z.ball.seen){ Z.ball.seen = true; if(Z.ball.alpha === 0 && ui.catching && ui.catching.phase === 'spell') czReform(); } } }
   if(!Z.ball.base){ Z.ball.cx = W / 2; Z.ball.cy = H * 0.68; Z.ball.base = Math.min(W - 40, H * 0.4); }
   const M = Z.mon;
