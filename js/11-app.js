@@ -677,16 +677,10 @@ function renderSound(){
     });
     musS.addEventListener('change', async ()=>{ await saveProfile(); });
   }
+  /* (4.83) the same way the words are spoken (speakWord, 03-quiz.js): what this tests is what the quiz does */
   $('#testVoiceBtn').addEventListener('click', ()=>{
-    try{
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance('你好');
-      const v = pickMandarinVoice();
-      if(v) u.voice = v;
-      u.lang = 'zh-CN';
-      u.volume = state.settings.volume;
-      speechSynthesis.speak(u);
-    }catch(e){ toast('Voice not available here.'); }
+    if(typeof speechOn === 'function' && !speechOn()) return toast('Voice not available here.');
+    speakWord('你好');
   });
   const cav = $('#changeAvatarBtn');
   if(cav) cav.addEventListener('click', ()=> goForward('avatarPick', 'sound'));

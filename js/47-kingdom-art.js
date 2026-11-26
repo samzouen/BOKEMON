@@ -514,9 +514,9 @@ function roundTower(g, x, y, r, h, roof, opts){
   for(let k = 1; k < h / 6; k++){ g.beginPath(); g.ellipse(x, y - k * 6, r, r * 0.35, 0, 0.15, Math.PI - 0.15); g.stroke(); }
   if(opts.slits) for(let k = 0; k < opts.slits; k++){ g.fillStyle = '#2d241c'; g.fillRect(x - 1 + (k % 2 ? r * 0.3 : -r * 0.25), y - h * (0.35 + 0.3 * k), 2, 6); }
   if(opts.band){ g.strokeStyle = opts.band; g.lineWidth = 2.4; g.beginPath(); g.ellipse(x, y - h + 5, r, r * 0.35, 0, 0.05, Math.PI - 0.05); g.stroke(); }
-  if(roof === 'dome'){ ell(g, x, y - h, r, r * 0.35, '#d9d2c2'); const top = dome(g, x, y - h + 1, r + 1.5, opts.domeC || GOLD, opts.tip); if(opts.flag) flag(g, x, top + 2, opts.flag, 10); return; }
+  if(roof === 'dome'){ ell(g, x, y - h, r, r * 0.35, '#d9d2c2'); const top = dome(g, x, y - h + 0.4, r + 1.5, opts.domeC || GOLD, opts.tip, (r + 1.5) * 0.35); if(opts.flag) flag(g, x, top + 2, opts.flag, 10); return; }   // (4.80) on its top, not sunk in it
   if(roof === 'cone'){
-    const top = y - h - r * 1.7;
+    const top = y - h - r * (opts.cone || 1.7);   // (4.80) `cone`: a spire's height to its radius
     g.fillStyle = lin(g, x - r, 0, x + r, 0, [[0, opts.roofL || '#6f8fd0'], [0.5, opts.roof || '#4a6aa8'], [1, opts.roofD || '#2f4778']]);
     g.beginPath(); g.moveTo(x - r - 2.5, y - h + 1); g.lineTo(x, top); g.lineTo(x + r + 2.5, y - h + 1); g.ellipse(x, y - h + 1, r + 2.5, (r + 2.5) * 0.35, 0, 0, Math.PI); g.closePath(); g.fill();
     g.strokeStyle = 'rgba(20,30,60,.35)'; g.lineWidth = 0.7; for(let k = 1; k < 4; k++){ g.beginPath(); g.moveTo(x - (r + 2.5) * (1 - k / 4), y - h + 1 - (y - h + 1 - top) * k / 4); g.lineTo(x + (r + 2.5) * (1 - k / 4), y - h + 1 - (y - h + 1 - top) * k / 4); g.stroke(); }
@@ -540,11 +540,17 @@ function pyramid(g, cx, yb, w, h, c){
   g.fillStyle = 'rgba(255,255,255,.13)'; g.beginPath(); g.moveTo(cx - w / 2 - 3, yb); g.lineTo(cx, yb - h); g.lineTo(cx - w * 0.1, yb); g.closePath(); g.fill();
 }
 /* a dome, ribbed, its finial */
-function dome(g, cx, yb, r, c, tip){
+function dome(g, cx, yb, r, c, tip, ry){
+  /* (4.80) `ry`: a dome on a round top (a tower's, a drum's) — its foot runs round the near half of that top's ellipse,
+     so the dome sits on it (the designer: "the domes being below the flat tops of the elements below them": its foot
+     drawn straight across the middle of the top left the top's near half showing in front of it, the dome sunk in it) */
+  ry = ry || 0;
   g.fillStyle = lin(g, cx - r, 0, cx + r, 0, [[0, c[0]], [0.5, c[1]], [1, c[2]]]);
-  g.beginPath(); g.moveTo(cx - r, yb); g.bezierCurveTo(cx - r, yb - r * 1.3, cx + r, yb - r * 1.3, cx + r, yb); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(cx - r, yb); g.bezierCurveTo(cx - r, yb - r * 1.3, cx + r, yb - r * 1.3, cx + r, yb);
+  if(ry) g.ellipse(cx, yb, r, ry, 0, 0, Math.PI); g.closePath(); g.fill();
   g.strokeStyle = 'rgba(0,0,0,.16)'; g.lineWidth = 0.7;
-  for(let k = -2; k <= 2; k++){ g.beginPath(); g.moveTo(cx + k * r * 0.38, yb); g.quadraticCurveTo(cx + k * r * 0.24, yb - r * 0.8, cx, yb - r * 0.97); g.stroke(); }
+  for(let k = -2; k <= 2; k++){ const u = k * 0.38, by = yb + ry * Math.sqrt(Math.max(0, 1 - u * u)); g.beginPath(); g.moveTo(cx + k * r * 0.38, by); g.quadraticCurveTo(cx + k * r * 0.24, yb - r * 0.8, cx, yb - r * 0.97); g.stroke(); }
+  if(ry){ g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = 0.8; g.beginPath(); g.ellipse(cx, yb, r, ry, 0, 0.08, Math.PI - 0.08); g.stroke(); }
   ell(g, cx - r * 0.38, yb - r * 0.62, r * 0.2, r * 0.13, 'rgba(255,255,255,.4)', -0.5);
   const t = tip || GOLD[1]; g.fillStyle = t; g.fillRect(cx - 0.8, yb - r * 0.97 - 9, 1.6, 9); ell(g, cx, yb - r * 0.97 - 9.5, 2.2, 2.2, t);
   return yb - r * 0.97 - 11;

@@ -172,7 +172,12 @@ async function stEraseBooms(x, y, r, plan, o, wait, spread){
     const a = Math.random() * Math.PI * 2, d = i ? sp * Math.sqrt(0.15 + 0.85 * Math.random()) : 0;
     const k = i === 0 ? ERASE_HIT.first : ERASE_HIT.size[0] + Math.random() * (ERASE_HIT.size[1] - ERASE_HIT.size[0]);
     stBlast(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.8, r * k, 'huge erase', o);
-    try { if(i % 3 === 0) playSfx('core_blast'); else if(i % 3 === 1) playSfx('hit_taken'); } catch(e){}
+    /* (4.81) every blast its own explosion (the designer: "Please create explosion SFX for each explosion that results from
+       the beam"), one over another, as loud and as deep as it is big: the first, the biggest, the loudest and deepest (till
+       4.81 every third a Core Blast, the next a hit taken) */
+    /* (4.82) "the booms are way too soft to be destructive": louder (0.8 to 1 of the blast's level, which is louder itself)
+       and deep, every one (rate 0.9 to 1.06) */
+    try { const big = Math.min(1, k / ERASE_HIT.first); playSfx('eraser_boom', { overlap:true, vol:0.8 + 0.2 * big, rate:1.12 - 0.22 * big + (i ? Math.random() * 0.06 : 0) }); } catch(e){}
     if((i === 0 || i === plan.length - 1) && typeof buzz === 'function') buzz('ultra');
   }
 }

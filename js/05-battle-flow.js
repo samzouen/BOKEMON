@@ -2849,6 +2849,9 @@ function runRepeatStrike(mon, mv, prevHits, done){
    — its bonus words included — so his strikes do double while they stand. */
 function runCloneEchoes(mon, mv, done){
   const b = ui.battle;
+  /* (4.81) a move of several strikes, or at several of them: each clone plays it all again, at half power */
+  const rp = b._replan && b._replan.seq === b.actionSeq && b._replan.mon === mon ? b._replan : null;
+  if(rp && cloneFullMove(mv)) return runCloneMoves(mon, mv, rp, done);
   b._cloneEchoing = true;
   const targets = cloneEchoTargets(2);
   const atk = monAtk(mon);
@@ -2882,10 +2885,67 @@ function runCloneEchoes(mon, mv, done){
       if(b.clones){
         b.clones.turnsLeft--;
         if(b.clones.turnsLeft<=0){ b.clones=null; clearPStatus(0,'clones'); }
+        else { const ps = getPStatus(0, 'clones'); if(ps) ps.turnsLeft = b.clones.turnsLeft; }   // (4.80) its count, his attacks left
       }
       done();
     }, true);
   }, hold);
+}
+
+/* (4.81) THE CLONES PLAY THE WHOLE MOVE. The designer: "Clones should copy the whole chain of an ultra at a 50% damage
+   rate, both adding to effectively a second ultra move with random variance on the hits. They should each execute the
+   full move on whichever monster is left." A move of several strikes, or at several of them — an Ultra's chain (or a
+   drive's), Twin Strike's two, a barrage, an area blow — is played again by each clone in full: planned afresh as an
+   Overcharge repeat is (setReplan: its count of strikes, its targets, its dodges and criticals rolled again), every
+   strike at the clones' share of the power (half), on whoever is still standing; the second clone after the first has
+   landed. Until 4.81 each clone struck once, for half of ONE strike of it (an Ultra of seven strikes: +14%). A single
+   blow is echoed as before (runCloneEchoes): two half blows, at ones it has not struck first. */
+function cloneFullMove(mv){
+  return !!mv && (mv.target === 'MultiHit' || mv.target === 'Multi2' || mv.target === 'AOE' || (mv.hits || 0) > 1);
+}
+function runCloneMoves(mon, mv, rp, done){
+  const b = ui.battle, me = pid('playerBob', mon), share = (b.clones && b.clones.mult) || 0.5;
+  b._cloneEchoing = true;
+  const end = ()=>{
+    if(ui.battle !== b) return;
+    b._cloneEchoing = false;
+    if(b.clones){
+      b.clones.turnsLeft--;
+      if(b.clones.turnsLeft <= 0){ b.clones = null; clearPStatus(0, 'clones'); }
+      else { const ps = getPStatus(0, 'clones'); if(ps) ps.turnsLeft = b.clones.turnsLeft; }
+    }
+    done();
+  };
+  const one = k=>{
+    if(ui.battle !== b) return;
+    if(k >= 2 || !livingEnemies().length) return end();
+    b._echoScale = share;
+    let fresh;
+    try { fresh = rp.plan() || {}; } finally { b._echoScale = 0; }
+    const list = (fresh.hits || []).filter(Boolean);
+    if(!list.length) return one(k + 1);
+    battleMsg(k ? `👥 And the other clone — <b>${escapeHtml(mv.name)}</b> again!` : `👥 A clone of ${escapeHtml(displayName(mon))} plays <b>${escapeHtml(mv.name)}</b> again, at half power!`);
+    logBattle(`  clone ${k + 1}: ${mv.name} at ×${share} — ${list.length} strike${list.length === 1 ? '' : 's'}: ${list.map(h=> h.dodged ? 'dodged' : h.dmg).join(', ')}`);
+    /* its art: the clone steps out and plays the move, as his echoes do (fxCloneEchoes); else the clones' dash */
+    const tid = (list.find(h=> h.t) || {}).idx;
+    let wait = typeof fxCloneEchoLand === 'function' ? fxCloneEchoLand(me, mv.name) : 0;
+    if(wait && tid != null) fxCloneEchoes(me, mv.name, (b._fxLast || {})['you|' + mv.name], ['enemy-' + tid], k);
+    else { wait = typeof fxHoldMs === 'function' ? fxHoldMs('Clone Echo') : 0; if(wait) fxPlay('Clone Echo', { type:'Physical', from:me, targets:[...new Set(list.map(h=> 'enemy-' + h.idx))], aside:true }); }
+    setTimeout(()=>{
+      if(ui.battle !== b) return;
+      const finish = ()=>{
+        if(ui.battle !== b) return;
+        reportHits(list);
+        const said = rp.riders ? (rp.riders(list) || '') : '';
+        if(said) battleMsg(said);
+        setTimeout(()=> one(k + 1), said ? 1100 : 450);
+      };
+      if(fresh.volleys) return playVolleys(fresh.volleys, 0, finish);
+      if(fresh.successive) return playSuccessiveHits(list, 0, finish, true);
+      applyHits(list); finish();
+    }, Math.max(300, wait || 0));
+  };
+  one(0);
 }
 
 /* (4.07) THE OVERCHARGE REPEAT, PLANNED AGAIN. The designer: "overcharge has a bug with multihit moves like ultra.

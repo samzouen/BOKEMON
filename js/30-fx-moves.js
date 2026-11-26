@@ -1511,12 +1511,12 @@ function fxCloneEchoLand(id, name){
   if(fxCloneSpots(id).length < 2) return 0;
   return FX_ECHO_LEAD + Math.max(380, 330 + fxHoldFor(name));
 }
-function fxCloneEchoes(id, name, base, ids){
+function fxCloneEchoes(id, name, base, ids, first){
   const land = fxCloneEchoLand(id, name);
   if(!land) return 0;
   const spots = fxCloneSpots(id), A = fxAnchor(id), STEP = 140, BACK = 260;
   (ids || []).forEach((tid, k)=>{
-    const sp = spots[k % 2], s = sp.s || 0.62;
+    const sp = spots[(k + (first || 0)) % 2], s = sp.s || 0.62;   // (4.81) `first`: which of the two steps out first
     fxLater(k * FX_ECHO_GAP, ()=>{
       if(!ui.battle) return;
       const at = { x:sp.x, y:sp.y, w:A.w * s, h:A.h * s, foot:sp.y + A.h * s * 0.34 };

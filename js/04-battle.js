@@ -457,6 +457,10 @@ function tickStatuses(){
   Object.keys(ps).forEach(k=>{
     const st = ps[k];
     if(st.permanent) return;                               // a bog lasts the whole battle
+    /* (4.80) the designer: "make it a true 3 attacks please" — 72 Transformations' clones are counted by his attacks
+       alone (runCloneEchoes), never by the rounds: till now they also ran out three rounds after the cast, the cast's
+       own round among them, so he had two of the three attacks the card promises (fewer with a companion's turns) */
+    if(k === 'clones') return;
     if(k === 'wrath') wrathTurnStack(st);                  // (4.24) a grudge a turn, before the turn ages it
     if(held(statusOwner(k, st, 'player'), k, st, 'player')){
       st.turnsLeft = st.max ? st.max : STATUS_TURNS + 1;   // refreshed, never ages
@@ -502,6 +506,7 @@ function tickStatuses(){
   Object.keys(es).forEach(k=>{
     const st = es[k];
     if(st.permanent) return;                               // (3.63) a Tachypsychia stolen from you: no clock, as yours
+    if(k === 'clones') return;                             // (4.80) theirs too (a thief's): its attacks count them, not the rounds
     if(held('enemy', k, st, 'enemy')){ st.turnsLeft = st.max ? st.max : STATUS_TURNS + 1; return; }
     st.turnsLeft--;
     if(st.turnsLeft <= 0){ delete es[k]; afterStatusGone(k, 'enemy'); expired.push('their ' + (STATUS_LABELS[k]||k)); ranOut++; }
@@ -881,6 +886,8 @@ function computeDamage(baseFactor, attackerAtk, attacker, defender, isPlayerAtta
   if(ui.battle) ui.battle._foresightMult = fc;    // (3.70) critStrike reads it: the two criticals add
   dmg *= passiveDamageMult(attacker, defender, isPlayerAttacking, peek, opts);
   if(ui.battle) ui.battle._foresightMult = 1;
+  /* (4.81) a clone playing his move again (runCloneMoves): at its share of the power, every strike of it */
+  if(isPlayerAttacking && !peek && ui.battle && ui.battle._echoScale) dmg *= ui.battle._echoScale;
   return Math.max(0, Math.ceil(dmg - 1e-9));   // (3.86) a hair of float noise (656.0000000000001) is not a point of damage
 }
 
@@ -11086,8 +11093,9 @@ function statusTipText(key, st, c, pill){
     case 'shell': { const o = tipOwner(s.owner), back = Math.ceil((s.thorns || 0) * tipAtk(o));
       return (s.reduce ? `${c.W} takes <b>${pc(s.reduce)}% less</b> damage and hits back` : `${c.W} hits back`) +
         (back ? ` for <b>${back}</b>` : '') + ` at anything that strikes it.`; }
-    case 'clones': { const cl = b.clones || {}, o = tipOwner(cl.uid), nm = tipName(o) || 'It';
+    case 'clones': { const cl = b.clones || {}, o = tipOwner(cl.uid), nm = tipName(o) || 'It', n = cl.turnsLeft != null ? cl.turnsLeft : s.turnsLeft;
       return `Two clones fight beside ${nm}: ` + (cl.full ? `each blow deals <b>${+(1 + 2 * (cl.mult || 0)).toFixed(2)}×</b>` : `they echo each move at half power`) +
+        (n > 0 ? ` for the next <b>${n}</b> attack${n === 1 ? '' : 's'}` : '') +   // (4.80) counted by attacks
         `, and ${nm} dodges <b>${pc(s.evade || cl.evade)}%</b> while they stand.`; }
     case 'dot': return `${c.W} burns for <b>${s.tick || 0}</b> each turn.` +
       (s.rider === 'noflee' ? ` It can't run away.` : s.rider === 'miss' && s.miss ? ` Its attacks miss <b>${pc(s.miss)}%</b> more often.` : '');

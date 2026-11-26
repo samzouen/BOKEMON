@@ -563,6 +563,7 @@ async function invStrikeRun(){
 function invEraserBeam(x0, y0, x1, y1, ms){
   if(typeof stEBeam !== 'function') return Promise.resolve();
   const b = stEBeam(x0, y0, x1, y1, {});
+  try { playSfx('eraser_beam'); } catch(e){}                           // (4.81) its own sound
   return stEraseHit(x1, y1, { r:2.2, boom:2.8, n:8, aura:ms, spread:0.6 }).then(()=> stBeamOut(b));
 }
 

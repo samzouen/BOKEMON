@@ -368,25 +368,115 @@ try{
   }
 }catch(e){}
 
-function speakWord(text){
-  try{
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    const v = pickMandarinVoice();
-    if(v) u.voice = v;
-    u.lang = 'zh-CN';                          // always Mandarin, never inherited
-    u.rate = 0.85;
-    u.volume = state?.settings?.volume ?? 0.8;
-    // Duck the music while the Chinese prompt plays so it stays clearly audible.
-    const restore = ()=>{ if(musicGain && actx) rampGain(musicGain, musicVolume(), 250);
-                          else if(audio.musicEl) audio.musicEl.volume = musicVolume(); };
-    if(musicGain && actx) rampGain(musicGain, musicVolume()*0.25, 150);
-    else if(audio.musicEl) audio.musicEl.volume = musicVolume() * 0.25;
-    u.addEventListener('end', restore);
-    u.addEventListener('error', restore);
-    setTimeout(restore, 6000);   // failsafe if the end event never fires
+/* ---------- (4.83) THE SPOKEN WORD, MADE TO GET THROUGH ON AN iPAD ----------
+   The designer: "Even when the app is closed and reopened, the Chinese words don't seem to come through reliably."
+   The iPad's own speech (WebKit) was eating the word in three ways:
+   1. Each time the app starts, the iPad will not speak until it is first asked to INSIDE a tap. The word is spoken on
+      its own, a moment after the writing pad is ready (from a timer, not a tap), so it was dropped without a sound or an
+      error until 🔊 Listen had been pressed once; closing and reopening the app put the block back. Now the first tap
+      anywhere speaks a silent space (primeSpeech), which lifts the block for the rest of the session.
+   2. Every prompt cancelled the speech and spoke straight after. On an iPad the cancel lands a moment later and can take
+      the new word with it, or leave the speech queue stuck. Now it cancels only when a word is still speaking, and the
+      new word waits 0.2 s after any cancel.
+   3. A word that has not started 1.6 s after it was asked for was lost (a queue left stuck when the iPad was put away
+      mid-word, say): it is cleared and asked for again, and if that one is lost too, Listen glows until it is tapped.
+   The utterance speaking is held on to, so it cannot be thrown away mid-word. */
+const SPEECH_RETRY_MS = 1600, SPEECH_AFTER_CANCEL_MS = 200;
+const _speech = { primed:false, primer:null, live:null, seq:0, cancelAt:0 };
+function speechOn(){
+  try { return typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined'; } catch(e){ return false; }
+}
+function speechCancel(){
+  try { speechSynthesis.cancel(); } catch(e){}
+  _speech.cancelAt = Date.now();
+  _speech.live = null;
+}
+/* A silent space, spoken inside the tap: from then on the iPad speaks when asked from anywhere. A tap brings several
+   events (pointerup, touchend, mouseup, click) and the iPad may not count every one of them as the tap, so it is tried at
+   each until one is taken. Taken shows at once: the iPad starts it there and then, and `speaking` turns true; refused,
+   nothing changes. (A word that starts, in speakWord, settles it too.) */
+function primeSpeech(e){
+  if(_speech.primed || !speechOn() || (e && e.isTrusted === false)) return;
+  try {
+    if(speechSynthesis.paused) speechSynthesis.resume();
+    const busy = ()=> !!(speechSynthesis.speaking || speechSynthesis.pending);
+    if(busy()){ _speech.primed = true; return; }          // already speaking: nothing is blocking it
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0; u.rate = 2; u.lang = 'zh-CN';
+    _speech.primer = u;
     speechSynthesis.speak(u);
-  }catch(e){}
+    if(busy()) _speech.primed = true;
+  } catch(err){}
+}
+/* Listen glows while a word has not got through; a tap on it always does */
+function speechCss(){
+  if(document.getElementById('speechCss')) return;
+  const s = document.createElement('style');
+  s.id = 'speechCss';
+  s.textContent = `#listenBtn.listen-glow{ box-shadow:0 0 0 3px #ffd66a, 0 0 18px 4px rgba(255,214,106,.75); animation:listenGlow 1.1s ease-in-out infinite; }
+@keyframes listenGlow{ 50%{ box-shadow:0 0 0 3px #ffd66a, 0 0 4px 1px rgba(255,214,106,.35); } }
+@media (prefers-reduced-motion: reduce){ #listenBtn.listen-glow{ animation:none; } }`;
+  document.head.appendChild(s);
+}
+function listenGlow(on){
+  const b = document.getElementById('listenBtn');
+  if(!b) return;
+  if(on) speechCss();
+  b.classList.toggle('listen-glow', !!on);
+}
+try {
+  if(typeof document !== 'undefined'){
+    ['pointerup', 'touchend', 'mouseup', 'click', 'keydown'].forEach(t=> document.addEventListener(t, primeSpeech, { capture:true, passive:true }));
+    /* back from the background: anything left mid-word is cleared, so the next word is not stuck behind it */
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState !== 'visible' || !speechOn()) return;
+      try { if(speechSynthesis.speaking || speechSynthesis.pending || speechSynthesis.paused) speechCancel(); } catch(e){}
+    });
+  }
+} catch(e){}
+
+function speakWord(text){
+  if(!text || !speechOn()) return;
+  const seq = ++_speech.seq;
+  try { if(speechSynthesis.paused) speechSynthesis.resume(); } catch(e){}
+  let busy = false;
+  try { busy = !!_speech.live && (speechSynthesis.speaking || speechSynthesis.pending); } catch(e){}
+  if(busy) speechCancel();
+  const go = (attempt)=>{
+    if(seq !== _speech.seq) return;                       // a newer word was asked for
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      const v = pickMandarinVoice();
+      if(v) u.voice = v;
+      u.lang = 'zh-CN';                          // always Mandarin, never inherited
+      u.rate = 0.85;
+      u.volume = state?.settings?.volume ?? 0.8;
+      // Duck the music while the Chinese prompt plays so it stays clearly audible.
+      let restored = false;
+      const restore = ()=>{ if(restored) return; restored = true;
+                            if(musicGain && actx) rampGain(musicGain, musicVolume(), 250);
+                            else if(audio.musicEl) audio.musicEl.volume = musicVolume(); };
+      if(musicGain && actx) rampGain(musicGain, musicVolume()*0.25, 150);
+      else if(audio.musicEl) audio.musicEl.volume = musicVolume() * 0.25;
+      let started = false;
+      const done = ()=>{ restore(); if(_speech.live === u) _speech.live = null; };
+      u.addEventListener('start', ()=>{ started = true; _speech.primed = true; listenGlow(false); });
+      u.addEventListener('end', done);
+      u.addEventListener('error', done);
+      setTimeout(restore, 6000);   // failsafe if the end event never fires
+      _speech.live = u;
+      speechSynthesis.speak(u);
+      setTimeout(()=>{
+        if(started || seq !== _speech.seq) return;
+        done();
+        speechCancel();                                    // whatever is stuck in front of it goes
+        if(attempt === 0) setTimeout(()=> go(1), SPEECH_AFTER_CANCEL_MS);
+        else { _speech.primed = false; listenGlow(true); }  // the next tap lifts the block again
+      }, SPEECH_RETRY_MS);
+    } catch(e){}
+  };
+  const wait = _speech.cancelAt + SPEECH_AFTER_CANCEL_MS - Date.now();
+  if(wait > 0) setTimeout(()=> go(0), wait); else go(0);
 }
 
 /* ---------- (3.97) the spelling screen's battle look ---------- */

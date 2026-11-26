@@ -731,6 +731,7 @@ if(typeof FX_MOVES !== 'undefined' && typeof fxAdd === 'function'){
       const H = nemHolePoint(ctx.fromId), L = nemFxLayer(), o = { host:L, t:H.t, px:true, z:1 };
       const to = (ctx.tids || []).map(id=> nemCentre(document.getElementById(id))).filter(Boolean);
       setTimeout(()=>{
+        try { playSfx('eraser_beam'); } catch(e){}                     // (4.81) its own sound, as on the field
         const beams = to.map(p=> stEBeam(H.x, H.y, p.x, p.y, o));
         const shake = [document.getElementById('battleStage'), L];
         Promise.all(to.map((p, i)=> stEraseHit(p.x, p.y, { r:2.2, boom:2.7, n:NEM_HOLE.booms, aura:NEM_HOLE.aura, spread:0.6, o, shake:i === 0 ? shake : null })))

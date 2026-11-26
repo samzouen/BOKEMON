@@ -383,7 +383,8 @@ async function stCloseRanks(S){
     el.style.cssText = `left:${(x0 + 0.5) * T}px;top:${(y0 + 0.62) * T}px;width:${len}px;transform:rotate(${ang}rad);z-index:66;--t:${T}px;`;
     world.appendChild(el);
   }
-  try { playSfx('stone_high'); } catch(e){}
+  /* (4.81) no chime here any more (the designer: "Please remove stone high chime from both instances": a stone's reward
+     chime, out of place as the shields lock and as the dome shatters) */
   sceneShake(300, ms=> 0.04 * (1 - ms / 300));
   await sceneWait(600);
 }
@@ -773,7 +774,7 @@ async function stWadjetCharging(S){
 async function stEraserKing(S){
   const k = stKingAt(), H = stHoleAt();
   if(!k) return;
-  try { playSfx('core_blast'); } catch(e){}
+  try { playSfx('eraser_beam'); } catch(e){}                           // (4.81) its own sound
   if(typeof buzz === 'function') buzz('ultra');
   stHoleGone('stHole', 900);
   sceneShake(1100, ms=> 0.24 * (1 - ms / 1100));
@@ -784,7 +785,7 @@ async function stEraserKing(S){
   const beam = stEBeam(H.x, H.y, h.x, h.y, {});
   await look;
   /* the dome in its way: shattered */
-  if(S.dome){ stShatter(S.dome); S.dome = null; S.shattered = (S.shattered || 0) + 1; try { playSfx('stone_high'); } catch(e){} }
+  if(S.dome){ stShatter(S.dome); S.dome = null; S.shattered = (S.shattered || 0) + 1; }   // (4.81) without the chime
   /* held on him: he shakes in it — (4.61) harder, and longer, the eraser's aura pulsing on him */
   stKingSpent(S, false);
   k.el.classList.add('st-erased');
@@ -896,7 +897,7 @@ async function stDuel(S){
 async function stDuelFire(S){
   const E = stEyes() || { x:31.4, y:22.4 }, H = stHoleAt();
   const mx = (E.x + H.x) / 2, my = (E.y + H.y) / 2;
-  try { playSfx('pulsar'); playSfx('core_blast'); } catch(e){}
+  try { playSfx('pulsar'); playSfx('eraser_beam'); } catch(e){}       // (4.81) his beam's own sound against Lucesco's
   if(typeof buzz === 'function') buzz('ultra');
   const eyes = $('#walkYou .jg-eyes');
   if(eyes){ eyes.classList.remove('on'); void eyes.offsetWidth; eyes.classList.add('on', 'st-hold'); }
@@ -918,7 +919,7 @@ async function stChargeLost(S){
   stHoleSize('stHole', 2.2);
   await sceneWait(500);
   const H = stHoleAt(), aim = { x:31.5, y:17.2 };
-  try { playSfx('core_blast'); } catch(e){}
+  try { playSfx('eraser_beam'); } catch(e){}
   if(typeof buzz === 'function') buzz('ultra');
   stHoleGone('stHole', 900);
   const look = sceneLook(ST.wideCam, { ms:320 });
@@ -937,7 +938,7 @@ async function stClashLost(S){
     stBeamOut(D.lb, 200);
     if(D.cl) D.cl.remove();
   }
-  try { playSfx('core_blast'); } catch(e){}
+  try { playSfx('eraser_beam'); } catch(e){}
   if(typeof buzz === 'function') buzz('ultra');
   stChargeOff();
   const eyes = $('#walkYou .jg-eyes'); if(eyes) eyes.classList.remove('on', 'st-hold');

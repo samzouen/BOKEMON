@@ -38,6 +38,17 @@ const SFX_MAP = {
   rip:              'rip.mp3',            // (3.20) the Guardian's sword tearing the air open
   timestop:         'timestop.mp3',       // (3.20) Nemesis stops time
   pulsar:           'pulsar_glare.mp3',   // (4.05) Lucesco's Pulsar Glare: "an intense, smoking/sizzling" laser pulse, a second long — (4.06) its high pitch held, in pulses
+  /* (4.81) the designer: "Please create an SFX for the eraser beam that is a darker and much lower version of pulsar glare.
+     Please create explosion SFX for each explosion that results from the beam." Made for the game, and (4.82)
+     made again — "i need eraser beam to feel heavy and rumbling like the sound of rockets lifting off. it needs to have
+     weight and power. the booms are way too soft to be destructive as well": the beam, a rocket lifting off (an ignition,
+     the roar building in under half a second, its turbulence and the crackle of its exhaust, a 34 Hz rumble driven into
+     harmonics a small speaker can carry, Pulsar Glare at a third of its pitch buried in it; 3.6 s, 3 dB louder on
+     average than Core Blast over the same time, 4 dB at its height); the blast, a hard crack, a punch falling from
+     192 Hz to 42, its roar rolling off, debris, the ground rumbling after it (2.3 s, its first 0.7 s 4 dB louder than
+     Core Blast's). The music dips under both (SFX_DUCK). */
+  eraser_beam:      'eraser_beam.mp3',
+  eraser_boom:      'eraser_boom.mp3',
   ambush:           'rift_ambush.mp3',    // (4.05) Rift Ambush: "a yiu-yiu-yiu pulsing sound that gradually increases in volume … until the 'hit'" (stopped then) — (4.06) at about 150 Hz
   // quiz feedback
   answer_correct:   'answer_correct.mp3',
@@ -95,7 +106,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.79';
+const GAME_VERSION = '4.83';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -181,7 +192,14 @@ function ensureAudioCtx(){
     if(!AC) return null;
     actx = new AC();
     musicGain = actx.createGain(); musicGain.gain.value = musicVolume(); musicGain.connect(actx.destination);
-    sfxGain   = actx.createGain(); sfxGain.gain.value   = sfxVolume();   sfxGain.connect(actx.destination);
+    sfxGain   = actx.createGain(); sfxGain.gain.value   = sfxVolume();
+    /* (4.82) a limiter on the effects: what stacks up (the eraser's blasts, one over another, over its roar) is held
+       under full scale instead of breaking up; anything below it untouched */
+    try {
+      const lim = actx.createDynamicsCompressor();
+      lim.threshold.value = -2; lim.knee.value = 2; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.22;
+      sfxGain.connect(lim); lim.connect(actx.destination);
+    } catch(e){ sfxGain.connect(actx.destination); }
     /* (3.49) An iPad stops the sound system now and then — the screen locked,
        another app's sound, the spoken prompts — and leaves it 'interrupted'
        (Safari's own word) or 'suspended'. Asked to start again as soon as it
@@ -345,7 +363,7 @@ function playBackSfx(){
    fanfare); the long ones (the stone roll, the evolution, the defeat) last. */
 const SFX_PRELOAD_ORDER = ['answer_correct', 'answer_wrong', 'ui_click', 'ui_back', 'hit_dealt', 'hit_taken', 'victory', 'level_up',
   'catch_success', 'catch_miss', 'power_up', 'stone_ultra', 'stone_veryhigh', 'stone_high', 'stone_mid', 'stone_low', 'recovery_heal',
-  'core_tinkle', 'evolution', 'stone_roll', 'core_blast', 'pulsar', 'ambush', 'defeat'];   // (4.07) the 2¼-minute defeat last again: 4.05's two came after it
+  'core_tinkle', 'evolution', 'stone_roll', 'core_blast', 'pulsar', 'eraser_beam', 'eraser_boom', 'ambush', 'defeat'];   // (4.07) the 2¼-minute defeat last again: 4.05's two came after it
 const SFX_TRIES = 3;                                   // a decode that fails is tried again, up to three times
 /* Can this file still be fetched? (never asked, or failed with tries left) */
 function sfxWanted(file){
@@ -434,7 +452,23 @@ function playSfxSoon(event, waitMs){
    slider — the designer: "please make ui_click 60% softer by default even
    before volume control adjustments … ui_back is fairly soft but make it 30%
    softer by default". */
-const SFX_LEVEL = { ui_click:0.4, ui_back:0.7 };
+const SFX_LEVEL = { ui_click:0.4, ui_back:0.7, eraser_boom:0.9 };
+/* (4.82) the music dips under the heaviest effects, so they land with all their weight (the designer, of the Eraser
+   Beam: "it needs to have weight and power"; of its blasts: "way too soft to be destructive"): to `to` of its level at
+   once, held `ms`, and back over 0.9 s */
+const SFX_DUCK = { eraser_beam:{ to:0.28, ms:3300 }, eraser_boom:{ to:0.35, ms:1000 } };
+function duckMusic(to, ms){
+  if(!actx || !musicGain) return;
+  try {
+    const now = actx.currentTime, base = musicVolume(), g = musicGain.gain;
+    audio.duck = { to, until:Math.max((audio.duck && audio.duck.until) || 0, now + ms / 1000) };
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(base * to, now + 0.06);
+    g.setValueAtTime(base * to, audio.duck.until);
+    g.linearRampToValueAtTime(base, audio.duck.until + 0.9);
+  } catch(e){}
+}
 /* How loud an effect plays, before the slider: `gain` outright, else its
    level (SFX_LEVEL) times `vol` — (3.40) a softer play of it. */
 function sfxGainFor(event, opts){
@@ -482,22 +516,27 @@ function playSfx(event, opts){
     if(file && audio.unlocked && audio.missing[file] && SFX_SYNTH[event]) return playSynthSfx(event, opts);            // (3.51)
     if(!file || !audio.unlocked || audio.missing[file]) return null;
     const vol = sfxGainFor(event, opts);
+    if(SFX_DUCK[event]) duckMusic(SFX_DUCK[event].to, SFX_DUCK[event].ms);   // (4.82)
     wakeAudio();                                       // (3.49) stopped by the iPad? started again first
     /* (3.28) from memory, when it is there: one voice a sound, as the element
        was — asked again, it starts again */
     const buf = sfxBufferOf(file);
     if(buf && actx && sfxGain){
+      /* (4.81) `overlap`: this play leaves the last one of it sounding (the eraser's blasts, one on another); `rate`: its
+         speed (and pitch) */
+      const over = !!(opts && opts.overlap);
       const prev = audio.sfxNow[file];
-      if(prev){ try{ prev.src.stop(); }catch(e){} }
+      if(prev && !over){ try{ prev.src.stop(); }catch(e){} }
       const g = actx.createGain();
       g.gain.value = vol;
       g.connect(sfxGain);
       const node = actx.createBufferSource();
       node.buffer = buf;
+      if(opts && opts.rate > 0) node.playbackRate.value = opts.rate;
       node.connect(g);
       const voice = { src:node, gain:g, fromMemory:true };
       node.onended = ()=>{ if(audio.sfxNow[file] === voice) delete audio.sfxNow[file]; try{ g.disconnect(); }catch(e){} };
-      audio.sfxNow[file] = voice;
+      if(!over || !prev) audio.sfxNow[file] = voice;
       node.start(0);
       return voice;
     }

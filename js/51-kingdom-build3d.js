@@ -45,8 +45,11 @@ const ROOF = {
   wood:  ['#cfa06a', '#9a6a3a', '#5e3e1e'], purple:['#a98ad0', '#6d4b8e', '#432a5e'], green:['#9ccf7a', '#5c9a40', '#36612a'],
 };
 
-/* ---------- THE VIEW: a building's frame o = { X, B }, its front-left corner on the ground; (x east, y back, z up) ---------- */
-const DX = 0.32, DY = 0.5;
+/* ---------- THE VIEW: a building's frame o = { X, B }, its front-left corner on the ground; (x east, y back, z up) ----------
+   (4.80) the designer: "the game has always made 3D a straight on but top-down perspective, but not skewed sideways" —
+   straight on now: a front faces you square, its top seen from above behind it, nothing of its sides (DX 0; till 4.80
+   0.32, the depth slanting off to the east). What is drawn on a side is drawn only while the view slants (DX > 0). */
+const DX = 0, DY = 0.5;
 const pt = (o, x, y, z)=> [o.X + x + y * DX, o.B - y * DY - z];
 function path(g, o, P){ g.beginPath(); P.forEach((p, k)=>{ const [a, b] = pt(o, p[0], p[1], p[2]); if(k) g.lineTo(a, b); else g.moveTo(a, b); }); g.closePath(); }
 function fillP(g, o, P, f){ path(g, o, P); g.fillStyle = f; g.fill(); }
@@ -80,36 +83,38 @@ function roundShadow(g, sx, sy, r, h, a){
 function block(g, o, x, y, z, w, d, h, m, opt){
   opt = opt || {};
   const c = opt.c || m.c;
-  const S = [[x + w, y, z], [x + w, y + d, z], [x + w, y + d, z + h], [x + w, y, z + h]];
-  fillP(g, o, S, grad(g, o, [x + w, y, z], [x + w, y + d, z], [[0, tint(c, 0.8)], [1, tint(c, 0.64)]]));
+  if(DX){ const S = [[x + w, y, z], [x + w, y + d, z], [x + w, y + d, z + h], [x + w, y, z + h]];
+    fillP(g, o, S, grad(g, o, [x + w, y, z], [x + w, y + d, z], [[0, tint(c, 0.8)], [1, tint(c, 0.64)]])); }
   if(opt.top !== false) fillP(g, o, [[x, y, z + h], [x + w, y, z + h], [x + w, y + d, z + h], [x, y + d, z + h]], opt.topC || tint(c, 1.12));
   const Fr = [[x, y, z], [x + w, y, z], [x + w, y, z + h], [x, y, z + h]];
   fillP(g, o, Fr, grad(g, o, [x, y, z], [x + w, y, z], [[0, tint(c, 1.04)], [1, tint(c, 0.92)]]));
   if(opt.tex !== false) texture(g, o, x, y, z, w, d, h, m, opt);
-  /* the corner caught by the light; the line of the top */
-  lines(g, o, [[[x + w, y, z], [x + w, y, z + h]]], 'rgba(255,255,255,.3)', 0.8);
-  if(opt.trim) lines(g, o, [[[x, y, z + h - 1], [x + w, y, z + h - 1]], [[x + w, y, z + h - 1], [x + w, y + d, z + h - 1]]], opt.trim, 2);
-  if(opt.plinth) lines(g, o, [[[x, y, z + 1.6], [x + w, y, z + 1.6]], [[x + w, y, z + 1.6], [x + w, y + d, z + 1.6]]], opt.plinth, 3.2);
+  /* the corner caught by the light; the line of the top (straight on: the top's edge, a little light; the front's
+     ends, a little shade, so a block stands out from what is behind it) */
+  if(DX) lines(g, o, [[[x + w, y, z], [x + w, y, z + h]]], 'rgba(255,255,255,.3)', 0.8);
+  else { lines(g, o, [[[x, y, z + h], [x + w, y, z + h]]], 'rgba(255,255,255,.45)', 0.8); lines(g, o, [[[x + 0.4, y, z], [x + 0.4, y, z + h]], [[x + w - 0.4, y, z], [x + w - 0.4, y, z + h]]], 'rgba(0,0,0,.12)', 0.8); }
+  if(opt.trim) lines(g, o, [[[x, y, z + h - 1], [x + w, y, z + h - 1]]].concat(DX ? [[[x + w, y, z + h - 1], [x + w, y + d, z + h - 1]]] : []), opt.trim, 2);
+  if(opt.plinth) lines(g, o, [[[x, y, z + 1.6], [x + w, y, z + 1.6]]].concat(DX ? [[[x + w, y, z + 1.6], [x + w, y + d, z + 1.6]]] : []), opt.plinth, 3.2);
 }
 function texture(g, o, x, y, z, w, d, h, m, opt){
   if(m.plank){
     const S = [];
     for(let xx = x + 4.5; xx < x + w - 1; xx += 4.5) S.push([[xx, y, z], [xx, y, z + h]]);
-    for(let yy = y + 4.5; yy < y + d - 1; yy += 4.5) S.push([[x + w, yy, z], [x + w, yy, z + h]]);
+    if(DX) for(let yy = y + 4.5; yy < y + d - 1; yy += 4.5) S.push([[x + w, yy, z], [x + w, yy, z + h]]);
     lines(g, o, S, m.line, 0.6); return;
   }
   if(m.timber){
     const T = m.timber, S = [], bay = 13;
     const nx = Math.max(1, Math.round(w / bay)), ny = Math.max(1, Math.round(d / bay));
     for(let k = 0; k <= nx; k++){ const xx = x + w * k / nx; S.push([[xx, y, z], [xx, y, z + h]]); }
-    for(let k = 0; k <= ny; k++){ const yy = y + d * k / ny; S.push([[x + w, yy, z], [x + w, yy, z + h]]); }
-    [z + 1, z + h * 0.5, z + h - 1].forEach(zz=>{ S.push([[x, y, zz], [x + w, y, zz]]); S.push([[x + w, y, zz], [x + w, y + d, zz]]); });
+    if(DX) for(let k = 0; k <= ny; k++){ const yy = y + d * k / ny; S.push([[x + w, yy, z], [x + w, yy, z + h]]); }
+    [z + 1, z + h * 0.5, z + h - 1].forEach(zz=>{ S.push([[x, y, zz], [x + w, y, zz]]); if(DX) S.push([[x + w, y, zz], [x + w, y + d, zz]]); });
     S.push([[x, y, z + h * 0.5], [x + w / nx, y, z + h - 1]]); S.push([[x + w, y, z + h * 0.5], [x + w - w / nx, y, z + h - 1]]);
     lines(g, o, S, T, 1.8); return;
   }
   if(!m.line) return;
   const step = m.brick ? 3.4 : 6, S = [];
-  for(let zz = z + step; zz < z + h - 0.5; zz += step){ S.push([[x, y, zz], [x + w, y, zz]]); S.push([[x + w, y, zz], [x + w, y + d, zz]]); }
+  for(let zz = z + step; zz < z + h - 0.5; zz += step){ S.push([[x, y, zz], [x + w, y, zz]]); if(DX) S.push([[x + w, y, zz], [x + w, y + d, zz]]); }
   lines(g, o, S, m.line, 0.6);
   if(opt.quoins && m.quoin){ for(let k = 0, zz = z; zz < z + h - 2; zz += step, k++){ const qw = k % 2 ? 4 : 6.5; fillP(g, o, [[x + w - qw, y, zz + 0.4], [x + w, y, zz + 0.4], [x + w, y, zz + step - 0.4], [x + w - qw, y, zz + step - 0.4]], m.quoin);
     fillP(g, o, [[x, y, zz + 0.4], [x + qw, y, zz + 0.4], [x + qw, y, zz + step - 0.4], [x, y, zz + step - 0.4]], m.quoin); } }
@@ -133,6 +138,7 @@ function winF(g, o, x, y, z, w, h, op){
 }
 /* a window in an east side (plane x): along the depth from y, its width w, from z up h (in shade) */
 function winS(g, o, x, y, z, w, h, op){
+  if(!DX) return;
   op = op || {};
   fillP(g, o, [[x, y - 0.8, z - 0.8], [x, y + w + 0.8, z - 0.8], [x, y + w + 0.8, z + h + 0.8], [x, y - 0.8, z + h + 0.8]], op.frame || '#3e2f22');
   fillP(g, o, [[x, y, z], [x, y + w, z], [x, y + w, z + h], [x, y, z + h]], op.dark ? '#4a5568' : grad(g, o, [x, y, z + h], [x, y + w, z], [[0, '#f3d27a'], [1, '#c98a3a']]));
@@ -182,8 +188,8 @@ function roofGable(g, o, x, y, z, w, d, rh, c, op){
   op = op || {};
   const v = op.ov == null ? 3 : op.ov, yr = y + d / 2, zr = z + rh, wc = op.wall || '#e8dcc0';
   fillP(g, o, [[x - v, yr, zr], [x + w + v, yr, zr], [x + w + v, y + d + v, z - 1], [x - v, y + d + v, z - 1]], c[0]);
-  fillP(g, o, [[x + w, y, z], [x + w, y + d, z], [x + w, yr, zr]], tint(wc, 0.7));
-  fillP(g, o, [[x + w + v, y - v, z - 1.4], [x + w + v + 0.9, y - v, z - 1.4], [x + w + v + 0.9, yr, zr], [x + w + v + 0.9, y + d + v, z - 1.4], [x + w + v, y + d + v, z - 1.4], [x + w + v, yr, zr]], tint(c[2], 0.85));
+  if(DX){ fillP(g, o, [[x + w, y, z], [x + w, y + d, z], [x + w, yr, zr]], tint(wc, 0.7));
+    fillP(g, o, [[x + w + v, y - v, z - 1.4], [x + w + v + 0.9, y - v, z - 1.4], [x + w + v + 0.9, yr, zr], [x + w + v + 0.9, y + d + v, z - 1.4], [x + w + v, y + d + v, z - 1.4], [x + w + v, yr, zr]], tint(c[2], 0.85)); }
   const front = [[x - v, y - v, z - 1.4], [x + w + v, y - v, z - 1.4], [x + w + v, yr, zr], [x - v, yr, zr]];
   fillP(g, o, front, grad(g, o, [x, y - v, z], [x, yr, zr], [[0, tint(c[1], 0.9)], [1, c[1]]]));
   if(op.thatch){ const S = []; for(let k = 0; k <= Math.round(w / 2.2); k++){ const xx = x - v + (w + 2 * v) * k / Math.round(w / 2.2); S.push([[xx, y - v, z - 1.4], [xx + (k % 3 - 1) * 0.8, yr, zr]]); } lines(g, o, S, tint(c[2], 1.05), 0.7); }
@@ -214,11 +220,12 @@ function roofHip(g, o, x, y, z, w, d, rh, c, op){
   fillP(g, o, [D, Cc, Rb, Ra], c[0]);
   fillP(g, o, [B, Cc, Rb], grad(g, o, B, Rb, [[0, c[2]], [1, tint(c[1], 0.9)]]));
   tiles(g, o, B, Cc, Rb, Rb, 'rgba(0,0,0,.18)', Math.max(3, Math.round(rh / 5)), 0);
+  if(!DX){ fillP(g, o, [A, D, Ra], grad(g, o, A, Ra, [[0, tint(c[0], 0.96)], [1, tint(c[0], 1.06)]])); tiles(g, o, A, D, Ra, Ra, 'rgba(0,0,0,.12)', Math.max(3, Math.round(rh / 5)), 0); }
   fillP(g, o, [A, B, Rb, Ra], grad(g, o, A, Ra, [[0, tint(c[1], 0.9)], [1, c[1]]]));
   tiles(g, o, A, B, Ra, Rb, 'rgba(0,0,0,.2)', Math.max(3, Math.round(rh / 4.5)), op.joints === false ? 0 : 5);
   fillP(g, o, [A, [x - v + (w + 2 * v) * 0.3, y - v, z - 1.4], [xa + (xb - xa) * 0.3, yr, zr], Ra], 'rgba(255,255,255,.08)');
   const ridge = op.ridge || tint(c[0], 1.15);
-  lines(g, o, [[Ra, Rb], [B, Rb], [A, Ra]], ridge, op.ridgeW || 1.6);
+  lines(g, o, [[Ra, Rb], [B, Rb], [A, Ra]].concat(DX ? [] : [[D, Ra], [Cc, Rb]]), ridge, op.ridgeW || 1.6);
   lines(g, o, [[A, B]], 'rgba(30,20,12,.45)', 1);
   return pt(o, (xa + xb) / 2, yr, zr);
 }
@@ -228,6 +235,7 @@ function roofGambrel(g, o, x, y, z, w, d, rh, c, op){
   const v = 3, y0 = y - v, y1 = y + d + v;
   const Q = [[x - v, z - 1.4], [x + w * 0.17, z + rh * 0.6], [x + w / 2, z + rh], [x + w * 0.83, z + rh * 0.6], [x + w + v, z - 1.4]];
   const quad = (a, b, f)=> fillP(g, o, [[a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]]], f);
+  if(!DX) quad(Q[0], Q[1], tint(c[0], 1.04));
   quad(Q[1], Q[2], tint(c[0], 0.98));
   quad(Q[2], Q[3], grad(g, o, [Q[2][0], y, Q[2][1]], [Q[3][0], y, Q[3][1]], [[0, c[1]], [1, tint(c[1], 0.88)]]));
   quad(Q[3], Q[4], grad(g, o, [Q[3][0], y, Q[3][1]], [Q[4][0], y, Q[4][1]], [[0, tint(c[2], 1.05)], [1, c[2]]]));
@@ -246,7 +254,8 @@ function roofGambrel(g, o, x, y, z, w, d, rh, c, op){
 function merlons(g, o, x, y, z, w, d, m, op){
   op = op || {};
   const s = op.step || 8, mw = s * 0.55, mh = op.h || 4.5, t = op.t || 2.6;
-  for(let yy = y + d - mw; yy > y + mw; yy -= s) block(g, o, x + w - t, yy, z, t, mw, mh, m, { tex:false });
+  if(!DX) for(let xx = x; xx < x + w - 1; xx += s) block(g, o, xx, y + d - t, z, Math.min(mw, x + w - xx), t, mh, m, { tex:false });   // (4.80) the back's, behind
+  for(let yy = y + d - mw; yy > y + mw; yy -= s){ block(g, o, x + w - t, yy, z, t, mw, mh, m, { tex:false }); if(!DX) block(g, o, x, yy, z, t, mw, mh, m, { tex:false }); }
   for(let xx = x; xx < x + w - 1; xx += s) block(g, o, xx, y, z, Math.min(mw, x + w - xx), t, mh, m, { tex:false, trim:op.gold });
 }
 /* a balustrade along a front (plane y), from x, w long */
@@ -290,7 +299,7 @@ function domeOn(g, o, x, y, z, r, hd, c, op){
   for(let k = 0; k < 6; k++){ const a = Math.PI * (0.12 + k * 0.152), wx = sx - Math.cos(a) * r * 0.86; if(Math.abs(wx - sx) > r * 0.8) continue; g.fillStyle = '#4e3b2a'; g.fillRect(wx - 1.6, sy - hd + 3, 3.2, hd - 6); g.fillStyle = '#f6c763'; g.fillRect(wx - 1, sy - hd + 3.6, 2, hd - 7.2); }
   if(op.band){ g.strokeStyle = op.band; g.lineWidth = 1.6; g.beginPath(); g.ellipse(sx, sy - hd, r, r * 0.34, 0, 0.05, Math.PI - 0.05); g.stroke(); }
   ell(g, sx, sy - hd, r, r * 0.34, '#efe8d6');
-  const top = dome(g, sx, sy - hd + 1, r + 1, c, op.tip || GOLD[1]);
+  const top = dome(g, sx, sy - hd + 0.4, r + 1, c, op.tip || GOLD[1], (r + 1) * 0.34);   // (4.80) sitting on the drum's top (its foot the top's near edge)
   if(op.crown) crown(g, sx, top + 3, op.crown);
   return top;
 }
@@ -326,8 +335,9 @@ function gardenTree(g, sx, sb, s, fruit, tub){
 /* ============================================================
    THE PALACE
    ============================================================ */
-const PALC = L=> ({ m:L >= 10 ? MAT.marble : L >= 8 ? MAT.white : MAT.cream, roof:L >= 10 ? ROOF.gold : ROOF.blue, gold:L >= 7 ? GOLD[1] : null,
-  dome:L >= 10 ? GOLD : L >= 8 ? BLUE : BLUE });
+/* (4.80) the designer: "palace 10 should not turn yellow" — its roofs and domes stay blue (gold only in its trim, its
+   finials and its flags) */
+const PALC = L=> ({ m:L >= 10 ? MAT.marble : L >= 8 ? MAT.white : MAT.cream, roof:ROOF.blue, gold:L >= 7 ? GOLD[1] : null, dome:BLUE });
 /* on its own plot (1 to 5): a hall of cream stone, its hip roof, round towers at its front corners; a keep with a
    spire (3), a second floor and a balcony (4), a gold spire (5) */
 function palacePlot(g, x0, y0, L){
@@ -398,8 +408,8 @@ function palaceWalls(g, X, Y, W, L, part){
   const lv = Math.min(L - 6, 4), H = 14 + lv * 1.6, T = 7, white = L >= 8, gold = L >= 9 ? GOLD[1] : null;
   const top = white ? '#fbf8f1' : '#efe3c6', face = white ? '#dcd5c6' : '#cdbf9f', walk = white ? '#cfc7b6' : '#b6a888';
   const xW = X + PG.wall, xE = X + W - PG.wall, yN = Y + PG.back, yS = Y + PG.front, gx = X + W / 2;
-  const tOpt = { slits:2, flag:'#c8463c', white, band:gold, domeC:L >= 10 ? GOLD : BLUE, roof:L >= 10 ? GOLD[1] : BLUE[1], roofL:L >= 10 ? GOLD[0] : BLUE[0], roofD:L >= 10 ? GOLD[2] : BLUE[2], tip:GOLD[1] };
-  const tR = 12 + lv, tH = H + 30 + 5 * lv, tRoof = L >= 8 ? 'dome' : 'cone';
+  const tOpt = { slits:2, flag:'#c8463c', white, band:gold, domeC:BLUE, roof:BLUE[1], roofL:BLUE[0], roofD:BLUE[2], tip:GOLD[1], cone:L >= 10 ? 2.1 : 1.7 };
+  const tR = 12 + lv, tH = H + 30 + 5 * lv, tRoof = L >= 10 ? 'cone' : L >= 8 ? 'dome' : 'cone';   // (4.80) spires at 10
   const runH = (a, b, y, south)=>{
     g.fillStyle = lin(g, 0, y - H, 0, y, [[0, top], [1, face]]); g.fillRect(a, y - H, b - a, H);
     g.strokeStyle = 'rgba(70,60,48,.26)'; g.lineWidth = 0.7; g.beginPath(); for(let r = 1; r * 5 < H; r++){ g.moveTo(a, y - r * 5); g.lineTo(b, y - r * 5); } g.stroke();
@@ -447,6 +457,54 @@ function cypress(g, sx, sb, h){
   g.beginPath(); g.moveTo(sx, sb - h); g.quadraticCurveTo(sx + h * 0.16, sb - h * 0.45, sx + h * 0.1, sb - 3); g.lineTo(sx - h * 0.1, sb - 3); g.quadraticCurveTo(sx - h * 0.16, sb - h * 0.45, sx, sb - h); g.fill();
   g.strokeStyle = 'rgba(140,200,110,.35)'; g.lineWidth = 0.7; g.beginPath(); for(let k = 1; k < 5; k++){ const yy = sb - h * k / 5.5; g.moveTo(sx - h * 0.08, yy + 2); g.quadraticCurveTo(sx - h * 0.02, yy - 1, sx + h * 0.02, yy); } g.stroke();
 }
+/* (4.80) behind the palace from 8 (the designer: "palace 10 should not turn yellow but instead have more grand buildings
+   behind instead of a row of trees. palace 8 and 9 should also follow suit but to a lesser degree. they look rather
+   similar to palace 6 and 7"): its back court, where the cypresses stood. A long range across the back (two floors at
+   8, three at 9, four at 10), its end pavilions (hip roofs at 8, domes at 9, spires at 10); round towers rising behind
+   the great hall (9, 10), and at 10 two more behind the wings. */
+function palaceRear(g, X, Y, W, L, C){
+  const m = C.m, gold = C.gold, cx = X + W / 2, n = L - 8, fl = 14;
+  const floors = 2 + n, h = floors * fl + 6, rh = 20 + 5 * n, d = 26;
+  const o = { X:X + 58, B:Y + PG.back + 64 }, ow = W - 116;
+  const tOpt = { roof:C.roof[1], roofL:C.roof[0], roofD:C.roof[2], tip:GOLD[1], flag:'#c8463c', slits:3, band:gold, white:true, domeC:C.dome, cone:L >= 10 ? 3 : 2 };
+  /* the towers behind it all: at 10, two behind the wings */
+  if(L >= 10) [cx - 118, cx + 118].forEach(tx=> roundTower(g, tx, o.B - 4, 10, h + 60, 'cone', Object.assign({}, tOpt, { slits:2 })));
+  /* the range */
+  castShadow(g, o, 0, 0, ow, d, h, 0.16);
+  block(g, o, 0, 0, 0, ow, d, h, m, { quoins:true, trim:gold, plinth:tint(m.c, 0.82) });
+  winRow(g, o, 0, 0, 0, ow, 15, floors, fl, { arch:'top', ww:5, wh:8, sill:false });
+  roofHip(g, o, 0, 0, h, ow, d, rh, C.roof, { ridge:gold || undefined, ov:2.5 });
+  for(let k = 0; k < 6; k++){ const dx = ow * (0.1 + k * 0.16) - 5; block(g, o, dx, 6, h + 2, 10, 6, 7, m, { tex:false }); winF(g, o, dx + 3, 6, h + 3, 4, 5, { arch:true, sill:false, frame:'#5b4632' }); roofGableY(g, o, dx, 6, h + 9, 10, 6, 6, C.roof, { wall:m.c, ov:1.2 }); }
+  /* its end pavilions, a floor higher */
+  const pw = 40, pd = 30, ph = h + fl + 4;
+  [o.X - 12, o.X + ow - pw + 12].forEach(px=>{
+    const q = { X:px, B:o.B + 6 };
+    castShadow(g, q, 0, 0, pw, pd, ph, 0.16);
+    block(g, q, 0, 0, 0, pw, pd, ph, m, { quoins:true, trim:gold, plinth:tint(m.c, 0.82) });
+    winRow(g, q, 0, 0, 0, pw, 3, floors + 1, fl, { arch:'top', ww:5.5, wh:9, sill:false, gold:null });
+    if(n === 0){ const [sx, sy] = roofHip(g, q, 0, 0, ph, pw, pd, 26, C.roof, { ridge:gold || undefined }); g.fillStyle = GOLD[1]; g.fillRect(sx - 0.7, sy - 8, 1.4, 8); ell(g, sx, sy - 8, 1.8, 1.8, GOLD[0]); }
+    else if(n === 1){ merlons(g, q, 0, 0, ph, pw, pd, m, { step:7, h:3, gold }); const top = domeOn(g, q, pw / 2, pd * 0.5, ph + 1, 13, 9, C.dome, { band:GOLD[1], tip:GOLD[1] }); flag(g, q.X + pw / 2, top - 1, '#c8463c', 10); }
+    else { const [sx, sy] = roofHip(g, q, 0, 0, ph, pw, pd, 52, C.roof, { ridge:gold || undefined, ov:2 }); g.fillStyle = GOLD[1]; g.fillRect(sx - 0.7, sy - 10, 1.4, 10); flag(g, sx, sy - 10, '#c8463c', 11); }
+  });
+  /* the towers rising behind the great hall (9, 10) */
+  if(L >= 9) [cx - 70, cx + 70].forEach(tx=> roundTower(g, tx, o.B + 10, 11 + n, h + 62 + 2 * (n - 1), 'cone', tOpt));   // (below the great tower's spire at 10)
+}
+/* (4.80) at 10, the great tower over the pavilion, in place of its dome (the designer: "maybe palace 10 can be taller
+   too ... a castle which is taller and more grandiose"): a square tower set back on the pavilion's roof, turrets at its
+   corners, a balcony; a round tower over it; its spire, the tallest thing in the kingdom */
+function palaceGreatTower(g, op, pw, pd, ph, C){
+  const m = C.m, gold = C.gold, tw = 38, td = 30, th = 46, ty = pd * 0.32, tx = pw / 2 - tw / 2;
+  block(g, op, tx, ty, ph, tw, td, th, m, { quoins:true, trim:gold });
+  winRow(g, op, tx, ty, ph + 4, tw, 2, 2, 20, { arch:true, ww:6, wh:12, sill:false, gold:GOLD[1] });
+  { const [sx, sy] = pt(op, pw / 2, ty, ph + th - 6); ell(g, sx, sy, 5.4, 5.4, GOLD[1]); ell(g, sx, sy, 4, 4, '#fbf8f1'); }
+  rail(g, op, tx - 2, ty - 0.5, ph + th, tw + 4, 4.5, '#fbf8f1', gold);
+  /* its corner turrets, corbelled out at the top */
+  [[tx - 1, 1], [tx + tw + 1, -1]].forEach(([x])=>{ const [sx, sy] = pt(op, x, ty + 2, ph + th - 22); roundTower(g, sx, sy, 5, 30, 'cone', { roof:C.roof[1], roofL:C.roof[0], roofD:C.roof[2], tip:GOLD[1], white:true, cone:3.4, flag:'#c8463c' }); });
+  /* the round tower over it, its windows, the spire */
+  const [cx, cy] = pt(op, pw / 2, ty + td / 2, ph + th);
+  roundTower(g, cx, cy, 13, 50, 'cone', { roof:C.roof[1], roofL:C.roof[0], roofD:C.roof[2], tip:GOLD[1], white:true, band:GOLD[1], slits:0, cone:4.8, flag:'#c8463c' });
+  [-6, 0, 6].forEach(dx=> winF(g, { X:cx + dx - 2, B:cy - 18 }, 0, 0, 0, 4, 11, { arch:true, sill:false, frame:'#4e3b2a' }));
+}
 /* the palace on its terrace, filling its ground: the great hall and its pavilion in the middle, the wings either side,
    round towers at their ends, the keep behind (6 to 8), the cypresses of its garden; a portico (7); an attic floor,
    domed towers, slender towers by the pavilion, the terrace's balustrade (8); the great dome over the pavilion and
@@ -454,8 +512,9 @@ function cypress(g, sx, sb, h){
 function palaceGrand(g, X, Y, w, h, L){
   const W = w * 100, cx = X + W / 2, C = PALC(L), m = C.m, gold = C.gold, lv = Math.min(L - 6, 4);
   palaceWalls(g, X, Y, W, L, 'back');
-  /* the cypresses along the back wall, behind everything */
-  for(let k = 0; k < 15; k++){ const tx = X + 34 + k * 24.5; cypress(g, tx, Y + PG.back + 16 + (k % 2) * 3, 34 + (k % 3) * 5); }
+  /* the cypresses along the back wall, behind everything (6, 7); from 8 the grand buildings of its back court instead */
+  if(L >= 8) palaceRear(g, X, Y, W, L, C);
+  else for(let k = 0; k < 15; k++){ const tx = X + 34 + k * 24.5; cypress(g, tx, Y + PG.back + 16 + (k % 2) * 3, 34 + (k % 3) * 5); }
   /* the terrace: its face; the buildings stand on its top, their fronts on the line yb */
   const yT = Y + PG.terr, tH = 10 + 2 * lv, tx0 = X + 24, tx1 = X + W - 24;
   g.fillStyle = 'rgba(22,30,14,.2)'; g.fillRect(tx0 + 4, yT, tx1 - tx0, 6);
@@ -467,7 +526,7 @@ function palaceGrand(g, X, Y, w, h, L){
   const pw = 46 + 4 * lv, pd = md + 18, ph = hh + 10;
   const om = { X:cx - mw / 2 - md * DX / 2, B:yb - 6 }, op = { X:cx - pw / 2 - pd * DX / 2, B:yb + 3 };
   const oL = { X:om.X - ww - 6, B:yb - 16 }, oR = { X:om.X + mw + md * DX * 0 + 6 + 4, B:yb - 16 };
-  const tOpt = { roof:C.roof[1], roofL:C.roof[0], roofD:C.roof[2], tip:GOLD[1], flag:'#c8463c', slits:3, band:L >= 7 ? GOLD[1] : null, white:L >= 8, domeC:C.dome };
+  const tOpt = { roof:C.roof[1], roofL:C.roof[0], roofD:C.roof[2], tip:GOLD[1], flag:'#c8463c', slits:3, band:L >= 7 ? GOLD[1] : null, white:L >= 8, domeC:C.dome, cone:L >= 10 ? 2.8 : 1.7 };
   /* shadows */
   castShadow(g, oL, 0, 0, ww, wd, wh, 0.2); castShadow(g, oR, 0, 0, ww, wd, wh, 0.2); castShadow(g, om, 0, 0, mw, md, hh, 0.22);
   /* the keep behind the hall (6 to 8): a square tower, its spire */
@@ -479,7 +538,7 @@ function palaceGrand(g, X, Y, w, h, L){
   /* the wings, their roofs, a balcony each (8), banners (9) */
   [oL, oR].forEach(o=>{
     block(g, o, 0, 0, 0, ww, wd, wh, m, { quoins:true, trim:gold, plinth:tint(m.c, 0.8) });
-    winRow(g, o, 0, 0, 0, ww, 5, wf, fl, { arch:'top', ww:5.5, wh:9, flowers:L >= 8, gold:L >= 10 ? GOLD[1] : null });
+    winRow(g, o, 0, 0, 0, ww, 5, wf, fl, { arch:'top', ww:5.5, wh:9, flowers:L >= 8, gold:null });
     winRowS(g, o, ww, 0, 0, wd, 3, wf, fl, { ww:4.5, wh:8 });
     if(L >= 9) [0.3, 0.7].forEach(u=>{ const [sx, sy] = pt(o, ww * u - 3, 0, wh - 3); banner(g, sx, sy, 6, 15, '#3c6fc4', GOLD[1]); });
     roofHip(g, o, 0, 0, wh, ww, wd, 26 + 2 * lv, C.roof, { ridge:gold || undefined });
@@ -487,7 +546,7 @@ function palaceGrand(g, X, Y, w, h, L){
   });
   /* the great hall: three floors (an attic over them from 8), its roof, its dormers and chimneys */
   block(g, om, 0, 0, 0, mw, md, hh, m, { quoins:true, trim:gold, plinth:tint(m.c, 0.8) });
-  winRow(g, om, 0, 0, 0, mw, 9, 3, fl, { arch:'top', ww:6, wh:10, flowers:L >= 8, gold:L >= 10 ? GOLD[1] : null });
+  winRow(g, om, 0, 0, 0, mw, 9, 3, fl, { arch:'top', ww:6, wh:10, flowers:L >= 8, gold:null });
   if(attic) winRow(g, om, 0, 0, 3 * fl + 3, mw, 9, 1, attic, { ww:5, wh:4, sill:false, frame:'#5b4632' });
   winRowS(g, om, mw, 0, 0, md, 4, 3, fl, { ww:5, wh:9 });
   roofHip(g, om, 0, 0, hh, mw, md, 30 + 3 * lv, C.roof, { ridge:gold || tint(C.roof[0], 1.1), ridgeW:gold ? 2 : 1.6 });
@@ -496,14 +555,17 @@ function palaceGrand(g, X, Y, w, h, L){
   /* slender towers either side of the pavilion (8) */
   const st = L >= 8 ? [cx - pw / 2 - 12, cx + pw / 2 + 12] : [];
   /* the pavilion in the middle, standing forward and higher: its own roof (6 to 8), or flat under the great dome (9) */
-  castShadow(g, op, 0, 0, pw, pd, ph, 0.2);
+  g.save(); g.beginPath(); g.rect(X, om.B, W, 300); g.clip(); castShadow(g, op, 0, 0, pw, pd, ph, 0.2); g.restore();   // (4.80) on the ground before the hall, not up its front
   block(g, op, 0, 0, 0, pw, pd, ph, m, { quoins:true, trim:gold, plinth:tint(m.c, 0.8) });
-  winRow(g, op, 0, 0, 0, pw, 3, 3, fl, { arch:true, ww:6.5, wh:11, skip:L >= 7 ? 30 : 8, flowers:L >= 8, gold:L >= 10 ? GOLD[1] : null });
+  winRow(g, op, 0, 0, 0, pw, 3, 3, fl, { arch:true, ww:6.5, wh:11, skip:L >= 7 ? 30 : 8, flowers:L >= 8, gold:null });
   winRowS(g, op, pw, 0, 0, pd, 4, 3, fl, { ww:5, wh:9 });
-  if(L >= 9){
+  if(L >= 10){
     merlons(g, op, 0, 0, ph, pw, pd, m, { step:7, h:3.5, gold });
-    const top = domeOn(g, op, pw / 2, pd * 0.5, ph + 2, 24 + 2 * lv, 16, C.dome, { band:GOLD[1], tip:GOLD[1], crown:L >= 10 ? 1.5 : 0 });
-    if(L < 10){ const [fx] = pt(op, pw / 2, pd * 0.5, 0); flag(g, fx, top - 1, '#c8463c', 13); }
+    palaceGreatTower(g, op, pw, pd, ph, C);
+  } else if(L >= 9){
+    merlons(g, op, 0, 0, ph, pw, pd, m, { step:7, h:3.5, gold });
+    const top = domeOn(g, op, pw / 2, pd * 0.5, ph + 2, 24 + 2 * lv, 16, C.dome, { band:GOLD[1], tip:GOLD[1] });
+    { const [fx] = pt(op, pw / 2, pd * 0.5, 0); flag(g, fx, top - 1, '#c8463c', 13); }
   } else {
     const [sx, sy] = roofHip(g, op, 0, 0, ph, pw, pd, 28 + 3 * lv, C.roof, { ridge:gold || undefined });
     g.fillStyle = GOLD[1]; g.fillRect(sx - 0.8, sy - 10, 1.6, 10); ell(g, sx, sy - 10, 2, 2, GOLD[0]);
@@ -520,16 +582,16 @@ function palaceGrand(g, X, Y, w, h, L){
     if(L >= 8) rail(g, op, qx + 2, -13.5, qh + 3.5, qw - 4, 0, '#fbf8f1');
   }
   [-1, 1].forEach(s=>{ const [sx, sy] = pt(op, pw / 2 + s * (pw / 2 - 7) - 3.5, 0, ph - 6); banner(g, sx, sy, 7, 20, '#c8463c', GOLD[1]); });
-  st.forEach(tx=>{ const [sx, sy] = [tx, yb + 2]; roundShadow(g, sx, sy, 9, hh + 34, 0.16); roundTower(g, sx, sy, 8.5 + lv * 0.4, hh + 30 + 4 * lv, 'dome', Object.assign({}, tOpt, { slits:2, flag:L >= 10 ? GOLD[1] : '#c8463c' })); });
-  /* the round towers at the wings' outer ends */
-  const tr = 13 + lv, th = wh + 46 + 5 * lv, tRoof = L >= 8 ? 'dome' : 'cone';
+  st.forEach(tx=>{ const [sx, sy] = [tx, yb + 2]; roundShadow(g, sx, sy, 9, hh + 34, 0.16); roundTower(g, sx, sy, 8.5 + lv * 0.4, hh + 30 + 4 * lv + (L >= 10 ? 22 : 0), L >= 10 ? 'cone' : 'dome', Object.assign({}, tOpt, { slits:2, flag:'#c8463c', cone:3.2 })); });
+  /* the round towers at the wings' outer ends (spires at 10, taller) */
+  const tr = 13 + lv, th = wh + 46 + 5 * lv + (L >= 10 ? 16 : 0), tRoof = L >= 10 ? 'cone' : L >= 8 ? 'dome' : 'cone';
   tower(g, oL, -2, 10, 0, tr, th, tRoof, tOpt); tower(g, oR, ww + 2, 10, 0, tr, th, tRoof, tOpt);
   /* the terrace's steps, its balustrade (8), statues beside the steps (9), lamps */
   const sw = 40 + 6 * lv, sx0 = cx - sw / 2;
   for(let k = 0; k < 5; k++){ const yy = yT - k * (tH / 5), ws = sw - k * 2; g.fillStyle = k % 2 ? tint(m.c, 1.08) : tint(m.c, 0.97); g.fillRect(cx - ws / 2, yy - tH / 5, ws, tH / 5 + 0.6); g.fillStyle = 'rgba(0,0,0,.13)'; g.fillRect(cx - ws / 2, yy - 0.8, ws, 0.8); }
   if(L >= 10){ g.fillStyle = '#d24242'; g.fillRect(cx - 8, yb + 2, 16, yT - yb - 2); g.fillStyle = GOLD[1]; g.fillRect(cx - 8, yb + 2, 1, yT - yb - 2); g.fillRect(cx + 7, yb + 2, 1, yT - yb - 2); }
   if(L >= 8) [[tx0 + 2, sx0 - 2], [sx0 + sw + 2, tx1 - 2]].forEach(([a, b])=>{ g.fillStyle = '#fbf8f1'; g.fillRect(a, yT - tH - 6, b - a, 1.6); for(let x = a; x < b; x += 3.4) g.fillRect(x, yT - tH - 5, 1.3, 5); if(gold){ g.fillStyle = gold; g.fillRect(a, yT - tH - 6.6, b - a, 0.8); } });
-  if(L >= 9) [sx0 - 9, sx0 + sw + 9].forEach(px=> statue(g, px, yT + 2, 1.05, L >= 10 ? GOLD[1] : null));
+  if(L >= 9) [sx0 - 9, sx0 + sw + 9].forEach(px=> statue(g, px, yT + 2, 1.05, null));   // (4.80) white marble at 10 too, not gold
   [sx0 - 2, sx0 + sw + 2].forEach(px=> lamp(g, px, yT - tH - 6, 13, L >= 9));
   /* the forecourt: the fountain, clipped trees in tubs along the avenue (7), lamps (8), statues in the gardens (10) */
   const yc = Y + PG.cross, ax = 22 + 4 * lv;
@@ -537,7 +599,7 @@ function palaceGrand(g, X, Y, w, h, L){
   if(L >= 9) ell(g, cx, yc - 15 - 2 * lv, 3, 3, GOLD[1]);
   if(L >= 7) [-1, 1].forEach(s=>{ [yT + 14, Y + 274].forEach(ty=> gardenTree(g, cx + s * (ax + 9), ty, 0.82, L >= 8 ? '#f2a33a' : null, true)); });
   if(L >= 8) [-1, 1].forEach(s=> lamp(g, cx + s * (ax + 4), yc + 2, 14, L >= 9));
-  if(L >= 10) [-1, 1].forEach(s=> statue(g, cx + s * 152, Y + 232, 1.05, GOLD[1]));
+  if(L >= 10) [-1, 1].forEach(s=> statue(g, cx + s * 152, Y + 232, 1.05, null));
   palaceWalls(g, X, Y, W, L, 'front');
 }
 /* where the palace's people stand: the steward by the door at the top of the steps, the heir at their foot, servants in
