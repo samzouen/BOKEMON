@@ -622,6 +622,7 @@ function renderSound(){
         style="width:100%;margin-top:8px;accent-color:var(--cinnabar);">
 
       <button class="btn btn-jade" id="testVoiceBtn" style="margin-top:14px;">🔊 Test voice</button>
+      <div id="voiceReport" style="font-size:12px;color:var(--ink);font-weight:700;margin-top:8px;line-height:1.4;"></div>
       <div style="font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:8px;">Words are always read in Mandarin. Music ducks automatically while a word is spoken.</div>
     </div>
 
@@ -677,10 +678,13 @@ function renderSound(){
     });
     musS.addEventListener('change', async ()=>{ await saveProfile(); });
   }
-  /* (4.83) the same way the words are spoken (speakWord, 03-quiz.js): what this tests is what the quiz does */
+  /* (4.83) the same way the words are spoken (speakWord, 03-quiz.js): what this tests is what the quiz does.
+     (4.84) Under it, what the device says it did: the voice it used, or that it has none, or that it never started. */
   $('#testVoiceBtn').addEventListener('click', ()=>{
-    if(typeof speechOn === 'function' && !speechOn()) return toast('Voice not available here.');
-    speakWord('你好');
+    const out = $('#voiceReport');
+    if(typeof speechOn === 'function' && !speechOn()){ if(out) out.textContent = 'This browser cannot speak.'; return toast('Voice not available here.'); }
+    if(out) out.textContent = '…';
+    speakWord('你好', { onReport: msg=>{ const o = $('#voiceReport'); if(o) o.textContent = msg; } });
   });
   const cav = $('#changeAvatarBtn');
   if(cav) cav.addEventListener('click', ()=> goForward('avatarPick', 'sound'));

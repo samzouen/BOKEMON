@@ -106,7 +106,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.83';
+const GAME_VERSION = '4.84';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -287,7 +287,18 @@ function buzz(p){
   } catch(e){ return false; }
 }
 
+/* (4.84) THE iPHONE'S SILENT SWITCH — the designer: "Previously the words would play even on silent mode". On silent, an
+   iPhone mutes what a page plays as background ('ambient') sound: its Web Audio, and Safari's speech with it unless media
+   is playing, while a video's sound carries on. The game says its sound is media playback (the Audio Session API, Safari
+   16.4 and later), so the effects and the music play through the switch as a video's would; for the spoken word, see
+   03-quiz.js (speechThroughSwitch). Said at once, and again at every tap in case anything has set it back. */
+function declarePlayback(){
+  try { const s = navigator.audioSession; if(s && s.type !== 'playback') s.type = 'playback'; } catch(e){}
+}
+declarePlayback();
+
 function unlockAudio(){
+  declarePlayback();                               // (4.84)
   ensureAudioCtx();
   wakeAudio();                                     // (3.49) any stop, not only 'suspended'
   if(audio.unlocked){ retryBlockedMusic(); return; }
@@ -295,8 +306,13 @@ function unlockAudio(){
   applyVolumes();
   /* (3.28) every effect fetched and decoded once, now — (3.49) one at a
      time, the short and important ones first, the long ones last (the
-     defeat's 2¼ minutes decodes to about 50 MB), and tried again if one fails */
-  preloadSfx(SFX_PRELOAD_ORDER.concat(Object.keys(SFX_MAP)));
+     defeat's 2¼ minutes decodes to about 50 MB), and tried again if one fails.
+     (4.84) The four long ones (SFX_HEAVY: three quarters of all the effects' memory once decoded) 20 s later, so a phone's
+     first moments, and its first spoken words, are not spent on them; asked for sooner, one is fetched at once and plays
+     from its file meanwhile (playSfx, playSfxSoon, ensureSfx). */
+  const every = SFX_PRELOAD_ORDER.concat(Object.keys(SFX_MAP));
+  preloadSfx(every.filter(ev=> !SFX_HEAVY.includes(ev)));
+  setTimeout(()=> preloadSfx(SFX_HEAVY), 20000);
   if(audio.musicName && !audio.musicEl) playMusic(audio.musicName);
 }
 try{
@@ -364,6 +380,9 @@ function playBackSfx(){
 const SFX_PRELOAD_ORDER = ['answer_correct', 'answer_wrong', 'ui_click', 'ui_back', 'hit_dealt', 'hit_taken', 'victory', 'level_up',
   'catch_success', 'catch_miss', 'power_up', 'stone_ultra', 'stone_veryhigh', 'stone_high', 'stone_mid', 'stone_low', 'recovery_heal',
   'core_tinkle', 'evolution', 'stone_roll', 'core_blast', 'pulsar', 'eraser_beam', 'eraser_boom', 'ambush', 'defeat'];   // (4.07) the 2¼-minute defeat last again: 4.05's two came after it
+/* (4.84) decoded 20 s after the first tap rather than at it (unlockAudio): the defeat (2¼ min, about 50 MB decoded), the
+   evolution (34 s, 12 MB), the stone roll (22 s, 8 MB) and the core blast (10 s, 4 MB) */
+const SFX_HEAVY = ['defeat', 'evolution', 'stone_roll', 'core_blast'];
 const SFX_TRIES = 3;                                   // a decode that fails is tried again, up to three times
 /* Can this file still be fetched? (never asked, or failed with tries left) */
 function sfxWanted(file){

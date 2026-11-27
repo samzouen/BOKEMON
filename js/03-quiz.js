@@ -356,7 +356,17 @@ function pickMandarinVoice(){
     if(lang.startsWith('zh-tw')) return 6;     // Taiwanese Mandarin — usable, last resort
     return 5;
   };
-  candidates.sort((a,b)=>score(a)-score(b));
+  /* (4.84) Within a language, the better voice first: a downloaded Premium, then an Enhanced, then the standard one. The
+     robotic 'Eloquence' voices an iPhone lists as well (Eddy, Flo, Grandma, Grandpa, Reed, Rocko, Sandy, Shelley) only
+     if there is nothing else. Until now the first Mandarin voice in the device's list was taken, whichever it was. */
+  const quality = v => {
+    const id = ((v.voiceURI||'') + ' ' + (v.name||'')).toLowerCase();
+    if(/eloquence|\b(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/.test(id)) return 9;
+    if(id.includes('premium')) return 0;
+    if(id.includes('enhanced')) return 1;
+    return 2;
+  };
+  candidates.sort((a,b)=> (score(a)*10 + quality(a)) - (score(b)*10 + quality(b)));
   _mandarinVoice = candidates[0];
   _voiceResolved = true;
   return _mandarinVoice;
@@ -368,20 +378,24 @@ try{
   }
 }catch(e){}
 
-/* ---------- (4.83) THE SPOKEN WORD, MADE TO GET THROUGH ON AN iPAD ----------
-   The designer: "Even when the app is closed and reopened, the Chinese words don't seem to come through reliably."
-   The iPad's own speech (WebKit) was eating the word in three ways:
-   1. Each time the app starts, the iPad will not speak until it is first asked to INSIDE a tap. The word is spoken on
-      its own, a moment after the writing pad is ready (from a timer, not a tap), so it was dropped without a sound or an
-      error until 🔊 Listen had been pressed once; closing and reopening the app put the block back. Now the first tap
-      anywhere speaks a silent space (primeSpeech), which lifts the block for the rest of the session.
-   2. Every prompt cancelled the speech and spoke straight after. On an iPad the cancel lands a moment later and can take
-      the new word with it, or leave the speech queue stuck. Now it cancels only when a word is still speaking, and the
-      new word waits 0.2 s after any cancel.
-   3. A word that has not started 1.6 s after it was asked for was lost (a queue left stuck when the iPad was put away
-      mid-word, say): it is cleared and asked for again, and if that one is lost too, Listen glows until it is tapped.
-   The utterance speaking is held on to, so it cannot be thrown away mid-word. */
-const SPEECH_RETRY_MS = 1600, SPEECH_AFTER_CANCEL_MS = 200;
+/* ---------- THE SPOKEN WORD ON AN iPHONE OR iPAD ----------
+   (4.83) the designer: "Even when the app is closed and reopened, the Chinese words don't seem to come through
+   reliably". (4.84): "starting up the app means the first few words are not pronounced … the words tend to be delayed
+   and half-pronounced". How the iPhone's own speech behaves (WebKit), and what the game does about each:
+   1. After every start of the app it will not speak until it is first asked to inside a tap: a word asked for from a
+      timer is dropped, with no sound and no error. The first tap anywhere speaks a silent 你 in the Chinese voice
+      (primeSpeech): that lifts the rule for the session, and wakes the voice before the first word is wanted.
+   2. A cancel lands late, at any moment, and can take the next word with it, or cut it off. So the game does not cancel
+      a word being said: a word asked for meanwhile waits its turn (a word lasts a second or two), and the same word asked
+      for again while it is being said, or about to be, is not doubled. Only a word that has not started 3 s after it was
+      asked (it is lost), or one that started 8 s ago and never finished (stuck), is cleared, the next time a word is
+      asked for, and that word then waits 0.4 s.
+   3. Its voice can take a while to wake. (4.83) cancelled a word not started within 1.6 s and asked again: on an iPhone
+      that cancelled the first words outright and cut others off as they began. Now nothing is cancelled for being slow:
+      a word not started after 3 s only lights Listen, whose tap asks again; if it starts late, it plays.
+   4. The silent switch: speechThroughSwitch below, and declarePlayback (02-core.js).
+   The word is held on to while it is said, so it cannot be thrown away mid-word. */
+const SPEECH_LATE_MS = 3000, SPEECH_LONG_MS = 8000, SPEECH_AFTER_CANCEL_MS = 400;
 const _speech = { primed:false, primer:null, live:null, seq:0, cancelAt:0 };
 function speechOn(){
   try { return typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined'; } catch(e){ return false; }
@@ -391,17 +405,79 @@ function speechCancel(){
   _speech.cancelAt = Date.now();
   _speech.live = null;
 }
-/* A silent space, spoken inside the tap: from then on the iPad speaks when asked from anywhere. A tap brings several
-   events (pointerup, touchend, mouseup, click) and the iPad may not count every one of them as the tap, so it is tried at
-   each until one is taken. Taken shows at once: the iPad starts it there and then, and `speaking` turns true; refused,
-   nothing changes. (A word that starts, in speakWord, settles it too.) */
+
+/* (4.84) THROUGH THE SILENT SWITCH — the designer: "Previously the words would play even on silent mode". An iPhone on
+   silent mutes a page's speech unless the page is playing media, and it still reports the word as said, so nothing in
+   the game can tell. The game's sound is declared media playback (declarePlayback, 02-core.js), and a moment of silence
+   is played through an <audio> element just before each word, so a media player's sound is under way when the word
+   starts. The first play is inside a tap, which lets the same element play again later on its own. Only on an iPhone
+   or iPad; elsewhere nothing is played. */
+function appleTouch(){
+  try { return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+  catch(e){ return false; }
+}
+function silentClip(){
+  if(_speech.clip !== undefined) return _speech.clip;
+  _speech.clip = null;
+  try {
+    if(!appleTouch() || typeof Audio === 'undefined') return null;
+    const rate = 8000, n = 1600, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);     // 0.2 s of silence, as a WAV
+    const put = (o, s)=>{ for(let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    put(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); put(8, 'WAVE'); put(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true);
+    v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    put(36, 'data'); v.setUint32(40, n * 2, true);
+    const a = new Audio(URL.createObjectURL(new Blob([buf], { type:'audio/wav' })));
+    a.preload = 'auto';
+    a.setAttribute('playsinline', '');
+    _speech.clip = a;
+  } catch(e){ _speech.clip = null; }
+  return _speech.clip;
+}
+/* the silence's first play, inside a tap (until one takes) */
+function clipInTap(){
+  const a = silentClip();
+  if(!a || _speech.clipOk) return;
+  try { const p = a.play(); if(p && p.then) p.then(()=>{ _speech.clipOk = true; }, ()=>{}); } catch(e){}
+}
+/* the silence, then `then`: at once where there is none, and at most 0.15 s later if it is slow to start */
+function speechThroughSwitch(then){
+  if(typeof declarePlayback === 'function') declarePlayback();
+  const a = silentClip();
+  if(!a){ then(); return; }
+  let went = false;
+  const go = ()=>{ if(went) return; went = true; then(); };
+  try { a.currentTime = 0; } catch(e){}
+  try { const p = a.play(); if(p && p.then) p.then(go, go); else go(); } catch(e){ go(); }
+  setTimeout(go, 150);
+}
+/* (4.84) what Settings' Test voice shows: what the device says it did, so a muted phone can be told from a missing voice */
+function speechReport(text, v, started){
+  if(!started) return `The device has not started speaking after ${SPEECH_LATE_MS / 1000} seconds. Tap Test voice again.`;
+  let zh = null;
+  try { const all = speechSynthesis.getVoices() || []; zh = all.length ? all.some(isMandarin) : null; } catch(e){}
+  if(zh === false) return 'The device has no Chinese voice. Add one in Settings › Accessibility › Spoken Content › Voices › Chinese.';
+  const who = v ? `${v.name} (${v.lang})` : 'its own Chinese voice';
+  return `The device says it spoke ${text} with ${who}. Heard nothing? Turn the volume up` +
+    (appleTouch() ? ', and try once with Silent Mode off.' : '.');
+}
+
+/* A silent 你, spoken inside the tap, in the voice the words will use: from then on the iPhone speaks when asked from
+   anywhere, and the voice is awake for the first word. A tap brings several events (pointerup, touchend, mouseup,
+   click) and the iPhone may not count every one of them as the tap, so it is tried at each until one is taken. Taken
+   shows at once: the iPhone starts it there and then, and `speaking` turns true; refused, nothing changes. (A word that
+   starts, in speakWord, settles it too.) */
 function primeSpeech(e){
-  if(_speech.primed || !speechOn() || (e && e.isTrusted === false)) return;
+  if(e && e.isTrusted === false) return;
+  clipInTap();                                                   // (4.84)
+  if(_speech.primed || !speechOn()) return;
   try {
     if(speechSynthesis.paused) speechSynthesis.resume();
     const busy = ()=> !!(speechSynthesis.speaking || speechSynthesis.pending);
     if(busy()){ _speech.primed = true; return; }          // already speaking: nothing is blocking it
-    const u = new SpeechSynthesisUtterance(' ');
+    const u = new SpeechSynthesisUtterance('你');
+    const v = pickMandarinVoice();
+    if(v) u.voice = v;
     u.volume = 0; u.rate = 2; u.lang = 'zh-CN';
     _speech.primer = u;
     speechSynthesis.speak(u);
@@ -435,15 +511,23 @@ try {
   }
 } catch(e){}
 
-function speakWord(text){
+/* opts.onReport(text): (4.84) told what the device did with the word (Settings' Test voice) */
+function speakWord(text, opts){
   if(!text || !speechOn()) return;
-  const seq = ++_speech.seq;
+  const report = opts && typeof opts.onReport === 'function' ? opts.onReport : null;
   try { if(speechSynthesis.paused) speechSynthesis.resume(); } catch(e){}
-  let busy = false;
-  try { busy = !!_speech.live && (speechSynthesis.speaking || speechSynthesis.pending); } catch(e){}
-  if(busy) speechCancel();
-  const go = (attempt)=>{
-    if(seq !== _speech.seq) return;                       // a newer word was asked for
+  const now = Date.now();
+  const L = _speech.live && !_speech.live.ended ? _speech.live : null;
+  const lost  = !!L && !L.startedAt && (L.late || now - L.askedAt > SPEECH_LATE_MS);
+  const stuck = !!L && !!L.startedAt && now - L.startedAt > SPEECH_LONG_MS;
+  /* the same word, being said or about to be: not asked twice. (One asked before a tap lifted the iPhone's rule was
+     dropped, not kept, so it is asked again.) */
+  if(L && !report && L.text === text && L.primed && !lost && !stuck) return;
+  /* never a word being said; a lost or stuck one, or one still waiting to start that a new word replaces */
+  if(L && (lost || stuck || (!L.startedAt && L.text !== text))) speechCancel();
+  const seq = ++_speech.seq;
+  const say = ()=>{
+    if(seq !== _speech.seq) return;                       // a newer word was asked for meanwhile
     try {
       const u = new SpeechSynthesisUtterance(text);
       const v = pickMandarinVoice();
@@ -451,6 +535,7 @@ function speakWord(text){
       u.lang = 'zh-CN';                          // always Mandarin, never inherited
       u.rate = 0.85;
       u.volume = state?.settings?.volume ?? 0.8;
+      const rec = { u, text, askedAt:Date.now(), startedAt:0, ended:false, late:false, primed:_speech.primed };
       // Duck the music while the Chinese prompt plays so it stays clearly audible.
       let restored = false;
       const restore = ()=>{ if(restored) return; restored = true;
@@ -458,25 +543,32 @@ function speakWord(text){
                             else if(audio.musicEl) audio.musicEl.volume = musicVolume(); };
       if(musicGain && actx) rampGain(musicGain, musicVolume()*0.25, 150);
       else if(audio.musicEl) audio.musicEl.volume = musicVolume() * 0.25;
-      let started = false;
-      const done = ()=>{ restore(); if(_speech.live === u) _speech.live = null; };
-      u.addEventListener('start', ()=>{ started = true; _speech.primed = true; listenGlow(false); });
+      const done = ()=>{ rec.ended = true; restore(); if(_speech.live === rec) _speech.live = null; };
+      u.addEventListener('start', ()=>{ rec.startedAt = Date.now(); rec.late = false; _speech.primed = true; listenGlow(false);
+                                         if(report) report(speechReport(text, v, true)); });
       u.addEventListener('end', done);
       u.addEventListener('error', done);
-      setTimeout(restore, 6000);   // failsafe if the end event never fires
-      _speech.live = u;
+      setTimeout(restore, 8000);   // failsafe if the end event never fires
+      _speech.live = rec;
       speechSynthesis.speak(u);
+      /* Not started after 3 s. Nothing is cancelled here. If the speech is idle, the word was dropped outright (nothing
+         waiting, nothing to cut), so it is asked for once more; otherwise (a slow voice, or a stuck queue) Listen lights,
+         and its tap asks again. */
       setTimeout(()=>{
-        if(started || seq !== _speech.seq) return;
-        done();
-        speechCancel();                                    // whatever is stuck in front of it goes
-        if(attempt === 0) setTimeout(()=> go(1), SPEECH_AFTER_CANCEL_MS);
-        else { _speech.primed = false; listenGlow(true); }  // the next tap lifts the block again
-      }, SPEECH_RETRY_MS);
+        if(rec.startedAt || rec.ended || _speech.live !== rec) return;
+        let idle = false;
+        try { idle = !speechSynthesis.speaking && !speechSynthesis.pending; } catch(e){}
+        if(idle && _speech.primed && !(opts && opts._again)){ _speech.live = null; speakWord(text, Object.assign({}, opts, { _again:true })); return; }
+        rec.late = true;
+        _speech.primed = false;                            // the next tap lifts the iPhone's rule again, if that was it
+        listenGlow(true);
+        if(report) report(speechReport(text, v, false));
+      }, SPEECH_LATE_MS);
     } catch(e){}
   };
+  const go = ()=> speechThroughSwitch(say);
   const wait = _speech.cancelAt + SPEECH_AFTER_CANCEL_MS - Date.now();
-  if(wait > 0) setTimeout(()=> go(0), wait); else go(0);
+  if(wait > 0) setTimeout(go, wait); else go();
 }
 
 /* ---------- (3.97) the spelling screen's battle look ---------- */
@@ -850,9 +942,11 @@ function renderQuiz(){
   /* The stroke data is fetched asynchronously. Starting the clock here meant a
      slow character could time out before it ever appeared — failing a word the
      child was never shown. Wait until the strokes are actually on screen. */
+  /* (4.84) the word at once, as the page comes up, not after the pad and a further 0.2 s: on a phone that was half a
+     second before anything was heard. The clock still waits for the pad. */
+  speakWord(word);
   whenWriterReady(()=>{
     if(!q.config.relaxed) startTimer();
-    setTimeout(()=> speakWord(word), 200);
   });
   if(q.config.onRender) q.config.onRender(q);                         // (4.27) a catch's page, drawn
 }
