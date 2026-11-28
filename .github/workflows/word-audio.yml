@@ -1,0 +1,77 @@
+# The spoken words: whenever a word list changes on GitHub, this makes a clip for every new phrase (and for any whose
+# reading changed in words/pinyin.txt), and saves them in words/audio. The game plays these instead of asking the
+# phone to speak. It can also be run by hand: the Actions tab, "Word audio", "Run workflow".
+# The script that does it: .github/word-audio/make_word_audio.py
+name: Word audio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'words/**'
+      - '!words/audio/**'
+      - 'words.txt'
+      - 'js/02-core.js'
+      - '.github/word-audio/**'
+      - '.github/workflows/word-audio.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: word-audio
+  cancel-in-progress: false
+
+jobs:
+  clips:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: The voice, kept between runs
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bokemon-voice
+          key: bokemon-voice-baker-v1
+
+      - name: Tools
+        run: |
+          pip install sherpa-onnx==2.0.3 pypinyin==0.55.0 jieba==0.42.1 numpy
+          command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+
+      - name: Make the clips
+        run: python .github/word-audio/make_word_audio.py --prune
+
+      - name: Save them
+        id: save
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A words/audio
+          if git diff --cached --quiet; then
+            echo "Every word already has its clip."
+            exit 0
+          fi
+          n=$(git diff --cached --name-only --diff-filter=A -- 'words/audio/*.mp3' | wc -l)
+          git commit -m "Word audio: $n new clip(s)"
+          for i in 1 2 3; do
+            if git pull --rebase && git push; then echo "pushed=yes" >> "$GITHUB_OUTPUT"; exit 0; fi
+            sleep 5
+          done
+          exit 1
+
+      - name: Republish the site
+        if: steps.save.outputs.pushed == 'yes'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || true
