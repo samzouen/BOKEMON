@@ -732,6 +732,7 @@ function go(screen){
   /* (A companion keeps its hurts out of a fight now, as the party does — 3.52.) */
   /* Training with the Monkey King ends when you walk away from it (2.87). */
   if(ui.coreSession && !['coreSpar','battle','quiz','spelling'].includes(screen) && typeof endCoreSession === 'function') endCoreSession();
+  if(ui.shortcutFrom && !['companions','talents','stats'].includes(screen)) ui.shortcutFrom = null;   // (4.86) Back goes to the Party again
   ui.screen = screen;
   if(typeof assetRegionCheck === 'function') assetRegionCheck();   // (4.09) a region come to since the loading screen: its backdrops, quietly
   render();

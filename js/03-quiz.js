@@ -295,6 +295,8 @@ function newEliteStone(){
    results = [{ text, passed, mistakes, timedOut }] */
 const MISTAKE_LIMIT = 5;
 const TIMER_SECONDS = 15;
+/* (4.86) the clock waits for the word to be heard (renderQuiz); with no voice at all, this long after the pad is up */
+const QUIZ_HEAR_WAIT_MS = 6000;
 let quizTimer = null;      // single shared interval handle
 let quizToken = 0;         // bumped each word; stale intervals self-cancel
 
@@ -511,9 +513,153 @@ try {
   }
 } catch(e){}
 
-/* opts.onReport(text): (4.84) told what the device did with the word (Settings' Test voice) */
+/* ---------- (4.85) THE WORD'S CLIP, MADE IN ADVANCE ----------
+   The designer: "i would like a script that makes the spoken words from my list". Every phrase on the lists has a clip,
+   made by GitHub whenever a list changes (.github/word-audio/make_word_audio.py; wordClips, 02-core.js). Played through
+   the game's own sound it starts at once, sounds the same on every device and plays on silent; nothing about the
+   phone's speech can lose it. A phrase with no clip (one added on the device, or one not made yet) is spoken by the
+   device, as before (speakDevice), and so is one whose clip cannot be fetched in time.
+   Fetched clips are kept on the device (the browser's Cache Storage): a clip's name changes whenever its sound does,
+   so a kept one is never stale. After the first tap all of them are fetched in the background, a few at a time
+   (about 4 MB for 666 phrases), so later words never wait on the internet. */
+const CLIP_CACHE = 'bokemon-word-audio', CLIP_WAIT_MS = 1800, CLIP_DECODED_KEEP = 40;
+const _clip = { bufs:new Map(), now:null, cache:null, warmed:null };
+function wordClipFile(text){
+  try { return (wordClips && Object.prototype.hasOwnProperty.call(wordClips, text) && wordClips[text]) || null; } catch(e){ return null; }
+}
+async function clipCache(){
+  if(_clip.cache !== null) return _clip.cache;
+  try { _clip.cache = typeof caches !== 'undefined' ? await caches.open(CLIP_CACHE) : false; } catch(e){ _clip.cache = false; }
+  return _clip.cache;
+}
+/* the clip's bytes: from the device's keeping, or fetched (and kept) */
+async function clipBytes(file){
+  const url = WORD_AUDIO_DIR + file, c = await clipCache();
+  let res = null;
+  if(c){ try { res = await c.match(url); } catch(e){} }
+  if(!res){
+    res = await fetch(url);
+    if(!res.ok) throw new Error('clip ' + res.status);
+    if(c){ try { await c.put(url, res.clone()); } catch(e){} }
+  }
+  return res.arrayBuffer();
+}
+/* decoded, ready to play: the last 40 are held */
+async function clipBuffer(file){
+  if(_clip.bufs.has(file)){ const b = _clip.bufs.get(file); _clip.bufs.delete(file); _clip.bufs.set(file, b); return b; }
+  const ctx = ensureAudioCtx();
+  if(!ctx) throw new Error('no sound');
+  const bytes = await clipBytes(file);
+  const buf = await new Promise((ok, no)=>{ const p = ctx.decodeAudioData(bytes, ok, no); if(p && p.then) p.then(ok, no); });
+  _clip.bufs.set(file, buf);
+  while(_clip.bufs.size > CLIP_DECODED_KEEP) _clip.bufs.delete(_clip.bufs.keys().next().value);
+  return buf;
+}
+function stopClip(){
+  const v = _clip.now;
+  _clip.now = null;
+  if(v && !v.ended){ try { v.src.stop(); } catch(e){} }
+}
+/* every clip on the device, fetched in the background a few at a time; clips no list uses any more are let go */
+function warmWordClips(){
+  const files = [...new Set(Object.values(wordClips || {}))];
+  const key = files.length + ':' + (files[0] || '');
+  if(!files.length || _clip.warmed === key) return;
+  _clip.warmed = key;
+  (async ()=>{
+    const c = await clipCache();
+    if(!c) return;
+    let have = new Set();
+    try { have = new Set((await c.keys()).map(r=> r.url.split('/').pop())); } catch(e){}
+    const todo = files.filter(f=> !have.has(f));
+    let i = 0;
+    const worker = async ()=>{
+      while(i < todo.length){
+        const url = WORD_AUDIO_DIR + todo[i++];
+        try { const r = await fetch(url); if(r.ok) await c.put(url, r); } catch(e){}
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    const want = new Set(files);
+    try { for(const r of await c.keys()){ if(!want.has(r.url.split('/').pop())) await c.delete(r); } } catch(e){}
+  })();
+}
+/* the word list's clips may have changed (02-core.js, syncWordClips): fetch any new ones once there has been a tap */
+function wordClipsChanged(){ if(audio.unlocked) setTimeout(warmWordClips, 3000); }
+try { document.addEventListener('pointerdown', ()=>{ if(!_clip.warmed) setTimeout(warmWordClips, 3000); }, { once:true, passive:true }); } catch(e){}
+
+function speakClip(text, file, opts){
+  const report = opts && typeof opts.onReport === 'function' ? opts.onReport : null;
+  const N = _clip.now;
+  if(N && !N.ended && N.text === text && !report){ heardNow(opts); return; }   // being said: not doubled
+  const seq = ++_speech.seq;                                         // a newer word, clip or not, wins
+  stopClip();
+  try { if(_speech.live && !_speech.live.ended) speechCancel(); } catch(e){}   // a word the device was saying goes
+  wakeAudio();
+  let settled = false;
+  const toDevice = ()=>{ if(seq === _speech.seq) speakDevice(text, opts); };
+  const giveUp = setTimeout(()=>{ if(!settled){ settled = true; toDevice(); } }, CLIP_WAIT_MS);
+  const play = buf=>{
+    if(settled) return;
+    settled = true; clearTimeout(giveUp);
+    if(seq !== _speech.seq) return;
+    const ctx = actx;
+    // Duck the music while the word plays, as for the device's voice.
+    let restored = false;
+    const restore = ()=>{ if(restored) return; restored = true;
+                          if(musicGain && ctx) rampGain(musicGain, musicVolume(), 250);
+                          else if(audio.musicEl) audio.musicEl.volume = musicVolume(); };
+    if(musicGain && ctx) rampGain(musicGain, musicVolume()*0.25, 150);
+    else if(audio.musicEl) audio.musicEl.volume = musicVolume() * 0.25;
+    const g = ctx.createGain();
+    g.gain.value = state?.settings?.volume ?? 0.8;
+    g.connect(ctx.destination);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(g);
+    const v = { src, text, ended:false };
+    src.onended = ()=>{ v.ended = true; try { g.disconnect(); } catch(e){} restore(); if(_clip.now === v) _clip.now = null; };
+    _clip.now = v;
+    src.start(0);
+    heardNow(opts);
+    listenGlow(false);
+    if(report) report(`Played the recorded voice saying ${text}. Heard nothing? Turn the volume up.`);
+  };
+  clipBuffer(file).then(buf=>{
+    if(settled) return;
+    const ctx = actx;
+    if(ctx && ctx.state === 'running') return play(buf);
+    /* the sound system is stopped (the phone put it to sleep): asked to start, and given half a second */
+    wakeAudio();
+    const t0 = Date.now();
+    const iv = setInterval(()=>{
+      if(settled){ clearInterval(iv); return; }
+      if(actx && actx.state === 'running'){ clearInterval(iv); play(buf); }
+      else if(Date.now() - t0 > 500){ clearInterval(iv); settled = true; clearTimeout(giveUp); toDevice(); }
+    }, 50);
+  }).catch(()=>{ if(!settled){ settled = true; clearTimeout(giveUp); toDevice(); } });
+}
+
+/* (4.86) opts.onStart(): told once, when the word is heard — its clip playing, or the device's voice starting (the quiz's
+   clock waits for it); at once when there is nothing to wait for */
+function heardNow(opts){
+  const f = opts && typeof opts.onStart === 'function' ? opts.onStart : null;
+  if(!f) return;
+  opts.onStart = null;
+  try { f(); } catch(e){}
+}
+/* The word, spoken: its clip where there is one and the sound system has been started by a tap; otherwise the device.
+   opts.onReport(text): told what happened (Settings' Test voice). */
 function speakWord(text, opts){
-  if(!text || !speechOn()) return;
+  if(!text){ heardNow(opts); return; }
+  const file = wordClipFile(text);
+  if(file && audio.unlocked && ensureAudioCtx()) return speakClip(text, file, opts);
+  return speakDevice(text, opts);
+}
+
+/* opts.onReport(text): (4.84) told what the device did with the word (Settings' Test voice) */
+function speakDevice(text, opts){
+  if(!text || !speechOn()){ heardNow(opts); return; }
   const report = opts && typeof opts.onReport === 'function' ? opts.onReport : null;
   try { if(speechSynthesis.paused) speechSynthesis.resume(); } catch(e){}
   const now = Date.now();
@@ -522,7 +668,11 @@ function speakWord(text, opts){
   const stuck = !!L && !!L.startedAt && now - L.startedAt > SPEECH_LONG_MS;
   /* the same word, being said or about to be: not asked twice. (One asked before a tap lifted the iPhone's rule was
      dropped, not kept, so it is asked again.) */
-  if(L && !report && L.text === text && L.primed && !lost && !stuck) return;
+  if(L && !report && L.text === text && L.primed && !lost && !stuck){
+    if(L.startedAt) heardNow(opts);
+    else if(opts && opts.onStart) L.u.addEventListener('start', ()=> heardNow(opts));
+    return;
+  }
   /* never a word being said; a lost or stuck one, or one still waiting to start that a new word replaces */
   if(L && (lost || stuck || (!L.startedAt && L.text !== text))) speechCancel();
   const seq = ++_speech.seq;
@@ -545,6 +695,7 @@ function speakWord(text, opts){
       else if(audio.musicEl) audio.musicEl.volume = musicVolume() * 0.25;
       const done = ()=>{ rec.ended = true; restore(); if(_speech.live === rec) _speech.live = null; };
       u.addEventListener('start', ()=>{ rec.startedAt = Date.now(); rec.late = false; _speech.primed = true; listenGlow(false);
+                                         heardNow(opts);
                                          if(report) report(speechReport(text, v, true)); });
       u.addEventListener('end', done);
       u.addEventListener('error', done);
@@ -558,7 +709,7 @@ function speakWord(text, opts){
         if(rec.startedAt || rec.ended || _speech.live !== rec) return;
         let idle = false;
         try { idle = !speechSynthesis.speaking && !speechSynthesis.pending; } catch(e){}
-        if(idle && _speech.primed && !(opts && opts._again)){ _speech.live = null; speakWord(text, Object.assign({}, opts, { _again:true })); return; }
+        if(idle && _speech.primed && !(opts && opts._again)){ _speech.live = null; speakDevice(text, Object.assign({}, opts, { _again:true })); return; }
         rec.late = true;
         _speech.primed = false;                            // the next tap lifts the iPhone's rule again, if that was it
         listenGlow(true);
@@ -923,7 +1074,21 @@ function renderQuiz(){
     quizMarkBonus(q);
     if(q.config.onComplete) q.config.onComplete(q.results);
   });
-  $('#listenBtn').addEventListener('click', ()=> speakWord(word));
+  /* (4.86) THE CLOCK WAITS FOR THE WORD — the designer: "the iPhone's voice seems unreliable because even now it takes
+     very long to play on 4.84 for most words, which is game breaking because of the limited time". The clock starts
+     when the word is first heard (its clip playing, or the device's voice starting), with the pad up, not when the
+     page comes up. A Listen that is heard first counts. If nothing is heard within 6 s of the pad, it starts anyway. */
+  const myTok = q.token;
+  let heard = false, padUp = false;
+  q.clockWaiting = !q.config.relaxed;
+  const clock = ()=>{
+    if(!q.clockWaiting || !heard || !padUp) return;
+    if(ui.quiz !== q || q.token !== myTok || q.resolved || q._ended) return;
+    q.clockWaiting = false;
+    startTimer();
+  };
+  const heardIt = ()=>{ heard = true; clock(); };
+  $('#listenBtn').addEventListener('click', ()=> speakWord(word, { onStart:heardIt }));
   $('#defBtn').addEventListener('click', ()=>{
     const def = definitionFor(word);
     $('#defBox').textContent = def ? def : 'Not available';
@@ -944,9 +1109,11 @@ function renderQuiz(){
      child was never shown. Wait until the strokes are actually on screen. */
   /* (4.84) the word at once, as the page comes up, not after the pad and a further 0.2 s: on a phone that was half a
      second before anything was heard. The clock still waits for the pad. */
-  speakWord(word);
+  speakWord(word, { onStart:heardIt });
   whenWriterReady(()=>{
-    if(!q.config.relaxed) startTimer();
+    padUp = true;
+    clock();
+    setTimeout(heardIt, QUIZ_HEAR_WAIT_MS);      // no voice at all: the clock starts anyway
   });
   if(q.config.onRender) q.config.onRender(q);                         // (4.27) a catch's page, drawn
 }
@@ -1032,7 +1199,7 @@ function holdTimerForLoad(){
 }
 function resumeTimer(){
   const q = ui.quiz;
-  if(!q || q.config.relaxed) return;
+  if(!q || q.config.relaxed || q.clockWaiting) return;     // (4.86) not before the word is heard
   stopTimer();
   runTimer(q.token);      // same rule: the interval owns its own handle
 }

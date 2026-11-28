@@ -1,0 +1,37 @@
+# How a word is read, where the voice would get it wrong. One word a line: the word, then its pinyin,
+# with tone marks or tone numbers (5, or no mark, for a light tone), one syllable for each character:
+#   炸鸡 zhá jī
+#   炸鸡 zha2 ji1
+# Write it as it is spoken, tone changes included (一座 yí zuò, 你好 ní hǎo).
+# After a change here, the word's clip is made again (GitHub does it when you push).
+# Every word's reading is in words/audio/readings.txt, to look through.
+# Lines starting with # are notes.
+
+# 炸 fried is zhá
+炸鸡 zhá jī
+吃炸鸡翅 chī zhá jī chì
+# 只 as a measure word is zhī
+两只 liǎng zhī
+# 肚子 the belly
+肚子 dù zi
+# 的 in 目的 is dì
+目的 mù dì
+# 得 to obtain is dé
+取得 qǔ dé
+# 画画 draw pictures: two full tones
+画画 huà huà
+# 兄弟 brothers
+兄弟 xiōng dì
+# the light tone, as the dictionary has it
+晚上 wǎn shang
+早晨 zǎo chen
+学生 xué sheng
+# full tones, as the dictionary has them
+楼下 lóu xià
+生活幸福 shēng huó xìng fú
+粗心大意 cū xīn dà yì
+哇哇大哭 wā wā dà kū
+# 儿 run into the word before it, lightly (the voice has no separate -r)
+去哪儿 qù nǎ er
+鸟儿 niǎo er
+一点儿小事 yì diǎn er xiǎo shì

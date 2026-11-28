@@ -1,0 +1,667 @@
+# Every phrase, with the pinyin the clip was made from. Any that is wrong: put it in words/pinyin.txt.
+夜市	yè shì
+踢足球	tī zú qiú
+一座楼房	yí zuò lóu fáng
+静悄悄	jìng qiāo qiāo
+热闹	rè nao
+五颜六色	wǔ yán liù sè
+一排桌椅	yì pái zhuō yǐ
+电灯	diàn dēng
+除了	chú le
+烤香肠	kǎo xiāng cháng
+我也喜欢	wó yě xǐ huan
+吃炸鸡翅	chī zhá jī chì   (words/pinyin.txt)
+你好	ní hǎo
+谢谢	xiè xie
+朋友	péng you
+老师	lǎo shī
+学校	xué xiào
+合作	hé zuò
+信箱	xìn xiāng
+一二三	yī èr sān
+可口	ké kǒu
+人人喜爱	rén rén xǐ ài
+树木	shù mù
+泥土	ní tǔ
+七七八八	qī qī bā bā
+也是	yě shì
+不会	bú huì
+女儿	nǚ ér
+阿姨	ā yí
+娃娃	wá wa
+礼物	lǐ wù
+衣服	yī fu
+力气	lì qi
+禾苗	hé miáo
+几个	jǐ ge
+去哪儿	qù nǎ er   (words/pinyin.txt)
+哥哥	gē ge
+弟弟	dì di
+姐姐	jiě jie
+妹妹	mèi mei
+起立	qǐ lì
+行李	xíng li
+日期	rì qī
+子孙	zǐ sūn
+美满	méi mǎn
+汽车	qì chē
+车辆	chē liàng
+只是	zhǐ shì
+四十	sì shí
+巴士	bā shì
+车站	chē zhàn
+读书	dú shū
+紫色	zǐ sè
+彩虹	cǎi hóng
+花朵	huā duǒ
+爬山	pá shān
+羊毛	yáng máo
+国王	guó wáng
+书架	shū jià
+作业	zuò yè
+书本	shū běn
+告示牌	gào shi pái
+妈妈	mā ma
+爸爸	bà ba
+爷爷	yé ye
+奶奶	nǎi nai
+叔叔	shū shu
+舅舅	jiù jiu
+玩具	wán jù
+婆婆	pó po
+公公	gōng gong
+公园	gōng yuán
+早晨	zǎo chen   (words/pinyin.txt)
+中午	zhōng wǔ
+下午	xià wǔ
+傍晚	bàng wǎn
+晚上	wǎn shang   (words/pinyin.txt)
+深夜	shēn yè
+太阳	tài yang
+云朵	yún duǒ
+蓝天	lán tiān
+早餐	zǎo cān
+午餐	wǔ cān
+晚餐	wǎn cān
+餐具	cān jù
+餐厅	cān tīng
+校园	xiào yuán
+农田	nóng tián
+菜刀	cài dāo
+在哪	zài nǎ
+上学	shàng xué
+下学	xià xué
+星期	xīng qī
+星星	xīng xing
+月亮	yuè liang
+大笑	dà xiào
+微笑	wēi xiào
+小时	xiǎo shí
+来回	lái huí
+写字	xiě zì
+跳舞	tiào wǔ
+开始	kāi shǐ
+救火车	jiù huǒ chē
+关门	guān mén
+两只	liǎng zhī   (words/pinyin.txt)
+长短	cháng duǎn
+广阔	guǎng kuò
+亮光	liàng guāng
+多少	duō shao
+刷牙	shuā yá
+洗脸	xí liǎn
+洗澡	xí zǎo
+方便	fāng biàn
+快乐	kuài lè
+图书馆	tú shū guǎn
+目的	mù dì   (words/pinyin.txt)
+挥手	huī shǒu
+本来	běn lái
+工作	gōng zuò
+开门	kāi mén
+看见	kàn jiàn
+又白又胖	yòu bái yòu pàng
+点头	diǎn tóu
+摇头	yáo tóu
+头脑	tóu nǎo
+游泳	yóu yǒng
+打篮球	dǎ lán qiú
+功课	gōng kè
+吹牛	chuī niú
+贝壳	bèi ké
+五六七	wǔ liù qī
+树枝	shù zhī
+支持	zhī chí
+八九十	bā jiǔ shí
+什么	shén me
+怎么	zěn me
+中文	zhōng wén
+文字	wén zì
+文件	wén jiàn
+服务	fú wù
+购物中心	gòu wù zhōng xīn
+饭店	fàn diàn
+客厅	kè tīng
+可爱	kě ài
+一起	yì qǐ
+游戏	yóu xì
+熊猫	xióng māo
+眼睛	yǎn jing
+纸巾	zhǐ jīn
+岁月	suì yuè
+整天	zhěng tiān
+水果	shuí guǒ
+游泳池	yóu yǒng chí
+水池	shuǐ chí
+尺寸	chǐ cùn
+正反	zhèng fǎn
+明白	míng bai
+古时	gǔ shí
+水壶	shuǐ hú
+后面	hòu miàn
+左手	zuó shǒu
+右边	yòu biān
+中间	zhōng jiān
+时间	shí jiān
+画画	huà huà   (words/pinyin.txt)
+花草	huā cǎo
+回家	huí jiā
+我的	wǒ de
+同学	tóng xué
+戴眼镜	dài yǎn jìng
+个子	gè zi
+高大	gāo dà
+豆腐	dòu fu
+今天	jīn tiān
+白米饭	bái mǐ fàn
+虫子	chóng zi
+两元五角	liǎng yuán wú jiǎo
+饼干	bǐng gān
+肉包子	ròu bāo zi
+身体	shēn tǐ
+健康	jiàn kāng
+万事如意	wàn shì rú yì
+云吞面	yún tūn miàn
+吃饭	chī fàn
+偷吃	tōu chī
+小贼	xiǎo zéi
+小猫	xiǎo māo
+野狗	yé gǒu
+马上	mǎ shàng
+起码	qí mǎ
+骑马	qí mǎ
+以后	yǐ hòu
+下雨	xià yǔ
+一点	yì diǎn
+毛巾	máo jīn
+要不要	yào bú yào
+需要	xū yào
+洗手	xí shǒu
+牙刷	yá shuā
+牙齿	yá chǐ
+首先	shǒu xiān
+东西	dōng xi
+冲凉	chōng liáng
+厕所	cè suǒ
+皮鞋	pí xié
+还是	hái shì
+自己	zì jǐ
+放手	fàng shǒu
+放工	fàng gōng
+放开	fàng kāi
+放好	fàng hǎo
+放下	fàng xià
+尺子	chǐ zi
+书包	shū bāo
+文具	wén jù
+闹钟	nào zhōng
+时钟	shí zhōng
+手表	shóu biǎo
+电话	diàn huà
+手机	shǒu jī
+收拾	shōu shi
+袜子	wà zi
+鞋子	xié zi
+汗衫	hàn shān
+长裤	cháng kù
+短裤	duǎn kù
+一双	yì shuāng
+足球	zú qiú
+羽毛球	yǔ máo qiú
+匹克球	pǐ kè qiú
+西瓜	xī guā
+果汁	guǒ zhī
+新加坡	xīn jiā pō
+公民	gōng mín
+好办法	hǎo bàn fǎ
+观看	guān kàn
+买卖	mǎi mai
+公斤	gōng jīn
+生日	shēng rì
+教堂	jiào táng
+耶稣	yē sū
+羡慕	xiàn mù
+嫉妒	jí dù
+保护	bǎo hù
+保持	bǎo chí
+抱抱	bào bao
+宝宝	bǎo bao
+香喷喷	xiāng pēn pēn
+吃草	chī cǎo
+父亲	fù qin
+母亲	mǔ qin
+大中小	dà zhōng xiǎo
+打扫	dá sǎo
+你们	nǐ men
+你呢	nǐ ne
+桌椅	zhuō yǐ
+牛奶	niú nǎi
+面包	miàn bāo
+鸡肉	jī ròu
+钓鱼	diào yú
+炸鸡	zhá jī   (words/pinyin.txt)
+干净	gān jìng
+肮脏	āng zāng
+肚子	dù zi   (words/pinyin.txt)
+脖子	bó zi
+肩膀	jiān bǎng
+手脚	shóu jiǎo
+灵活	líng huó
+昨天	zuó tiān
+前天	qián tiān
+后天	hòu tiān
+明天	míng tiān
+名字	míng zi
+高兴	gāo xìng
+伤心	shāng xīn
+难过	nán guò
+操心	cāo xīn
+怀疑	huái yí
+开心	kāi xīn
+儿童	ér tóng
+节日	jié rì
+庆祝	qìng zhù
+再见	zài jiàn
+起来	qǐ lai
+声音	shēng yīn
+大声	dà shēng
+叫喊	jiào hǎn
+爪子	zhuǎ zi
+尖刻	jiān kè
+狮子	shī zi
+老虎	láo hǔ
+大象	dà xiàng
+长颈鹿	cháng jǐng lù
+鸟儿	niǎo er   (words/pinyin.txt)
+斑马	bān mǎ
+斑马线	bān mǎ xiàn
+动物	dòng wù
+学习	xué xí
+来到	lái dào
+到达	dào dá
+跌倒	diē dǎo
+受伤	shòu shāng
+游乐场	yóu lè chǎng
+捉迷藏	zhuō mí cáng
+地铁	dì tiě
+生活	shēng huó
+家庭	jiā tíng
+厨房	chú fáng
+煮菜	zhǔ cài
+食物	shí wù
+汽水	qì shuǐ
+气球	qì qiú
+帮助	bāng zhù
+现在	xiàn zài
+对面	duì miàn
+兄弟	xiōng dì   (words/pinyin.txt)
+合适	hé shì
+很大	hěn dà
+出去	chū qu
+外公	wài gōng
+外面	wài miàn
+里面	lǐ miàn
+进来	jìn lai
+大桥	dà qiáo
+天桥	tiān qiáo
+马路	mǎ lù
+天气	tiān qì
+好热	hǎo rè
+好冷	háo lěng
+冰箱	bīng xiāng
+冰水	bīng shuǐ
+年级	nián jí
+开学	kāi xué
+孩子	hái zi
+学生	xué sheng   (words/pinyin.txt)
+男孩	nán hái
+女孩	nǚ hái
+孙子	sūn zi
+孙女	sūn nǚ
+关心	guān xīn
+观赏	guān shǎng
+商店	shāng diàn
+电动车	diàn dòng chē
+摩托车	mó tuō chē
+三轮车	sān lún chē
+自行车	zì xíng chē
+行礼	xíng lǐ
+耳朵	ěr duo
+鼻子	bí zi
+嘴唇	zuǐ chún
+舌头	shé tou
+头发	tóu fa
+互相	hù xiāng
+应该	yīng gāi
+清洁	qīng jié
+操场	cāo chǎng
+说话	shuō huà
+交谈	jiāo tán
+胡言乱语	hú yán luàn yǔ
+晴朗	qíng lǎng
+慢吞吞	màn tūn tūn
+快点	kuài diǎn
+迅速地	xùn sù de
+喝水	hē shuǐ
+口渴	kóu kě
+黄瓜	huáng guā
+青菜	qīng cài
+甜美的笑容	tián měi de xiào róng
+比一比	bǐ yi bǐ
+哭了起来	kū le qǐ lai
+小安的书包	xiǎo ān de shū bāo
+是黑色的	shì hēi sè de
+老师说	lǎo shī shuō
+我来考你们	wǒ lái káo nǐ men
+这个字怎么写	zhè ge zì zěn me xiě
+大声说话	dà shēng shuō huà
+借书	jiè shū
+很多次	hěn duō cì
+一首歌	yì shǒu gē
+英语	yīng yǔ
+各种各样	gè zhǒng gè yàng
+一回到家	yì huí dào jiā
+就去玩玩具	jiù qù wán wán jù
+小文	xiǎo wén
+坐在地上	zuò zài dì shang
+听奶奶	tīng nǎi nai
+讲故事	jiǎng gù shi
+楼下	lóu xià   (words/pinyin.txt)
+灯光	dēng guāng
+一排树	yì pái shù
+公园里	gōng yuán lǐ
+有很多人	yóu hěn duō rén
+在运动	zài yùn dòng
+我喜欢	wó xǐ huan
+的花朵	de huā duǒ
+东海岸	dōng hǎi àn
+步行	bù xíng
+市区	shì qū
+发现	fā xiàn
+这里	zhè lǐ
+到处都是	dào chù dōu shì
+花草树木	huā cǎo shù mù
+吃美食	chī měi shí
+我还喜欢	wǒ hái xǐ huan
+看电影	kàn diàn yǐng
+洗菜	xǐ cài
+用手	yòng shǒu
+拿不起来	ná bù qǐ lai
+告诉老师	gào su lǎo shī
+关好水龙头	guān hǎo shuǐ lóng tóu
+忘了带笔	wàng le dài bǐ
+哥哥连忙	gē ge lián máng
+向同学借	xiàng tóng xué jiè
+走到学校后	zǒu dào xué xiào hòu
+弟弟热得	dì di rè de
+脸红了起来	liǎn hóng le qǐ lai
+参观学校	cān guān xué xiào
+国家	guó jiā
+打扫干净	dá sǎo gān jìng
+跑步	pǎo bù
+风景优美	fēng jǐng yōu měi
+经过	jīng guò
+过来	guò lai
+方块	fāng kuài
+冰块	bīng kuài
+跟着	gēn zhe
+很多	hěn duō
+布娃娃	bù wá wa
+青蛙	qīng wā
+最好	zuì hǎo
+最后	zuì hòu
+取得	qǔ dé   (words/pinyin.txt)
+图画	tú huà
+图片	tú piàn
+冬天	dōng tiān
+更加努力	gèng jiā nǔ lì
+跳绳	tiào shéng
+跳高	tiào gāo
+逃跑	táo pǎo
+永远年轻	yóng yuǎn nián qīng
+运动	yùn dòng
+一百分	yì bǎi fēn
+白色	bái sè
+身体健康	shēn tǐ jiàn kāng
+建造	jiàn zào
+吹泡泡	chuī pào pao
+喜欢	xǐ huan
+收到礼物	shōu dào lǐ wù
+补习	bǔ xí
+听写	tīng xiě
+泻药	xiè yào
+这些	zhè xiē
+一些	yì xiē
+从此	cóng cǐ
+宝贝	bǎo bèi
+宝石	bǎo shí
+年岁	nián suì
+岁数	suì shu
+想出办法	xiǎng chū bàn fǎ
+相信	xiāng xìn
+总是	zǒng shì
+总结	zǒng jié
+忘记	wàng jì
+医生	yī shēng
+医院	yī yuàn
+乱丢垃圾	luàn diū lā jī
+过去	guò qu
+夜晚	yè wǎn
+做梦	zuò mèng
+美梦	měi mèng
+那里	nà lǐ
+哪里	ná lǐ
+觉得高兴	jué de gāo xìng
+很久以前	hén jiǔ yǐ qián
+剪刀	jiǎn dāo
+相亲相爱	xiāng qīn xiāng ài
+解决难题	jiě jué nán tí
+准备	zhǔn bèi
+轻易	qīng yì
+容易	róng yì
+争吵不休	zhēng chǎo bù xiū
+立刻	lì kè
+感到伤心	gǎn dào shāng xīn
+知错能改	zhī cuò néng gǎi
+分工合作	fēn gōng hé zuò
+油炸	yóu zhá
+脸红	liǎn hóng
+笑脸	xiào liǎn
+捡拾	jiǎn shí
+扁豆	biǎn dòu
+扁担	biǎn dan
+遍地	biàn dì
+苦瓜	kǔ guā
+南瓜	nán guā
+比较高低	bǐ jiào gāo dī
+就要	jiù yào
+吃惊	chī jīng
+拔腿就跑	bá tuǐ jiù pǎo
+拨打	bō dǎ
+哇哇大哭	wā wā dà kū   (words/pinyin.txt)
+机器	jī qì
+黑夜	hēi yè
+思考问题	sī kǎo wèn tí
+烤肉	kǎo ròu
+香甜可口	xiāng tián ké kǒu
+下棋	xià qí
+搭乘巴士	dā chéng bā shì
+乖巧懂事	guāi qiǎo dǒng shì
+积水	jī shuǐ
+乌云密布	wū yún mì bù
+电器	diàn qì
+许多	xǔ duō
+捏着鼻子	niē zhe bí zi
+拼图	pīn tú
+老鹰	lǎo yīng
+你追我跑	nǐ zhuī wó pǎo
+轻声说话	qīng shēng shuō huà
+救命	jiù mìng
+生活幸福	shēng huó xìng fú   (words/pinyin.txt)
+实现愿望	shí xiàn yuàn wàng
+蛋糕	dàn gāo
+电影院	diàn yǐng yuàn
+门票	mén piào
+庆祝活动	qìng zhù huó dòng
+奇怪	qí guài
+睡觉	shuì jiào
+聪明	cōng ming
+金色	jīn sè
+漂亮	piào liang
+呕吐	ǒu tù
+宠物	chǒng wù
+欺负	qī fu
+围观	wéi guān
+认识朋友	rèn shi péng you
+迎接	yíng jiē
+提醒	tí xǐng
+粗心大意	cū xīn dà yì   (words/pinyin.txt)
+仔细	zǐ xì
+争抢	zhēng qiǎng
+推倒	tuī dào
+讨厌	tǎo yàn
+弄破书本	nòng pò shū běn
+捉弄同学	zhuō nòng tóng xué
+破坏公物	pò huài gōng wù
+横冲直撞	héng chōng zhí zhuàng
+亮晶晶	liàng jīng jīng
+明白道理	míng bai dào lǐ
+茄子	qié zi
+豆芽	dòu yá
+大伯	dà bó
+胡萝卜	hú luó bo
+煮饭	zhǔ fàn
+老鼠	láo shǔ
+或者	huò zhě
+猪肉	zhū ròu
+牛肉	niú ròu
+采摘瓜果	cǎi zhāi guā guǒ
+挖地洞	wā dì dòng
+诚实	chéng shí
+一张纸	yì zhāng zhǐ
+一张卡片	yì zhāng kǎ piàn
+一支笔	yì zhī bǐ
+一只鸡	yì zhī jī
+一只猫	yì zhī māo
+一只狗	yì zhī gǒu
+一只兔子	yì zhī tù zi
+一只小船	yì zhī xiǎo chuán
+一根树枝	yì gēn shù zhī
+一根绳子	yì gēn shéng zi
+一根黄瓜	yì gēn huáng guā
+一棵白菜	yì kē bái cài
+一碗汤	yì wǎn tāng
+一粒玉米	yí lì yù mǐ
+一片草地	yí piàn cǎo dì
+一头大象	yì tóu dà xiàng
+一座岛	yí zuò dǎo
+一道彩虹	yí dào cǎi hóng
+一番话	yì fān huà
+一块石头	yí kuài shí tou
+一架飞机	yí jià fēi jī
+远近	yuǎn jìn
+轻重	qīng zhòng
+早晚	záo wǎn
+前后	qián hòu
+爱恨	ài hèn
+粗细	cū xì
+推拉	tuī lā
+哭笑	kū xiào
+黑白	hēi bái
+先苦后甜	xiān kǔ hòu tián
+难易	nán yì
+难过开心	nán guò kāi xīn
+争吵和好	zhēng chǎo hé hǎo
+争抢礼让	zhēng qiǎng lǐ ràng
+讨厌喜欢	tǎo yàn xǐ huan
+完成作业	wán chéng zuò yè
+草地	cǎo dì
+大家都是	dà jiā dōu shì
+好朋友	hǎo péng you
+不应该为了	bù yīng gāi wèi le
+一点儿小事	yì diǎn er xiǎo shì   (words/pinyin.txt)
+而争吵	ér zhēng chǎo
+看扁别人	kàn biǎn bié ren
+互相比较	hù xiāng bǐ jiào
+汤面	tāng miàn
+味道香甜	wèi dào xiāng tián
+马上就要	mǎ shàng jiù yào
+考试了	kǎo shì le
+我要认真	wǒ yào rèn zhēn
+温习功课	wēn xí gōng kè
+冲洗马桶	chōng xǐ má tǒng
+告诉	gào su
+节约用水	jié yuē yòng shuǐ
+外婆	wài pó
+连忙	lián máng
+猜想	cāi xiǎng
+十分重要	shí fēn zhòng yào
+我觉得口渴	wǒ jué de kóu kě
+想喝一杯	xiǎng hē yì bēi
+冰凉的果汁	bīng liáng de guǒ zhī
+发生意外	fā shēng yì wài
+突然发现	tū rán fā xiàn
+注意安全	zhù yì ān quán
+准时上学	zhǔn shí shàng xué
+学业进步	xué yè jìn bù
+谈天说地	tán tiān shuō dì
+请教问题	qǐng jiào wèn tí
+景色优美	jǐng sè yōu měi
+从此以后	cóng cǐ yǐ hòu
+保持安静	bǎo chí ān jìng
+改过自新	gǎi guò zì xīn
+张贴海报	zhāng tiē hǎi bào
+抹桌扫地	mǒ zhuō sǎo dì
+丢失钱包	diū shī qián bāo
+满脸通红	mán liǎn tōng hóng
+童话故事	tóng huà gù shi
+手忙脚乱	shǒu máng jiǎo luàn
+脸色苍白	liǎn sè cāng bái
+活泼可爱	huó po kě ài
+当心	dāng xīn
+希望	xī wàng
+成为	chéng wéi
+练习	liàn xí
+做功课	zuò gōng kè
+交朋友	jiāo péng you
+举起双手	jú qǐ shuāng shǒu
+读了一遍	dú le yí biàn
+第一名	dì yī míng
+想要	xiǎng yào
+我们就要	wǒ men jiù yào
+不断地	bú duàn de
+努力	nǔ lì
+一双手	yì shuāng shǒu
+姓名	xìng míng
+身体肥胖	shēn tǐ féi pàng
+明白意思	míng bai yì si
+卷发	juǎn fà
+因为	yīn wèi
+讲华语	jiǎng huá yǔ
+一定	yí dìng
+梦想成真	mèng xiǎng chéng zhēn
+互相帮助	hù xiāng bāng zhù
+又聪明	yòu cōng ming
+又懂事	yòu dǒng shì
+大家都	dà jiā dōu
+很喜欢她	hén xǐ huan tā

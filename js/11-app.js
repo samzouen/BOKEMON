@@ -623,7 +623,7 @@ function renderSound(){
 
       <button class="btn btn-jade" id="testVoiceBtn" style="margin-top:14px;">🔊 Test voice</button>
       <div id="voiceReport" style="font-size:12px;color:var(--ink);font-weight:700;margin-top:8px;line-height:1.4;"></div>
-      <div style="font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:8px;">Words are always read in Mandarin. Music ducks automatically while a word is spoken.</div>
+      <div style="font-size:11px;color:var(--ink-soft);font-weight:600;margin-top:8px;">Words on the lists play in a recorded voice; any other word is read by the device's own voice, always in Mandarin. Music ducks while a word plays.</div>
     </div>
 
     <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:12px;">

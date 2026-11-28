@@ -106,7 +106,7 @@ const SFX_SYNTH = {
    bespoke track for one zone without supplying the rest. */
 /* Bump by 0.01 with every published change, so a glance at the home screen
    confirms which build is actually loaded. */
-const GAME_VERSION = '4.84';
+const GAME_VERSION = '4.86';
 
 const BGM_MAP = {
   main_menu:      'main_menu.mp3',
@@ -2568,7 +2568,33 @@ async function loadWordlist(){
     listWords = { builtin: phraseKeys(DEFAULT_MASTER_WORDS) };
   }
   rebuildRemote();
+  await loadWordClips();                            // (4.85)
   syncRemoteWords();
+  syncWordClips();                                  // (4.85)
+}
+
+/* (4.85) THE WORDS' CLIPS — the designer: "i would like a script that makes the spoken words from my list".
+   words/audio/index.json: each phrase on the lists, and its clip (made by GitHub whenever a list changes:
+   .github/word-audio/make_word_audio.py). Fetched with the lists; the last one fetched is kept on the device, so a
+   start without the internet still knows its clips (which are kept too: 03-quiz.js, clipBytes). */
+const WORD_AUDIO_DIR = 'words/audio/';
+const WORD_CLIPS_KEY = 'wc_word_clips';
+let wordClips = {};
+async function loadWordClips(){
+  try { const r = await store.get(WORD_CLIPS_KEY); const j = r ? JSON.parse(r.value) : null; if(j && j.clips && typeof j.clips === 'object') wordClips = j.clips; } catch(e){}
+}
+async function syncWordClips(){
+  try {
+    const r = await fetch(WORD_AUDIO_DIR + 'index.json', { cache:'no-store' });
+    if(!r.ok) return;
+    const t = await r.text();
+    if(/<\s*html/i.test(t)) return;                 // a 404 page, not the list
+    const j = JSON.parse(t);
+    if(!j || !j.clips || typeof j.clips !== 'object') return;
+    wordClips = j.clips;
+    await store.set(WORD_CLIPS_KEY, JSON.stringify({ v:j.v, voice:j.voice, clips:j.clips }));
+    if(typeof wordClipsChanged === 'function') wordClipsChanged();
+  } catch(e){}
 }
 
 /* Fetch the manifest, then every list it names. Falls back to the older

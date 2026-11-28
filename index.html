@@ -604,6 +604,8 @@
      full one (quizStartBonus, 03-quiz.js) */
   .qz-split{ display:flex; gap:10px; }
   .qz-split > .btn{ flex:1 1 0; width:auto !important; min-width:0; }
+  /* (4.86) left-handed, the bonus on the left (the designer: "Left handed mode should swap the bonus words button") */
+  body.left-handed .qz-split{ flex-direction:row-reverse; }
   body.writing .qz-next.qz-bonus{ height:54px; padding:0 6px; border-radius:14px; background:rgba(14,10,36,.6); border:1.5px solid rgba(196,170,255,.8);
     color:#f1eaff; text-shadow:0 0 10px rgba(170,140,255,.85); display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.08;
     box-shadow:0 0 14px rgba(150,120,255,.3), inset 0 0 12px rgba(150,120,255,.12); }

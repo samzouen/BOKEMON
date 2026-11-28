@@ -517,7 +517,7 @@ function renderPartyStub(){
     <div class="party-head-row">
       <div>
         <div class="screen-title" style="margin:0;">Your Party</div>
-        <div class="screen-sub" style="margin:0;">${battleParty().length} / 6${companionsUnlocked() && bondedCompanions().length ? ` · 🤝 ${bondedCompanions().length} companion${bondedCompanions().length === 1 ? '' : 's'}` : ''} · tap one for options</div>
+        <div class="screen-sub" style="margin:0;">${battleParty().length} / 6${companionsUnlocked() && bondedCompanions().length ? ` · 🤝 ${bondedCompanions().length} companion${bondedCompanions().length === 1 ? '' : 's'}` : ''} · tap for more · hold to move</div>
       </div>
       <button class="btn btn-ghost storage-corner" id="storageBtn">📦 ${storedMonsters().length}</button>
     </div>
@@ -541,22 +541,33 @@ function renderPartyStub(){
    priority as needed." The ⇄ between them swaps their sides
    (leader.companionLeft); the one on the left goes first in battle when
    they are just as quick. */
+/* (4.86) THE PARTY, FOLDED — the designer: "collapse the party display to a vertically shorter tile with just the
+   member/companion and their names. Only expand to show the present info when short pressed. When long pressed, do not
+   expand info but allow drag and drop to reposition within the party. In expanded view, Keep up and down buttons on the
+   right side consistently, Up in the first row and down in the second row. allow companions the up and down button as
+   well. Please require a check on breakthrough so it is not accidentally pressed."
+   Folded, a tile is its monsters' portraits and names (a companion beside its leader, 🤝). A tap opens it on all it
+   showed before (level, elements, health, attack, who fights beside whom, ⇄) with the tapped monster's buttons; ▲ Up and
+   ▼ Down stand at the right, Up on the first row and Down on the second, for a companion too (it moves with its leader).
+   A press held 0.45 s lifts the tile instead: drag it to its place in the party and let go. */
+const PARTY_HOLD_MS = 450, PARTY_SLOP = 10;
 function partyHeadHtml(m, opts){
   opts = opts || {};
   const maxHp = monMaxHp(m);
   const ready = breakthroughReady(m);          // its breakthrough waits for a tap (2.82)
-  const px = opts.pair ? 44 : 52;
-  const portrait = (typeof ptMonPic === 'function' && ptMonPic(m, px)) || monPortrait(m.species, px, { stage:monStage(m), crowned:isCrowned(m) });   // (4.38) its portrait, if put up
-  return `<div class="party-head${opts.pair ? ' pair-head' : ''}${ui.partyOpen === m.uid ? ' open' : ''}" ${isSeed(m) ? '' : `data-tap="${m.uid}"`}>
+  const portrait = (typeof ptMonPic === 'function' && ptMonPic(m, 44)) || monPortrait(m.species, 44, { stage:monStage(m), crowned:isCrowned(m) });   // (4.38) its portrait, if put up
+  const more = !!opts.open && !isSeed(m);
+  return `<div class="party-head${opts.pair ? ' pair-head' : ''}${ui.partyOpen === m.uid ? ' sel' : ''}" ${isSeed(m) ? '' : `data-tap="${m.uid}"`}>
         ${ready ? `<span class="bt-ready" title="Ready to break through">${portrait}</span>` : portrait}
-        <div style="flex:1;min-width:0;">
-          <div class="ph-name">${opts.comp ? '<span class="ph-comp" title="Companion">🤝</span> ' : ''}${escapeHtml(displayName(m))}${crownMark(m)} <span>Lv ${m.level}</span></div>
-          <div>${typeIcons(m.species, 20)}</div>
-          ${isSeed(m)
-            ? `<div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:5px;font-style:italic;">In your care — cannot battle.</div>`
-            : `<div class="hpbar" style="margin-top:5px;"><div class="hpfill" style="width:${Math.max(0,m.currentHp/maxHp*100)}%;background:${m.currentHp/maxHp<0.3?'var(--cinnabar)':'var(--jade)'};"></div></div>
-               <div style="font-size:11px;color:var(--ink-soft);font-weight:700;margin-top:2px;">${Math.max(0,m.currentHp)}/${maxHp} HP · ATK ${monAtk(m)}</div>
-               ${opts.pair ? '' : partyCompanionLine(m)}`}
+        <div class="ph-text">
+          <div class="ph-name">${opts.comp ? '<span class="ph-comp" title="Companion">🤝</span> ' : ''}${escapeHtml(displayName(m))}${crownMark(m)}${more ? ` <span class="ph-lv">Lv ${m.level}</span>` : ''}</div>
+          ${isSeed(m) ? `<div class="ph-seed">In your care — cannot battle.</div>` : ''}
+          ${more ? `<div class="ph-more">
+            <div>${typeIcons(m.species, 20)}</div>
+            <div class="hpbar" style="margin-top:5px;"><div class="hpfill" style="width:${Math.max(0,m.currentHp/maxHp*100)}%;background:${m.currentHp/maxHp<0.3?'var(--cinnabar)':'var(--jade)'};"></div></div>
+            <div class="ph-hp">${Math.max(0,m.currentHp)}/${maxHp} HP · ATK ${monAtk(m)}</div>
+            ${opts.pair ? '' : partyCompanionLine(m)}
+          </div>` : ''}
         </div>
       </div>`;
 }
@@ -565,18 +576,55 @@ function partyPairCss(){
   const st = document.createElement('style');
   st.id = 'partyPairCss';
   st.textContent = `
-  .ph-name{ font-family:'Baloo 2',cursive; font-weight:700; font-size:16px; line-height:1.2; }
-  .ph-name > span:last-child{ font-size:12px; color:var(--ink-soft); }
-  .pair-heads{ display:flex; align-items:stretch; gap:6px; }
-  .pair-heads .pair-head{ flex:1; min-width:0; gap:8px; padding:4px; border-radius:12px; }
-  .pair-heads .pair-head.open{ background:rgba(201,154,63,.12); }
-  .pair-heads .ph-name{ font-size:14px; }
+  #partyList .party-card{ padding:8px 10px; position:relative; transition:transform .18s ease, box-shadow .18s ease;
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  #partyList .party-card.open{ padding:10px 12px 12px; }
+  #partyList .party-head{ gap:10px; border-radius:12px; padding:2px; }
+  #partyList .pair-card.open .party-head.sel{ background:rgba(201,154,63,.14); }
+  #partyList img{ -webkit-user-drag:none; }
+  .ph-text{ flex:1; min-width:0; }
+  .ph-name{ font-family:'Baloo 2',cursive; font-weight:700; font-size:16px; line-height:1.2; overflow-wrap:break-word;
+    display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+  .ph-name .ph-lv{ font-size:12px; color:var(--ink-soft); }
+  .ph-more{ margin-top:2px; }
+  .ph-hp{ font-size:11px; color:var(--ink-soft); font-weight:700; margin-top:2px; }
+  .ph-seed{ font-size:11px; color:var(--ink-soft); font-weight:700; font-style:italic; }
+  .pair-heads{ display:flex; align-items:center; gap:6px; }
+  .pair-heads .pair-head{ flex:1; min-width:0; }
+  .party-card.open .pair-heads{ align-items:stretch; }
+  .pair-heads .ph-name{ font-size:15px; }
+  .pair-gap{ flex:0 0 auto; width:1px; align-self:stretch; background:var(--line); margin:4px 4px; }
   .pair-swap{ flex:0 0 auto; align-self:center; width:34px; height:34px; border-radius:50%; border:2px solid var(--line);
     background:var(--paper); font-size:17px; font-weight:900; color:var(--ink); cursor:pointer; padding:0; box-shadow:0 2px 0 var(--paper-3); }
   .pair-swap:active{ transform:translateY(1px); box-shadow:none; }
   .pair-foot{ margin-top:6px; font-size:11px; font-weight:700; color:var(--ink-soft); text-align:center; }
-  @media (max-width:420px){ .pair-heads{ flex-direction:column; } .pair-swap{ transform:rotate(90deg); } }`;
+  .pa-grid{ display:grid; grid-template-columns:1fr 1fr 92px; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
+  .pa-grid .mini-btn{ min-width:0; width:100%; margin:0; padding:9px 8px; line-height:1.15; }
+  .pa-grid .pa-up{ grid-column:3; grid-row:1; }
+  .pa-grid .pa-down{ grid-column:3; grid-row:2; }
+  #partyList.reordering .ph-more, #partyList.reordering .ph-lv, #partyList.reordering .pair-foot,
+  #partyList.reordering .pa-grid, #partyList.reordering .pair-swap{ display:none; }
+  #partyList.reordering .pair-gap{ display:block; }
+  #partyList .party-card.lifted{ z-index:5; box-shadow:0 10px 24px rgba(35,32,25,.28); cursor:grabbing; }
+  #partyList .bt-ready{ line-height:0; }
+  .party-card.open .ph-name{ display:block; -webkit-line-clamp:unset; }
+  @media (max-width:420px){ .pa-grid{ grid-template-columns:1fr 1fr 78px; } .pair-heads .ph-name{ font-size:14px; } }
+  /* on a phone an open pair stands one above the other, as it did before 4.86 */
+  @media (max-width:480px){ .party-card.open .pair-heads{ flex-direction:column; } .party-card.open .pair-heads .pair-head{ width:100%; }
+    .party-card.open .pair-heads .ph-name{ font-size:15px; } .party-card.open .pair-swap{ transform:rotate(90deg); } }
+  @media (prefers-reduced-motion: reduce){ #partyList .party-card{ transition:none; } }`;
   document.head.appendChild(st);
+}
+/* (4.86) Break through, after a check: "require a check on breakthrough so it is not accidentally pressed" */
+function breakthroughAsk(m, after){
+  const st = stoneCarriedBy(m);
+  if(!st || !breakthroughReady(m)) return doBreakthrough(m, after);     // it says why not
+  const need = breakthroughNeed(monCeiling(m)), have = stoneCharge(st.id), left = have - need;
+  const next = Math.min(LEVEL_MAX, monCeiling(m) + CEILING_STEP);
+  confirmDialogHtml(`⚡ Break <b>${escapeHtml(displayName(m))}</b> through to Lv ${next}?<br><br>` +
+    `It uses ${need} charge from the ${escapeHtml(st.name)}, which has ${have}.` +
+    (left > 0 ? ` The other ${left} stay${left === 1 ? 's' : ''} on the stone.` : ' That empties it.'),
+    ()=> doBreakthrough(m, after), 'Break through');
 }
 function renderPartyList(){
   const list = $('#partyList');
@@ -584,40 +632,49 @@ function renderPartyList(){
   breakthroughCss();
   companionsCss();
   partyPairCss();
+  /* The tapped monster's buttons, two to a row, ▲ Up at the right of the first row and ▼ Down of the second (a
+     companion's move its leader, and it with them). Two buttons take a row each; an odd one out takes the first row. */
   const actionsFor = (m, idx, comp)=>{
-    const ready = breakthroughReady(m);
+    const main = [
+      breakthroughReady(m) ? `<button class="mini-btn bt-btn" data-break="${m.uid}">⚡ Break through to Lv ${Math.min(LEVEL_MAX, monCeiling(m) + CEILING_STEP)}</button>` : '',
+      `<button class="mini-btn" data-stats="${m.uid}">📊 Stats &amp; Moves</button>`,
+      typeof ptTalkBtn === 'function' ? ptTalkBtn(m) : '',
+      comp ? `<button class="mini-btn" data-comps="1">🤝 Companions</button>` : '',
+      (!comp && !isFixedMember(m)) ? `<button class="mini-btn" data-store="${m.uid}" ${battleParty().length<=1?'disabled':''}>📦 To storage</button>` : '',
+    ].filter(Boolean);
+    const n = main.length, odd = n % 2;
+    const at = i=> n === 2 ? `grid-column:1 / 3;grid-row:${i + 1};`
+      : (odd && i === 0) ? 'grid-column:1 / 3;grid-row:1;'
+      : `grid-column:${(i - odd) % 2 + 1};grid-row:${Math.floor((i - odd) / 2) + 1 + odd};`;
     return `
-        <div class="party-actions">
-          ${ready ? `<button class="mini-btn bt-btn" data-break="${m.uid}">⚡ Break through to Lv ${Math.min(LEVEL_MAX, monCeiling(m) + CEILING_STEP)}</button>` : ''}
-          <button class="mini-btn" data-stats="${m.uid}">📊 Stats &amp; Moves</button>
-          ${typeof ptTalkBtn === 'function' ? ptTalkBtn(m) : ''}
-          ${comp ? `<button class="mini-btn" data-comps="1">🤝 Companions</button>` : `
-          <button class="mini-btn" data-up="${idx}" ${idx===0?'disabled':''}>▲ Up</button>
-          <button class="mini-btn" data-down="${idx}" ${idx===state.party.length-1?'disabled':''}>▼ Down</button>
-          ${isFixedMember(m) ? '' : `<button class="mini-btn" data-store="${m.uid}" ${battleParty().length<=1?'disabled':''}>📦 To storage</button>`}`}
+        <div class="party-actions pa-grid">
+          ${main.map((b, i)=> b.replace('<button ', `<button style="${at(i)}" `)).join('')}
+          <button class="mini-btn pa-up" data-up="${idx}" ${idx===0?'disabled':''}>▲ Up</button>
+          <button class="mini-btn pa-down" data-down="${idx}" ${idx===state.party.length-1?'disabled':''}>▼ Down</button>
         </div>`;
   };
   list.innerHTML = state.party.map((m,idx)=>{
     const c = (companionsUnlocked() && !isPassenger(m)) ? companionOf(m) : null;
+    const open = !!ui.partyOpen && (ui.partyOpen === m.uid || (!!c && ui.partyOpen === c.uid));
     if(!c){
       return `
-    <div class="party-card ${isSeed(m)?'seed-card':''}" data-uid="${m.uid}">
-      ${partyHeadHtml(m)}
-      ${ui.partyOpen===m.uid ? actionsFor(m, idx, false) : ''}
+    <div class="party-card ${isSeed(m)?'seed-card':''}${open?' open':''}" data-uid="${m.uid}" data-idx="${idx}">
+      ${partyHeadHtml(m, { open })}
+      ${open ? actionsFor(m, idx, false) : ''}
     </div>`;
     }
     const [L, R] = pairOrder(m, c);
-    const head = x=> partyHeadHtml(x, { pair:true, comp:x === c });
-    const open = ui.partyOpen === m.uid ? actionsFor(m, idx, false) : ui.partyOpen === c.uid ? actionsFor(c, idx, true) : '';
+    const head = x=> partyHeadHtml(x, { pair:true, comp:x === c, open });
     return `
-    <div class="party-card pair-card" data-uid="${m.uid}">
-      <div class="pair-heads">${head(L)}<button class="pair-swap" data-swap="${m.uid}" title="Swap sides" aria-label="Swap sides">⇄</button>${head(R)}</div>
-      <div class="pair-foot">🤝 ${escapeHtml(displayName(c))} fights beside ${escapeHtml(displayName(m))} · on a tie, ${escapeHtml(displayName(L))} (left) goes first</div>
-      ${open}
+    <div class="party-card pair-card${open?' open':''}" data-uid="${m.uid}" data-idx="${idx}">
+      <div class="pair-heads">${head(L)}${open ? `<button class="pair-swap" data-swap="${m.uid}" title="Swap sides" aria-label="Swap sides">⇄</button>` : '<span class="pair-gap"></span>'}${head(R)}</div>
+      ${open ? `<div class="pair-foot">🤝 ${escapeHtml(displayName(c))} fights beside ${escapeHtml(displayName(m))} · on a tie, ${escapeHtml(displayName(L))} (left) goes first</div>
+      ${ui.partyOpen === c.uid ? actionsFor(c, idx, true) : actionsFor(m, idx, false)}` : ''}
     </div>`;
   }).join('') + ((typeof questPassengersHtml === 'function') ? questPassengersHtml() : '');   // (3.99) the sealed blades you carry for the Fairy King: passengers
 
   list.querySelectorAll('[data-tap]').forEach(el=>el.addEventListener('click', ()=>{
+    if(Date.now() - (ui.partyDragAt || 0) < 500) return;     // the end of a drag, not a tap
     const uid = el.dataset.tap;
     ui.partyOpen = (ui.partyOpen===uid) ? null : uid;
     renderPartyList();
@@ -632,16 +689,16 @@ function renderPartyList(){
     await saveProfile();
     renderPartyList();
   }));
-  list.querySelectorAll('[data-comps]').forEach(b=>b.addEventListener('click', e=>{ e.stopPropagation(); go('companions'); }));
+  list.querySelectorAll('[data-comps]').forEach(b=>b.addEventListener('click', e=>{ e.stopPropagation(); ui.shortcutFrom = null; go('companions'); }));
   if(typeof ptTalkWire === 'function') ptTalkWire(list);                   // (4.38) Cuain and the Monkey King: Talk
   list.querySelectorAll('[data-stats]').forEach(b=>b.addEventListener('click', e=>{ e.stopPropagation(); ui.statsUid=b.dataset.stats; go('stats'); }));
   list.querySelectorAll('[data-break]').forEach(b=>b.addEventListener('click', e=>{
     e.stopPropagation();
     const m = state.party.concat(bondedCompanions()).find(x=> x.uid === b.dataset.break);
-    if(m) doBreakthrough(m, renderPartyList);
+    if(m) breakthroughAsk(m, renderPartyList);                              // (4.86) after a check
   }));
-  list.querySelectorAll('[data-up]').forEach(b=>b.addEventListener('click', async e=>{ e.stopPropagation(); const i=+b.dataset.up; [state.party[i-1],state.party[i]]=[state.party[i],state.party[i-1]]; await saveProfile(); renderPartyList(); }));
-  list.querySelectorAll('[data-down]').forEach(b=>b.addEventListener('click', async e=>{ e.stopPropagation(); const i=+b.dataset.down; [state.party[i+1],state.party[i]]=[state.party[i],state.party[i+1]]; await saveProfile(); renderPartyList(); }));
+  list.querySelectorAll('[data-up]').forEach(b=>b.addEventListener('click', async e=>{ e.stopPropagation(); const i=+b.dataset.up; if(i < 1) return; [state.party[i-1],state.party[i]]=[state.party[i],state.party[i-1]]; await saveProfile(); renderPartyList(); }));
+  list.querySelectorAll('[data-down]').forEach(b=>b.addEventListener('click', async e=>{ e.stopPropagation(); const i=+b.dataset.down; if(i >= state.party.length-1) return; [state.party[i+1],state.party[i]]=[state.party[i],state.party[i+1]]; await saveProfile(); renderPartyList(); }));
   list.querySelectorAll('[data-store]').forEach(b=>b.addEventListener('click', async e=>{
     const pm = state.party.find(x=>x.uid===b.dataset.store);
     if(isFixedMember(pm)){ toast('This one stays with you.'); return; }
@@ -661,6 +718,110 @@ function renderPartyList(){
     toast(c ? `${displayName(m)} moved to storage — ${displayName(c)} goes with it.` : `${displayName(m)} moved to storage.`);
     renderPartyStub();
   }));
+  partyDragWire(list);
+}
+/* (4.86) Hold a tile 0.45 s and it lifts: drag it up or down the party and let go. A finger that moves first is
+   scrolling the page, and a button keeps its own tap. While a tile is up every tile folds, so the party is short; near
+   the top or bottom of the screen the page scrolls under it. */
+function partyDragWire(list){
+  if(list._dragWired) return;
+  list._dragWired = true;
+  let press = null, drag = null, settling = false;
+  const cards = ()=> [...list.querySelectorAll('.party-card[data-idx]')];
+  const clear = ()=>{ if(press){ clearTimeout(press.timer); press = null; } };
+  const begin = ()=>{
+    const p = press; press = null;
+    if(!p || !p.card.isConnected || drag || settling) return;
+    list.classList.add('reordering');                     // every tile folded while one is carried
+    const all = cards();
+    const rects = all.map(c=> c.getBoundingClientRect());
+    const from = all.indexOf(p.card);
+    if(from < 0){ list.classList.remove('reordering'); return; }
+    const r = rects[from];
+    const gap = rects.length > 1 ? Math.max(0, rects[1].top - rects[0].bottom) : 10;
+    /* a tile above that folded has moved this one up: it comes to the finger */
+    const y0 = (p.y >= r.top && p.y <= r.bottom) ? p.y : r.top + r.height / 2;
+    drag = { card:p.card, all, rects, from, to:from, gap, y0, y:p.y, sy:p.y, moved:false, sy0:window.scrollY, step:r.height + gap, id:p.id, raf:0 };
+    p.card.classList.add('lifted');
+    p.card.style.transition = 'none';
+    try { list.setPointerCapture(p.id); } catch(e){}
+    try { if(navigator.vibrate) navigator.vibrate(12); } catch(e){}
+    try { playSfx('ui_click'); } catch(e){}
+    place();
+    drag.raf = requestAnimationFrame(edge);
+  };
+  const place = ()=>{
+    const d = drag;
+    const dy = d.y - d.y0 + (window.scrollY - d.sy0);
+    d.card.style.transform = `translateY(${dy}px) scale(1.02)`;
+    const mid = d.rects[d.from].top + d.rects[d.from].height / 2 + dy;
+    let to = 0;
+    d.rects.forEach((r, i)=>{ if(i !== d.from && mid > r.top + r.height / 2) to++; });
+    if(to === d.to) return;
+    d.to = to;
+    d.all.forEach((c, i)=>{
+      if(i === d.from) return;
+      const shift = (d.from < to && i > d.from && i <= to) ? -d.step : (d.from > to && i >= to && i < d.from) ? d.step : 0;
+      c.style.transform = shift ? `translateY(${shift}px)` : '';
+    });
+  };
+  /* near the top or bottom of the screen, the page scrolls under the tile (once it has been moved, not as it lifts) */
+  const edge = ()=>{
+    const d = drag;
+    if(!d) return;
+    const H = window.innerHeight, E = 72;
+    const v = !d.moved ? 0 : d.y < E ? -(E - d.y) / 5 : d.y > H - E ? (d.y - (H - E)) / 5 : 0;
+    if(v){ const before = window.scrollY; window.scrollBy(0, v); if(window.scrollY !== before) place(); }
+    d.raf = requestAnimationFrame(edge);
+  };
+  const end = ok=>{
+    const d = drag;
+    drag = null;
+    cancelAnimationFrame(d.raf);
+    try { list.releasePointerCapture(d.id); } catch(e){}
+    ui.partyDragAt = Date.now();
+    const moved = ok && d.to !== d.from;
+    /* it settles into its new place, then the party is drawn in its new order */
+    let target = 0;
+    if(moved){
+      for(let i = Math.min(d.from, d.to); i <= Math.max(d.from, d.to); i++) if(i !== d.from) target += d.rects[i].height + d.gap;
+      if(d.to < d.from) target = -target;
+    } else d.all.forEach(c=>{ if(c !== d.card) c.style.transform = ''; });
+    d.card.style.transition = 'transform .16s ease, box-shadow .16s ease';
+    d.card.style.transform = `translateY(${target}px)`;
+    d.card.classList.remove('lifted');
+    settling = true;
+    setTimeout(async ()=>{
+      settling = false;
+      if(moved){ const [m] = state.party.splice(d.from, 1); state.party.splice(d.to, 0, m); }
+      list.classList.remove('reordering');
+      renderPartyList();
+      if(moved) await saveProfile();
+    }, 170);
+  };
+  list.addEventListener('pointerdown', e=>{
+    if(drag || settling || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const card = e.target.closest('.party-card[data-idx]');
+    if(!card || e.target.closest('button, input, a, select')) return;
+    clear();
+    press = { card, x:e.clientX, y:e.clientY, id:e.pointerId, timer:setTimeout(begin, PARTY_HOLD_MS) };
+  });
+  list.addEventListener('pointermove', e=>{
+    if(drag){ if(e.pointerId === drag.id){ e.preventDefault(); drag.y = e.clientY; if(Math.abs(drag.y - drag.sy) > 6) drag.moved = true; place(); } return; }
+    if(press && (e.pointerId !== press.id || Math.hypot(e.clientX - press.x, e.clientY - press.y) > PARTY_SLOP)) clear();   // a scroll, not a hold
+  });
+  /* a finger that has lifted a tile must not scroll the page under it */
+  list.addEventListener('touchmove', e=>{ if(drag && e.cancelable) e.preventDefault(); }, { passive:false });
+  list.addEventListener('contextmenu', e=>{ if(press || drag) e.preventDefault(); });
+  list.addEventListener('dragstart', e=> e.preventDefault());
+  const up = e=>{
+    if(press && e.pointerId === press.id) clear();
+    if(drag && e.pointerId === drag.id) end(e.type === 'pointerup');
+  };
+  list.addEventListener('pointerup', up);
+  list.addEventListener('pointercancel', up);
+  /* the click that ends a drag opens nothing */
+  list.addEventListener('click', e=>{ if(Date.now() - (ui.partyDragAt || 0) < 500){ e.stopPropagation(); e.preventDefault(); } }, true);
 }
 
 /* ---------- SCREEN: stats & moves ---------- */
@@ -1123,12 +1284,12 @@ function renderCompanions(){
   const med = state.medals || {};
   const leaders = battleParty();
   screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Party</button>
+    <button class="back-link" id="backBtn">← ${ui.shortcutFrom ? 'Stats' : 'Party'}</button>
     <div class="screen-title">Companions</div>
     <div class="screen-sub">A crowned monster can hold the core of one monster from your storage. They fight side by side in every battle, and the companion travels with its leader — into storage too. The Monkey King trains the core slot.</div>
     <div class="medal-bar" style="margin-bottom:12px;"><span>🥈 ${med.silver || 0}</span><span>🥇 ${med.gold || 0}</span><span>${crownIcon(16)} ${state.inventory.crowns || 0}</span></div>
     <div id="compList">${leaders.map(companionCardHtml).join('')}</div>`;
-  $('#backBtn').addEventListener('click', ()=> go('party'));
+  $('#backBtn').addEventListener('click', ()=> shortcutBack());   // (4.86) to the Stats page it was opened from
   const list = $('#compList');
   list.querySelectorAll('[data-choose]').forEach(b=> b.addEventListener('click', ()=>{
     const L = coreFind(b.dataset.choose); if(L) chooseCompanionFor(L); }));
@@ -1597,6 +1758,43 @@ function companionPanel(m){
       ${inParty ? `<button class="btn btn-ghost" id="toCompanions" style="margin-top:10px;">🤝 Companions…</button>` : ''}
     </div>`;
 }
+/* (4.86) Companions and Talents, opened from a Stats page (its shortcuts, or the core slot's Companions…), go back to it */
+function shortcutBack(){
+  const uid = ui.shortcutFrom;
+  if(uid && state.party.concat(state.storage).some(x=> x.uid === uid)){ ui.statsUid = uid; return go('stats'); }
+  ui.shortcutFrom = null;
+  go('party');
+}
+/* (4.86) the Stats page's top: the portrait at 144, what matters most beside it */
+const STATS_PEN_SVG = '<svg class="st-pen" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.2-4.6L15.6 5a2.1 2.1 0 0 1 3 3L8.2 18.4z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M13.6 7l3.4 3.4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>';
+function statsHeadCss(){
+  if(document.getElementById('statsHeadCss')) return;
+  const st = document.createElement('style');
+  st.id = 'statsHeadCss';
+  st.textContent = `
+  .st-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .st-top .back-link{ margin-bottom:0; flex:0 0 auto; }
+  .st-jumps{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+  .st-jump{ font-family:'Baloo 2',cursive; font-weight:700; font-size:13px; color:var(--ink); background:var(--paper-2);
+    border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; box-shadow:0 2px 0 var(--paper-3); white-space:nowrap; }
+  .st-jump:active{ transform:translateY(1px); box-shadow:none; }
+  .st-head{ display:flex; align-items:flex-start; gap:14px; margin:8px 0 12px; }
+  .st-pic{ flex:0 0 auto; line-height:0; }
+  .st-info{ flex:1; min-width:0; }
+  .st-name{ display:inline; background:none; border:0; padding:0; margin:0; color:var(--ink); text-align:left; cursor:pointer;
+    font-family:'Baloo 2',cursive; font-weight:800; font-size:22px; line-height:1.15; overflow-wrap:anywhere; -webkit-tap-highlight-color:transparent; }
+  .st-pen{ width:15px; height:15px; margin-left:6px; vertical-align:0; color:var(--ink-soft); opacity:.85; }
+  .st-species{ font-size:12px; color:var(--ink-soft); font-weight:700; margin:2px 0 5px; }
+  .st-lv{ font-weight:800; font-size:15px; line-height:1.25; margin-top:9px; }
+  .st-lv span{ font-size:12px; color:var(--ink-soft); font-weight:700; }
+  .st-bar{ margin-top:5px; height:8px; }
+  .st-fights{ font-size:11px; font-weight:700; color:var(--ink-soft); margin-top:3px; }
+  .st-wait{ font-size:11px; font-weight:800; color:var(--gold); margin-top:3px; }
+  .st-stats{ display:flex; flex-wrap:wrap; gap:2px 16px; margin-top:8px; font-weight:800; font-size:15px; }
+  .st-rename{ margin:-2px 0 14px; }
+  .st-card > :first-child{ margin-top:0 !important; }`;
+  document.head.appendChild(st);
+}
 function renderStats(){
   const m = state.party.find(x=>x.uid===ui.statsUid) || state.storage.find(x=>x.uid===ui.statsUid);
   if(!m){ return go('party'); }
@@ -1703,30 +1901,39 @@ function renderStats(){
       stoneType:m.ultraStone.type, stonePlus:stonePlus(m.ultraStone),
       target:'MultiHit', words:t.words, unlock:0, unlocked:true });
   }
+  /* (4.86) The designer: "Please put the talent and companion buttons into the stats and moves page as shortcuts as
+     well. Remove the renaming space and instead make renames expand only by pressing on the name of the monster itself
+     … double the width and height of the portrait and make some info live on the right of the portrait". The portrait
+     is 144 (it was 72); beside it, its name, kind, elements, level and bar, health and attack (the level's line and the
+     health and attack were the top of the card below). A tap on the name opens the naming under it; a small pencil
+     after the name, where it can be renamed, is the only hint. Companions and Talents sit at the top, by ← Party. */
+  statsHeadCss();
+  const talentsOn = typeof talentsUnlocked === 'function' && talentsUnlocked();
+  const renamable = !isCuain(m) && (!m.nickname || ((state.medals && state.medals.bronze) || 0) > 0);
   screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Party</button>
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-      ${monPortrait(m.species,72,{stage:monStage(m),crowned:isCrowned(m)})}
-      <div style="flex:1;">
-        <div style="font-family:'Baloo 2',cursive;font-weight:800;font-size:20px;">${escapeHtml(displayName(m))}</div>
-        <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-bottom:4px;">${sp.name}${m.nickname?'':' '}</div>
-        <div>${typeIcons(m.species, 22)} ${typeBadges(m.species)}</div>
+    <div class="st-top">
+      <button class="back-link" id="backBtn">← Party</button>
+      ${(companionsUnlocked() || talentsOn) ? `<div class="st-jumps">
+        ${companionsUnlocked() ? `<button class="st-jump" id="stComp">🤝 Companions</button>` : ''}
+        ${talentsOn ? `<button class="st-jump" id="stTalent">✨ Talents</button>` : ''}</div>` : ''}
+    </div>
+    <div class="st-head">
+      <div class="st-pic">${monPortrait(m.species, 144, { stage:monStage(m), crowned:isCrowned(m) })}</div>
+      <div class="st-info">
+        <button class="st-name" id="nameTap" aria-controls="nameArea" aria-expanded="false">${escapeHtml(displayName(m))}${renamable ? STATS_PEN_SVG : ''}</button>
+        <div class="st-species">${sp.name}</div>
+        <div class="st-types">${typeIcons(m.species, 22)} ${typeBadges(m.species)}</div>
+        <div class="st-lv">Level ${m.level}${levelNote ? `<span>${levelNote}</span>` : ''}</div>
+        ${capped ? '' : `<div class="hpbar st-bar"><div class="hpfill" style="width:${Math.min(100, m.xpFights/need*100)}%;background:var(--gold);"></div></div>
+        <div class="st-fights">${m.xpFights}/${need} fights</div>`}
+        ${waitNote ? `<div class="st-wait">${waitNote}</div>` : ''}
+        <div class="st-stats"><span>❤️ HP <b style="color:var(--jade-dark);">${maxHp}</b></span><span>⚔️ ATK <b style="color:var(--cinnabar-dark);">${monAtk(m)}</b></span></div>
       </div>
     </div>
-    <div id="nameArea" style="margin-bottom:12px;"></div>
+    <div id="nameArea" class="st-rename" hidden></div>
 
-    <div class="hp-card" style="margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;font-weight:800;font-size:15px;">
-        <span>Level ${m.level}${levelNote}</span>
-        <span style="color:var(--ink-soft);white-space:nowrap;padding-left:8px;">${capped?'':`${m.xpFights}/${need} fights`}</span>
-      </div>
-      ${capped?'':`<div class="hpbar" style="margin-top:8px;height:9px;"><div class="hpfill" style="width:${Math.min(100, m.xpFights/need*100)}%;background:var(--gold);"></div></div>`}
-      ${waitNote ? `<div style="font-size:11px;font-weight:800;color:var(--gold);margin-top:5px;">${waitNote}</div>` : ''}
+    <div class="hp-card st-card" style="margin-bottom:12px;">
       ${chargeCard}${storeCard}
-      <div style="display:flex;gap:20px;margin-top:12px;font-weight:800;">
-        <div>❤️ HP <span style="color:var(--jade-dark);">${maxHp}</span></div>
-        <div>⚔️ ATK <span style="color:var(--cinnabar-dark);">${monAtk(m)}</span></div>
-      </div>
       <div style="font-size:12px;color:var(--ink-soft);font-weight:700;margin-top:8px;">
         💪 Protein boosts: ${m.supplements||0} / ${suppCap}
         ${atCap ? `<span style="color:var(--gold);">· maxed, final boost counted triple</span>` : ''}
@@ -1778,9 +1985,19 @@ function renderStats(){
     </div>
   `;
   $('#backBtn').addEventListener('click', ()=>go('party'));
-  // naming: unnamed can be named anytime; a named monster can be renamed once,
-  // and only after progressing to a later region than where it was named.
+  const sjc = $('#stComp'), sjt = $('#stTalent');                 // (4.86) the shortcuts; their pages come back here
+  if(sjc) sjc.addEventListener('click', ()=>{ ui.shortcutFrom = m.uid; go('companions'); });
+  if(sjt) sjt.addEventListener('click', ()=>{ ui.shortcutFrom = m.uid; go('talents'); });
+  // naming: unnamed can be named anytime; a named monster can be renamed for a Bronze Medal.
+  // (4.86) Shut until its name is tapped.
   const nameArea = $('#nameArea');
+  $('#nameTap').addEventListener('click', ()=>{
+    const opening = nameArea.hidden;
+    nameArea.hidden = !opening;
+    $('#nameTap').setAttribute('aria-expanded', opening ? 'true' : 'false');
+    const ni = $('#nameInput');
+    if(opening && ni) ni.focus();
+  });
   if(nameArea && isCuain(m)){
     nameArea.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);font-weight:600;">` +
       `He will not answer to any other name. He is ${m.crowned ? 'Cuain' : 'the Whalelord'}.</div>`;
@@ -1868,7 +2085,7 @@ function renderStats(){
     renderStats();
   });
   const bb = $('#breakBtn');                      // the player's breakthrough (2.82)
-  if(bb) bb.addEventListener('click', ()=> doBreakthrough(m, renderStats));
+  if(bb) bb.addEventListener('click', ()=> breakthroughAsk(m, renderStats));      // (4.86) after a check
   const sn = $('#stoneOn');
   if(sn) sn.addEventListener('click', ()=>{
     const cur = stoneCarriedBy(m);
@@ -1879,7 +2096,7 @@ function renderStats(){
   const cb = $('#useCrown');
   if(cb) cb.addEventListener('click', ()=> confirmCrown(m));
   const tc = $('#toCompanions');                   // bonding for real (2.86)
-  if(tc) tc.addEventListener('click', ()=> go('companions'));
+  if(tc) tc.addEventListener('click', ()=>{ ui.shortcutFrom = m.uid; go('companions'); });
   wireElemPassivePanel(m);                         // (3.67) its element passives
   const up = $('#useProtein');
   if(up) up.addEventListener('click', async ()=>{

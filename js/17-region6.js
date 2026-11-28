@@ -1932,7 +1932,7 @@ function renderTalents(){
   const cap = m ? talentCapacity(m) : 0, used = m ? talentSpent(m) : 0, next = m ? talentNextAt(m) : null;
   const fx = m ? talentFxOf(m) : null;
   screenEl.innerHTML = `
-    <button class="back-link" id="backBtn">← Party</button>
+    <button class="back-link" id="backBtn">← ${ui.shortcutFrom ? 'Stats' : 'Party'}</button>
     <div class="tl-head">
       <div><div class="screen-title" style="margin:0;">Talents</div>
         <div class="screen-sub" style="margin:0;">Crowned monsters past level 100 learn from the lit constellations of their own elements' skies.</div></div>
@@ -1958,7 +1958,7 @@ function renderTalents(){
     ${talentSkyHtml(sky, m)}` : ''}
     <div class="tl-legend">A minor constellation costs 1 point to switch on; a major one ★, 2. Light one with Starlight once, and every monster of its element can use it. Switching off is free.</div>
     ${(typeof isDev === 'function' && isDev()) ? `<div class="tl-dev">🛠️ <button class="btn btn-ghost" id="tlDevSkies">Open every sky</button><button class="btn btn-ghost" id="tlDevStar">+100 Starlight</button></div>` : ''}`;
-  $('#backBtn').addEventListener('click', ()=> go('party'));
+  $('#backBtn').addEventListener('click', ()=> shortcutBack());   // (4.86) to the Stats page it was opened from
   screenEl.querySelectorAll('[data-sky]').forEach(b=> b.addEventListener('click', ()=> openSky(b.dataset.sky)));
   screenEl.querySelectorAll('[data-tuid]').forEach(b=> b.addEventListener('click', ()=>{ ui.talentUid = b.dataset.tuid; renderTalents(); }));
   screenEl.querySelectorAll('[data-tab]').forEach(b=> b.addEventListener('click', ()=>{ ui.talentSky = b.dataset.tab; renderTalents(); }));
